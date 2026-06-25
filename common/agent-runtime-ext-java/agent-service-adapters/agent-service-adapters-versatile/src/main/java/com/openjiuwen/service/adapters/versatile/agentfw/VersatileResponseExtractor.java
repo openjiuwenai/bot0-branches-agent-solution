@@ -6,11 +6,13 @@ package com.openjiuwen.service.adapters.versatile.agentfw;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.service.spec.dto.QueryChunk;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
-public class VersatileResponseExtractor {
+final class VersatileResponseExtractor {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -20,11 +22,11 @@ public class VersatileResponseExtractor {
     private String result;
     private String error;
 
-    public VersatileResponseExtractor(String resultNodeName) {
+    VersatileResponseExtractor(String resultNodeName) {
         this.resultNodeName = resultNodeName;
     }
 
-    public List<Event> consumeLine(String line) {
+    List<QueryChunk> consumeLine(String line) {
         if (line == null || line.isBlank()) {
             return List.of();
         }
@@ -51,39 +53,22 @@ public class VersatileResponseExtractor {
             completed = true;
         }
 
-        List<Event> events = new ArrayList<>(1);
-        events.add(new Event(EventType.PASSTHROUGH, data));
-        return events;
+        return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, data));
     }
 
-    public List<Event> finish() {
-        List<Event> events = new ArrayList<>(1);
+    List<QueryChunk> finish() {
         if (failed) {
-            events.add(new Event(EventType.FAILED, error));
-            return events;
+            return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, error));
         }
         if (completed) {
-            events.add(new Event(EventType.COMPLETED, result));
-            return events;
+            return List.of(new QueryChunk(QueryChunk.TYPE_ANSWER, result));
         }
-        events.add(new Event(EventType.INPUT_REQUIRED, null));
-        return events;
-    }
-
-    public boolean completed() {
-        return completed;
-    }
-
-    public String result() {
-        return result;
-    }
-
-    public String error() {
-        return error;
+        return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, Map.of("message", "Versatile requires more input")));
     }
 
     private boolean shouldExtractResult(String rawData, JsonNode json) {
-        return hasText(resultNodeName)
+        return resultNodeName != null
+                && !resultNodeName.trim().isEmpty()
                 && rawData.contains("\"node_name\":\"" + resultNodeName + "\"")
                 && json != null
                 && json.isObject();
@@ -149,17 +134,4 @@ public class VersatileResponseExtractor {
         return trimmed;
     }
 
-    private static boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
-    public enum EventType {
-        PASSTHROUGH,
-        INPUT_REQUIRED,
-        COMPLETED,
-        FAILED
-    }
-
-    public record Event(EventType type, Object data) {
-    }
 }

@@ -39,6 +39,7 @@ class VersatileHttpClientTest {
             received.add(String.valueOf(exchange.getRequestHeaders().get("Content-type").size()));
             received.add(exchange.getRequestURI().getQuery());
             received.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            received.add(exchange.getProtocol());
             byte[] body = "data: {\"event\":\"message\"}\n\ndata: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -50,10 +51,9 @@ class VersatileHttpClientTest {
         VersatileHttpClient client = new VersatileHttpClient(properties);
         VersatileRequestExtractor.RemoteRequest request = new VersatileRequestExtractor.RemoteRequest(
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/run",
-                Map.of("x-user-id", "u-1"),
+                Map.of("x-user-id", "u-1", "Content-Type", "application/json"),
                 Map.of("workspace_id", "w-1"),
-                Map.of("query", "q"),
-                null
+                Map.of("query", "q")
         );
         List<String> lines = new ArrayList<>();
 
@@ -65,16 +65,18 @@ class VersatileHttpClientTest {
                 "u-1",
                 "1",
                 "workspace_id=w-1",
-                "{\"query\":\"q\"}"
+                "{\"query\":\"q\"}",
+                "HTTP/1.1"
         );
     }
 
     @Test
-    void doesNotDuplicateContentTypeWhenAlreadyPresent() throws Exception {
+    void usesOnlyRequestHeaders() throws Exception {
         List<Integer> contentTypeSizes = new ArrayList<>();
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/run", exchange -> {
-            contentTypeSizes.add(exchange.getRequestHeaders().get("Content-type").size());
+            List<String> values = exchange.getRequestHeaders().get("Content-type");
+            contentTypeSizes.add(values != null ? values.size() : 0);
             byte[] body = "data: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -85,15 +87,14 @@ class VersatileHttpClientTest {
         VersatileHttpClient client = new VersatileHttpClient(new VersatileProperties());
         VersatileRequestExtractor.RemoteRequest request = new VersatileRequestExtractor.RemoteRequest(
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/run",
-                Map.of("Content-Type", "application/custom"),
                 Map.of(),
                 Map.of(),
-                null
+                Map.of()
         );
 
         client.postStream(request, line -> { });
 
-        assertThat(contentTypeSizes).containsExactly(1);
+        assertThat(contentTypeSizes).containsExactly(0);
     }
 
     @Test
@@ -112,8 +113,7 @@ class VersatileHttpClientTest {
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/run",
                 Map.of(),
                 Map.of(),
-                Map.of(),
-                null
+                Map.of()
         );
 
         assertThatThrownBy(() -> client.postStream(request, line -> { }))
@@ -127,8 +127,7 @@ class VersatileHttpClientTest {
                 "https://example.test/run",
                 Map.of("Authorization", "Bearer token", "x-user-id", "u-1"),
                 Map.of("api_key", "query-secret", "workspace_id", "w-1"),
-                Map.of("custom_data", Map.of("password", "pwd", "query", "q")),
-                null
+                Map.of("custom_data", Map.of("password", "pwd", "query", "q"))
         );
 
         Map<String, Object> logRequest = VersatileHttpClient.logRequest(request, "https://example.test/run?api_key=x");
@@ -168,8 +167,7 @@ class VersatileHttpClientTest {
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/run",
                 Map.of(),
                 Map.of(),
-                Map.of(),
-                null
+                Map.of()
         );
         List<String> lines = new ArrayList<>();
 

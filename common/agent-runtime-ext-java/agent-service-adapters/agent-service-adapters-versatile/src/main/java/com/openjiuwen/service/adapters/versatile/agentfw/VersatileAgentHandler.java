@@ -39,13 +39,20 @@ public class VersatileAgentHandler implements AgentHandler {
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
         log.debug("Versatile query request={}", logServeRequest(request));
-        VersatileResponseExtractor responseExtractor = execute(request, null);
-        if (responseExtractor.error() != null) {
-            log.error("Versatile query returned remote error conversation_id={} error={}",
-                    request.getConversationId(), responseExtractor.error());
-            throw new IllegalStateException(responseExtractor.error());
+        Object result = null;
+        for (QueryChunk chunk : execute(request, null)) {
+            if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
+                log.error("Versatile query returned remote error conversation_id={} error={}",
+                        request.getConversationId(), chunk.getData());
+                throw new IllegalStateException(String.valueOf(chunk.getData()));
+            }
+            if (QueryChunk.TYPE_ANSWER.equals(chunk.getType())) {
+                result = chunk.getData();
+            }
         }
-        Object result = responseExtractor.completed() ? responseExtractor.result() : null;
+        if (result == null) {
+            log.info("Versatile query finished without answer conversation_id={}", request.getConversationId());
+        }
         QueryResponse response = new QueryResponse(result, request.getConversationId());
         log.info("Completed Versatile query conversation_id={} result_present={}",
                 request.getConversationId(), result != null);
@@ -77,10 +84,10 @@ public class VersatileAgentHandler implements AgentHandler {
         }
     }
 
-    private VersatileResponseExtractor execute(ServeRequest request, QueryStreamObserver observer) {
+    private List<QueryChunk> execute(ServeRequest request, QueryStreamObserver observer) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
-        log.info("Resolved Versatile remote request conversation_id={} intent={} url={} headers={} params={} body_keys={}",
-                request.getConversationId(), remoteRequest.intent(), remoteRequest.url(),
+        log.info("Resolved Versatile remote request conversation_id={} url={} headers={} params={} body_keys={}",
+                request.getConversationId(), remoteRequest.url(),
                 remoteRequest.headers().size(), remoteRequest.params().size(), remoteRequest.body().keySet());
         log.debug("Versatile remote request conversation_id={} request={}",
                 request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
@@ -98,8 +105,9 @@ public class VersatileAgentHandler implements AgentHandler {
             if (observer != null && observer.isCancelled()) {
                 throw new CancellationException();
             }
-            emit(responseExtractor.finish(), observer);
-            return responseExtractor;
+            List<QueryChunk> finalEvents = responseExtractor.finish();
+            emit(finalEvents, observer);
+            return finalEvents;
         } catch (CancellationException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -108,25 +116,16 @@ public class VersatileAgentHandler implements AgentHandler {
         }
     }
 
-    private void emit(List<VersatileResponseExtractor.Event> events, QueryStreamObserver observer) {
-        if (observer == null || events == null || events.isEmpty()) {
+    private void emit(List<QueryChunk> chunks, QueryStreamObserver observer) {
+        if (observer == null || chunks == null || chunks.isEmpty()) {
             return;
         }
-        for (VersatileResponseExtractor.Event event : events) {
+        for (QueryChunk chunk : chunks) {
             if (observer.isCancelled()) {
                 return;
             }
-            observer.onNext(toChunk(event));
+            observer.onNext(chunk);
         }
-    }
-
-    private QueryChunk toChunk(VersatileResponseExtractor.Event event) {
-        return switch (event.type()) {
-            case PASSTHROUGH -> new QueryChunk("chunk", event.data());
-            case INPUT_REQUIRED -> new QueryChunk("input_required", event.data());
-            case COMPLETED -> new QueryChunk("completed", event.data());
-            case FAILED -> new QueryChunk("error", event.data());
-        };
     }
 
     private static Map<String, Object> logServeRequest(ServeRequest request) {

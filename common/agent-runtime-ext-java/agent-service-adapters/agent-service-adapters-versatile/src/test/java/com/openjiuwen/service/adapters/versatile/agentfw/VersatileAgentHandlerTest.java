@@ -60,7 +60,7 @@ class VersatileAgentHandlerTest {
         assertThat(observer.completed).isTrue();
         assertThat(observer.error).isNull();
         assertThat(observer.chunks).extracting(QueryChunk::getType)
-                .containsExactly("chunk", "chunk", "completed");
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ANSWER);
         assertThat(observer.chunks.get(2).getData()).isEqualTo("final");
     }
 

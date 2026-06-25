@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class VersatileRequestExtractor {
+final class VersatileRequestExtractor {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -24,20 +24,25 @@ public class VersatileRequestExtractor {
 
     private final VersatileProperties properties;
 
-    public VersatileRequestExtractor(VersatileProperties properties) {
+    VersatileRequestExtractor(VersatileProperties properties) {
         this.properties = Objects.requireNonNull(properties, "properties");
     }
 
-    public RemoteRequest extract(ServeRequest request) {
+    RemoteRequest extract(ServeRequest request) {
         SemanticInput semanticInput = extractSemanticInput(request);
         Map<String, Object> sourceBody = mapValue(request.getMetadata().get("body"));
         Map<String, Object> remoteBody = new LinkedHashMap<>(mapValue(sourceBody.get("custom_data")));
-
+        remoteBody.remove("query");
+        remoteBody.remove("intent");
+        Map<String, Object> inputs = new LinkedHashMap<>(mapValue(remoteBody.get("inputs")));
         if (hasText(semanticInput.query())) {
-            remoteBody.put("query", semanticInput.query());
+            inputs.put("query", semanticInput.query());
         }
         if (hasText(semanticInput.intent())) {
-            remoteBody.put("intent", semanticInput.intent());
+            inputs.put("intent", semanticInput.intent());
+        }
+        if (!inputs.isEmpty()) {
+            remoteBody.put("inputs", inputs);
         }
 
         Map<String, String> headers = new LinkedHashMap<>();
@@ -60,7 +65,7 @@ public class VersatileRequestExtractor {
 
         String url = resolveUrlTemplate(semanticInput.intent()).replace(
                 "{conversation_id}", request.getConversationId() != null ? request.getConversationId() : "");
-        return new RemoteRequest(url, headers, params, remoteBody, semanticInput.intent());
+        return new RemoteRequest(url, headers, params, remoteBody);
     }
 
     private SemanticInput extractSemanticInput(ServeRequest request) {
@@ -170,12 +175,11 @@ public class VersatileRequestExtractor {
     private record SemanticInput(String query, String intent) {
     }
 
-    public record RemoteRequest(
+    record RemoteRequest(
             String url,
             Map<String, String> headers,
             Map<String, String> params,
-            Map<String, Object> body,
-            String intent
+            Map<String, Object> body
     ) {
         public RemoteRequest {
             headers = immutableCopy(headers);

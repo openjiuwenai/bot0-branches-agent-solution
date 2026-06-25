@@ -1,56 +1,55 @@
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
+import com.openjiuwen.service.spec.dto.QueryChunk;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class VersatileResponseExtractorTest {
 
     @Test
-    void emitsInputRequiredWhenStreamEndsBeforeEndSignal() {
+    void emitsInterruptWhenStreamEndsBeforeEndSignal() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
-        List<VersatileResponseExtractor.Event> events = extractor.consumeLine("data: {\"event\":\"message\"}");
-        events.addAll(extractor.finish());
+        List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine("data: {\"event\":\"message\"}"));
+        chunks.addAll(extractor.finish());
 
-        assertThat(events).extracting(VersatileResponseExtractor.Event::type)
-                .containsExactly(
-                        VersatileResponseExtractor.EventType.PASSTHROUGH,
-                        VersatileResponseExtractor.EventType.INPUT_REQUIRED);
-        assertThat(events.get(0).data()).isEqualTo("{\"event\":\"message\"}");
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_INTERRUPT);
+        assertThat(chunks.get(0).getData()).isEqualTo("{\"event\":\"message\"}");
+        assertThat(chunks.get(1).getData()).isEqualTo(Map.of("message", "Versatile requires more input"));
     }
 
     @Test
-    void extractsResultNodeAndEmitsCompletedOnEnd() {
+    void extractsResultNodeAndEmitsAnswerOnEnd() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
                 .isEmpty();
-        List<VersatileResponseExtractor.Event> events =
-                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}");
-        events.addAll(extractor.finish());
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
 
-        assertThat(events).extracting(VersatileResponseExtractor.Event::type)
-                .containsExactly(
-                        VersatileResponseExtractor.EventType.PASSTHROUGH,
-                        VersatileResponseExtractor.EventType.COMPLETED);
-        String result = extractor.result();
-        assertThat(result).isEqualTo("final");
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ANSWER);
+        assertThat(chunks.get(1).getData()).isEqualTo("final");
     }
 
     @Test
-    void emitsInputRequiredWhenResultNodeArrivesWithoutEndSignal() {
+    void emitsInterruptWhenResultNodeArrivesWithoutEndSignal() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
                 .isEmpty();
-        List<VersatileResponseExtractor.Event> events = extractor.finish();
+        List<QueryChunk> chunks = extractor.finish();
 
-        assertThat(events).extracting(VersatileResponseExtractor.Event::type)
-                .containsExactly(VersatileResponseExtractor.EventType.INPUT_REQUIRED);
-        assertThat(extractor.result()).isEqualTo("final");
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_INTERRUPT);
+        assertThat(chunks.get(0).getData()).isEqualTo(Map.of("message", "Versatile requires more input"));
     }
 
     @Test
@@ -59,29 +58,25 @@ class VersatileResponseExtractorTest {
 
         assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":{\"node_type\":\"QA\",\"text\":\"custom final\"}}}"))
                 .isEmpty();
-        List<VersatileResponseExtractor.Event> events =
-                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}");
-        events.addAll(extractor.finish());
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
 
-        assertThat(events).extracting(VersatileResponseExtractor.Event::type)
-                .containsExactly(
-                        VersatileResponseExtractor.EventType.PASSTHROUGH,
-                        VersatileResponseExtractor.EventType.COMPLETED);
-        assertThat(extractor.result()).isEqualTo("custom final");
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ANSWER);
+        assertThat(chunks.get(1).getData()).isEqualTo("custom final");
     }
 
     @Test
     void marksExceptionAsFailed() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
-        List<VersatileResponseExtractor.Event> events =
-                extractor.consumeLine("data: {\"event\":\"exception\",\"data\":{\"message\":\"boom\"}}");
-        events.addAll(extractor.finish());
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"event\":\"exception\",\"data\":{\"message\":\"boom\"}}"));
+        chunks.addAll(extractor.finish());
 
-        assertThat(events).extracting(VersatileResponseExtractor.Event::type)
-                .containsExactly(
-                        VersatileResponseExtractor.EventType.PASSTHROUGH,
-                        VersatileResponseExtractor.EventType.FAILED);
-        assertThat(extractor.error()).contains("exception");
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ERROR);
+        assertThat(chunks.get(1).getData()).asString().contains("exception");
     }
 }

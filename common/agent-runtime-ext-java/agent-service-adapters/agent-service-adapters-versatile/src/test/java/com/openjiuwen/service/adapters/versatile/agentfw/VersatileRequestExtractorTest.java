@@ -44,10 +44,12 @@ class VersatileRequestExtractorTest {
                 .doesNotContainKey("authorization");
         assertThat(remote.params()).containsEntry("workspace_id", "override")
                 .containsEntry("type", "controller");
-        assertThat(remote.body()).containsEntry("query", "new question")
-                .containsEntry("intent", "knowledge_qa")
+        assertThat(remote.body()).containsEntry("inputs", Map.of(
+                        "query", "new question",
+                        "intent", "knowledge_qa"
+                ))
                 .containsEntry("city", "Shenzhen");
-        assertThat(remote.intent()).isEqualTo("knowledge_qa");
+        assertThat(remote.body()).doesNotContainKeys("query", "intent", "custom_data");
     }
 
     @Test
@@ -71,9 +73,12 @@ class VersatileRequestExtractorTest {
                 new VersatileRequestExtractor(properties).extract(request);
 
         assertThat(remote.url()).isEqualTo("https://example.test/booking/c-2");
-        assertThat(remote.body()).containsEntry("query", "book hotel")
-                .containsEntry("intent", "booking")
+        assertThat(remote.body()).containsEntry("inputs", Map.of(
+                        "query", "book hotel",
+                        "intent", "booking"
+                ))
                 .containsEntry("city", "Shanghai");
+        assertThat(remote.body()).doesNotContainKeys("query", "intent", "custom_data");
     }
 
     @Test
@@ -92,11 +97,12 @@ class VersatileRequestExtractorTest {
         VersatileRequestExtractor.RemoteRequest remote =
                 new VersatileRequestExtractor(properties).extract(request);
 
-        assertThat(remote.body()).containsEntry("query", "plain question")
+        assertThat(remote.body()).containsEntry("inputs", Map.of(
+                        "query", "plain question"
+                ))
                 .containsEntry("city", "Beijing")
-                .doesNotContainEntry("query", "custom query");
+                .doesNotContainKeys("query", "intent", "custom_data");
         assertThat(remote.params()).containsEntry("channel", "web");
-        assertThat(remote.intent()).isNull();
     }
 
     @Test

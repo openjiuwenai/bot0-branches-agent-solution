@@ -24,7 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.StringJoiner;
 
-public class VersatileHttpClient {
+final class VersatileHttpClient {
 
     private static final Logger log = LoggerFactory.getLogger(VersatileHttpClient.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -32,24 +32,27 @@ public class VersatileHttpClient {
     private final VersatileProperties properties;
     private final HttpClient httpClient;
 
-    public VersatileHttpClient(VersatileProperties properties) {
+    VersatileHttpClient(VersatileProperties properties) {
         this.properties = properties;
-        this.httpClient = HttpClient.newBuilder().build();
+        this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
     }
 
-    public void postStream(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer)
+    void postStream(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer)
             throws IOException, InterruptedException {
         String body = OBJECT_MAPPER.writeValueAsString(request.body());
         String url = withQueryParams(request.url(), request.params());
-        log.info("Posting Versatile request url={} intent={} headers={} params={} body_keys={}",
-                url, request.intent(), request.headers().size(), request.params().size(), request.body().keySet());
+        Duration timeout = properties.getTimeout() != null ? properties.getTimeout() : Duration.ofSeconds(600);
+        log.info("Posting Versatile request url={} headers={} params={} body_keys={}",
+                url, request.headers().size(), request.params().size(), request.body().keySet());
         log.debug("Versatile outbound request={}", logRequest(request, url));
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(timeout())
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+                .version(HttpClient.Version.HTTP_1_1)
+                .timeout(timeout)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body.getBytes(StandardCharsets.UTF_8)));
 
-        builder.setHeader("Content-Type", "application/json");
         for (Map.Entry<String, String> header : request.headers().entrySet()) {
             builder.setHeader(header.getKey(), header.getValue());
         }
@@ -57,9 +60,12 @@ public class VersatileHttpClient {
         HttpResponse<InputStream> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
         log.info("Received Versatile response status={} url={}", response.statusCode(), url);
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            String responseBody = readAll(response.body());
+            String responseBody;
+            try (InputStream responseBodyStream = response.body()) {
+                responseBody = new String(responseBodyStream.readAllBytes(), StandardCharsets.UTF_8);
+            }
             log.warn("Versatile HTTP error status={} body={}", response.statusCode(), responseBody);
-            throw new VersatileHttpException(response.statusCode(), responseBody);
+            throw new IOException("Versatile HTTP " + response.statusCode() + ": " + responseBody);
         }
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
@@ -76,21 +82,10 @@ public class VersatileHttpClient {
     static Map<String, Object> logRequest(VersatileRequestExtractor.RemoteRequest request, String url) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("url", url);
-        data.put("intent", request.intent());
         data.put("headers", request.headers());
         data.put("params", request.params());
         data.put("body", request.body());
         return data;
-    }
-
-    private String readAll(InputStream body) throws IOException {
-        try (body) {
-            return new String(body.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
-    private Duration timeout() {
-        return properties.getTimeout() != null ? properties.getTimeout() : Duration.ofSeconds(600);
     }
 
     private String withQueryParams(String url, Map<String, String> params) {
@@ -100,7 +95,8 @@ public class VersatileHttpClient {
         StringJoiner joiner = new StringJoiner("&");
         for (Map.Entry<String, String> entry : params.entrySet()) {
             if (entry.getKey() != null && entry.getValue() != null) {
-                joiner.add(encode(entry.getKey()) + "=" + encode(entry.getValue()));
+                joiner.add(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8) + "="
+                        + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
             }
         }
         if (joiner.length() == 0) {
@@ -109,31 +105,8 @@ public class VersatileHttpClient {
         return url + (url.contains("?") ? "&" : "?") + joiner;
     }
 
-    private String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
-    }
-
     @FunctionalInterface
-    public interface LineConsumer {
+    interface LineConsumer {
         void accept(String line) throws IOException, InterruptedException;
-    }
-
-    public static class VersatileHttpException extends IOException {
-        private final int statusCode;
-        private final String responseBody;
-
-        public VersatileHttpException(int statusCode, String responseBody) {
-            super("Versatile HTTP " + statusCode + ": " + responseBody);
-            this.statusCode = statusCode;
-            this.responseBody = responseBody;
-        }
-
-        public int getStatusCode() {
-            return statusCode;
-        }
-
-        public String getResponseBody() {
-            return responseBody;
-        }
     }
 }
