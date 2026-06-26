@@ -13,6 +13,7 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,23 +40,52 @@ public class VersatileAgentHandler implements AgentHandler {
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
         log.debug("Versatile query request={}", logServeRequest(request));
-        Object result = null;
-        for (QueryChunk chunk : execute(request, null)) {
+        VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
+        log.info("Resolved Versatile remote request conversation_id={} url={} headers={} params={} body_keys={}",
+                request.getConversationId(), remoteRequest.url(),
+                remoteRequest.headers().size(), remoteRequest.params().size(), remoteRequest.body().keySet());
+        log.debug("Versatile remote request conversation_id={} request={}",
+                request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+
+        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
+        List<QueryChunk> chunks = new ArrayList<>();
+        String[] lastEvent = new String[1];
+        try {
+            client.postStream(remoteRequest, line -> {
+                String event = stripSsePrefix(line);
+                if (event != null && !event.isBlank()) {
+                    lastEvent[0] = event;
+                }
+                chunks.addAll(responseExtractor.consumeLine(line));
+            });
+            chunks.addAll(responseExtractor.finish());
+        } catch (Exception exception) {
+            log.error("Versatile invocation failed conversation_id={}", request.getConversationId(), exception);
+            throw new IllegalStateException("Versatile invocation failed", exception);
+        }
+
+        Object content = null;
+        for (QueryChunk chunk : chunks) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
                         request.getConversationId(), chunk.getData());
                 throw new IllegalStateException(String.valueOf(chunk.getData()));
             }
-            if (QueryChunk.TYPE_ANSWER.equals(chunk.getType())) {
-                result = chunk.getData();
+            if (QueryChunk.TYPE_ANSWER.equals(chunk.getType()) && chunk.getData() != null) {
+                content = chunk.getData();
             }
         }
-        if (result == null) {
-            log.info("Versatile query finished without answer conversation_id={}", request.getConversationId());
+        if (content == null) {
+            content = lastEvent[0] != null ? lastEvent[0] : "";
+            log.info("Versatile query finished without answer, using fallback content conversation_id={}",
+                    request.getConversationId());
         }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("role", "assistant");
+        result.put("content", String.valueOf(content));
         QueryResponse response = new QueryResponse(result, request.getConversationId());
-        log.info("Completed Versatile query conversation_id={} result_present={}",
-                request.getConversationId(), result != null);
+        log.info("Completed Versatile query conversation_id={} content_present={}",
+                request.getConversationId(), !String.valueOf(content).isEmpty());
         log.debug("Versatile query response conversation_id={} result={}",
                 request.getConversationId(), result);
         return response;
@@ -138,6 +168,20 @@ public class VersatileAgentHandler implements AgentHandler {
         data.put("messages", request.getMessages());
         data.put("metadata", request.getMetadata());
         return data;
+    }
+
+    private static String stripSsePrefix(String line) {
+        if (line == null) {
+            return null;
+        }
+        String trimmed = line.trim();
+        if (trimmed.startsWith("data:")) {
+            return trimmed.substring("data:".length()).trim();
+        }
+        if (trimmed.contains(":") && !trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+            return null;
+        }
+        return trimmed;
     }
 
 }

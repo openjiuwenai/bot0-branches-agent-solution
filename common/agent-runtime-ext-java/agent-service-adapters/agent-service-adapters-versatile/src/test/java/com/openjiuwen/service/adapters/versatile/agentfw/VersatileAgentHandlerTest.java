@@ -41,7 +41,7 @@ class VersatileAgentHandlerTest {
         QueryResponse response = handler.query(request());
 
         assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isEqualTo("final");
+        assertThat(response.getResult()).isEqualTo(Map.of("role", "assistant", "content", "final"));
     }
 
     @Test
@@ -83,7 +83,7 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
-    void queryReturnsNullWhenCompletedWithoutResultNode() throws Exception {
+    void queryReturnsLastRemoteEventWhenCompletedWithoutResultNode() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"event\":\"message\",\"data\":{\"text\":\"only passthrough\"}}",
                 "{\"data\":{\"node_type\":\"End\"}}"
@@ -93,11 +93,14 @@ class VersatileAgentHandlerTest {
         QueryResponse response = handler.query(request());
 
         assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isNull();
+        assertThat(response.getResult()).isEqualTo(Map.of(
+                "role", "assistant",
+                "content", "{\"data\":{\"node_type\":\"End\"}}"
+        ));
     }
 
     @Test
-    void queryReturnsNullWhenResultArrivesWithoutEndSignal() throws Exception {
+    void queryReturnsLastRemoteEventWhenResultArrivesWithoutEndSignal() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"
         ));
@@ -107,7 +110,21 @@ class VersatileAgentHandlerTest {
         QueryResponse response = handler.query(request());
 
         assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isNull();
+        assertThat(response.getResult()).isEqualTo(Map.of(
+                "role", "assistant",
+                "content", "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"
+        ));
+    }
+
+    @Test
+    void queryReturnsEmptyContentWhenRemoteReturnsNoEvents() throws Exception {
+        VersatileProperties properties = propertiesWithServer(List.of());
+        VersatileAgentHandler handler = new VersatileAgentHandler(properties);
+
+        QueryResponse response = handler.query(request());
+
+        assertThat(response.getConversationId()).isEqualTo("c-1");
+        assertThat(response.getResult()).isEqualTo(Map.of("role", "assistant", "content", ""));
     }
 
     private static ServeRequest request() {

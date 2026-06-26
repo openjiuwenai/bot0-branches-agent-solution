@@ -79,7 +79,7 @@ Versatile adapter 需要支持两种调用形态：
 
 建议 `query()` 和 `streamQuery()` 共用同一条远端 SSE/line-stream 解析链路。非流式只是额外做结果聚合，避免两套解析规则产生语义差异。
 
-`query()` 不依赖流式 `COMPLETED` chunk 才能返回；它应在远端流消费结束后读取 `VersatileResponseExtractor` 的解析状态。只有远端流里出现 `node_type=End` 时才认为业务完成；若业务完成且已抽取最终结果，则写入 `QueryResponse.result`，若业务完成但未抽取到最终结果，则返回 `QueryResponse.result = null`。如果流结束时没有出现 `node_type=End`，即使过程中缓存到了结果，也按未完成处理，非流式返回 `QueryResponse.result = null`，流式补发 `INPUT_REQUIRED`。
+`query()` 不依赖流式 `COMPLETED` chunk 才能返回；它应在远端流消费结束后读取 `VersatileResponseExtractor` 的解析状态，并按 `agent-runtime-java` 现有非流式 handler 的契约聚合成普通 assistant message。若出现 `node_type=End` 且已抽取最终结果，则 `content` 使用抽取结果；否则 `content` 使用最后一条远端事件兜底；如果远端完全没有返回事件，则 `content` 为空字符串。最终 `QueryResponse.result` 始终返回 `{role: "assistant", content: "..."}`，不返回 `null`。流式路径仍保持事件语义：流结束时没有 `node_type=End` 则补发 `INPUT_REQUIRED`。
 
 ### 3.2 转发模型
 
@@ -338,7 +338,7 @@ openjiuwen:
 | `timeout` | versatile | SSE/HTTP 单次请求超时，默认 600s |
 | `headers-template` | versatile | 远端常要求 `Accept`、`stream`、租户/应用静态头 |
 | `forward-header-whitelist` | versatile | 安全透传用户态 header，避免 servlet/threadlocal 旁路 |
-| `result-node-name` | versatile | 需要从 SSE 节点中抽取最终答案时使用；没有配置则只透传远端流，非流式聚合无法生成业务最终结果 |
+| `result-node-name` | versatile | 需要从 SSE 节点中抽取最终答案时使用；没有配置或未命中时，非流式使用最后一条远端事件作为 `content` 兜底 |
 | `endpoints[]` | versatile | 可选；多个远端 URL 时按 `intent` 选择，只覆盖 URL，不改变请求/响应处理逻辑 |
 | `endpoints[].intent` | endpoint | 命中入口 `intent` 时使用该 endpoint；`custom_data.intent` 只保留到远端 body |
 | `endpoints[].url-template` | endpoint | endpoint 专属 URL；未命中时使用默认 `url-template` |

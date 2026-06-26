@@ -21,7 +21,7 @@ class VersatileResponseExtractorTest {
         assertThat(chunks).extracting(QueryChunk::getType)
                 .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_INTERRUPT);
         assertThat(chunks.get(0).getData()).isEqualTo("{\"event\":\"message\"}");
-        assertThat(chunks.get(1).getData()).isEqualTo(Map.of("message", "Versatile requires more input"));
+        assertThat(chunks.get(1).getData()).isNull();
     }
 
     @Test
@@ -49,7 +49,7 @@ class VersatileResponseExtractorTest {
 
         assertThat(chunks).extracting(QueryChunk::getType)
                 .containsExactly(QueryChunk.TYPE_INTERRUPT);
-        assertThat(chunks.get(0).getData()).isEqualTo(Map.of("message", "Versatile requires more input"));
+        assertThat(chunks.get(0).getData()).isNull();
     }
 
     @Test

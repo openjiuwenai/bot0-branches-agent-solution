@@ -10,7 +10,6 @@ import com.openjiuwen.service.spec.dto.QueryChunk;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 final class VersatileResponseExtractor {
 
@@ -63,7 +62,7 @@ final class VersatileResponseExtractor {
         if (completed) {
             return List.of(new QueryChunk(QueryChunk.TYPE_ANSWER, result));
         }
-        return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, Map.of("message", "Versatile requires more input")));
+        return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, null));
     }
 
     private boolean shouldExtractResult(String rawData, JsonNode json) {
