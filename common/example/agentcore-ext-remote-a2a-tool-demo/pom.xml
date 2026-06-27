@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.openjiuwen.example</groupId>
+    <artifactId>agentcore-ext-remote-a2a-tool-demo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>agentcore-ext-remote-a2a-tool-demo</name>
+    <description>Example for AgentCore ext remote A2A tool injection</description>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.6</version>
+        <relativePath/>
+    </parent>
+
+    <modules>
+        <module>agent-a-deepagent-runtime</module>
+        <module>agent-b-versatile-runtime</module>
+    </modules>
+
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+        <agent-runtime-ext-java.version>0.1.0-SNAPSHOT</agent-runtime-ext-java.version>
+        <agent-core-java.version>0.1.12</agent-core-java.version>
+    </properties>
+</project>
