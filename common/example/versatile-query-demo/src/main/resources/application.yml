@@ -1,0 +1,35 @@
+﻿server:
+  port: ${SERVER_PORT:18080}
+
+openjiuwen:
+  service:
+    agent-id: versatile-query-demo
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    versatile:
+      url-template: ${VERSATILE_URL:http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}}
+      timeout: 600s
+      forward-header-whitelist:
+        - stream
+        - x-invoke-mode
+        - x-language
+      headers-template:
+        Content-Type: application/json
+        accept: "*/*"
+        accept-language: zh-CN,zh;q=0.9,de;q=0.8,en;q=0.7
+        cf2-cftk: ""
+        cftk: ""
+        origin: https://localhost:8090
+        projectname: "null"
+        region: "null"
+        stream: "true"
+        x-invoke-mode: DEBUG
+        x-language: zh-cn
+        Cookie: "AGENT_SID=testUser|0"
+      result-node-name: ABCDEResponseNode
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.versatile: DEBUG

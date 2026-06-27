@@ -1,0 +1,43 @@
+server:
+  port: ${AGENT_B_PORT:18091}
+
+openjiuwen:
+  service:
+    agent-id: versatile-agent
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "VersatileAgent"
+      agent-description: "Remote Versatile runtime used by AgentCore ext demo"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "versatile_workflow"
+          name: "Versatile Workflow"
+          description: "Process requests through the configured remote Versatile HTTP/SSE workflow"
+          tags: ["versatile", "workflow", "remote"]
+          examples: ["Process a banking workflow request"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+    versatile:
+      url-template: ${VERSATILE_URL:http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}}
+      timeout: 600s
+      forward-header-whitelist:
+        - stream
+        - x-invoke-mode
+        - x-language
+      headers-template:
+        Content-Type: application/json
+        accept: "*/*"
+        stream: "true"
+        x-invoke-mode: DEBUG
+        x-language: zh-cn
+      result-node-name: ${VERSATILE_RESULT_NODE:ABCDEResponseNode}
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.versatile: DEBUG

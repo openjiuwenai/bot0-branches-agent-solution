@@ -1,0 +1,60 @@
+server:
+  port: ${AGENT_A_PORT:18090}
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "AgentCoreExtDeepAgent"
+      agent-description: "DeepAgent runtime with remote A2A tool injection"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "remote_delegate"
+          name: "Remote Delegate"
+          description: "Use the injected remote A2A tool to delegate work to the Versatile runtime"
+          tags: ["a2a", "remote", "versatile"]
+          examples: ["Ask the remote runtime to process this banking request"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+    agentcore-ext:
+      remote-a2a:
+        agents:
+          - name: versatile-agent
+            url: ${REMOTE_A2A_CARD_URL:http://127.0.0.1:18091}
+  demo:
+    deep-agent:
+      llm:
+        provider: ${DEEPSEEK_PROVIDER:OpenAI}
+        api-key: ${DEEPSEEK_API_KEY:}
+        api-base: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+        model-name: ${DEEPSEEK_MODEL:deepseek-chat}
+        ssl-verify: ${DEEPSEEK_SSL_VERIFY:true}
+        temperature: ${DEEPSEEK_TEMPERATURE:0.2}
+        top-p: ${DEEPSEEK_TOP_P:0.8}
+        timeout: ${DEEPSEEK_TIMEOUT:120s}
+        completion-timeout: ${DEEP_AGENT_COMPLETION_TIMEOUT:600s}
+        max-iterations: ${DEEP_AGENT_MAX_ITERATIONS:8}
+        workspace-path: ${DEEP_AGENT_WORKSPACE:target/deep-agent-workspace}
+        skill-directories:
+          - ${DEEP_AGENT_SKILLS_DIR:../skills}
+        skill-mode: ${DEEP_AGENT_SKILL_MODE:all}
+        system-prompt: >
+          You are Agent A. You have a remote tool named versatile-agent.
+          When the user asks for banking workflow, external workflow, or remote processing,
+          call versatile-agent with a JSON object containing remoteInput.
+          remoteInput must be the user's original message text copied unchanged.
+          If the user message is a JSON string with query and intent fields, copy that exact JSON string.
+          Do not rewrite, summarize, split, or rebuild the query and intent fields yourself.
+          After the remote result is returned as the tool result, continue the final answer.
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG
