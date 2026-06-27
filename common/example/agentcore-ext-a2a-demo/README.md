@@ -151,7 +151,7 @@ function New-AgentARequestJson {
     params = [ordered]@{
       message = [ordered]@{
         role = "ROLE_USER"
-        contextId = "agentcore-ext-a2a-demo-1"
+        contextId = $Id
         parts = @(
           [ordered]@{
             text = $messageText
@@ -236,7 +236,7 @@ function Send-AgentARequestJson {
 ```powershell
 $requestJson1 = New-AgentARequestJson `
   -Id "agentcore-ext-a2a-demo-1" `
-  -Query "请调用 versatile-agent 处理：先查询尾号为4241的银行卡余额，再转账5元给李四" `
+  -Query "先查询尾号为4241的银行卡余额，再转账5元给李四" `
   -Intent "查询账户余额"
 
 Send-AgentARequestJson $requestJson1
