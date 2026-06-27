@@ -246,7 +246,7 @@ Send-AgentARequestJson $requestJson1
 
 ```powershell
 $requestJson2 = New-AgentARequestJson `
-  -Id "agentcore-ext-remote-a2a-tool-demo-2" `
+  -Id "agentcore-ext-remote-a2a-tool-demo-1" `
   -Query '[{"cardNum":"6222021816044054241","regAcctType":"011","cardAlias":""}]' `
   -Intent "LATEST"
 
@@ -261,7 +261,7 @@ $round3Query = @'
 '@
 
 $requestJson3 = New-AgentARequestJson `
-  -Id "agentcore-ext-remote-a2a-tool-demo-3" `
+  -Id "agentcore-ext-remote-a2a-tool-demo-1" `
   -Query $round3Query `
   -Intent "LATEST"
 
