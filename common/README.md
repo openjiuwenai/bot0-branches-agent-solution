@@ -18,7 +18,7 @@ common
 ## 扩展工程
 
 - `agent-runtime-ext-java`：运行时扩展模块的 Maven 父工程。
-- `agent-service-adapters-agentcore-ext`：AgentCore adapter 的增强模块，在 AgentCore handler 执行链路前补充远端 A2A card 发现和远端工具注入。
+- `agent-service-adapters-agentcore-ext`：AgentCore adapter 的增强模块，复用 runtime 的远端 A2A card 注册发现结果，在 AgentCore handler 执行链路前补充远端工具注入。
 - `agent-service-adapters-versatile`：Versatile adapter，把查询请求适配到远端 HTTP/SSE 工作流服务。
 
 ## 配套示例

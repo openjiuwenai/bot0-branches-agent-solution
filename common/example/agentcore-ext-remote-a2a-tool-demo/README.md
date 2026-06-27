@@ -2,7 +2,7 @@
 
 这个 example 启动两个 runtime：
 
-- Agent A：DeepAgent + `JiuwenCoreAgentExtHandler`，启动前从 Agent B 的 A2A card 注入远端工具。
+- Agent A：DeepAgent + `JiuwenCoreAgentExtHandler`，复用 runtime 的远端 A2A card 发现结果注入远端工具。
 - Agent B：`VersatileAgentHandler`，通过 A2A 暴露 card 和 `/a2a/`。
 
 example 拆成两个可执行 jar，避免一个 jar 内两个 `@SpringBootApplication` 同时被扫描，导致两个 `AgentHandler` bean 同时存在：
@@ -80,7 +80,7 @@ mvn "-Dmaven.repo.local=.m2\repository" `
   spring-boot:run
 ```
 
-Agent A 会在每次 `query()` / `streamQuery()` 前尝试刷新 Agent B card。发现成功后，DeepAgent 内部 ReActAgent 会看到配置名：
+Agent A 使用 `openjiuwen.service.a2a.remote-agents` 触发 runtime 内置远端 card 发现；`agentcore-ext` 在每次 `query()` / `streamQuery()` 前读取已发现的 registry，并把新增远端 agent 注入为工具。发现成功后，DeepAgent 内部 ReActAgent 会看到配置名：
 
 ```text
 versatile-agent

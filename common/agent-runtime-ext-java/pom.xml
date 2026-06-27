@@ -58,11 +58,6 @@
                 <version>0.1.12</version>
             </dependency>
             <dependency>
-                <groupId>org.a2aproject.sdk</groupId>
-                <artifactId>a2a-java-sdk-spec</artifactId>
-                <version>1.0.0.Final</version>
-            </dependency>
-            <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
                 <version>${jackson.version}</version>

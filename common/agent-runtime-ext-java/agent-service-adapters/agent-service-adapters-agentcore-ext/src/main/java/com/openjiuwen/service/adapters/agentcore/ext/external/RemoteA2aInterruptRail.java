@@ -26,12 +26,12 @@ public class RemoteA2aInterruptRail extends BaseInterruptRail {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
-    private final Map<String, RemoteA2aAgentCardCache.RemoteA2aToolSpec> specsByToolName;
+    private final Map<String, RemoteA2aToolInstaller.RemoteA2aToolSpec> specsByToolName;
 
-    public RemoteA2aInterruptRail(List<RemoteA2aAgentCardCache.RemoteA2aToolSpec> specs) {
-        super(specs.stream().map(RemoteA2aAgentCardCache.RemoteA2aToolSpec::toolName).toList());
+    public RemoteA2aInterruptRail(List<RemoteA2aToolInstaller.RemoteA2aToolSpec> specs) {
+        super(specs.stream().map(RemoteA2aToolInstaller.RemoteA2aToolSpec::toolName).toList());
         this.specsByToolName = specs.stream().collect(Collectors.toUnmodifiableMap(
-                RemoteA2aAgentCardCache.RemoteA2aToolSpec::toolName,
+                RemoteA2aToolInstaller.RemoteA2aToolSpec::toolName,
                 Function.identity()));
         specs.forEach(spec -> getTools().add(toToolCard(spec)));
     }
@@ -42,7 +42,7 @@ public class RemoteA2aInterruptRail extends BaseInterruptRail {
             return reject(resumeInput);
         }
         String toolName = resolveToolName(ctx, toolCall);
-        RemoteA2aAgentCardCache.RemoteA2aToolSpec spec = Objects.requireNonNull(
+        RemoteA2aToolInstaller.RemoteA2aToolSpec spec = Objects.requireNonNull(
                 specsByToolName.get(toolName), "Unknown remote A2A tool: " + toolName);
         String message = extractMessage(toolCall);
         InterruptRequest request = InterruptRequest.builder()
@@ -62,7 +62,7 @@ public class RemoteA2aInterruptRail extends BaseInterruptRail {
         return toolCall != null ? toolCall.getName() : "";
     }
 
-    private static ToolCard toToolCard(RemoteA2aAgentCardCache.RemoteA2aToolSpec spec) {
+    private static ToolCard toToolCard(RemoteA2aToolInstaller.RemoteA2aToolSpec spec) {
         return ToolCard.builder()
                 .id(spec.toolName())
                 .name(spec.toolName())

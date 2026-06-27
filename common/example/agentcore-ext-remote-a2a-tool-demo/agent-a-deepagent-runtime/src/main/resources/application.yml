@@ -23,11 +23,9 @@ openjiuwen:
           examples: ["Ask the remote runtime to process this banking request"]
           input-modes: ["text", "text/plain"]
           output-modes: ["text", "text/plain"]
-    agentcore-ext:
-      remote-a2a:
-        agents:
-          - name: versatile-agent
-            url: ${REMOTE_A2A_CARD_URL:http://127.0.0.1:18091}
+      remote-agents:
+        - name: versatile-agent
+          url: ${REMOTE_A2A_CARD_URL:http://127.0.0.1:18091}
   demo:
     deep-agent:
       llm:

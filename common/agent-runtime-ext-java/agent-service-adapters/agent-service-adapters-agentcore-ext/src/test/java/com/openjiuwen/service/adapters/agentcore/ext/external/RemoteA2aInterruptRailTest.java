@@ -162,8 +162,8 @@ class RemoteA2aInterruptRailTest {
                 });
     }
 
-    private static RemoteA2aAgentCardCache.RemoteA2aToolSpec spec(String name) {
-        return new RemoteA2aAgentCardCache.RemoteA2aToolSpec(
+    private static RemoteA2aToolInstaller.RemoteA2aToolSpec spec(String name) {
+        return new RemoteA2aToolInstaller.RemoteA2aToolSpec(
                 name,
                 name,
                 "Delegate to remote agent",
