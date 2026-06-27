@@ -58,8 +58,14 @@ public class RemoteA2aToolInstaller {
         if (newSpecs.isEmpty()) {
             return;
         }
-        target.registerRail(new RemoteA2aInterruptRail(newSpecs));
+        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(newSpecs);
+        target.registerRail(rail);
         newSpecs.forEach(spec -> knownToolNames.add(spec.toolName()));
+        log.info("Installed remote A2A interrupt rail rail={} targetAgent={} tools={} toolDetails={}",
+                rail.getClass().getSimpleName(),
+                target.getClass().getName(),
+                newSpecs.stream().map(RemoteA2aAgentCardCache.RemoteA2aToolSpec::toolName).toList(),
+                newSpecs);
     }
 
     private static BaseAgent resolveBaseAgent(Object agent) {

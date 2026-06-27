@@ -6,15 +6,19 @@ import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(OutputCaptureExtension.class)
 class RemoteA2aToolInstallerTest {
 
     @Test
-    void installsRailToolCardIntoBaseAgentAbilityManagerWithoutDuplicating() throws IOException {
+    void installsRailToolCardIntoBaseAgentAbilityManagerWithoutDuplicating(CapturedOutput output) throws IOException {
         try (RemoteA2aAgentCardCacheTest.CardServer server = RemoteA2aAgentCardCacheTest.CardServer.start(
                 RemoteA2aAgentCardCacheTest.cardJson("Remote Agent", "Find hotels", "/a2a"))) {
             ReActAgent agent = reactAgent();
@@ -35,6 +39,9 @@ class RemoteA2aToolInstallerTest {
                         assertThat(tool.getParameters()).containsEntry("type", "object");
                     });
             assertThat(server.requests()).isEqualTo(1);
+            assertThat(output).contains("Installed remote A2A interrupt rail")
+                    .contains("tools=[agent-b]")
+                    .contains("rail=RemoteA2aInterruptRail");
         }
     }
 

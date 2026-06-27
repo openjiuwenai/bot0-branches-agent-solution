@@ -144,7 +144,15 @@ public class RemoteA2aAgentCardCache {
         if (card.skills() == null || card.skills().isEmpty()) {
             return null;
         }
-        String baseName = normalizeName(firstNonBlank(entry.configuredName(), card.name(), "remote-agent"));
+        String baseName;
+        if (entry.configuredName() != null && !entry.configuredName().isBlank()) {
+            baseName = entry.configuredName().trim();
+            if (!baseName.matches("[A-Za-z0-9_-]+")) {
+                throw new IllegalArgumentException("Invalid remote A2A tool name: " + baseName);
+            }
+        } else {
+            baseName = normalizeName(firstNonBlank(card.name(), "remote-agent"));
+        }
         String remoteAgentId = dedupe(baseName, usedNames);
         String description = card.skills().stream()
                 .map(RemoteA2aAgentCardCache::describe)

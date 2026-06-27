@@ -149,7 +149,7 @@ openjiuwen:
 字段：
 
 - `agents[].url`：远端 runtime base URL 或 card URL。
-- `agents[].name`：可选稳定别名，优先作为远端 id 和 toolName 基础值。
+- `agents[].name`：可选本地注入工具名。配置后按用户显式指定的名字使用，不做小写/kebab-case 规范化；只做底线合法性校验和重名处理。
 
 ### 3.3 RemoteA2aAgentCardCache
 
@@ -204,7 +204,7 @@ URL 处理：
 cache 到 registry 的数据流：
 
 1. 对配置 URL 拉取原始 `AgentCard`。
-2. 按映射规则生成 `remoteAgentId`，并用同一个值作为 registry name。
+2. 按工具命名规则生成 `remoteAgentId/toolName`，并用同一个值作为 registry name。
 3. 校验 `AgentCard.supportedInterfaces[0].url` 可被 `A2ARemoteAgentCardRegistry.resolveUrl(name)` 读取；如果 card 缺少可调用 URL，则该 URL 进入 `FAILED`，不生成工具。
 4. 调用 `registry.register(remoteAgentId, card)` 保存原始 card。
 5. 生成 `RemoteA2aToolSpec`。spec 不保存 endpoint，interrupt context 也不保存 endpoint；后续编排层只通过 `agentName -> registry.resolveUrl(agentName)` 找远端地址。
@@ -218,12 +218,20 @@ cache 到 registry 的数据流：
 - 没有 skills 的 card 不生成工具。
 - v1 是“一个远端 agent/card -> 一个文本透传工具”。
 - 多 skill card 不拆成多个本地工具；description 合并 skills 描述，输入仍使用统一文本 envelope。
-- `remoteAgentId` 优先用配置 `name`，其次用 card `name`，最后用 `remote-agent`。
-- id 归一化为小写 kebab-case。
-- 重名时生成 `agent-b-2`、`agent-b-3`。
+- 配置了 `agents[].name` 时，该值就是本地注入工具名和 `remoteAgentId`。实现只 `trim` 前后空白，然后做底线合法性校验；不改大小写，不把空格、下划线、短横线等字符改写成其他形式。
+- 没配置 `agents[].name` 时，才从远端 `card.name` 推导本地工具名；推导值统一规范化为小写 kebab-case，避免把远端展示名直接暴露成本地可调用工具名。
+- `card.name` 为空或规范化后为空时，使用 `remote-agent`。
+- 重名时在最终工具名后追加序号，例如 `agent-b-2`、`agent-b-3`；如果显式配置名为 `Agent B`，则冲突名生成 `Agent B-2`。
 - `toolName` 默认等于 `remoteAgentId`。
 - `description` 由 card skills 的 description 拼接生成。
 - `inputSchema` 使用统一 envelope；v1 不映射远端 skill 的结构化 inputSchema。
+
+命名边界：
+
+- `agents[].name` 是本地调用约定，优先级高于远端 card。推荐配置稳定、清晰、模型易调用的名字，例如 `agent-b` 或 `versatile-agent`。
+- 显式配置名的合法性校验只用于阻止空值、控制字符等明显不可作为 tool name 的值；不要把它当作自动规范化入口。
+- 自动推导名来自远端 `card.name`，而 `card.name` 更接近远端展示名，不保证适合作为本地工具名，所以必须规范化后再注入。
+- `remoteAgentId`、registry name、`ToolCard.id`、`ToolCard.name`、`BaseInterruptRail` 拦截的 `toolName` 必须使用同一个最终工具名。
 
 `RemoteA2aToolSpec` 作为 cache 内部 record：
 

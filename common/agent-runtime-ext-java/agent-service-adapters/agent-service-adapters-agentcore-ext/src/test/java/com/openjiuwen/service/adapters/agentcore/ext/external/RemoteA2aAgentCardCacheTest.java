@@ -24,13 +24,42 @@ class RemoteA2aAgentCardCacheTest {
             cache.refreshPendingOnce();
 
             assertThat(cache.availableToolSpecs()).singleElement().satisfies(spec -> {
-                assertThat(spec.remoteAgentId()).isEqualTo("agent-b");
-                assertThat(spec.toolName()).isEqualTo("agent-b");
+                assertThat(spec.remoteAgentId()).isEqualTo("Agent B");
+                assertThat(spec.toolName()).isEqualTo("Agent B");
                 assertThat(spec.description()).contains("Find hotels");
                 assertThat(spec.inputSchema()).containsEntry("type", "object");
             });
-            assertThat(registry.resolveUrl("agent-b")).isEqualTo(server.baseUrl() + "/a2a");
+            assertThat(registry.resolveUrl("Agent B")).isEqualTo(server.baseUrl() + "/a2a");
             assertThat(server.requests).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void derivesNormalizedToolNameFromCardNameWhenConfiguredNameIsBlank() throws IOException {
+        try (CardServer server = CardServer.start(cardJson("Remote Agent", "Find hotels", "/a2a"))) {
+            RemoteA2aAgentCardCache cache = new RemoteA2aAgentCardCache(
+                    properties(agent(server.baseUrl(), "")),
+                    new A2ARemoteAgentCardRegistry());
+
+            cache.refreshPendingOnce();
+
+            assertThat(cache.availableToolSpecs()).singleElement().satisfies(spec -> {
+                assertThat(spec.remoteAgentId()).isEqualTo("remote-agent");
+                assertThat(spec.toolName()).isEqualTo("remote-agent");
+            });
+        }
+    }
+
+    @Test
+    void rejectsInvalidConfiguredToolName() throws IOException {
+        try (CardServer server = CardServer.start(cardJson("Remote Agent", "Find hotels", "/a2a"))) {
+            RemoteA2aAgentCardCache cache = new RemoteA2aAgentCardCache(
+                    properties(agent(server.baseUrl(), "bad name")),
+                    new A2ARemoteAgentCardRegistry());
+
+            cache.refreshPendingOnce();
+
+            assertThat(cache.availableToolSpecs()).isEmpty();
         }
     }
 
