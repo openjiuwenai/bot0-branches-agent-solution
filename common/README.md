@@ -11,8 +11,8 @@ common
 |       |-- agent-service-adapters-agentcore-ext
 |       `-- agent-service-adapters-versatile
 `-- example
-    |-- agentcore-ext-a2a-demo
-    `-- versatile-query-demo
+    |-- agentcore-ext-remote-a2a-tool-demo
+    `-- versatile-a2a-adapter-demo
 ```
 
 ## 扩展工程
@@ -23,10 +23,10 @@ common
 
 ## 配套示例
 
-- `example/agentcore-ext-a2a-demo`：AgentCore ext 远端 A2A 工具注入示例。
+- `example/agentcore-ext-remote-a2a-tool-demo`：AgentCore ext 远端 A2A 工具注入示例。
   - `agent-a-deepagent-runtime`：Agent A，使用 `agent-service-adapters-agentcore-ext` 的 DeepAgent runtime。
   - `agent-b-versatile-runtime`：Agent B，通过 A2A 暴露的 Versatile runtime。
-- `example/versatile-query-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
+- `example/versatile-a2a-adapter-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
 
 ## 构建
 
@@ -34,5 +34,5 @@ common
 
 ```powershell
 mvn "-Dmaven.repo.local=.m2\repository" -f common\agent-runtime-ext-java\pom.xml clean install "-DskipTests"
-mvn "-Dmaven.repo.local=.m2\repository" -f common\example\agentcore-ext-a2a-demo\pom.xml clean package "-DskipTests"
+mvn "-Dmaven.repo.local=.m2\repository" -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml clean package "-DskipTests"
 ```
