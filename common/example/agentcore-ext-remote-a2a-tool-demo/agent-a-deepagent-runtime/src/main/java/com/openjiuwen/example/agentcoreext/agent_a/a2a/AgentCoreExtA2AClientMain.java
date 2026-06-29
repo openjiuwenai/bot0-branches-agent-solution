@@ -38,7 +38,7 @@ public final class AgentCoreExtA2AClientMain {
                       "contextId": "agentcore-ext-remote-a2a-tool-demo-1",
                       "parts": [
                         {
-                          "text": "{\\"query\\":\\"请调用 versatile-agent 处理：先查询尾号为4241的银行卡余额，再转账5元给李四\\",\\"intent\\":\\"查询账户余额\\"}"
+                          "text": "{\\"query\\":\\"请使用可处理银行业务流程的远端能力处理：先查询尾号为4241的银行卡余额，再转账5元给李四\\",\\"intent\\":\\"查询账户余额\\"}"
                         }
                       ]
                     },

@@ -28,11 +28,52 @@ common
   - `agent-b-versatile-runtime`：Agent B，通过 A2A 暴露的 Versatile runtime。
 - `example/versatile-a2a-adapter-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
 
-## 构建
+## 编译打包流程
 
-在仓库根目录执行：
+### 正式Release版本
+
+如果依赖的 openJiuwen runtime 和 openJiuwen core 已经正式发布，直接在本仓构建 `common` 扩展和示例：
 
 ```powershell
-mvn "-Dmaven.repo.local=.m2\repository" -f common\agent-runtime-ext-java\pom.xml clean install "-DskipTests"
-mvn "-Dmaven.repo.local=.m2\repository" -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml clean package "-DskipTests"
+mvn -f common\agent-runtime-ext-java\pom.xml `
+  clean install
+
+mvn -f common\example\versatile-a2a-adapter-demo\pom.xml `
+  clean install
+
+mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
+  clean install
+```
+
+`common` 和 example 都不跳过测试。
+
+### 非正式Release版本
+
+非正式Release版本可能依赖的是 openJiuwen core 或 openJiuwen runtime 的非正式版本、开发分支，先安装依赖仓库，再构建本仓。
+
+先在 openJiuwen core 仓库执行(目前依赖feature/630分支)：
+
+```powershell
+mvn clean install
+```
+
+再安装 openJiuwen runtime(目前依赖develop分支)：
+
+```powershell
+mvn -f vendor\agent-runtime-java\pom.xml `
+  clean install `
+  "-DskipTests"
+```
+
+最后构建本仓 `common` 扩展和示例：
+
+```powershell
+mvn -f common\agent-runtime-ext-java\pom.xml `
+  clean install
+
+mvn -f common\example\versatile-a2a-adapter-demo\pom.xml `
+  clean install
+
+mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
+  clean install
 ```

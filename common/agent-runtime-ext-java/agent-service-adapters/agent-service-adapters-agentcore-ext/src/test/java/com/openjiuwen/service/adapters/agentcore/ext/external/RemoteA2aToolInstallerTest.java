@@ -10,6 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -74,7 +76,63 @@ class RemoteA2aToolInstallerTest {
     }
 
     @Test
-    void skipsInvalidRegistryEntryName(CapturedOutput output) {
+    void usesRemoteSkillDescriptionsForInjectedToolDescription() {
+        ReActAgent agent = reactAgent();
+        A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
+        registry.register("agent-b", remoteCard("Remote card fallback description", List.of(
+                skill("Process account balance queries"),
+                skill("Handle transfer workflow requests"))));
+        RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
+
+        installer.install(agent);
+
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .filteredOn(tool -> "agent-b".equals(tool.getName()))
+                .singleElement()
+                .satisfies(tool -> assertThat(tool.getDescription())
+                        .contains("Process account balance queries")
+                        .contains("Handle transfer workflow requests")
+                        .doesNotContain("Remote card fallback description"));
+    }
+
+    @Test
+    void fallsBackToRemoteCardDescriptionWhenSkillsAreEmpty() {
+        ReActAgent agent = reactAgent();
+        A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
+        registry.register("agent-b", remoteCard("Remote card fallback description", List.of()));
+        RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
+
+        installer.install(agent);
+
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .filteredOn(tool -> "agent-b".equals(tool.getName()))
+                .singleElement()
+                .satisfies(tool -> assertThat(tool.getDescription())
+                        .isEqualTo("Remote card fallback description"));
+    }
+
+    @Test
+    void keepsRegistryEntryNameAsToolNameWhenRemoteCardNameDiffers() {
+        ReActAgent agent = reactAgent();
+        A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
+        registry.register("agent-b", remoteCard("Remote card fallback description", List.of(skill("Remote skill"))));
+        RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
+
+        installer.install(agent);
+
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .filteredOn(tool -> "agent-b".equals(tool.getName()))
+                .singleElement()
+                .satisfies(tool -> {
+                    assertThat(tool.getName()).isEqualTo("agent-b");
+                    assertThat(tool.getDescription()).isEqualTo("Remote skill");
+                });
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .noneMatch(tool -> "Remote Agent B".equals(tool.getName()));
+    }
+
+    @Test
+    void preservesRegistryEntryNameAsToolNameWithoutFormatValidation() {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
         registry.register("Agent B", null);
@@ -83,8 +141,26 @@ class RemoteA2aToolInstallerTest {
         installer.install(agent);
 
         assertThat(agent.getAbilityManager().listToolInfo())
-                .noneMatch(tool -> "Agent B".equals(tool.getName()));
-        assertThat(output).contains("Invalid remote A2A tool name 'Agent B'");
+                .filteredOn(tool -> "Agent B".equals(tool.getName()))
+                .singleElement()
+                .satisfies(tool -> assertThat(tool.getDescription()).contains("remote A2A agent 'Agent B'"));
+    }
+
+    @Test
+    void preservesRegistryEntryNameAsToolNameWithoutTrimming() {
+        ReActAgent agent = reactAgent();
+        A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
+        registry.register(" agent-b ", null);
+        RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
+
+        installer.install(agent);
+
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .filteredOn(tool -> " agent-b ".equals(tool.getName()))
+                .singleElement()
+                .satisfies(tool -> assertThat(tool.getDescription()).contains("remote A2A agent ' agent-b '"));
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .noneMatch(tool -> "agent-b".equals(tool.getName()));
     }
 
     @Test
@@ -144,5 +220,29 @@ class RemoteA2aToolInstallerTest {
                 .name("Agent A")
                 .description("Agent A")
                 .build());
+    }
+
+    private static org.a2aproject.sdk.spec.AgentCard remoteCard(String description,
+            List<org.a2aproject.sdk.spec.AgentSkill> skills) {
+        return org.a2aproject.sdk.spec.AgentCard.builder()
+                .name("Remote Agent B")
+                .description(description)
+                .version("1.0")
+                .capabilities(new org.a2aproject.sdk.spec.AgentCapabilities(true, false, false, List.of()))
+                .defaultInputModes(List.of())
+                .defaultOutputModes(List.of())
+                .skills(skills)
+                .securitySchemes(Map.of())
+                .securityRequirements(List.of())
+                .supportedInterfaces(List.of(new org.a2aproject.sdk.spec.AgentInterface("jsonrpc",
+                        "http://remote/a2a/", null, "1.0")))
+                .signatures(List.of())
+                .additionalInterfaces(List.of())
+                .build();
+    }
+
+    private static org.a2aproject.sdk.spec.AgentSkill skill(String description) {
+        return new org.a2aproject.sdk.spec.AgentSkill("skill-id", "Skill", description, List.of(), List.of(),
+                List.of(), List.of(), List.of());
     }
 }

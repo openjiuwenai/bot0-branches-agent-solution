@@ -3,7 +3,7 @@
 这个 example 启动两个 runtime：
 
 - Agent A：DeepAgent + `JiuwenCoreAgentExtHandler`，复用 runtime 的远端 A2A card 发现结果注入远端工具。
-- Agent B：`VersatileAgentHandler`，通过 A2A 暴露 card 和 `/a2a/`。
+- Agent B：`VersatileAgentHandler`，通过 runtime 默认 A2A card 和 `/a2a/` 暴露服务。
 
 example 拆成两个可执行 jar，避免一个 jar 内两个 `@SpringBootApplication` 同时被扫描，导致两个 `AgentHandler` bean 同时存在：
 
@@ -80,13 +80,7 @@ mvn "-Dmaven.repo.local=.m2\repository" `
   spring-boot:run
 ```
 
-Agent A 使用 `openjiuwen.service.a2a.remote-agents` 触发 runtime 内置远端 card 发现；`agentcore-ext` 在每次 `query()` / `streamQuery()` 前读取已发现的 registry，并把新增远端 agent 注入为工具。发现成功后，DeepAgent 内部 ReActAgent 会看到配置名：
-
-```text
-versatile-agent
-```
-
-AgentCore/OpenAI function calling 会把该名称规范化为可调用函数名 `versatileagent`，日志中的 `tool_call` 也会显示为 `versatileagent`。
+Agent A 使用 `openjiuwen.service.a2a.remote-agents` 触发 runtime 内置远端 card 发现；`agentcore-ext` 在每次 `query()` / `streamQuery()` 前读取已发现的 registry，并把新增远端 agent 注入为工具。`remote-agents.name` 是 runtime 发现与路由键，不写入 Agent A 给模型的业务指令。
 
 DeepAgent 同时加载 example 内置 skill：
 
@@ -94,7 +88,7 @@ DeepAgent 同时加载 example 内置 skill：
 common/example/agentcore-ext-remote-a2a-tool-demo/skills/remote-versatile/SKILL.md
 ```
 
-这个 skill 会要求 DeepAgent 调用注入工具，也就是配置名 `versatile-agent` / 运行时函数名 `versatileagent`，并使用 `{ "remoteInput": "..." }` 作为工具入参。原始用户 message 先进入 Agent A；DeepAgent 需要把原始 `message.parts[0].text` 原样拷贝到 `remoteInput`，随后 `RemoteA2aInterruptRail` 只读取这个 `remoteInput` 字符串并作为 Agent A 发给 Agent B 的 A2A message。
+这个 skill 会要求 DeepAgent 按工具描述选择可处理银行业务或远端业务流程的注入工具，并使用 `{ "remoteInput": "..." }` 作为工具入参。原始用户 message 先进入 Agent A；DeepAgent 需要把原始 `message.parts[0].text` 原样拷贝到 `remoteInput`，随后 `RemoteA2aInterruptRail` 只读取这个 `remoteInput` 字符串并作为 Agent A 发给 Agent B 的 A2A message。
 
 ## 调用 Agent A：A2A 三轮请求
 
@@ -231,7 +225,7 @@ function Send-AgentARequestJson {
 }
 ```
 
-第一轮进入 Agent A DeepAgent，并要求它调用注入的 `versatile-agent` 工具：
+第一轮进入 Agent A DeepAgent，并要求它使用可处理银行业务流程的远端能力：
 
 ```powershell
 $requestJson1 = New-AgentARequestJson `
@@ -272,7 +266,7 @@ Send-AgentARequestJson $requestJson3
 
 ```text
 Agent A DeepAgent
-  -> LLM calls versatile-agent
+  -> LLM calls the matching injected remote A2A tool
   -> RemoteA2aInterruptRail throws a2a_delegate interrupt
   -> A2AEnabledServeOrchestrator calls Agent B with streaming A2A client
   -> Agent B VersatileAgentHandler calls VERSATILE_URL

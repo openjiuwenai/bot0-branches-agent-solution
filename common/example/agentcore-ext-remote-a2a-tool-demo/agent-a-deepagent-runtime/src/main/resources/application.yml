@@ -44,9 +44,9 @@ openjiuwen:
           - ${DEEP_AGENT_SKILLS_DIR:../skills}
         skill-mode: ${DEEP_AGENT_SKILL_MODE:all}
         system-prompt: >
-          You are Agent A. You have a remote tool named versatile-agent.
-          When the user asks for banking workflow, external workflow, or remote processing,
-          call versatile-agent with a JSON object containing remoteInput.
+          You are Agent A. When the user asks for banking workflow, external workflow,
+          or remote business processing, choose the injected remote A2A tool whose
+          description best matches that capability and call it with a JSON object containing remoteInput.
           remoteInput must be the user's original message text copied unchanged.
           If the user message is a JSON string with query and intent fields, copy that exact JSON string.
           Do not rewrite, summarize, split, or rebuild the query and intent fields yourself.

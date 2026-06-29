@@ -9,20 +9,11 @@ openjiuwen:
       webflux:
         enabled: false
     a2a:
-      agent-name: "VersatileAgent"
-      agent-description: "Remote Versatile runtime used by AgentCore ext demo"
-      provider-organization: "OpenJiuwen"
-      streaming: true
-      default-input-modes: ["text", "text/plain"]
-      default-output-modes: ["text", "text/plain"]
+      agent-description: "Remote runtime that processes banking and external business workflows through Versatile HTTP/SSE."
       skills:
-        - id: "versatile_workflow"
-          name: "Versatile Workflow"
-          description: "Process requests through the configured remote Versatile HTTP/SSE workflow"
-          tags: ["versatile", "workflow", "remote"]
-          examples: ["Process a banking workflow request"]
-          input-modes: ["text", "text/plain"]
-          output-modes: ["text", "text/plain"]
+        - id: "banking_workflow"
+          name: "Banking Workflow"
+          description: "Process banking workflow requests such as account balance lookup, transfer preparation, and follow-up business steps through the configured Versatile HTTP/SSE workflow."
     versatile:
       url-template: ${VERSATILE_URL:http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}}
       timeout: 600s
