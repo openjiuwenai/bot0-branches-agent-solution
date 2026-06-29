@@ -32,8 +32,6 @@ final class VersatileRequestExtractor {
         SemanticInput semanticInput = extractSemanticInput(request);
         Map<String, Object> sourceBody = mapValue(request.getMetadata().get("body"));
         Map<String, Object> remoteBody = new LinkedHashMap<>(mapValue(sourceBody.get("custom_data")));
-        remoteBody.remove("query");
-        remoteBody.remove("intent");
         Map<String, Object> inputs = new LinkedHashMap<>(mapValue(remoteBody.get("inputs")));
         if (hasText(semanticInput.query())) {
             inputs.put("query", semanticInput.query());

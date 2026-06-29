@@ -48,8 +48,10 @@ class VersatileRequestExtractorTest {
                         "query", "new question",
                         "intent", "knowledge_qa"
                 ))
+                .containsEntry("query", "old question")
+                .containsEntry("intent", "old_intent")
                 .containsEntry("city", "Shenzhen");
-        assertThat(remote.body()).doesNotContainKeys("query", "intent", "custom_data");
+        assertThat(remote.body()).doesNotContainKey("custom_data");
     }
 
     @Test
@@ -100,8 +102,9 @@ class VersatileRequestExtractorTest {
         assertThat(remote.body()).containsEntry("inputs", Map.of(
                         "query", "plain question"
                 ))
+                .containsEntry("query", "custom query")
                 .containsEntry("city", "Beijing")
-                .doesNotContainKeys("query", "intent", "custom_data");
+                .doesNotContainKeys("intent", "custom_data");
         assertThat(remote.params()).containsEntry("channel", "web");
     }
 

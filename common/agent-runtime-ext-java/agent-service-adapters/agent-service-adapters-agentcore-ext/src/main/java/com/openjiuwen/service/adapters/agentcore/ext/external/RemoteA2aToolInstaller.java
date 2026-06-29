@@ -7,6 +7,8 @@ package com.openjiuwen.service.adapters.agentcore.ext.external;
 import com.openjiuwen.core.singleagent.BaseAgent;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import org.a2aproject.sdk.spec.AgentCard;
+import org.a2aproject.sdk.spec.AgentSkill;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +22,6 @@ import java.util.WeakHashMap;
 public class RemoteA2aToolInstaller {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteA2aToolInstaller.class);
-    private static final String VALID_TOOL_NAME_PATTERN = "[A-Za-z0-9_-]+";
     private static final Map<String, Object> INPUT_SCHEMA = Map.of(
             "type", "object",
             "properties", Map.of(
@@ -81,22 +82,38 @@ public class RemoteA2aToolInstaller {
         if (toolName == null) {
             return java.util.Optional.empty();
         }
-        return java.util.Optional.of(new RemoteA2aToolSpec(toolName, toolName, description(toolName),
+        return java.util.Optional.of(new RemoteA2aToolSpec(toolName, toolName, description(toolName, entry.card()),
                 INPUT_SCHEMA));
     }
 
     private static String validToolName(String remoteAgentName) {
-        String toolName = remoteAgentName == null ? "" : remoteAgentName.trim();
-        if (toolName.isBlank() || !toolName.matches(VALID_TOOL_NAME_PATTERN)) {
-            log.warn("Invalid remote A2A tool name '{}'. Allowed pattern: {}", remoteAgentName,
-                    VALID_TOOL_NAME_PATTERN);
+        if (remoteAgentName == null || remoteAgentName.isBlank()) {
+            log.warn("Remote A2A agent name is blank, skip tool injection");
             return null;
         }
-        return toolName;
+        return remoteAgentName;
     }
 
-    private static String description(String remoteAgentName) {
+    private static String description(String remoteAgentName, AgentCard card) {
+        String skillDescriptions = skillDescriptions(card);
+        if (!skillDescriptions.isBlank()) {
+            return skillDescriptions;
+        }
+        if (card != null && card.description() != null && !card.description().isBlank()) {
+            return card.description().trim();
+        }
         return "Delegate this request to remote A2A agent '" + remoteAgentName + "'.";
+    }
+
+    private static String skillDescriptions(AgentCard card) {
+        if (card == null || card.skills() == null || card.skills().isEmpty()) {
+            return "";
+        }
+        return card.skills().stream()
+                .map(AgentSkill::description)
+                .filter(description -> description != null && !description.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.joining("\n"));
     }
 
     private static BaseAgent resolveBaseAgent(Object agent) {
