@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.agentcoreext.agent_a;
 
 import com.openjiuwen.core.singleagent.schema.AgentCard;
@@ -15,6 +19,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+/**
+ * Spring Boot application for the AgentCore extension DeepAgent demo runtime.
+ *
+ * @since 2026-06-30
+ */
 @SpringBootApplication
 @EnableConfigurationProperties(DeepAgentLlmProperties.class)
 public class DeepAgentRuntimeApplication {

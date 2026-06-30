@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
 import com.openjiuwen.core.singleagent.ReActAgent;
@@ -18,6 +22,11 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests remote A2A tool installation behavior.
+ *
+ * @since 2026-06-30
+ */
 @ExtendWith(OutputCaptureExtension.class)
 class RemoteA2aToolInstallerTest {
 

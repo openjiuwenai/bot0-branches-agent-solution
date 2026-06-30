@@ -13,6 +13,11 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import java.util.Objects;
 
+/**
+ * AgentCore handler extension that installs remote A2A tools before execution.
+ *
+ * @since 2026-06-30
+ */
 public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     private final RemoteA2aToolInstaller remoteToolInstaller;

@@ -19,6 +19,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 
+/**
+ * Installs remote A2A tool rails into supported AgentCore agents.
+ *
+ * @since 2026-06-30
+ */
 public class RemoteA2aToolInstaller {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteA2aToolInstaller.class);
@@ -38,10 +43,25 @@ public class RemoteA2aToolInstaller {
         this.registry = registry;
     }
 
+    /**
+     * Creates a remote A2A tool installer.
+     *
+     * @param registry remote A2A card registry
+     * @return remote A2A tool installer
+     *
+     * @since 2026-06-30
+     */
     public static RemoteA2aToolInstaller create(A2ARemoteAgentCardRegistry registry) {
         return new RemoteA2aToolInstaller(registry);
     }
 
+    /**
+     * Installs remote A2A tools into the supplied agent when supported.
+     *
+     * @param agent target agent instance
+     *
+     * @since 2026-06-30
+     */
     public void install(Object agent) {
         if (registry == null) {
             return;

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.agentcoreext.agent_a;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -7,6 +11,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Configuration properties for the AgentCore extension DeepAgent demo LLM backend.
+ *
+ * @since 2026-06-30
+ */
 @ConfigurationProperties(prefix = "openjiuwen.demo.deep-agent.llm")
 public class DeepAgentLlmProperties {
 
@@ -25,12 +34,24 @@ public class DeepAgentLlmProperties {
     private List<String> skillDirectories = List.of("common/example/agentcore-ext-remote-a2a-tool-demo/skills");
     private String skillMode = "all";
 
+    /**
+     * Validates that required LLM properties are configured.
+     *
+     * @since 2026-06-30
+     */
     public void requireConfigured() {
         requireText(apiKey, "openjiuwen.demo.deep-agent.llm.api-key");
         requireText(apiBase, "openjiuwen.demo.deep-agent.llm.api-base");
         requireText(modelName, "openjiuwen.demo.deep-agent.llm.model-name");
     }
 
+    /**
+     * Builds the model configuration map used by DeepAgent.
+     *
+     * @return model configuration
+     *
+     * @since 2026-06-30
+     */
     public Map<String, Object> modelConfig() {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("model", modelName);
@@ -39,6 +60,13 @@ public class DeepAgentLlmProperties {
         return model;
     }
 
+    /**
+     * Builds the backend configuration map used by DeepAgent.
+     *
+     * @return backend configuration
+     *
+     * @since 2026-06-30
+     */
     public Map<String, Object> backendConfig() {
         Map<String, Object> backend = new LinkedHashMap<>();
         backend.put("provider", provider);

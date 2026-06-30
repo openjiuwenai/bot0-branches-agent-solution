@@ -16,6 +16,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * Extracts Versatile remote request data from service requests.
+ *
+ * @since 2026-06-30
+ */
 final class VersatileRequestExtractor {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();

@@ -20,6 +20,11 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Interrupt rail that delegates selected tool calls to remote A2A agents.
+ *
+ * @since 2026-06-30
+ */
 public class RemoteA2aInterruptRail extends BaseInterruptRail {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();

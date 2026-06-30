@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -12,6 +16,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Tests remote A2A interrupt rail tool-call delegation.
+ *
+ * @since 2026-06-30
+ */
 class RemoteA2aInterruptRailTest {
 
     @Test

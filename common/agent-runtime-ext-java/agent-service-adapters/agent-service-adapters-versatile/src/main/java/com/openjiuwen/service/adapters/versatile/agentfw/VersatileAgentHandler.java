@@ -20,6 +20,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 
+/**
+ * Agent handler that forwards service requests to a Versatile-compatible HTTP endpoint.
+ *
+ * @since 2026-06-30
+ */
 public class VersatileAgentHandler implements AgentHandler {
 
     private static final Logger log = LoggerFactory.getLogger(VersatileAgentHandler.class);

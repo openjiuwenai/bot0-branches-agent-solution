@@ -11,6 +11,11 @@ import com.openjiuwen.service.spec.dto.QueryChunk;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Extracts service response chunks from Versatile streaming responses.
+ *
+ * @since 2026-06-30
+ */
 final class VersatileResponseExtractor {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile;
 
 import com.openjiuwen.service.adapters.versatile.agentfw.VersatileAgentHandler;
@@ -7,6 +11,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
+/**
+ * Spring Boot application for the Versatile A2A adapter demo.
+ *
+ * @since 2026-06-30
+ */
 @SpringBootApplication
 public class VersatileA2AAdapterDemoApplication {
 

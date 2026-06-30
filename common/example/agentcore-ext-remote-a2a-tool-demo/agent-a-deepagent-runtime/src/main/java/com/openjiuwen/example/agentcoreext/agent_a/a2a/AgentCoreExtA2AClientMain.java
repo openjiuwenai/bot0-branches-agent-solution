@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.agentcoreext.agent_a.a2a;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -15,6 +19,11 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Command-line client that exercises the AgentCore extension A2A demo endpoint.
+ *
+ * @since 2026-06-30
+ */
 public final class AgentCoreExtA2AClientMain {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
