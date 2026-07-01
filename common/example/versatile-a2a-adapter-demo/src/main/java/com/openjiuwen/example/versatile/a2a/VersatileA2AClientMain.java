@@ -37,189 +37,20 @@ public final class VersatileA2AClientMain {
 
     public static void main(String[] args) throws Exception {
         String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18080/a2a/");
-        sendRequest(endpointUrl, firstRequestJson());
-        sendRequest(endpointUrl, secondRequestJson());
-        sendRequest(endpointUrl, thirdRequestJson());
+        sendRequest(endpointUrl, requestJson("request-1.json"));
+        sendRequest(endpointUrl, requestJson("request-2.json"));
+        sendRequest(endpointUrl, requestJson("request-3.json"));
     }
 
-    private static String firstRequestJson() {
-        return """
-                {
-                  "jsonrpc": "2.0",
-                  "id": "versatile-a2a-demo-1",
-                  "method": "SendStreamingMessage",
-                  "params": {
-                    "message": {
-                      "role": "ROLE_USER",
-                      "contextId": "versatile-a2a-1",
-                      "parts": [
-                        {
-                          "text": "{\\"query\\":\\"先查询尾号为4241的银行卡余额，再转账5元给李四\\",\\"intent\\":\\"查询账户余额\\"}"
-                        }
-                      ]
-                    },
-                    "metadata": {
-                      "body": {
-                        "agent_id": "main_planner",
-                        "input": {
-                          "query": "xxx",
-                          "intent": "xxx",
-                          "wap_userName": "张三"
-                        },
-                        "conversation_id": "test-session-001",
-                        "timeout": "300",
-                        "role_id": "1",
-                        "role_name": "手机银行",
-                        "stream": true,
-                        "custom_data": {
-                          "inputs": {
-                            "query": "xxx",
-                            "intent": "xxx",
-                            "wap_userName": "张三"
-                          },
-                          "memory_inputs": {},
-                          "globals": {},
-                          "plugin_configs": [],
-                          "long_term_memory": {
-                            "enable_retrieve": true,
-                            "enable_extract": true
-                          }
-                        }
-                      },
-                      "headers": {
-                        "stream": "true",
-                        "x-invoke-mode": "DEBUG",
-                        "x-language": "zh-cn",
-                        "x-debug-trace": "trace-from-example"
-                      },
-                      "query": {
-                        "workspace_id": "11",
-                        "type": "controller"
-                      }
-                    }
-                  }
-                }
-                """;
-    }
-
-    private static String secondRequestJson() {
-        return """
-                {
-                  "jsonrpc": "2.0",
-                  "id": "versatile-a2a-demo-2",
-                  "method": "SendStreamingMessage",
-                  "params": {
-                    "message": {
-                      "role": "ROLE_USER",
-                      "contextId": "versatile-a2a-1",
-                      "parts": [
-                        {
-                          "text": "{\\"query\\":\\"[{\\\\\\"cardNum\\\\\\":\\\\\\"6222021816044054241\\\\\\",\\\\\\"regAcctType\\\\\\":\\\\\\"011\\\\\\",\\\\\\"cardAlias\\\\\\":\\\\\\"\\\\\\"}]\\",\\"intent\\":\\"LATEST\\"}"
-                        }
-                      ]
-                    },
-                    "metadata": {
-                      "body": {
-                        "agent_id": "main_planner",
-                        "input": {
-                          "query": "xxx",
-                          "intent": "xxx",
-                          "wap_userName": "张三"
-                        },
-                        "conversation_id": "test-session-001",
-                        "timeout": "300",
-                        "role_id": "1",
-                        "role_name": "手机银行",
-                        "stream": true,
-                        "custom_data": {
-                          "inputs": {
-                            "query": "xxx",
-                            "intent": "xxx",
-                            "wap_userName": "张三"
-                          },
-                          "memory_inputs": {},
-                          "globals": {},
-                          "plugin_configs": [],
-                          "long_term_memory": {
-                            "enable_retrieve": true,
-                            "enable_extract": true
-                          }
-                        }
-                      },
-                      "headers": {
-                        "stream": "true",
-                        "x-invoke-mode": "DEBUG",
-                        "x-language": "zh-cn",
-                        "x-debug-trace": "trace-from-example"
-                      },
-                      "query": {
-                        "workspace_id": "11",
-                        "type": "controller"
-                      }
-                    }
-                  }
-                }
-                """;
-    }
-
-    private static String thirdRequestJson() {
-        return """
-                {
-                  "jsonrpc": "2.0",
-                  "id": "versatile-a2a-demo-3",
-                  "method": "SendStreamingMessage",
-                  "params": {
-                    "message": {
-                      "role": "ROLE_USER",
-                      "contextId": "versatile-a2a-1",
-                      "parts": [
-                        {
-                          "text": "{\\"query\\":\\"{\\\\\\"bankCardBalanceList\\\\\\":[{\\\\\\"bankCardNumber\\\\\\":\\\\\\"6222021816044054241\\\\\\",\\\\\\"mediumStatus\\\\\\":\\\\\\"0\\\\\\",\\\\\\"currencyBalanceList\\\\\\":[{\\\\\\"currencyCode\\\\\\":\\\\\\"001\\\\\\",\\\\\\"currencyName\\\\\\":\\\\\\"人民币可用余额\\\\\\",\\\\\\"balance\\\\\\":\\\\\\"1500.92\\\\\\"}]}],\\\\\\"responseData\\\\\\":[{\\\\\\"answer\\\\\\":\\\\\\"已为您查询账户余额\\\\\\",\\\\\\"readme\\\\\\":\\\\\\"已为您查询账户余额\\\\\\",\\\\\\"pageData\\\\\\":\\\\\\"\\\\\\",\\\\\\"type\\\\\\":\\\\\\"1\\\\\\"}]}\\",\\"intent\\":\\"LATEST\\"}"
-                        }
-                      ]
-                    },
-                    "metadata": {
-                      "body": {
-                        "agent_id": "main_planner",
-                        "input": {
-                          "query": "xxx",
-                          "intent": "xxx",
-                          "wap_userName": "张三"
-                        },
-                        "conversation_id": "test-session-001",
-                        "timeout": "300",
-                        "role_id": "1",
-                        "role_name": "手机银行",
-                        "stream": true,
-                        "custom_data": {
-                          "inputs": {
-                            "query": "xxx",
-                            "intent": "xxx",
-                            "wap_userName": "张三"
-                          },
-                          "memory_inputs": {},
-                          "globals": {},
-                          "plugin_configs": [],
-                          "long_term_memory": {
-                            "enable_retrieve": true,
-                            "enable_extract": true
-                          }
-                        }
-                      },
-                      "headers": {
-                        "stream": "true",
-                        "x-invoke-mode": "DEBUG",
-                        "x-language": "zh-cn",
-                        "x-debug-trace": "trace-from-example"
-                      },
-                      "query": {
-                        "workspace_id": "11",
-                        "type": "controller"
-                      }
-                    }
-                  }
-                }
-                """;
+    private static String requestJson(String fileName) throws Exception {
+        String resourceName = "a2a-requests/" + fileName;
+        try (InputStream inputStream = VersatileA2AClientMain.class.getClassLoader()
+                .getResourceAsStream(resourceName)) {
+            if (inputStream == null) {
+                throw new IllegalStateException("Missing request resource: " + resourceName);
+            }
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private static void sendRequest(String endpointUrl, String requestJson) throws Exception {

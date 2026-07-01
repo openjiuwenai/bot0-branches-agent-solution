@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -69,13 +70,14 @@ public class RemoteA2aToolInstaller {
             log.info("agent-id mode cannot install remote A2A tools in v1");
             return;
         }
-        BaseAgent target = resolveBaseAgent(agent);
-        if (target == null) {
+        Optional<BaseAgent> target = resolveBaseAgent(agent);
+        if (target.isEmpty()) {
             log.warn("Unsupported agent type for remote A2A tool install: {}",
                     agent == null ? "null" : agent.getClass().getName());
             return;
         }
-        Set<String> installedNames = installedRemoteAgentNames.computeIfAbsent(target, key -> new LinkedHashSet<>());
+        BaseAgent targetAgent = target.get();
+        Set<String> installedNames = installedRemoteAgentNames.computeIfAbsent(targetAgent, key -> new LinkedHashSet<>());
         synchronized (installedNames) {
             List<RemoteA2aToolSpec> newSpecs = registry.getAll().stream()
                     .filter(entry -> !installedNames.contains(entry.name()))
@@ -86,31 +88,28 @@ public class RemoteA2aToolInstaller {
                 return;
             }
             RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(newSpecs);
-            target.registerRail(rail);
+            targetAgent.registerRail(rail);
             newSpecs.forEach(spec -> installedNames.add(spec.remoteAgentId()));
             log.info("Installed remote A2A interrupt rail rail={} targetAgent={} tools={} toolDetails={}",
                     rail.getClass().getSimpleName(),
-                    target.getClass().getName(),
+                    targetAgent.getClass().getName(),
                     newSpecs.stream().map(RemoteA2aToolSpec::toolName).toList(),
                     newSpecs);
         }
     }
 
-    private static java.util.Optional<RemoteA2aToolSpec> toSpec(A2ARemoteAgentCardRegistry.RemoteAgentEntry entry) {
-        String toolName = validToolName(entry.name());
-        if (toolName == null) {
-            return java.util.Optional.empty();
-        }
-        return java.util.Optional.of(new RemoteA2aToolSpec(toolName, toolName, description(toolName, entry.card()),
-                INPUT_SCHEMA));
+    private static Optional<RemoteA2aToolSpec> toSpec(A2ARemoteAgentCardRegistry.RemoteAgentEntry entry) {
+        return validToolName(entry.name())
+                .map(toolName -> new RemoteA2aToolSpec(toolName, toolName, description(toolName, entry.card()),
+                        INPUT_SCHEMA));
     }
 
-    private static String validToolName(String remoteAgentName) {
+    private static Optional<String> validToolName(String remoteAgentName) {
         if (remoteAgentName == null || remoteAgentName.isBlank()) {
             log.warn("Remote A2A agent name is blank, skip tool injection");
-            return null;
+            return Optional.empty();
         }
-        return remoteAgentName;
+        return Optional.of(remoteAgentName);
     }
 
     private static String description(String remoteAgentName, AgentCard card) {
@@ -135,14 +134,14 @@ public class RemoteA2aToolInstaller {
                 .collect(java.util.stream.Collectors.joining("\n"));
     }
 
-    private static BaseAgent resolveBaseAgent(Object agent) {
+    private static Optional<BaseAgent> resolveBaseAgent(Object agent) {
         if (agent instanceof BaseAgent baseAgent) {
-            return baseAgent;
+            return Optional.of(baseAgent);
         }
         if (agent instanceof DeepAgent deepAgent) {
-            return deepAgent.getAgent();
+            return Optional.ofNullable(deepAgent.getAgent());
         }
-        return null;
+        return Optional.empty();
     }
 
     public record RemoteA2aToolSpec(String remoteAgentId, String toolName, String description,

@@ -11,6 +11,7 @@ import com.openjiuwen.service.spec.dto.QueryChunk;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Extracts service response chunks from Versatile streaming responses.
@@ -34,30 +35,30 @@ final class VersatileResponseExtractor {
         if (line == null || line.isBlank()) {
             return List.of();
         }
-        String data = stripSsePrefix(line);
-        if (data == null || data.isBlank()) {
+        Optional<String> data = stripSsePrefix(line);
+        if (data.isEmpty() || data.get().isBlank()) {
             return new ArrayList<>();
         }
 
-        JsonNode json = readTree(data);
-        if (shouldExtractResult(data, json)) {
-            String extracted = extractResult(json);
-            if (extracted != null) {
-                result = extracted;
+        Optional<JsonNode> json = readTree(data.get());
+        if (shouldExtractResult(data.get(), json)) {
+            Optional<String> extracted = extractResult(json.get());
+            if (extracted.isPresent()) {
+                result = extracted.get();
                 return new ArrayList<>();
             }
         }
 
-        if (hasTextField(json, "event", "exception")) {
+        if (hasTextField(json.orElse(null), "event", "exception")) {
             isCompleted = true;
             hasFailed = true;
-            error = data;
+            error = data.get();
         }
-        if (containsNodeTypeEnd(json)) {
+        if (json.filter(this::containsNodeTypeEnd).isPresent()) {
             isCompleted = true;
         }
 
-        return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, data));
+        return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, data.get()));
     }
 
     List<QueryChunk> finish() {
@@ -70,28 +71,27 @@ final class VersatileResponseExtractor {
         return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, null));
     }
 
-    private boolean shouldExtractResult(String rawData, JsonNode json) {
+    private boolean shouldExtractResult(String rawData, Optional<JsonNode> json) {
         return resultNodeName != null
                 && !resultNodeName.trim().isEmpty()
                 && rawData.contains("\"node_name\":\"" + resultNodeName + "\"")
-                && json != null
-                && json.isObject();
+                && json.filter(JsonNode::isObject).isPresent();
     }
 
-    private String extractResult(JsonNode json) {
+    private Optional<String> extractResult(JsonNode json) {
         JsonNode resultData = json.at("/custom_rsp_data/data");
         if (resultData.isMissingNode() || resultData.isNull()) {
             resultData = json.get("data");
         }
         if (resultData == null || resultData.isMissingNode() || resultData.isNull()) {
-            return null;
+            return Optional.empty();
         }
         JsonNode nodeType = resultData.get("node_type");
         JsonNode text = resultData.get("text");
         if (nodeType != null && "QA".equals(nodeType.asText()) && text != null && !text.asText().isBlank()) {
-            return text.asText();
+            return Optional.of(text.asText());
         }
-        return null;
+        return Optional.empty();
     }
 
     private boolean containsNodeTypeEnd(JsonNode json) {
@@ -119,22 +119,22 @@ final class VersatileResponseExtractor {
         return field != null && expected.equals(field.asText());
     }
 
-    private JsonNode readTree(String data) {
+    private Optional<JsonNode> readTree(String data) {
         try {
-            return OBJECT_MAPPER.readTree(data);
+            return Optional.of(OBJECT_MAPPER.readTree(data));
         } catch (JsonProcessingException ignored) {
-            return null;
+            return Optional.empty();
         }
     }
 
-    private String stripSsePrefix(String line) {
+    private Optional<String> stripSsePrefix(String line) {
         String trimmed = line.trim();
         if (trimmed.startsWith("data:")) {
-            return trimmed.substring("data:".length()).trim();
+            return Optional.of(trimmed.substring("data:".length()).trim());
         }
         if (trimmed.contains(":") && !trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-            return null;
+            return Optional.empty();
         }
-        return trimmed;
+        return Optional.of(trimmed);
     }
 }

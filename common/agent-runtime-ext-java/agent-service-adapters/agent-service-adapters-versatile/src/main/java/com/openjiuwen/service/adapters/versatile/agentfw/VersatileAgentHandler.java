@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CancellationException;
 
 /**
@@ -45,22 +46,26 @@ public class VersatileAgentHandler implements AgentHandler {
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
         log.debug("Versatile query request={}", logServeRequest(request));
-        VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
-        log.info("Resolved Versatile remote request conversation_id={} url={} headers={} params={} body_keys={}",
-                request.getConversationId(), remoteRequest.url(),
-                remoteRequest.headers().size(), remoteRequest.params().size(), remoteRequest.body().keySet());
-        log.debug("Versatile remote request conversation_id={} request={}",
-                request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+        QueryInvocationResult invocationResult = invokeForQuery(request);
+        Object content = resolveQueryContent(request, invocationResult);
+        Map<String, Object> result = assistantResult(content);
+        QueryResponse response = new QueryResponse(result, request.getConversationId());
+        log.info("Completed Versatile query conversation_id={} content_present={}",
+                request.getConversationId(), !String.valueOf(content).isEmpty());
+        log.debug("Versatile query response conversation_id={} result={}",
+                request.getConversationId(), result);
+        return response;
+    }
 
+    private QueryInvocationResult invokeForQuery(ServeRequest request) {
+        VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
+        logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
         VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
         List<QueryChunk> chunks = new ArrayList<>();
-        String[] lastEvent = new String[1];
+        LastEventHolder lastEvent = new LastEventHolder();
         try {
             client.postStream(remoteRequest, line -> {
-                String event = stripSsePrefix(line);
-                if (event != null && !event.isBlank()) {
-                    lastEvent[0] = event;
-                }
+                stripSsePrefix(line).filter(event -> !event.isBlank()).ifPresent(lastEvent::set);
                 chunks.addAll(responseExtractor.consumeLine(line));
             });
             chunks.addAll(responseExtractor.finish());
@@ -68,32 +73,34 @@ public class VersatileAgentHandler implements AgentHandler {
             log.error("Versatile invocation failed conversation_id={}", request.getConversationId(), exception);
             throw new IllegalStateException("Versatile invocation failed", exception);
         }
+        return new QueryInvocationResult(chunks, lastEvent.value());
+    }
 
-        Object content = null;
-        for (QueryChunk chunk : chunks) {
+    private Object resolveQueryContent(ServeRequest request, QueryInvocationResult invocationResult) {
+        Optional<Object> answer = Optional.empty();
+        for (QueryChunk chunk : invocationResult.chunks()) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
                         request.getConversationId(), chunk.getData());
                 throw new IllegalStateException(String.valueOf(chunk.getData()));
             }
             if (QueryChunk.TYPE_ANSWER.equals(chunk.getType()) && chunk.getData() != null) {
-                content = chunk.getData();
+                answer = Optional.of(chunk.getData());
             }
         }
-        if (content == null) {
-            content = lastEvent[0] != null ? lastEvent[0] : "";
-            log.info("Versatile query finished without answer, using fallback content conversation_id={}",
-                    request.getConversationId());
+        if (answer.isPresent()) {
+            return answer.get();
         }
+        log.info("Versatile query finished without answer, using fallback content conversation_id={}",
+                request.getConversationId());
+        return invocationResult.lastEvent().orElse("");
+    }
+
+    private static Map<String, Object> assistantResult(Object content) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("role", "assistant");
         result.put("content", String.valueOf(content));
-        QueryResponse response = new QueryResponse(result, request.getConversationId());
-        log.info("Completed Versatile query conversation_id={} content_present={}",
-                request.getConversationId(), !String.valueOf(content).isEmpty());
-        log.debug("Versatile query response conversation_id={} result={}",
-                request.getConversationId(), result);
-        return response;
+        return result;
     }
 
     @Override
@@ -121,11 +128,7 @@ public class VersatileAgentHandler implements AgentHandler {
 
     private List<QueryChunk> execute(ServeRequest request, QueryStreamObserver observer) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
-        log.info("Resolved Versatile remote request conversation_id={} url={} headers={} params={} body_keys={}",
-                request.getConversationId(), remoteRequest.url(),
-                remoteRequest.headers().size(), remoteRequest.params().size(), remoteRequest.body().keySet());
-        log.debug("Versatile remote request conversation_id={} request={}",
-                request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+        logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
         VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
         try {
             client.postStream(remoteRequest, line -> {
@@ -175,17 +178,41 @@ public class VersatileAgentHandler implements AgentHandler {
         return data;
     }
 
-    private static String stripSsePrefix(String line) {
+    private void logRemoteRequest(
+            String message, ServeRequest request, VersatileRequestExtractor.RemoteRequest remoteRequest) {
+        log.info("{} conversation_id={} url={} headers={} params={} body_keys={}",
+                message, request.getConversationId(), remoteRequest.url(),
+                remoteRequest.headers().size(), remoteRequest.params().size(), remoteRequest.body().keySet());
+        log.debug("Versatile remote request conversation_id={} request={}",
+                request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+    }
+
+    private static Optional<String> stripSsePrefix(String line) {
         if (line == null) {
-            return null;
+            return Optional.empty();
         }
         String trimmed = line.trim();
         if (trimmed.startsWith("data:")) {
-            return trimmed.substring("data:".length()).trim();
+            return Optional.of(trimmed.substring("data:".length()).trim());
         }
         if (trimmed.contains(":") && !trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-            return null;
+            return Optional.empty();
         }
-        return trimmed;
+        return Optional.of(trimmed);
+    }
+
+    private record QueryInvocationResult(List<QueryChunk> chunks, Optional<String> lastEvent) {
+    }
+
+    private static final class LastEventHolder {
+        private String value;
+
+        private void set(String value) {
+            this.value = value;
+        }
+
+        private Optional<String> value() {
+            return Optional.ofNullable(value);
+        }
     }
 }
