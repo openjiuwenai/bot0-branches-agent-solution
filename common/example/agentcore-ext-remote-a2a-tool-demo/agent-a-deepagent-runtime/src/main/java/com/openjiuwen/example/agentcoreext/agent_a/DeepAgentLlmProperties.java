@@ -23,7 +23,8 @@ public class DeepAgentLlmProperties {
     private String apiBase = "https://api.deepseek.com";
     private String modelName = "deepseek-chat";
     private boolean sslVerify = true;
-    private String systemPrompt = "You are Agent A. When the user asks for remote business processing, call the remote A2A tool.";
+    private String systemPrompt = "You are Agent A. When the user asks for remote business processing, "
+            + "call the remote A2A tool.";
     private Double temperature = 0.2;
     private Double topP = 0.8;
     private Duration timeout = Duration.ofSeconds(120);

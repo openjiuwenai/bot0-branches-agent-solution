@@ -61,7 +61,8 @@ final class VersatileHttpClient {
             builder.setHeader(header.getKey(), header.getValue());
         }
 
-        HttpResponse<InputStream> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> response = httpClient.send(
+                builder.build(), HttpResponse.BodyHandlers.ofInputStream());
         log.info("Received Versatile response status={} url={}", response.statusCode(), url);
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             String responseBody;
@@ -72,7 +73,8 @@ final class VersatileHttpClient {
             throw new IOException("Versatile HTTP " + response.statusCode() + ": " + responseBody);
         }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (!line.isBlank()) {

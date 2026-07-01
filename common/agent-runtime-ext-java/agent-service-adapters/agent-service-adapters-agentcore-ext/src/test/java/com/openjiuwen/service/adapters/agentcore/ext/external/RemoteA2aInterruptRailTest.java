@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RemoteA2aInterruptRailTest {
     @Test
     void exposesToolCardAndInterruptsWithA2aDelegateContext() {
-        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b")));
         ToolCall toolCall = ToolCall.builder()
                 .id("call-1")
                 .name("agent-b")
@@ -38,11 +37,10 @@ class RemoteA2aInterruptRailTest {
                 .inputs(inputs)
                 .extra(new java.util.HashMap<>())
                 .build();
+        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b")));
 
         assertThatThrownBy(() -> rail.beforeToolCall(ctx))
-                .isInstanceOf(ToolInterruptException.class)
-                .satisfies(error -> {
-                    ToolInterruptException exception = (ToolInterruptException) error;
+                .isInstanceOfSatisfying(ToolInterruptException.class, exception -> {
                     assertThat(exception.getRequest().getMessage()).isEqualTo("find hotels");
                     assertThat(exception.getRequest().getContext())
                             .containsEntry("agentName", "agent-b")
@@ -58,7 +56,6 @@ class RemoteA2aInterruptRailTest {
 
     @Test
     void resumeRejectsRemoteResultSoAbilityManagerSkipsRealToolLookup() {
-        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b")));
         ToolCall toolCall = ToolCall.builder()
                 .id("call-1")
                 .name("agent-b")
@@ -72,6 +69,7 @@ class RemoteA2aInterruptRailTest {
                 .inputs(inputs)
                 .extra(new java.util.HashMap<>(Map.of("_resume_user_input", "remote result")))
                 .build();
+        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b")));
 
         rail.beforeToolCall(ctx);
 
@@ -83,7 +81,6 @@ class RemoteA2aInterruptRailTest {
 
     @Test
     void dispatchesMultipleRemoteToolsByToolName() {
-        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b"), spec("agent-c")));
         ToolCallInputs inputs = ToolCallInputs.builder()
                 .toolCall(ToolCall.builder()
                         .id("call-1")
@@ -96,10 +93,11 @@ class RemoteA2aInterruptRailTest {
                 .inputs(inputs)
                 .extra(new java.util.HashMap<>())
                 .build();
+        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b"), spec("agent-c")));
 
         assertThatThrownBy(() -> rail.beforeToolCall(ctx))
-                .isInstanceOf(ToolInterruptException.class)
-                .satisfies(error -> assertThat(((ToolInterruptException) error).getRequest().getContext())
+                .isInstanceOfSatisfying(ToolInterruptException.class, exception -> assertThat(
+                                exception.getRequest().getContext())
                         .containsEntry("agentName", "agent-c"));
         assertThat(rail.getTools()).extracting(card -> card.getName())
                 .containsExactlyInAnyOrder("agent-b", "agent-c");
@@ -107,7 +105,6 @@ class RemoteA2aInterruptRailTest {
 
     @Test
     void dispatchesByToolInputsNameWhenToolCallNameDiffers() {
-        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b"), spec("agent-c")));
         ToolCallInputs inputs = ToolCallInputs.builder()
                 .toolCall(ToolCall.builder()
                         .id("call-1")
@@ -120,10 +117,11 @@ class RemoteA2aInterruptRailTest {
                 .inputs(inputs)
                 .extra(new java.util.HashMap<>())
                 .build();
+        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b"), spec("agent-c")));
 
         assertThatThrownBy(() -> rail.beforeToolCall(ctx))
-                .isInstanceOf(ToolInterruptException.class)
-                .satisfies(error -> assertThat(((ToolInterruptException) error).getRequest().getContext())
+                .isInstanceOfSatisfying(ToolInterruptException.class, exception -> assertThat(
+                                exception.getRequest().getContext())
                         .containsEntry("agentName", "agent-c"));
     }
 
@@ -140,19 +138,19 @@ class RemoteA2aInterruptRailTest {
                 .build();
 
         assertThatThrownBy(() -> rail.beforeToolCall(ctx))
-                .isInstanceOf(ToolInterruptException.class)
-                .satisfies(error -> assertThat(((ToolInterruptException) error).getRequest().getMessage())
+                .isInstanceOfSatisfying(ToolInterruptException.class, exception -> assertThat(
+                                exception.getRequest().getMessage())
                         .isEqualTo("plain text"));
     }
 
     @Test
     void preservesStructuredRemoteInputStringAsOpaqueMessage() {
-        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b")));
         ToolCallInputs inputs = ToolCallInputs.builder()
                 .toolCall(ToolCall.builder()
                         .id("call-1")
                         .name("agent-b")
-                        .arguments("{\"remoteInput\":\"{\\\"query\\\":\\\"find balance\\\",\\\"intent\\\":\\\"查询账户余额\\\"}\"}")
+                        .arguments("{\"remoteInput\":\"{\\\"query\\\":\\\"find balance\\\","
+                                + "\\\"intent\\\":\\\"查询账户余额\\\"}\"}")
                         .build())
                 .toolName("agent-b")
                 .build();
@@ -160,11 +158,10 @@ class RemoteA2aInterruptRailTest {
                 .inputs(inputs)
                 .extra(new java.util.HashMap<>())
                 .build();
+        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b")));
 
         assertThatThrownBy(() -> rail.beforeToolCall(ctx))
-                .isInstanceOf(ToolInterruptException.class)
-                .satisfies(error -> {
-                    ToolInterruptException exception = (ToolInterruptException) error;
+                .isInstanceOfSatisfying(ToolInterruptException.class, exception -> {
                     assertThat(exception.getRequest().getMessage())
                             .isEqualTo("{\"query\":\"find balance\",\"intent\":\"查询账户余额\"}");
                 });

@@ -42,7 +42,7 @@ class AgentCoreExtAutoConfigurationTest {
     }
 
     @Test
-    void createsInstallerForPlainAgentcoreHandlerWithoutOwningHandlerSelection() {
+    void createsInstallerForPlainAgentcoreHandler() {
         runner.withPropertyValues("openjiuwen.service.handler=agentcore")
                 .run(context -> {
                     assertThat(context).hasSingleBean(RemoteA2aToolInstaller.class);

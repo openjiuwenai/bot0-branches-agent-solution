@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ExtendWith(OutputCaptureExtension.class)
 class RemoteA2aToolInstallerTest {
     @Test
-    void installsRailToolCardIntoBaseAgentAbilityManagerWithoutDuplicating(CapturedOutput output) {
+    void installsRailToolCardIntoBaseAgent(CapturedOutput output) {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
         registry.register("agent-b", null);
@@ -166,7 +166,8 @@ class RemoteA2aToolInstallerTest {
         assertThat(agent.getAbilityManager().listToolInfo())
                 .filteredOn(tool -> " agent-b ".equals(tool.getName()))
                 .singleElement()
-                .satisfies(tool -> assertThat(tool.getDescription()).contains("remote A2A agent ' agent-b '"));
+                .satisfies(tool -> assertThat(tool.getDescription())
+                        .contains("remote A2A agent ' agent-b '"));
         assertThat(agent.getAbilityManager().listToolInfo())
                 .noneMatch(tool -> "agent-b".equals(tool.getName()));
     }

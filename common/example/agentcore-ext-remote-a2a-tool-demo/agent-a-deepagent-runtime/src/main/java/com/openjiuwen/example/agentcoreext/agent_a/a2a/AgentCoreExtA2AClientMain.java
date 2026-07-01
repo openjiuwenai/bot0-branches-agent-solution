@@ -6,6 +6,8 @@ package com.openjiuwen.example.agentcoreext.agent_a.a2a;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -25,6 +27,7 @@ import java.util.Map;
  * @since 2026-06-30
  */
 public final class AgentCoreExtA2AClientMain {
+    private static final Logger log = LoggerFactory.getLogger(AgentCoreExtA2AClientMain.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -33,8 +36,6 @@ public final class AgentCoreExtA2AClientMain {
     }
 
     public static void main(String[] args) throws Exception {
-        String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18090/a2a/");
-
         String requestJson1 = """
                 {
                   "jsonrpc": "2.0",
@@ -92,6 +93,8 @@ public final class AgentCoreExtA2AClientMain {
                   }
                 }
                 """;
+        String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18090/a2a/");
+        sendRequest(endpointUrl, requestJson1);
 
         String requestJson2 = """
                 {
@@ -150,6 +153,7 @@ public final class AgentCoreExtA2AClientMain {
                   }
                 }
                 """;
+        sendRequest(endpointUrl, requestJson2);
 
         String requestJson3 = """
                 {
@@ -208,9 +212,6 @@ public final class AgentCoreExtA2AClientMain {
                   }
                 }
                 """;
-
-        sendRequest(endpointUrl, requestJson1);
-        sendRequest(endpointUrl, requestJson2);
         sendRequest(endpointUrl, requestJson3);
     }
 
@@ -220,9 +221,9 @@ public final class AgentCoreExtA2AClientMain {
         Map<String, Object> metadata = mapValue(params.get("metadata"));
         Map<String, Object> headers = new LinkedHashMap<>(mapValue(metadata.get("headers")));
 
-        System.out.println("POST " + endpointUrl);
-        System.out.println("Request body:");
-        System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root));
+        log.info("POST {}", endpointUrl);
+        log.info("Request body:");
+        log.info("{}", MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root));
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(endpointUrl))
                 .timeout(Duration.ofSeconds(600))
@@ -242,14 +243,15 @@ public final class AgentCoreExtA2AClientMain {
         HttpClient client = HttpClient.newHttpClient();
         HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
-        System.out.println("HTTP " + response.statusCode());
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+        log.info("HTTP {}", response.statusCode());
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+                log.info("{}", line);
             }
         }
-        System.out.println();
+        log.info("");
     }
 
     private static Map<String, Object> mapValue(Object value) {

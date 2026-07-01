@@ -48,7 +48,8 @@ class VersatileHttpClientTest {
             received.add(exchange.getRequestURI().getQuery());
             received.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             received.add(exchange.getProtocol());
-            byte[] body = "data: {\"event\":\"message\"}\n\ndata: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8);
+            byte[] body = ("data: {\"event\":\"message\"}\n\n"
+                    + "data: {\"data\":{\"node_type\":\"End\"}}\n").getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();
@@ -160,7 +161,8 @@ class VersatileHttpClientTest {
                 exchange.getResponseBody().flush();
                 serverSawFirstLine.set(firstLineReceived.await(2, TimeUnit.SECONDS));
                 allowCompletion.countDown();
-                exchange.getResponseBody().write("data: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8));
+                exchange.getResponseBody().write(
+                        "data: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new IOException(exception);

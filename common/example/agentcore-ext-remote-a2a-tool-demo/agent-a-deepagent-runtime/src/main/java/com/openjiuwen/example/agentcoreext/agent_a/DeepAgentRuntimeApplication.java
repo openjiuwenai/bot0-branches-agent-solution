@@ -42,11 +42,6 @@ public class DeepAgentRuntimeApplication {
     }
 
     static DeepAgent buildDeepAgent(DeepAgentLlmProperties properties) {
-        AgentCard card = AgentCard.builder()
-                .id(AGENT_ID)
-                .name("AgentCoreExtDeepAgent")
-                .description("DeepAgent runtime with remote A2A tool injection")
-                .build();
         DeepAgentConfig config = DeepAgentConfig.builder()
                 .systemPrompt(properties.getSystemPrompt())
                 .maxIterations(properties.getMaxIterations())
@@ -64,6 +59,11 @@ public class DeepAgentRuntimeApplication {
         Workspace workspace = Workspace.builder()
                 .rootPath(properties.getWorkspacePath())
                 .language("zh-CN")
+                .build();
+        AgentCard card = AgentCard.builder()
+                .id(AGENT_ID)
+                .name("AgentCoreExtDeepAgent")
+                .description("DeepAgent runtime with remote A2A tool injection")
                 .build();
         return new DeepAgent(card, config, workspace);
     }

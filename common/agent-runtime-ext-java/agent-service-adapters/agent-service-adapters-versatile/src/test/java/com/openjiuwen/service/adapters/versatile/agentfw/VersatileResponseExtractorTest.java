@@ -35,7 +35,8 @@ class VersatileResponseExtractorTest {
     void extractsResultNodeAndEmitsAnswerOnEnd() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
-        assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
+        assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
+                + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
                 .isEmpty();
         List<QueryChunk> chunks = new ArrayList<>(
                 extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
@@ -50,7 +51,8 @@ class VersatileResponseExtractorTest {
     void emitsInterruptWhenResultNodeArrivesWithoutEndSignal() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
-        assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
+        assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
+                + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
                 .isEmpty();
         List<QueryChunk> chunks = extractor.finish();
 
@@ -63,7 +65,8 @@ class VersatileResponseExtractorTest {
     void extractsResultFromCustomResponseData() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
-        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":{\"node_type\":\"QA\",\"text\":\"custom final\"}}}"))
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"text\":\"custom final\"}}}"))
                 .isEmpty();
         List<QueryChunk> chunks = new ArrayList<>(
                 extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
