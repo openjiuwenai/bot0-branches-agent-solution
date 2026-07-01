@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -108,7 +109,7 @@ final class VersatileRequestExtractor {
             if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
                 try {
                     return OBJECT_MAPPER.readValue(trimmed, MAP_TYPE);
-                } catch (Exception ignored) {
+                } catch (JsonProcessingException ignored) {
                     return Map.of();
                 }
             }

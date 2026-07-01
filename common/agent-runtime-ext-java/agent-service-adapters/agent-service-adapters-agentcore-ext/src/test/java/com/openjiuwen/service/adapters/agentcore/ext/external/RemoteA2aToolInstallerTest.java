@@ -16,9 +16,10 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -198,25 +199,22 @@ class RemoteA2aToolInstallerTest {
         int workers = 8;
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(workers);
-        var executor = Executors.newFixedThreadPool(workers);
-        try {
-            for (int i = 0; i < workers; i++) {
-                executor.submit(() -> {
+        List<CompletableFuture<Void>> tasks = IntStream.range(0, workers)
+                .mapToObj(index -> CompletableFuture.runAsync(() -> {
                     try {
                         start.await();
                         installer.install(agent);
                     } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(e);
                     } finally {
                         done.countDown();
                     }
-                });
-            }
-            start.countDown();
-            assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
-        } finally {
-            executor.shutdownNow();
-        }
+                }))
+                .toList();
+
+        start.countDown();
+        CompletableFuture.allOf(tasks.toArray(CompletableFuture[]::new)).get(5, TimeUnit.SECONDS);
+        assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
 
         assertThat(agent.getAbilityManager().listToolInfo())
                 .filteredOn(tool -> "agent-b".equals(tool.getName()))

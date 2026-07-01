@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.agentcoreext.agent_a;
+package com.openjiuwen.example.agentcoreext.agenta;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -22,7 +22,7 @@ public class DeepAgentLlmProperties {
     private String apiKey = "";
     private String apiBase = "https://api.deepseek.com";
     private String modelName = "deepseek-chat";
-    private boolean sslVerify = true;
+    private boolean isSslVerify = true;
     private String systemPrompt = "You are Agent A. When the user asks for remote business processing, "
             + "call the remote A2A tool.";
     private Double temperature = 0.2;
@@ -72,7 +72,7 @@ public class DeepAgentLlmProperties {
         backend.put("provider", provider);
         backend.put("api_key", apiKey);
         backend.put("api_base", apiBase);
-        backend.put("verify_ssl", sslVerify);
+        backend.put("verify_ssl", isSslVerify);
         backend.put("timeout", timeout.toSeconds());
         return backend;
     }
@@ -110,11 +110,11 @@ public class DeepAgentLlmProperties {
     }
 
     public boolean isSslVerify() {
-        return sslVerify;
+        return isSslVerify;
     }
 
-    public void setSslVerify(boolean sslVerify) {
-        this.sslVerify = sslVerify;
+    public void setSslVerify(boolean isSslVerify) {
+        this.isSslVerify = isSslVerify;
     }
 
     public String getSystemPrompt() {

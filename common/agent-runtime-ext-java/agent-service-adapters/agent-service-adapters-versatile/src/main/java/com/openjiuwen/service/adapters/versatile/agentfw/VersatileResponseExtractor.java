@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.dto.QueryChunk;
@@ -20,8 +21,8 @@ final class VersatileResponseExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String resultNodeName;
-    private boolean completed;
-    private boolean failed;
+    private boolean isCompleted;
+    private boolean hasFailed;
     private String result;
     private String error;
 
@@ -48,22 +49,22 @@ final class VersatileResponseExtractor {
         }
 
         if (hasTextField(json, "event", "exception")) {
-            completed = true;
-            failed = true;
+            isCompleted = true;
+            hasFailed = true;
             error = data;
         }
         if (containsNodeTypeEnd(json)) {
-            completed = true;
+            isCompleted = true;
         }
 
         return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, data));
     }
 
     List<QueryChunk> finish() {
-        if (failed) {
+        if (hasFailed) {
             return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, error));
         }
-        if (completed) {
+        if (isCompleted) {
             return List.of(new QueryChunk(QueryChunk.TYPE_ANSWER, result));
         }
         return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, null));
@@ -121,7 +122,7 @@ final class VersatileResponseExtractor {
     private JsonNode readTree(String data) {
         try {
             return OBJECT_MAPPER.readTree(data);
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             return null;
         }
     }

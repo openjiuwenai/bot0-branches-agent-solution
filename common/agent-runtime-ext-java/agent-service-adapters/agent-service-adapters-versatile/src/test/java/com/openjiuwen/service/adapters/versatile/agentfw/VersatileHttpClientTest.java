@@ -164,7 +164,6 @@ class VersatileHttpClientTest {
                 exchange.getResponseBody().write(
                         "data: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8));
             } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
                 throw new IOException(exception);
             } finally {
                 exchange.close();
@@ -188,7 +187,6 @@ class VersatileHttpClientTest {
                 try {
                     assertThat(allowCompletion.await(2, TimeUnit.SECONDS)).isTrue();
                 } catch (InterruptedException exception) {
-                    Thread.currentThread().interrupt();
                     throw new IOException(exception);
                 }
             }

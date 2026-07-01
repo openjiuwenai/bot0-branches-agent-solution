@@ -36,7 +36,14 @@ public final class VersatileA2AClientMain {
     }
 
     public static void main(String[] args) throws Exception {
-        String requestJson1 = """
+        String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18080/a2a/");
+        sendRequest(endpointUrl, firstRequestJson());
+        sendRequest(endpointUrl, secondRequestJson());
+        sendRequest(endpointUrl, thirdRequestJson());
+    }
+
+    private static String firstRequestJson() {
+        return """
                 {
                   "jsonrpc": "2.0",
                   "id": "versatile-a2a-demo-1",
@@ -93,10 +100,10 @@ public final class VersatileA2AClientMain {
                   }
                 }
                 """;
-        String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18080/a2a/");
-        sendRequest(endpointUrl, requestJson1);
+    }
 
-        String requestJson2 = """
+    private static String secondRequestJson() {
+        return """
                 {
                   "jsonrpc": "2.0",
                   "id": "versatile-a2a-demo-2",
@@ -153,9 +160,10 @@ public final class VersatileA2AClientMain {
                   }
                 }
                 """;
-        sendRequest(endpointUrl, requestJson2);
+    }
 
-        String requestJson3 = """
+    private static String thirdRequestJson() {
+        return """
                 {
                   "jsonrpc": "2.0",
                   "id": "versatile-a2a-demo-3",
@@ -212,7 +220,6 @@ public final class VersatileA2AClientMain {
                   }
                 }
                 """;
-        sendRequest(endpointUrl, requestJson3);
     }
 
     private static void sendRequest(String endpointUrl, String requestJson) throws Exception {

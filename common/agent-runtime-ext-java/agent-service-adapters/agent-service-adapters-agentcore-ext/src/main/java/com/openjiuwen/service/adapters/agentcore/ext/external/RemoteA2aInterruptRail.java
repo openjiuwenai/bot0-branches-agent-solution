@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -86,7 +87,7 @@ public class RemoteA2aInterruptRail extends BaseInterruptRail {
             if (remoteInput instanceof String s && !s.isBlank()) {
                 return s;
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // Fall back to raw tool arguments below.
         }
         return arguments;

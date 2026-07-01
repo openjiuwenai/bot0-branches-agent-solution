@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.agentcoreext.agent_a;
+package com.openjiuwen.example.agentcoreext.agenta;
 
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RuntimeIsolationTest {
     @Test
     void agentBApplicationIsNotOnAgentAClasspath() {
-        assertThat(classExists("com.openjiuwen.example.agentcoreext.agent_b.VersatileRuntimeApplication"))
+        assertThat(classExists("com.openjiuwen.example.agentcoreext.agentb.VersatileRuntimeApplication"))
                 .isFalse();
     }
 

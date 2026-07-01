@@ -13,6 +13,7 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,7 +64,7 @@ public class VersatileAgentHandler implements AgentHandler {
                 chunks.addAll(responseExtractor.consumeLine(line));
             });
             chunks.addAll(responseExtractor.finish());
-        } catch (Exception exception) {
+        } catch (IOException | InterruptedException | RuntimeException exception) {
             log.error("Versatile invocation failed conversation_id={}", request.getConversationId(), exception);
             throw new IllegalStateException("Versatile invocation failed", exception);
         }
@@ -112,7 +113,7 @@ public class VersatileAgentHandler implements AgentHandler {
         } catch (CancellationException ignored) {
             // Observer cancellation is a normal stream termination path.
             log.warn("Versatile streamQuery cancelled conversation_id={}", request.getConversationId());
-        } catch (Exception exception) {
+        } catch (RuntimeException exception) {
             log.error("Versatile streamQuery failed conversation_id={}", request.getConversationId(), exception);
             observer.onError(exception);
         }
@@ -144,7 +145,7 @@ public class VersatileAgentHandler implements AgentHandler {
             return finalEvents;
         } catch (CancellationException exception) {
             throw exception;
-        } catch (Exception exception) {
+        } catch (IOException | InterruptedException | RuntimeException exception) {
             log.error("Versatile invocation failed conversation_id={}", request.getConversationId(), exception);
             throw new IllegalStateException("Versatile invocation failed", exception);
         }

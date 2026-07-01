@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.agentcoreext.agent_b;
+package com.openjiuwen.example.agentcoreext.agentb;
 
 import com.openjiuwen.service.adapters.versatile.agentfw.VersatileAgentHandler;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
