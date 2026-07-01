@@ -77,7 +77,8 @@ public class RemoteA2aToolInstaller {
             return;
         }
         BaseAgent targetAgent = target.get();
-        Set<String> installedNames = installedRemoteAgentNames.computeIfAbsent(targetAgent, key -> new LinkedHashSet<>());
+        Set<String> installedNames = installedRemoteAgentNames.computeIfAbsent(
+                targetAgent, key -> new LinkedHashSet<>());
         synchronized (installedNames) {
             List<RemoteA2aToolSpec> newSpecs = registry.getAll().stream()
                     .filter(entry -> !installedNames.contains(entry.name()))
