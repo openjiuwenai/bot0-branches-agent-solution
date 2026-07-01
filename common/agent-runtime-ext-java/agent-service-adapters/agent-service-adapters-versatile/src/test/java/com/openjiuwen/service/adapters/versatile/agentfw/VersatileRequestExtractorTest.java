@@ -20,7 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-06-30
  */
 class VersatileRequestExtractorTest {
-
     @Test
     void buildsRemoteRequestFromMessagesAndMetadata() {
         VersatileProperties properties = new VersatileProperties();

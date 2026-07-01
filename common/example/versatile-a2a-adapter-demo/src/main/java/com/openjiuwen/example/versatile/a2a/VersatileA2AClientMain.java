@@ -25,7 +25,6 @@ import java.util.Map;
  * @since 2026-06-30
  */
 public final class VersatileA2AClientMain {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };

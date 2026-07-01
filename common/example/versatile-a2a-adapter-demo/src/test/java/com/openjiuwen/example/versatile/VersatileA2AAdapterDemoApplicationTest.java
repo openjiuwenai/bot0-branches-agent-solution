@@ -12,16 +12,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = {
-        "openjiuwen.service.versatile.url-template=http://127.0.0.1:1"
-})
 /**
  * Verifies the Versatile A2A adapter demo application context.
  *
  * @since 2026-06-30
  */
+@SpringBootTest(properties = {
+        "openjiuwen.service.versatile.url-template=http://127.0.0.1:1"
+})
 class VersatileA2AAdapterDemoApplicationTest {
-
     @Autowired
     private AgentHandler agentHandler;
 

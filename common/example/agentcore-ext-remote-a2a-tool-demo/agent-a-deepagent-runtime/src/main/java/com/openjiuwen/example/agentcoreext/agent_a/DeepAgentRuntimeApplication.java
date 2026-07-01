@@ -27,7 +27,6 @@ import org.springframework.context.annotation.Bean;
 @SpringBootApplication
 @EnableConfigurationProperties(DeepAgentLlmProperties.class)
 public class DeepAgentRuntimeApplication {
-
     private static final String AGENT_ID = "agentcore-ext-deep-agent";
 
     public static void main(String[] args) {

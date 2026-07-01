@@ -26,7 +26,6 @@ import java.util.concurrent.CancellationException;
  * @since 2026-06-30
  */
 public class VersatileAgentHandler implements AgentHandler {
-
     private static final Logger log = LoggerFactory.getLogger(VersatileAgentHandler.class);
 
     private final VersatileHttpClient client;
@@ -188,5 +187,4 @@ public class VersatileAgentHandler implements AgentHandler {
         }
         return trimmed;
     }
-
 }

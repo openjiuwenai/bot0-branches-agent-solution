@@ -21,7 +21,6 @@ import java.util.Set;
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.versatile")
 public class VersatileProperties {
-
     private String urlTemplate;
     private Duration timeout = Duration.ofSeconds(600);
     private Map<String, String> headersTemplate = new LinkedHashMap<>();

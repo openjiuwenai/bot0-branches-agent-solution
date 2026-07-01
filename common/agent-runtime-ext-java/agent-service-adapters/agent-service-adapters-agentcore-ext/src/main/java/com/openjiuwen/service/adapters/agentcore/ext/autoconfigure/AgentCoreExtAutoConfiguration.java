@@ -18,7 +18,6 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration
 public class AgentCoreExtAutoConfiguration {
-
     @Bean
     @ConditionalOnMissingBean
     RemoteA2aToolInstaller remoteA2aToolInstaller(ObjectProvider<A2ARemoteAgentCardRegistry> registry) {

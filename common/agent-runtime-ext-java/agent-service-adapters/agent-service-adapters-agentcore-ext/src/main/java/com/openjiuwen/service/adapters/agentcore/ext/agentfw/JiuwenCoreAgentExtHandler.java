@@ -19,7 +19,6 @@ import java.util.Objects;
  * @since 2026-06-30
  */
 public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
-
     private final RemoteA2aToolInstaller remoteToolInstaller;
 
     public JiuwenCoreAgentExtHandler(Object agent, MiddlewareAdapterRegistrar middlewareAdapterRegistrar,

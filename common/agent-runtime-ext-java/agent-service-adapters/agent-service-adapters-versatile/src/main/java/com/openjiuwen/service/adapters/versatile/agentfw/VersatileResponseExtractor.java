@@ -17,7 +17,6 @@ import java.util.List;
  * @since 2026-06-30
  */
 final class VersatileResponseExtractor {
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String resultNodeName;
@@ -137,5 +136,4 @@ final class VersatileResponseExtractor {
         }
         return trimmed;
     }
-
 }

@@ -18,7 +18,6 @@ import org.springframework.context.annotation.Bean;
  */
 @SpringBootApplication
 public class VersatileRuntimeApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(VersatileRuntimeApplication.class, args);
     }

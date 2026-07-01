@@ -17,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-06-30
  */
 class VersatileAutoConfigurationTest {
-
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(VersatileAutoConfiguration.class));
 

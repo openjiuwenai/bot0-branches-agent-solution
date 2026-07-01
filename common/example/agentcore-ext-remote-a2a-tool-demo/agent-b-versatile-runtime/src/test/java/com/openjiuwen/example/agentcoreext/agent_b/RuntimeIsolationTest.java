@@ -15,7 +15,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-06-30
  */
 class RuntimeIsolationTest {
-
     @Test
     void agentAApplicationIsNotOnAgentBClasspath() {
         assertThat(classExists("com.openjiuwen.example.agentcoreext.agent_a.DeepAgentRuntimeApplication"))

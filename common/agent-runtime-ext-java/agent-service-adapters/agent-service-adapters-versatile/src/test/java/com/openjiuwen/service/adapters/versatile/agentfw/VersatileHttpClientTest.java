@@ -28,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @since 2026-06-30
  */
 class VersatileHttpClientTest {
-
     private HttpServer server;
 
     @AfterEach

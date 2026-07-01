@@ -18,7 +18,6 @@ import java.util.Map;
  */
 @ConfigurationProperties(prefix = "openjiuwen.demo.deep-agent.llm")
 public class DeepAgentLlmProperties {
-
     private String provider = "OpenAI";
     private String apiKey = "";
     private String apiBase = "https://api.deepseek.com";

@@ -22,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @since 2026-06-30
  */
 class RemoteA2aInterruptRailTest {
-
     @Test
     void exposesToolCardAndInterruptsWithA2aDelegateContext() {
         RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(List.of(spec("agent-b")));

@@ -30,7 +30,6 @@ import java.util.StringJoiner;
  * @since 2026-06-30
  */
 final class VersatileHttpClient {
-
     private static final Logger log = LoggerFactory.getLogger(VersatileHttpClient.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 

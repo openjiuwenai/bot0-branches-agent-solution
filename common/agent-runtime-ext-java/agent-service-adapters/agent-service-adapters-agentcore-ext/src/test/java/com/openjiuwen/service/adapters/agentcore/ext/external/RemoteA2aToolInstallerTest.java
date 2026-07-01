@@ -29,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @ExtendWith(OutputCaptureExtension.class)
 class RemoteA2aToolInstallerTest {
-
     @Test
     void installsRailToolCardIntoBaseAgentAbilityManagerWithoutDuplicating(CapturedOutput output) {
         ReActAgent agent = reactAgent();

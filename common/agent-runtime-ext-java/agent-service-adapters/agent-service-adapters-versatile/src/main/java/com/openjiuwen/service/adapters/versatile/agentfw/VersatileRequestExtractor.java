@@ -22,7 +22,6 @@ import java.util.Set;
  * @since 2026-06-30
  */
 final class VersatileRequestExtractor {
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };

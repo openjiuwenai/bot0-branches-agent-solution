@@ -19,7 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-06-30
  */
 class AgentCoreExtAutoConfigurationTest {
-
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(AgentCoreExtAutoConfiguration.class))
             .withBean(A2ARemoteAgentCardRegistry.class);

@@ -26,7 +26,6 @@ import java.util.stream.Collectors;
  * @since 2026-06-30
  */
 public class RemoteA2aInterruptRail extends BaseInterruptRail {
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };

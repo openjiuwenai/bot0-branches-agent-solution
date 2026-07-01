@@ -18,7 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-06-30
  */
 class VersatileResponseExtractorTest {
-
     @Test
     void emitsInterruptWhenStreamEndsBeforeEndSignal() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");

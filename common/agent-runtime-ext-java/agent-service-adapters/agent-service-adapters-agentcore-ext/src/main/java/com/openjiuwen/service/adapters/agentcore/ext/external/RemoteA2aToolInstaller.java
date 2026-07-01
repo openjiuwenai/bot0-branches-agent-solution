@@ -25,7 +25,6 @@ import java.util.WeakHashMap;
  * @since 2026-06-30
  */
 public class RemoteA2aToolInstaller {
-
     private static final Logger log = LoggerFactory.getLogger(RemoteA2aToolInstaller.class);
     private static final Map<String, Object> INPUT_SCHEMA = Map.of(
             "type", "object",
