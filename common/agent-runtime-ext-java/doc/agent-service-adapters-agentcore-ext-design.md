@@ -66,8 +66,11 @@ ServeRequest
 ```java
 Object agent
 MiddlewareAdapterRegistrar middlewareAdapterRegistrar
-RemoteA2aToolInstaller remoteToolInstaller
+ExternalSvcAdapterRegistrar externalSvcAdapterRegistrar
 ```
+
+这些构造参数对齐上游 `JiuwenCoreAgentHandler`。`RemoteA2aToolInstaller` 是 `agentcore-ext`
+内部装配细节，不作为业务构造函数参数暴露。
 
 当前覆盖的方法只有：
 
@@ -119,10 +122,8 @@ RemoteA2aToolInstaller remoteA2aToolInstaller(ObjectProvider<A2ARemoteAgentCardR
 
 ```java
 @Bean
-AgentHandler agentHandler(DeepAgent agent,
-                          MiddlewareAdapterRegistrar registrar,
-                          RemoteA2aToolInstaller installer) {
-    return new JiuwenCoreAgentExtHandler(agent, registrar, installer);
+AgentHandler agentHandler(DeepAgent agent) {
+    return new JiuwenCoreAgentExtHandler(agent);
 }
 ```
 
@@ -474,10 +475,8 @@ openjiuwen:
 
 ```java
 @Bean
-AgentHandler agentHandler(BaseAgent agent,
-                          MiddlewareAdapterRegistrar registrar,
-                          RemoteA2aToolInstaller installer) {
-    return new JiuwenCoreAgentExtHandler(agent, registrar, installer);
+AgentHandler agentHandler(BaseAgent agent) {
+    return new JiuwenCoreAgentExtHandler(agent);
 }
 ```
 
@@ -485,10 +484,8 @@ DeepAgent 场景：
 
 ```java
 @Bean
-AgentHandler agentHandler(DeepAgent agent,
-                          MiddlewareAdapterRegistrar registrar,
-                          RemoteA2aToolInstaller installer) {
-    return new JiuwenCoreAgentExtHandler(agent, registrar, installer);
+AgentHandler agentHandler(DeepAgent agent) {
+    return new JiuwenCoreAgentExtHandler(agent);
 }
 ```
 
@@ -500,6 +497,7 @@ AgentHandler agentHandler(DeepAgent agent,
 1. 独立 Maven module。
 2. Spring Boot auto-configuration 注册 RemoteA2aToolInstaller。
 3. 显式 JiuwenCoreAgentExtHandler，入口前安装远端工具，主逻辑复用 JiuwenCoreAgentHandler。
+   RemoteA2aToolInstaller 由 Spring 标准可选注入，不暴露到业务构造函数。
 4. 从 A2ARemoteAgentCardRegistry.getAll() 读取已注册远端 agent。
 5. 将 registry entry name 原样映射为 AgentCore ToolCard 的 name/id 和远端路由 key。
 6. 从远端 card.skills[].description / card.description 生成工具描述。

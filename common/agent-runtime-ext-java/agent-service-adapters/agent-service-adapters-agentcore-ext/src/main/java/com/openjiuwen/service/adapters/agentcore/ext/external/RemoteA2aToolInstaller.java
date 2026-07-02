@@ -56,6 +56,17 @@ public class RemoteA2aToolInstaller {
     }
 
     /**
+     * Creates a no-op remote A2A tool installer.
+     *
+     * @return no-op remote A2A tool installer
+     *
+     * @since 2026-06-30
+     */
+    public static RemoteA2aToolInstaller noop() {
+        return new RemoteA2aToolInstaller(null);
+    }
+
+    /**
      * Installs remote A2A tools into the supplied agent when supported.
      *
      * @param agent target agent instance
