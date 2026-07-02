@@ -10,10 +10,7 @@ import com.openjiuwen.harness.rails.SkillUseRail;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.harness.workspace.Workspace;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
-import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
-import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.spec.spi.AgentHandler;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -34,11 +31,9 @@ public class DeepAgentRuntimeApplication {
     }
 
     @Bean
-    AgentHandler deepAgentHandler(DeepAgentLlmProperties properties,
-                                  ObjectProvider<MiddlewareAdapterRegistrar> registrar,
-                                  RemoteA2aToolInstaller installer) {
+    AgentHandler deepAgentHandler(DeepAgentLlmProperties properties) {
         properties.requireConfigured();
-        return new JiuwenCoreAgentExtHandler(buildDeepAgent(properties), registrar.getIfAvailable(), installer);
+        return new JiuwenCoreAgentExtHandler(buildDeepAgent(properties));
     }
 
     static DeepAgent buildDeepAgent(DeepAgentLlmProperties properties) {
