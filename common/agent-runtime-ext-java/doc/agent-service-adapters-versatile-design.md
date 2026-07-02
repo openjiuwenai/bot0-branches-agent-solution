@@ -70,7 +70,6 @@ ServeRequest
 
 ```text
 interrupt  # QueryChunk.TYPE_INTERRUPT
-answer     # QueryChunk.TYPE_ANSWER
 chunk      # QueryChunk.TYPE_CHUNK
 error      # QueryChunk.TYPE_ERROR
 ```
@@ -81,7 +80,7 @@ error      # QueryChunk.TYPE_ERROR
 | --- | --- |
 | 普通远端事件透传 | `chunk` |
 | 等待输入/远端未完成/连接结束但没看到 End | `interrupt` |
-| 已完成答案 | `answer` |
+| 已完成答案 | `chunk`，`data.type=answer`，真实答案在 `data.output` |
 | 远端异常或 adapter 异常 | `error` 或 `observer.onError()` |
 
 `QueryResponse.result` 没有强类型。当前 `VersatileAgentHandler.query()` 源码会构造一个 map，写入：

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,8 +44,8 @@ class VersatileResponseExtractorTest {
         chunks.addAll(extractor.finish());
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ANSWER);
-        assertThat(chunks.get(1).getData()).isEqualTo("final");
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK);
+        assertAnswerEnvelope(chunks.get(1), "final");
     }
 
     @Test
@@ -73,8 +74,8 @@ class VersatileResponseExtractorTest {
         chunks.addAll(extractor.finish());
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ANSWER);
-        assertThat(chunks.get(1).getData()).isEqualTo("custom final");
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK);
+        assertAnswerEnvelope(chunks.get(1), "custom final");
     }
 
     @Test
@@ -88,5 +89,29 @@ class VersatileResponseExtractorTest {
         assertThat(chunks).extracting(QueryChunk::getType)
                 .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ERROR);
         assertThat(chunks.get(1).getData()).asString().contains("exception");
+    }
+
+    @Test
+    void dropsMatchedResultNodeWhenTextIsBlank() {
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
+
+        assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
+                + "\"node_name\":\"AnswerNode\",\"text\":\"\",\"summary\":\"final\"}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_CHUNK);
+        assertThat(chunks.get(0).getData()).asString().contains("\"node_type\":\"End\"");
+    }
+
+    private static void assertAnswerEnvelope(QueryChunk chunk, String expectedOutput) {
+        assertThat(chunk.getData()).isInstanceOf(Map.class);
+        Map<?, ?> envelope = (Map<?, ?>) chunk.getData();
+        assertThat(envelope.get("type")).isEqualTo("answer");
+        assertThat(envelope.get("output")).isEqualTo(expectedOutput);
+        assertThat(envelope.containsKey("payload")).isFalse();
     }
 }

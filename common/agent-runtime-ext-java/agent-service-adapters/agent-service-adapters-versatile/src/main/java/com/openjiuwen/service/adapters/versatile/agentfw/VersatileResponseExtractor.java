@@ -10,7 +10,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -45,8 +47,8 @@ final class VersatileResponseExtractor {
             Optional<String> extracted = extractResult(json.get());
             if (extracted.isPresent()) {
                 result = extracted.get();
-                return new ArrayList<>();
             }
+            return new ArrayList<>();
         }
 
         if (hasTextField(json.orElse(null), "event", "exception")) {
@@ -65,10 +67,31 @@ final class VersatileResponseExtractor {
         if (hasFailed) {
             return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, error));
         }
+        if (isCompleted && result != null) {
+            return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, answerEnvelope(result)));
+        }
         if (isCompleted) {
-            return List.of(new QueryChunk(QueryChunk.TYPE_ANSWER, result));
+            return List.of();
         }
         return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, null));
+    }
+
+    static Optional<String> answerText(Object data) {
+        if (!(data instanceof Map<?, ?> envelope) || !"answer".equals(envelope.get("type"))) {
+            return Optional.empty();
+        }
+        Object output = envelope.get("output");
+        if (output != null && !String.valueOf(output).isBlank()) {
+            return Optional.of(String.valueOf(output));
+        }
+        return Optional.empty();
+    }
+
+    private static Map<String, Object> answerEnvelope(String output) {
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("output", output);
+        return envelope;
     }
 
     private boolean shouldExtractResult(String rawData, Optional<JsonNode> json) {
