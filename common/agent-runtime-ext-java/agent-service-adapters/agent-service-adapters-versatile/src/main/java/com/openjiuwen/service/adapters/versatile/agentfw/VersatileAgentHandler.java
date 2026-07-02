@@ -84,8 +84,9 @@ public class VersatileAgentHandler implements AgentHandler {
                         request.getConversationId(), chunk.getData());
                 throw new IllegalStateException(String.valueOf(chunk.getData()));
             }
-            if (QueryChunk.TYPE_ANSWER.equals(chunk.getType()) && chunk.getData() != null) {
-                answer = Optional.of(chunk.getData());
+            Optional<String> answerText = VersatileResponseExtractor.answerText(chunk.getData());
+            if (answerText.isPresent()) {
+                answer = Optional.of(answerText.get());
             }
         }
         if (answer.isPresent()) {

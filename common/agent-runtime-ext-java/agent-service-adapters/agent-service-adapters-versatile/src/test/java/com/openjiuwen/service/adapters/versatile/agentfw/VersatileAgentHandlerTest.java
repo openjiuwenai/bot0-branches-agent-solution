@@ -68,8 +68,12 @@ class VersatileAgentHandlerTest {
         assertThat(observer.isCompleted).isTrue();
         assertThat(observer.error).isNull();
         assertThat(observer.chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ANSWER);
-        assertThat(observer.chunks.get(2).getData()).isEqualTo("final");
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK);
+        assertThat(observer.chunks.get(2).getData()).isInstanceOf(Map.class);
+        Map<?, ?> envelope = (Map<?, ?>) observer.chunks.get(2).getData();
+        assertThat(envelope.get("type")).isEqualTo("answer");
+        assertThat(envelope.get("output")).isEqualTo("final");
+        assertThat(envelope.containsKey("payload")).isFalse();
     }
 
     @Test
