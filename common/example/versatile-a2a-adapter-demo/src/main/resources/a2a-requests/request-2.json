@@ -1,0 +1,55 @@
+{
+  "jsonrpc": "2.0",
+  "id": "versatile-a2a-demo-2",
+  "method": "SendStreamingMessage",
+  "params": {
+    "message": {
+      "role": "ROLE_USER",
+      "contextId": "versatile-a2a-1",
+      "parts": [
+        {
+          "text": "{\"query\":\"[{\\\"cardNum\\\":\\\"6222021816044054241\\\",\\\"regAcctType\\\":\\\"011\\\",\\\"cardAlias\\\":\\\"\\\"}]\",\"intent\":\"LATEST\"}"
+        }
+      ]
+    },
+    "metadata": {
+      "body": {
+        "agent_id": "main_planner",
+        "input": {
+          "query": "xxx",
+          "intent": "xxx",
+          "wap_userName": "张三"
+        },
+        "conversation_id": "test-session-001",
+        "timeout": "300",
+        "role_id": "1",
+        "role_name": "手机银行",
+        "stream": true,
+        "custom_data": {
+          "inputs": {
+            "query": "xxx",
+            "intent": "xxx",
+            "wap_userName": "张三"
+          },
+          "memory_inputs": {},
+          "globals": {},
+          "plugin_configs": [],
+          "long_term_memory": {
+            "enable_retrieve": true,
+            "enable_extract": true
+          }
+        }
+      },
+      "headers": {
+        "stream": "true",
+        "x-invoke-mode": "DEBUG",
+        "x-language": "zh-cn",
+        "x-debug-trace": "trace-from-example"
+      },
+      "query": {
+        "workspace_id": "11",
+        "type": "controller"
+      }
+    }
+  }
+}

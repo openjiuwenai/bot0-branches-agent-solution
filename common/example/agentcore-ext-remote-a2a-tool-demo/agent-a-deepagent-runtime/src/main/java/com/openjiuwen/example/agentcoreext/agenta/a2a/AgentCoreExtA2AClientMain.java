@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.versatile.a2a;
+package com.openjiuwen.example.agentcoreext.agenta.a2a;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,21 +22,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Command-line client that exercises the Versatile A2A adapter demo endpoint.
+ * Command-line client that exercises the AgentCore extension A2A demo endpoint.
  *
  * @since 2026-06-30
  */
-public final class VersatileA2AClientMain {
-    private static final Logger log = LoggerFactory.getLogger(VersatileA2AClientMain.class);
+public final class AgentCoreExtA2AClientMain {
+    private static final Logger log = LoggerFactory.getLogger(AgentCoreExtA2AClientMain.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
-    private VersatileA2AClientMain() {
+    private AgentCoreExtA2AClientMain() {
     }
 
     public static void main(String[] args) throws Exception {
-        String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18080/a2a/");
+        String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18090/a2a/");
         sendRequest(endpointUrl, requestJson("request-1.json"));
         sendRequest(endpointUrl, requestJson("request-2.json"));
         sendRequest(endpointUrl, requestJson("request-3.json"));
@@ -44,7 +44,7 @@ public final class VersatileA2AClientMain {
 
     private static String requestJson(String fileName) throws Exception {
         String resourceName = "a2a-requests/" + fileName;
-        try (InputStream inputStream = VersatileA2AClientMain.class.getClassLoader()
+        try (InputStream inputStream = AgentCoreExtA2AClientMain.class.getClassLoader()
                 .getResourceAsStream(resourceName)) {
             if (inputStream == null) {
                 throw new IllegalStateException("Missing request resource: " + resourceName);

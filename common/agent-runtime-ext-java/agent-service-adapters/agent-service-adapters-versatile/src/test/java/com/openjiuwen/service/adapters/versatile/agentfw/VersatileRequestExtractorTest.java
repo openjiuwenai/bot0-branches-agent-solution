@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -10,8 +14,12 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests Versatile request extraction rules.
+ *
+ * @since 2026-06-30
+ */
 class VersatileRequestExtractorTest {
-
     @Test
     void buildsRemoteRequestFromMessagesAndMetadata() {
         VersatileProperties properties = new VersatileProperties();

@@ -1,4 +1,8 @@
-package com.openjiuwen.example.agentcoreext.agent_a;
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.example.agentcoreext.agenta;
 
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
@@ -15,10 +19,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+/**
+ * Spring Boot application for the AgentCore extension DeepAgent demo runtime.
+ *
+ * @since 2026-06-30
+ */
 @SpringBootApplication
 @EnableConfigurationProperties(DeepAgentLlmProperties.class)
 public class DeepAgentRuntimeApplication {
-
     private static final String AGENT_ID = "agentcore-ext-deep-agent";
 
     public static void main(String[] args) {
@@ -34,11 +42,6 @@ public class DeepAgentRuntimeApplication {
     }
 
     static DeepAgent buildDeepAgent(DeepAgentLlmProperties properties) {
-        AgentCard card = AgentCard.builder()
-                .id(AGENT_ID)
-                .name("AgentCoreExtDeepAgent")
-                .description("DeepAgent runtime with remote A2A tool injection")
-                .build();
         DeepAgentConfig config = DeepAgentConfig.builder()
                 .systemPrompt(properties.getSystemPrompt())
                 .maxIterations(properties.getMaxIterations())
@@ -56,6 +59,11 @@ public class DeepAgentRuntimeApplication {
         Workspace workspace = Workspace.builder()
                 .rootPath(properties.getWorkspacePath())
                 .language("zh-CN")
+                .build();
+        AgentCard card = AgentCard.builder()
+                .id(AGENT_ID)
+                .name("AgentCoreExtDeepAgent")
+                .description("DeepAgent runtime with remote A2A tool injection")
                 .build();
         return new DeepAgent(card, config, workspace);
     }
