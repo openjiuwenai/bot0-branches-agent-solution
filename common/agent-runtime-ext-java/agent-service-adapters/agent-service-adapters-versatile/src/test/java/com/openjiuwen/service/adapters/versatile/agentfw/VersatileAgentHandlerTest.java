@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -18,8 +22,12 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests Versatile agent handler request and response adaptation.
+ *
+ * @since 2026-06-30
+ */
 class VersatileAgentHandlerTest {
-
     private HttpServer server;
 
     @AfterEach
@@ -57,7 +65,7 @@ class VersatileAgentHandlerTest {
 
         handler.streamQuery(request(), observer);
 
-        assertThat(observer.completed).isTrue();
+        assertThat(observer.isCompleted).isTrue();
         assertThat(observer.error).isNull();
         assertThat(observer.chunks).extracting(QueryChunk::getType)
                 .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ANSWER);
@@ -73,12 +81,12 @@ class VersatileAgentHandlerTest {
         ));
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
         RecordingObserver observer = new RecordingObserver();
-        observer.cancelAfterFirstChunk = true;
+        observer.shouldCancelAfterFirstChunk = true;
 
         handler.streamQuery(request(), observer);
 
         assertThat(observer.chunks).hasSize(1);
-        assertThat(observer.completed).isFalse();
+        assertThat(observer.isCompleted).isFalse();
         assertThat(observer.error).isNull();
     }
 
@@ -153,8 +161,8 @@ class VersatileAgentHandlerTest {
     private static final class RecordingObserver implements QueryStreamObserver {
         private final List<QueryChunk> chunks = new ArrayList<>();
         private Throwable error;
-        private boolean completed;
-        private boolean cancelAfterFirstChunk;
+        private boolean isCompleted;
+        private boolean shouldCancelAfterFirstChunk;
 
         @Override
         public void onNext(QueryChunk chunk) {
@@ -168,12 +176,12 @@ class VersatileAgentHandlerTest {
 
         @Override
         public void onComplete() {
-            this.completed = true;
+            this.isCompleted = true;
         }
 
         @Override
         public boolean isCancelled() {
-            return cancelAfterFirstChunk && !chunks.isEmpty();
+            return shouldCancelAfterFirstChunk && !chunks.isEmpty();
         }
     }
 }

@@ -113,7 +113,7 @@ $env:A2A_ENDPOINT_URL = "http://127.0.0.1:18090/a2a/"
 mvn "-Dmaven.repo.local=.m2\repository" `
   -f "common\example\agentcore-ext-remote-a2a-tool-demo\agent-a-deepagent-runtime\pom.xml" `
   -DskipTests compile exec:java `
-  "-Dexec.mainClass=com.openjiuwen.example.agentcoreext.agent_a.a2a.AgentCoreExtA2AClientMain"
+  "-Dexec.mainClass=com.openjiuwen.example.agentcoreext.agenta.a2a.AgentCoreExtA2AClientMain"
 ```
 
 先定义公共函数：

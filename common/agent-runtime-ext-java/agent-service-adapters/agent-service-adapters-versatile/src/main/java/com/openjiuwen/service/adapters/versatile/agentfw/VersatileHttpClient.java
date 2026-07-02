@@ -24,8 +24,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.StringJoiner;
 
+/**
+ * HTTP client for invoking Versatile-compatible streaming endpoints.
+ *
+ * @since 2026-06-30
+ */
 final class VersatileHttpClient {
-
     private static final Logger log = LoggerFactory.getLogger(VersatileHttpClient.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -57,7 +61,8 @@ final class VersatileHttpClient {
             builder.setHeader(header.getKey(), header.getValue());
         }
 
-        HttpResponse<InputStream> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> response = httpClient.send(
+                builder.build(), HttpResponse.BodyHandlers.ofInputStream());
         log.info("Received Versatile response status={} url={}", response.statusCode(), url);
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             String responseBody;
@@ -68,7 +73,8 @@ final class VersatileHttpClient {
             throw new IOException("Versatile HTTP " + response.statusCode() + ": " + responseBody);
         }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (!line.isBlank()) {
@@ -105,8 +111,20 @@ final class VersatileHttpClient {
         return url + (url.contains("?") ? "&" : "?") + joiner;
     }
 
+    /**
+     * Consumes one non-blank response line.
+     *
+     * @since 2026-06-30
+     */
     @FunctionalInterface
     interface LineConsumer {
+        /**
+         * Accepts one decoded response line.
+         *
+         * @param line response line
+         * @throws IOException when line processing fails
+         * @throws InterruptedException when line processing is interrupted
+         */
         void accept(String line) throws IOException, InterruptedException;
     }
 }

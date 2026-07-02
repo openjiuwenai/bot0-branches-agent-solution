@@ -1,4 +1,8 @@
-package com.openjiuwen.example.agentcoreext.agent_a;
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.example.agentcoreext.agenta;
 
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.SkillUseRail;
@@ -8,8 +12,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Verifies the AgentCore extension DeepAgent demo application context.
+ *
+ * @since 2026-06-30
+ */
 class DeepAgentRuntimeApplicationTest {
-
     @Test
     void buildsDeepAgentWithSkillUseRail() {
         DeepAgentLlmProperties properties = new DeepAgentLlmProperties();

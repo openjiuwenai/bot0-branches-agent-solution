@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -14,10 +15,15 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Extracts Versatile remote request data from service requests.
+ *
+ * @since 2026-06-30
+ */
 final class VersatileRequestExtractor {
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -67,17 +73,17 @@ final class VersatileRequestExtractor {
     }
 
     private SemanticInput extractSemanticInput(ServeRequest request) {
-        Object content = latestUserContent(request);
-        Map<String, Object> structuredContent = structuredContent(content);
-        String query = stringValue(structuredContent.get("query"));
+        Optional<Object> content = latestUserContent(request);
+        Map<String, Object> structuredContent = content.map(this::structuredContent).orElseGet(Map::of);
+        String query = stringValue(structuredContent.get("query")).orElse(null);
         if (!hasText(query)) {
             query = request.lastUserQuery();
         }
-        String intent = stringValue(structuredContent.get("intent"));
+        String intent = stringValue(structuredContent.get("intent")).orElse(null);
         return new SemanticInput(query, intent);
     }
 
-    private Object latestUserContent(ServeRequest request) {
+    private Optional<Object> latestUserContent(ServeRequest request) {
         for (int i = request.getMessages().size() - 1; i >= 0; i--) {
             Map<String, Object> message = request.getMessages().get(i);
             if (message == null) {
@@ -85,14 +91,14 @@ final class VersatileRequestExtractor {
             }
             Object role = message.get("role");
             if (role != null && "user".equalsIgnoreCase(String.valueOf(role))) {
-                return message.get("content");
+                return Optional.ofNullable(message.get("content"));
             }
         }
         if (!request.getMessages().isEmpty()) {
             Map<String, Object> message = request.getMessages().get(request.getMessages().size() - 1);
-            return message != null ? message.get("content") : null;
+            return message != null ? Optional.ofNullable(message.get("content")) : Optional.empty();
         }
-        return null;
+        return Optional.empty();
     }
 
     private Map<String, Object> structuredContent(Object content) {
@@ -104,7 +110,7 @@ final class VersatileRequestExtractor {
             if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
                 try {
                     return OBJECT_MAPPER.readValue(trimmed, MAP_TYPE);
-                } catch (Exception ignored) {
+                } catch (JsonProcessingException ignored) {
                     return Map.of();
                 }
             }
@@ -162,8 +168,8 @@ final class VersatileRequestExtractor {
         return result;
     }
 
-    private static String stringValue(Object value) {
-        return value != null ? String.valueOf(value) : null;
+    private static Optional<String> stringValue(Object value) {
+        return value != null ? Optional.of(String.valueOf(value)) : Optional.empty();
     }
 
     private static boolean hasText(String value) {

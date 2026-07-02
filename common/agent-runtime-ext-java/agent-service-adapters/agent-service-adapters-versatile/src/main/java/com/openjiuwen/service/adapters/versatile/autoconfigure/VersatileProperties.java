@@ -14,9 +14,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Configuration properties for the Versatile service adapter.
+ *
+ * @since 2026-06-30
+ */
 @ConfigurationProperties(prefix = "openjiuwen.service.versatile")
 public class VersatileProperties {
-
     private String urlTemplate;
     private Duration timeout = Duration.ofSeconds(600);
     private Map<String, String> headersTemplate = new LinkedHashMap<>();
@@ -73,6 +77,11 @@ public class VersatileProperties {
         this.endpoints = endpoints != null ? new ArrayList<>(endpoints) : new ArrayList<>();
     }
 
+    /**
+     * Endpoint override for intent-specific Versatile routing.
+     *
+     * @since 2026-06-30
+     */
     public static class Endpoint {
         private String intent;
         private String urlTemplate;

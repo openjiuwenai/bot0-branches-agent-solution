@@ -1,0 +1,55 @@
+{
+  "jsonrpc": "2.0",
+  "id": "agentcore-ext-remote-a2a-tool-demo-1",
+  "method": "SendStreamingMessage",
+  "params": {
+    "message": {
+      "role": "ROLE_USER",
+      "contextId": "agentcore-ext-remote-a2a-tool-demo-1",
+      "parts": [
+        {
+          "text": "{\"query\":\"请使用可处理银行业务流程的远端能力处理：先查询尾号为4241的银行卡余额，再转账5元给李四\",\"intent\":\"查询账户余额\"}"
+        }
+      ]
+    },
+    "metadata": {
+      "body": {
+        "agent_id": "main_planner",
+        "input": {
+          "query": "metadata-body-fixed-query",
+          "intent": "metadata-body-fixed-intent",
+          "wap_userName": "张三"
+        },
+        "conversation_id": "test-session-001",
+        "timeout": "300",
+        "role_id": "1",
+        "role_name": "手机银行",
+        "stream": true,
+        "custom_data": {
+          "inputs": {
+            "query": "custom-data-fixed-query",
+            "intent": "custom-data-fixed-intent",
+            "wap_userName": "张三"
+          },
+          "memory_inputs": {},
+          "globals": {},
+          "plugin_configs": [],
+          "long_term_memory": {
+            "enable_retrieve": true,
+            "enable_extract": true
+          }
+        }
+      },
+      "headers": {
+        "stream": "true",
+        "x-invoke-mode": "DEBUG",
+        "x-language": "zh-cn",
+        "x-debug-trace": "trace-from-agentcore-ext-demo"
+      },
+      "query": {
+        "workspace_id": "11",
+        "type": "controller"
+      }
+    }
+  }
+}

@@ -62,7 +62,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.openjiuwen.example.agentcoreext.agent_a.DeepAgentRuntimeApplication</mainClass>
+                    <mainClass>com.openjiuwen.example.agentcoreext.agenta.DeepAgentRuntimeApplication</mainClass>
                 </configuration>
             </plugin>
             <plugin>

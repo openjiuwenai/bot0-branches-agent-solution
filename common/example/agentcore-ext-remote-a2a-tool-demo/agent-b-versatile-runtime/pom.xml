@@ -52,7 +52,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.openjiuwen.example.agentcoreext.agent_b.VersatileRuntimeApplication</mainClass>
+                    <mainClass>com.openjiuwen.example.agentcoreext.agentb.VersatileRuntimeApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

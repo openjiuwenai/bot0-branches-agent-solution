@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.agentcore.ext.autoconfigure;
 
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
@@ -9,8 +13,12 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests AgentCore extension auto-configuration wiring.
+ *
+ * @since 2026-06-30
+ */
 class AgentCoreExtAutoConfigurationTest {
-
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(AgentCoreExtAutoConfiguration.class))
             .withBean(A2ARemoteAgentCardRegistry.class);
@@ -34,7 +42,7 @@ class AgentCoreExtAutoConfigurationTest {
     }
 
     @Test
-    void createsInstallerForPlainAgentcoreHandlerWithoutOwningHandlerSelection() {
+    void createsInstallerForPlainAgentcoreHandler() {
         runner.withPropertyValues("openjiuwen.service.handler=agentcore")
                 .run(context -> {
                     assertThat(context).hasSingleBean(RemoteA2aToolInstaller.class);

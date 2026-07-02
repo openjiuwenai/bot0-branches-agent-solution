@@ -11,9 +11,13 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 
+/**
+ * Auto-configuration for AgentCore extension adapters.
+ *
+ * @since 2026-06-30
+ */
 @AutoConfiguration
 public class AgentCoreExtAutoConfiguration {
-
     @Bean
     @ConditionalOnMissingBean
     RemoteA2aToolInstaller remoteA2aToolInstaller(ObjectProvider<A2ARemoteAgentCardRegistry> registry) {

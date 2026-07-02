@@ -1,0 +1,55 @@
+{
+  "jsonrpc": "2.0",
+  "id": "versatile-a2a-demo-3",
+  "method": "SendStreamingMessage",
+  "params": {
+    "message": {
+      "role": "ROLE_USER",
+      "contextId": "versatile-a2a-1",
+      "parts": [
+        {
+          "text": "{\"query\":\"{\\\"bankCardBalanceList\\\":[{\\\"bankCardNumber\\\":\\\"6222021816044054241\\\",\\\"mediumStatus\\\":\\\"0\\\",\\\"currencyBalanceList\\\":[{\\\"currencyCode\\\":\\\"001\\\",\\\"currencyName\\\":\\\"人民币可用余额\\\",\\\"balance\\\":\\\"1500.92\\\"}]}],\\\"responseData\\\":[{\\\"answer\\\":\\\"已为您查询账户余额\\\",\\\"readme\\\":\\\"已为您查询账户余额\\\",\\\"pageData\\\":\\\"\\\",\\\"type\\\":\\\"1\\\"}]}\",\"intent\":\"LATEST\"}"
+        }
+      ]
+    },
+    "metadata": {
+      "body": {
+        "agent_id": "main_planner",
+        "input": {
+          "query": "xxx",
+          "intent": "xxx",
+          "wap_userName": "张三"
+        },
+        "conversation_id": "test-session-001",
+        "timeout": "300",
+        "role_id": "1",
+        "role_name": "手机银行",
+        "stream": true,
+        "custom_data": {
+          "inputs": {
+            "query": "xxx",
+            "intent": "xxx",
+            "wap_userName": "张三"
+          },
+          "memory_inputs": {},
+          "globals": {},
+          "plugin_configs": [],
+          "long_term_memory": {
+            "enable_retrieve": true,
+            "enable_extract": true
+          }
+        }
+      },
+      "headers": {
+        "stream": "true",
+        "x-invoke-mode": "DEBUG",
+        "x-language": "zh-cn",
+        "x-debug-trace": "trace-from-example"
+      },
+      "query": {
+        "workspace_id": "11",
+        "type": "controller"
+      }
+    }
+  }
+}

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -18,8 +22,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Tests Versatile HTTP client request construction and streaming handling.
+ *
+ * @since 2026-06-30
+ */
 class VersatileHttpClientTest {
-
     private HttpServer server;
 
     @AfterEach
@@ -40,7 +48,8 @@ class VersatileHttpClientTest {
             received.add(exchange.getRequestURI().getQuery());
             received.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             received.add(exchange.getProtocol());
-            byte[] body = "data: {\"event\":\"message\"}\n\ndata: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8);
+            byte[] body = ("data: {\"event\":\"message\"}\n\n"
+                    + "data: {\"data\":{\"node_type\":\"End\"}}\n").getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();
@@ -152,9 +161,9 @@ class VersatileHttpClientTest {
                 exchange.getResponseBody().flush();
                 serverSawFirstLine.set(firstLineReceived.await(2, TimeUnit.SECONDS));
                 allowCompletion.countDown();
-                exchange.getResponseBody().write("data: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8));
+                exchange.getResponseBody().write(
+                        "data: {\"data\":{\"node_type\":\"End\"}}\n".getBytes(StandardCharsets.UTF_8));
             } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
                 throw new IOException(exception);
             } finally {
                 exchange.close();
@@ -178,7 +187,6 @@ class VersatileHttpClientTest {
                 try {
                     assertThat(allowCompletion.await(2, TimeUnit.SECONDS)).isTrue();
                 } catch (InterruptedException exception) {
-                    Thread.currentThread().interrupt();
                     throw new IOException(exception);
                 }
             }

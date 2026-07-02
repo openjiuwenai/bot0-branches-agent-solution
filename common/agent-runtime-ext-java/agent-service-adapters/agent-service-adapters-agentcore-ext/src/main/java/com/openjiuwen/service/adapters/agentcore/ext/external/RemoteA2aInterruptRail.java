@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -20,8 +21,12 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Interrupt rail that delegates selected tool calls to remote A2A agents.
+ *
+ * @since 2026-06-30
+ */
 public class RemoteA2aInterruptRail extends BaseInterruptRail {
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -82,7 +87,7 @@ public class RemoteA2aInterruptRail extends BaseInterruptRail {
             if (remoteInput instanceof String s && !s.isBlank()) {
                 return s;
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // Fall back to raw tool arguments below.
         }
         return arguments;
