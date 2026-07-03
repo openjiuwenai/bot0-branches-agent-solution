@@ -95,7 +95,7 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
-    void queryReturnsFallbackContentFromRemoteChunksWhenCompletedWithoutResultNode() throws Exception {
+    void queryReturnsFallbackWhenCompletedWithoutResult() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"event\":\"message\",\"data\":{\"text\":\"only passthrough\"}}",
                 "{\"event\":\"message\",\"data\":{\"summary\":\"need account confirmation\"}}",

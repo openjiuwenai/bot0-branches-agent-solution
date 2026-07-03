@@ -75,7 +75,7 @@ public class VersatileAgentHandler implements AgentHandler {
 
     private Map<String, Object> resolveQueryResult(ServeRequest request, List<QueryChunk> chunks) {
         Optional<String> answer = Optional.empty();
-        boolean interrupted = false;
+        boolean isInterrupted = false;
         List<String> interruptMessages = new ArrayList<>();
         for (QueryChunk chunk : chunks) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
@@ -89,7 +89,7 @@ public class VersatileAgentHandler implements AgentHandler {
                 continue;
             }
             if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType())) {
-                interrupted = true;
+                isInterrupted = true;
             } else {
                 interruptMessages.add(String.valueOf(chunk.getData()));
             }
@@ -97,7 +97,7 @@ public class VersatileAgentHandler implements AgentHandler {
         if (answer.isPresent()) {
             return assistantResult(answer.get());
         }
-        if (interrupted) {
+        if (isInterrupted) {
             String message = interruptMessage(interruptMessages);
             Map<String, Object> result = assistantResult(message);
             result.put("_interrupt", Map.of("message", message));
@@ -205,5 +205,4 @@ public class VersatileAgentHandler implements AgentHandler {
         log.debug("Versatile remote request conversation_id={} request={}",
                 request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
     }
-
 }
