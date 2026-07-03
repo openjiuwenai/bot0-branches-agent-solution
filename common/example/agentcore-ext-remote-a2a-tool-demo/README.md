@@ -271,4 +271,148 @@ Agent A DeepAgent
   -> A2AEnabledServeOrchestrator calls Agent B with streaming A2A client
   -> Agent B VersatileAgentHandler calls VERSATILE_URL
   -> remote result resumes Agent A as tool result
+``## 调用 Agent A：REST 三轮请求
+
+REST 入口调用 Agent A 的 `/v1/query`。runtime 会把 REST 原始请求体完整放进 `ServeRequest.metadata.body`，所以这里把 `custom_data` 放在 REST body 顶层；URL query string 会进入 `ServeRequest.metadata.query`，并由 Agent B 的 `VersatileAgentHandler` 透传给 `VERSATILE_URL`。Agent A 委托到 Agent B 后，Agent B 会从 `metadata.body.custom_data` 构造最终发给 `VERSATILE_URL` 的 HTTP body。
+
+三轮请求必须使用同一个 `conversation_id`，这样 Agent A 的 orchestrator 才能基于 shadow task 继续转发后续轮次。
+
+先定义公共函数：
+
+```powershell
+chcp.com 65001 > $null
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
+
+$restUrl = "http://127.0.0.1:18090/v1/query?workspace_id=11&type=controller"
+$conversationId = "agentcore-ext-remote-a2a-tool-demo-rest-1"
+
+function New-AgentARestRequestJson {
+  param(
+    [string] $ConversationId,
+    [string] $Query,
+    [string] $Intent
+  )
+
+  $messageText = @{
+    query = $Query
+    intent = $Intent
+  } | ConvertTo-Json -Compress -Depth 100
+
+  $request = [ordered]@{
+    conversation_id = $ConversationId
+    stream = $true
+    user_id = "demo-user"
+    space_id = "demo-space"
+    messages = @(
+      [ordered]@{
+        role = "user"
+        content = $messageText
+      }
+    )
+    agent_id = "main_planner"
+    input = [ordered]@{
+      query = "metadata-body-fixed-query"
+      intent = "metadata-body-fixed-intent"
+      wap_userName = "张三"
+    }
+    timeout = "300"
+    role_id = "1"
+    role_name = "手机银行"
+    custom_data = [ordered]@{
+      inputs = [ordered]@{
+        query = "custom-data-fixed-query"
+        intent = "custom-data-fixed-intent"
+        wap_userName = "张三"
+      }
+      memory_inputs = [ordered]@{}
+      globals = [ordered]@{}
+      plugin_configs = @()
+      long_term_memory = [ordered]@{
+        enable_retrieve = $true
+        enable_extract = $true
+      }
+    }
+  }
+
+  return ($request | ConvertTo-Json -Depth 100)
+}
+
+function Send-AgentARestRequestJson {
+  param([string] $RequestJson)
+
+  Write-Host "Request body:"
+  $RequestJson
+  Write-Host ""
+
+  $response = Invoke-WebRequest `
+    -UseBasicParsing `
+    -Uri $restUrl `
+    -Method Post `
+    -ContentType "application/json; charset=utf-8" `
+    -Headers @{
+      Accept = "text/event-stream"
+      stream = "true"
+      "x-invoke-mode" = "DEBUG"
+      "x-language" = "zh-cn"
+      "x-debug-trace" = "trace-from-agentcore-ext-rest-demo"
+    } `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($RequestJson))
+
+  Write-Host "HTTP $($response.StatusCode)"
+  $response.RawContentStream.Position = 0
+  $reader = New-Object System.IO.StreamReader($response.RawContentStream, [System.Text.Encoding]::UTF8)
+  $reader.ReadToEnd()
+}
+```
+
+第一轮进入 Agent A DeepAgent，并要求它使用可处理银行业务流程的远端能力：
+
+```powershell
+$restRequestJson1 = New-AgentARestRequestJson `
+  -ConversationId $conversationId `
+  -Query "先查询尾号为4241的银行卡余额，再转账5元给李四" `
+  -Intent "查询账户余额"
+
+Send-AgentARestRequestJson $restRequestJson1
+```
+
+第二轮仍然请求 Agent A；预期由 Agent A 直接转发到 Agent B 的 shadow task：
+
+```powershell
+$restRequestJson2 = New-AgentARestRequestJson `
+  -ConversationId $conversationId `
+  -Query '[{"cardNum":"6222021816044054241","regAcctType":"011","cardAlias":""}]' `
+  -Intent "LATEST"
+
+Send-AgentARestRequestJson $restRequestJson2
+```
+
+第三轮继续请求 Agent A；预期 Agent B 返回最终结果后，Agent A 把 remote tool result 注入回 DeepAgent：
+
+```powershell
+$restRound3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044054241","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"1500.92"}]}],"responseData":[{"answer":"已为您查询账户余额","readme":"已为您查询账户余额","pageData":"","type":"1"},{"answer":"","readme":"","pageData":{"id":"queryBalance","bankBalanceData":[{"layouttype":"1","actionFun_click":{"menu":{"param":"returnFlag=3","needLogin":"false","menuId":"account_1"}},"actionType_click":"menu","bankIoc":{"titleValueColor":"","titleValue":"","type":"pic","bgColor":"","bgPic":"","actionFun_click":"","actionType_click":""},"areaName":{"titleValueColor":"F4E1B3","titleValue":"广州","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardTypeDesc":{"titleValueColor":"F4E1B3","titleValue":"借记卡（I类）","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"alias":{"titleValueColor":"F4E1B3","titleValue":"","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardNumLast":{"titleValueColor":"F4E1B3","titleValue":"6222****4241","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balanceList":[{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"1970.23","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}},{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币可用余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"1500.92","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}}],"showCardNumBtn":{"type":"button","btnId":"tttt","btnName":"查看","bgColor":null,"actionFun_click":"abc","actionType_click":"4"},"showAccountBalanceBtn":{"type":"button","btnId":"qqqq","btnName":"点击查询","bgColor":null,"actionFun_click":"def","actionType_click":"4"}},"queryStatus":"成功","failCause":"","type":"7"}]}
+'@
+
+$restRequestJson3 = New-AgentARestRequestJson `
+  -ConversationId $conversationId `
+  -Query $restRound3Query `
+  -Intent "LATEST"
+
+Send-AgentARestRequestJson $restRequestJson3
+```
+
+REST 三轮链路：
+
+```text
+Agent A /v1/query
+  -> QueryMvcController stores raw REST body as ServeRequest.metadata.body
+  -> Agent A DeepAgent calls the injected remote A2A tool
+  -> A2AEnabledServeOrchestrator calls Agent B through A2A
+  -> Agent B VersatileAgentHandler reads metadata.body.custom_data
+  -> Agent B calls VERSATILE_URL
+  -> remote result resumes Agent A as tool result
 ```

@@ -95,9 +95,10 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
-    void queryReturnsLastRemoteEventWhenCompletedWithoutResultNode() throws Exception {
+    void queryReturnsFallbackContentFromRemoteChunksWhenCompletedWithoutResultNode() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"event\":\"message\",\"data\":{\"text\":\"only passthrough\"}}",
+                "{\"event\":\"message\",\"data\":{\"summary\":\"need account confirmation\"}}",
                 "{\"data\":{\"node_type\":\"End\"}}"
         ));
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
@@ -105,14 +106,18 @@ class VersatileAgentHandlerTest {
         QueryResponse response = handler.query(request());
 
         assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isEqualTo(Map.of(
-                "role", "assistant",
-                "content", "{\"data\":{\"node_type\":\"End\"}}"
-        ));
+        assertThat(response.getResult()).isInstanceOf(Map.class);
+        Map<?, ?> result = (Map<?, ?>) response.getResult();
+        assertThat(result.get("role")).isEqualTo("assistant");
+        String expectedMessage = "{\"event\":\"message\",\"data\":{\"text\":\"only passthrough\"}}\n"
+                + "{\"event\":\"message\",\"data\":{\"summary\":\"need account confirmation\"}}\n"
+                + "{\"data\":{\"node_type\":\"End\"}}";
+        assertThat(result.get("content")).isEqualTo(expectedMessage);
+        assertThat(result.containsKey("_interrupt")).isFalse();
     }
 
     @Test
-    void queryReturnsLastRemoteEventWhenResultArrivesWithoutEndSignal() throws Exception {
+    void queryReturnsInterruptWhenResultArrivesWithoutEndSignal() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"
         ));
@@ -122,21 +127,26 @@ class VersatileAgentHandlerTest {
         QueryResponse response = handler.query(request());
 
         assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isEqualTo(Map.of(
-                "role", "assistant",
-                "content", "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"
-        ));
+        assertThat(response.getResult()).isInstanceOf(Map.class);
+        Map<?, ?> result = (Map<?, ?>) response.getResult();
+        assertThat(result.get("role")).isEqualTo("assistant");
+        assertThat(result.get("content")).isEqualTo("Remote agent requires input");
+        assertThat(result.get("_interrupt")).isEqualTo(Map.of("message", "Remote agent requires input"));
     }
 
     @Test
-    void queryReturnsEmptyContentWhenRemoteReturnsNoEvents() throws Exception {
+    void queryReturnsInterruptWhenRemoteReturnsNoEvents() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of());
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
 
         QueryResponse response = handler.query(request());
 
         assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isEqualTo(Map.of("role", "assistant", "content", ""));
+        assertThat(response.getResult()).isInstanceOf(Map.class);
+        Map<?, ?> result = (Map<?, ?>) response.getResult();
+        assertThat(result.get("role")).isEqualTo("assistant");
+        assertThat(result.get("content")).isEqualTo("Remote agent requires input");
+        assertThat(result.get("_interrupt")).isEqualTo(Map.of("message", "Remote agent requires input"));
     }
 
     private static ServeRequest request() {

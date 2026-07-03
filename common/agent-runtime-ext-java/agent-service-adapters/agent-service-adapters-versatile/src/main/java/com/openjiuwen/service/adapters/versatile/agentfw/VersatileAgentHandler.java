@@ -29,6 +29,7 @@ import java.util.concurrent.CancellationException;
  */
 public class VersatileAgentHandler implements AgentHandler {
     private static final Logger log = LoggerFactory.getLogger(VersatileAgentHandler.class);
+    private static final String INTERRUPT_MESSAGE = "Remote agent requires input";
 
     private final VersatileHttpClient client;
     private final VersatileRequestExtractor extractor;
@@ -46,26 +47,22 @@ public class VersatileAgentHandler implements AgentHandler {
                 request.getConversationId(), request.isStream(), request.getUserId(),
                 request.getTenantId(), request.getMessages().size());
         log.debug("Versatile query request={}", logServeRequest(request));
-        QueryInvocationResult invocationResult = invokeForQuery(request);
-        Object content = resolveQueryContent(request, invocationResult);
-        Map<String, Object> result = assistantResult(content);
+        Map<String, Object> result = resolveQueryResult(request, invokeForQuery(request));
         QueryResponse response = new QueryResponse(result, request.getConversationId());
         log.info("Completed Versatile query conversation_id={} content_present={}",
-                request.getConversationId(), !String.valueOf(content).isEmpty());
+                request.getConversationId(), !String.valueOf(result.get("content")).isEmpty());
         log.debug("Versatile query response conversation_id={} result={}",
                 request.getConversationId(), result);
         return response;
     }
 
-    private QueryInvocationResult invokeForQuery(ServeRequest request) {
+    private List<QueryChunk> invokeForQuery(ServeRequest request) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
         logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
         VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
         List<QueryChunk> chunks = new ArrayList<>();
-        LastEventHolder lastEvent = new LastEventHolder();
         try {
             client.postStream(remoteRequest, line -> {
-                stripSsePrefix(line).filter(event -> !event.isBlank()).ifPresent(lastEvent::set);
                 chunks.addAll(responseExtractor.consumeLine(line));
             });
             chunks.addAll(responseExtractor.finish());
@@ -73,12 +70,14 @@ public class VersatileAgentHandler implements AgentHandler {
             log.error("Versatile invocation failed conversation_id={}", request.getConversationId(), exception);
             throw new IllegalStateException("Versatile invocation failed", exception);
         }
-        return new QueryInvocationResult(chunks, lastEvent.value());
+        return chunks;
     }
 
-    private Object resolveQueryContent(ServeRequest request, QueryInvocationResult invocationResult) {
-        Optional<Object> answer = Optional.empty();
-        for (QueryChunk chunk : invocationResult.chunks()) {
+    private Map<String, Object> resolveQueryResult(ServeRequest request, List<QueryChunk> chunks) {
+        Optional<String> answer = Optional.empty();
+        boolean interrupted = false;
+        List<String> interruptMessages = new ArrayList<>();
+        for (QueryChunk chunk : chunks) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
                         request.getConversationId(), chunk.getData());
@@ -87,14 +86,33 @@ public class VersatileAgentHandler implements AgentHandler {
             Optional<String> answerText = VersatileResponseExtractor.answerText(chunk.getData());
             if (answerText.isPresent()) {
                 answer = Optional.of(answerText.get());
+                continue;
+            }
+            if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType())) {
+                interrupted = true;
+            } else {
+                interruptMessages.add(String.valueOf(chunk.getData()));
             }
         }
         if (answer.isPresent()) {
-            return answer.get();
+            return assistantResult(answer.get());
         }
-        log.info("Versatile query finished without answer, using fallback content conversation_id={}",
-                request.getConversationId());
-        return invocationResult.lastEvent().orElse("");
+        if (interrupted) {
+            String message = interruptMessage(interruptMessages);
+            Map<String, Object> result = assistantResult(message);
+            result.put("_interrupt", Map.of("message", message));
+            log.info("Versatile query returned interrupt conversation_id={}", request.getConversationId());
+            return result;
+        }
+        return assistantResult(interruptMessage(interruptMessages));
+    }
+
+    private static String interruptMessage(List<String> messages) {
+        String joined = String.join("\n", messages.stream()
+                .filter(message -> message != null && !message.isBlank())
+                .distinct()
+                .toList());
+        return joined.isBlank() ? INTERRUPT_MESSAGE : joined;
     }
 
     private static Map<String, Object> assistantResult(Object content) {
@@ -188,32 +206,4 @@ public class VersatileAgentHandler implements AgentHandler {
                 request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
     }
 
-    private static Optional<String> stripSsePrefix(String line) {
-        if (line == null) {
-            return Optional.empty();
-        }
-        String trimmed = line.trim();
-        if (trimmed.startsWith("data:")) {
-            return Optional.of(trimmed.substring("data:".length()).trim());
-        }
-        if (trimmed.contains(":") && !trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-            return Optional.empty();
-        }
-        return Optional.of(trimmed);
-    }
-
-    private record QueryInvocationResult(List<QueryChunk> chunks, Optional<String> lastEvent) {
-    }
-
-    private static final class LastEventHolder {
-        private String value;
-
-        private void set(String value) {
-            this.value = value;
-        }
-
-        private Optional<String> value() {
-            return Optional.ofNullable(value);
-        }
-    }
 }
