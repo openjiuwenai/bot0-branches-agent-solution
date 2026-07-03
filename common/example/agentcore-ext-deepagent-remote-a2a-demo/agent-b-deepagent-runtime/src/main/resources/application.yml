@@ -1,0 +1,45 @@
+server:
+  port: ${AGENT_B_PORT:18191}
+
+openjiuwen:
+  service:
+    agent-id: agent-b
+    handler: agentcore
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "AgentBDeepAgent"
+      agent-description: "DeepAgent runtime that interrupts twice and completes on the third round"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "three_round_deepagent"
+          name: "Three Round DeepAgent"
+          description: "Uses DeepAgent-native ask_user interruptions for the first two rounds and returns a final answer on the third round"
+          tags: ["deepagent", "interrupt"]
+          examples: ["Run a three-round workflow"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+  demo:
+    deep-agent:
+      llm:
+        provider: ${DEEPSEEK_PROVIDER:OpenAI}
+        api-key: ${DEEPSEEK_API_KEY:}
+        api-base: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+        model-name: ${DEEPSEEK_MODEL:deepseek-chat}
+        ssl-verify: ${DEEPSEEK_SSL_VERIFY:true}
+        temperature: ${DEEPSEEK_TEMPERATURE:0.0}
+        top-p: ${DEEPSEEK_TOP_P:0.8}
+        timeout: ${DEEPSEEK_TIMEOUT:120s}
+        completion-timeout: ${DEEP_AGENT_COMPLETION_TIMEOUT:600s}
+        max-iterations: ${DEEP_AGENT_MAX_ITERATIONS:8}
+        workspace-path: ${DEEP_AGENT_B_WORKSPACE:target/agent-b-workspace}
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.agentcore: DEBUG
+    com.openjiuwen.service.app.controller.a2a: DEBUG

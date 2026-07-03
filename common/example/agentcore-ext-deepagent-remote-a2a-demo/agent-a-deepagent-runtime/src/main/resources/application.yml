@@ -1,0 +1,47 @@
+server:
+  port: ${AGENT_A_PORT:18190}
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "AgentADeepAgent"
+      agent-description: "DeepAgent runtime that delegates to remote DeepAgent Agent B"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "delegate_agent_b"
+          name: "Delegate Agent B"
+          description: "Delegate the workflow to the remote DeepAgent Agent B"
+          tags: ["a2a", "deepagent"]
+          examples: ["Start the three-round DeepAgent workflow"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+      remote-agents:
+        - name: agent-b
+          url: ${REMOTE_A2A_CARD_URL:http://127.0.0.1:18191}
+  demo:
+    deep-agent:
+      llm:
+        provider: ${DEEPSEEK_PROVIDER:OpenAI}
+        api-key: ${DEEPSEEK_API_KEY:}
+        api-base: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+        model-name: ${DEEPSEEK_MODEL:deepseek-chat}
+        ssl-verify: ${DEEPSEEK_SSL_VERIFY:true}
+        temperature: ${DEEPSEEK_TEMPERATURE:0.0}
+        top-p: ${DEEPSEEK_TOP_P:0.8}
+        timeout: ${DEEPSEEK_TIMEOUT:120s}
+        completion-timeout: ${DEEP_AGENT_COMPLETION_TIMEOUT:600s}
+        max-iterations: ${DEEP_AGENT_MAX_ITERATIONS:8}
+        workspace-path: ${DEEP_AGENT_A_WORKSPACE:target/agent-a-workspace}
+
+logging:
+  level:
+    com.openjiuwen.service.app.orchestrator: DEBUG
+    com.openjiuwen.service.adapters.agentcore: DEBUG
