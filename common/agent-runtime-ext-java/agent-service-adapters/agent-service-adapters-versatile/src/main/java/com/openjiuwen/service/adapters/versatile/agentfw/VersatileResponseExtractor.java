@@ -142,7 +142,7 @@ final class VersatileResponseExtractor {
         return field != null && expected.equals(field.asText());
     }
 
-    private Optional<JsonNode> readTree(String data) {
+    private static Optional<JsonNode> readTree(String data) {
         try {
             return Optional.of(OBJECT_MAPPER.readTree(data));
         } catch (JsonProcessingException ignored) {

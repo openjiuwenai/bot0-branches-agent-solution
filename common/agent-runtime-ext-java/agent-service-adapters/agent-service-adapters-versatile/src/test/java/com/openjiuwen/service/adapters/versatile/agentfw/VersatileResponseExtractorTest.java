@@ -92,7 +92,7 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void dropsMatchedResultNodeWhenTextIsBlank() {
+    void emitsNoFinalChunkWhenCompletedWithoutResult() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
