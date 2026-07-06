@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -355,7 +356,6 @@ public class SandboxRail extends DeepAgentRail {
     }
 
     private Object renderChart(Map<String, Object> inputs) {
-        String title = stringOrDefault(inputs.get("title"), "Chart");
         String chartType = stringOrDefault(inputs.get("chart_type"), "bar")
                 .toLowerCase(Locale.ROOT);
         if (!List.of("bar", "line", "scatter").contains(chartType)) {
@@ -386,6 +386,7 @@ public class SandboxRail extends DeepAgentRail {
         } catch (JsonProcessingException ex) {
             return errorResult("failed to serialise y_keys: " + ex.getMessage());
         }
+        String title = stringOrDefault(inputs.get("title"), "Chart");
         String code = buildChartPython(new ChartRequest(rows.json(), title, chartType, xKey, ykJson,
                 sandboxPng));
         return runSandbox(code, localPng, relPath, RenderKind.CHART);
@@ -401,7 +402,7 @@ public class SandboxRail extends DeepAgentRail {
         if (result == null) {
             return errorResult("sandbox ops returned null result");
         }
-        if (!result.ok()) {
+        if (!result.isOk()) {
             Map<String, Object> err = errorResult("sandbox python exit=" + result.exitCode());
             err.put("message", result.message());
             err.put("stderr_tail", tail(result.stderr(), 2000));
@@ -415,27 +416,34 @@ public class SandboxRail extends DeepAgentRail {
             err.put("stderr_tail", tail(result.stderr(), 2000));
             return err;
         }
-        return buildSuccessResult(ops, kind, stdout, reportedPng.get(), localPng, relPngPath);
+        return buildSuccessResult(new SuccessContext(ops, kind, stdout,
+                new RenderPaths(reportedPng.get(), localPng, relPngPath)));
     }
 
-    private Map<String, Object> buildSuccessResult(SandboxOps ops, RenderKind kind,
-                                                   String stdout, String reportedPng,
-                                                   String localPng, String relPngPath) {
+    private Map<String, Object> buildSuccessResult(SuccessContext ctx) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
-        if (kind == RenderKind.TABLE) {
+        String stdout = ctx.stdout();
+        if (ctx.kind() == RenderKind.TABLE) {
             extractBlock(stdout, TABLE_BEGIN, TABLE_END).ifPresent(md -> out.put("markdown_table", md));
-            extractMarker(stdout, "ROW_COUNT:")
-                    .flatMap(SandboxRail::parseIntOptional)
-                    .ifPresent(v -> out.put("row_count", v));
-            extractMarker(stdout, "COL_COUNT:")
-                    .flatMap(SandboxRail::parseIntOptional)
-                    .ifPresent(v -> out.put("column_count", v));
+            extractMarker(stdout, "ROW_COUNT:").ifPresent(raw -> {
+                OptionalInt parsed = parseIntOptional(raw);
+                if (parsed.isPresent()) {
+                    out.put("row_count", parsed.getAsInt());
+                }
+            });
+            extractMarker(stdout, "COL_COUNT:").ifPresent(raw -> {
+                OptionalInt parsed = parseIntOptional(raw);
+                if (parsed.isPresent()) {
+                    out.put("column_count", parsed.getAsInt());
+                }
+            });
         }
-        Optional<String> downloaded = downloadPng(ops, reportedPng, localPng);
-        out.put("sandbox_png_path", reportedPng);
+        RenderPaths paths = ctx.paths();
+        Optional<String> downloaded = downloadPng(ctx.ops(), paths.sandboxPng(), paths.localPng());
+        out.put("sandbox_png_path", paths.sandboxPng());
         if (downloaded.isPresent()) {
-            out.put("png_path", relPngPath);
+            out.put("png_path", paths.relPngPath());
             out.put("png_absolute_path", downloaded.get());
         } else {
             out.put("png_path", null);
@@ -545,8 +553,6 @@ public class SandboxRail extends DeepAgentRail {
                     out.add(trimmed);
                 }
             }
-        } else {
-            // Any other type (Number, Boolean, null, custom object) → treat as empty list.
         }
         return out;
     }
@@ -575,11 +581,11 @@ public class SandboxRail extends DeepAgentRail {
         return Optional.of(stdout.substring(contentStart + 1, end).trim());
     }
 
-    private static Optional<Integer> parseIntOptional(String value) {
+    private static OptionalInt parseIntOptional(String value) {
         try {
-            return Optional.of(Integer.parseInt(value.trim()));
+            return OptionalInt.of(Integer.parseInt(value.trim()));
         } catch (NumberFormatException ex) {
-            return Optional.empty();
+            return OptionalInt.empty();
         }
     }
 
@@ -658,5 +664,11 @@ public class SandboxRail extends DeepAgentRail {
         static RowParseResult error(String message) {
             return new RowParseResult(null, message);
         }
+    }
+
+    private record RenderPaths(String sandboxPng, String localPng, String relPngPath) {
+    }
+
+    private record SuccessContext(SandboxOps ops, RenderKind kind, String stdout, RenderPaths paths) {
     }
 }

@@ -63,12 +63,6 @@ public final class DeepResearchAgentFactory {
                                   Supplier<SandboxOps> sandboxOpsSupplier) {
         props.requireConfigured();
 
-        AgentCard card = AgentCard.builder()
-                .id(props.getAgentId())
-                .name(props.getAgentName())
-                .description(props.getAgentDescription())
-                .build();
-
         List<Object> rails = buildRails(props, sandboxOpsSupplier);
         DeepAgentConfig config = DeepAgentConfig.builder()
                 .systemPrompt(props.getSystemPrompt())
@@ -85,6 +79,11 @@ public final class DeepResearchAgentFactory {
         Workspace workspace = Workspace.builder()
                 .rootPath(props.getWorkspacePath())
                 .language(props.getWorkspaceLanguage())
+                .build();
+        AgentCard card = AgentCard.builder()
+                .id(props.getAgentId())
+                .name(props.getAgentName())
+                .description(props.getAgentDescription())
                 .build();
         return new DeepAgent(card, config, workspace);
     }

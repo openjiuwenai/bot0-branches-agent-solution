@@ -64,7 +64,7 @@ public class SandboxSmokeTest implements ApplicationRunner {
                     data != null ? data.getExitCode() : null,
                     data != null ? data.getStdout() : null,
                     data != null ? data.getStderr() : null);
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             LOG.error("[sandbox-smoke] failed", ex);
         }
     }

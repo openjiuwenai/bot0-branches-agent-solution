@@ -73,7 +73,7 @@ public class DeepResearchRuntimeApplication {
                                      ObjectProvider<AgentCoreSandboxClientFactory> sandboxFactoryProvider) {
         AgentCoreSandboxClientFactory sandboxFactory = sandboxFactoryProvider.getIfAvailable();
         Supplier<SandboxOps> sandboxOpsSupplier = sandboxFactory != null
-                ? () -> toSandboxOps(sandboxFactory.create())
+                ? () -> resolveSandboxOps(sandboxFactory)
                 : null;
         return new JiuwenCoreAgentExtHandler(
                 DeepResearchAgentFactory.build(properties, sandboxOpsSupplier),
@@ -81,10 +81,15 @@ public class DeepResearchRuntimeApplication {
                 installer);
     }
 
-    private static SandboxOps toSandboxOps(SandboxClient client) {
+    private static SandboxOps resolveSandboxOps(AgentCoreSandboxClientFactory factory) {
+        SandboxClient client = factory.create();
         if (client == null) {
             return null;
         }
+        return toSandboxOps(client);
+    }
+
+    private static SandboxOps toSandboxOps(SandboxClient client) {
         return new SandboxOps() {
             @Override
             public ExecResult executeCode(String code, int timeoutSeconds) {
@@ -98,11 +103,11 @@ public class DeepResearchRuntimeApplication {
                 String stderr = data != null && data.getStderr() != null ? data.getStderr() : "";
                 Integer exit = data != null ? data.getExitCode() : null;
                 int exitCode = exit != null ? exit : -1;
-                boolean success = result.getCode() == 0 && exit != null && exit == 0;
-                String message = success
+                boolean isOk = result.getCode() == 0 && exit != null && exit == 0;
+                String message = isOk
                         ? ""
                         : "transport code=" + result.getCode() + " message=" + result.getMessage();
-                return new ExecResult(success, exitCode, stdout, stderr, message);
+                return new ExecResult(isOk, exitCode, stdout, stderr, message);
             }
 
             @Override

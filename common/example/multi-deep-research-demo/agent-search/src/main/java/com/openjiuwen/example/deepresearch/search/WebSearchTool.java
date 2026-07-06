@@ -53,7 +53,7 @@ public final class WebSearchTool {
         SearchResponse response;
         try {
             response = provider().search(new SearchRequest(query, topK, timeRange, language));
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             return error("tavily_failed: " + ex.getMessage());
         }
         return WebSearchResultSerializer.serialize(response);

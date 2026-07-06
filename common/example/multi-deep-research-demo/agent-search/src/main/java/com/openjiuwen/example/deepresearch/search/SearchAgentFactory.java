@@ -44,12 +44,6 @@ public final class SearchAgentFactory {
     public static ReActAgent build(SearchAgentProperties props) {
         props.requireConfigured();
 
-        AgentCard card = AgentCard.builder()
-                .id(props.getAgentId())
-                .name(props.getAgentName())
-                .description(props.getAgentDescription())
-                .build();
-        ReActAgent agent = new ReActAgent(card);
         ReActAgentConfig config = ReActAgentConfig.builder()
                 .maxIterations(props.getMaxIterations())
                 .sysOperationId(props.getSysOperationId())
@@ -65,6 +59,12 @@ public final class SearchAgentFactory {
             config.getModelConfigObj().setTemperature(props.getTemperature());
             config.getModelConfigObj().setTopP(props.getTopP());
         }
+        AgentCard card = AgentCard.builder()
+                .id(props.getAgentId())
+                .name(props.getAgentName())
+                .description(props.getAgentDescription())
+                .build();
+        ReActAgent agent = new ReActAgent(card);
         agent.configure(config);
         ToolCard toolCard = ToolCard.builder()
                 .id(TOOL_NAME)
