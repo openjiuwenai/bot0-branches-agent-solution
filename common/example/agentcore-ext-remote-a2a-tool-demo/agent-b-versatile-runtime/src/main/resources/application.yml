@@ -1,0 +1,34 @@
+server:
+  port: ${AGENT_B_PORT:18091}
+
+openjiuwen:
+  service:
+    agent-id: versatile-agent
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-description: "Remote runtime that processes banking and external business workflows through Versatile HTTP/SSE."
+      skills:
+        - id: "banking_workflow"
+          name: "Banking Workflow"
+          description: "Process banking workflow requests such as account balance lookup, transfer preparation, and follow-up business steps through the configured Versatile HTTP/SSE workflow."
+    versatile:
+      url-template: ${VERSATILE_URL:http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}}
+      timeout: 600s
+      forward-header-whitelist:
+        - stream
+        - x-invoke-mode
+        - x-language
+      headers-template:
+        Content-Type: application/json
+        accept: "*/*"
+        stream: "true"
+        x-invoke-mode: DEBUG
+        x-language: zh-cn
+      result-node-name: ${VERSATILE_RESULT_NODE:ABCDEResponseNode}
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.versatile: DEBUG
