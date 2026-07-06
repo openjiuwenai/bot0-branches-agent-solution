@@ -1,0 +1,78 @@
+server:
+  port: ${DEEP_RESEARCH_PORT:18090}
+
+spring:
+  application:
+    name: DeepResearchAgent
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "DeepResearchAgent"
+      agent-description: "Deep research agent comparing domestic LLM API offerings (2026 Q2)"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "deep_research"
+          name: "Deep Research"
+          description: "Produce a comparison matrix + citations + confidence for domestic LLM API offerings"
+          tags: ["research", "comparison", "llm"]
+          examples: ["对比火山方舟、阿里百炼、智谱、Kimi、DeepSeek 五家旗舰模型的输入输出定价、上下文窗口、QPS、Function Calling 支持"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+      remote-agents:
+        - name: search-agent
+          url: ${SEARCH_AGENT_URL:http://127.0.0.1:18091}
+        # read-agent / verify-agent — uncomment when the respective runtime is up:
+        # - name: read-agent
+        #   url: ${READ_AGENT_URL:http://127.0.0.1:18092}
+        # - name: verify-agent
+        #   url: ${VERIFY_AGENT_URL:http://127.0.0.1:18093}
+    external:
+      sandbox:
+        enabled: ${SANDBOX_ENABLED:false}
+        timeout-ms: ${SANDBOX_TIMEOUT_MS:30000}
+        retry:
+          max: 1
+          backoff-ms: 200
+        circuit-breaker:
+          enabled: true
+          failure-threshold: 3
+          reset-timeout-ms: 30000
+        audit:
+          enabled: true
+        servers:
+          - server-id: default
+            service-url: ${SANDBOX_URL:http://127.0.0.1:8321}
+            sandbox-type: jiuwenbox
+            launcher-type: pre_deploy
+            on-stop: delete
+            root-path: .
+            idle-ttl-seconds: 300
+  demo:
+    deep-research:
+      provider: ${LLM_PROVIDER:OpenAI}
+      api-key: ${LLM_API_KEY:}
+      api-base: ${LLM_API_BASE:https://api.deepseek.com}
+      model-name: ${LLM_MODEL:deepseek-chat}
+      ssl-verify: ${LLM_SSL_VERIFY:true}
+      temperature: ${LLM_TEMPERATURE:0.2}
+      top-p: ${LLM_TOP_P:0.8}
+      timeout: ${LLM_TIMEOUT:120s}
+      completion-timeout: ${DEEP_RESEARCH_COMPLETION_TIMEOUT:600s}
+      max-iterations: ${DEEP_RESEARCH_MAX_ITERATIONS:10}
+      workspace-path: ${DEEP_RESEARCH_WORKSPACE:target/deep-research-workspace}
+      workspace-language: ${DEEP_RESEARCH_LANGUAGE:zh-CN}
+
+logging:
+  level:
+    com.openjiuwen.example.deepresearch: DEBUG
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG
