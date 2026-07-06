@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.openjiuwen</groupId>
+        <artifactId>agent-runtime-ext-java</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>pev</artifactId>
+    <name>pev — PEV agent-service-app (canonical template)</name>
+    <description>PEV (Plan→Execute→Verify→Diagnose→Dispatch) as a canonical agent-service-app on agent-core-java. Self-contained: kernel (sealed types + pure functions) + agent (extends BaseAgent) + rails (Beta cognitive). Not an ext adapter — PEV is itself an agent-service-app, a sibling pattern to EDPA.</description>
+
+    <!-- PEV 用 sealed types + pattern switch（Java 21 稳定）；覆盖父 pom 的 17。
+         Java 21 对 agent-core-java 的 jdk17 artifact 向后兼容。 -->
+    <properties>
+        <agent-runtime-ext.java.release>21</agent-runtime-ext.java.release>
+    </properties>
+
+    <dependencies>
+        <!-- agent-core-java: BaseAgent / AgentRail / Runner. Version 0.1.12-jdk17 is what m2 holds. -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-core-java</artifactId>
+            <version>0.1.12-jdk17</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

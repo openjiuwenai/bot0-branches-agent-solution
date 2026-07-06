@@ -26,6 +26,8 @@
     <modules>
         <module>agent-service-adapters/agent-service-adapters-versatile</module>
         <module>agent-service-adapters/agent-service-adapters-agentcore-ext</module>
+        <module>agent-patterns/pev</module>
+        <module>agent-patterns/react-rails</module>
     </modules>
 
     <dependencyManagement>
