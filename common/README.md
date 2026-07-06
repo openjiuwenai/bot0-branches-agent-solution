@@ -11,6 +11,7 @@ common
 |       |-- agent-service-adapters-agentcore-ext
 |       `-- agent-service-adapters-versatile
 `-- example
+    |-- agentcore-ext-deepagent-remote-a2a-demo
     |-- agentcore-ext-remote-a2a-tool-demo
     `-- versatile-a2a-adapter-demo
 ```
@@ -26,6 +27,9 @@ common
 - `example/agentcore-ext-remote-a2a-tool-demo`：AgentCore ext 远端 A2A 工具注入示例。
   - `agent-a-deepagent-runtime`：Agent A，使用 `agent-service-adapters-agentcore-ext` 的 DeepAgent runtime。
   - `agent-b-versatile-runtime`：Agent B，通过 A2A 暴露的 Versatile runtime。
+- `example/agentcore-ext-deepagent-remote-a2a-demo`：DeepAgent 到 DeepAgent 的远端 A2A 委托示例。
+  - `agent-a-deepagent-runtime`：Agent A，通过注入的远端 A2A 工具委托 Agent B。
+  - `agent-b-deepagent-runtime`：Agent B，通过 A2A 暴露 DeepAgent runtime。
 - `example/versatile-a2a-adapter-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
 
 ## 编译打包流程
@@ -42,6 +46,9 @@ mvn -f common\example\versatile-a2a-adapter-demo\pom.xml `
   clean install
 
 mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
+  clean install
+
+mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
   clean install
 ```
 
@@ -75,5 +82,8 @@ mvn -f common\example\versatile-a2a-adapter-demo\pom.xml `
   clean install
 
 mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
+  clean install
+
+mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
   clean install
 ```

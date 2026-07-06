@@ -67,9 +67,9 @@ class AgentBDeepAgentApplicationTest {
 
         rail.beforeToolCall(ctx);
 
-        ToolCallInputs inputs = (ToolCallInputs) ctx.getInputs();
-        assertThat(inputs.getToolArgs()).isEqualTo(
-                "{\"response\":\"round-3-confirmed: transfer confirmation has been provided\"}");
+        assertThat(ctx.getInputs()).isInstanceOfSatisfying(ToolCallInputs.class, inputs ->
+                assertThat(inputs.getToolArgs()).isEqualTo(
+                        "{\"response\":\"round-3-confirmed: transfer confirmation has been provided\"}"));
     }
 
     private AgentCallbackContext askUserContext(String resumeInput) {
