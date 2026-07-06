@@ -107,6 +107,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the agent id.
+     *
      * @return the agent id
      */
     public String getAgentId() {
@@ -114,6 +116,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the agent id.
+     *
      * @param agentId the agent id
      */
     public void setAgentId(String agentId) {
@@ -121,6 +125,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the agent name.
+     *
      * @return the agent name
      */
     public String getAgentName() {
@@ -128,6 +134,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the agent name.
+     *
      * @param agentName the agent name
      */
     public void setAgentName(String agentName) {
@@ -135,6 +143,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the agent description.
+     *
      * @return the agent description
      */
     public String getAgentDescription() {
@@ -142,6 +152,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the agent description.
+     *
      * @param agentDescription the agent description
      */
     public void setAgentDescription(String agentDescription) {
@@ -149,6 +161,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the LLM provider name.
+     *
      * @return the LLM provider name
      */
     public String getProvider() {
@@ -156,6 +170,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the LLM provider name.
+     *
      * @param provider the LLM provider name
      */
     public void setProvider(String provider) {
@@ -163,6 +179,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the LLM API key.
+     *
      * @return the LLM API key
      */
     public String getApiKey() {
@@ -170,6 +188,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the LLM API key.
+     *
      * @param apiKey the LLM API key
      */
     public void setApiKey(String apiKey) {
@@ -177,6 +197,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the LLM base URL.
+     *
      * @return the LLM base URL
      */
     public String getApiBase() {
@@ -184,6 +206,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the LLM base URL.
+     *
      * @param apiBase the LLM base URL
      */
     public void setApiBase(String apiBase) {
@@ -191,6 +215,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the LLM model name.
+     *
      * @return the LLM model name
      */
     public String getModelName() {
@@ -198,6 +224,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the LLM model name.
+     *
      * @param modelName the LLM model name
      */
     public void setModelName(String modelName) {
@@ -205,6 +233,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Returns whether SSL verification is enabled.
+     *
      * @return whether SSL verification is enabled
      */
     public boolean isSslVerify() {
@@ -212,6 +242,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets whether SSL verification is enabled.
+     *
      * @param isSslVerify whether SSL verification is enabled
      */
     public void setSslVerify(boolean isSslVerify) {
@@ -219,6 +251,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the sampling temperature.
+     *
      * @return the sampling temperature
      */
     public Double getTemperature() {
@@ -226,6 +260,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the sampling temperature.
+     *
      * @param temperature the sampling temperature
      */
     public void setTemperature(Double temperature) {
@@ -233,6 +269,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the nucleus sampling probability.
+     *
      * @return the nucleus sampling probability
      */
     public Double getTopP() {
@@ -240,6 +278,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the nucleus sampling probability.
+     *
      * @param topP the nucleus sampling probability
      */
     public void setTopP(Double topP) {
@@ -247,6 +287,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the ReAct max iterations.
+     *
      * @return the ReAct max iterations
      */
     public int getMaxIterations() {
@@ -254,6 +296,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the ReAct max iterations.
+     *
      * @param maxIterations the ReAct max iterations
      */
     public void setMaxIterations(int maxIterations) {
@@ -261,6 +305,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the internal operation id used for tracing.
+     *
      * @return the internal operation id used for tracing
      */
     public String getSysOperationId() {
@@ -268,6 +314,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the internal operation id used for tracing.
+     *
      * @param sysOperationId the internal operation id used for tracing
      */
     public void setSysOperationId(String sysOperationId) {
@@ -275,6 +323,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Returns whether the stub web-search backend is enabled.
+     *
      * @return whether the stub web-search backend is enabled
      */
     public boolean isUseStub() {
@@ -282,6 +332,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets whether the stub web-search backend is enabled.
+     *
      * @param isUseStub whether the stub web-search backend is enabled
      */
     public void setUseStub(boolean isUseStub) {
@@ -289,6 +341,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Gets the search-agent system prompt.
+     *
      * @return the search-agent system prompt
      */
     public String getSystemPrompt() {
@@ -296,6 +350,8 @@ public class SearchAgentProperties {
     }
 
     /**
+     * Sets the search-agent system prompt.
+     *
      * @param systemPrompt the search-agent system prompt
      */
     public void setSystemPrompt(String systemPrompt) {

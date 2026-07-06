@@ -553,6 +553,8 @@ public class SandboxRail extends DeepAgentRail {
                     out.add(trimmed);
                 }
             }
+        } else {
+            return out;
         }
         return out;
     }

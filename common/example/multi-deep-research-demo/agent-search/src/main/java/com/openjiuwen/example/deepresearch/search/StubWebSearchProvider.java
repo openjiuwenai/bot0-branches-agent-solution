@@ -34,7 +34,9 @@ public final class StubWebSearchProvider implements WebSearchProvider {
     private final JsonNode fixture;
     private final String fixturePath;
 
-    /** Creates a stub provider bound to the default fixture location. */
+    /**
+     * Creates a stub provider bound to the default fixture location.
+     */
     public StubWebSearchProvider() {
         this(DEFAULT_FIXTURE);
     }

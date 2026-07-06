@@ -238,6 +238,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the agent id.
+     *
      * @return the agent id
      */
     public String getAgentId() {
@@ -245,6 +247,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the agent id.
+     *
      * @param agentId the agent id
      */
     public void setAgentId(String agentId) {
@@ -252,6 +256,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the agent name.
+     *
      * @return the agent name
      */
     public String getAgentName() {
@@ -259,6 +265,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the agent name.
+     *
      * @param agentName the agent name
      */
     public void setAgentName(String agentName) {
@@ -266,6 +274,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the agent description.
+     *
      * @return the agent description
      */
     public String getAgentDescription() {
@@ -273,6 +283,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the agent description.
+     *
      * @param agentDescription the agent description
      */
     public void setAgentDescription(String agentDescription) {
@@ -280,6 +292,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the LLM provider name.
+     *
      * @return the LLM provider name
      */
     public String getProvider() {
@@ -287,6 +301,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the LLM provider name.
+     *
      * @param provider the LLM provider name
      */
     public void setProvider(String provider) {
@@ -294,6 +310,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the LLM API key.
+     *
      * @return the LLM API key
      */
     public String getApiKey() {
@@ -301,6 +319,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the LLM API key.
+     *
      * @param apiKey the LLM API key
      */
     public void setApiKey(String apiKey) {
@@ -308,6 +328,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the LLM base URL.
+     *
      * @return the LLM base URL
      */
     public String getApiBase() {
@@ -315,6 +337,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the LLM base URL.
+     *
      * @param apiBase the LLM base URL
      */
     public void setApiBase(String apiBase) {
@@ -322,6 +346,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the LLM model name.
+     *
      * @return the LLM model name
      */
     public String getModelName() {
@@ -329,6 +355,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the LLM model name.
+     *
      * @param modelName the LLM model name
      */
     public void setModelName(String modelName) {
@@ -336,6 +364,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Returns whether SSL verification is enabled.
+     *
      * @return whether SSL verification is enabled
      */
     public boolean isSslVerify() {
@@ -343,6 +373,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets whether SSL verification is enabled.
+     *
      * @param isSslVerify whether SSL verification is enabled
      */
     public void setSslVerify(boolean isSslVerify) {
@@ -350,6 +382,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the sampling temperature.
+     *
      * @return the sampling temperature
      */
     public Double getTemperature() {
@@ -357,6 +391,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the sampling temperature.
+     *
      * @param temperature the sampling temperature
      */
     public void setTemperature(Double temperature) {
@@ -364,6 +400,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the nucleus sampling probability.
+     *
      * @return the nucleus sampling probability
      */
     public Double getTopP() {
@@ -371,6 +409,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the nucleus sampling probability.
+     *
      * @param topP the nucleus sampling probability
      */
     public void setTopP(Double topP) {
@@ -378,6 +418,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the LLM request timeout.
+     *
      * @return the LLM request timeout
      */
     public Duration getTimeout() {
@@ -385,6 +427,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the LLM request timeout.
+     *
      * @param timeout the LLM request timeout
      */
     public void setTimeout(Duration timeout) {
@@ -392,6 +436,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the total completion timeout for a single invoke.
+     *
      * @return the total completion timeout for a single invoke
      */
     public Duration getCompletionTimeout() {
@@ -399,6 +445,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the total completion timeout for a single invoke.
+     *
      * @param completionTimeout the total completion timeout for a single invoke
      */
     public void setCompletionTimeout(Duration completionTimeout) {
@@ -406,6 +454,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the DeepAgent task-loop max iterations.
+     *
      * @return the DeepAgent task-loop max iterations
      */
     public int getMaxIterations() {
@@ -413,6 +463,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the DeepAgent task-loop max iterations.
+     *
      * @param maxIterations the DeepAgent task-loop max iterations
      */
     public void setMaxIterations(int maxIterations) {
@@ -420,6 +472,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Returns whether the DeepAgent task-loop is enabled.
+     *
      * @return whether the DeepAgent task-loop is enabled
      */
     public boolean isEnableTaskLoop() {
@@ -427,6 +481,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets whether the DeepAgent task-loop is enabled.
+     *
      * @param isEnableTaskLoop whether the DeepAgent task-loop is enabled
      */
     public void setEnableTaskLoop(boolean isEnableTaskLoop) {
@@ -434,6 +490,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the workspace root used for memory and reports.
+     *
      * @return the workspace root used for memory and reports
      */
     public String getWorkspacePath() {
@@ -441,6 +499,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the workspace root used for memory and reports.
+     *
      * @param workspacePath the workspace root used for memory and reports
      */
     public void setWorkspacePath(String workspacePath) {
@@ -448,6 +508,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the workspace default language (used by rails to tag outputs).
+     *
      * @return the workspace default language (used by rails to tag outputs)
      */
     public String getWorkspaceLanguage() {
@@ -455,6 +517,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the workspace default language.
+     *
      * @param workspaceLanguage the workspace default language
      */
     public void setWorkspaceLanguage(String workspaceLanguage) {
@@ -462,6 +526,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the skill directories.
+     *
      * @return the skill directories
      */
     public List<String> getSkillDirectories() {
@@ -469,6 +535,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the skill directories.
+     *
      * @param skillDirectories the skill directories
      */
     public void setSkillDirectories(List<String> skillDirectories) {
@@ -476,6 +544,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the skill selection mode.
+     *
      * @return the skill selection mode
      */
     public String getSkillMode() {
@@ -483,6 +553,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the skill selection mode.
+     *
      * @param skillMode the skill selection mode
      */
     public void setSkillMode(String skillMode) {
@@ -490,6 +562,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the DeepAgent system prompt.
+     *
      * @return the DeepAgent system prompt
      */
     public String getSystemPrompt() {
@@ -497,6 +571,8 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Sets the DeepAgent system prompt.
+     *
      * @param systemPrompt the DeepAgent system prompt
      */
     public void setSystemPrompt(String systemPrompt) {
