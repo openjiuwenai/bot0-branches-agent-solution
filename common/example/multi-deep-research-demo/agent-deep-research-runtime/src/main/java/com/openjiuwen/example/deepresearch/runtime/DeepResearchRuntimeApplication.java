@@ -23,6 +23,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -38,17 +39,33 @@ import java.util.function.Supplier;
  * library tier's narrow {@link SandboxOps} interface. Library code never sees
  * {@code SandboxClient}; if the sandbox backend ever changes, only the adapter
  * in {@link #toSandboxOps} needs updating.
+ *
+ * @since 2026-07-06
  */
 @SpringBootApplication
 @EnableConfigurationProperties(DeepResearchSpringProperties.class)
 public class DeepResearchRuntimeApplication {
-
     private static final int DOWNLOAD_CHUNK_SIZE = 65536;
 
+    /**
+     * Spring Boot entry point.
+     *
+     * @param args standard command-line arguments forwarded to Spring
+     */
     public static void main(String[] args) {
         SpringApplication.run(DeepResearchRuntimeApplication.class, args);
     }
 
+    /**
+     * Builds the deep-research {@link AgentHandler} SPI bean wired against
+     * runtime-provided middleware, remote A2A installer, and (optional) sandbox factory.
+     *
+     * @param properties runtime configuration bound from {@code application.yml}
+     * @param registrar optional middleware registrar provider
+     * @param installer remote A2A tool installer
+     * @param sandboxFactoryProvider optional sandbox client factory provider
+     * @return the configured {@link AgentHandler}
+     */
     @Bean
     AgentHandler deepResearchHandler(DeepResearchSpringProperties properties,
                                      ObjectProvider<MiddlewareAdapterRegistrar> registrar,
@@ -71,29 +88,35 @@ public class DeepResearchRuntimeApplication {
         return new SandboxOps() {
             @Override
             public ExecResult executeCode(String code, int timeoutSeconds) {
-                ExecuteCodeResult r = client.code().executeCode(code, "python", timeoutSeconds, null, null);
-                if (r == null) {
+                ExecuteCodeResult result = client.code()
+                        .executeCode(code, "python", timeoutSeconds, null, null);
+                if (result == null) {
                     return new ExecResult(false, -1, "", "", "sandbox returned null result");
                 }
-                ExecuteCodeData d = r.getData();
-                String stdout = d != null && d.getStdout() != null ? d.getStdout() : "";
-                String stderr = d != null && d.getStderr() != null ? d.getStderr() : "";
-                Integer exit = d != null ? d.getExitCode() : null;
+                ExecuteCodeData data = result.getData();
+                String stdout = data != null && data.getStdout() != null ? data.getStdout() : "";
+                String stderr = data != null && data.getStderr() != null ? data.getStderr() : "";
+                Integer exit = data != null ? data.getExitCode() : null;
                 int exitCode = exit != null ? exit : -1;
-                boolean ok = r.getCode() == 0 && exit != null && exit == 0;
-                String message = ok ? "" : "transport code=" + r.getCode() + " message=" + r.getMessage();
-                return new ExecResult(ok, exitCode, stdout, stderr, message);
+                boolean success = result.getCode() == 0 && exit != null && exit == 0;
+                String message = success
+                        ? ""
+                        : "transport code=" + result.getCode() + " message=" + result.getMessage();
+                return new ExecResult(success, exitCode, stdout, stderr, message);
             }
 
             @Override
-            public String downloadFile(String remotePath, String localPath) {
+            public Optional<String> downloadFile(String remotePath, String localPath) {
                 DownloadFileResult dl = client.fs().downloadFile(
                         remotePath, localPath, true, true, false, DOWNLOAD_CHUNK_SIZE, null);
                 if (dl == null || dl.getCode() != 0) {
-                    return null;
+                    return Optional.empty();
                 }
-                DownloadFileData d = dl.getData();
-                return d != null && d.getLocalPath() != null ? d.getLocalPath() : localPath;
+                DownloadFileData data = dl.getData();
+                if (data != null && data.getLocalPath() != null) {
+                    return Optional.of(data.getLocalPath());
+                }
+                return Optional.of(localPath);
             }
         };
     }

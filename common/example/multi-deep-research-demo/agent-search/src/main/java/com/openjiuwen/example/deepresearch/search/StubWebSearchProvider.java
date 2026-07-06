@@ -23,9 +23,10 @@ import java.util.logging.Logger;
  *
  * <p>Missing-match policy: return an empty result list and log a warning,
  * never fabricate. The root agent treats an empty response as a search miss.
+ *
+ * @since 2026-07-06
  */
 public final class StubWebSearchProvider implements WebSearchProvider {
-
     private static final Logger LOG = Logger.getLogger(StubWebSearchProvider.class.getName());
     private static final String DEFAULT_FIXTURE = "/fixtures/search-results.json";
 
@@ -33,10 +34,16 @@ public final class StubWebSearchProvider implements WebSearchProvider {
     private final JsonNode fixture;
     private final String fixturePath;
 
+    /** Creates a stub provider bound to the default fixture location. */
     public StubWebSearchProvider() {
         this(DEFAULT_FIXTURE);
     }
 
+    /**
+     * Creates a stub provider using a specific classpath fixture.
+     *
+     * @param classpathResource absolute classpath resource path
+     */
     public StubWebSearchProvider(String classpathResource) {
         this.fixturePath = classpathResource;
         this.fixture = loadFixture(classpathResource);

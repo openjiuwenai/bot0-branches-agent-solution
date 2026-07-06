@@ -4,6 +4,7 @@
 
 package com.openjiuwen.example.deepresearch.rail;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.tool.Tool;
@@ -12,12 +13,14 @@ import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.DeepAgentRail;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -33,20 +36,84 @@ import java.util.function.Supplier;
  * report claims — cheap defence against LLM hallucinated URLs / stale sources.
  *
  * <p>Library-tier only — depends on {@code agent-core-java} + {@link SandboxOps}.
+ *
+ * @since 2026-07-06
  */
 public class UrlVerifyRail extends DeepAgentRail {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int EXEC_TIMEOUT_SECONDS = 90;
     private static final int MAX_URLS_PER_CALL = 10;
     private static final int DEFAULT_TIMEOUT_SECONDS = 10;
     private static final int MAX_TIMEOUT_SECONDS = 30;
+    private static final int SNIPPET_TAIL_MAX = 2000;
     private static final String RESULT_BEGIN = "VERIFY_URLS_BEGIN";
     private static final String RESULT_END = "VERIFY_URLS_END";
+
+    private static final String PY_VERIFY_BODY = ""
+            + "MAX_BODY = 4096\n"
+            + "SNIPPET_CHARS = 800\n"
+            + "UA = 'openjiuwen-deep-research/0.1'\n"
+            + "def _verify(url):\n"
+            + "    start = time.time()\n"
+            + "    out = {'url': url, 'ok': False}\n"
+            + "    try:\n"
+            + "        ctx = ssl.create_default_context()\n"
+            + "        chain = []\n"
+            + "        class _R(urllib.request.HTTPRedirectHandler):\n"
+            + "            def redirect_request(self, req, fp, code, msg, headers, newurl):\n"
+            + "                chain.append({'from': req.full_url, 'to': newurl, 'code': code})\n"
+            + "                return super().redirect_request(req, fp, code, msg, headers, newurl)\n"
+            + "        opener = urllib.request.build_opener(_R(),"
+            + " urllib.request.HTTPSHandler(context=ctx))\n"
+            + "        req = urllib.request.Request(url, method='GET', headers={'User-Agent': UA})\n"
+            + "        resp = opener.open(req, timeout=TIMEOUT)\n"
+            + "        raw = resp.read(MAX_BODY)\n"
+            + "        try:\n"
+            + "            body = raw.decode('utf-8', errors='replace')\n"
+            + "        except Exception:\n"
+            + "            body = ''\n"
+            + "        out.update({\n"
+            + "            'ok': True,\n"
+            + "            'status': resp.status,\n"
+            + "            'final_url': resp.geturl(),\n"
+            + "            'redirect_chain': chain,\n"
+            + "            'content_type': resp.headers.get('Content-Type', ''),\n"
+            + "            'content_length': resp.headers.get('Content-Length'),\n"
+            + "            'body_snippet': body[:SNIPPET_CHARS],\n"
+            + "        })\n"
+            + "    except urllib.error.HTTPError as e:\n"
+            + "        try:\n"
+            + "            raw = e.read(MAX_BODY) if hasattr(e, 'read') else b''\n"
+            + "            body = raw.decode('utf-8', errors='replace')\n"
+            + "        except Exception:\n"
+            + "            body = ''\n"
+            + "        out.update({\n"
+            + "            'ok': False,\n"
+            + "            'status': e.code,\n"
+            + "            'final_url': getattr(e, 'url', url),\n"
+            + "            'error': 'HTTP ' + str(e.code) + ' ' + str(e.reason),\n"
+            + "            'body_snippet': body[:SNIPPET_CHARS],\n"
+            + "        })\n"
+            + "    except urllib.error.URLError as e:\n"
+            + "        out['error'] = 'URLError: ' + str(e.reason)\n"
+            + "    except Exception as e:\n"
+            + "        out['error'] = type(e).__name__ + ': ' + str(e)\n"
+            + "    out['elapsed_ms'] = int((time.time() - start) * 1000)\n"
+            + "    return out\n"
+            + "results = []\n"
+            + "with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(URLS))) as ex:\n"
+            + "    for r in ex.map(_verify, URLS):\n"
+            + "        results.append(r)\n";
 
     private final Supplier<SandboxOps> opsSupplier;
     private final List<Tool> ownedTools = new ArrayList<>();
 
+    /**
+     * Creates a new URL-verify rail.
+     *
+     * @param opsSupplier supplier of {@link SandboxOps} (evaluated per invocation)
+     * @throws IllegalArgumentException if {@code opsSupplier} is {@code null}
+     */
     public UrlVerifyRail(Supplier<SandboxOps> opsSupplier) {
         if (opsSupplier == null) {
             throw new IllegalArgumentException("opsSupplier is required");
@@ -121,132 +188,134 @@ public class UrlVerifyRail extends DeepAgentRail {
             return errorResult("urls limited to " + MAX_URLS_PER_CALL + " per call (got "
                     + urls.size() + ")");
         }
-        int timeout = clampTimeout(inputs.get("timeout_seconds"));
 
         String urlsJson;
         try {
             urlsJson = MAPPER.writeValueAsString(urls);
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             return errorResult("failed to serialise urls: " + ex.getMessage());
         }
 
-        SandboxOps ops;
-        try {
-            ops = opsSupplier.get();
-        } catch (RuntimeException ex) {
-            return errorResult("sandbox ops not available: " + ex.getMessage());
-        }
-        if (ops == null) {
-            return errorResult("sandbox ops supplier returned null");
-        }
-
+        int timeout = clampTimeout(inputs.get("timeout_seconds"));
         String code = buildVerifyPython(urlsJson, timeout);
-        ExecResult result;
-        try {
-            result = ops.executeCode(code, EXEC_TIMEOUT_SECONDS);
-        } catch (RuntimeException ex) {
-            return errorResult("sandbox executeCode failed: " + ex.getMessage());
-        }
-        if (result == null) {
-            return errorResult("sandbox ops returned null result");
-        }
+        SandboxOps ops = opsSupplier.get();
+        ExecResult result = ops.executeCode(code, EXEC_TIMEOUT_SECONDS);
+        return buildResult(result);
+    }
+
+    private Object buildResult(ExecResult result) {
         if (!result.ok()) {
             Map<String, Object> err = errorResult("sandbox python exit=" + result.exitCode());
             err.put("message", result.message());
-            err.put("stderr_tail", tail(result.stderr(), 2000));
+            err.put("stderr_tail", tail(result.stderr(), SNIPPET_TAIL_MAX));
             return err;
         }
 
         String stdout = result.stdout();
-        String jsonBlock = extractBlock(stdout, RESULT_BEGIN, RESULT_END);
-        if (jsonBlock == null) {
+        Optional<String> jsonBlock = extractBlock(stdout, RESULT_BEGIN, RESULT_END);
+        if (jsonBlock.isEmpty()) {
             Map<String, Object> err = errorResult("sandbox did not emit "
                     + RESULT_BEGIN + " block");
-            err.put("stdout_tail", tail(stdout, 2000));
-            err.put("stderr_tail", tail(result.stderr(), 2000));
+            err.put("stdout_tail", tail(stdout, SNIPPET_TAIL_MAX));
+            err.put("stderr_tail", tail(result.stderr(), SNIPPET_TAIL_MAX));
             return err;
         }
         try {
-            Map<String, Object> parsed = MAPPER.readValue(jsonBlock, new TypeReference<>() {});
+            Map<String, Object> parsed = MAPPER.readValue(jsonBlock.get(), new TypeReference<>() {});
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("ok", true);
             out.put("results", parsed.get("urls"));
             return out;
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             Map<String, Object> err = errorResult("failed to parse verify_urls output: "
                     + ex.getMessage());
-            err.put("stdout_tail", tail(stdout, 2000));
+            err.put("stdout_tail", tail(stdout, SNIPPET_TAIL_MAX));
             return err;
         }
     }
 
     private static int clampTimeout(Object raw) {
-        int t = DEFAULT_TIMEOUT_SECONDS;
-        if (raw instanceof Number n) {
-            t = n.intValue();
-        } else if (raw instanceof String s && !s.isBlank()) {
+        int seconds = DEFAULT_TIMEOUT_SECONDS;
+        if (raw instanceof Number num) {
+            seconds = num.intValue();
+        } else if (raw instanceof String str && !str.isBlank()) {
             try {
-                t = Integer.parseInt(s.trim());
+                seconds = Integer.parseInt(str.trim());
             } catch (NumberFormatException ignored) {
-                t = DEFAULT_TIMEOUT_SECONDS;
+                seconds = DEFAULT_TIMEOUT_SECONDS;
             }
+        } else {
+            // leave seconds at default
         }
-        if (t < 1) {
+        if (seconds < 1) {
             return 1;
         }
-        return Math.min(t, MAX_TIMEOUT_SECONDS);
+        return Math.min(seconds, MAX_TIMEOUT_SECONDS);
     }
 
-    private static List<String> coerceUrlList(Object o) {
+    private static List<String> coerceUrlList(Object raw) {
+        if (raw instanceof List<?> list) {
+            return coerceListToUrls(list);
+        } else if (raw instanceof String str && !str.isBlank()) {
+            return coerceStringToUrls(str);
+        } else {
+            return new ArrayList<>();
+        }
+    }
+
+    private static List<String> coerceListToUrls(List<?> list) {
         List<String> out = new ArrayList<>();
-        if (o instanceof List<?> list) {
-            for (Object item : list) {
-                if (item != null) {
-                    String s = String.valueOf(item).trim();
-                    if (!s.isEmpty()) {
-                        out.add(s);
-                    }
-                }
+        for (Object item : list) {
+            if (item == null) {
+                continue;
             }
-        } else if (o instanceof String s && !s.isBlank()) {
-            for (String piece : s.split("[,\\s]+")) {
-                String trimmed = piece.trim();
-                if (!trimmed.isEmpty()) {
-                    out.add(trimmed);
-                }
+            String trimmed = String.valueOf(item).trim();
+            if (!trimmed.isEmpty()) {
+                out.add(trimmed);
+            }
+        }
+        return out;
+    }
+
+    private static List<String> coerceStringToUrls(String src) {
+        List<String> out = new ArrayList<>();
+        for (String piece : src.split("[,\\s]+")) {
+            String trimmed = piece.trim();
+            if (!trimmed.isEmpty()) {
+                out.add(trimmed);
             }
         }
         return out;
     }
 
     private static Map<String, Object> errorResult(String message) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("ok", false);
-        m.put("error", message);
-        return m;
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("ok", false);
+        map.put("error", message);
+        return map;
     }
 
-    private static String extractBlock(String stdout, String beginMarker, String endMarker) {
+    private static Optional<String> extractBlock(String stdout, String beginMarker, String endMarker) {
         int begin = stdout.indexOf(beginMarker);
         int end = stdout.indexOf(endMarker);
         if (begin < 0 || end < 0 || end <= begin) {
-            return null;
+            return Optional.empty();
         }
         int contentStart = stdout.indexOf('\n', begin);
         if (contentStart < 0 || contentStart >= end) {
-            return null;
+            return Optional.empty();
         }
-        return stdout.substring(contentStart + 1, end).trim();
+        return Optional.of(stdout.substring(contentStart + 1, end).trim());
     }
 
-    private static String tail(String s, int max) {
-        if (s == null) {
+    private static String tail(String src, int max) {
+        if (src == null) {
             return "";
         }
-        return s.length() <= max ? s : "..." + s.substring(s.length() - max);
+        return src.length() <= max ? src : "..." + src.substring(src.length() - max);
     }
 
-    private String buildVerifyPython(String urlsJson, int timeoutSeconds) {
+    private static String buildVerifyPython(String urlsJson, int timeoutSeconds) {
         String urlsB64 = Base64.getEncoder().encodeToString(urlsJson.getBytes(StandardCharsets.UTF_8));
         return ""
                 + "import base64, json, sys, time, ssl\n"
@@ -254,60 +323,7 @@ public class UrlVerifyRail extends DeepAgentRail {
                 + "import concurrent.futures\n"
                 + "URLS = json.loads(base64.b64decode('" + urlsB64 + "').decode('utf-8'))\n"
                 + "TIMEOUT = " + timeoutSeconds + "\n"
-                + "MAX_BODY = 4096\n"
-                + "SNIPPET_CHARS = 800\n"
-                + "UA = 'openjiuwen-deep-research/0.1'\n"
-                + "def _verify(url):\n"
-                + "    start = time.time()\n"
-                + "    out = {'url': url, 'ok': False}\n"
-                + "    try:\n"
-                + "        ctx = ssl.create_default_context()\n"
-                + "        chain = []\n"
-                + "        class _R(urllib.request.HTTPRedirectHandler):\n"
-                + "            def redirect_request(self, req, fp, code, msg, headers, newurl):\n"
-                + "                chain.append({'from': req.full_url, 'to': newurl, 'code': code})\n"
-                + "                return super().redirect_request(req, fp, code, msg, headers, newurl)\n"
-                + "        opener = urllib.request.build_opener(_R(),"
-                + " urllib.request.HTTPSHandler(context=ctx))\n"
-                + "        req = urllib.request.Request(url, method='GET', headers={'User-Agent': UA})\n"
-                + "        resp = opener.open(req, timeout=TIMEOUT)\n"
-                + "        raw = resp.read(MAX_BODY)\n"
-                + "        try:\n"
-                + "            body = raw.decode('utf-8', errors='replace')\n"
-                + "        except Exception:\n"
-                + "            body = ''\n"
-                + "        out.update({\n"
-                + "            'ok': True,\n"
-                + "            'status': resp.status,\n"
-                + "            'final_url': resp.geturl(),\n"
-                + "            'redirect_chain': chain,\n"
-                + "            'content_type': resp.headers.get('Content-Type', ''),\n"
-                + "            'content_length': resp.headers.get('Content-Length'),\n"
-                + "            'body_snippet': body[:SNIPPET_CHARS],\n"
-                + "        })\n"
-                + "    except urllib.error.HTTPError as e:\n"
-                + "        try:\n"
-                + "            raw = e.read(MAX_BODY) if hasattr(e, 'read') else b''\n"
-                + "            body = raw.decode('utf-8', errors='replace')\n"
-                + "        except Exception:\n"
-                + "            body = ''\n"
-                + "        out.update({\n"
-                + "            'ok': False,\n"
-                + "            'status': e.code,\n"
-                + "            'final_url': getattr(e, 'url', url),\n"
-                + "            'error': 'HTTP ' + str(e.code) + ' ' + str(e.reason),\n"
-                + "            'body_snippet': body[:SNIPPET_CHARS],\n"
-                + "        })\n"
-                + "    except urllib.error.URLError as e:\n"
-                + "        out['error'] = 'URLError: ' + str(e.reason)\n"
-                + "    except Exception as e:\n"
-                + "        out['error'] = type(e).__name__ + ': ' + str(e)\n"
-                + "    out['elapsed_ms'] = int((time.time() - start) * 1000)\n"
-                + "    return out\n"
-                + "results = []\n"
-                + "with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(URLS))) as ex:\n"
-                + "    for r in ex.map(_verify, URLS):\n"
-                + "        results.append(r)\n"
+                + PY_VERIFY_BODY
                 + "print('" + RESULT_BEGIN + "')\n"
                 + "print(json.dumps({'urls': results}, ensure_ascii=False))\n"
                 + "print('" + RESULT_END + "')\n";

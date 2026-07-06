@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 
 /**
  * Tavily Search API backend.
@@ -28,9 +29,10 @@ import java.util.Objects;
  * + {@code include_answer=false} (the deep-research root agent synthesises the
  * final answer; Tavily's LLM summary is not consumed). The API key is read
  * from the {@code TAVILY_API_KEY} env var by the caller and passed in.
+ *
+ * @since 2026-07-06
  */
 public final class TavilyWebSearchProvider implements WebSearchProvider {
-
     static final String DEFAULT_ENDPOINT = "https://api.tavily.com/search";
 
     private final String apiKey;
@@ -38,6 +40,11 @@ public final class TavilyWebSearchProvider implements WebSearchProvider {
     private final HttpClient httpClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /**
+     * Creates a provider against the default Tavily endpoint.
+     *
+     * @param apiKey the Tavily API key (must be non-null)
+     */
     public TavilyWebSearchProvider(String apiKey) {
         this(apiKey, DEFAULT_ENDPOINT, defaultHttpClient());
     }
@@ -51,8 +58,7 @@ public final class TavilyWebSearchProvider implements WebSearchProvider {
     private static HttpClient defaultHttpClient() {
         // HTTP/1.1: corporate proxies and CDNs occasionally break HTTP/2 ALPN.
         // proxy(ProxySelector.getDefault()): JDK HttpClient defaults to NO_PROXY
-        // and ignores http_proxy / https_proxy env vars. Honouring the default
-        // ProxySelector picks up -Dhttp.proxyHost / -Dhttps.proxyHost at launch.
+        // and ignores http_proxy / https_proxy env vars.
         return HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
@@ -84,18 +90,15 @@ public final class TavilyWebSearchProvider implements WebSearchProvider {
     }
 
     private String buildRequestBody(SearchRequest request) throws IOException {
-        // No include_domains push-down: domain bias is applied AFTER fetch by
-        // DomainReranker (official x2, blog x0.7). Narrowing at Tavily here
-        // would suppress generic queries that don't mention a vendor brand.
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("api_key", apiKey);
         body.put("query", request.query());
         body.put("search_depth", "basic");
         body.put("max_results", Math.max(1, request.topK()));
         body.put("include_answer", false);
-        Integer days = mapTimeRangeToDays(request.timeRange());
-        if (days != null) {
-            body.put("days", days);
+        OptionalInt days = mapTimeRangeToDays(request.timeRange());
+        if (days.isPresent()) {
+            body.put("days", days.getAsInt());
         }
         return mapper.writeValueAsString(body);
     }
@@ -124,22 +127,22 @@ public final class TavilyWebSearchProvider implements WebSearchProvider {
         return new SearchResponse(reranked);
     }
 
-    private static Integer mapTimeRangeToDays(TimeRange range) {
+    private static OptionalInt mapTimeRangeToDays(TimeRange range) {
         if (range == null || range == TimeRange.ALL) {
-            return null;
+            return OptionalInt.empty();
         }
         return switch (range) {
-            case WEEK -> 7;
-            case MONTH -> 30;
-            case YEAR -> 365;
-            default -> null;
+            case WEEK -> OptionalInt.of(7);
+            case MONTH -> OptionalInt.of(30);
+            case YEAR -> OptionalInt.of(365);
+            default -> OptionalInt.empty();
         };
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null) {
+    private static String truncate(String src, int max) {
+        if (src == null) {
             return "";
         }
-        return s.length() <= max ? s : s.substring(0, max) + "...";
+        return src.length() <= max ? src : src.substring(0, max) + "...";
     }
 }

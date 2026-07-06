@@ -4,6 +4,7 @@
 
 package com.openjiuwen.example.deepresearch.rail;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.tool.Tool;
@@ -12,7 +13,10 @@ import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.DeepAgentRail;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
@@ -23,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -44,472 +49,26 @@ import java.util.function.Supplier;
  * sandbox facade type is intentionally library-owned so the runtime wrapper can
  * adapt any concrete sandbox client (jiuwenbox / e2b / etc.) into {@link SandboxOps}
  * without leaking runtime or core-java sandbox types into this tier.
+ *
+ * @since 2026-07-06
  */
 public class SandboxRail extends DeepAgentRail {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String PIP_INDEX_URL = firstNonBlank(
             System.getProperty("openjiuwen.sandbox.pip-index-url"),
-            System.getenv("OPENJIUWEN_SANDBOX_PIP_INDEX_URL"));
+            System.getenv("OPENJIUWEN_SANDBOX_PIP_INDEX_URL")).orElse(null);
     private static final String PIP_TRUSTED_HOST = firstNonBlank(
             System.getProperty("openjiuwen.sandbox.pip-trusted-host"),
-            System.getenv("OPENJIUWEN_SANDBOX_PIP_TRUSTED_HOST"));
+            System.getenv("OPENJIUWEN_SANDBOX_PIP_TRUSTED_HOST")).orElse(null);
     private static final int EXEC_TIMEOUT_SECONDS = parseIntOrDefault(
             firstNonBlank(
                     System.getProperty("openjiuwen.sandbox.exec-timeout-seconds"),
-                    System.getenv("OPENJIUWEN_SANDBOX_EXEC_TIMEOUT_SECONDS")),
+                    System.getenv("OPENJIUWEN_SANDBOX_EXEC_TIMEOUT_SECONDS")).orElse(null),
             240);
     private static final String PNG_MARKER = "PNG_PATH:";
     private static final String TABLE_BEGIN = "MARKDOWN_TABLE_BEGIN";
     private static final String TABLE_END = "MARKDOWN_TABLE_END";
-
-    private final Supplier<SandboxOps> opsSupplier;
-    private final String workspacePath;
-    private final List<Tool> ownedTools = new ArrayList<>();
-    private final AtomicInteger callSeq = new AtomicInteger();
-
-    public SandboxRail(Supplier<SandboxOps> opsSupplier, String workspacePath) {
-        if (opsSupplier == null) {
-            throw new IllegalArgumentException("opsSupplier is required");
-        }
-        this.opsSupplier = opsSupplier;
-        this.workspacePath = workspacePath == null || workspacePath.isBlank()
-                ? "target/deep-research-workspace"
-                : workspacePath;
-    }
-
-    @Override
-    public int priority() {
-        return 60;
-    }
-
-    @Override
-    public void init(Object agent) {
-        if (!(agent instanceof DeepAgent deepAgent)) {
-            return;
-        }
-        LocalFunction table = new LocalFunction(buildTableCard(), this::renderComparisonTable);
-        LocalFunction chart = new LocalFunction(buildChartCard(), this::renderChart);
-        deepAgent.registerHarnessTool(table);
-        deepAgent.registerHarnessTool(chart);
-        ownedTools.add(table);
-        ownedTools.add(chart);
-    }
-
-    @Override
-    public void uninit(Object agent) {
-        if (agent instanceof DeepAgent deepAgent) {
-            for (Tool tool : List.copyOf(ownedTools)) {
-                deepAgent.unregisterHarnessTool(tool);
-            }
-        }
-        ownedTools.clear();
-    }
-
-    private ToolCard buildTableCard() {
-        Map<String, Object> rowsProp = new LinkedHashMap<>();
-        rowsProp.put("type", "array");
-        rowsProp.put("description",
-                "Array of objects; each object is one row. All rows should share the same keys.");
-        rowsProp.put("items", Map.of("type", "object"));
-
-        Map<String, Object> titleProp = new LinkedHashMap<>();
-        titleProp.put("type", "string");
-        titleProp.put("description", "Title shown above the table (also used in the PNG).");
-
-        Map<String, Object> properties = new LinkedHashMap<>();
-        properties.put("rows", rowsProp);
-        properties.put("title", titleProp);
-
-        Map<String, Object> inputParams = new LinkedHashMap<>();
-        inputParams.put("type", "object");
-        inputParams.put("properties", properties);
-        inputParams.put("required", List.of("rows", "title"));
-
-        return ToolCard.builder()
-                .id("sandbox_render_comparison_table")
-                .name("render_comparison_table")
-                .description("Render a comparison table from multi-source rows via pandas inside "
-                        + "the sandbox. Returns a Markdown table plus a PNG path in the workspace. "
-                        + "Call this once vendor × dimension cells are collected; use the Markdown "
-                        + "in the final report and cite the PNG for reviewers.")
-                .inputParams(inputParams)
-                .build();
-    }
-
-    private ToolCard buildChartCard() {
-        Map<String, Object> rowsProp = new LinkedHashMap<>();
-        rowsProp.put("type", "array");
-        rowsProp.put("description", "Array of objects; each object is one row.");
-        rowsProp.put("items", Map.of("type", "object"));
-
-        Map<String, Object> chartTypeProp = new LinkedHashMap<>();
-        chartTypeProp.put("type", "string");
-        chartTypeProp.put("enum", List.of("bar", "line", "scatter"));
-        chartTypeProp.put("description", "Chart type.");
-
-        Map<String, Object> xKeyProp = new LinkedHashMap<>();
-        xKeyProp.put("type", "string");
-        xKeyProp.put("description", "Row key to use for the x-axis (typically vendor).");
-
-        Map<String, Object> yKeysProp = new LinkedHashMap<>();
-        yKeysProp.put("type", "array");
-        yKeysProp.put("items", Map.of("type", "string"));
-        yKeysProp.put("description", "One or more row keys to plot on the y-axis "
-                + "(numeric fields only).");
-
-        Map<String, Object> titleProp = new LinkedHashMap<>();
-        titleProp.put("type", "string");
-        titleProp.put("description", "Chart title.");
-
-        Map<String, Object> properties = new LinkedHashMap<>();
-        properties.put("rows", rowsProp);
-        properties.put("chart_type", chartTypeProp);
-        properties.put("x_key", xKeyProp);
-        properties.put("y_keys", yKeysProp);
-        properties.put("title", titleProp);
-
-        Map<String, Object> inputParams = new LinkedHashMap<>();
-        inputParams.put("type", "object");
-        inputParams.put("properties", properties);
-        inputParams.put("required", List.of("rows", "chart_type", "x_key", "y_keys", "title"));
-
-        return ToolCard.builder()
-                .id("sandbox_render_chart")
-                .name("render_chart")
-                .description("Render a bar/line/scatter chart from multi-source rows via matplotlib "
-                        + "inside the sandbox. Returns a PNG path in the workspace. Use this to "
-                        + "visualise numeric comparisons (e.g. input token price by vendor).")
-                .inputParams(inputParams)
-                .build();
-    }
-
-    private Object renderComparisonTable(Map<String, Object> inputs) {
-        String title = stringOrDefault(inputs.get("title"), "Comparison");
-        RowParseResult rows = serializeRows(inputs.get("rows"));
-        if (rows.error() != null) {
-            return errorResult(rows.error());
-        }
-        int seq = callSeq.incrementAndGet();
-        String ts = timestamp();
-        String filename = "render_table_" + ts + "_" + seq + ".png";
-        String sandboxPng = "/tmp/deepresearch_table_" + ts + "_" + seq + ".png";
-        String localPng = localReportPath(filename);
-        String relPath = "reports/" + filename;
-
-        String code = buildTablePython(rows.json(), title, sandboxPng);
-        return runSandbox(code, localPng, relPath, true);
-    }
-
-    private Object renderChart(Map<String, Object> inputs) {
-        String title = stringOrDefault(inputs.get("title"), "Chart");
-        String chartType = stringOrDefault(inputs.get("chart_type"), "bar")
-                .toLowerCase(Locale.ROOT);
-        if (!List.of("bar", "line", "scatter").contains(chartType)) {
-            return errorResult("chart_type must be bar|line|scatter (got '" + chartType + "')");
-        }
-        String xKey = stringOrDefault(inputs.get("x_key"), "");
-        if (xKey.isBlank()) {
-            return errorResult("x_key is required");
-        }
-        List<String> yKeys = coerceStringList(inputs.get("y_keys"));
-        if (yKeys.isEmpty()) {
-            return errorResult("y_keys must be a non-empty array of strings");
-        }
-        RowParseResult rows = serializeRows(inputs.get("rows"));
-        if (rows.error() != null) {
-            return errorResult(rows.error());
-        }
-        int seq = callSeq.incrementAndGet();
-        String ts = timestamp();
-        String filename = "render_chart_" + ts + "_" + seq + ".png";
-        String sandboxPng = "/tmp/deepresearch_chart_" + ts + "_" + seq + ".png";
-        String localPng = localReportPath(filename);
-        String relPath = "reports/" + filename;
-
-        String ykJson;
-        try {
-            ykJson = MAPPER.writeValueAsString(yKeys);
-        } catch (Exception ex) {
-            return errorResult("failed to serialise y_keys: " + ex.getMessage());
-        }
-        String code = buildChartPython(rows.json(), title, chartType, xKey, ykJson, sandboxPng);
-        return runSandbox(code, localPng, relPath, false);
-    }
-
-    private Map<String, Object> runSandbox(String code, String localPng,
-                                           String relPngPath, boolean expectTable) {
-        SandboxOps ops;
-        try {
-            ops = opsSupplier.get();
-        } catch (RuntimeException ex) {
-            return errorResult("sandbox ops not available: " + ex.getMessage());
-        }
-        if (ops == null) {
-            return errorResult("sandbox ops supplier returned null");
-        }
-        ExecResult result;
-        try {
-            result = ops.executeCode(code, EXEC_TIMEOUT_SECONDS);
-        } catch (RuntimeException ex) {
-            return errorResult("sandbox executeCode failed: " + ex.getMessage());
-        }
-        if (result == null) {
-            return errorResult("sandbox ops returned null result");
-        }
-        if (!result.ok()) {
-            Map<String, Object> err = errorResult("sandbox python exit=" + result.exitCode());
-            err.put("message", result.message());
-            err.put("stderr_tail", tail(result.stderr(), 2000));
-            return err;
-        }
-        String stdout = result.stdout();
-        String reportedPng = extractMarker(stdout, PNG_MARKER);
-        if (reportedPng == null) {
-            Map<String, Object> err = errorResult("sandbox did not emit " + PNG_MARKER + " marker");
-            err.put("stdout_tail", tail(stdout, 2000));
-            err.put("stderr_tail", tail(result.stderr(), 2000));
-            return err;
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ok", true);
-        if (expectTable) {
-            String md = extractBlock(stdout, TABLE_BEGIN, TABLE_END);
-            if (md != null) {
-                out.put("markdown_table", md);
-            }
-            String rowCount = extractMarker(stdout, "ROW_COUNT:");
-            String colCount = extractMarker(stdout, "COL_COUNT:");
-            if (rowCount != null) {
-                out.put("row_count", parseIntOrNull(rowCount));
-            }
-            if (colCount != null) {
-                out.put("column_count", parseIntOrNull(colCount));
-            }
-        }
-        String downloaded = downloadPng(ops, reportedPng, localPng);
-        out.put("sandbox_png_path", reportedPng);
-        if (downloaded != null) {
-            out.put("png_path", relPngPath);
-            out.put("png_absolute_path", downloaded);
-        } else {
-            out.put("png_path", null);
-            out.put("download_warning",
-                    "sandbox rendered PNG but download to workspace failed; check sandbox_png_path");
-        }
-        return out;
-    }
-
-    private String downloadPng(SandboxOps ops, String sandboxPng, String localPng) {
-        try {
-            ensureParentDir(localPng);
-            return ops.downloadFile(sandboxPng, localPng);
-        } catch (RuntimeException ex) {
-            return null;
-        }
-    }
-
-    private String localReportPath(String filename) {
-        Path base = Paths.get(workspacePath, "reports");
-        return base.resolve(filename).toString();
-    }
-
-    private void ensureParentDir(String pathStr) {
-        try {
-            Path p = Paths.get(pathStr).getParent();
-            if (p != null) {
-                java.nio.file.Files.createDirectories(p);
-            }
-        } catch (Exception ignored) {
-            // Best-effort: downloadFile will try to create parent dirs too (isCreateParentDirs=true).
-        }
-    }
-
-    private RowParseResult serializeRows(Object rowsRaw) {
-        if (rowsRaw == null) {
-            return RowParseResult.error("rows is required (got null)");
-        }
-        try {
-            List<Map<String, Object>> rows;
-            if (rowsRaw instanceof List<?> list) {
-                rows = new ArrayList<>();
-                for (int i = 0; i < list.size(); i++) {
-                    Object o = list.get(i);
-                    if (!(o instanceof Map<?, ?> m)) {
-                        return RowParseResult.error(
-                                "rows[" + i + "] is not an object: "
-                                        + (o == null ? "null" : o.getClass().getSimpleName()));
-                    }
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> row = (Map<String, Object>) m;
-                    rows.add(row);
-                }
-            } else if (rowsRaw instanceof String s) {
-                rows = MAPPER.readValue(s, new TypeReference<>() {});
-            } else {
-                return RowParseResult.error(
-                        "rows must be array of objects or JSON string, got "
-                                + rowsRaw.getClass().getSimpleName());
-            }
-            if (rows.isEmpty()) {
-                return RowParseResult.error("rows must be non-empty");
-            }
-            return RowParseResult.ok(MAPPER.writeValueAsString(rows));
-        } catch (Exception ex) {
-            return RowParseResult.error("failed to parse rows: " + ex.getMessage());
-        }
-    }
-
-    private static String stringOrDefault(Object o, String fallback) {
-        return o == null ? fallback : String.valueOf(o);
-    }
-
-    private static List<String> coerceStringList(Object o) {
-        List<String> out = new ArrayList<>();
-        if (o instanceof List<?> list) {
-            for (Object item : list) {
-                if (item != null) {
-                    out.add(String.valueOf(item));
-                }
-            }
-        } else if (o instanceof String s && !s.isBlank()) {
-            for (String piece : s.split(",")) {
-                String trimmed = piece.trim();
-                if (!trimmed.isEmpty()) {
-                    out.add(trimmed);
-                }
-            }
-        }
-        return out;
-    }
-
-    private static String extractMarker(String stdout, String marker) {
-        int idx = stdout.indexOf(marker);
-        if (idx < 0) {
-            return null;
-        }
-        int start = idx + marker.length();
-        int end = stdout.indexOf('\n', start);
-        String value = end < 0 ? stdout.substring(start) : stdout.substring(start, end);
-        return value.trim();
-    }
-
-    private static String extractBlock(String stdout, String beginMarker, String endMarker) {
-        int begin = stdout.indexOf(beginMarker);
-        int end = stdout.indexOf(endMarker);
-        if (begin < 0 || end < 0 || end <= begin) {
-            return null;
-        }
-        int contentStart = stdout.indexOf('\n', begin);
-        if (contentStart < 0 || contentStart >= end) {
-            return null;
-        }
-        return stdout.substring(contentStart + 1, end).trim();
-    }
-
-    private static Integer parseIntOrNull(String s) {
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private static int parseIntOrDefault(String s, int fallback) {
-        if (s == null || s.isBlank()) {
-            return fallback;
-        }
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (NumberFormatException ex) {
-            return fallback;
-        }
-    }
-
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
-
-    private static String timestamp() {
-        return LocalDateTime.now().format(TS_FMT);
-    }
-
-    private static Map<String, Object> errorResult(String message) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("ok", false);
-        m.put("error", message);
-        return m;
-    }
-
-    private record RowParseResult(String json, String error) {
-        static RowParseResult ok(String json) {
-            return new RowParseResult(json, null);
-        }
-        static RowParseResult error(String message) {
-            return new RowParseResult(null, message);
-        }
-    }
-
-    private static String tail(String s, int max) {
-        if (s == null) {
-            return "";
-        }
-        return s.length() <= max ? s : "..." + s.substring(s.length() - max);
-    }
-
-    private static String firstNonBlank(String... vals) {
-        for (String v : vals) {
-            if (v != null && !v.isBlank()) {
-                return v;
-            }
-        }
-        return null;
-    }
-
-    private static String pipExtraArgsLiteral() {
-        List<String> args = new ArrayList<>();
-        if (PIP_INDEX_URL != null) {
-            args.add("-i");
-            args.add(PIP_INDEX_URL);
-        }
-        if (PIP_TRUSTED_HOST != null) {
-            args.add("--trusted-host");
-            args.add(PIP_TRUSTED_HOST);
-        }
-        try {
-            return MAPPER.writeValueAsString(args);
-        } catch (Exception ex) {
-            return "[]";
-        }
-    }
-
-    private String buildTablePython(String rowsJson, String title, String pngPath) {
-        String rowsB64 = Base64.getEncoder().encodeToString(rowsJson.getBytes(StandardCharsets.UTF_8));
-        String titleB64 = Base64.getEncoder().encodeToString(title.getBytes(StandardCharsets.UTF_8));
-        return PY_PREAMBLE
-                + "ROWS_JSON = _b64d('" + rowsB64 + "')\n"
-                + "TITLE     = _b64d('" + titleB64 + "')\n"
-                + "PNG_PATH  = " + pyStr(pngPath) + "\n"
-                + PY_TABLE_BODY;
-    }
-
-    private String buildChartPython(String rowsJson, String title, String chartType,
-                                    String xKey, String yKeysJson, String pngPath) {
-        String rowsB64 = Base64.getEncoder().encodeToString(rowsJson.getBytes(StandardCharsets.UTF_8));
-        String titleB64 = Base64.getEncoder().encodeToString(title.getBytes(StandardCharsets.UTF_8));
-        String xB64 = Base64.getEncoder().encodeToString(xKey.getBytes(StandardCharsets.UTF_8));
-        String yB64 = Base64.getEncoder().encodeToString(yKeysJson.getBytes(StandardCharsets.UTF_8));
-        return PY_PREAMBLE
-                + "ROWS_JSON  = _b64d('" + rowsB64 + "')\n"
-                + "TITLE      = _b64d('" + titleB64 + "')\n"
-                + "X_KEY      = _b64d('" + xB64 + "')\n"
-                + "Y_KEYS     = json.loads(_b64d('" + yB64 + "'))\n"
-                + "CHART_TYPE = " + pyStr(chartType) + "\n"
-                + "PNG_PATH   = " + pyStr(pngPath) + "\n"
-                + PY_CHART_BODY;
-    }
-
-    private static String pyStr(String s) {
-        return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'";
-    }
 
     private static final String PY_PREAMBLE = ""
             + "import base64, json, os, sys, subprocess\n"
@@ -648,4 +207,456 @@ public class SandboxRail extends DeepAgentRail {
             + "fig.savefig(PNG_PATH, dpi=150, bbox_inches='tight')\n"
             + "plt.close(fig)\n"
             + "print('PNG_PATH:' + PNG_PATH)\n";
+
+    private final Supplier<SandboxOps> opsSupplier;
+    private final String workspacePath;
+    private final List<Tool> ownedTools = new ArrayList<>();
+    private final AtomicInteger callSeq = new AtomicInteger();
+
+    /**
+     * Create a sandbox rail.
+     *
+     * @param opsSupplier supplier of the sandbox facade; called on each tool invocation
+     *     so the rail picks up runtime-provisioned or dynamically re-created backends
+     * @param workspacePath absolute or relative workspace root; PNG downloads land under
+     *     {@code <workspacePath>/reports/}
+     */
+    public SandboxRail(Supplier<SandboxOps> opsSupplier, String workspacePath) {
+        if (opsSupplier == null) {
+            throw new IllegalArgumentException("opsSupplier is required");
+        }
+        this.opsSupplier = opsSupplier;
+        this.workspacePath = workspacePath == null || workspacePath.isBlank()
+                ? "target/deep-research-workspace"
+                : workspacePath;
+    }
+
+    @Override
+    public int priority() {
+        return 60;
+    }
+
+    @Override
+    public void init(Object agent) {
+        if (!(agent instanceof DeepAgent deepAgent)) {
+            return;
+        }
+        LocalFunction table = new LocalFunction(buildTableCard(), this::renderComparisonTable);
+        LocalFunction chart = new LocalFunction(buildChartCard(), this::renderChart);
+        deepAgent.registerHarnessTool(table);
+        deepAgent.registerHarnessTool(chart);
+        ownedTools.add(table);
+        ownedTools.add(chart);
+    }
+
+    @Override
+    public void uninit(Object agent) {
+        if (agent instanceof DeepAgent deepAgent) {
+            for (Tool tool : List.copyOf(ownedTools)) {
+                deepAgent.unregisterHarnessTool(tool);
+            }
+        }
+        ownedTools.clear();
+    }
+
+    private ToolCard buildTableCard() {
+        Map<String, Object> rowsProp = new LinkedHashMap<>();
+        rowsProp.put("type", "array");
+        rowsProp.put("description",
+                "Array of objects; each object is one row. All rows should share the same keys.");
+        rowsProp.put("items", Map.of("type", "object"));
+
+        Map<String, Object> titleProp = new LinkedHashMap<>();
+        titleProp.put("type", "string");
+        titleProp.put("description", "Title shown above the table (also used in the PNG).");
+
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("rows", rowsProp);
+        properties.put("title", titleProp);
+
+        Map<String, Object> inputParams = new LinkedHashMap<>();
+        inputParams.put("type", "object");
+        inputParams.put("properties", properties);
+        inputParams.put("required", List.of("rows", "title"));
+
+        return ToolCard.builder()
+                .id("sandbox_render_comparison_table")
+                .name("render_comparison_table")
+                .description("Render a comparison table from multi-source rows via pandas inside "
+                        + "the sandbox. Returns a Markdown table plus a PNG path in the workspace. "
+                        + "Call this once vendor × dimension cells are collected; use the Markdown "
+                        + "in the final report and cite the PNG for reviewers.")
+                .inputParams(inputParams)
+                .build();
+    }
+
+    private ToolCard buildChartCard() {
+        Map<String, Object> rowsProp = new LinkedHashMap<>();
+        rowsProp.put("type", "array");
+        rowsProp.put("description", "Array of objects; each object is one row.");
+        rowsProp.put("items", Map.of("type", "object"));
+
+        Map<String, Object> chartTypeProp = new LinkedHashMap<>();
+        chartTypeProp.put("type", "string");
+        chartTypeProp.put("enum", List.of("bar", "line", "scatter"));
+        chartTypeProp.put("description", "Chart type.");
+
+        Map<String, Object> xKeyProp = new LinkedHashMap<>();
+        xKeyProp.put("type", "string");
+        xKeyProp.put("description", "Row key to use for the x-axis (typically vendor).");
+
+        Map<String, Object> yKeysProp = new LinkedHashMap<>();
+        yKeysProp.put("type", "array");
+        yKeysProp.put("items", Map.of("type", "string"));
+        yKeysProp.put("description", "One or more row keys to plot on the y-axis "
+                + "(numeric fields only).");
+
+        Map<String, Object> titleProp = new LinkedHashMap<>();
+        titleProp.put("type", "string");
+        titleProp.put("description", "Chart title.");
+
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("rows", rowsProp);
+        properties.put("chart_type", chartTypeProp);
+        properties.put("x_key", xKeyProp);
+        properties.put("y_keys", yKeysProp);
+        properties.put("title", titleProp);
+
+        Map<String, Object> inputParams = new LinkedHashMap<>();
+        inputParams.put("type", "object");
+        inputParams.put("properties", properties);
+        inputParams.put("required", List.of("rows", "chart_type", "x_key", "y_keys", "title"));
+
+        return ToolCard.builder()
+                .id("sandbox_render_chart")
+                .name("render_chart")
+                .description("Render a bar/line/scatter chart from multi-source rows via matplotlib "
+                        + "inside the sandbox. Returns a PNG path in the workspace. Use this to "
+                        + "visualise numeric comparisons (e.g. input token price by vendor).")
+                .inputParams(inputParams)
+                .build();
+    }
+
+    private Object renderComparisonTable(Map<String, Object> inputs) {
+        String title = stringOrDefault(inputs.get("title"), "Comparison");
+        RowParseResult rows = serializeRows(inputs.get("rows"));
+        if (rows.error() != null) {
+            return errorResult(rows.error());
+        }
+        int seq = callSeq.incrementAndGet();
+        String ts = timestamp();
+        String filename = "render_table_" + ts + "_" + seq + ".png";
+        String sandboxPng = "/tmp/deepresearch_table_" + ts + "_" + seq + ".png";
+        String localPng = localReportPath(filename);
+        String relPath = "reports/" + filename;
+
+        String code = buildTablePython(rows.json(), title, sandboxPng);
+        return runSandbox(code, localPng, relPath, RenderKind.TABLE);
+    }
+
+    private Object renderChart(Map<String, Object> inputs) {
+        String title = stringOrDefault(inputs.get("title"), "Chart");
+        String chartType = stringOrDefault(inputs.get("chart_type"), "bar")
+                .toLowerCase(Locale.ROOT);
+        if (!List.of("bar", "line", "scatter").contains(chartType)) {
+            return errorResult("chart_type must be bar|line|scatter (got '" + chartType + "')");
+        }
+        String xKey = stringOrDefault(inputs.get("x_key"), "");
+        if (xKey.isBlank()) {
+            return errorResult("x_key is required");
+        }
+        List<String> yKeys = coerceStringList(inputs.get("y_keys"));
+        if (yKeys.isEmpty()) {
+            return errorResult("y_keys must be a non-empty array of strings");
+        }
+        RowParseResult rows = serializeRows(inputs.get("rows"));
+        if (rows.error() != null) {
+            return errorResult(rows.error());
+        }
+        int seq = callSeq.incrementAndGet();
+        String ts = timestamp();
+        String filename = "render_chart_" + ts + "_" + seq + ".png";
+        String sandboxPng = "/tmp/deepresearch_chart_" + ts + "_" + seq + ".png";
+        String localPng = localReportPath(filename);
+        String relPath = "reports/" + filename;
+
+        String ykJson;
+        try {
+            ykJson = MAPPER.writeValueAsString(yKeys);
+        } catch (JsonProcessingException ex) {
+            return errorResult("failed to serialise y_keys: " + ex.getMessage());
+        }
+        String code = buildChartPython(new ChartRequest(rows.json(), title, chartType, xKey, ykJson,
+                sandboxPng));
+        return runSandbox(code, localPng, relPath, RenderKind.CHART);
+    }
+
+    private Map<String, Object> runSandbox(String code, String localPng,
+                                           String relPngPath, RenderKind kind) {
+        SandboxOps ops = opsSupplier.get();
+        if (ops == null) {
+            return errorResult("sandbox ops supplier returned null");
+        }
+        ExecResult result = ops.executeCode(code, EXEC_TIMEOUT_SECONDS);
+        if (result == null) {
+            return errorResult("sandbox ops returned null result");
+        }
+        if (!result.ok()) {
+            Map<String, Object> err = errorResult("sandbox python exit=" + result.exitCode());
+            err.put("message", result.message());
+            err.put("stderr_tail", tail(result.stderr(), 2000));
+            return err;
+        }
+        String stdout = result.stdout();
+        Optional<String> reportedPng = extractMarker(stdout, PNG_MARKER);
+        if (reportedPng.isEmpty()) {
+            Map<String, Object> err = errorResult("sandbox did not emit " + PNG_MARKER + " marker");
+            err.put("stdout_tail", tail(stdout, 2000));
+            err.put("stderr_tail", tail(result.stderr(), 2000));
+            return err;
+        }
+        return buildSuccessResult(ops, kind, stdout, reportedPng.get(), localPng, relPngPath);
+    }
+
+    private Map<String, Object> buildSuccessResult(SandboxOps ops, RenderKind kind,
+                                                   String stdout, String reportedPng,
+                                                   String localPng, String relPngPath) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        if (kind == RenderKind.TABLE) {
+            extractBlock(stdout, TABLE_BEGIN, TABLE_END).ifPresent(md -> out.put("markdown_table", md));
+            extractMarker(stdout, "ROW_COUNT:")
+                    .flatMap(SandboxRail::parseIntOptional)
+                    .ifPresent(v -> out.put("row_count", v));
+            extractMarker(stdout, "COL_COUNT:")
+                    .flatMap(SandboxRail::parseIntOptional)
+                    .ifPresent(v -> out.put("column_count", v));
+        }
+        Optional<String> downloaded = downloadPng(ops, reportedPng, localPng);
+        out.put("sandbox_png_path", reportedPng);
+        if (downloaded.isPresent()) {
+            out.put("png_path", relPngPath);
+            out.put("png_absolute_path", downloaded.get());
+        } else {
+            out.put("png_path", null);
+            out.put("download_warning",
+                    "sandbox rendered PNG but download to workspace failed; check sandbox_png_path");
+        }
+        return out;
+    }
+
+    private Optional<String> downloadPng(SandboxOps ops, String sandboxPng, String localPng) {
+        ensureParentDir(localPng);
+        return ops.downloadFile(sandboxPng, localPng);
+    }
+
+    private String localReportPath(String filename) {
+        Path base = Paths.get(workspacePath, "reports");
+        return base.resolve(filename).toString();
+    }
+
+    private void ensureParentDir(String pathStr) {
+        try {
+            Path parent = Paths.get(pathStr).getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+        } catch (IOException | InvalidPathException ignored) {
+            // Best-effort: downloadFile will try to create parent dirs too (isCreateParentDirs=true).
+        }
+    }
+
+    private RowParseResult serializeRows(Object rowsRaw) {
+        if (rowsRaw == null) {
+            return RowParseResult.error("rows is required (got null)");
+        }
+        try {
+            List<Map<String, Object>> rows;
+            if (rowsRaw instanceof List<?> list) {
+                rows = new ArrayList<>();
+                for (int i = 0; i < list.size(); i++) {
+                    Object item = list.get(i);
+                    if (!(item instanceof Map<?, ?> map)) {
+                        return RowParseResult.error(
+                                "rows[" + i + "] is not an object: "
+                                        + (item == null ? "null" : item.getClass().getSimpleName()));
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> row = (Map<String, Object>) map;
+                    rows.add(row);
+                }
+            } else if (rowsRaw instanceof String jsonStr) {
+                rows = MAPPER.readValue(jsonStr, new TypeReference<>() {});
+            } else {
+                return RowParseResult.error(
+                        "rows must be array of objects or JSON string, got "
+                                + rowsRaw.getClass().getSimpleName());
+            }
+            if (rows.isEmpty()) {
+                return RowParseResult.error("rows must be non-empty");
+            }
+            return RowParseResult.ok(MAPPER.writeValueAsString(rows));
+        } catch (IOException | ClassCastException ex) {
+            return RowParseResult.error("failed to parse rows: " + ex.getMessage());
+        }
+    }
+
+    private String buildTablePython(String rowsJson, String title, String pngPath) {
+        String rowsB64 = Base64.getEncoder().encodeToString(rowsJson.getBytes(StandardCharsets.UTF_8));
+        String titleB64 = Base64.getEncoder().encodeToString(title.getBytes(StandardCharsets.UTF_8));
+        return PY_PREAMBLE
+                + "ROWS_JSON = _b64d('" + rowsB64 + "')\n"
+                + "TITLE     = _b64d('" + titleB64 + "')\n"
+                + "PNG_PATH  = " + pyStr(pngPath) + "\n"
+                + PY_TABLE_BODY;
+    }
+
+    private String buildChartPython(ChartRequest req) {
+        String rowsB64 = Base64.getEncoder().encodeToString(req.rowsJson().getBytes(StandardCharsets.UTF_8));
+        String titleB64 = Base64.getEncoder().encodeToString(req.title().getBytes(StandardCharsets.UTF_8));
+        String xB64 = Base64.getEncoder().encodeToString(req.xKey().getBytes(StandardCharsets.UTF_8));
+        String yB64 = Base64.getEncoder().encodeToString(req.yKeysJson().getBytes(StandardCharsets.UTF_8));
+        return PY_PREAMBLE
+                + "ROWS_JSON  = _b64d('" + rowsB64 + "')\n"
+                + "TITLE      = _b64d('" + titleB64 + "')\n"
+                + "X_KEY      = _b64d('" + xB64 + "')\n"
+                + "Y_KEYS     = json.loads(_b64d('" + yB64 + "'))\n"
+                + "CHART_TYPE = " + pyStr(req.chartType()) + "\n"
+                + "PNG_PATH   = " + pyStr(req.pngPath()) + "\n"
+                + PY_CHART_BODY;
+    }
+
+    private static String stringOrDefault(Object value, String fallback) {
+        return value == null ? fallback : String.valueOf(value);
+    }
+
+    private static List<String> coerceStringList(Object value) {
+        List<String> out = new ArrayList<>();
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                if (item != null) {
+                    out.add(String.valueOf(item));
+                }
+            }
+        } else if (value instanceof String csv && !csv.isBlank()) {
+            for (String piece : csv.split(",")) {
+                String trimmed = piece.trim();
+                if (!trimmed.isEmpty()) {
+                    out.add(trimmed);
+                }
+            }
+        } else {
+            // Any other type (Number, Boolean, null, custom object) → treat as empty list.
+        }
+        return out;
+    }
+
+    private static Optional<String> extractMarker(String stdout, String marker) {
+        int idx = stdout.indexOf(marker);
+        if (idx < 0) {
+            return Optional.empty();
+        }
+        int start = idx + marker.length();
+        int end = stdout.indexOf('\n', start);
+        String value = end < 0 ? stdout.substring(start) : stdout.substring(start, end);
+        return Optional.of(value.trim());
+    }
+
+    private static Optional<String> extractBlock(String stdout, String beginMarker, String endMarker) {
+        int begin = stdout.indexOf(beginMarker);
+        int end = stdout.indexOf(endMarker);
+        if (begin < 0 || end < 0 || end <= begin) {
+            return Optional.empty();
+        }
+        int contentStart = stdout.indexOf('\n', begin);
+        if (contentStart < 0 || contentStart >= end) {
+            return Optional.empty();
+        }
+        return Optional.of(stdout.substring(contentStart + 1, end).trim());
+    }
+
+    private static Optional<Integer> parseIntOptional(String value) {
+        try {
+            return Optional.of(Integer.parseInt(value.trim()));
+        } catch (NumberFormatException ex) {
+            return Optional.empty();
+        }
+    }
+
+    private static int parseIntOrDefault(String value, int fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
+    }
+
+    private static String timestamp() {
+        return LocalDateTime.now().format(TS_FMT);
+    }
+
+    private static Map<String, Object> errorResult(String message) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("ok", false);
+        map.put("error", message);
+        return map;
+    }
+
+    private static String tail(String source, int max) {
+        if (source == null) {
+            return "";
+        }
+        return source.length() <= max ? source : "..." + source.substring(source.length() - max);
+    }
+
+    private static Optional<String> firstNonBlank(String... vals) {
+        for (String candidate : vals) {
+            if (candidate != null && !candidate.isBlank()) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static String pyStr(String source) {
+        return "'" + source.replace("\\", "\\\\").replace("'", "\\'") + "'";
+    }
+
+    private static String pipExtraArgsLiteral() {
+        List<String> args = new ArrayList<>();
+        if (PIP_INDEX_URL != null) {
+            args.add("-i");
+            args.add(PIP_INDEX_URL);
+        }
+        if (PIP_TRUSTED_HOST != null) {
+            args.add("--trusted-host");
+            args.add(PIP_TRUSTED_HOST);
+        }
+        try {
+            return MAPPER.writeValueAsString(args);
+        } catch (JsonProcessingException ex) {
+            return "[]";
+        }
+    }
+
+    private enum RenderKind {
+        TABLE, CHART
+    }
+
+    private record ChartRequest(String rowsJson, String title, String chartType,
+                                String xKey, String yKeysJson, String pngPath) {
+    }
+
+    private record RowParseResult(String json, String error) {
+        static RowParseResult ok(String json) {
+            return new RowParseResult(json, null);
+        }
+
+        static RowParseResult error(String message) {
+            return new RowParseResult(null, message);
+        }
+    }
 }

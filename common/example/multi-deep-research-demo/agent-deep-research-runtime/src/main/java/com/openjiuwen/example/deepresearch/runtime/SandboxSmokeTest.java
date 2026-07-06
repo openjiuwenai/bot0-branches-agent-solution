@@ -20,16 +20,22 @@ import org.springframework.stereotype.Component;
  * Startup smoke test that invokes a single {@code echo} through the runtime
  * {@code AgentCoreSandboxClientFactory} to verify jiuwenbox connectivity end-to-end.
  * Enabled only when {@code openjiuwen.demo.deep-research.sandbox.smoke-test=true}.
+ *
+ * @since 2026-07-06
  */
 @Component
 @ConditionalOnProperty(prefix = "openjiuwen.demo.deep-research.sandbox",
         name = "smoke-test", havingValue = "true")
 public class SandboxSmokeTest implements ApplicationRunner {
-
     private static final Logger LOG = LoggerFactory.getLogger(SandboxSmokeTest.class);
 
     private final ObjectProvider<AgentCoreSandboxClientFactory> factoryProvider;
 
+    /**
+     * Creates the smoke-test runner with Spring-provided sandbox factory.
+     *
+     * @param factoryProvider Spring provider for {@link AgentCoreSandboxClientFactory}
+     */
     public SandboxSmokeTest(ObjectProvider<AgentCoreSandboxClientFactory> factoryProvider) {
         this.factoryProvider = factoryProvider;
     }
@@ -38,7 +44,7 @@ public class SandboxSmokeTest implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         AgentCoreSandboxClientFactory factory = factoryProvider.getIfAvailable();
         if (factory == null) {
-            LOG.warn("[sandbox-smoke] AgentCoreSandboxClientFactory bean absent — "
+            LOG.warn("[sandbox-smoke] AgentCoreSandboxClientFactory bean absent - "
                     + "confirm openjiuwen.service.external.sandbox.enabled=true");
             return;
         }
@@ -58,8 +64,8 @@ public class SandboxSmokeTest implements ApplicationRunner {
                     data != null ? data.getExitCode() : null,
                     data != null ? data.getStdout() : null,
                     data != null ? data.getStderr() : null);
-        } catch (RuntimeException e) {
-            LOG.error("[sandbox-smoke] failed", e);
+        } catch (RuntimeException ex) {
+            LOG.error("[sandbox-smoke] failed", ex);
         }
     }
 }

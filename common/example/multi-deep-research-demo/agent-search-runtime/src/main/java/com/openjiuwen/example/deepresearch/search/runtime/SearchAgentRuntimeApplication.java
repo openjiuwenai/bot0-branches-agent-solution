@@ -27,15 +27,28 @@ import org.springframework.context.annotation.Bean;
  * <p>Profile switching: {@code openjiuwen.demo.search-agent.use-stub=true} (set
  * under the {@code stub} Spring profile in {@code application.yml}) makes the
  * factory wire {@code StubWebSearchTool} instead of {@code WebSearchTool}.
+ *
+ * @since 2026-07-06
  */
 @SpringBootApplication
 @EnableConfigurationProperties(SearchAgentSpringProperties.class)
 public class SearchAgentRuntimeApplication {
-
+    /**
+     * Spring Boot entry point.
+     *
+     * @param args command-line arguments forwarded to Spring
+     */
     public static void main(String[] args) {
         SpringApplication.run(SearchAgentRuntimeApplication.class, args);
     }
 
+    /**
+     * Builds the search-agent {@link AgentHandler} SPI bean.
+     *
+     * @param properties runtime configuration bound from {@code application.yml}
+     * @param registrar optional middleware registrar provider
+     * @return the configured {@link AgentHandler}
+     */
     @Bean
     AgentHandler searchAgentHandler(SearchAgentSpringProperties properties,
                                     ObjectProvider<MiddlewareAdapterRegistrar> registrar) {

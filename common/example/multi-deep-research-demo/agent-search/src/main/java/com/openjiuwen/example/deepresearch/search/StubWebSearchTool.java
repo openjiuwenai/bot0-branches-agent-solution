@@ -18,14 +18,22 @@ import java.util.Map;
  * Stub {@code web_search} tool bridge backed by {@link StubWebSearchProvider}.
  * Same I/O contract as {@link WebSearchTool} — only the tool implementation
  * class differs between stub and prod, picked by the wrapper's Spring profile.
+ *
+ * @since 2026-07-06
  */
 public final class StubWebSearchTool {
-
     private static final WebSearchProvider PROVIDER = new StubWebSearchProvider();
 
     private StubWebSearchTool() {
     }
 
+    /**
+     * Executes a fixture-backed web search.
+     *
+     * @param inputs raw tool inputs (keys: {@code query}, {@code top_k},
+     *     {@code time_range}, {@code language})
+     * @return a serialised search response, or an error map when {@code query} is blank
+     */
     public static Object search(Map<String, Object> inputs) {
         String query = stringInput(inputs, "query", "");
         if (query.isBlank()) {
@@ -40,18 +48,18 @@ public final class StubWebSearchTool {
     }
 
     private static String stringInput(Map<String, Object> inputs, String key, String fallback) {
-        Object v = inputs == null ? null : inputs.get(key);
-        return v == null ? fallback : v.toString();
+        Object value = inputs == null ? null : inputs.get(key);
+        return value == null ? fallback : value.toString();
     }
 
     private static int intInput(Map<String, Object> inputs, String key, int fallback) {
-        Object v = inputs == null ? null : inputs.get(key);
-        if (v instanceof Number n) {
-            return n.intValue();
+        Object value = inputs == null ? null : inputs.get(key);
+        if (value instanceof Number num) {
+            return num.intValue();
         }
-        if (v instanceof String s && !s.isBlank()) {
+        if (value instanceof String str && !str.isBlank()) {
             try {
-                return Integer.parseInt(s.trim());
+                return Integer.parseInt(str.trim());
             } catch (NumberFormatException ex) {
                 return fallback;
             }

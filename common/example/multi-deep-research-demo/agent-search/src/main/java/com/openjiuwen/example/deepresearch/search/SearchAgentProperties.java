@@ -12,9 +12,10 @@ import java.util.Map;
  *
  * <p>Library tier: depends only on JDK + agent-core-java, no Spring annotations.
  * The runtime wrapper subclasses this to attach {@code @ConfigurationProperties}.
+ *
+ * @since 2026-07-06
  */
 public class SearchAgentProperties {
-
     private String agentId = "search-agent";
     private String agentName = "SearchAgent";
     private String agentDescription = "ReAct web-search sub-agent (Tavily + source-kind reranker)";
@@ -63,6 +64,12 @@ public class SearchAgentProperties {
               root agent. Return ONLY the JSON object above.
             """;
 
+    /**
+     * Builds the JSON schema describing the {@code web_search} tool input contract
+     * for the LLM (matches the {@link WebSearchTool} runtime signature).
+     *
+     * @return an ordered map keyed as {@code type} / {@code properties} / {@code required}
+     */
     public Map<String, Object> webSearchInputSchema() {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("query", Map.of("type", "string", "description", "Search query string."));
@@ -80,6 +87,13 @@ public class SearchAgentProperties {
         return schema;
     }
 
+    /**
+     * Asserts that the mandatory LLM settings ({@code api-key} / {@code api-base} /
+     * {@code model-name}) have been supplied. Called by the runtime wrapper during
+     * bean initialisation so misconfiguration surfaces before the first request.
+     *
+     * @throws IllegalStateException if any of the required properties is blank
+     */
     public void requireConfigured() {
         requireText(apiKey, "search-agent.llm.api-key");
         requireText(apiBase, "search-agent.llm.api-base");
@@ -92,45 +106,143 @@ public class SearchAgentProperties {
         }
     }
 
-    public String getAgentId() { return agentId; }
-    public void setAgentId(String agentId) { this.agentId = agentId; }
+    /** @return the agent id */
+    public String getAgentId() {
+        return agentId;
+    }
 
-    public String getAgentName() { return agentName; }
-    public void setAgentName(String agentName) { this.agentName = agentName; }
+    /** @param agentId the agent id */
+    public void setAgentId(String agentId) {
+        this.agentId = agentId;
+    }
 
-    public String getAgentDescription() { return agentDescription; }
-    public void setAgentDescription(String agentDescription) { this.agentDescription = agentDescription; }
+    /** @return the agent name */
+    public String getAgentName() {
+        return agentName;
+    }
 
-    public String getProvider() { return provider; }
-    public void setProvider(String provider) { this.provider = provider; }
+    /** @param agentName the agent name */
+    public void setAgentName(String agentName) {
+        this.agentName = agentName;
+    }
 
-    public String getApiKey() { return apiKey; }
-    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    /** @return the agent description */
+    public String getAgentDescription() {
+        return agentDescription;
+    }
 
-    public String getApiBase() { return apiBase; }
-    public void setApiBase(String apiBase) { this.apiBase = apiBase; }
+    /** @param agentDescription the agent description */
+    public void setAgentDescription(String agentDescription) {
+        this.agentDescription = agentDescription;
+    }
 
-    public String getModelName() { return modelName; }
-    public void setModelName(String modelName) { this.modelName = modelName; }
+    /** @return the LLM provider name */
+    public String getProvider() {
+        return provider;
+    }
 
-    public boolean isSslVerify() { return sslVerify; }
-    public void setSslVerify(boolean sslVerify) { this.sslVerify = sslVerify; }
+    /** @param provider the LLM provider name */
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
 
-    public Double getTemperature() { return temperature; }
-    public void setTemperature(Double temperature) { this.temperature = temperature; }
+    /** @return the LLM API key */
+    public String getApiKey() {
+        return apiKey;
+    }
 
-    public Double getTopP() { return topP; }
-    public void setTopP(Double topP) { this.topP = topP; }
+    /** @param apiKey the LLM API key */
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
+    }
 
-    public int getMaxIterations() { return maxIterations; }
-    public void setMaxIterations(int maxIterations) { this.maxIterations = maxIterations; }
+    /** @return the LLM base URL */
+    public String getApiBase() {
+        return apiBase;
+    }
 
-    public String getSysOperationId() { return sysOperationId; }
-    public void setSysOperationId(String sysOperationId) { this.sysOperationId = sysOperationId; }
+    /** @param apiBase the LLM base URL */
+    public void setApiBase(String apiBase) {
+        this.apiBase = apiBase;
+    }
 
-    public boolean isUseStub() { return useStub; }
-    public void setUseStub(boolean useStub) { this.useStub = useStub; }
+    /** @return the LLM model name */
+    public String getModelName() {
+        return modelName;
+    }
 
-    public String getSystemPrompt() { return systemPrompt; }
-    public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
+    /** @param modelName the LLM model name */
+    public void setModelName(String modelName) {
+        this.modelName = modelName;
+    }
+
+    /** @return whether SSL verification is enabled */
+    public boolean isSslVerify() {
+        return sslVerify;
+    }
+
+    /** @param sslVerify whether SSL verification is enabled */
+    public void setSslVerify(boolean sslVerify) {
+        this.sslVerify = sslVerify;
+    }
+
+    /** @return the sampling temperature */
+    public Double getTemperature() {
+        return temperature;
+    }
+
+    /** @param temperature the sampling temperature */
+    public void setTemperature(Double temperature) {
+        this.temperature = temperature;
+    }
+
+    /** @return the nucleus sampling probability */
+    public Double getTopP() {
+        return topP;
+    }
+
+    /** @param topP the nucleus sampling probability */
+    public void setTopP(Double topP) {
+        this.topP = topP;
+    }
+
+    /** @return the ReAct max iterations */
+    public int getMaxIterations() {
+        return maxIterations;
+    }
+
+    /** @param maxIterations the ReAct max iterations */
+    public void setMaxIterations(int maxIterations) {
+        this.maxIterations = maxIterations;
+    }
+
+    /** @return the internal operation id used for tracing */
+    public String getSysOperationId() {
+        return sysOperationId;
+    }
+
+    /** @param sysOperationId the internal operation id used for tracing */
+    public void setSysOperationId(String sysOperationId) {
+        this.sysOperationId = sysOperationId;
+    }
+
+    /** @return whether the stub web-search backend is enabled */
+    public boolean isUseStub() {
+        return useStub;
+    }
+
+    /** @param useStub whether the stub web-search backend is enabled */
+    public void setUseStub(boolean useStub) {
+        this.useStub = useStub;
+    }
+
+    /** @return the search-agent system prompt */
+    public String getSystemPrompt() {
+        return systemPrompt;
+    }
+
+    /** @param systemPrompt the search-agent system prompt */
+    public void setSystemPrompt(String systemPrompt) {
+        this.systemPrompt = systemPrompt;
+    }
 }

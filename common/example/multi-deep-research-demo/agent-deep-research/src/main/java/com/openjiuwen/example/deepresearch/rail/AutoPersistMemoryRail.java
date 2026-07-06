@@ -34,9 +34,10 @@ import java.util.Map;
  *
  * <p>Only persists on {@code result_type == "answer"} — error / interrupt / early
  * finish paths are skipped so we never persist half-baked runs.
+ *
+ * @since 2026-07-06
  */
 public class AutoPersistMemoryRail extends MemoryRail {
-
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final int MIN_QUERY_LEN = 4;
     private static final int SLUG_MAX_LEN = 40;
@@ -50,7 +51,6 @@ public class AutoPersistMemoryRail extends MemoryRail {
         if (!(ctx.getInputs() instanceof InvokeInputs invokeInputs)) {
             return;
         }
-
         Map<String, Object> result = invokeInputs.getResult();
         if (result == null || !"answer".equals(String.valueOf(result.get("result_type")))) {
             return;
@@ -65,40 +65,40 @@ public class AutoPersistMemoryRail extends MemoryRail {
         }
 
         String date = LocalDate.now().format(DATE_FORMAT);
-        String slug = slugify(query);
+        String filename = "answer-" + date + "-" + slugify(query) + ".md";
         String outputStr = String.valueOf(output);
-        // core-java's write_memory tool flattens paths to basename, so the file
-        // lands at memory/ root regardless. Prefix "answer-" to disambiguate from
-        // LLM-authored scratchpads (which use the "notes-" prefix by convention).
-        String filename = "answer-" + date + "-" + slug + ".md";
-
-        // (1) Full memory record — indexed by MemoryIndexManager for cross-session recall.
         String memoryContent = renderReport(query, outputStr, date, invokeInputs.getConversationId());
+        writeMemoryEntry(filename, memoryContent);
+        writeReportCopy(filename, outputStr);
+    }
+
+    private void writeMemoryEntry(String filename, String memoryContent) {
         Map<String, Object> args = new LinkedHashMap<>();
         args.put("path", filename);
         args.put("content", memoryContent);
         args.put("append", false);
         try {
             invokeMemoryTool("write_memory", args);
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
             // Fail-open: persistence failure must never break the invoke result.
         }
+    }
 
-        // (2) Human-readable report — dropped next to the chart PNGs so a reviewer can
-        // open one directory and see both the narrative and the visualisations.
-        if (owner != null) {
-            try {
-                Path reportsDir = owner.getWorkspace().root().resolve("reports");
-                Files.createDirectories(reportsDir);
-                Files.writeString(reportsDir.resolve(filename), outputStr, StandardCharsets.UTF_8);
-            } catch (IOException ignored) {
-                // Fail-open: report copy is best-effort.
-            }
+    private void writeReportCopy(String filename, String outputStr) {
+        if (owner == null) {
+            return;
+        }
+        try {
+            Path reportsDir = owner.getWorkspace().root().resolve("reports");
+            Files.createDirectories(reportsDir);
+            Files.writeString(reportsDir.resolve(filename), outputStr, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+            // Fail-open: report copy is best-effort.
         }
     }
 
     /**
-     * Return the original human question for this conversation.
+     * Returns the original human question for this conversation.
      *
      * <p>In a2a interrupt/resume flows every tool call becomes a new {@code streamQuery},
      * so {@link InvokeInputs#getQuery()} carries whatever the last resume payload was
@@ -107,29 +107,42 @@ public class AutoPersistMemoryRail extends MemoryRail {
      * {@code [STEERING]} pseudo-user messages that the runtime injects after each tool
      * result. Fall back to {@code invokeInputs.getQuery()} so persistence still runs
      * even when the context is unavailable.
+     *
+     * @param ctx the callback context (may carry a {@link ModelContext})
+     * @param invokeInputs the invoke inputs used as fallback source
+     * @return the original user question or the fallback query
      */
     private static String resolveOriginalQuery(AgentCallbackContext ctx, InvokeInputs invokeInputs) {
         ModelContext context = ctx.getContext();
-        if (context != null) {
-            List<BaseMessage> messages = context.getMessages();
-            if (messages != null) {
-                for (BaseMessage message : messages) {
-                    if (message == null || !"user".equals(message.getRole())) {
-                        continue;
-                    }
-                    String content = message.getContentAsString();
-                    if (content == null) {
-                        continue;
-                    }
-                    String stripped = content.strip();
-                    if (stripped.isEmpty() || stripped.startsWith(STEERING_PREFIX)) {
-                        continue;
-                    }
-                    return stripped;
-                }
+        if (context == null) {
+            return invokeInputs.getQuery();
+        }
+        List<BaseMessage> messages = context.getMessages();
+        if (messages == null) {
+            return invokeInputs.getQuery();
+        }
+        for (BaseMessage message : messages) {
+            String stripped = extractUserContent(message);
+            if (stripped != null) {
+                return stripped;
             }
         }
         return invokeInputs.getQuery();
+    }
+
+    private static String extractUserContent(BaseMessage message) {
+        if (message == null || !"user".equals(message.getRole())) {
+            return null;
+        }
+        String content = message.getContentAsString();
+        if (content == null) {
+            return null;
+        }
+        String stripped = content.strip();
+        if (stripped.isEmpty() || stripped.startsWith(STEERING_PREFIX)) {
+            return null;
+        }
+        return stripped;
     }
 
     private static String slugify(String query) {
