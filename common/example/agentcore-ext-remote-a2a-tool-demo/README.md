@@ -271,7 +271,9 @@ Agent A DeepAgent
   -> A2AEnabledServeOrchestrator calls Agent B with streaming A2A client
   -> Agent B VersatileAgentHandler calls VERSATILE_URL
   -> remote result resumes Agent A as tool result
-``## 调用 Agent A：REST 三轮请求
+```
+
+## 调用 Agent A：REST 三轮请求
 
 REST 入口调用 Agent A 的 `/v1/query`。runtime 会把 REST 原始请求体完整放进 `ServeRequest.metadata.body`，所以这里把 `custom_data` 放在 REST body 顶层；URL query string 会进入 `ServeRequest.metadata.query`，并由 Agent B 的 `VersatileAgentHandler` 透传给 `VERSATILE_URL`。Agent A 委托到 Agent B 后，Agent B 会从 `metadata.body.custom_data` 构造最终发给 `VERSATILE_URL` 的 HTTP body。
 
