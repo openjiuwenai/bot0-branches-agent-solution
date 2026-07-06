@@ -73,7 +73,7 @@ public class DeepResearchRuntimeApplication {
                                      ObjectProvider<AgentCoreSandboxClientFactory> sandboxFactoryProvider) {
         AgentCoreSandboxClientFactory sandboxFactory = sandboxFactoryProvider.getIfAvailable();
         Supplier<SandboxOps> sandboxOpsSupplier = sandboxFactory != null
-                ? () -> resolveSandboxOps(sandboxFactory)
+                ? () -> resolveSandboxOps(sandboxFactory).orElse(null)
                 : null;
         return new JiuwenCoreAgentExtHandler(
                 DeepResearchAgentFactory.build(properties, sandboxOpsSupplier),
@@ -81,12 +81,12 @@ public class DeepResearchRuntimeApplication {
                 installer);
     }
 
-    private static SandboxOps resolveSandboxOps(AgentCoreSandboxClientFactory factory) {
+    private static Optional<SandboxOps> resolveSandboxOps(AgentCoreSandboxClientFactory factory) {
         SandboxClient client = factory.create();
         if (client == null) {
-            return null;
+            return Optional.empty();
         }
-        return toSandboxOps(client);
+        return Optional.of(toSandboxOps(client));
     }
 
     private static SandboxOps toSandboxOps(SandboxClient client) {

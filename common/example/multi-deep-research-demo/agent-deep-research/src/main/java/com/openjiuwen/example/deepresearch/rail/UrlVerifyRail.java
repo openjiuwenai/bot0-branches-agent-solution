@@ -235,20 +235,26 @@ public class UrlVerifyRail extends DeepAgentRail {
     }
 
     private static int clampTimeout(Object raw) {
-        int seconds = DEFAULT_TIMEOUT_SECONDS;
+        int seconds;
         if (raw instanceof Number num) {
             seconds = num.intValue();
         } else if (raw instanceof String str && !str.isBlank()) {
-            try {
-                seconds = Integer.parseInt(str.trim());
-            } catch (NumberFormatException ignored) {
-                seconds = DEFAULT_TIMEOUT_SECONDS;
-            }
+            seconds = parseTimeoutString(str.trim());
+        } else {
+            seconds = DEFAULT_TIMEOUT_SECONDS;
         }
         if (seconds < 1) {
             return 1;
         }
         return Math.min(seconds, MAX_TIMEOUT_SECONDS);
+    }
+
+    private static int parseTimeoutString(String raw) {
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException ignored) {
+            return DEFAULT_TIMEOUT_SECONDS;
+        }
     }
 
     private static List<String> coerceUrlList(Object raw) {

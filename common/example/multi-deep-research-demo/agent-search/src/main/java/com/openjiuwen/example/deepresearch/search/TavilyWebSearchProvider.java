@@ -84,13 +84,8 @@ public final class TavilyWebSearchProvider implements WebSearchProvider {
         } catch (IOException ex) {
             throw new IllegalStateException("tavily call failed: " + ex.getMessage(), ex);
         } catch (InterruptedException ex) {
-            restoreInterruptFlag();
             throw new IllegalStateException("tavily call interrupted", ex);
         }
-    }
-
-    private static void restoreInterruptFlag() {
-        Thread.currentThread().interrupt();
     }
 
     private String buildRequestBody(SearchRequest request) throws IOException {
