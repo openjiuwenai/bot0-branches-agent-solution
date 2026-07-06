@@ -19,6 +19,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * MemoryRail extension that deterministically persists each substantive final answer
@@ -79,7 +80,7 @@ public class AutoPersistMemoryRail extends MemoryRail {
         args.put("append", false);
         try {
             invokeMemoryTool("write_memory", args);
-        } catch (RuntimeException ignored) {
+        } catch (IllegalStateException | IllegalArgumentException ignored) {
             // Fail-open: persistence failure must never break the invoke result.
         }
     }
@@ -122,27 +123,27 @@ public class AutoPersistMemoryRail extends MemoryRail {
             return invokeInputs.getQuery();
         }
         for (BaseMessage message : messages) {
-            String stripped = extractUserContent(message);
-            if (stripped != null) {
-                return stripped;
+            Optional<String> stripped = extractUserContent(message);
+            if (stripped.isPresent()) {
+                return stripped.get();
             }
         }
         return invokeInputs.getQuery();
     }
 
-    private static String extractUserContent(BaseMessage message) {
+    private static Optional<String> extractUserContent(BaseMessage message) {
         if (message == null || !"user".equals(message.getRole())) {
-            return null;
+            return Optional.empty();
         }
         String content = message.getContentAsString();
         if (content == null) {
-            return null;
+            return Optional.empty();
         }
         String stripped = content.strip();
         if (stripped.isEmpty() || stripped.startsWith(STEERING_PREFIX)) {
-            return null;
+            return Optional.empty();
         }
-        return stripped;
+        return Optional.of(stripped);
     }
 
     private static String slugify(String query) {

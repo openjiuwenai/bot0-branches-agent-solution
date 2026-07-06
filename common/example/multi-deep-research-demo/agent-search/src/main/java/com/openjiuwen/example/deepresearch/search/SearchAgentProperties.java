@@ -24,7 +24,7 @@ public class SearchAgentProperties {
     private String apiKey = "";
     private String apiBase = "https://api.deepseek.com";
     private String modelName = "deepseek-chat";
-    private boolean sslVerify = true;
+    private boolean isSslVerify = true;
     private Double temperature = 0.2;
     private Double topP = 0.8;
 
@@ -35,7 +35,7 @@ public class SearchAgentProperties {
      * When {@code true}, the wrapper should wire {@link StubWebSearchTool#search}
      * as the tool body (fixture-backed). Default {@code false} = prod Tavily.
      */
-    private boolean useStub = false;
+    private boolean isUseStub = false;
 
     private String systemPrompt = """
             You are the search sub-agent of a deep-research multi-agent system.
@@ -106,142 +106,198 @@ public class SearchAgentProperties {
         }
     }
 
-    /** @return the agent id */
+    /**
+     * @return the agent id
+     */
     public String getAgentId() {
         return agentId;
     }
 
-    /** @param agentId the agent id */
+    /**
+     * @param agentId the agent id
+     */
     public void setAgentId(String agentId) {
         this.agentId = agentId;
     }
 
-    /** @return the agent name */
+    /**
+     * @return the agent name
+     */
     public String getAgentName() {
         return agentName;
     }
 
-    /** @param agentName the agent name */
+    /**
+     * @param agentName the agent name
+     */
     public void setAgentName(String agentName) {
         this.agentName = agentName;
     }
 
-    /** @return the agent description */
+    /**
+     * @return the agent description
+     */
     public String getAgentDescription() {
         return agentDescription;
     }
 
-    /** @param agentDescription the agent description */
+    /**
+     * @param agentDescription the agent description
+     */
     public void setAgentDescription(String agentDescription) {
         this.agentDescription = agentDescription;
     }
 
-    /** @return the LLM provider name */
+    /**
+     * @return the LLM provider name
+     */
     public String getProvider() {
         return provider;
     }
 
-    /** @param provider the LLM provider name */
+    /**
+     * @param provider the LLM provider name
+     */
     public void setProvider(String provider) {
         this.provider = provider;
     }
 
-    /** @return the LLM API key */
+    /**
+     * @return the LLM API key
+     */
     public String getApiKey() {
         return apiKey;
     }
 
-    /** @param apiKey the LLM API key */
+    /**
+     * @param apiKey the LLM API key
+     */
     public void setApiKey(String apiKey) {
         this.apiKey = apiKey;
     }
 
-    /** @return the LLM base URL */
+    /**
+     * @return the LLM base URL
+     */
     public String getApiBase() {
         return apiBase;
     }
 
-    /** @param apiBase the LLM base URL */
+    /**
+     * @param apiBase the LLM base URL
+     */
     public void setApiBase(String apiBase) {
         this.apiBase = apiBase;
     }
 
-    /** @return the LLM model name */
+    /**
+     * @return the LLM model name
+     */
     public String getModelName() {
         return modelName;
     }
 
-    /** @param modelName the LLM model name */
+    /**
+     * @param modelName the LLM model name
+     */
     public void setModelName(String modelName) {
         this.modelName = modelName;
     }
 
-    /** @return whether SSL verification is enabled */
+    /**
+     * @return whether SSL verification is enabled
+     */
     public boolean isSslVerify() {
-        return sslVerify;
+        return isSslVerify;
     }
 
-    /** @param sslVerify whether SSL verification is enabled */
-    public void setSslVerify(boolean sslVerify) {
-        this.sslVerify = sslVerify;
+    /**
+     * @param isSslVerify whether SSL verification is enabled
+     */
+    public void setSslVerify(boolean isSslVerify) {
+        this.isSslVerify = isSslVerify;
     }
 
-    /** @return the sampling temperature */
+    /**
+     * @return the sampling temperature
+     */
     public Double getTemperature() {
         return temperature;
     }
 
-    /** @param temperature the sampling temperature */
+    /**
+     * @param temperature the sampling temperature
+     */
     public void setTemperature(Double temperature) {
         this.temperature = temperature;
     }
 
-    /** @return the nucleus sampling probability */
+    /**
+     * @return the nucleus sampling probability
+     */
     public Double getTopP() {
         return topP;
     }
 
-    /** @param topP the nucleus sampling probability */
+    /**
+     * @param topP the nucleus sampling probability
+     */
     public void setTopP(Double topP) {
         this.topP = topP;
     }
 
-    /** @return the ReAct max iterations */
+    /**
+     * @return the ReAct max iterations
+     */
     public int getMaxIterations() {
         return maxIterations;
     }
 
-    /** @param maxIterations the ReAct max iterations */
+    /**
+     * @param maxIterations the ReAct max iterations
+     */
     public void setMaxIterations(int maxIterations) {
         this.maxIterations = maxIterations;
     }
 
-    /** @return the internal operation id used for tracing */
+    /**
+     * @return the internal operation id used for tracing
+     */
     public String getSysOperationId() {
         return sysOperationId;
     }
 
-    /** @param sysOperationId the internal operation id used for tracing */
+    /**
+     * @param sysOperationId the internal operation id used for tracing
+     */
     public void setSysOperationId(String sysOperationId) {
         this.sysOperationId = sysOperationId;
     }
 
-    /** @return whether the stub web-search backend is enabled */
+    /**
+     * @return whether the stub web-search backend is enabled
+     */
     public boolean isUseStub() {
-        return useStub;
+        return isUseStub;
     }
 
-    /** @param useStub whether the stub web-search backend is enabled */
-    public void setUseStub(boolean useStub) {
-        this.useStub = useStub;
+    /**
+     * @param isUseStub whether the stub web-search backend is enabled
+     */
+    public void setUseStub(boolean isUseStub) {
+        this.isUseStub = isUseStub;
     }
 
-    /** @return the search-agent system prompt */
+    /**
+     * @return the search-agent system prompt
+     */
     public String getSystemPrompt() {
         return systemPrompt;
     }
 
-    /** @param systemPrompt the search-agent system prompt */
+    /**
+     * @param systemPrompt the search-agent system prompt
+     */
     public void setSystemPrompt(String systemPrompt) {
         this.systemPrompt = systemPrompt;
     }

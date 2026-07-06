@@ -204,7 +204,7 @@ public class UrlVerifyRail extends DeepAgentRail {
     }
 
     private Object buildResult(ExecResult result) {
-        if (!result.ok()) {
+        if (!result.isOk()) {
             Map<String, Object> err = errorResult("sandbox python exit=" + result.exitCode());
             err.put("message", result.message());
             err.put("stderr_tail", tail(result.stderr(), SNIPPET_TAIL_MAX));
@@ -244,8 +244,6 @@ public class UrlVerifyRail extends DeepAgentRail {
             } catch (NumberFormatException ignored) {
                 seconds = DEFAULT_TIMEOUT_SECONDS;
             }
-        } else {
-            // leave seconds at default
         }
         if (seconds < 1) {
             return 1;
