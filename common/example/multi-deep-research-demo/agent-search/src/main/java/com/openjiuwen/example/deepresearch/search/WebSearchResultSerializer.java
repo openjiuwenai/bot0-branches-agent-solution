@@ -19,21 +19,22 @@ import java.util.Map;
  * { "results": [ { url, title, snippet, source_kind, score } ] }
  * }</pre>
  * Centralised so prod and stub tool bridges emit byte-identical output.
+ *
+ * @since 2026-07-06
  */
 final class WebSearchResultSerializer {
-
     private WebSearchResultSerializer() {
     }
 
     static Map<String, Object> serialize(SearchResponse response) {
         List<Map<String, Object>> results = new ArrayList<>();
-        for (Result r : response.results()) {
+        for (Result result : response.results()) {
             Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("url", r.url());
-            entry.put("title", r.title());
-            entry.put("snippet", r.snippet());
-            entry.put("source_kind", r.sourceKind().name().toLowerCase(Locale.ROOT));
-            entry.put("score", r.score());
+            entry.put("url", result.url());
+            entry.put("title", result.title());
+            entry.put("snippet", result.snippet());
+            entry.put("source_kind", result.sourceKind().name().toLowerCase(Locale.ROOT));
+            entry.put("score", result.score());
             results.add(entry);
         }
         Map<String, Object> out = new LinkedHashMap<>();

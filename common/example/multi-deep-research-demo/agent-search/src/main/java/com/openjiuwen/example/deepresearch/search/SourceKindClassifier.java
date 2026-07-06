@@ -8,15 +8,17 @@ import com.openjiuwen.example.deepresearch.search.WebSearchProvider.SourceKind;
 
 import java.net.URI;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * Classifies a result URL into {@link SourceKind} buckets (official / blog /
  * news / forum) by host pattern. The classification feeds verify-agent's
  * authoritative-source preference.
+ *
+ * @since 2026-07-06
  */
 public final class SourceKindClassifier {
-
     private static final Set<String> VENDOR_OFFICIAL_HOSTS = Set.of(
             "volcengine.com",
             "bailian.aliyun.com",
@@ -40,11 +42,18 @@ public final class SourceKindClassifier {
     private SourceKindClassifier() {
     }
 
+    /**
+     * Classifies the given URL by host into a {@link SourceKind} bucket.
+     *
+     * @param url the result URL (may be {@code null} or blank)
+     * @return the source classification; {@link SourceKind#BLOG} as a safe default
+     */
     public static SourceKind classify(String url) {
-        String host = hostOf(url);
-        if (host == null) {
+        Optional<String> hostOpt = hostOf(url);
+        if (hostOpt.isEmpty()) {
             return SourceKind.BLOG;
         }
+        String host = hostOpt.get();
         if (matchesAny(host, VENDOR_OFFICIAL_HOSTS) || isOfficialDocsLike(host)) {
             return SourceKind.OFFICIAL;
         }
@@ -73,15 +82,18 @@ public final class SourceKindClassifier {
         return false;
     }
 
-    private static String hostOf(String url) {
+    private static Optional<String> hostOf(String url) {
         if (url == null || url.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         try {
             String host = URI.create(url).getHost();
-            return host == null ? null : host.toLowerCase(Locale.ROOT);
+            if (host == null) {
+                return Optional.empty();
+            }
+            return Optional.of(host.toLowerCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            return null;
+            return Optional.empty();
         }
     }
 }

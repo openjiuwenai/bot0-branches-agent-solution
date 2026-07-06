@@ -15,9 +15,10 @@ import java.util.Map;
  *
  * <p>Library tier: depends only on {@code agent-core-java}, no Spring annotations. The
  * runtime wrapper subclasses this to attach {@code @ConfigurationProperties}.
+ *
+ * @since 2026-07-06
  */
 public class DeepResearchProperties {
-
     private String agentId = "deep-research-agent";
     private String agentName = "DeepResearchAgent";
     private String agentDescription = "Deep research agent comparing domestic LLM API offerings";
@@ -188,6 +189,11 @@ public class DeepResearchProperties {
                 MUST be delivered — never end a run mid-tool-call.
             """;
 
+    /**
+     * Builds the model-tier config map consumed by core-java's LLM client (model name + sampling).
+     *
+     * @return an ordered map with keys {@code model}, {@code temperature}, {@code top_p}
+     */
     public Map<String, Object> modelConfig() {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("model", modelName);
@@ -196,6 +202,12 @@ public class DeepResearchProperties {
         return model;
     }
 
+    /**
+     * Builds the backend-tier config map consumed by core-java's LLM client (provider + credentials).
+     *
+     * @return an ordered map with keys {@code provider}, {@code api_key}, {@code api_base},
+     *     {@code verify_ssl}, {@code timeout}
+     */
     public Map<String, Object> backendConfig() {
         Map<String, Object> backend = new LinkedHashMap<>();
         backend.put("provider", provider);
@@ -206,6 +218,13 @@ public class DeepResearchProperties {
         return backend;
     }
 
+    /**
+     * Asserts that the mandatory LLM settings ({@code api-key} / {@code api-base} /
+     * {@code model-name}) have been supplied. Called by the runtime wrapper during
+     * bean initialisation so misconfiguration surfaces before the first request.
+     *
+     * @throws IllegalStateException if any of the required properties is blank
+     */
     public void requireConfigured() {
         requireText(apiKey, "deep-research.llm.api-key");
         requireText(apiBase, "deep-research.llm.api-base");
@@ -218,60 +237,193 @@ public class DeepResearchProperties {
         }
     }
 
-    public String getAgentId() { return agentId; }
-    public void setAgentId(String agentId) { this.agentId = agentId; }
+    /** @return the agent id */
+    public String getAgentId() {
+        return agentId;
+    }
 
-    public String getAgentName() { return agentName; }
-    public void setAgentName(String agentName) { this.agentName = agentName; }
+    /** @param agentId the agent id */
+    public void setAgentId(String agentId) {
+        this.agentId = agentId;
+    }
 
-    public String getAgentDescription() { return agentDescription; }
-    public void setAgentDescription(String agentDescription) { this.agentDescription = agentDescription; }
+    /** @return the agent name */
+    public String getAgentName() {
+        return agentName;
+    }
 
-    public String getProvider() { return provider; }
-    public void setProvider(String provider) { this.provider = provider; }
+    /** @param agentName the agent name */
+    public void setAgentName(String agentName) {
+        this.agentName = agentName;
+    }
 
-    public String getApiKey() { return apiKey; }
-    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    /** @return the agent description */
+    public String getAgentDescription() {
+        return agentDescription;
+    }
 
-    public String getApiBase() { return apiBase; }
-    public void setApiBase(String apiBase) { this.apiBase = apiBase; }
+    /** @param agentDescription the agent description */
+    public void setAgentDescription(String agentDescription) {
+        this.agentDescription = agentDescription;
+    }
 
-    public String getModelName() { return modelName; }
-    public void setModelName(String modelName) { this.modelName = modelName; }
+    /** @return the LLM provider name */
+    public String getProvider() {
+        return provider;
+    }
 
-    public boolean isSslVerify() { return sslVerify; }
-    public void setSslVerify(boolean sslVerify) { this.sslVerify = sslVerify; }
+    /** @param provider the LLM provider name */
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
 
-    public Double getTemperature() { return temperature; }
-    public void setTemperature(Double temperature) { this.temperature = temperature; }
+    /** @return the LLM API key */
+    public String getApiKey() {
+        return apiKey;
+    }
 
-    public Double getTopP() { return topP; }
-    public void setTopP(Double topP) { this.topP = topP; }
+    /** @param apiKey the LLM API key */
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
+    }
 
-    public Duration getTimeout() { return timeout; }
-    public void setTimeout(Duration timeout) { this.timeout = timeout; }
+    /** @return the LLM base URL */
+    public String getApiBase() {
+        return apiBase;
+    }
 
-    public Duration getCompletionTimeout() { return completionTimeout; }
-    public void setCompletionTimeout(Duration completionTimeout) { this.completionTimeout = completionTimeout; }
+    /** @param apiBase the LLM base URL */
+    public void setApiBase(String apiBase) {
+        this.apiBase = apiBase;
+    }
 
-    public int getMaxIterations() { return maxIterations; }
-    public void setMaxIterations(int maxIterations) { this.maxIterations = maxIterations; }
+    /** @return the LLM model name */
+    public String getModelName() {
+        return modelName;
+    }
 
-    public boolean isEnableTaskLoop() { return enableTaskLoop; }
-    public void setEnableTaskLoop(boolean enableTaskLoop) { this.enableTaskLoop = enableTaskLoop; }
+    /** @param modelName the LLM model name */
+    public void setModelName(String modelName) {
+        this.modelName = modelName;
+    }
 
-    public String getWorkspacePath() { return workspacePath; }
-    public void setWorkspacePath(String workspacePath) { this.workspacePath = workspacePath; }
+    /** @return whether SSL verification is enabled */
+    public boolean isSslVerify() {
+        return sslVerify;
+    }
 
-    public String getWorkspaceLanguage() { return workspaceLanguage; }
-    public void setWorkspaceLanguage(String workspaceLanguage) { this.workspaceLanguage = workspaceLanguage; }
+    /** @param sslVerify whether SSL verification is enabled */
+    public void setSslVerify(boolean sslVerify) {
+        this.sslVerify = sslVerify;
+    }
 
-    public List<String> getSkillDirectories() { return skillDirectories; }
-    public void setSkillDirectories(List<String> skillDirectories) { this.skillDirectories = skillDirectories; }
+    /** @return the sampling temperature */
+    public Double getTemperature() {
+        return temperature;
+    }
 
-    public String getSkillMode() { return skillMode; }
-    public void setSkillMode(String skillMode) { this.skillMode = skillMode; }
+    /** @param temperature the sampling temperature */
+    public void setTemperature(Double temperature) {
+        this.temperature = temperature;
+    }
 
-    public String getSystemPrompt() { return systemPrompt; }
-    public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
+    /** @return the nucleus sampling probability */
+    public Double getTopP() {
+        return topP;
+    }
+
+    /** @param topP the nucleus sampling probability */
+    public void setTopP(Double topP) {
+        this.topP = topP;
+    }
+
+    /** @return the LLM request timeout */
+    public Duration getTimeout() {
+        return timeout;
+    }
+
+    /** @param timeout the LLM request timeout */
+    public void setTimeout(Duration timeout) {
+        this.timeout = timeout;
+    }
+
+    /** @return the total completion timeout for a single invoke */
+    public Duration getCompletionTimeout() {
+        return completionTimeout;
+    }
+
+    /** @param completionTimeout the total completion timeout for a single invoke */
+    public void setCompletionTimeout(Duration completionTimeout) {
+        this.completionTimeout = completionTimeout;
+    }
+
+    /** @return the DeepAgent task-loop max iterations */
+    public int getMaxIterations() {
+        return maxIterations;
+    }
+
+    /** @param maxIterations the DeepAgent task-loop max iterations */
+    public void setMaxIterations(int maxIterations) {
+        this.maxIterations = maxIterations;
+    }
+
+    /** @return whether the DeepAgent task-loop is enabled */
+    public boolean isEnableTaskLoop() {
+        return enableTaskLoop;
+    }
+
+    /** @param enableTaskLoop whether the DeepAgent task-loop is enabled */
+    public void setEnableTaskLoop(boolean enableTaskLoop) {
+        this.enableTaskLoop = enableTaskLoop;
+    }
+
+    /** @return the workspace root used for memory and reports */
+    public String getWorkspacePath() {
+        return workspacePath;
+    }
+
+    /** @param workspacePath the workspace root used for memory and reports */
+    public void setWorkspacePath(String workspacePath) {
+        this.workspacePath = workspacePath;
+    }
+
+    /** @return the workspace default language (used by rails to tag outputs) */
+    public String getWorkspaceLanguage() {
+        return workspaceLanguage;
+    }
+
+    /** @param workspaceLanguage the workspace default language */
+    public void setWorkspaceLanguage(String workspaceLanguage) {
+        this.workspaceLanguage = workspaceLanguage;
+    }
+
+    /** @return the skill directories */
+    public List<String> getSkillDirectories() {
+        return skillDirectories;
+    }
+
+    /** @param skillDirectories the skill directories */
+    public void setSkillDirectories(List<String> skillDirectories) {
+        this.skillDirectories = skillDirectories;
+    }
+
+    /** @return the skill selection mode */
+    public String getSkillMode() {
+        return skillMode;
+    }
+
+    /** @param skillMode the skill selection mode */
+    public void setSkillMode(String skillMode) {
+        this.skillMode = skillMode;
+    }
+
+    /** @return the DeepAgent system prompt */
+    public String getSystemPrompt() {
+        return systemPrompt;
+    }
+
+    /** @param systemPrompt the DeepAgent system prompt */
+    public void setSystemPrompt(String systemPrompt) {
+        this.systemPrompt = systemPrompt;
+    }
 }

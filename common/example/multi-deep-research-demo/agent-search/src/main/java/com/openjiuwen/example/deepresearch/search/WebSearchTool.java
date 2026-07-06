@@ -22,9 +22,10 @@ import java.util.Map;
  * <p>Tool contract: {@code public static Object search(Map<String,Object>)},
  * matching the {@code LocalFunction} signature expected by agent-core-java's
  * {@code AbilityManager}.
+ *
+ * @since 2026-07-06
  */
 public final class WebSearchTool {
-
     private static final String API_KEY_ENV = "TAVILY_API_KEY";
 
     private static volatile WebSearchProvider provider;
@@ -32,6 +33,14 @@ public final class WebSearchTool {
     private WebSearchTool() {
     }
 
+    /**
+     * Executes a web search using the configured Tavily-backed provider.
+     *
+     * @param inputs raw tool inputs (keys: {@code query}, {@code top_k},
+     *     {@code time_range}, {@code language})
+     * @return a serialised search response, or an error map with an empty
+     *     {@code results} list when the provider call fails
+     */
     public static Object search(Map<String, Object> inputs) {
         String query = stringInput(inputs, "query", "");
         if (query.isBlank()) {
@@ -50,7 +59,11 @@ public final class WebSearchTool {
         return WebSearchResultSerializer.serialize(response);
     }
 
-    /** Visible for tests — override provider with an in-memory fake. */
+    /**
+     * Visible for tests — override the provider with an in-memory fake.
+     *
+     * @param override the replacement provider (must not be {@code null} in tests)
+     */
     static void useProvider(WebSearchProvider override) {
         provider = override;
     }
@@ -73,18 +86,18 @@ public final class WebSearchTool {
     }
 
     private static String stringInput(Map<String, Object> inputs, String key, String fallback) {
-        Object v = inputs == null ? null : inputs.get(key);
-        return v == null ? fallback : v.toString();
+        Object value = inputs == null ? null : inputs.get(key);
+        return value == null ? fallback : value.toString();
     }
 
     private static int intInput(Map<String, Object> inputs, String key, int fallback) {
-        Object v = inputs == null ? null : inputs.get(key);
-        if (v instanceof Number n) {
-            return n.intValue();
+        Object value = inputs == null ? null : inputs.get(key);
+        if (value instanceof Number num) {
+            return num.intValue();
         }
-        if (v instanceof String s && !s.isBlank()) {
+        if (value instanceof String str && !str.isBlank()) {
             try {
-                return Integer.parseInt(s.trim());
+                return Integer.parseInt(str.trim());
             } catch (NumberFormatException ex) {
                 return fallback;
             }

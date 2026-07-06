@@ -12,6 +12,7 @@ import com.openjiuwen.core.singleagent.schema.AgentCard;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Library-tier factory: turn {@link SearchAgentProperties} into a configured
@@ -21,9 +22,10 @@ import java.util.Map;
  * <p>The {@code use-stub} flag in {@link SearchAgentProperties} decides which
  * static method backs the tool: {@link WebSearchTool#search} for prod (Tavily)
  * or {@link StubWebSearchTool#search} for stub (fixture).
+ *
+ * @since 2026-07-06
  */
 public final class SearchAgentFactory {
-
     private static final String TOOL_NAME = "web_search";
     private static final String TOOL_DESCRIPTION = """
             Search the public web, classify each hit as official / blog / news / forum,
@@ -33,6 +35,12 @@ public final class SearchAgentFactory {
     private SearchAgentFactory() {
     }
 
+    /**
+     * Builds a {@link ReActAgent} preloaded with the {@code web_search} tool.
+     *
+     * @param props the search-agent configuration
+     * @return the configured agent
+     */
     public static ReActAgent build(SearchAgentProperties props) {
         props.requireConfigured();
 
@@ -41,9 +49,7 @@ public final class SearchAgentFactory {
                 .name(props.getAgentName())
                 .description(props.getAgentDescription())
                 .build();
-
         ReActAgent agent = new ReActAgent(card);
-
         ReActAgentConfig config = ReActAgentConfig.builder()
                 .maxIterations(props.getMaxIterations())
                 .sysOperationId(props.getSysOperationId())
@@ -60,20 +66,16 @@ public final class SearchAgentFactory {
             config.getModelConfigObj().setTopP(props.getTopP());
         }
         agent.configure(config);
-
         ToolCard toolCard = ToolCard.builder()
                 .id(TOOL_NAME)
                 .name(TOOL_NAME)
                 .description(TOOL_DESCRIPTION)
                 .inputParams(props.webSearchInputSchema())
                 .build();
-
-        java.util.function.Function<Map<String, Object>, Object> toolFn = props.isUseStub()
+        Function<Map<String, Object>, Object> toolFn = props.isUseStub()
                 ? StubWebSearchTool::search
                 : WebSearchTool::search;
-
         agent.getAbilityManager().add(new LocalFunction(toolCard, toolFn));
-
         return agent;
     }
 }
