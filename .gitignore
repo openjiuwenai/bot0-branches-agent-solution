@@ -37,3 +37,6 @@ logs/
 # Cache
 .cache/
 *.cache
+
+# MR description working copies (not production code)
+MR_*.md
