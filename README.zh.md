@@ -100,7 +100,7 @@ common/example
 
 ## 参与贡献
 
-欢迎通过 Issue、Pull Request 或设计讨论参与 openJiuwen agent-solution 的演进。提交贡献前建议：
+欢迎通过 Issue、Pull Request 或设计讨论参与 openJiuwen agent-solution 的演进。提交贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 开源许可证
 

@@ -101,7 +101,7 @@ common/example
 
 ## Contributing
 
-We welcome issues, pull requests, design discussions, documentation improvements, code contributions, and usage feedback. Before contributing, please read the relevant module README files and design documents, keep adapter responsibilities clearly separated from runtime and core responsibilities, and include tests or example verification for new behavior when appropriate.
+We welcome issues, pull requests, design discussions, documentation improvements, code contributions, and usage feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
 
 ## License
 
