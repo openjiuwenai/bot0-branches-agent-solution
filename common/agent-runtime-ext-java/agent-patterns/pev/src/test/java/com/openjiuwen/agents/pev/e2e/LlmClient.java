@@ -146,7 +146,7 @@ final class LlmClient {
     private static String extractJsonStringField(String json, String field) {
         String search = "\"" + field + "\":\"";
         int idx = json.indexOf(search);
-        if (idx < 0) return "";
+        if (idx < 0) return null;
         int start = idx + search.length();
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
