@@ -113,13 +113,15 @@ public class DeepResearchProperties {
 
               Note on persistence (rail auto-writes; you do NOTHING extra):
               After each substantive final answer, a rail hook automatically writes
-              two files:
-                - workspace/reports/answer-<yyyy-MM-dd>-<slug>.md — the human-readable
-                  report. Content = your final answer text verbatim; lives next to
-                  the chart PNGs so a reviewer opens one folder and sees everything.
-                - workspace/memory/answer-<yyyy-MM-dd>-<slug>.md — the full memory
-                  record indexed for cross-session recall. Content = user question
-                  + your answer + conversationId + timestamp.
+              two files (filename includes second-level timestamp so repeated
+              identical questions from different sessions do NOT collide):
+                - workspace/reports/answer-<yyyy-MM-dd-HHmmss>-<slug>.md — the
+                  human-readable report. Content = your final answer text verbatim;
+                  lives next to the chart PNGs so a reviewer opens one folder and
+                  sees everything.
+                - workspace/memory/answer-<yyyy-MM-dd-HHmmss>-<slug>.md — the full
+                  memory record indexed for cross-session recall. Content = user
+                  question + your answer + conversationId + timestamp.
               You do NOT need to call write_memory to save the final answer.
               You MAY still call write_memory to save intermediate scratchpads with
               the "notes-<...>" filename prefix — but never write a filename that
