@@ -67,7 +67,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
          * first real {@code invoke()}.
          */
         FIRST_PRINCIPLES,
-        // === NEW ===
+                // PLAN mode: divergent/exploratory framing
         /** Replace SystemMessage with divergent/exploratory framing (PLAN phase). */
         PLAN_MODE,
         /** Replace SystemMessage with convergent/execution framing (BUILD phase). */

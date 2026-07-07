@@ -40,7 +40,6 @@ class SystemPromptInjectLlmE2eTest {
         assertThat(result).isNotNull();
         // Output should be substantial (prompt encourages multi-angle)
         // Soft observe: output may be short in thinking-on mode
-        /* assertThat(output.length()).isGreaterThan(50); */
 
         // Check if output contains multi-angle markers ("首先"/"其次"/"1."/"角度"/"维度")
         boolean hasAngleStructure = output.contains("角度") || output.contains("维度")

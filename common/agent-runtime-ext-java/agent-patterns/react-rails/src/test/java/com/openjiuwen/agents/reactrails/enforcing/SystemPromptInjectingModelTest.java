@@ -227,7 +227,7 @@ class SystemPromptInjectingModelTest {
                 .maxTokens(200)
                 .build();
 
-        var model = new SystemPromptInjectingModel(cliCfg, reqCfg);
+        var enforcingModel = new SystemPromptInjectingModel(cliCfg, reqCfg);
         SystemPromptInjectingModel.setInjectionMode(
                 SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
 
@@ -349,7 +349,7 @@ class SystemPromptInjectingModelTest {
                 .maxTokens(200)
                 .build();
 
-        var model = new SystemPromptInjectingModel(cliCfg, reqCfg);
+        var enforcingModel = new SystemPromptInjectingModel(cliCfg, reqCfg);
         SystemPromptInjectingModel.setInjectionMode(
                 SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
 
