@@ -20,7 +20,8 @@ import java.util.Locale;
  * <p>This is the default verifier for {@link CriteriaVerificationRail} when no
  * LLM-backed verifier is injected — it covers the rule-based path (output/history
  * keyword coverage), leaving the LLM-judge path to a future injected verifier.
- */
+ 
+  * @since 2026-07*/
 public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
 
     /** When a criterion can't be keyword-checked, treat as violation (honest). */

@@ -21,7 +21,8 @@ import java.util.Set;
  * <p>This is <b>defense-in-depth</b> on top of PEV's internal verify (which drives dispatch):
  * a composable, independently-injected criteria check that other agent-service-app
  * implementations (e.g. a future EDPA) can reuse unchanged.
- */
+ 
+  * @since 2026-07*/
 public class CriteriaVerificationRail extends AgentRail {
 
     private final Set<String> successCriteria;

@@ -60,7 +60,8 @@ import java.util.Objects;
  *   <li>Strip {@code ctx.pushSteering(...)} on brake → steering queue empty → test RED</li>
  *   <li>Strip {@code ctx.requestForceFinish(...)} on maxStagnations → loop spins forever → test RED</li>
  * </ul>
- */
+ 
+  * @since 2026-07*/
 public class StagnationDetectionRail extends AgentRail {
 
     /** Priority: 50 — medium, between voting critic (100) and bridge rail (0). */

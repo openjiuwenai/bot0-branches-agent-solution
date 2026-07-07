@@ -50,7 +50,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * so all agents sharing this class see the same override. In a multi-agent scenario
  * each agent should have its own model instance; the static channel is the
  * cross-hook communication primitive.
- */
+ 
+  * @since 2026-07*/
 public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     /** Injection modes. */

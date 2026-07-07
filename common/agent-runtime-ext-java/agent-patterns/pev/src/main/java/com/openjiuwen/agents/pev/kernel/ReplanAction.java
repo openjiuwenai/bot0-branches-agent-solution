@@ -35,6 +35,7 @@ public sealed interface ReplanAction permits
     /** Discard the current plan and re-plan the whole goal. */
     record GlobalReplan(String feedback) implements ReplanAction {}
 
-    /** Stop the loop and return a partial / degraded result honestly. */
+    /** Stop the loop and return a partial / degraded result honestly. 
+    /** Stop the loop and return a partial / degraded result honestly.  * @since 2026-07*/
     record AcceptPartial(String reason) implements ReplanAction {}
 }

@@ -40,7 +40,8 @@ public final class PevKernel {
      * </ul>
      * Either signal triggers {@link RootCause.PerceptionUnreliable}; {@code threw} wins
      * over {@code parseFailure} when both happen to be true (a throw means no return value).
-     */
+     
+      * @since 2026-07*/
     public record VerifyResult(boolean passed, Set<String> failedNodes,
                                 String feedback, boolean parseFailure, boolean threw) {
         public VerifyResult {

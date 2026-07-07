@@ -50,7 +50,8 @@ import java.util.Set;
  *   <li>Strip setInjectionMode(PLAN_MODE) → system prompt unchanged → LLM may skip
  *       divergent exploration → RED (mock-assert exploration keywords in output).</li>
  * </ul>
- */
+ 
+  * @since 2026-07*/
 public class PreCompletionChecklistRail extends AgentRail {
 
     /** Priority: 80 — fires after VotingCriticVerifierRail (100)

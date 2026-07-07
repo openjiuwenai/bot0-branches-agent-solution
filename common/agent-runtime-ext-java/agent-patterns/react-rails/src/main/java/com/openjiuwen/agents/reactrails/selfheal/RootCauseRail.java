@@ -45,7 +45,8 @@ import java.util.Map;
  * <p>Honest boundary: this rail covers DeviceFailure → Degrade only.
  * PerceptionUnreliable / PlanOrAnswerError need criteria-verify signal integration
  * ({@link com.openjiuwen.agents.reactrails.verification.CriteriaVerificationRail}), deferred.
- */
+ 
+  * @since 2026-07*/
 public class RootCauseRail extends AgentRail {
 
     public static final String ROOT_CAUSE_DEGRADED_KEY = "root_cause_degraded";

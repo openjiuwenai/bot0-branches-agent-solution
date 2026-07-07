@@ -48,7 +48,8 @@ import org.springframework.context.annotation.Bean;
  * reactrails.checklist-enabled=true                # PreCompletionChecklistRail switch (default true)
  * reactrails.checklist-max-plan-rounds=2           # PLAN phase max rounds (default 2)
  * </pre>
- */
+ 
+  * @since 2026-07*/
 @AutoConfiguration
 @ConditionalOnClass({ReActAgent.class, AgentRail.class})
 @ConditionalOnProperty(name = "reactrails.enabled", havingValue = "true", matchIfMissing = true)

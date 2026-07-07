@@ -35,7 +35,8 @@ import java.util.Map;
  * under {@code card.getId()} (auto-generated UUID when null). The two keys match ONLY when
  * {@code id} is set explicitly — hence the card sets {@code .id(__replan__)} == {@code .name(...)}.
  * Use {@link #registerOnto(ReActAgent)} to do both atomically.
- */
+ 
+  * @since 2026-07*/
 public class ReplanTool extends Tool {
 
     public static final String TOOL_NAME = "__replan__";

@@ -48,7 +48,8 @@ import java.util.stream.Collectors;
  *
  * <p><b>Honest boundary</b>: Phase1 规则提取工具调用签名，Phase2 LLM 摘要已 deferred
  * （需在 rail 内发起 LLM 调用，涉及注入时序复杂度）。
- */
+ 
+  * @since 2026-07*/
 public class HistoryCompressorRail extends AgentRail {
 
     /** 上次压缩边界索引（初始 0 = 未压缩）。 */

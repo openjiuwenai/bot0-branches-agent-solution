@@ -20,7 +20,8 @@ public final class PevComponents {
 
     private PevComponents() {}
 
-    /** 单个执行节点（Plan 的组成单元）。 */
+    /** 单个执行节点（Plan 的组成单元）。 
+    /** 单个执行节点（Plan 的组成单元）。  * @since 2026-07*/
     public record PlanNode(String id, String description) {}
 
     /** Plan 阶段产物：目标 + 节点列表。 */

@@ -43,7 +43,8 @@ import java.util.stream.Collectors;
  *   <li><b>verify fail + retries exhausted</b> → requestForceFinish(degraded=true, unmet=violations)
  *       — honest degrade terminal.</li>
  * </ul>
- */
+ 
+  * @since 2026-07*/
 public class CriteriaReplanBridgeRail extends AgentRail {
 
     public static final String OUTPUT_KEY = "output";

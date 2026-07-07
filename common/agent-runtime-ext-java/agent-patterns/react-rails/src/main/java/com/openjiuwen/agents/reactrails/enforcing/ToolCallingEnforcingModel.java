@@ -39,7 +39,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   Model m = new ToolCallingEnforcingModel(cliCfg, reqCfg);
  *   agent.setLlm(m);  // unchanged — polymorphism
  * }</pre>
- */
+ 
+  * @since 2026-07*/
 public class ToolCallingEnforcingModel extends Model {
 
     private static final String PROBE_TOOL_NAME = "__probe_tool__";

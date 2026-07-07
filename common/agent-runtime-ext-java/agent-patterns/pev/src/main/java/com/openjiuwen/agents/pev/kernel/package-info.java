@@ -91,5 +91,6 @@
  *
  * <p><b>This ledger is the deliverable.</b> Zero code merged, zero new coupling; the
  * isomorphism is acknowledged and made auditable instead of hidden.
- */
+ 
+  * @since 2026-07*/
 package com.openjiuwen.agents.pev.kernel;

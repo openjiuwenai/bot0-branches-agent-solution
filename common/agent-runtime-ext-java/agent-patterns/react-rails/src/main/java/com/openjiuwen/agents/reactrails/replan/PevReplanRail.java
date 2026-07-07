@@ -69,7 +69,8 @@ import java.util.Set;
  *   <li>PerceptionUnreliable is not diagnosed here — no verifier is involved in the __replan__
  *       path. The dispatch function still handles it if called, but it's structurally deferred.</li>
  * </ul>
- */
+ 
+  * @since 2026-07*/
 public class PevReplanRail extends AgentRail {
 
     public static final String REPLAN_EXCEEDED_KEY = "replan_exceeded";

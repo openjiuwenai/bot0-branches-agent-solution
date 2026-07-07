@@ -38,6 +38,7 @@ public sealed interface RootCause permits
         public PlanOrAnswerError { nodes = Set.copyOf(nodes); }
     }
 
-    /** Verifier itself is untrustworthy. */
+    /** Verifier itself is untrustworthy. 
+    /** Verifier itself is untrustworthy.  * @since 2026-07*/
     record PerceptionUnreliable(boolean verifierThrew) implements RootCause {}
 }
