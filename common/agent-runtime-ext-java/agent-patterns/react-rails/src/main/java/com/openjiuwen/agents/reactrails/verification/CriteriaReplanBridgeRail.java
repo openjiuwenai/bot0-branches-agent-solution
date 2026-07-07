@@ -119,7 +119,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
 /**
      * IFF 范式：剥离 gradient metadata → 降级到通用纠正提示 → LLM 看不到精确定位的缺失维度 → RED。
      *
-     * <p>当 violations 携带 gradient metadata（来自 {@link GradientVerifier}）时，
+     * <p>当 violations 携带 gradient metadata（来自 {@code RuleBasedCriteriaVerifier}）时，
      * 生成维度级精确定位的纠正提示（区分已覆盖/缺失维度）；否则回退到通用提示格式。
      */
     private static String buildCorrectionHint(List<Violation> violations) {
