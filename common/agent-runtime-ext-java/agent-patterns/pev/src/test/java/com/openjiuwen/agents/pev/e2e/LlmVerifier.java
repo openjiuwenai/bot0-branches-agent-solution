@@ -9,6 +9,7 @@ import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
 
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,7 +47,7 @@ final class LlmVerifier implements PevComponents.Verifier {
                 "判断以下任务的执行结果是否满足要求。只回复 PASS 或 FAIL，不要其他内容。\n"
                         + "任务要求：" + userInput + "\n执行结果：" + output);
 
-        String up = verdict == null ? "" : verdict.toUpperCase();
+        String up = verdict == null ? "" : verdict.toUpperCase(Locale.ROOT);
         boolean parseFailure = up.isBlank();
         boolean pass = !parseFailure && up.contains("PASS") && !up.contains("FAIL");
 

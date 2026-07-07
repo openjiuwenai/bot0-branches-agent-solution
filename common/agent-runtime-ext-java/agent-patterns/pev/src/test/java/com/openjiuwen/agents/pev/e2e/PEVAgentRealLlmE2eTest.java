@@ -4,6 +4,7 @@
 
 package com.openjiuwen.agents.pev.e2e;
 
+import java.util.Locale;
 import com.openjiuwen.agents.pev.agent.PEVAgent;
 import com.openjiuwen.agents.pev.agent.PevComponents;
 import com.openjiuwen.agents.pev.kernel.NodeResult;
@@ -59,8 +60,8 @@ class PEVAgentRealLlmE2eTest {
             String verdict = LLM.chat(
                     "判断以下回答是否满足要求。只回复 PASS 或 FAIL，不要其他内容。\n"
                             + "要求：" + in + "\n回答：" + output);
-            boolean pass = verdict.toUpperCase().contains("PASS")
-                    && !verdict.toUpperCase().contains("FAIL");
+            boolean pass = verdict.toUpperCase(Locale.ROOT).contains("PASS")
+                    && !verdict.toUpperCase(Locale.ROOT).contains("FAIL");
             return new PevKernel.VerifyResult(pass, pass ? Set.of() : Set.of("answer"), verdict);
         };
 

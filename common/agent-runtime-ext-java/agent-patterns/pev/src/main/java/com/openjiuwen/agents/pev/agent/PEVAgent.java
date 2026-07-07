@@ -120,7 +120,6 @@ public class PEVAgent extends BaseAgent {
         return List.of(invoke(input, session)).iterator();
     }
 
-    // ==================== Verify-Diagnose-Dispatch loop ====================
 
     private void runVerifyLoop(String userInput, PevComponents.Plan plan,
                                Map<String, NodeResult> completed,
@@ -194,7 +193,6 @@ public class PEVAgent extends BaseAgent {
         }
     }
 
-    // ==================== Rail seam — let registered rails observe PEV phases ====================
 
     private void fire(AgentCallbackEvent event, Session session, Object payload) {
         AgentCallbackContext.AgentCallbackContextBuilder b = AgentCallbackContext.builder()
@@ -207,7 +205,6 @@ public class PEVAgent extends BaseAgent {
         fireCallbackEvent(event, b.build());
     }
 
-    // ==================== helpers ====================
 
     private static String assembleOutput(Map<String, NodeResult> results) {
         if (results.isEmpty()) {

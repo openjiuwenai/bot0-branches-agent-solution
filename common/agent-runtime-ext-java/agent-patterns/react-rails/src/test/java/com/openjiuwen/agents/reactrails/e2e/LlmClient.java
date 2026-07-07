@@ -91,7 +91,11 @@ final class LlmClient {
 
     private static HttpURLConnection openConnection(String urlString) throws Exception {
         URL url = new URL(urlString);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        java.net.URLConnection uc = url.openConnection();
+        if (!(uc instanceof HttpURLConnection)) {
+            throw new RuntimeException("Not an HTTP URL: " + urlString);
+        }
+        HttpURLConnection conn = (HttpURLConnection) uc;
         conn.setRequestMethod("POST");
         conn.setConnectTimeout(REQUEST_TIMEOUT_MILLIS);
         conn.setReadTimeout(REQUEST_TIMEOUT_MILLIS);
@@ -99,7 +103,7 @@ final class LlmClient {
     }
 
     private static String readStream(java.io.InputStream stream) throws Exception {
-        if (stream == null) return null;
+        if (stream == null) return "";
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             StringBuilder result = new StringBuilder();
             String line;

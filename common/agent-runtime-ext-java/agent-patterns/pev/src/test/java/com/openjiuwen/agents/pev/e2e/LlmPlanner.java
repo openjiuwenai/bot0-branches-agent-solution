@@ -54,7 +54,6 @@ final class LlmPlanner implements PevComponents.Planner {
         return new PevComponents.Plan(userInput, nodes);
     }
 
-    // ==================== prompt ====================
 
     private String buildPrompt(String task) {
         StringBuilder toolBlock = new StringBuilder();
@@ -80,7 +79,6 @@ final class LlmPlanner implements PevComponents.Planner {
                 """.formatted(task, toolBlock);
     }
 
-    // ==================== JSON parsing (best-effort, no external dep) ====================
 
     private static final Pattern NODE_OBJECT = Pattern.compile(
             "\\{[^{}]*\"id\"[^{}]*\\}", Pattern.DOTALL);
@@ -121,16 +119,15 @@ final class LlmPlanner implements PevComponents.Planner {
         String needle = "\"" + key + "\"";
         int i = json.indexOf(needle);
         if (i < 0) {
-            return null;
+            return "";
         }
         int colon = json.indexOf(':', i + needle.length());
         if (colon < 0) {
-            return null;
+            return "";
         }
-        // find opening quote of value
         int q1 = json.indexOf('"', colon + 1);
         if (q1 < 0) {
-            return null;
+            return "";
         }
         StringBuilder sb = new StringBuilder();
         for (int j = q1 + 1; j < json.length(); j++) {

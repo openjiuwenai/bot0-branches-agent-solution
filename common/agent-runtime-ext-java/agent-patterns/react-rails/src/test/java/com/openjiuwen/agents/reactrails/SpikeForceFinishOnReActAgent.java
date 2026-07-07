@@ -90,7 +90,7 @@ class SpikeForceFinishOnReActAgent {
         }
     }
 
-    @SuppressWarnings("rawtypes")
+    
     static class SpikeModelClient extends BaseModelClient {
         SpikeModelClient(ModelRequestConfig reqCfg, ModelClientConfig cliCfg) {
             super(reqCfg, cliCfg);

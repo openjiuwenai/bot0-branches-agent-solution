@@ -11,6 +11,7 @@ import com.openjiuwen.agents.pev.kernel.PevKernel;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -144,7 +145,7 @@ class AdversarialCatchE2eTest {
                     执行结果：%s""".formatted(userInput, output);
 
             String verdict = llm.chat(prompt);
-            String up = verdict == null ? "" : verdict.toUpperCase();
+            String up = verdict == null ? "" : verdict.toUpperCase(Locale.ROOT);
             boolean parseFailure = up.isBlank();
             boolean pass = !parseFailure && up.contains("PASS") && !up.contains("FAIL");
 

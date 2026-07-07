@@ -5,6 +5,7 @@
 package com.openjiuwen.agents.pev.e2e;
 
 import com.openjiuwen.agents.pev.agent.PEVAgent;
+import java.util.Locale;
 import com.openjiuwen.agents.pev.agent.PevComponents;
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
@@ -103,7 +104,7 @@ class DeviceFailureDegradesE2eTest {
 
         // 软观察：degraded output 里应能看出错误线索（真 LLM 可能让 verifier 写不同措辞，
         // 故只 soft-observe，不进 hard断言）。
-        if (!output.toLowerCase().contains("timeout")
+        if (!output.toLowerCase(Locale.ROOT).contains("timeout")
                 && !output.contains("超时") && !output.contains("不可达")) {
             System.out.println("[pev-device-failure-e2e] (soft) output 未含超时线索，"
                     + "可接受——硬断言已由 DeviceFailure 标记 + 不重试覆盖。");

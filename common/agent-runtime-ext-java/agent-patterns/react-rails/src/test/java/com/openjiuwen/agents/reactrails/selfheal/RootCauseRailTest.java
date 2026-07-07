@@ -72,7 +72,6 @@ class RootCauseRailTest {
                 .isFalse();
     }
 
-    // ==================== helpers ====================
 
     private static AgentCallbackContext ctxWithToolName(String toolName) {
         // Minimal context — no ToolCallInputs (rail falls back to __unknown_tool__).

@@ -68,7 +68,6 @@ class ReplanRailTest {
         assertThat(rail.replanCount()).isEqualTo(0);
     }
 
-    // ==================== helpers ====================
 
     private static AgentCallbackContext ctxWithReplanToolCall() {
         ToolCall replanCall = new ToolCall();

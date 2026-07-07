@@ -89,7 +89,7 @@ class RootCauseRailRealLlmE2eTest {
         // 通道装配由 RootCauseRailTest（mock 硬断言）承重。
     }
 
-    @SuppressWarnings("rawtypes")
+    
     static class AlwaysFailTool extends Tool {
         // inputParams 必填：缺 schema 时 LLM 倾向"叙述"使用工具而非真调（实测 GLM/deepseek 均如此）。
         private static final ToolCard CARD = ToolCard.builder()

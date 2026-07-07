@@ -52,7 +52,6 @@ final class ClaimTools {
         return t;
     }
 
-    // ==================== tools ====================
 
     static String getClaimInfo(Map<String, Object> inputs) {
         return fixture(caseNo(inputs)).status;
@@ -79,7 +78,6 @@ final class ClaimTools {
         return v == null ? "" : String.valueOf(v);
     }
 
-    // ==================== fixtures ====================
 
     record CaseFixture(String status, String documents, String fraud,
                        String payout, String largeAmount) {}

@@ -237,11 +237,11 @@ class SystemPromptInjectingModelTest {
                 new UserMessage("Analyze the current economic situation."));
 
         // First invoke: probe + real(with injection)
-        model.invoke(messages, List.of(), 0.3f, null, "test-model",
+        enforcingModel.invoke(messages, List.of(), 0.3f, null, "test-model",
                 null, null, null, null, null);
 
         // Second invoke: only real(no probe, no injection)
-        model.invoke(messages, List.of(), 0.3f, null, "test-model",
+        enforcingModel.invoke(messages, List.of(), 0.3f, null, "test-model",
                 null, null, null, null, null);
 
         // --- Assertions ---
@@ -357,7 +357,7 @@ class SystemPromptInjectingModelTest {
         List<BaseMessage> messages = List.of(
                 new UserMessage("Analyze the current economic situation."));
 
-        model.invoke(messages, List.of(), 0.3f, null, "test-model",
+        enforcingModel.invoke(messages, List.of(), 0.3f, null, "test-model",
                 null, null, null, null, null);
 
         List<?> captured = capturedMessages.get();
