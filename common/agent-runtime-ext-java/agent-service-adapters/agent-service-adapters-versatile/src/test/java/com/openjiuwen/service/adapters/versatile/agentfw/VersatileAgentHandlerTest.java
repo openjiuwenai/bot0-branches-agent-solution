@@ -11,6 +11,7 @@ import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -37,6 +38,7 @@ class VersatileAgentHandlerTest {
         }
     }
 
+    @Tag("smoke")
     @Test
     void queryReturnsExtractedResult() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
