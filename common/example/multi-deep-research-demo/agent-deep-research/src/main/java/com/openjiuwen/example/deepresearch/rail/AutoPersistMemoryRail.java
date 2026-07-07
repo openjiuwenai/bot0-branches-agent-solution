@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,7 +39,10 @@ import java.util.Optional;
  * @since 2026-07-06
  */
 public class AutoPersistMemoryRail extends MemoryRail {
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter FILENAME_TS_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss");
+    private static final DateTimeFormatter CONTENT_TS_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int MIN_QUERY_LEN = 4;
     private static final int SLUG_MAX_LEN = 40;
     private static final String STEERING_PREFIX = "[STEERING]";
@@ -65,10 +68,12 @@ public class AutoPersistMemoryRail extends MemoryRail {
             return;
         }
 
-        String date = LocalDate.now().format(DATE_FORMAT);
-        String filename = "answer-" + date + "-" + slugify(query) + ".md";
+        LocalDateTime now = LocalDateTime.now();
+        String filenameTs = now.format(FILENAME_TS_FORMAT);
+        String contentTs = now.format(CONTENT_TS_FORMAT);
+        String filename = "answer-" + filenameTs + "-" + slugify(query) + ".md";
         String outputStr = String.valueOf(output);
-        String memoryContent = renderReport(query, outputStr, date, invokeInputs.getConversationId());
+        String memoryContent = renderReport(query, outputStr, contentTs, invokeInputs.getConversationId());
         writeMemoryEntry(filename, memoryContent);
         writeReportCopy(filename, outputStr);
     }
@@ -155,10 +160,10 @@ public class AutoPersistMemoryRail extends MemoryRail {
         return cleaned.isEmpty() ? "answer" : cleaned;
     }
 
-    private static String renderReport(String query, String answer, String date, String conversationId) {
+    private static String renderReport(String query, String answer, String timestamp, String conversationId) {
         StringBuilder sb = new StringBuilder();
         sb.append("# 自动持久化对话记录\n\n");
-        sb.append("- 日期：").append(date).append("\n");
+        sb.append("- 时间：").append(timestamp).append("\n");
         if (conversationId != null && !conversationId.isBlank()) {
             sb.append("- 会话 ID：").append(conversationId).append("\n");
         }
