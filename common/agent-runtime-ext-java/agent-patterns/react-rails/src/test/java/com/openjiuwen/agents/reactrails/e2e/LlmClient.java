@@ -37,6 +37,8 @@ final class LlmClient {
                 .uri(URI.create(BASE + PATH))
                 .header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json")
+                // 120s covers all models' nominal latency. Earlier timeouts were workarounds
+                // for the PEV LlmClient reasoning_content bug (GLM empty content loop).
                 .timeout(Duration.ofSeconds(120))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();

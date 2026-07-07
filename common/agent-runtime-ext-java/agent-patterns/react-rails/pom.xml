@@ -26,6 +26,11 @@
             <version>0.1.12-jdk17</version>
         </dependency>
         <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>pev</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
             <optional>true</optional>
@@ -38,6 +43,11 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

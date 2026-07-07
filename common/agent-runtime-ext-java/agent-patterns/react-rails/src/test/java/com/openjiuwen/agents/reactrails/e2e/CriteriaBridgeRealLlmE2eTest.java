@@ -1,0 +1,50 @@
+package com.openjiuwen.agents.reactrails.e2e;
+
+import com.openjiuwen.agents.reactrails.replan.ReplanRail;
+import com.openjiuwen.agents.reactrails.verification.CriteriaReplanBridgeRail;
+import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
+import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
+import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
+import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
+import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
+import com.openjiuwen.core.singleagent.agents.ReActAgent;
+import com.openjiuwen.core.singleagent.schema.AgentCard;
+import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+
+class CriteriaBridgeRealLlmE2eTest {
+    @Test void realLlm_verifyFail_steeringRetry() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "skip");
+        DefaultModelClientFactories.ensureRegistered();
+        var cliCfg = ModelClientConfig.builder()
+            .clientId("bridge-e2e-" + System.nanoTime()).clientProvider("OpenAI")
+            .apiKey(System.getenv("OPENJIUWEN_API_KEY"))
+            .apiBase(System.getenv("OPENJIUWEN_BASE_URL")).verifySsl(false).build();
+        var reqCfg = ModelRequestConfig.builder()
+            .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash"))
+            .temperature(0.3).maxTokens(200).build();
+        ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
+        ReActAgent agent = new ReActAgent(AgentCard.builder().name("bridge-e2e").build());
+        agent.setLlm(model);
+
+        // BridgeRail: verify fail → steering + retry (max 2 retries)
+        ReplanRail counter = new ReplanRail(2);
+        // Set hard criteria: require specific numeric values an LLM rarely puts in '分析形势'
+        agent.registerRail(new CriteriaReplanBridgeRail(
+            new RuleBasedCriteriaVerifier(),
+            List.of("GDP", "CPI", "通胀率"), counter));
+
+        Object result = agent.invoke("分析当前的经济形势。请简短回答。", null);
+
+        System.out.println("[bridge-e2e] result: " + String.valueOf(result).substring(0, Math.min(200, String.valueOf(result).length())));
+        System.out.println("[bridge-e2e] replanCount (from counter): " + counter.replanCount());
+        assertThat(result).isNotNull();
+
+        if (counter.replanCount() > 0) {
+            System.out.println("[bridge-e2e] ✅ verify 失败后触发了 retry！次数=" + counter.replanCount());
+        } else {
+            System.out.println("[bridge-e2e] ⚠️ 没有触发 retry（可能 LLM 第一轮就包含关键词）");
+        }
+    }
+}

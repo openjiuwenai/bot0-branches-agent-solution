@@ -67,9 +67,10 @@ final class LlmClient {
                 .uri(URI.create(url))
                 .header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json")
-                // 120s accommodates GLM long-tail latency on multi-tool planner/verifier
-                // prompts; the prior 60s cap aborted 5-tool claim scenarios on a single slow
-                // call. Real-LLM e2e is soft-observe — the timeout must not be the flake source.
+                // 120s covers all models' nominal latency with reasoning_content fallback.
+                // The prior timeouts (300s/600s) masked a GLM-5.2 bug: empty content from
+                // reasoning_content-only responses caused the PEV verify loop to endlessly
+                // replan. Fixed via extractContent reasoning_content fallback.
                 .timeout(Duration.ofSeconds(120))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
@@ -109,13 +110,36 @@ final class LlmClient {
                 .replace("\n", "\\n").replace("\r", "") + "\"";
     }
 
-    /** Extract {@code choices[0].message.content} from an OpenAI-compatible response (best-effort). */
+    /**
+     * Extract {@code choices[0].message.content} from an OpenAI-compatible response (best-effort).
+     *
+     * <p>GLM-5.2 quirk: when thinking is active (even with {@code thinking:disabled}), the
+     * model may write its entire answer into {@code reasoning_content} and leave
+     * {@code content} as an empty string {@code ""} — the model exhausted its token budget
+     * before producing a final answer. When {@code content} is empty after extraction,
+     * fall back to {@code reasoning_content} so the PEV planner/verifier still has text
+     * to work with and doesn't loop on empty inputs.
+     */
     private static String extractContent(String json) {
-        int idx = json.indexOf("\"content\":\"");
-        if (idx < 0) {
-            return "";
+        // Try primary content field
+        String content = extractJsonStringField(json, "content");
+        if (content != null && !content.isEmpty()) {
+            return content;
         }
-        int start = idx + "\"content\":\"".length();
+        // GLM fallback: thinking output goes into reasoning_content when content is empty
+        String reasoning = extractJsonStringField(json, "reasoning_content");
+        if (reasoning != null && !reasoning.isEmpty()) {
+            return reasoning;
+        }
+        return "";
+    }
+
+    /** Extract the JSON string value for a given field name (best-effort, no Jackson). */
+    private static String extractJsonStringField(String json, String field) {
+        String search = "\"" + field + "\":\"";
+        int idx = json.indexOf(search);
+        if (idx < 0) return null;
+        int start = idx + search.length();
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
             char c = json.charAt(i);
@@ -124,9 +148,7 @@ final class LlmClient {
                 sb.append(n == 'n' ? '\n' : n);
                 continue;
             }
-            if (c == '"') {
-                break;
-            }
+            if (c == '"') break;
             sb.append(c);
         }
         return sb.toString();

@@ -45,7 +45,7 @@ public class ReplanTool extends Tool {
     private static final ToolCard CARD = ToolCard.builder()
             .id(TOOL_NAME)
             .name(TOOL_NAME)
-            .description("调用此工具表达 Replan 意图——放弃当前路径，换新策略。"
+            .description("调用此工具表达需要调整当前策略的意图。"
                     + "参数：replan_reason（为什么要 replan）、new_approach（新策略是什么）。")
             .inputParams(Map.of(
                     "type", "object",
@@ -66,10 +66,12 @@ public class ReplanTool extends Tool {
         return CARD;
     }
 
-    /** 同步调用：返回结构化确认 Map（对齐 spring-ai-ascend 上游变体的返回契约）。 */
+    /** 同步调用：返回结构化确认 Map，含"请总结教训"提示引导 LLM 主动做教训提炼。 */
     @Override
     public Object invoke(Map<String, Object> args, Map<String, Object> kwargs) {
-        return Map.of("status", "replan_recorded", "message", "Replan 已确认。请按新策略继续。");
+        return Map.of("status", "replan_recorded",
+                "message", "Replan 已确认。请总结之前的尝试经验（哪些可用、哪些需改变）"
+                + "，然后基于新方向继续。");
     }
 
     /** 流式调用：将同步结果包装成单元素迭代器返回。 */

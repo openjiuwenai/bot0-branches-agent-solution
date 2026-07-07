@@ -48,6 +48,17 @@ public class ReplanRail extends AgentRail {
         return replanCount;
     }
 
+    /**
+     * 公开计数方法 — bridge rail 调用同一计数器。递增 replan 并返回是否超限。
+     * 让 LLM 发起的 __replan__ 和系统发起的 verify-failure retry 共享总预算。
+     *
+     * @return true if replanCount > maxReplan (超限，应降级)
+     */
+    public synchronized boolean incrementAndCheckOverLimit() {
+        replanCount++;
+        return replanCount > maxReplan;
+    }
+
     /** 模型回调钩子：检测 __replan__ 调用并计数，超限则 forceFinish 降级终态。 */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {
