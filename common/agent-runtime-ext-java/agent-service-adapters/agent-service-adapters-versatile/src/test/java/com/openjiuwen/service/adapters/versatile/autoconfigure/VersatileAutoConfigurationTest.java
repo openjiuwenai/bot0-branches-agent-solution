@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.versatile.autoconfigure;
 
 import com.openjiuwen.service.spec.spi.AgentHandler;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -20,6 +21,7 @@ class VersatileAutoConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(VersatileAutoConfiguration.class));
 
+    @Tag("smoke")
     @Test
     void onlyBindsPropertiesWhenConfigured() {
         runner.withPropertyValues(
