@@ -11,8 +11,18 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * Minimal OpenAI-compatible chat client for react-rails real-LLM e2e.
- * Copies the PEV module's LlmClient pattern (thinking:disabled, env-gated).
+ * 最小化 OpenAI 兼容聊天客户端 for react-rails real-LLM e2e。
+ *
+ * <p>仅用于真 LLM e2e 测试（自含 HTTP 实现，无外部依赖）。
+ * 请求体构造与响应解析均为最小实现，不支持流式（本测试场景无需流式响应）。
+ *
+ * <p>env 配置：
+ * <ul>
+ *   <li>OPENJIUWEN_API_KEY — API 密钥（必填）</li>
+ *   <li>OPENJIUWEN_BASE_URL — API 端点（必填）</li>
+ *   <li>OPENJIUWEN_MODEL — 模型名（可选，缺省 glm-5.2）</li>
+ *   <li>OPENJIUWEN_COMPLETIONS_PATH — 补全路径（可选，缺省 /chat/completions）</li>
+ * </ul>
  */
 final class LlmClient {
 
@@ -21,34 +31,55 @@ final class LlmClient {
     private static final String MODEL = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "glm-5.2");
     private static final String KEY = System.getenv("OPENJIUWEN_API_KEY");
 
+    /** 请求超时（覆盖全部模型，含 GLM long-tail thinking）。 */
+    private static final int REQUEST_TIMEOUT_SECS = 120;
+
     static boolean envPresent() {
         return KEY != null && !KEY.isBlank() && !BASE.isBlank();
     }
 
-    // HttpClient with default settings (standard JDK API, not derived from any third-party source).
-    private final HttpClient http = HttpClient.newHttpClient();
+    // HttpClient 实例（标准 JDK 构建，非第三方来源）。
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    /** 发送聊天请求并返回助手端响应内容。 */
     String chat(String userPrompt) {
-        if (!envPresent()) throw new IllegalStateException("OPENJIUWEN env not set");
-        String body = """
+        if (!envPresent()) {
+            throw new IllegalStateException("OPENJIUWEN env not set");
+        }
+        String requestBody = buildRequestBody(userPrompt);
+        HttpRequest request = buildChatRequest(requestBody);
+        return sendAndExtract(request);
+    }
+
+    private String buildRequestBody(String userPrompt) {
+        return """
                 {"model":"%s","messages":[{"role":"user","content":%s}],"temperature":0.3,"thinking":{"type":"disabled"}}
                 """.formatted(MODEL, jsonString(userPrompt));
-        HttpRequest req = HttpRequest.newBuilder()
+    }
+
+    private HttpRequest buildChatRequest(String body) {
+        return HttpRequest.newBuilder()
                 .uri(URI.create(BASE + PATH))
                 .header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json")
-                // 120s covers all models' nominal latency. Earlier timeouts were workarounds
-                // for the PEV LlmClient reasoning_content bug (GLM empty content loop).
-                .timeout(Duration.ofSeconds(120))
+                .timeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECS))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
+    }
+
+    private String sendAndExtract(HttpRequest request) {
         try {
-            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() != 200)
-                throw new RuntimeException("LLM HTTP " + resp.statusCode() + ": " + resp.body().substring(0, Math.min(200, resp.body().length())));
+            HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200) {
+                throw new RuntimeException("LLM HTTP " + resp.statusCode() + ": "
+                        + resp.body().substring(0, Math.min(200, resp.body().length())));
+            }
             return extractContent(resp.body());
-        } catch (RuntimeException e) { throw e; }
-        catch (Exception e) { throw new RuntimeException("LLM call failed: " + e.getMessage(), e); }
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("LLM call failed: " + e.getMessage(), e);
+        }
     }
 
     private static String jsonString(String s) {
