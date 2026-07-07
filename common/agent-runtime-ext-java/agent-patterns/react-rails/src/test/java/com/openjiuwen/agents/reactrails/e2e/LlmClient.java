@@ -60,24 +60,28 @@ final class LlmClient {
     private String sendRequest(String requestBody) {
         try {
             HttpURLConnection conn = openConnection(BASE + PATH);
-            conn.setRequestProperty("Authorization", "Bearer " + KEY);
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
+            try {
+                conn.setRequestProperty("Authorization", "Bearer " + KEY);
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
 
-            try (OutputStream os = conn.getOutputStream()) {
-                byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
-                os.write(input, 0, input.length);
+                try (OutputStream os = conn.getOutputStream()) {
+                    byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                int status = conn.getResponseCode();
+                if (status != 200) {
+                    String errorBody = readStream(conn.getErrorStream());
+                    throw new RuntimeException("LLM HTTP " + status + ": "
+                            + (errorBody != null ? errorBody.substring(0, Math.min(200, errorBody.length())) : "(no body)"));
+                }
+
+                String responseBody = readStream(conn.getInputStream());
+                return extractContent(responseBody);
+            } finally {
+                conn.disconnect();
             }
-
-            int status = conn.getResponseCode();
-            if (status != 200) {
-                String errorBody = readStream(conn.getErrorStream());
-                throw new RuntimeException("LLM HTTP " + status + ": "
-                        + (errorBody != null ? errorBody.substring(0, Math.min(200, errorBody.length())) : "(no body)"));
-            }
-
-            String responseBody = readStream(conn.getInputStream());
-            return extractContent(responseBody);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -96,13 +100,14 @@ final class LlmClient {
 
     private static String readStream(java.io.InputStream stream) throws Exception {
         if (stream == null) return null;
-        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
-        StringBuilder result = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            result.append(line);
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            StringBuilder result = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                result.append(line);
+            }
+            return result.toString();
         }
-        return result.toString();
     }
 
     private static String jsonString(String s) {
