@@ -9,6 +9,7 @@ import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @ExtendWith(OutputCaptureExtension.class)
 class RemoteA2aToolInstallerTest {
+    @Tag("smoke")
     @Test
     void installsRailToolCardIntoBaseAgent(CapturedOutput output) {
         ReActAgent agent = reactAgent();
