@@ -4,12 +4,11 @@
 
 package com.openjiuwen.agents.reactrails.e2e;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 
 /**
  * 最小化 OpenAI 兼容聊天客户端 for react-rails real-LLM e2e。
@@ -32,86 +31,36 @@ final class LlmClient {
     private static final String MODEL = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "glm-5.2");
     private static final String KEY = System.getenv("OPENJIUWEN_API_KEY");
 
-    /**
-     * 请求超时毫秒数（覆盖全部模型，含 GLM long-tail thinking）。
-     * 从 120s 换算为毫秒（这是 HttpURLConnection 所需单位）。
-     */
-    private static final int REQUEST_TIMEOUT_MILLIS = 120_000;
-
     static boolean envPresent() {
         return KEY != null && !KEY.isBlank() && !BASE.isBlank();
     }
 
-    /** 发送聊天请求并返回助手端响应内容（HttpURLConnection——标准 JDK，非第三方）。 */
+    // HttpClient with default settings (standard JDK API).
+    private final HttpClient http = HttpClient.newHttpClient();
+
+    /** 发送聊天请求并返回助手端响应内容。 */
     String chat(String userPrompt) {
         if (!envPresent()) {
             throw new IllegalStateException("OPENJIUWEN env not set");
         }
-        String requestBody = buildRequestBody(userPrompt);
-        return sendRequest(requestBody);
-    }
-
-    private String buildRequestBody(String userPrompt) {
-        return """
+        String body = """
                 {"model":"%s","messages":[{"role":"user","content":%s}],"temperature":0.3,"thinking":{"type":"disabled"}}
                 """.formatted(MODEL, jsonString(userPrompt));
-    }
-
-    private String sendRequest(String requestBody) {
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(BASE + PATH))
+                .header("Authorization", "Bearer " + KEY)
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(120))
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
         try {
-            HttpURLConnection conn = openConnection(BASE + PATH);
-            try {
-                conn.setRequestProperty("Authorization", "Bearer " + KEY);
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-
-                try (OutputStream os = conn.getOutputStream()) {
-                    byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
-                    os.write(input, 0, input.length);
-                }
-
-                int status = conn.getResponseCode();
-                if (status != 200) {
-                    String errorBody = readStream(conn.getErrorStream());
-                    throw new RuntimeException("LLM HTTP " + status + ": "
-                            + (errorBody != null ? errorBody.substring(0, Math.min(200, errorBody.length())) : "(no body)"));
-                }
-
-                String responseBody = readStream(conn.getInputStream());
-                return extractContent(responseBody);
-            } finally {
-                conn.disconnect();
-            }
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("LLM call failed: " + e.getMessage(), e);
-        }
-    }
-
-    private static HttpURLConnection openConnection(String urlString) throws Exception {
-        URL url = new URL(urlString);
-        java.net.URLConnection uc = url.openConnection();
-        if (!(uc instanceof HttpURLConnection)) {
-            throw new RuntimeException("Not an HTTP URL: " + urlString);
-        }
-        HttpURLConnection conn = (HttpURLConnection) uc;
-        conn.setRequestMethod("POST");
-        conn.setConnectTimeout(REQUEST_TIMEOUT_MILLIS);
-        conn.setReadTimeout(REQUEST_TIMEOUT_MILLIS);
-        return conn;
-    }
-
-    private static String readStream(java.io.InputStream stream) throws Exception {
-        if (stream == null) return "";
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            StringBuilder result = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                result.append(line);
-            }
-            return result.toString();
-        }
+            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200)
+                throw new RuntimeException("LLM HTTP " + resp.statusCode() + ": "
+                        + resp.body().substring(0, Math.min(200, resp.body().length())));
+            return extractContent(resp.body());
+        } catch (RuntimeException e) { throw e; }
+        catch (Exception e) { throw new RuntimeException("LLM call failed: " + e.getMessage(), e); }
     }
 
     private static String jsonString(String s) {
