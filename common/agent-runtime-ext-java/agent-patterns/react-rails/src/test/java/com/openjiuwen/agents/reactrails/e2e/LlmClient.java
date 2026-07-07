@@ -120,9 +120,20 @@ final class LlmClient {
     }
 
     private static String extractContent(String json) {
-        int idx = json.indexOf("\"content\":\"");
-        if (idx < 0) return "";
-        int start = idx + "\"content\":\"".length();
+        String content = extractField(json, "content");
+        if (content != null && !content.isEmpty()) return content;
+        String reasoningContent = extractField(json, "reasoning_content");
+        if (reasoningContent != null && !reasoningContent.isEmpty()) return reasoningContent;
+        String reasoning = extractField(json, "reasoning");
+        if (reasoning != null && !reasoning.isEmpty()) return reasoning;
+        return "";
+    }
+
+    private static String extractField(String json, String field) {
+        String search = "\"" + field + "\":\"";
+        int idx = json.indexOf(search);
+        if (idx < 0) return null;
+        int start = idx + search.length();
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
             char c = json.charAt(i);

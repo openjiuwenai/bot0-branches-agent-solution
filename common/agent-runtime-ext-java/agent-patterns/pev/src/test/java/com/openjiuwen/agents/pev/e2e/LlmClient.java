@@ -51,11 +51,14 @@ final class LlmClient {
         //     e2e tasks (plan JSON, PASS/FAIL, summarize) disable it (→ ~3s).
         //   qwen-off / qwen-on: Qwen3 "enable_thinking":false/true — Qwen3.5-flash thinking is
         //     bounded (~5-25s), works in both modes; lets the cross-model e2e compare.
+        //   thinking-on / thinking-off: DeepSeek "thinking":{"type":"enabled/disabled"}.
         //   none: emit no thinking param (model default).
         String mode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
         String thinkingJson = switch (mode) {
             case "qwen-off" -> "\"enable_thinking\":false";
             case "qwen-on" -> "\"enable_thinking\":true";
+            case "thinking-on" -> "\"thinking\":{\"type\":\"enabled\"}";
+            case "thinking-off" -> "\"thinking\":{\"type\":\"disabled\"}";
             case "none" -> "";
             default -> "\"thinking\":{\"type\":\"disabled\"}";
         };
@@ -113,24 +116,29 @@ final class LlmClient {
     /**
      * Extract {@code choices[0].message.content} from an OpenAI-compatible response (best-effort).
      *
-     * <p>GLM-5.2 quirk: when thinking is active (even with {@code thinking:disabled}), the
-     * model may write its entire answer into {@code reasoning_content} and leave
-     * {@code content} as an empty string {@code ""} — the model exhausted its token budget
-     * before producing a final answer. When {@code content} is empty after extraction,
-     * fall back to {@code reasoning_content} so the PEV planner/verifier still has text
-     * to work with and doesn't loop on empty inputs.
+     * <p>Three providers, three field names for the same "thinking overflow" behavior:
+     * <ul>
+     *   <li><b>GLM-5.2</b>: writes into {@code reasoning_content}, leaves {@code content} empty
+     *       when the token budget runs out before a final answer.</li>
+     *   <li><b>Qwen3.5-35B</b> (OpenRouter): writes into {@code reasoning} — always present
+     *       even with {@code enable_thinking:false}, and content can be empty on length-limited
+     *       or complex prompts (same mechanism: token budget exhausted).</li>
+     *   <li><b>DeepSeek</b> (v4-flash / v4-pro): keeps {@code content} populated in both
+     *       {@code thinking:enabled/disabled} modes; {@code reasoning_content} coexists but
+     *       is not needed as a fallback.</li>
+     * </ul>
+     * Fallback chain: content → reasoning_content (GLM) → reasoning (Qwen) → "".
      */
     private static String extractContent(String json) {
-        // Try primary content field
         String content = extractJsonStringField(json, "content");
-        if (content != null && !content.isEmpty()) {
-            return content;
-        }
-        // GLM fallback: thinking output goes into reasoning_content when content is empty
-        String reasoning = extractJsonStringField(json, "reasoning_content");
-        if (reasoning != null && !reasoning.isEmpty()) {
-            return reasoning;
-        }
+        if (content != null && !content.isEmpty()) return content;
+
+        String reasoningContent = extractJsonStringField(json, "reasoning_content");
+        if (reasoningContent != null && !reasoningContent.isEmpty()) return reasoningContent;
+
+        String reasoning = extractJsonStringField(json, "reasoning");
+        if (reasoning != null && !reasoning.isEmpty()) return reasoning;
+
         return "";
     }
 
