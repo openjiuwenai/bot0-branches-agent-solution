@@ -1,0 +1,42 @@
+# agent-rdc Spring Boot 启动配置
+#
+# 让 AgentRdcApplication.main() 调用 SpringApplication.run() 时能拉起进程：
+#   - spring.datasource.*  → spring-boot-starter-jdbc 自动配置 DataSource
+#   - spring.flyway.*      → Flyway 启动时跑 V2/V3 migration 建表
+#   - server.port          → Tomcat 监听 8092（避开 8080 与其他模块冲突）
+#   - spring.profiles.active=dev → 默认 dev profile（连本地 PG）
+#
+# 部署侧覆盖：通过环境变量 SPRING_DATASOURCE_URL / USERNAME / PASSWORD 指向生产 PG，
+# 无需独立 application-prod.yml。dev 默认值仅用于本地开发。
+#
+# 测试不读本文件：src/test/java/** 用 EmbeddedPostgres.builder().start() + 手工构造 beans。
+#
+# Authority: REQ-2026-002 + ADR-0160 decision 7 (agent-rdc 是 runnable Spring Boot application)
+
+spring:
+  profiles:
+    active: dev
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agent_rdc}
+    username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
+    password: ${SPRING_DATASOURCE_PASSWORD:agent_rdc}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8092
+
+---
+# dev profile 段
+# 与默认段一致——默认段已含 dev 值，本段作为覆盖练习入口。
+# 开发者本机 PG 配置不同时，可在此覆盖，或直接用环境变量 SPRING_DATASOURCE_URL 等。
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agent_rdc}
+    username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
+    password: ${SPRING_DATASOURCE_PASSWORD:agent_rdc}
