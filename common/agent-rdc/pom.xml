@@ -220,6 +220,13 @@
               </exclude>
             </excludes>
           </configuration>
+          <executions>
+            <execution>
+              <goals>
+                <goal>repackage</goal>
+              </goals>
+            </execution>
+          </executions>
         </plugin>
         <!--
           Parallel test execution:
@@ -276,5 +283,11 @@
         </plugin>
       </plugins>
     </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
   </build>
 </project>
