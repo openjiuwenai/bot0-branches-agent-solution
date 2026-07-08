@@ -1,6 +1,7 @@
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
+import com.openjiuwen.rdc.spi.registry.FrameworkType;
 
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +13,24 @@ import java.util.Optional;
  * (ADR-0160 decision 4). The {@code api} / {@code discovery} / {@code health}
  * subpackages call this port and never touch JDBC directly.
  *
- * <p>Authority: ADR-0160 decision 4 + HD3-001/003/004/005/006. The port
- * returns <em>raw row snapshots</em> ({@link RegistryRow}) rather than
- * {@code AgentCardDto} — the {@code AgentDiscoveryService} implementation in
- * {@code registry.runtime.discovery} is responsible for encoding the opaque
- * {@code routeHandle} via {@code RouteHandleCodec} and assembling the DTO so
- * the route handle format stays encapsulated in the discovery layer
- * (ADR-0160 decision 5).
+ * <p>Authority: ADR-0160 decision 4 + HD3-001/003/004/005/006, revised by
+ * REQ-2026-004. The port returns <em>raw row snapshots</em> ({@link RegistryRow})
+ * rather than {@code AgentCardDto} — the {@code AgentDiscoveryService}
+ * implementation in {@code registry.runtime.discovery} is responsible for
+ * encoding the opaque {@code routeHandle} via {@code RouteHandleCodec} and
+ * assembling the DTO so the route handle format stays encapsulated in the
+ * discovery layer (ADR-0160 decision 5).
+ *
+ * <p>REQ-2026-004 changes (baseline-breaking):
+ * <ul>
+ *   <li>Removed {@code searchByIntent} (Method A free-text SQL) —
+ *       {@code search_tsv} column dropped in V4.</li>
+ *   <li>Removed {@code searchByCapability} (Method B capability-scoped SQL)
+ *       — {@code capability} column dropped in V4.</li>
+ *   <li>{@link RegistryRow#agentType} renamed to
+ *       {@link RegistryRow#frameworkType} (type {@link FrameworkType}).</li>
+ *   <li>{@link RegistryRow#capability} field removed.</li>
+ * </ul>
  *
  * <p>Tenant isolation: every method takes {@code tenantId} as the first
  * parameter and the implementation MUST scope every SQL statement by
@@ -29,8 +41,8 @@ import java.util.Optional;
  *
  * <p>Pure Java — the port itself imports no JDBC / Spring type so callers in
  * {@code api} / {@code discovery} / {@code health} stay JDBC-free. The port
- * depends only on {@link AgentRegistryEntry} from {@code spi.registry} and on the
- * nested record types declared below.
+ * depends only on {@link AgentRegistryEntry} + {@link FrameworkType} from
+ * {@code spi.registry} and on the nested record types declared below.
  */
 public interface AgentRegistryRepository {
 
@@ -45,13 +57,21 @@ public interface AgentRegistryRepository {
      * entry back to {@code ONLINE} and re-route traffic to it (PR #389
      * review issue #7).
      *
+     * <p>REQ-2026-004: {@code entry.frameworkType} replaces the legacy
+     * {@code agentType} String column (renamed to {@code framework_type} in
+     * V4). {@code capability} column is gone — the registry PK
+     * {@code (tenant_id, agent_id)} is now the sole routing index.
+     *
      * @param entry           registry entry from the {@code POST /register} body
+     *                        (push mode) or from pull-based bootstrap
+     *                        ({@code PullRegistrationBootstrap}, pull mode)
      * @param a2aAgentCardJson pre-serialized JSON of
      *                        {@link AgentRegistryEntry#getA2aAgentCard()};
      *                        {@code null} when the entry carries no A2A card.
      *                        Serialization is the caller's concern (HTTP
-     *                        boundary in {@code registry.runtime.api}) so this
-     *                        port stays Jackson-free (ADR-0160 decision 3/5).
+     *                        boundary in {@code registry.runtime.api} / pull
+     *                        bootstrap) so this port stays Jackson-free
+     *                        (ADR-0160 decision 3/5).
      */
     void upsert(AgentRegistryEntry entry, String a2aAgentCardJson);
 
@@ -68,6 +88,11 @@ public interface AgentRegistryRepository {
      * {@code staleBeforeMillis} for the health-probe scheduler
      * ({@code MvpHealthProbeScheduler}, HD3-004 lease/TTL). Returns at most
      * {@code limit} rows ordered by oldest heartbeat first.
+     *
+     * <p>Pull-based registration entries (inserted by
+     * {@code PullRegistrationBootstrap}) are automatically picked up by this
+     * scan — they live in the same {@code agent_registry_mvp} table and
+     * follow the same heartbeat / status lifecycle as push-based entries.
      */
     List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit);
 
@@ -86,35 +111,24 @@ public interface AgentRegistryRepository {
     boolean updateStatus(String tenantId, String agentId, String newStatus, boolean refreshHeartbeat);
 
     /**
-     * Method A discovery SQL — tsvector-ranked natural-language intent search.
-     * Filters by {@code tenant_id = :tenantId} AND
-     * {@code status IN ('ONLINE','DEGRADED')} AND
-     * {@code last_heartbeat >= NOW() - INTERVAL '15 seconds'} (HD3-004
-     * visibility window) AND optional {@code contract_version = :contractVersion}
-     * AND (when {@code userQuery} is non-null)
-     * {@code search_tsv @@ websearch_to_tsquery} (PR #389 review issue #9:
-     * keyword-style OR, no adjacency requirement).
-     * Ordered by ts_rank DESC, weight DESC.
+     * Single-value point lookup by registry primary key
+     * {@code (tenantId, agentId)}. Replaces the dual
+     * {@code searchByIntent} / {@code searchByCapability} methods removed
+     * in REQ-2026-004. Filters by {@code tenant_id = :tenantId} AND
+     * {@code agent_id = :agentId} AND
+     * {@code status IN ('ONLINE','DEGRADED')} — {@code DRAINING} /
+     * {@code OFFLINE} entries are invisible to discovery (treated as
+     * not-found).
      *
-     * @param userQuery        natural-language intent; {@code null} = weight-only
-     *                         ranking (no tsvector filter). Non-null is
-     *                         tokenised via {@code websearch_to_tsquery}
-     *                         (PR #389 review issue #9: keyword-style OR,
-     *                         no adjacency requirement).
-     * @param contractVersion  version filter; {@code null} = no filter,
-     *                         non-null = exact match
-     * @param topK             upper bound on returned candidates
+     * <p>The HD3-004 visibility window (15-second heartbeat filter) is no
+     * longer applied at the discovery layer — discovery is now an exact
+     * point lookup, and the visibility window applies only to the
+     * health-probe scheduler's {@link #scanDueForProbe} scan.
+     *
+     * @return {@link Optional#empty()} when no ONLINE/DEGRADED entry matches
+     *         the key pair; otherwise a populated {@link RegistryRow}
      */
-    List<RegistryRow> searchByIntent(String tenantId, String userQuery, String contractVersion, int topK);
-
-    /**
-     * Method B discovery SQL — capability-scoped, optionally tsvector-ranked.
-     * Same tenant / status / heartbeat / contract-version filters as
-     * {@link #searchByIntent}; additionally scoped by
-     * {@code capability = :capability}.
-     */
-    List<RegistryRow> searchByCapability(String tenantId, String capability, String userQuery,
-                                          String contractVersion, int topK);
+    Optional<RegistryRow> searchByAgentId(String tenantId, String agentId);
 
     /**
      * Resolve the physical endpoint for an opaque {@code routeHandle}.
@@ -133,18 +147,13 @@ public interface AgentRegistryRepository {
     /**
      * Raw row snapshot mirroring {@code agent_registry_mvp} columns. The
      * discovery service assembles {@code AgentCardDto} from this snapshot +
-     * the encoded route handle. Method A populates every field; Method B
-     * reads the row but leaves the business definition fields
-     * ({@code agentName} / {@code agentType}) out of the resulting DTO.
-     * REQ-2026-001 removed {@code serviceId} / {@code systemProfile} /
-     * {@code toolSchemas} — the A2A standard card now carries the equivalent
-     * metadata via {@link AgentRegistryEntry#getA2aAgentCard()}.
+     * the encoded route handle. REQ-2026-004 renamed {@code agentType} →
+     * {@code frameworkType} and removed {@code capability}.
      */
     record RegistryRow(
             String agentId,
             String agentName,
-            String agentType,
-            String capability,
+            FrameworkType frameworkType,
             String routeKey,
             String contractVersion,
             String capabilityVersion,

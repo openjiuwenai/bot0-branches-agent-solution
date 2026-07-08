@@ -69,15 +69,8 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
                         return false;
                     }
                     @Override
-                    public List<RegistryRow> searchByIntent(String tenantId, String userQuery,
-                                                            String contractVersion, int topK) {
-                        return List.of();
-                    }
-                    @Override
-                    public List<RegistryRow> searchByCapability(String tenantId, String capability,
-                                                                String userQuery, String contractVersion,
-                                                                int topK) {
-                        return List.of();
+                    public Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
+                        return Optional.empty();
                     }
                     @Override
                     public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId) {
@@ -98,8 +91,8 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     @Test
     void tenant_isolation_violation_on_discover_increments_op_total_counter() {
         tenantContext.set("tenant-bound");
-        assertThatThrownBy(() -> discovery.discoverBestAgents(
-                "tenant-A", "intent", null, 5))
+        assertThatThrownBy(() -> discovery.searchByAgentId(
+                "tenant-A", "agent-001"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
         assertThat(counter("discover", "tenant_isolation_violation"))

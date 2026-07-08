@@ -105,9 +105,12 @@ class AgentRdcRegistryJdbcPurityTest {
     void javax_sql_confined_to_persistence_adapter() {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry..")
                 .and().resideOutsideOfPackage(JDBC_ADAPTER)
+                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")
                 .should().dependOnClassesThat().resideInAPackage("javax.sql..")
                 .because("javax.sql (DataSource) lives only in registry.runtime.persistence.jdbc.. "
-                       + "(ADR-0160 decision 4); the rest of the runtime stays pure Java.")
+                       + "(ADR-0160 decision 4) and the registry.runtime root wiring package "
+                       + "(RegistryRuntimeBeanConfig constructs JdbcAgentRegistryRepository + "
+                       + "Flyway from a DataSource); every other subpackage stays pure Java.")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -250,13 +253,18 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.discovery..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.api..")
+                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.pull..")
+                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")
                 .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
                 .because("Jackson is licensed only inside registry.runtime.discovery (for "
-                       + "RouteHandleCodec's opaque handle encoding) and "
+                       + "RouteHandleCodec's opaque handle encoding), "
                        + "registry.runtime.api (for A2A AgentCard JSON serialization at the "
-                       + "HTTP boundary, per REQ-2026-001); every other subpackage stays "
-                       + "serialisation-agnostic (ADR-0160 decision 3/5, relaxed per "
-                       + "REQ-2026-001).")
+                       + "HTTP boundary, per REQ-2026-001), registry.runtime.pull (for "
+                       + "A2A AgentCard JSON deserialization in pull-based registration, per "
+                       + "REQ-2026-004), and the registry.runtime root (for "
+                       + "RegistryRuntimeBeanConfig's ObjectMapper bean wiring); every other "
+                       + "subpackage stays serialisation-agnostic (ADR-0160 decision 3/5, "
+                       + "relaxed per REQ-2026-001 / REQ-2026-004).")
                 .check(REGISTRY_RUNTIME);
     }
 

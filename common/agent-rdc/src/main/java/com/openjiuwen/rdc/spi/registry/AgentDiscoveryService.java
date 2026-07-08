@@ -1,36 +1,21 @@
 package com.openjiuwen.rdc.spi.registry;
 
-import java.util.List;
+import java.util.Optional;
 
 /**
  * agent-bus owned runtime route index lookup entry (HD3-001). The upper
  * Orchestrator / Gateway depends on this interface only; the persistence
- * form (single PostgreSQL + tsvector in MVP, Consul + PGVector in phase 2)
- * is invisible to the caller.
+ * form (single PostgreSQL in MVP, Consul + PGVector in phase 2) is
+ * invisible to the caller.
  *
- * <p>Authority: ADR-0160 decision 2 — <b>dual-method discovery contract</b>.
- * Two {@code discoverBestAgents} overloads serve exploratory and
- * capability-scoped callers from one SPI:
- * <ul>
- *   <li><b>Method A</b> {@code discoverBestAgents(tenantId, userQuery, contractVersion, topK)}
- *       — natural-language intent discovery. Returns <em>rich</em>
- *       {@link AgentCardDto} (business definition fields populated) for
- *       exploratory callers (Orchestrator / Gateway) that do not know the
- *       capability name ahead of time.</li>
- *   <li><b>Method B</b> {@code discoverBestAgents(tenantId, capability, userQuery, contractVersion, topK)}
- *       — capability-scoped discovery. Returns <em>minimal</em>
- *       {@link AgentCardDto} (business definition fields {@code null}, ICD 5
- *       routing fields only) for callers that already know which capability
- *       they want and only need the routing handle.</li>
- * </ul>
- *
- * <p>{@code contractVersion} filter semantics (both methods):
- * {@code null} = no version filter; non-null = exact match; empty result on
- * version mismatch = silent {@code version_unavailable} result, no exception
- * (decision deferred to phase 2 H2/H3 review — PRD line 152).
- *
- * <p>{@code userQuery} semantics (both methods): {@code null} = weight-only
- * ranking; non-null = tsvector ranking (MVP) / vector ranking (phase 2).
+ * <p>Authority: ADR-0160 decision 2 — <b>revised by REQ-2026-004</b>. The
+ * dual-method discovery contract (Method A free-text + Method B
+ * capability-scoped) is removed; discovery collapses to
+ * {@link #searchByAgentId(String, String)} single-value point lookup.
+ * The free-text search infrastructure ({@code search_tsv} column + GIN
+ * index + {@code ts_rank}) is removed in V4 — A2A AgentCard carries no
+ * {@code capability} concept, so capability-scoped discovery cannot be
+ * populated from pull-based registration.
  *
  * <p>{@link #resolveRouteHandle(String, String)} (ADR-0160 decision 5) is the
  * <em>only</em> way the forwarding layer recovers a physical endpoint from an
@@ -54,45 +39,33 @@ import java.util.List;
 public interface AgentDiscoveryService {
 
     /**
-     * Method A — natural-language intent discovery. Rich DTO (business
-     * definition fields populated).
+     * Single-value point lookup by registry primary key
+     * {@code (tenantId, agentId)}. Replaces the dual Method A / Method B
+     * {@code discoverBestAgents} overloads removed in REQ-2026-004.
      *
-     * @param tenantId         registry key mandatory dimension; cross-tenant
-     *                         fallback is forbidden (HD3-003). Mismatch with
-     *                         the caller's {@link TenantContext} raises
-     *                         {@link TenantIsolationViolationException}.
-     * @param userQuery        natural-language intent; {@code null} = weight-only
-     *                         ranking
-     * @param contractVersion  version filter; {@code null} = no filter,
-     *                         non-null = exact match, empty result on mismatch
-     * @param topK             upper bound on returned candidates
-     * @return list of {@link AgentCardDto} ordered by relevance; never
-     *         {@code null}, possibly empty
-     */
-    List<AgentCardDto> discoverBestAgents(String tenantId,
-                                          String userQuery,
-                                          String contractVersion,
-                                          int topK);
-
-    /**
-     * Method B — capability-scoped discovery. Minimal DTO (business
-     * definition fields {@code null}, ICD 5 routing fields only).
+     * <p>Returns {@link Optional#empty()} when no row matches — the caller
+     * (Orchestrator / Gateway) maps that to {@code agent_not_found}. A
+     * matched row returns a rich {@link AgentCardDto} with all ICD 5
+     * routing fields populated; business definition fields
+     * ({@code agentName} / {@code frameworkType}) are also populated
+     * (single-value lookup has no "minimal DTO" variant).
      *
-     * @param tenantId         registry key mandatory dimension (HD3-003)
-     * @param capability       mandatory capability name to scope the search
-     * @param userQuery        optional natural-language intent for tsvector
-     *                         ranking within the capability; {@code null} =
-     *                         weight-only ranking
-     * @param contractVersion  version filter; same semantics as Method A
-     * @param topK             upper bound on returned candidates
-     * @return list of {@link AgentCardDto} ordered by relevance; never
-     *         {@code null}, possibly empty
+     * <p>Status filter: only {@code ONLINE} and {@code DEGRADED} entries
+     * are returned; {@code DRAINING} / {@code OFFLINE} entries return
+     * {@link Optional#empty()} (treated as not-found from the discovery
+     * caller's perspective — the health-probe scheduler still sees them
+     * for state transitions).
+     *
+     * @param tenantId  registry key mandatory dimension; cross-tenant
+     *                  fallback is forbidden (HD3-003). Mismatch with the
+     *                  caller's {@link TenantContext} raises
+     *                  {@link TenantIsolationViolationException}.
+     * @param agentId   registry key mandatory dimension; the agent's
+     *                  unique identifier within the tenant
+     * @return {@link Optional#empty()} if no ONLINE/DEGRADED entry matches,
+     *         otherwise a populated {@link AgentCardDto}
      */
-    List<AgentCardDto> discoverBestAgents(String tenantId,
-                                          String capability,
-                                          String userQuery,
-                                          String contractVersion,
-                                          int topK);
+    Optional<AgentCardDto> searchByAgentId(String tenantId, String agentId);
 
     /**
      * Resolve an opaque {@code routeHandle} into a {@link RouteResolution}
@@ -101,7 +74,7 @@ public interface AgentDiscoveryService {
      * (HD3-006).
      *
      * @param routeHandle opaque handle produced by a prior
-     *                    {@code discoverBestAgents} call
+     *                    {@code searchByAgentId} call
      * @param tenantId    tenant id of the resolving caller; mismatch with the
      *                    tenant encoded in the handle raises
      *                    {@link TenantIsolationViolationException}

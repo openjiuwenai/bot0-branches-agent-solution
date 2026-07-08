@@ -181,14 +181,8 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
             updateStatusCalls.incrementAndGet();
             return true;
         }
-        @Override public List<RegistryRow> searchByIntent(String tenantId, String userQuery,
-                                                          String contractVersion, int topK) {
-            return List.of();
-        }
-        @Override public List<RegistryRow> searchByCapability(String tenantId, String capability,
-                                                              String userQuery, String contractVersion,
-                                                              int topK) {
-            return List.of();
+        @Override public java.util.Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
+            return java.util.Optional.empty();
         }
         @Override public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId) {
             return java.util.Optional.empty();

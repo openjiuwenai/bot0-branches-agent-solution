@@ -74,7 +74,7 @@ public class MvpRegistryController {
                                          @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
         if (card == null || !card.hasRegistryKey()) {
             throw new IllegalArgumentException(
-                    "AgentRegistryEntry must carry tenantId + agentId + capability (registry key)");
+                    "AgentRegistryEntry must carry tenantId + agentId (registry key)");
         }
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
@@ -90,7 +90,7 @@ public class MvpRegistryController {
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             observability.observeRegister(traceId, card.getTenantId(), card.getAgentId(),
-                    card.getCapability(), card.getContractVersion(),
+                    card.getContractVersion(),
                     card.getCapabilityVersion(), "ONLINE", null, outcome, latencyMs);
             MDC.remove("traceId");
         }

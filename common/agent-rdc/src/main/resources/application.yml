@@ -28,6 +28,25 @@ spring:
 server:
   port: 8092
 
+# rdc.pull-registration — pull-based agent registration (REQ-2026-004)
+# opt-in: default disabled. When enabled, PullRegistrationBootstrap listens
+# for ApplicationReadyEvent and serially HTTP GETs each runtime's
+# /.well-known/agent-card.json, constructing AgentRegistryEntry upserts.
+# Single runtime failure is logged + skipped, never blocks startup.
+rdc:
+  pull-registration:
+    enabled: false
+    runtimes: []
+      # Example (copy + edit per environment):
+      # - base-url: http://localhost:8090
+      #   tenant-id: tenant-A
+      #   framework-type: JIUWEN
+      #   card-path: /.well-known/agent-card.json
+      #   route-key: /v1/query
+      #   region: cn-east-1
+      #   headers:
+      #     Authorization: Bearer ${RUNTIME_TOKEN:placeholder}
+
 ---
 # dev profile 段
 # 与默认段一致——默认段已含 dev 值，本段作为覆盖练习入口。

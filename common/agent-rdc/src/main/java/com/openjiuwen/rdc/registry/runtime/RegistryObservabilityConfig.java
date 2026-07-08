@@ -17,31 +17,34 @@ import java.util.concurrent.TimeUnit;
  * service stay thin:
  * <ul>
  *   <li><b>Audit</b> — structured SLF4J log lines on the {@code registry.audit}
- *       logger, 10 fields per line: {@code traceId}, {@code tenantId},
- *       {@code agentId}, {@code capability}, {@code contractVersion},
- *       {@code capabilityVersion}, {@code health}, {@code routeHandleId},
- *       {@code outcome}, {@code latencyMs}. The
- *       {@code registryOp} tag (register / deregister / probe / discover /
- *       resolve) prefixes each line. Unavailable fields are emitted as
- *       {@code "-"} so log parsers can rely on a stable 10-field shape.
- *       REQ-2026-001 removed {@code serviceId} from the audit schema —
- *       the field was redundant with {@code agentId} (registry PK is
- *       {@code (tenant_id, agent_id)}).</li>
+ *       logger, 9 fields per line (REQ-2026-004 removed {@code capability}
+ *       from the audit schema): {@code traceId}, {@code tenantId},
+ *       {@code agentId}, {@code contractVersion}, {@code capabilityVersion},
+ *       {@code health}, {@code routeHandleId}, {@code outcome},
+ *       {@code latencyMs}. The {@code registryOp} tag (register / deregister
+ *       / probe / discover / resolve) prefixes each line. Unavailable fields
+ *       are emitted as {@code "-"} so log parsers can rely on a stable
+ *       9-field shape.</li>
  *   <li><b>Metrics</b> — Micrometer {@link Counter} ({@code agent_bus_registry_op_total},
  *       tags {@code op} + {@code outcome}) and {@link Timer}
  *       ({@code agent_bus_registry_op_duration_ms}, tag {@code op}) per
- *       registry operation. {@link MeterRegistry} is constructor-injected;
- *       agent-bus ships {@code micrometer-core} at compile scope
- *       (PR #389 review issue #6 — agent-bus is now a runnable Spring Boot
- *       application, so it bundles micrometer-core directly instead of
- *       relying on a runtime consumer's actuator dependency).</li>
+ *       registry operation. {@link MeterRegistry} is constructor-injected.</li>
+ * </ul>
+ *
+ * <p>REQ-2026-004 changes (baseline-breaking):
+ * <ul>
+ *   <li>Removed {@code capability} parameter from {@link #observeRegister}
+ *       and {@link #observeDiscover} — audit log format goes from 10 fields
+ *       to 9 fields. Operations dashboards parsing the audit log must update
+ *       their field count.</li>
+ *   <li>{@code observeDiscover} now takes {@code agentId} instead of
+ *       {@code capability} — single-value point lookup reports the agentId
+ *       it searched for, not a capability scope.</li>
  * </ul>
  *
  * <p>Each {@code observeXxx} method emits BOTH the audit line and the
  * metric update for one operation, so callers make a single call per op
  * (no risk of audit-without-metric or vice versa).
- *
- * <p>Authority: ADR-0160 + design doc §9.2 + NFR-4 (audit) / NFR-5 (metrics).
  */
 @Configuration
 public class RegistryObservabilityConfig {
@@ -59,43 +62,41 @@ public class RegistryObservabilityConfig {
     // ---- audit + metrics per operation ----
 
     public void observeRegister(String traceId, String tenantId, String agentId,
-                                String capability, String contractVersion, String capabilityVersion,
+                                String contractVersion, String capabilityVersion,
                                 String health, String routeHandleId, String outcome, long latencyMs) {
-        audit("register", traceId, tenantId, agentId, capability,
+        audit("register", traceId, tenantId, agentId,
                 contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
         recordMetrics("register", outcome, latencyMs);
     }
 
     public void observeDeregister(String traceId, String tenantId, String agentId,
                                   String outcome, long latencyMs) {
-        audit("deregister", traceId, tenantId, agentId, PLACEHOLDER,
+        audit("deregister", traceId, tenantId, agentId,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs);
         recordMetrics("deregister", outcome, latencyMs);
     }
 
     public void observeProbe(String traceId, String tenantId, String agentId,
                              String health, String outcome, long latencyMs) {
-        audit("probe", traceId, tenantId, agentId, PLACEHOLDER,
+        audit("probe", traceId, tenantId, agentId,
                 PLACEHOLDER, PLACEHOLDER, health, PLACEHOLDER, outcome, latencyMs);
         recordMetrics("probe", outcome, latencyMs);
     }
 
-    public void observeDiscover(String traceId, String tenantId, String capability,
-                                String contractVersion, String outcome, int resultCount, long latencyMs) {
-        AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} capability={} "
+    public void observeDiscover(String traceId, String tenantId, String agentId,
+                                String outcome, int resultCount, long latencyMs) {
+        AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={} resultCount={}",
-                traceId, tenantId, PLACEHOLDER,
-                capability == null ? PLACEHOLDER : capability,
-                contractVersion == null ? PLACEHOLDER : contractVersion,
-                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
+                traceId, tenantId, agentId == null ? PLACEHOLDER : agentId,
+                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
                 resultCount < 0 ? PLACEHOLDER : resultCount);
         recordMetrics("discover", outcome, latencyMs);
     }
 
     public void observeResolve(String traceId, String tenantId, String routeHandleId,
                                String outcome, long latencyMs) {
-        audit("resolve", traceId, tenantId, PLACEHOLDER, PLACEHOLDER,
+        audit("resolve", traceId, tenantId, PLACEHOLDER,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, routeHandleId, outcome, latencyMs);
         recordMetrics("resolve", outcome, latencyMs);
     }
@@ -103,12 +104,12 @@ public class RegistryObservabilityConfig {
     // ---- internals ----
 
     private void audit(String op, String traceId, String tenantId, String agentId,
-                       String capability, String contractVersion, String capabilityVersion,
+                       String contractVersion, String capabilityVersion,
                        String health, String routeHandleId, String outcome, long latencyMs) {
-        AUDIT.info("registryOp={} traceId={} tenantId={} agentId={} capability={} "
+        AUDIT.info("registryOp={} traceId={} tenantId={} agentId={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={}",
-                op, traceId, tenantId, agentId, capability,
+                op, traceId, tenantId, agentId,
                 contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
     }
 

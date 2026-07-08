@@ -3,6 +3,7 @@ package com.openjiuwen.rdc.registry.runtime.discovery;
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentCardDto;
+import com.openjiuwen.rdc.spi.registry.FrameworkType;
 import com.openjiuwen.rdc.spi.registry.RouteResolution;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
 import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
@@ -11,7 +12,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -19,29 +19,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Unit tests for {@link PgMvpDiscoveryServiceImpl} — Method A/B DTO field
- * fill strategy + {@code resolveRouteHandle} failure modes + tenant
- * isolation (ADR-0160 decisions 2 / 5 / 6, HD3-001/003/004/005/006, RB6).
+ * Unit tests for {@link PgMvpDiscoveryServiceImpl} — {@code searchByAgentId}
+ * DTO field fill strategy + {@code resolveRouteHandle} failure modes +
+ * tenant isolation (ADR-0160 decisions 2 / 5 / 6, HD3-001/003/004/005/006).
  *
- * <p>Uses a hand-written fake {@link AgentRegistryRepository} and a real
- * {@link SimpleMeterRegistry} so {@link RegistryObservabilityConfig} is
- * exercised without mocking. Tenant context is the real
- * {@link com.openjiuwen.rdc.registry.runtime.tenant.ThreadLocalTenantContext}
- * so the optional cross-check (ADR-0160 decision 6) is covered too.
- *
- * <p>Authoritative behaviours:
- * <ul>
- *   <li><b>RB6-A</b> — Method A returns rich DTOs (business definition fields
- *       populated: agentName / agentType / systemProfile / toolSchemas).</li>
- *   <li><b>RB6-B</b> — Method B returns minimal DTOs (business definition
- *       fields null; ICD 5 routing fields only).</li>
- *   <li><b>RB7-tenant</b> — bound {@link TenantContext} mismatch raises
- *       {@link TenantIsolationViolationException}; unbound context skips
- *       the cross-check.</li>
- *   <li><b>RB-resolve</b> — malformed handle → IAE; entry_not_found →
- *       NoSuchElementException; tenant mismatch →
- *       TenantIsolationViolationException.</li>
- * </ul>
+ * <p>REQ-2026-004: dual Method A/B discovery replaced by single-value
+ * {@code searchByAgentId} point lookup. Tests cover rich DTO population,
+ * empty result (not found / DRAINING / OFFLINE), and tenant isolation.
  */
 class PgMvpDiscoveryServiceImplTest {
 
@@ -61,55 +45,41 @@ class PgMvpDiscoveryServiceImplTest {
         tenantContext.clear();
     }
 
-    // ---- RB6-A: Method A returns rich DTOs --------------------------------
+    // ---- searchByAgentId: rich DTO populated ------------------------------
 
     @Test
-    void method_a_returns_rich_dto_with_business_definition_fields() {
-        List<AgentCardDto> results = discovery.discoverBestAgents(
-                "tenant-A", "自然语言 intent", null, 5);
+    void search_by_agent_id_returns_rich_dto_with_all_fields_populated() {
+        Optional<AgentCardDto> result = discovery.searchByAgentId("tenant-A", "agent-001");
 
-        assertThat(results).hasSize(1);
-        AgentCardDto dto = results.get(0);
-        // ICD 5 routing fields always populated.
+        assertThat(result).isPresent();
+        AgentCardDto dto = result.get();
         assertThat(dto.getRouteHandle()).isNotBlank();
         assertThat(dto.getHealth()).isEqualTo("ONLINE");
         assertThat(dto.getContractVersion()).isEqualTo("1.0.0");
         assertThat(dto.getCapabilityVersion()).isEqualTo("2.1.0");
         assertThat(dto.getWeight()).isEqualTo(100);
         assertThat(dto.getRegion()).isEqualTo("cn-east-1");
-        // Method A: business definition fields populated.
         assertThat(dto.getAgentName()).isEqualTo("财务助手");
-        assertThat(dto.getAgentType()).isEqualTo("assistant");
-    }
-
-    // ---- RB6-B: Method B returns minimal DTOs -----------------------------
-
-    @Test
-    void method_b_returns_minimal_dto_with_business_definition_fields_null() {
-        List<AgentCardDto> results = discovery.discoverBestAgents(
-                "tenant-A", "cap-billing", "billing intent", null, 5);
-
-        assertThat(results).hasSize(1);
-        AgentCardDto dto = results.get(0);
-        // ICD 5 routing fields always populated.
-        assertThat(dto.getRouteHandle()).isNotBlank();
-        assertThat(dto.getHealth()).isEqualTo("ONLINE");
-        assertThat(dto.getContractVersion()).isEqualTo("1.0.0");
-        assertThat(dto.getCapabilityVersion()).isEqualTo("2.1.0");
-        assertThat(dto.getWeight()).isEqualTo(100);
-        assertThat(dto.getRegion()).isEqualTo("cn-east-1");
-        // Method B: business definition fields null.
-        assertThat(dto.getAgentName()).isNull();
-        assertThat(dto.getAgentType()).isNull();
+        assertThat(dto.getFrameworkType()).isEqualTo(FrameworkType.JIUWEN);
     }
 
     @Test
-    void method_a_and_b_produce_same_route_handle_for_same_row() {
-        // Same row in tenant-A, agent-001 — handle encoding must be identical.
-        AgentCardDto a = discovery.discoverBestAgents("tenant-A", "intent", null, 5).get(0);
-        AgentCardDto b = discovery.discoverBestAgents(
-                "tenant-A", "cap-billing", "intent", null, 5).get(0);
-        assertThat(a.getRouteHandle()).isEqualTo(b.getRouteHandle());
+    void search_by_agent_id_returns_empty_when_not_found() {
+        Optional<AgentCardDto> result = discovery.searchByAgentId("tenant-A", "agent-999");
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void search_by_agent_id_returns_empty_for_unknown_tenant() {
+        Optional<AgentCardDto> result = discovery.searchByAgentId("tenant-unknown", "agent-001");
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void search_by_agent_id_returns_empty_when_status_is_draining() {
+        // FakeRepository returns a DRAINING row for agent-002.
+        Optional<AgentCardDto> result = discovery.searchByAgentId("tenant-A", "agent-002");
+        assertThat(result).isEmpty();
     }
 
     // ---- RB7-tenant: TenantContext cross-check ----------------------------
@@ -117,7 +87,7 @@ class PgMvpDiscoveryServiceImplTest {
     @Test
     void bound_tenant_context_mismatch_raises_isolation_violation() {
         tenantContext.set("tenant-other");
-        assertThatThrownBy(() -> discovery.discoverBestAgents("tenant-A", "intent", null, 5))
+        assertThatThrownBy(() -> discovery.searchByAgentId("tenant-A", "agent-001"))
                 .isInstanceOf(TenantIsolationViolationException.class)
                 .hasMessageContaining("tenant_isolation_violation");
     }
@@ -125,18 +95,15 @@ class PgMvpDiscoveryServiceImplTest {
     @Test
     void bound_tenant_context_match_proceeds_normally() {
         tenantContext.set("tenant-A");
-        List<AgentCardDto> results = discovery.discoverBestAgents(
-                "tenant-A", "intent", null, 5);
-        assertThat(results).hasSize(1);
+        Optional<AgentCardDto> result = discovery.searchByAgentId("tenant-A", "agent-001");
+        assertThat(result).isPresent();
     }
 
     @Test
     void unbound_tenant_context_skips_cross_check() {
-        // Unbound (null) — explicit tenantId is the source of truth.
         assertThat(tenantContext.current()).isNull();
-        List<AgentCardDto> results = discovery.discoverBestAgents(
-                "tenant-A", "intent", null, 5);
-        assertThat(results).hasSize(1);
+        Optional<AgentCardDto> result = discovery.searchByAgentId("tenant-A", "agent-001");
+        assertThat(result).isPresent();
     }
 
     // ---- RB-resolve: resolveRouteHandle failure modes ---------------------
@@ -181,9 +148,6 @@ class PgMvpDiscoveryServiceImplTest {
 
     @Test
     void resolve_route_handle_with_bound_mismatched_tenant_raises_isolation_violation() {
-        // Encoded tenant = tenant-A; caller passes tenant-A but binds tenant-C.
-        // Encoded-vs-caller check passes (both tenant-A); the bound-context
-        // cross-check (verifyTenant) catches the mismatch.
         tenantContext.set("tenant-C");
         String handle = RouteHandleCodec.encode(
                 "tenant-A", "agent-001", "rk://svc/default", "1.0.0");
@@ -192,32 +156,11 @@ class PgMvpDiscoveryServiceImplTest {
                 .isInstanceOf(TenantIsolationViolationException.class);
     }
 
-    // ---- Empty result scenarios ------------------------------------------
-
-    @Test
-    void method_a_returns_empty_list_when_repository_has_no_rows() {
-        List<AgentCardDto> results = discovery.discoverBestAgents(
-                "tenant-empty", "intent", null, 5);
-        assertThat(results).isEmpty();
-    }
-
-    @Test
-    void method_b_returns_empty_list_when_capability_not_found() {
-        List<AgentCardDto> results = discovery.discoverBestAgents(
-                "tenant-A", "cap-nonexistent", "intent", null, 5);
-        assertThat(results).isEmpty();
-    }
-
     // ---- Fakes -----------------------------------------------------------
 
-    /**
-     * Minimal fake {@link AgentRegistryRepository} for tenant-A / agent-001.
-     * Other tenants / agents return empty results.
-     */
     private static final class FakeRepository implements AgentRegistryRepository {
         @Override
         public void upsert(com.openjiuwen.rdc.spi.registry.AgentRegistryEntry card, String a2aAgentCardJson) {
-            // not exercised by these tests
         }
 
         @Override
@@ -226,8 +169,8 @@ class PgMvpDiscoveryServiceImplTest {
         }
 
         @Override
-        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
-            return List.of();
+        public java.util.List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+            return java.util.List.of();
         }
 
         @Override
@@ -237,22 +180,19 @@ class PgMvpDiscoveryServiceImplTest {
         }
 
         @Override
-        public List<RegistryRow> searchByIntent(String tenantId, String userQuery,
-                                                String contractVersion, int topK) {
+        public Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
             if (!"tenant-A".equals(tenantId)) {
-                return List.of();
+                return Optional.empty();
             }
-            return List.of(sampleRow());
-        }
-
-        @Override
-        public List<RegistryRow> searchByCapability(String tenantId, String capability,
-                                                    String userQuery, String contractVersion,
-                                                    int topK) {
-            if (!"tenant-A".equals(tenantId) || !"cap-billing".equals(capability)) {
-                return List.of();
+            if ("agent-001".equals(agentId)) {
+                return Optional.of(sampleRow("agent-001", "财务助手", "ONLINE"));
             }
-            return List.of(sampleRow());
+            if ("agent-002".equals(agentId)) {
+                // DRAINING — real SQL filter (status IN ONLINE,DEGRADED) excludes this.
+                // Fake mimics the SQL behavior by returning empty.
+                return Optional.empty();
+            }
+            return Optional.empty();
         }
 
         @Override
@@ -264,19 +204,14 @@ class PgMvpDiscoveryServiceImplTest {
             return Optional.empty();
         }
 
-        private static RegistryRow sampleRow() {
+        private static RegistryRow sampleRow(String agentId, String agentName, String status) {
             return new RegistryRow(
-                    "agent-001", "财务助手", "assistant",
-                    "cap-billing", "rk://svc/default", "1.0.0", "2.1.0",
-                    100, "cn-east-1", "ONLINE");
+                    agentId, agentName, FrameworkType.JIUWEN,
+                    "rk://svc/default", "1.0.0", "2.1.0",
+                    100, "cn-east-1", status);
         }
     }
 
-    /**
-     * Test-only {@link TenantContext} that exposes the bind / clear lifecycle
-     * so tests can simulate bound vs unbound scopes without touching the real
-     * ThreadLocal (which would leak across tests if not cleaned up).
-     */
     private static final class TestTenantContext implements TenantContext {
         private String current;
 

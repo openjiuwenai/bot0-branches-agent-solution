@@ -3,38 +3,35 @@ package com.openjiuwen.rdc.spi.registry;
 import java.util.Objects;
 
 /**
- * Unified discovery-result DTO returned by both
- * {@link AgentDiscoveryService#discoverBestAgents(String, String, String, int)}
- * (Method A) and
- * {@link AgentDiscoveryService#discoverBestAgents(String, String, String, String, int)}
- * (Method B).
+ * Discovery-result DTO returned by
+ * {@link AgentDiscoveryService#searchByAgentId(String, String)}.
  *
- * <p>Authority: ADR-0160 decision 2 + RB6. The ICD 5 routing fields
- * ({@code routeHandle} / {@code health} / {@code contractVersion} /
- * {@code capabilityVersion} / {@code selectionHint = weight + region}) are
- * always populated by both methods. The business definition fields
- * ({@code agentName} / {@code agentType}) are {@link Nullable @Nullable} —
- * Method A populates them for exploratory callers (Orchestrator / Gateway);
- * Method B leaves them {@code null} for capability-scoped routing. Per
- * HD3-006 the DTO never carries the physical endpoint or {@code routeKey}
- * in plain form — only the opaque {@code routeHandle}; the forwarding layer
- * recovers the endpoint via
+ * <p>Authority: ADR-0160 decision 2 (revised by REQ-2026-004) + RB6. The
+ * ICD 5 routing fields ({@code routeHandle} / {@code health} /
+ * {@code contractVersion} / {@code capabilityVersion} /
+ * {@code selectionHint = weight + region}) are always populated when a
+ * match is found. The business definition fields ({@code agentName} /
+ * {@code frameworkType}) are {@link Nullable @Nullable} —
+ * {@code searchByAgentId} populates them for callers that need the full
+ * card view. Per HD3-006 the DTO never carries the physical endpoint or
+ * {@code routeKey} in plain form — only the opaque {@code routeHandle};
+ * the forwarding layer recovers the endpoint via
  * {@link AgentDiscoveryService#resolveRouteHandle(String, String)}.
  *
- * <p>REQ-2026-001 removed {@code systemProfile} + {@code toolSchemas} —
- * both overlapped with the A2A standard AgentCard that the registry now
- * embeds. Discovery callers that need A2A card details should fetch
- * {@code /.well-known/agent-card.json} directly (the
- * {@link com.openjiuwen.rdc.spi.registry.AgentRegistryEntry#getA2aAgentCard()
- * AgentRegistryEntry.a2aAgentCard} field is not surfaced via this DTO —
- * follow-up PR may add it).
+ * <p>REQ-2026-004 changes (baseline-breaking):
+ * <ul>
+ *   <li>Renamed {@code agentType} (String) → {@code frameworkType}
+ *       ({@link FrameworkType}).</li>
+ *   <li>Discovery collapses to {@code searchByAgentId} single-value lookup;
+ *       the dual Method A/B distinction is removed.</li>
+ * </ul>
  *
  * <p>Hand-written builder (no Lombok) so the {@code spi.registry} package
  * stays pure Java (ADR-0160 decision 1).
  */
 public final class AgentCardDto {
 
-    // ---- ICD 5 routing fields (both methods populate) ----
+    // ---- ICD 5 routing fields (always populated on match) ----
 
     private final String routeHandle;
     private final String health;
@@ -43,10 +40,10 @@ public final class AgentCardDto {
     private final int weight;
     private final String region;
 
-    // ---- Business definition fields (Method A fills, Method B leaves null) ----
+    // ---- Business definition fields (populated by searchByAgentId) ----
 
     @Nullable private final String agentName;
-    @Nullable private final String agentType;
+    @Nullable private final FrameworkType frameworkType;
 
     private AgentCardDto(Builder b) {
         this.routeHandle = b.routeHandle;
@@ -56,7 +53,7 @@ public final class AgentCardDto {
         this.weight = b.weight;
         this.region = b.region;
         this.agentName = b.agentName;
-        this.agentType = b.agentType;
+        this.frameworkType = b.frameworkType;
     }
 
     public String getRouteHandle() {
@@ -89,8 +86,8 @@ public final class AgentCardDto {
     }
 
     @Nullable
-    public String getAgentType() {
-        return agentType;
+    public FrameworkType getFrameworkType() {
+        return frameworkType;
     }
 
     public static Builder builder() {
@@ -105,7 +102,7 @@ public final class AgentCardDto {
         private int weight;
         private String region;
         private String agentName;
-        private String agentType;
+        private FrameworkType frameworkType;
 
         private Builder() {
         }
@@ -145,8 +142,8 @@ public final class AgentCardDto {
             return this;
         }
 
-        public Builder agentType(String agentType) {
-            this.agentType = agentType;
+        public Builder frameworkType(FrameworkType frameworkType) {
+            this.frameworkType = frameworkType;
             return this;
         }
 

@@ -20,32 +20,35 @@ import org.a2aproject.sdk.spec.AgentCard;
  * record's canonical constructor.
  *
  * <p>Required fields (registry key + routing index): {@code tenantId},
- * {@code agentId}, {@code agentName}, {@code agentType}, {@code capability},
- * {@code routeKey}, {@code contractVersion}, {@code capabilityVersion},
- * {@code endpointUrl}. Optional fields (selection hint / A2A metadata):
- * {@code maxConcurrency}, {@code weight}, {@code region}, {@code a2aAgentCard}.
+ * {@code agentId}, {@code agentName}, {@code frameworkType}, {@code routeKey},
+ * {@code contractVersion}, {@code capabilityVersion}, {@code endpointUrl}.
+ * Optional fields (selection hint / A2A metadata): {@code maxConcurrency},
+ * {@code weight}, {@code region}, {@code a2aAgentCard}.
  *
- * <p>REQ-2026-001 removed {@code serviceId} (redundant with {@code agentId};
- * registry PK is {@code (tenant_id, agent_id)}), {@code toolSchemas}
- * (overlapped with A2A {@link AgentCard#skills()}), {@code capabilityKeywords}
- * (overlapped with A2A {@code skills[].tags}), and {@code systemProfile}
- * (semantically vague; overlapped with A2A {@code capabilities} +
- * {@code supportedInterfaces}). The A2A standard card now carries the
- * equivalent metadata as {@link #a2aAgentCard}.
+ * <p>REQ-2026-004 changes (baseline-breaking):
+ * <ul>
+ *   <li>Removed {@code capability} field — A2A AgentCard carries no such
+ *       concept, pull-based registration cannot derive it. Discovery
+ *       collapses to {@link AgentDiscoveryService#searchByAgentId} single
+ *       value point lookup.</li>
+ *   <li>Renamed {@code agentType} (String) → {@code frameworkType}
+ *       ({@link FrameworkType} enum) — closed vocabulary replaces free
+ *       text; pull config / push body must declare a concrete framework.</li>
+ *   <li>{@link #hasRegistryKey()} narrowed to {@code tenantId + agentId}
+ *       (was {@code tenantId + agentId + capability}).</li>
+ * </ul>
  *
  * <p>The MVP controller persists the entry verbatim into
  * {@code agent_registry_mvp}; the A2A card is serialized to JSONB in the
- * {@code a2a_agent_card} column, and the {@code search_tsv} GENERATED column
- * is rebuilt from {@code a2a_agent_card->>'description'} (weight A) +
- * {@code a2a_agent_card->>'name'} (weight B).
+ * {@code a2a_agent_card} column. The {@code search_tsv} GENERATED column
+ * and {@code capability} column were removed in V4 (REQ-2026-004).
  */
 public final class AgentRegistryEntry {
 
     private String tenantId;
     private String agentId;
     private String agentName;
-    private String agentType;
-    private String capability;
+    private FrameworkType frameworkType;
     private String routeKey;
     private String contractVersion;
     private String capabilityVersion;
@@ -79,20 +82,12 @@ public final class AgentRegistryEntry {
         this.agentName = agentName;
     }
 
-    public String getAgentType() {
-        return agentType;
+    public FrameworkType getFrameworkType() {
+        return frameworkType;
     }
 
-    public void setAgentType(String agentType) {
-        this.agentType = agentType;
-    }
-
-    public String getCapability() {
-        return capability;
-    }
-
-    public void setCapability(String capability) {
-        this.capability = capability;
+    public void setFrameworkType(FrameworkType frameworkType) {
+        this.frameworkType = frameworkType;
     }
 
     public String getRouteKey() {
@@ -161,11 +156,11 @@ public final class AgentRegistryEntry {
 
     /**
      * Convenience for tests / internal callers that want to assert the
-     * registry-key trio is present before persisting. The registry PK is
-     * {@code (tenant_id, agent_id)}; {@code capability} is the routing
-     * index, not part of the PK, but required for discovery.
+     * registry-key pair is present before persisting. The registry PK is
+     * {@code (tenant_id, agent_id)}; {@code capability} was removed in
+     * REQ-2026-004 so the key check narrows to the PK pair.
      */
     public boolean hasRegistryKey() {
-        return Objects.nonNull(tenantId) && Objects.nonNull(agentId) && Objects.nonNull(capability);
+        return Objects.nonNull(tenantId) && Objects.nonNull(agentId);
     }
 }

@@ -372,8 +372,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         card.setTenantId(tenant);
         card.setAgentId(agent);
         card.setAgentName("test-agent");
-        card.setAgentType("assistant");
-        card.setCapability("cap-test");
+        card.setFrameworkType(com.openjiuwen.rdc.spi.registry.FrameworkType.JIUWEN);
         card.setRouteKey("rk://svc/default");
         card.setContractVersion("1.0.0");
         card.setCapabilityVersion("2.1.0");

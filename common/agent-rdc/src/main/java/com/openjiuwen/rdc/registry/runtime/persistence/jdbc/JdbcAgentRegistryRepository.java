@@ -1,6 +1,7 @@
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
+import com.openjiuwen.rdc.spi.registry.FrameworkType;
 
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -20,14 +21,16 @@ import java.util.function.Supplier;
  * {@code org.springframework.jdbc.*} — enforced at test time by
  * {@code AgentRdcRegistryJdbcPurityTest} (S5).
  *
- * <h2>SQL contract</h2>
+ * <h2>SQL contract (REQ-2026-004 revised)</h2>
  * <ul>
  *   <li><b>upsert</b> — {@code INSERT ... ON CONFLICT (tenant_id, agent_id)
  *       DO UPDATE SET ...} ; an agent restart overwrites the prior entry and
  *       resets {@code status = 'ONLINE'} + {@code last_heartbeat = NOW()},
  *       EXCEPT when the prior status is {@code DRAINING} (operator-initiated
  *       graceful drain) — DRAINING is preserved so a restart during drain
- *       does not re-route traffic to the agent (PR #389 review issue #7).</li>
+ *       does not re-route traffic to the agent (PR #389 review issue #7).
+ *       REQ-2026-004: writes {@code framework_type} (was {@code agent_type});
+ *       {@code capability} column dropped — no longer written.</li>
  *   <li><b>delete</b> — {@code DELETE WHERE tenant_id = :tenantId AND
  *       agent_id = :agentId}; returns affected-row count &gt; 0.</li>
  *   <li><b>scanDueForProbe</b> — {@code SELECT ... WHERE status IN ('ONLINE','DEGRADED')
@@ -36,24 +39,20 @@ import java.util.function.Supplier;
  *       agent can be re-probed and restored to ONLINE (PR #389 review issue #4).
  *       Runs unscoped (no {@code withTenant} wrap) — REQUIRES an owner-role
  *       connection; under a restricted role the RLS policy filters everything
- *       (PR #389 review issue #3, see Pr389RlsAndRecoveryFeedbackLoopTest).</li>
+ *       (PR #389 review issue #3, see Pr389RlsAndRecoveryFeedbackLoopTest).
+ *       Pull-based registration entries are scanned the same as push-based
+ *       ones — they live in the same table.</li>
  *   <li><b>updateStatus</b> — {@code UPDATE ... SET status = :newStatus [,
  *       last_heartbeat = NOW()] WHERE tenant_id AND agent_id}; the scheduler
  *       uses {@code refreshHeartbeat=false} when downgrading (5xx → DEGRADED)
  *       and {@code true} when reaffirming (200 → ONLINE).</li>
- *   <li><b>searchByIntent / searchByCapability</b> — both filter by
- *       {@code status IN ('ONLINE','DEGRADED')} AND
- *       {@code last_heartbeat >= NOW() - INTERVAL '15 seconds'} (HD3-004
- *       visibility window) AND optional {@code contract_version} exact match
- *       AND optional {@code search_tsv @@ websearch_to_tsquery} ranking;
- *       ordered by ts_rank DESC, weight DESC when {@code userQuery} is
- *       non-null, else weight DESC only. The {@code status IN ('ONLINE','DEGRADED')}
- *       divergence from the design doc's {@code WHERE status = 'ONLINE'} is
- *       per PRD FR-4/FR-5 (HD3-004 alignment: DEGRADED targets stay
- *       discoverable but marked). PR #389 review issue #9: switched from
- *       {@code phraseto_tsquery} (requires token adjacency) to
- *       {@code websearch_to_tsquery} (keyword-style) to match the L2 design
- *       §3.3.1 "关键词分词检索" intent.</li>
+ *   <li><b>searchByAgentId</b> — REQ-2026-004 replaces
+ *       {@code searchByIntent} / {@code searchByCapability}. Single-value
+ *       point lookup by PK {@code (tenant_id, agent_id)} with
+ *       {@code status IN ('ONLINE','DEGRADED')} filter. The HD3-004 15-second
+ *       visibility window is no longer applied at discovery — exact match
+ *       on the PK, status filter only. DRAINING / OFFLINE entries return
+ *       empty (treated as not-found from discovery's perspective).</li>
  *   <li><b>findEndpoint</b> — {@code SELECT endpoint_url, route_key,
  *       contract_version WHERE tenant_id AND agent_id}; used by
  *       {@code AgentDiscoveryService.resolveRouteHandle} after the codec has
@@ -73,17 +72,10 @@ import java.util.function.Supplier;
  * (Rule R-C.c); RLS is the defence-in-depth fallback. The table owner
  * (superuser) bypasses RLS, so superuser-backed integration tests are
  * unaffected.
- *
- * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
- * registry-discovery-runtime-design.cn.md} §3.2 / §3.3.1 (port/adapter
- * refactoring per ADR-0160 decision 4 — JdbcTemplate usage下沉 from
- * {@code PgMvpDiscoveryServiceImpl} to this adapter);
- * {@code ICD-Agent-Registry-Discovery} HD3-001/003/004/005/006.
  */
 public final class JdbcAgentRegistryRepository implements AgentRegistryRepository {
 
     private static final String TABLE = "agent_registry_mvp";
-    private static final String VISIBILITY_WINDOW = "15 seconds";
 
     private final NamedParameterJdbcTemplate jdbc;
     private final TransactionTemplate txTemplate;
@@ -118,19 +110,19 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         Objects.requireNonNull(entry, "entry is required");
         requireNonBlank(entry.getTenantId(), "tenantId");
         requireNonBlank(entry.getAgentId(), "agentId");
+        Objects.requireNonNull(entry.getFrameworkType(), "frameworkType is required");
         String sql = "INSERT INTO " + TABLE + " ("
-                + "tenant_id, agent_id, agent_name, agent_type, capability, "
+                + "tenant_id, agent_id, agent_name, framework_type, "
                 + "route_key, contract_version, "
                 + "capability_version, endpoint_url, max_concurrency, weight, region, "
                 + "a2a_agent_card, status, last_heartbeat) "
-                + "VALUES (:tenantId, :agentId, :agentName, :agentType, :capability, "
+                + "VALUES (:tenantId, :agentId, :agentName, :frameworkType, "
                 + ":routeKey, :contractVersion, "
                 + ":capabilityVersion, :endpointUrl, :maxConcurrency, :weight, :region, "
                 + ":a2aAgentCard::jsonb, 'ONLINE', CURRENT_TIMESTAMP) "
                 + "ON CONFLICT (tenant_id, agent_id) DO UPDATE SET "
                 + "agent_name = EXCLUDED.agent_name, "
-                + "agent_type = EXCLUDED.agent_type, "
-                + "capability = EXCLUDED.capability, "
+                + "framework_type = EXCLUDED.framework_type, "
                 + "route_key = EXCLUDED.route_key, "
                 + "contract_version = EXCLUDED.contract_version, "
                 + "capability_version = EXCLUDED.capability_version, "
@@ -152,8 +144,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     .addValue("tenantId", entry.getTenantId())
                     .addValue("agentId", entry.getAgentId())
                     .addValue("agentName", entry.getAgentName())
-                    .addValue("agentType", entry.getAgentType())
-                    .addValue("capability", entry.getCapability())
+                    .addValue("frameworkType", entry.getFrameworkType().name())
                     .addValue("routeKey", entry.getRouteKey())
                     .addValue("contractVersion", entry.getContractVersion())
                     .addValue("capabilityVersion", entry.getCapabilityVersion())
@@ -189,20 +180,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         // HD3-004 lease/TTL scan: ONLINE rows whose heartbeat is older than
         // the stale threshold (caller passes NOW() - probe-interval), PLUS
         // DEGRADED rows so a recovered agent can be re-probed and restored
-        // to ONLINE (PR #389 review issue #4 — without this, DEGRADED is an
-        // unrecoverable terminal state until the 15-second visibility window
-        // evicts the row or a fresh upsert re-registers it; flappy networks
-        // make that pathological). The scheduler scopes by tenant via
-        // withTenant before issuing this query — but the scan is
-        // tenant-agnostic here so the scheduler can sweep all tenants in one
-        // call. To respect Stage 24 RLS wiring per-tenant, the scheduler
-        // wraps each row's downstream probe in its own tenant transaction;
-        // this scan itself runs unscoped and REQUIRES an owner-role
-        // connection (RLS bypassed by owner). Under a restricted role
-        // (app_role_rls), the scan returns empty because the adapter never
-        // sets app.tenant_id for this call — see
-        // Pr389RlsAndRecoveryFeedbackLoopTest for the contract test that
-        // documents this deployment requirement.
+        // to ONLINE (PR #389 review issue #4). Pull-based registration entries
+        // (inserted by PullRegistrationBootstrap) are scanned here the same
+        // as push-based ones — they share the same table and lifecycle.
         String sql = "SELECT tenant_id, agent_id, endpoint_url FROM " + TABLE
                 + " WHERE status IN ('ONLINE','DEGRADED') AND last_heartbeat < :staleBefore"
                 + " ORDER BY last_heartbeat ASC LIMIT :limit";
@@ -234,56 +214,23 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    // ===== discovery search (Method A / Method B) =====
+    // ===== discovery (single-value point lookup) =====
 
     @Override
-    public List<RegistryRow> searchByIntent(String tenantId, String userQuery,
-                                             String contractVersion, int topK) {
+    public java.util.Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
         requireNonBlank(tenantId, "tenantId");
-        if (topK <= 0) {
-            throw new IllegalArgumentException("topK must be > 0");
-        }
+        requireNonBlank(agentId, "agentId");
         return withTenant(tenantId, () -> {
-            StringBuilder sql = new StringBuilder()
-                    .append("SELECT agent_id, agent_name, agent_type, capability, ")
-                    .append("route_key, contract_version, capability_version, ")
-                    .append("weight, region, status FROM ").append(TABLE)
-                    .append(" WHERE tenant_id = :tenantId")
-                    .append(" AND status IN ('ONLINE','DEGRADED')")
-                    .append(" AND last_heartbeat >= NOW() - INTERVAL '").append(VISIBILITY_WINDOW).append("'");
+            String sql = "SELECT agent_id, agent_name, framework_type, "
+                    + "route_key, contract_version, capability_version, "
+                    + "weight, region, status FROM " + TABLE
+                    + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
+                    + " AND status IN ('ONLINE','DEGRADED')";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
-                    .addValue("topK", topK);
-            appendVersionAndRankFilters(sql, params, contractVersion, userQuery);
-            sql.append(" LIMIT :topK");
-            return jdbc.query(sql.toString(), params, RegistryRowMapper.INSTANCE);
-        });
-    }
-
-    @Override
-    public List<RegistryRow> searchByCapability(String tenantId, String capability, String userQuery,
-                                                 String contractVersion, int topK) {
-        requireNonBlank(tenantId, "tenantId");
-        requireNonBlank(capability, "capability");
-        if (topK <= 0) {
-            throw new IllegalArgumentException("topK must be > 0");
-        }
-        return withTenant(tenantId, () -> {
-            StringBuilder sql = new StringBuilder()
-                    .append("SELECT agent_id, agent_name, agent_type, capability, ")
-                    .append("route_key, contract_version, capability_version, ")
-                    .append("weight, region, status FROM ").append(TABLE)
-                    .append(" WHERE tenant_id = :tenantId")
-                    .append(" AND capability = :capability")
-                    .append(" AND status IN ('ONLINE','DEGRADED')")
-                    .append(" AND last_heartbeat >= NOW() - INTERVAL '").append(VISIBILITY_WINDOW).append("'");
-            MapSqlParameterSource params = new MapSqlParameterSource()
-                    .addValue("tenantId", tenantId)
-                    .addValue("capability", capability)
-                    .addValue("topK", topK);
-            appendVersionAndRankFilters(sql, params, contractVersion, userQuery);
-            sql.append(" LIMIT :topK");
-            return jdbc.query(sql.toString(), params, RegistryRowMapper.INSTANCE);
+                    .addValue("agentId", agentId);
+            List<RegistryRow> rows = jdbc.query(sql, params, RegistryRowMapper.INSTANCE);
+            return rows.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(rows.get(0));
         });
     }
 
@@ -318,38 +265,6 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    /**
-     * Append the optional {@code contract_version = :contractVersion} filter
-     * and the optional {@code search_tsv @@ websearch_to_tsquery} filter +
-     * rank ordering to the discovery SQL builder. When {@code userQuery} is
-     * non-null, ts_rank is computed and the ORDER BY ranks by relevance
-     * first; when null, the ORDER BY is weight-only.
-     *
-     * <p>PR #389 review issue #9: switched from {@code phraseto_tsquery}
-     * (requires token adjacency — phrase match) to {@code websearch_to_tsquery}
-     * (keyword-style: tokens are OR'd, quoted phrases supported, no
-     * adjacency requirement). The L2 design §3.3.1 specifies "关键词分词检索"
-     * (keyword tokenization search) for stage 1, which {@code phraseto_tsquery}
-     * did not implement — a query like "理财 产品" (different word order
-     * from the indexed "产品 理财") returned 0 results under
-     * {@code phraseto_tsquery} but matches under
-     * {@code websearch_to_tsquery}.
-     */
-    private void appendVersionAndRankFilters(StringBuilder sql, MapSqlParameterSource params,
-                                             String contractVersion, String userQuery) {
-        if (contractVersion != null) {
-            sql.append(" AND contract_version = :contractVersion");
-            params.addValue("contractVersion", contractVersion);
-        }
-        if (userQuery != null) {
-            sql.append(" AND search_tsv @@ websearch_to_tsquery('simple', :userQuery)");
-            sql.append(" ORDER BY ts_rank(search_tsv, websearch_to_tsquery('simple', :userQuery)) DESC, weight DESC");
-            params.addValue("userQuery", userQuery);
-        } else {
-            sql.append(" ORDER BY weight DESC");
-        }
-    }
-
     /** Row mapper for {@link RegistryRow} — single instance, stateless. */
     private static final class RegistryRowMapper
             implements org.springframework.jdbc.core.RowMapper<RegistryRow> {
@@ -357,11 +272,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
 
         @Override
         public RegistryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+            String frameworkTypeName = rs.getString("framework_type");
+            FrameworkType frameworkType = frameworkTypeName == null
+                    ? null : FrameworkType.valueOf(frameworkTypeName);
             return new RegistryRow(
                     rs.getString("agent_id"),
                     rs.getString("agent_name"),
-                    rs.getString("agent_type"),
-                    rs.getString("capability"),
+                    frameworkType,
                     rs.getString("route_key"),
                     rs.getString("contract_version"),
                     rs.getString("capability_version"),

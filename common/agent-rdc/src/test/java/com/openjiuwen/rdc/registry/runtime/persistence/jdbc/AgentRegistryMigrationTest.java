@@ -15,34 +15,20 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * V2 migration smoke test for {@code V2__create_agent_registry_mvp.sql}
- * (RB1, ADR-0160 §3.2, HD3-002/003/004).
+ * V2/V3/V4 migration smoke test for {@code agent_registry_mvp}.
  *
- * <p>Boots an in-process PostgreSQL (Zonky embedded-postgres) and runs the
- * agent-rdc Flyway migration (V2 registry), then
- * verifies the {@code agent_registry_mvp} table:
+ * <p>REQ-2026-004 V4 migration changes:
  * <ul>
- *   <li><b>RB1-S1</b> — V2 applies cleanly (no SQL errors, no Flyway
- *       validation warnings).</li>
- *   <li><b>RB1-S2</b> — composite primary key {@code (tenant_id, agent_id)}
- *       is in place (HD3-003).</li>
- *   <li><b>RB1-S3</b> — {@code search_tsv} GENERATED column + GIN index
- *       exist (Method A/B tsvector ranking).</li>
- *   <li><b>RB1-S4</b> — partial index on {@code last_heartbeat WHERE
- *       status IN ('ONLINE','DEGRADED')} exists (HD3-004 lease/TTL scan
- *       path; PR #389 #4 widened from ONLINE-only to also cover DEGRADED
- *       so recovered agents can be re-probed and restored to ONLINE).</li>
- *   <li><b>RB1-S5</b> — {@code CHECK status IN ('ONLINE','DEGRADED',
- *       'DRAINING','OFFLINE')} constraint rejects invalid lifecycle values.</li>
- *   <li><b>RB1-S6</b> — Row-Level Security policy
- *       {@code agent_registry_mvp_tenant_isolation} is enabled (defence-in-depth
- *       tenant isolation, mirroring V1 §7.3).</li>
- *   <li><b>RB1-S7</b> — RLS binds a restricted (non-owner) role: a row
- *       inserted under {@code app.tenant_id='tenant-A'} is invisible when
- *       the restricted role queries with {@code app.tenant_id='tenant-B'}.</li>
+ *   <li>Dropped {@code search_tsv} GENERATED column + GIN index
+ *       {@code idx_agent_registry_mvp_search_tsv}.</li>
+ *   <li>Dropped {@code capability} column + BTREE index
+ *       {@code idx_agent_registry_mvp_tenant_capability}.</li>
+ *   <li>Renamed {@code agent_type} → {@code framework_type}.</li>
  * </ul>
  *
- * <p>Authority: ADR-0160 §3.2 + HD3-002/003/004 + Stage 24 RLS wiring.
+ * <p>Tests verify the post-V4 schema state: PK unchanged, partial heartbeat
+ * index unchanged, RLS unchanged, CHECK constraints unchanged. Old
+ * search_tsv / capability / agent_type artifacts must be gone.
  */
 class AgentRegistryMigrationTest {
 
@@ -67,30 +53,20 @@ class AgentRegistryMigrationTest {
 
     @BeforeEach
     void cleanTable() {
-        // PR #389 review issue: tests share one EmbeddedPostgres instance
-        // across cases; without a clean-table guard, rows inserted by one
-        // case (e.g. RB1-S7 RLS visibility) leak into the next case's
-        // assertions. The original tenant-prefix isolation worked for
-        // read-only assertions but is fragile for any future write-and-count
-        // case. DELETE is cheap and unambiguous.
         if (jdbc != null) {
             jdbc.execute("DELETE FROM agent_registry_mvp");
         }
     }
 
-    // ---- RB1-S1: V2 applies cleanly --------------------------------------
-
     @Test
-    void v2_migration_applies_cleanly() {
+    void v2_through_v4_migrations_applied_cleanly() {
         List<String> applied = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank",
                 String.class);
         assertThat(applied)
-                .as("V2 (registry) migration must apply cleanly")
-                .contains("2");
+                .as("V2/V3/V4 migrations must all apply cleanly")
+                .contains("2", "3", "4");
     }
-
-    // ---- RB1-S2: composite primary key ----------------------------------
 
     @Test
     void agent_registry_mvp_has_composite_primary_key() {
@@ -100,42 +76,78 @@ class AgentRegistryMigrationTest {
                 + "WHERE i.indrelid = 'agent_registry_mvp'::regclass AND i.indisprimary "
                 + "ORDER BY array_position(i.indkey, a.attnum)");
         assertThat(pkColumns)
-                .as("HD3-003: agent_registry_mvp PK must be (tenant_id, agent_id)")
+                .as("HD3-003: agent_registry_mvp PK must be (tenant_id, agent_id) — V4 unchanged")
                 .extracting(row -> row.get("attname"))
                 .containsExactly("tenant_id", "agent_id");
     }
 
-    // ---- RB1-S3: search_tsv GENERATED + GIN index ------------------------
+    // ---- V4: search_tsv + GIN index DROPPED ------------------------------
 
     @Test
-    void search_tsv_is_generated_column() {
-        Map<String, Object> row = jdbc.queryForMap(
-                "SELECT attgenerated, atttypid::regtype FROM pg_attribute "
-                + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'search_tsv'");
-        assertThat(row.get("attgenerated"))
-                .as("search_tsv must be a GENERATED ALWAYS column")
-                .asString().isNotBlank();
-        assertThat(row.get("atttypid").toString())
-                .as("search_tsv must be of type tsvector")
-                .contains("tsvector");
+    void v4_drops_search_tsv_column() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pg_attribute "
+                + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'search_tsv'",
+                Integer.class);
+        assertThat(count)
+                .as("REQ-2026-004 V4: search_tsv column must be dropped")
+                .isZero();
     }
 
     @Test
-    void gin_index_on_search_tsv_exists() {
+    void v4_drops_search_tsv_gin_index() {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes "
                 + "WHERE tablename = 'agent_registry_mvp' AND indexname = ?",
                 Integer.class, "idx_agent_registry_mvp_search_tsv");
-        assertThat(count).isEqualTo(1);
+        assertThat(count)
+                .as("REQ-2026-004 V4: idx_agent_registry_mvp_search_tsv GIN index must be dropped")
+                .isZero();
+    }
+
+    // ---- V4: capability column + BTREE index DROPPED ---------------------
+
+    @Test
+    void v4_drops_capability_column() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pg_attribute "
+                + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'capability'",
+                Integer.class);
+        assertThat(count)
+                .as("REQ-2026-004 V4: capability column must be dropped")
+                .isZero();
     }
 
     @Test
-    void btree_index_on_tenant_capability_exists() {
+    void v4_drops_tenant_capability_btree_index() {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes "
                 + "WHERE tablename = 'agent_registry_mvp' AND indexname = ?",
                 Integer.class, "idx_agent_registry_mvp_tenant_capability");
-        assertThat(count).isEqualTo(1);
+        assertThat(count)
+                .as("REQ-2026-004 V4 D-3: idx_agent_registry_mvp_tenant_capability BTREE index must be dropped")
+                .isZero();
+    }
+
+    // ---- V4: agent_type RENAMED to framework_type ------------------------
+
+    @Test
+    void v4_renames_agent_type_to_framework_type() {
+        Integer frameworkCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pg_attribute "
+                + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'framework_type'",
+                Integer.class);
+        assertThat(frameworkCount)
+                .as("REQ-2026-004 V4: framework_type column must exist (renamed from agent_type)")
+                .isEqualTo(1);
+
+        Integer agentTypeCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pg_attribute "
+                + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'agent_type'",
+                Integer.class);
+        assertThat(agentTypeCount)
+                .as("REQ-2026-004 V4: agent_type column must be gone (renamed to framework_type)")
+                .isZero();
     }
 
     // ---- RB1-S4: partial index on last_heartbeat WHERE status IN ('ONLINE','DEGRADED') ----
@@ -148,10 +160,6 @@ class AgentRegistryMigrationTest {
                 Integer.class, "ix_agent_registry_mvp_heartbeat_due");
         assertThat(count).isEqualTo(1);
 
-        // pg_get_expr renders the partial-index predicate back to SQL text.
-        // PR #389 #4: the partial index now covers both ONLINE and DEGRADED
-        // rows so the probe scheduler can re-probe DEGRADED agents and
-        // restore them to ONLINE on recovery.
         String predicate = jdbc.queryForObject(
                 "SELECT pg_get_expr(i.indpred, i.indrelid) FROM pg_index i "
                 + "JOIN pg_class c ON c.oid = i.indrelid "
@@ -169,9 +177,7 @@ class AgentRegistryMigrationTest {
 
     @Test
     void check_constraint_rejects_invalid_status() {
-        // Insert a valid row first.
         insertValidRow("tenant-A", "agent-001");
-        // Try to update to an invalid status — should fail.
         try {
             jdbc.update("UPDATE agent_registry_mvp SET status = 'INVALID' "
                     + "WHERE tenant_id = ? AND agent_id = ?", "tenant-A", "agent-001");
@@ -196,10 +202,10 @@ class AgentRegistryMigrationTest {
     void check_constraint_rejects_negative_weight() {
         try {
             jdbc.update("INSERT INTO agent_registry_mvp ("
-                    + "tenant_id, agent_id, agent_name, agent_type, capability, "
+                    + "tenant_id, agent_id, agent_name, framework_type, "
                     + "route_key, contract_version, capability_version, "
                     + "endpoint_url, weight) "
-                    + "VALUES ('tenant-neg', 'agent-neg', 'name', 'type', 'cap', "
+                    + "VALUES ('tenant-neg', 'agent-neg', 'name', 'JIUWEN', "
                     + "'rk', '1.0', '1.0', 'http://x', -1)");
             org.assertj.core.api.Assertions.fail(
                     "CHECK constraint should have rejected weight=-1");
@@ -216,7 +222,7 @@ class AgentRegistryMigrationTest {
                 "SELECT relrowsecurity FROM pg_class WHERE relname = 'agent_registry_mvp'",
                 Boolean.class);
         assertThat(rlsEnabled)
-                .as("HD3-003 defence-in-depth: RLS must be enabled on agent_registry_mvp")
+                .as("HD3-003 defence-in-depth: RLS must be enabled on agent_registry_mvp — V4 unchanged")
                 .isTrue();
     }
 
@@ -234,18 +240,14 @@ class AgentRegistryMigrationTest {
 
     @Test
     void rls_filters_rows_for_restricted_role_by_tenant_id() throws Exception {
-        // Insert two rows as the owner (bypasses RLS).
         insertValidRow("tenant-A", "agent-rls-a");
         insertValidRow("tenant-B", "agent-rls-b");
 
-        // Create a restricted role that is bound by RLS.
         jdbc.execute("CREATE ROLE app_role_rls; "
                 + "GRANT USAGE ON SCHEMA public TO app_role_rls; "
                 + "GRANT SELECT ON agent_registry_mvp TO app_role_rls");
 
-        // Open a connection as the restricted role.
         try (java.sql.Connection restricted = dataSource.getConnection()) {
-            // Sanity: the owner connection sees both rows.
             Integer ownerCount = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM agent_registry_mvp "
                     + "WHERE tenant_id IN ('tenant-A','tenant-B') "
@@ -253,8 +255,6 @@ class AgentRegistryMigrationTest {
                     Integer.class);
             assertThat(ownerCount).isEqualTo(2);
 
-            // Switch the restricted connection's role and set tenant-A.
-            // The owner can SET ROLE to a non-owner; RLS then binds.
             try (java.sql.Statement st = restricted.createStatement()) {
                 st.execute("SET ROLE app_role_rls");
                 st.execute("SET app.tenant_id = 'tenant-A'");
@@ -275,10 +275,10 @@ class AgentRegistryMigrationTest {
 
     private void insertValidRow(String tenantId, String agentId) {
         jdbc.update("INSERT INTO agent_registry_mvp ("
-                + "tenant_id, agent_id, agent_name, agent_type, capability, "
+                + "tenant_id, agent_id, agent_name, framework_type, "
                 + "route_key, contract_version, capability_version, "
                 + "endpoint_url, weight, status) "
-                + "VALUES (?, ?, 'name', 'type', 'cap', "
+                + "VALUES (?, ?, 'name', 'JIUWEN', "
                 + "'rk', '1.0', '1.0', 'http://x', 100, 'ONLINE')",
                 tenantId, agentId);
     }

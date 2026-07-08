@@ -13,7 +13,6 @@ import org.slf4j.MDC;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,12 +20,18 @@ import java.util.UUID;
 
 /**
  * MVP phase-1 implementation of {@link AgentDiscoveryService} — single
- * PostgreSQL + tsvector (ADR-0160 decisions 2 / 4 / 5 / 6).
+ * PostgreSQL lookup (ADR-0160 decisions 2 / 4 / 5 / 6, revised by
+ * REQ-2026-004).
  *
  * <p>Thin orchestrator: delegates persistence to {@link AgentRegistryRepository}
  * (port, ADR-0160 decision 4) and route-handle encoding to {@link RouteHandleCodec}
  * (internal to this package, ADR-0160 decision 5). No JDBC imports — the
  * {@code req-2026-003-jdbc-confined-to-persistence} gate enforces that.
+ *
+ * <p>REQ-2026-004: the dual {@code discoverBestAgents} overloads (Method A
+ * free-text + Method B capability-scoped) are removed; discovery collapses
+ * to {@link #searchByAgentId(String, String)} single-value point lookup.
+ * Free-text search infrastructure (tsvector + GIN index) is dropped in V4.
  *
  * <p>Tenant isolation (ADR-0160 decision 6, ESC-2 design pivot): HTTP-entry
  * callers pass {@code tenantId} explicitly — no {@code TenantFilter} populates
@@ -42,8 +47,6 @@ import java.util.UUID;
  * {@code entry_not_found}); tenant mismatch →
  * {@link TenantIsolationViolationException} (HTTP 400
  * {@code tenant_isolation_violation}).
- *
- * <p>Authority: ADR-0160 decisions 2 / 4 / 5 / 6 + HD3-001 / 003 / 004 / 005 / 006.
  */
 @Primary
 @Service
@@ -62,21 +65,21 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     @Override
-    public List<AgentCardDto> discoverBestAgents(String tenantId,
-                                                 String userQuery,
-                                                 String contractVersion,
-                                                 int topK) {
+    public Optional<AgentCardDto> searchByAgentId(String tenantId, String agentId) {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
         String outcome = "success";
+        int resultCount = 0;
         try {
             verifyTenant(tenantId);
-            List<RegistryRow> rows = repository.searchByIntent(tenantId, userQuery, contractVersion, topK);
-            List<AgentCardDto> dtos = rows.stream()
-                    .map(row -> toRichDto(tenantId, row))
-                    .toList();
-            return dtos;
+            Optional<RegistryRow> row = repository.searchByAgentId(tenantId, agentId);
+            if (row.isEmpty()) {
+                outcome = "not_found";
+                return Optional.empty();
+            }
+            resultCount = 1;
+            return Optional.of(toDto(tenantId, row.get()));
         } catch (TenantIsolationViolationException ex) {
             outcome = "tenant_isolation_violation";
             throw ex;
@@ -85,40 +88,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
             throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDiscover(traceId, tenantId, null, contractVersion,
-                    outcome, -1, latencyMs);
-            MDC.remove("traceId");
-        }
-    }
-
-    @Override
-    public List<AgentCardDto> discoverBestAgents(String tenantId,
-                                                 String capability,
-                                                 String userQuery,
-                                                 String contractVersion,
-                                                 int topK) {
-        String traceId = UUID.randomUUID().toString();
-        MDC.put("traceId", traceId);
-        long start = System.nanoTime();
-        String outcome = "success";
-        int resultCount = -1;
-        try {
-            verifyTenant(tenantId);
-            List<RegistryRow> rows = repository.searchByCapability(
-                    tenantId, capability, userQuery, contractVersion, topK);
-            resultCount = rows.size();
-            return rows.stream()
-                    .map(row -> toMinimalDto(tenantId, row))
-                    .toList();
-        } catch (TenantIsolationViolationException ex) {
-            outcome = "tenant_isolation_violation";
-            throw ex;
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
-        } finally {
-            long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDiscover(traceId, tenantId, capability, contractVersion,
+            observability.observeDiscover(traceId, tenantId, agentId,
                     outcome, resultCount, latencyMs);
             MDC.remove("traceId");
         }
@@ -182,9 +152,10 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     /**
-     * Method A — rich DTO (business definition fields populated, ADR-0160 decision 2).
+     * Rich DTO — all ICD 5 routing fields + business definition fields
+     * populated (single-value lookup has no "minimal DTO" variant).
      */
-    private AgentCardDto toRichDto(String tenantId, RegistryRow row) {
+    private AgentCardDto toDto(String tenantId, RegistryRow row) {
         String handle = RouteHandleCodec.encode(
                 tenantId, row.agentId(), row.routeKey(), row.contractVersion());
         return AgentCardDto.builder()
@@ -195,23 +166,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 .weight(row.weight())
                 .region(row.region())
                 .agentName(row.agentName())
-                .agentType(row.agentType())
-                .build();
-    }
-
-    /**
-     * Method B — minimal DTO (business definition fields null, ADR-0160 decision 2).
-     */
-    private AgentCardDto toMinimalDto(String tenantId, RegistryRow row) {
-        String handle = RouteHandleCodec.encode(
-                tenantId, row.agentId(), row.routeKey(), row.contractVersion());
-        return AgentCardDto.builder()
-                .routeHandle(handle)
-                .health(row.status())
-                .contractVersion(row.contractVersion())
-                .capabilityVersion(row.capabilityVersion())
-                .weight(row.weight())
-                .region(row.region())
+                .frameworkType(row.frameworkType())
                 .build();
     }
 }
