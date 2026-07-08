@@ -1,5 +1,5 @@
-docs
-architecture
+/docs
+/architecture
 .claude/
 
 # Entire toolkit is local-only: skills, pipelines, teams, scripts, harness
