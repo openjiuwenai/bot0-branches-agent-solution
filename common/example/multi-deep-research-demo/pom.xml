@@ -31,6 +31,6 @@
         <maven.compiler.release>17</maven.compiler.release>
         <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
-        <agent-core-java.version>0.1.12</agent-core-java.version>
+        <agent-core-java.version>0.1.13</agent-core-java.version>
     </properties>
 </project>
