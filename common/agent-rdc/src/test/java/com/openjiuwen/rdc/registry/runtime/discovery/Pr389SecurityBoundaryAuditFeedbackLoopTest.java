@@ -2,7 +2,7 @@ package com.openjiuwen.rdc.registry.runtime.discovery;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentCard;
+import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
 import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -56,7 +56,7 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
         discovery = new PgMvpDiscoveryServiceImpl(
                 new AgentRegistryRepository() {
                     @Override
-                    public void upsert(AgentCard card) { }
+                    public void upsert(AgentRegistryEntry card, String a2aAgentCardJson) { }
                     @Override
                     public boolean delete(String tenantId, String agentId) { return false; }
                     @Override

@@ -5,7 +5,7 @@ import com.openjiuwen.rdc.registry.runtime.discovery.PgMvpDiscoveryServiceImpl;
 import com.openjiuwen.rdc.registry.runtime.health.MvpHealthProbeScheduler;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentCard;
+import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 import com.openjiuwen.rdc.spi.registry.AgentCardDto;
 import com.openjiuwen.rdc.spi.registry.RouteResolution;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -83,7 +83,7 @@ class AgentRegistryEndToEndIntegrationTest {
                 repository,
                 new com.openjiuwen.rdc.registry.runtime.tenant.ThreadLocalTenantContext(),
                 observability);
-        controller = new MvpRegistryController(repository, observability);
+        controller = new MvpRegistryController(repository, observability, new com.fasterxml.jackson.databind.ObjectMapper());
         // staleBeforeMs is small (1s) so backdating a row's heartbeat by a
         // few seconds is enough to make it "due" for probe. probe scan limit
         // at 200 matches production.
@@ -118,7 +118,7 @@ class AgentRegistryEndToEndIntegrationTest {
         String agent = "agent-e2e";
 
         // 1. register
-        AgentCard card = sampleCard(tenant, agent, agentEndpoint);
+        AgentRegistryEntry card = sampleCard(tenant, agent, agentEndpoint);
         ResponseEntity<Void> reg = controller.register(card, null, null);
         assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
 
@@ -250,16 +250,13 @@ class AgentRegistryEndToEndIntegrationTest {
 
     // ---- helpers ---------------------------------------------------------
 
-    private static AgentCard sampleCard(String tenant, String agent, String endpoint) {
-        AgentCard card = new AgentCard();
+    private static AgentRegistryEntry sampleCard(String tenant, String agent, String endpoint) {
+        AgentRegistryEntry card = new AgentRegistryEntry();
         card.setTenantId(tenant);
         card.setAgentId(agent);
-        card.setServiceId("svc-e2e");
         card.setAgentName("财务助手");
         card.setAgentType("assistant");
         card.setCapability("cap-billing");
-        card.setCapabilityKeywords("billing invoice");
-        card.setSystemProfile("profile-e2e");
         card.setRouteKey("rk://svc/default");
         card.setContractVersion("1.0.0");
         card.setCapabilityVersion("2.1.0");
@@ -267,7 +264,17 @@ class AgentRegistryEndToEndIntegrationTest {
         card.setMaxConcurrency(10);
         card.setWeight(100);
         card.setRegion("cn-east-1");
-        card.setToolSchemas("[]");
+        card.setA2aAgentCard(org.a2aproject.sdk.spec.AgentCard.builder()
+                .name("财务助手")
+                .description("billing invoice helper")
+                .version("1.0.0")
+                .capabilities(new org.a2aproject.sdk.spec.AgentCapabilities(
+                        false, false, false, java.util.List.of()))
+                .defaultInputModes(java.util.List.of())
+                .defaultOutputModes(java.util.List.of())
+                .skills(java.util.List.of())
+                .supportedInterfaces(java.util.List.of())
+                .build());
         return card;
     }
 

@@ -2,7 +2,8 @@ package com.openjiuwen.rdc.registry.runtime;
 
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentCard;
+import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
@@ -108,7 +109,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      */
     @Test
     void owner_role_scan_sees_stale_online_row() {
-        ownerRepo.upsert(sampleCard("tenant-rls-X", "agent-X"));
+        upsertCard(ownerRepo, sampleCard("tenant-rls-X", "agent-X"));
         backdateHeartbeat("tenant-rls-X", "agent-X", "10 seconds");
 
         List<AgentRegistryRepository.ProbeTarget> targets =
@@ -130,7 +131,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      */
     @Test
     void app_role_scan_with_no_tenant_set_returns_empty_rls_trap_documented() {
-        ownerRepo.upsert(sampleCard("tenant-rls-Y", "agent-Y"));
+        upsertCard(ownerRepo, sampleCard("tenant-rls-Y", "agent-Y"));
         backdateHeartbeat("tenant-rls-Y", "agent-Y", "10 seconds");
 
         // app_role + no app.tenant_id set → RLS fail-closed → empty scan.
@@ -158,7 +159,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      */
     @Test
     void app_role_scan_with_tenant_set_still_returns_empty_no_with_tenant_wrap() throws Exception {
-        ownerRepo.upsert(sampleCard("tenant-rls-Z", "agent-Z"));
+        upsertCard(ownerRepo, sampleCard("tenant-rls-Z", "agent-Z"));
         backdateHeartbeat("tenant-rls-Z", "agent-Z", "10 seconds");
 
         // Set app.tenant_id at session level on one app_role connection —
@@ -207,7 +208,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      */
     @Test
     void app_role_update_for_tenant_a_does_not_touch_tenant_b_row() {
-        ownerRepo.upsert(sampleCard("tenant-B", "agent-X"));
+        upsertCard(ownerRepo, sampleCard("tenant-B", "agent-X"));
         String originalStatus = readStatus("tenant-B", "agent-X");
 
         // app_role call targeting tenant-A — must not affect tenant-B's row.
@@ -231,7 +232,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      */
     @Test
     void app_role_delete_for_tenant_a_does_not_remove_tenant_b_row() {
-        ownerRepo.upsert(sampleCard("tenant-B", "agent-Y"));
+        upsertCard(ownerRepo, sampleCard("tenant-B", "agent-Y"));
 
         boolean deleted = appRoleRepo.delete("tenant-A", "agent-Y");
         assertThat(deleted)
@@ -256,7 +257,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      */
     @Test
     void app_role_upsert_inserts_only_into_callers_tenant() {
-        appRoleRepo.upsert(sampleCard("tenant-A", "agent-Z"));
+        upsertCard(appRoleRepo, sampleCard("tenant-A", "agent-Z"));
 
         // Row landed in tenant-A (the caller's tenantId), not anywhere else.
         assertThat(ownerRepo.findEndpoint("tenant-A", "agent-Z"))
@@ -283,12 +284,12 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     @Test
     void upsert_preserves_draining_status_across_re_registration() {
         // Register, then force into DRAINING (operator-initiated drain).
-        ownerRepo.upsert(sampleCard("tenant-drain", "agent-drain"));
+        upsertCard(ownerRepo, sampleCard("tenant-drain", "agent-drain"));
         ownerRepo.updateStatus("tenant-drain", "agent-drain", "DRAINING", false);
         assertThat(readStatus("tenant-drain", "agent-drain")).isEqualTo("DRAINING");
 
         // Re-register (upsert) the same agent — DRAINING must be preserved.
-        ownerRepo.upsert(sampleCard("tenant-drain", "agent-drain"));
+        upsertCard(ownerRepo, sampleCard("tenant-drain", "agent-drain"));
         assertThat(readStatus("tenant-drain", "agent-drain"))
                 .as("PR #389 #7: DRAINING status preserved across re-registration "
                     + "(operator's drain intent overrides agent restart)")
@@ -302,11 +303,11 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      */
     @Test
     void upsert_resets_degraded_to_online_on_re_registration() {
-        ownerRepo.upsert(sampleCard("tenant-rec2", "agent-rec2"));
+        upsertCard(ownerRepo, sampleCard("tenant-rec2", "agent-rec2"));
         ownerRepo.updateStatus("tenant-rec2", "agent-rec2", "DEGRADED", false);
         assertThat(readStatus("tenant-rec2", "agent-rec2")).isEqualTo("DEGRADED");
 
-        ownerRepo.upsert(sampleCard("tenant-rec2", "agent-rec2"));
+        upsertCard(ownerRepo, sampleCard("tenant-rec2", "agent-rec2"));
         assertThat(readStatus("tenant-rec2", "agent-rec2"))
                 .as("non-DRAINING states reset to ONLINE on re-registration")
                 .isEqualTo("ONLINE");
@@ -326,7 +327,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     @Test
     void degraded_row_is_repicked_by_scan_and_restored_to_online_on_successful_probe() {
         // Register, then force-degrade to DEGRADED with a backdated heartbeat.
-        ownerRepo.upsert(sampleCard("tenant-rec", "agent-rec"));
+        upsertCard(ownerRepo, sampleCard("tenant-rec", "agent-rec"));
         ownerRepo.updateStatus("tenant-rec", "agent-rec", "DEGRADED", false);
         backdateHeartbeat("tenant-rec", "agent-rec", "10 seconds");
 
@@ -349,16 +350,30 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
 
     // ---- helpers ---------------------------------------------------------
 
-    private static AgentCard sampleCard(String tenant, String agent) {
-        AgentCard card = new AgentCard();
+    private static final ObjectMapper TEST_MAPPER = new ObjectMapper();
+
+    private static void upsertCard(AgentRegistryRepository repo, AgentRegistryEntry card) {
+        repo.upsert(card, serializeA2a(card.getA2aAgentCard()));
+    }
+
+    private static String serializeA2a(org.a2aproject.sdk.spec.AgentCard card) {
+        if (card == null) {
+            return null;
+        }
+        try {
+            return TEST_MAPPER.writeValueAsString(card);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalArgumentException(ex);
+        }
+    }
+
+    private static AgentRegistryEntry sampleCard(String tenant, String agent) {
+        AgentRegistryEntry card = new AgentRegistryEntry();
         card.setTenantId(tenant);
         card.setAgentId(agent);
-        card.setServiceId("svc-test");
         card.setAgentName("test-agent");
         card.setAgentType("assistant");
         card.setCapability("cap-test");
-        card.setCapabilityKeywords("test probe");
-        card.setSystemProfile("profile-test");
         card.setRouteKey("rk://svc/default");
         card.setContractVersion("1.0.0");
         card.setCapabilityVersion("2.1.0");
@@ -366,7 +381,17 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         card.setMaxConcurrency(10);
         card.setWeight(100);
         card.setRegion("cn-east-1");
-        card.setToolSchemas("[]");
+        card.setA2aAgentCard(org.a2aproject.sdk.spec.AgentCard.builder()
+                .name("test-agent")
+                .description("test probe")
+                .version("1.0.0")
+                .capabilities(new org.a2aproject.sdk.spec.AgentCapabilities(
+                        false, false, false, java.util.List.of()))
+                .defaultInputModes(java.util.List.of())
+                .defaultOutputModes(java.util.List.of())
+                .skills(java.util.List.of())
+                .supportedInterfaces(java.util.List.of())
+                .build());
         return card;
     }
 

@@ -246,13 +246,17 @@ class AgentRdcRegistryJdbcPurityTest {
     // persistence.jdbc stay Jackson-free.
 
     @Test
-    void jackson_confined_to_discovery_subpackage() {
+    void jackson_confined_to_discovery_and_api_subpackages() {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.discovery..")
+                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.api..")
                 .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
                 .because("Jackson is licensed only inside registry.runtime.discovery (for "
-                       + "RouteHandleCodec's opaque handle encoding); every other subpackage "
-                       + "stays serialisation-agnostic (ADR-0160 decision 3/5).")
+                       + "RouteHandleCodec's opaque handle encoding) and "
+                       + "registry.runtime.api (for A2A AgentCard JSON serialization at the "
+                       + "HTTP boundary, per REQ-2026-001); every other subpackage stays "
+                       + "serialisation-agnostic (ADR-0160 decision 3/5, relaxed per "
+                       + "REQ-2026-001).")
                 .check(REGISTRY_RUNTIME);
     }
 

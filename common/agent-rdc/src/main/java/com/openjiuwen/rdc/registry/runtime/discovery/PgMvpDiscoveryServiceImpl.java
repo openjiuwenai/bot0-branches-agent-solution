@@ -196,8 +196,6 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 .region(row.region())
                 .agentName(row.agentName())
                 .agentType(row.agentType())
-                .systemProfile(row.systemProfile())
-                .toolSchemas(row.toolSchemas())
                 .build();
     }
 

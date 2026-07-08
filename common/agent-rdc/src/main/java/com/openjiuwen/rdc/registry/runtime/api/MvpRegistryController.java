@@ -2,7 +2,9 @@ package com.openjiuwen.rdc.registry.runtime.api;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentCard;
+import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,7 +20,7 @@ import java.util.UUID;
 /**
  * HTTP entry point for the agent registry MVP (ADR-0160 decisions 4 / 6 / 7).
  *
- * <p>Exposes {@code POST /api/registry/register} (upsert an {@link AgentCard})
+ * <p>Exposes {@code POST /api/registry/register} (upsert an {@link AgentRegistryEntry})
  * and {@code DELETE /api/registry/deregister/{tenantId}/{agentId}}. Both
  * endpoints read {@code tenantId} from the request path (deregister) or body
  * (register) and pass it down explicitly — no {@code TenantFilter} populates
@@ -56,27 +58,31 @@ public class MvpRegistryController {
 
     private final AgentRegistryRepository repository;
     private final RegistryObservabilityConfig observability;
+    private final ObjectMapper objectMapper;
 
     public MvpRegistryController(AgentRegistryRepository repository,
-                                 RegistryObservabilityConfig observability) {
+                                 RegistryObservabilityConfig observability,
+                                 ObjectMapper objectMapper) {
         this.repository = repository;
         this.observability = observability;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<Void> register(@RequestBody AgentCard card,
+    public ResponseEntity<Void> register(@RequestBody AgentRegistryEntry card,
                                          @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
                                          @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
         if (card == null || !card.hasRegistryKey()) {
             throw new IllegalArgumentException(
-                    "AgentCard must carry tenantId + agentId + capability (registry key)");
+                    "AgentRegistryEntry must carry tenantId + agentId + capability (registry key)");
         }
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
         String outcome = "success";
         try {
-            repository.upsert(card);
+            String a2aCardJson = serializeA2aCard(card.getA2aAgentCard());
+            repository.upsert(card, a2aCardJson);
             return ResponseEntity.ok().build();
         } catch (RuntimeException ex) {
             outcome = "error";
@@ -84,7 +90,7 @@ public class MvpRegistryController {
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             observability.observeRegister(traceId, card.getTenantId(), card.getAgentId(),
-                    card.getServiceId(), card.getCapability(), card.getContractVersion(),
+                    card.getCapability(), card.getContractVersion(),
                     card.getCapabilityVersion(), "ONLINE", null, outcome, latencyMs);
             MDC.remove("traceId");
         }
@@ -140,5 +146,26 @@ public class MvpRegistryController {
             return xTraceId.trim();
         }
         return UUID.randomUUID().toString();
+    }
+
+    /**
+     * Serialize the A2A standard AgentCard to JSON for the
+     * {@code a2a_agent_card} jsonb column. Returns {@code null} when the
+     * card is absent (caller registered without A2A metadata); PG jsonb
+     * accepts NULL. Serialization lives at the HTTP boundary
+     * ({@code registry.runtime.api}) so the persistence port stays
+     * Jackson-free (ADR-0160 decision 3/5, relaxed per REQ-2026-001 to
+     * allow Jackson in {@code registry.runtime.api} for A2A card
+     * serialization).
+     */
+    private String serializeA2aCard(org.a2aproject.sdk.spec.AgentCard card) {
+        if (card == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(card);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("Failed to serialize a2aAgentCard to JSON", ex);
+        }
     }
 }

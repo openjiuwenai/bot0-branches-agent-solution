@@ -171,7 +171,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
             this.targets = targets;
         }
 
-        @Override public void upsert(com.openjiuwen.rdc.spi.registry.AgentCard card) { }
+        @Override public void upsert(com.openjiuwen.rdc.spi.registry.AgentRegistryEntry card, String a2aAgentCardJson) { }
         @Override public boolean delete(String tenantId, String agentId) { return false; }
         @Override public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return targets;

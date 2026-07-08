@@ -1,6 +1,6 @@
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
-import com.openjiuwen.rdc.spi.registry.AgentCard;
+import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,13 +29,13 @@ import java.util.Optional;
  *
  * <p>Pure Java — the port itself imports no JDBC / Spring type so callers in
  * {@code api} / {@code discovery} / {@code health} stay JDBC-free. The port
- * depends only on {@link AgentCard} from {@code spi.registry} and on the
+ * depends only on {@link AgentRegistryEntry} from {@code spi.registry} and on the
  * nested record types declared below.
  */
 public interface AgentRegistryRepository {
 
     /**
-     * Upsert (insert or replace) a registered agent card. On conflict
+     * Upsert (insert or replace) a registered agent entry. On conflict
      * {@code (tenant_id, agent_id)} the existing row is overwritten and the
      * status reset to {@code ONLINE} with a fresh {@code last_heartbeat}
      * (the agent re-registers on restart). The exception is
@@ -45,9 +45,15 @@ public interface AgentRegistryRepository {
      * entry back to {@code ONLINE} and re-route traffic to it (PR #389
      * review issue #7).
      *
-     * @param card standard agent card from the {@code POST /register} body
+     * @param entry           registry entry from the {@code POST /register} body
+     * @param a2aAgentCardJson pre-serialized JSON of
+     *                        {@link AgentRegistryEntry#getA2aAgentCard()};
+     *                        {@code null} when the entry carries no A2A card.
+     *                        Serialization is the caller's concern (HTTP
+     *                        boundary in {@code registry.runtime.api}) so this
+     *                        port stays Jackson-free (ADR-0160 decision 3/5).
      */
-    void upsert(AgentCard card);
+    void upsert(AgentRegistryEntry entry, String a2aAgentCardJson);
 
     /**
      * Delete a registered agent.
@@ -129,20 +135,19 @@ public interface AgentRegistryRepository {
      * discovery service assembles {@code AgentCardDto} from this snapshot +
      * the encoded route handle. Method A populates every field; Method B
      * reads the row but leaves the business definition fields
-     * ({@code agentName} / {@code agentType} / {@code systemProfile} /
-     * {@code toolSchemas}) out of the resulting DTO.
+     * ({@code agentName} / {@code agentType}) out of the resulting DTO.
+     * REQ-2026-001 removed {@code serviceId} / {@code systemProfile} /
+     * {@code toolSchemas} — the A2A standard card now carries the equivalent
+     * metadata via {@link AgentRegistryEntry#getA2aAgentCard()}.
      */
     record RegistryRow(
             String agentId,
-            String serviceId,
             String agentName,
             String agentType,
             String capability,
             String routeKey,
             String contractVersion,
             String capabilityVersion,
-            String systemProfile,
-            String toolSchemas,
             int weight,
             String region,
             String status

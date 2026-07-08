@@ -1,6 +1,6 @@
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
-import com.openjiuwen.rdc.spi.registry.AgentCard;
+import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -114,26 +114,23 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     // ===== upsert / delete / scan / update =====
 
     @Override
-    public void upsert(AgentCard card) {
-        Objects.requireNonNull(card, "card is required");
-        requireNonBlank(card.getTenantId(), "tenantId");
-        requireNonBlank(card.getAgentId(), "agentId");
+    public void upsert(AgentRegistryEntry entry, String a2aAgentCardJson) {
+        Objects.requireNonNull(entry, "entry is required");
+        requireNonBlank(entry.getTenantId(), "tenantId");
+        requireNonBlank(entry.getAgentId(), "agentId");
         String sql = "INSERT INTO " + TABLE + " ("
-                + "tenant_id, agent_id, service_id, agent_name, agent_type, capability, "
-                + "capability_keywords, system_profile, route_key, contract_version, "
+                + "tenant_id, agent_id, agent_name, agent_type, capability, "
+                + "route_key, contract_version, "
                 + "capability_version, endpoint_url, max_concurrency, weight, region, "
-                + "tool_schemas, status, last_heartbeat) "
-                + "VALUES (:tenantId, :agentId, :serviceId, :agentName, :agentType, :capability, "
-                + ":capabilityKeywords, :systemProfile, :routeKey, :contractVersion, "
+                + "a2a_agent_card, status, last_heartbeat) "
+                + "VALUES (:tenantId, :agentId, :agentName, :agentType, :capability, "
+                + ":routeKey, :contractVersion, "
                 + ":capabilityVersion, :endpointUrl, :maxConcurrency, :weight, :region, "
-                + ":toolSchemas::jsonb, 'ONLINE', CURRENT_TIMESTAMP) "
+                + ":a2aAgentCard::jsonb, 'ONLINE', CURRENT_TIMESTAMP) "
                 + "ON CONFLICT (tenant_id, agent_id) DO UPDATE SET "
-                + "service_id = EXCLUDED.service_id, "
                 + "agent_name = EXCLUDED.agent_name, "
                 + "agent_type = EXCLUDED.agent_type, "
                 + "capability = EXCLUDED.capability, "
-                + "capability_keywords = EXCLUDED.capability_keywords, "
-                + "system_profile = EXCLUDED.system_profile, "
                 + "route_key = EXCLUDED.route_key, "
                 + "contract_version = EXCLUDED.contract_version, "
                 + "capability_version = EXCLUDED.capability_version, "
@@ -141,7 +138,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 + "max_concurrency = EXCLUDED.max_concurrency, "
                 + "weight = EXCLUDED.weight, "
                 + "region = EXCLUDED.region, "
-                + "tool_schemas = EXCLUDED.tool_schemas, "
+                + "a2a_agent_card = EXCLUDED.a2a_agent_card, "
                 // PR #389 #7: preserve DRAINING (operator-initiated graceful
                 // drain) across re-registration; an agent restart must not
                 // pull a draining entry back to ONLINE and re-route traffic
@@ -150,24 +147,21 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 + "status = CASE WHEN agent_registry_mvp.status = 'DRAINING' "
                 + "THEN 'DRAINING' ELSE 'ONLINE' END, "
                 + "last_heartbeat = CURRENT_TIMESTAMP";
-        withTenant(card.getTenantId(), () -> {
+        withTenant(entry.getTenantId(), () -> {
             MapSqlParameterSource params = new MapSqlParameterSource()
-                    .addValue("tenantId", card.getTenantId())
-                    .addValue("agentId", card.getAgentId())
-                    .addValue("serviceId", card.getServiceId())
-                    .addValue("agentName", card.getAgentName())
-                    .addValue("agentType", card.getAgentType())
-                    .addValue("capability", card.getCapability())
-                    .addValue("capabilityKeywords", card.getCapabilityKeywords())
-                    .addValue("systemProfile", card.getSystemProfile())
-                    .addValue("routeKey", card.getRouteKey())
-                    .addValue("contractVersion", card.getContractVersion())
-                    .addValue("capabilityVersion", card.getCapabilityVersion())
-                    .addValue("endpointUrl", card.getEndpointUrl())
-                    .addValue("maxConcurrency", card.getMaxConcurrency())
-                    .addValue("weight", card.getWeight())
-                    .addValue("region", card.getRegion())
-                    .addValue("toolSchemas", card.getToolSchemas());
+                    .addValue("tenantId", entry.getTenantId())
+                    .addValue("agentId", entry.getAgentId())
+                    .addValue("agentName", entry.getAgentName())
+                    .addValue("agentType", entry.getAgentType())
+                    .addValue("capability", entry.getCapability())
+                    .addValue("routeKey", entry.getRouteKey())
+                    .addValue("contractVersion", entry.getContractVersion())
+                    .addValue("capabilityVersion", entry.getCapabilityVersion())
+                    .addValue("endpointUrl", entry.getEndpointUrl())
+                    .addValue("maxConcurrency", entry.getMaxConcurrency())
+                    .addValue("weight", entry.getWeight())
+                    .addValue("region", entry.getRegion())
+                    .addValue("a2aAgentCard", a2aAgentCardJson);
             jdbc.update(sql, params);
             return null;
         });
@@ -251,9 +245,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         }
         return withTenant(tenantId, () -> {
             StringBuilder sql = new StringBuilder()
-                    .append("SELECT agent_id, service_id, agent_name, agent_type, capability, ")
-                    .append("route_key, contract_version, capability_version, system_profile, ")
-                    .append("tool_schemas, weight, region, status FROM ").append(TABLE)
+                    .append("SELECT agent_id, agent_name, agent_type, capability, ")
+                    .append("route_key, contract_version, capability_version, ")
+                    .append("weight, region, status FROM ").append(TABLE)
                     .append(" WHERE tenant_id = :tenantId")
                     .append(" AND status IN ('ONLINE','DEGRADED')")
                     .append(" AND last_heartbeat >= NOW() - INTERVAL '").append(VISIBILITY_WINDOW).append("'");
@@ -276,9 +270,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         }
         return withTenant(tenantId, () -> {
             StringBuilder sql = new StringBuilder()
-                    .append("SELECT agent_id, service_id, agent_name, agent_type, capability, ")
-                    .append("route_key, contract_version, capability_version, system_profile, ")
-                    .append("tool_schemas, weight, region, status FROM ").append(TABLE)
+                    .append("SELECT agent_id, agent_name, agent_type, capability, ")
+                    .append("route_key, contract_version, capability_version, ")
+                    .append("weight, region, status FROM ").append(TABLE)
                     .append(" WHERE tenant_id = :tenantId")
                     .append(" AND capability = :capability")
                     .append(" AND status IN ('ONLINE','DEGRADED')")
@@ -365,15 +359,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         public RegistryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             return new RegistryRow(
                     rs.getString("agent_id"),
-                    rs.getString("service_id"),
                     rs.getString("agent_name"),
                     rs.getString("agent_type"),
                     rs.getString("capability"),
                     rs.getString("route_key"),
                     rs.getString("contract_version"),
                     rs.getString("capability_version"),
-                    rs.getString("system_profile"),
-                    rs.getString("tool_schemas"),
                     rs.getInt("weight"),
                     rs.getString("region"),
                     rs.getString("status"));

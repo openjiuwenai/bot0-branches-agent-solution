@@ -80,8 +80,6 @@ class PgMvpDiscoveryServiceImplTest {
         // Method A: business definition fields populated.
         assertThat(dto.getAgentName()).isEqualTo("财务助手");
         assertThat(dto.getAgentType()).isEqualTo("assistant");
-        assertThat(dto.getSystemProfile()).isEqualTo("profile-a");
-        assertThat(dto.getToolSchemas()).isEqualTo("[]");
     }
 
     // ---- RB6-B: Method B returns minimal DTOs -----------------------------
@@ -103,8 +101,6 @@ class PgMvpDiscoveryServiceImplTest {
         // Method B: business definition fields null.
         assertThat(dto.getAgentName()).isNull();
         assertThat(dto.getAgentType()).isNull();
-        assertThat(dto.getSystemProfile()).isNull();
-        assertThat(dto.getToolSchemas()).isNull();
     }
 
     @Test
@@ -220,7 +216,7 @@ class PgMvpDiscoveryServiceImplTest {
      */
     private static final class FakeRepository implements AgentRegistryRepository {
         @Override
-        public void upsert(com.openjiuwen.rdc.spi.registry.AgentCard card) {
+        public void upsert(com.openjiuwen.rdc.spi.registry.AgentRegistryEntry card, String a2aAgentCardJson) {
             // not exercised by these tests
         }
 
@@ -270,9 +266,9 @@ class PgMvpDiscoveryServiceImplTest {
 
         private static RegistryRow sampleRow() {
             return new RegistryRow(
-                    "agent-001", "svc-001", "财务助手", "assistant",
+                    "agent-001", "财务助手", "assistant",
                     "cap-billing", "rk://svc/default", "1.0.0", "2.1.0",
-                    "profile-a", "[]", 100, "cn-east-1", "ONLINE");
+                    100, "cn-east-1", "ONLINE");
         }
     }
 

@@ -17,13 +17,16 @@ import java.util.concurrent.TimeUnit;
  * service stay thin:
  * <ul>
  *   <li><b>Audit</b> — structured SLF4J log lines on the {@code registry.audit}
- *       logger, 11 fields per line: {@code traceId}, {@code tenantId},
- *       {@code agentId}, {@code serviceId}, {@code capability},
- *       {@code contractVersion}, {@code capabilityVersion}, {@code health},
- *       {@code routeHandleId}, {@code outcome}, {@code latencyMs}. The
+ *       logger, 10 fields per line: {@code traceId}, {@code tenantId},
+ *       {@code agentId}, {@code capability}, {@code contractVersion},
+ *       {@code capabilityVersion}, {@code health}, {@code routeHandleId},
+ *       {@code outcome}, {@code latencyMs}. The
  *       {@code registryOp} tag (register / deregister / probe / discover /
  *       resolve) prefixes each line. Unavailable fields are emitted as
- *       {@code "-"} so log parsers can rely on a stable 11-field shape.</li>
+ *       {@code "-"} so log parsers can rely on a stable 10-field shape.
+ *       REQ-2026-001 removed {@code serviceId} from the audit schema —
+ *       the field was redundant with {@code agentId} (registry PK is
+ *       {@code (tenant_id, agent_id)}).</li>
  *   <li><b>Metrics</b> — Micrometer {@link Counter} ({@code agent_bus_registry_op_total},
  *       tags {@code op} + {@code outcome}) and {@link Timer}
  *       ({@code agent_bus_registry_op_duration_ms}, tag {@code op}) per
@@ -55,34 +58,34 @@ public class RegistryObservabilityConfig {
 
     // ---- audit + metrics per operation ----
 
-    public void observeRegister(String traceId, String tenantId, String agentId, String serviceId,
+    public void observeRegister(String traceId, String tenantId, String agentId,
                                 String capability, String contractVersion, String capabilityVersion,
                                 String health, String routeHandleId, String outcome, long latencyMs) {
-        audit("register", traceId, tenantId, agentId, serviceId, capability,
+        audit("register", traceId, tenantId, agentId, capability,
                 contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
         recordMetrics("register", outcome, latencyMs);
     }
 
     public void observeDeregister(String traceId, String tenantId, String agentId,
                                   String outcome, long latencyMs) {
-        audit("deregister", traceId, tenantId, agentId, PLACEHOLDER, PLACEHOLDER,
+        audit("deregister", traceId, tenantId, agentId, PLACEHOLDER,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs);
         recordMetrics("deregister", outcome, latencyMs);
     }
 
     public void observeProbe(String traceId, String tenantId, String agentId,
                              String health, String outcome, long latencyMs) {
-        audit("probe", traceId, tenantId, agentId, PLACEHOLDER, PLACEHOLDER,
+        audit("probe", traceId, tenantId, agentId, PLACEHOLDER,
                 PLACEHOLDER, PLACEHOLDER, health, PLACEHOLDER, outcome, latencyMs);
         recordMetrics("probe", outcome, latencyMs);
     }
 
     public void observeDiscover(String traceId, String tenantId, String capability,
                                 String contractVersion, String outcome, int resultCount, long latencyMs) {
-        AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} serviceId={} capability={} "
+        AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} capability={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={} resultCount={}",
-                traceId, tenantId, PLACEHOLDER, PLACEHOLDER,
+                traceId, tenantId, PLACEHOLDER,
                 capability == null ? PLACEHOLDER : capability,
                 contractVersion == null ? PLACEHOLDER : contractVersion,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
@@ -92,20 +95,20 @@ public class RegistryObservabilityConfig {
 
     public void observeResolve(String traceId, String tenantId, String routeHandleId,
                                String outcome, long latencyMs) {
-        audit("resolve", traceId, tenantId, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER,
+        audit("resolve", traceId, tenantId, PLACEHOLDER, PLACEHOLDER,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, routeHandleId, outcome, latencyMs);
         recordMetrics("resolve", outcome, latencyMs);
     }
 
     // ---- internals ----
 
-    private void audit(String op, String traceId, String tenantId, String agentId, String serviceId,
+    private void audit(String op, String traceId, String tenantId, String agentId,
                        String capability, String contractVersion, String capabilityVersion,
                        String health, String routeHandleId, String outcome, long latencyMs) {
-        AUDIT.info("registryOp={} traceId={} tenantId={} agentId={} serviceId={} capability={} "
+        AUDIT.info("registryOp={} traceId={} tenantId={} agentId={} capability={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={}",
-                op, traceId, tenantId, agentId, serviceId, capability,
+                op, traceId, tenantId, agentId, capability,
                 contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
     }
 

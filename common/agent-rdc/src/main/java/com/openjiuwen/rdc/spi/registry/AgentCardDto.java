@@ -13,13 +13,21 @@ import java.util.Objects;
  * ({@code routeHandle} / {@code health} / {@code contractVersion} /
  * {@code capabilityVersion} / {@code selectionHint = weight + region}) are
  * always populated by both methods. The business definition fields
- * ({@code agentName} / {@code agentType} / {@code systemProfile} /
- * {@code toolSchemas}) are {@link Nullable @Nullable} — Method A populates
- * them for exploratory callers (Orchestrator / Gateway); Method B leaves
- * them {@code null} for capability-scoped routing. Per HD3-006 the DTO never
- * carries the physical endpoint or {@code routeKey} in plain form — only the
- * opaque {@code routeHandle}; the forwarding layer recovers the endpoint via
+ * ({@code agentName} / {@code agentType}) are {@link Nullable @Nullable} —
+ * Method A populates them for exploratory callers (Orchestrator / Gateway);
+ * Method B leaves them {@code null} for capability-scoped routing. Per
+ * HD3-006 the DTO never carries the physical endpoint or {@code routeKey}
+ * in plain form — only the opaque {@code routeHandle}; the forwarding layer
+ * recovers the endpoint via
  * {@link AgentDiscoveryService#resolveRouteHandle(String, String)}.
+ *
+ * <p>REQ-2026-001 removed {@code systemProfile} + {@code toolSchemas} —
+ * both overlapped with the A2A standard AgentCard that the registry now
+ * embeds. Discovery callers that need A2A card details should fetch
+ * {@code /.well-known/agent-card.json} directly (the
+ * {@link com.openjiuwen.rdc.spi.registry.AgentRegistryEntry#getA2aAgentCard()
+ * AgentRegistryEntry.a2aAgentCard} field is not surfaced via this DTO —
+ * follow-up PR may add it).
  *
  * <p>Hand-written builder (no Lombok) so the {@code spi.registry} package
  * stays pure Java (ADR-0160 decision 1).
@@ -39,8 +47,6 @@ public final class AgentCardDto {
 
     @Nullable private final String agentName;
     @Nullable private final String agentType;
-    @Nullable private final String systemProfile;
-    @Nullable private final String toolSchemas;
 
     private AgentCardDto(Builder b) {
         this.routeHandle = b.routeHandle;
@@ -51,8 +57,6 @@ public final class AgentCardDto {
         this.region = b.region;
         this.agentName = b.agentName;
         this.agentType = b.agentType;
-        this.systemProfile = b.systemProfile;
-        this.toolSchemas = b.toolSchemas;
     }
 
     public String getRouteHandle() {
@@ -89,16 +93,6 @@ public final class AgentCardDto {
         return agentType;
     }
 
-    @Nullable
-    public String getSystemProfile() {
-        return systemProfile;
-    }
-
-    @Nullable
-    public String getToolSchemas() {
-        return toolSchemas;
-    }
-
     public static Builder builder() {
         return new Builder();
     }
@@ -112,8 +106,6 @@ public final class AgentCardDto {
         private String region;
         private String agentName;
         private String agentType;
-        private String systemProfile;
-        private String toolSchemas;
 
         private Builder() {
         }
@@ -155,16 +147,6 @@ public final class AgentCardDto {
 
         public Builder agentType(String agentType) {
             this.agentType = agentType;
-            return this;
-        }
-
-        public Builder systemProfile(String systemProfile) {
-            this.systemProfile = systemProfile;
-            return this;
-        }
-
-        public Builder toolSchemas(String toolSchemas) {
-            this.toolSchemas = toolSchemas;
             return this;
         }
 

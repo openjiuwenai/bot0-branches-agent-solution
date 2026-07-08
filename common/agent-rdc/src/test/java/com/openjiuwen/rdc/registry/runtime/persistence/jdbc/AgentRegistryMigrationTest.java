@@ -196,11 +196,11 @@ class AgentRegistryMigrationTest {
     void check_constraint_rejects_negative_weight() {
         try {
             jdbc.update("INSERT INTO agent_registry_mvp ("
-                    + "tenant_id, agent_id, service_id, agent_name, agent_type, capability, "
-                    + "system_profile, route_key, contract_version, capability_version, "
+                    + "tenant_id, agent_id, agent_name, agent_type, capability, "
+                    + "route_key, contract_version, capability_version, "
                     + "endpoint_url, weight) "
-                    + "VALUES ('tenant-neg', 'agent-neg', 'svc', 'name', 'type', 'cap', "
-                    + "'profile', 'rk', '1.0', '1.0', 'http://x', -1)");
+                    + "VALUES ('tenant-neg', 'agent-neg', 'name', 'type', 'cap', "
+                    + "'rk', '1.0', '1.0', 'http://x', -1)");
             org.assertj.core.api.Assertions.fail(
                     "CHECK constraint should have rejected weight=-1");
         } catch (org.springframework.dao.DataIntegrityViolationException ex) {
@@ -275,11 +275,11 @@ class AgentRegistryMigrationTest {
 
     private void insertValidRow(String tenantId, String agentId) {
         jdbc.update("INSERT INTO agent_registry_mvp ("
-                + "tenant_id, agent_id, service_id, agent_name, agent_type, capability, "
-                + "system_profile, route_key, contract_version, capability_version, "
+                + "tenant_id, agent_id, agent_name, agent_type, capability, "
+                + "route_key, contract_version, capability_version, "
                 + "endpoint_url, weight, status) "
-                + "VALUES (?, ?, 'svc', 'name', 'type', 'cap', "
-                + "'profile', 'rk', '1.0', '1.0', 'http://x', 100, 'ONLINE')",
+                + "VALUES (?, ?, 'name', 'type', 'cap', "
+                + "'rk', '1.0', '1.0', 'http://x', 100, 'ONLINE')",
                 tenantId, agentId);
     }
 }
