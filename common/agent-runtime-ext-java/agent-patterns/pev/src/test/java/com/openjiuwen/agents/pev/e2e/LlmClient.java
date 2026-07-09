@@ -70,11 +70,10 @@ final class LlmClient {
                 .uri(URI.create(url))
                 .header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json")
-                // 120s covers all models' nominal latency with reasoning_content fallback.
-                // The prior timeouts (300s/600s) masked a GLM-5.2 bug: empty content from
-                // reasoning_content-only responses caused the PEV verify loop to endlessly
-                // replan. Fixed via extractContent reasoning_content fallback.
-                .timeout(Duration.ofSeconds(120))
+                // 300s covers GLM-4.7 thinking=on complex scenarios (ClaimsAdjudication
+                // takes 20s off / 120s+ on). The prior 120s cap caused false soft-skips.
+                // reasoning_content fallback (GLM/Qwen) fixed the infinite-loop root cause.
+                .timeout(Duration.ofSeconds(300))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         try {

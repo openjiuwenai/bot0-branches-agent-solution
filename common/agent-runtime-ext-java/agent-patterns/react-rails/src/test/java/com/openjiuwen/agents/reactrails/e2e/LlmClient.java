@@ -50,7 +50,7 @@ final class LlmClient {
                 .uri(URI.create(BASE + PATH))
                 .header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(120))
+                .timeout(Duration.ofSeconds(300))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         try {
