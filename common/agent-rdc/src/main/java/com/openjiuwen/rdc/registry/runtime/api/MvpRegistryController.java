@@ -81,6 +81,7 @@ public class MvpRegistryController {
         long start = System.nanoTime();
         String outcome = "success";
         try {
+            applyDefaults(card);
             String a2aCardJson = serializeA2aCard(card.getA2aAgentCard());
             repository.upsert(card, a2aCardJson);
             return ResponseEntity.ok().build();
@@ -125,6 +126,24 @@ public class MvpRegistryController {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             observability.observeDeregister(traceId, tenantId, agentId, outcome, latencyMs);
             MDC.remove("traceId");
+        }
+    }
+
+    /**
+     * Apply default values to optional selection-hint fields the push caller
+     * may have omitted. The {@code agent_registry_mvp} columns
+     * {@code max_concurrency} and {@code weight} are NOT NULL, and
+     * {@link com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository#upsert}
+     * binds these columns explicitly (so the DB-level DEFAULT does not apply
+     * when the entry carries null). Push callers therefore rely on this
+     * boundary to materialise the README-documented defaults (10 / 100).
+     */
+    private static void applyDefaults(AgentRegistryEntry card) {
+        if (card.getMaxConcurrency() == null) {
+            card.setMaxConcurrency(10);
+        }
+        if (card.getWeight() == null) {
+            card.setWeight(100);
         }
     }
 

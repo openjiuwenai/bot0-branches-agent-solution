@@ -161,6 +161,12 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
         entry.setCapabilityVersion(runtime.getCapabilityVersion());
         entry.setEndpointUrl(runtime.getBaseUrl());
         entry.setRegion(runtime.getRegion());
+        entry.setMaxConcurrency(runtime.getMaxConcurrency() != null
+                ? runtime.getMaxConcurrency()
+                : PullRegistrationProperties.DEFAULT_MAX_CONCURRENCY);
+        entry.setWeight(runtime.getWeight() != null
+                ? runtime.getWeight()
+                : PullRegistrationProperties.DEFAULT_WEIGHT);
         // a2aAgentCard left null — the raw JSON is passed to upsert as
         // a2aAgentCardJson, so the a2a_agent_card jsonb column is populated
         // without needing to deserialize the 17-field A2A record.

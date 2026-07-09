@@ -98,6 +98,21 @@ public class PullRegistrationProperties {
         /** Agent capability version. Default {@code v1}. */
         private String capabilityVersion = "v1";
 
+        /**
+         * Max concurrency hint for the runtime. Optional — when null,
+         * {@link PullRegistrationBootstrap#buildEntry} applies the default
+         * ({@link PullRegistrationProperties#DEFAULT_MAX_CONCURRENCY}) to
+         * satisfy the NOT NULL constraint on {@code agent_registry_mvp}.
+         */
+        private Integer maxConcurrency;
+
+        /**
+         * Selection weight hint for the runtime. Optional — when null,
+         * {@link PullRegistrationBootstrap#buildEntry} applies the default
+         * ({@link PullRegistrationProperties#DEFAULT_WEIGHT}).
+         */
+        private Integer weight;
+
         public String getBaseUrl() {
             return baseUrl;
         }
@@ -177,6 +192,22 @@ public class PullRegistrationProperties {
         public void setCapabilityVersion(String capabilityVersion) {
             this.capabilityVersion = capabilityVersion;
         }
+
+        public Integer getMaxConcurrency() {
+            return maxConcurrency;
+        }
+
+        public void setMaxConcurrency(Integer maxConcurrency) {
+            this.maxConcurrency = maxConcurrency;
+        }
+
+        public Integer getWeight() {
+            return weight;
+        }
+
+        public void setWeight(Integer weight) {
+            this.weight = weight;
+        }
     }
 
     /**
@@ -190,4 +221,19 @@ public class PullRegistrationProperties {
      * Not exposed as a config key to prevent operator misconfiguration.
      */
     public static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
+    /**
+     * Default {@code maxConcurrency} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.max_concurrency}
+     * and the push-path convention documented in the README.
+     */
+    public static final int DEFAULT_MAX_CONCURRENCY = 10;
+
+    /**
+     * Default {@code weight} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.weight}.
+     */
+    public static final int DEFAULT_WEIGHT = 100;
 }

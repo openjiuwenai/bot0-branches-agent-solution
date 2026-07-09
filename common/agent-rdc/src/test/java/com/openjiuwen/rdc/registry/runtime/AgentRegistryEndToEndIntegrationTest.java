@@ -183,6 +183,37 @@ class AgentRegistryEndToEndIntegrationTest {
                 .isInstanceOf(com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException.class);
     }
 
+    @Test
+    void register_applies_defaults_when_request_body_omits_max_concurrency_and_weight() throws Exception {
+        String agentEndpoint = agentServer.url("/").toString().replaceAll("/$", "");
+        String tenant = "tenant-defaults";
+        String agent = "agent-defaults";
+
+        AgentRegistryEntry card = new AgentRegistryEntry();
+        card.setTenantId(tenant);
+        card.setAgentId(agent);
+        card.setAgentName("defaults-helper");
+        card.setFrameworkType(FrameworkType.JIUWEN);
+        card.setRouteKey("rk://svc/default");
+        card.setContractVersion("1.0.0");
+        card.setCapabilityVersion("2.1.0");
+        card.setEndpointUrl(agentEndpoint);
+        // maxConcurrency + weight intentionally omitted — controller must
+        // apply defaults so the NOT NULL columns are satisfied.
+
+        ResponseEntity<Void> reg = controller.register(card, null, null);
+        assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
+
+        Integer maxConcurrency = readInt("max_concurrency", tenant, agent);
+        Integer weight = readInt("weight", tenant, agent);
+        assertThat(maxConcurrency)
+                .as("push path must default max_concurrency to 10 when request body omits it")
+                .isEqualTo(10);
+        assertThat(weight)
+                .as("push path must default weight to 100 when request body omits it")
+                .isEqualTo(100);
+    }
+
     // ---- helpers ---------------------------------------------------------
 
     private static AgentRegistryEntry sampleCard(String tenant, String agent, String endpoint) {
@@ -222,5 +253,11 @@ class AgentRegistryEndToEndIntegrationTest {
         return new org.springframework.jdbc.core.JdbcTemplate(dataSource).queryForObject(
                 "SELECT status FROM agent_registry_mvp WHERE tenant_id = ? AND agent_id = ?",
                 String.class, tenant, agent);
+    }
+
+    private static Integer readInt(String column, String tenant, String agent) {
+        return new org.springframework.jdbc.core.JdbcTemplate(dataSource).queryForObject(
+                "SELECT " + column + " FROM agent_registry_mvp WHERE tenant_id = ? AND agent_id = ?",
+                Integer.class, tenant, agent);
     }
 }
