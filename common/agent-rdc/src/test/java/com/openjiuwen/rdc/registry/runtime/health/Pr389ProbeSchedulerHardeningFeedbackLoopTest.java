@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,7 +42,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * context; the fix is structural (a dedicated
  * {@code RegistrySchedulingConfig} bean) and is verified by inspection.
  *
- * <p>Authority: PR #389 review issue #2. ADR-0160 + HD3-004.
+ * <p>Authority: PR #389 review issue #2. ADR-0160 + HD3-004. Revised for
+ * REQ-2026-006 (ProbeTarget adds serviceId; repo port listByAgentId +
+ * findEndpoint(serviceId) + updateStatus(serviceId) + delete(serviceId)
+ * overload).
  */
 class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
 
@@ -110,8 +114,10 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
         String fastUrl = agentServer.url("/fast").toString().replaceAll("/$", "");
 
         CountingRepository repo = new CountingRepository(List.of(
-                new AgentRegistryRepository.ProbeTarget("tenant-A", "agent-slow", slowUrl),
-                new AgentRegistryRepository.ProbeTarget("tenant-A", "agent-fast", fastUrl)));
+                new AgentRegistryRepository.ProbeTarget(
+                        "tenant-A", "agent-slow", "slow-host-8080", slowUrl),
+                new AgentRegistryRepository.ProbeTarget(
+                        "tenant-A", "agent-fast", "fast-host-8080", fastUrl)));
 
         MvpHealthProbeScheduler scheduler = new MvpHealthProbeScheduler(
                 repo, observability, /* staleBeforeMs = */ 1_000L, /* scanLimit = */ 100);
@@ -173,19 +179,21 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
 
         @Override public void upsert(com.openjiuwen.rdc.spi.registry.AgentRegistryEntry card, String a2aAgentCardJson) { }
         @Override public boolean delete(String tenantId, String agentId) { return false; }
+        @Override public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
         @Override public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return targets;
         }
-        @Override public boolean updateStatus(String tenantId, String agentId,
+        @Override public boolean updateStatus(String tenantId, String agentId, String serviceId,
                                               String newStatus, boolean refreshHeartbeat) {
             updateStatusCalls.incrementAndGet();
             return true;
         }
-        @Override public java.util.Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
-            return java.util.Optional.empty();
+        @Override public List<RegistryRow> listByAgentId(String tenantId, String agentId) {
+            return List.of();
         }
-        @Override public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId) {
-            return java.util.Optional.empty();
+        @Override public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
+                                                              String serviceId) {
+            return Optional.empty();
         }
     }
 }

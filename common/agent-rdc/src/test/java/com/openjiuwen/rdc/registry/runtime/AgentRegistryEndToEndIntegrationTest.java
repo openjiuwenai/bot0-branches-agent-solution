@@ -20,37 +20,39 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 import javax.sql.DataSource;
-import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * End-to-end integration test for the Stage 4 agent registry MVP (RB5),
- * revised for REQ-2026-004 (searchByAgentId single-value point lookup).
+ * revised for REQ-2026-006 (multi-instance list lookup).
  *
  * <p>Boots an in-process PostgreSQL (Zonky embedded-postgres) + the full
- * agent-rdc Flyway migration (V2→V3→V4), then drives the full registry
+ * agent-rdc Flyway migration (V2→V3→V4→V5), then drives the full registry
  * lifecycle through the production classes:
  * <ol>
  *   <li><b>register</b> — {@link MvpRegistryController#register} (HTTP path)
  *       via {@link JdbcAgentRegistryRepository#upsert}.</li>
- *   <li><b>searchByAgentId</b> — single-value point lookup returns rich
- *       {@link AgentCardDto} with all fields populated.</li>
+ *   <li><b>searchInstancesByAgentId</b> — list lookup returns rich
+ *       {@link AgentCardDto} entries with all fields populated (one entry
+ *       per matching instance; each carries its own opaque routeHandle).</li>
  *   <li><b>resolve</b> — {@code resolveRouteHandle} returns the physical
- *       endpoint for the opaque handle from searchByAgentId.</li>
+ *       endpoint for the opaque handle from searchInstancesByAgentId.</li>
  *   <li><b>probe → DEGRADED</b> — {@link MvpHealthProbeScheduler#probeOnlineAgents}
  *       issues {@code GET {endpoint}/health}; a 5xx response
  *       triggers {@code updateStatus(..., "DEGRADED", false)}.</li>
- *   <li><b>DEGRADED visibility</b> — searchByAgentId still returns the row
- *       with {@code health=DEGRADED} (status IN ONLINE,DEGRADED).</li>
+ *   <li><b>DEGRADED visibility</b> — searchInstancesByAgentId still returns
+ *       the row with {@code health=DEGRADED} (status IN ONLINE,DEGRADED).</li>
  *   <li><b>deregister</b> — {@link MvpRegistryController#deregister} (HTTP
- *       path) deletes the row; subsequent searchByAgentId returns empty.</li>
+ *       path) deletes all instances for the pair; subsequent
+ *       searchInstancesByAgentId returns an empty list.</li>
  * </ol>
  *
- * <p>REQ-2026-004: Method A/B discovery + free-text search + 15s visibility
- * window at discovery layer removed. Visibility window now applies only to
- * the health-probe scheduler scan.
+ * <p>REQ-2026-006: discovery collapses from single-value Optional lookup to
+ * list lookup. The 15s visibility window at discovery layer is gone; visibility
+ * window applies only to the health-probe scheduler scan.
  */
 class AgentRegistryEndToEndIntegrationTest {
 
@@ -79,7 +81,8 @@ class AgentRegistryEndToEndIntegrationTest {
                 repository,
                 new com.openjiuwen.rdc.registry.runtime.tenant.ThreadLocalTenantContext(),
                 observability);
-        controller = new MvpRegistryController(repository, observability, new com.fasterxml.jackson.databind.ObjectMapper());
+        controller = new MvpRegistryController(
+                repository, discovery, observability, new com.fasterxml.jackson.databind.ObjectMapper());
         scheduler = new MvpHealthProbeScheduler(
                 repository, observability,
                 /* staleBeforeMs = */ 1_000L,
@@ -113,10 +116,10 @@ class AgentRegistryEndToEndIntegrationTest {
         ResponseEntity<Void> reg = controller.register(card, null, null);
         assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
 
-        // 2. searchByAgentId — rich DTO with all fields populated.
-        Optional<AgentCardDto> result = discovery.searchByAgentId(tenant, agent);
-        assertThat(result).isPresent();
-        AgentCardDto dto = result.get();
+        // 2. searchInstancesByAgentId — rich DTO with all fields populated.
+        List<AgentCardDto> result = discovery.searchInstancesByAgentId(tenant, agent);
+        assertThat(result).hasSize(1);
+        AgentCardDto dto = result.get(0);
         assertThat(dto.getRouteHandle()).isNotBlank();
         assertThat(dto.getHealth()).isEqualTo("ONLINE");
         assertThat(dto.getAgentName()).isEqualTo("财务助手");
@@ -144,17 +147,17 @@ class AgentRegistryEndToEndIntegrationTest {
                 .as("HD3-004: 5xx probe → status downgraded to DEGRADED")
                 .isEqualTo("DEGRADED");
 
-        // 5. DEGRADED visibility — searchByAgentId still returns the row.
-        Optional<AgentCardDto> degraded = discovery.searchByAgentId(tenant, agent);
-        assertThat(degraded).isPresent();
-        assertThat(degraded.get().getHealth()).isEqualTo("DEGRADED");
+        // 5. DEGRADED visibility — searchInstancesByAgentId still returns the row.
+        List<AgentCardDto> degraded = discovery.searchInstancesByAgentId(tenant, agent);
+        assertThat(degraded).hasSize(1);
+        assertThat(degraded.get(0).getHealth()).isEqualTo("DEGRADED");
 
-        // 6. deregister
+        // 6. deregister (deletes ALL instances for the pair)
         ResponseEntity<Void> dereg = controller.deregister(tenant, agent, null, null);
         assertThat(dereg.getStatusCode().is2xxSuccessful()).isTrue();
 
-        // 7. searchByAgentId returns empty after deregister
-        assertThat(discovery.searchByAgentId(tenant, agent)).isEmpty();
+        // 7. searchInstancesByAgentId returns empty list after deregister
+        assertThat(discovery.searchInstancesByAgentId(tenant, agent)).isEmpty();
 
         // 8. resolve after deregister → entry_not_found
         assertThatThrownBy(() -> discovery.resolveRouteHandle(dto.getRouteHandle(), tenant))
@@ -169,14 +172,14 @@ class AgentRegistryEndToEndIntegrationTest {
         controller.register(sampleCard("tenant-A", "agent-x", agentEndpoint), null, null);
 
         // tenant-B search must not see tenant-A's row.
-        assertThat(discovery.searchByAgentId("tenant-B", "agent-x"))
-                .as("HD3-003: cross-tenant search returns empty")
+        assertThat(discovery.searchInstancesByAgentId("tenant-B", "agent-x"))
+                .as("HD3-003: cross-tenant search returns empty list")
                 .isEmpty();
 
         // Obtain a real handle via tenant-A search.
-        Optional<AgentCardDto> aResult = discovery.searchByAgentId("tenant-A", "agent-x");
-        assertThat(aResult).isPresent();
-        String handle = aResult.get().getRouteHandle();
+        List<AgentCardDto> aResult = discovery.searchInstancesByAgentId("tenant-A", "agent-x");
+        assertThat(aResult).hasSize(1);
+        String handle = aResult.get(0).getRouteHandle();
 
         // tenant-B caller must be rejected when resolving tenant-A's handle.
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))

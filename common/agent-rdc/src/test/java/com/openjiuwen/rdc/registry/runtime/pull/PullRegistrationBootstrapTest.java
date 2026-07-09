@@ -161,23 +161,29 @@ class PullRegistrationBootstrapTest {
         }
 
         @Override
+        public boolean delete(String tenantId, String agentId, String serviceId) {
+            return false;
+        }
+
+        @Override
         public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return List.of();
         }
 
         @Override
-        public boolean updateStatus(String tenantId, String agentId,
+        public boolean updateStatus(String tenantId, String agentId, String serviceId,
                                     String newStatus, boolean refreshHeartbeat) {
             return false;
         }
 
         @Override
-        public Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
-            return Optional.empty();
+        public List<RegistryRow> listByAgentId(String tenantId, String agentId) {
+            return List.of();
         }
 
         @Override
-        public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId) {
+        public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
+                                                    String serviceId) {
             return Optional.empty();
         }
     }

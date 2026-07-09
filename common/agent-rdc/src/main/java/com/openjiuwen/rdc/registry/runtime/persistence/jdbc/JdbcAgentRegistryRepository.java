@@ -12,6 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import javax.sql.DataSource;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -21,44 +22,46 @@ import java.util.function.Supplier;
  * {@code org.springframework.jdbc.*} — enforced at test time by
  * {@code AgentRdcRegistryJdbcPurityTest} (S5).
  *
- * <h2>SQL contract (REQ-2026-004 revised)</h2>
+ * <h2>SQL contract (REQ-2026-006 revised)</h2>
  * <ul>
- *   <li><b>upsert</b> — {@code INSERT ... ON CONFLICT (tenant_id, agent_id)
- *       DO UPDATE SET ...} ; an agent restart overwrites the prior entry and
- *       resets {@code status = 'ONLINE'} + {@code last_heartbeat = NOW()},
- *       EXCEPT when the prior status is {@code DRAINING} (operator-initiated
- *       graceful drain) — DRAINING is preserved so a restart during drain
- *       does not re-route traffic to the agent (PR #389 review issue #7).
- *       REQ-2026-004: writes {@code framework_type} (was {@code agent_type});
- *       {@code capability} column dropped — no longer written.</li>
- *   <li><b>delete</b> — {@code DELETE WHERE tenant_id = :tenantId AND
- *       agent_id = :agentId}; returns affected-row count &gt; 0.</li>
- *   <li><b>scanDueForProbe</b> — {@code SELECT ... WHERE status IN ('ONLINE','DEGRADED')
- *       AND last_heartbeat < :staleBefore ORDER BY last_heartbeat ASC LIMIT :limit}.
- *       HD3-004 lease/TTL scan path. DEGRADED rows are included so a recovered
- *       agent can be re-probed and restored to ONLINE (PR #389 review issue #4).
- *       Runs unscoped (no {@code withTenant} wrap) — REQUIRES an owner-role
- *       connection; under a restricted role the RLS policy filters everything
- *       (PR #389 review issue #3, see Pr389RlsAndRecoveryFeedbackLoopTest).
- *       Pull-based registration entries are scanned the same as push-based
- *       ones — they live in the same table.</li>
+ *   <li><b>upsert</b> — {@code INSERT ... ON CONFLICT (tenant_id, agent_id,
+ *       service_id) DO UPDATE SET ...} ; an agent restart overwrites the
+ *       prior entry and resets {@code status = 'ONLINE'} +
+ *       {@code last_heartbeat = NOW()}, EXCEPT when the prior status is
+ *       {@code DRAINING} (operator-initiated graceful drain) — DRAINING is
+ *       preserved so a restart during drain does not re-route traffic to
+ *       the agent (PR #389 review issue #7). REQ-2026-006: {@code service_id}
+ *       is the third PK column (server-derived from {@code endpoint_url}
+ *       via {@code ServiceIdCodec}); {@code ON CONFLICT} scopes to instance
+ *       level so N instances of the same agentId upsert independently.</li>
+ *   <li><b>delete(tenantId, agentId)</b> — {@code DELETE WHERE tenant_id =
+ *       :tenantId AND agent_id = :agentId}; semantic generalization in
+ *       REQ-2026-006: deletes ALL instances for the pair (was single-row
+ *       delete when PK was (tenant_id, agent_id)). Backward compatible —
+ *       callers that previously deleted one row now delete all instances.</li>
+ *   <li><b>delete(tenantId, agentId, serviceId)</b> — REQ-2026-006 new
+ *       overload: {@code DELETE WHERE tenant_id AND agent_id AND service_id};
+ *       deletes a single instance (rolling deploy of one replica).</li>
+ *   <li><b>scanDueForProbe</b> — {@code SELECT tenant_id, agent_id,
+ *       service_id, endpoint_url ... WHERE status IN ('ONLINE','DEGRADED')
+ *       AND last_heartbeat < :staleBefore ORDER BY last_heartbeat ASC LIMIT
+ *       :limit}. HD3-004 lease/TTL scan path. REQ-2026-006: returns
+ *       {@code service_id} so the scheduler can call
+ *       {@link #updateStatus(String, String, String, String, boolean)} with
+ *       the right instance scope.</li>
  *   <li><b>updateStatus</b> — {@code UPDATE ... SET status = :newStatus [,
- *       last_heartbeat = NOW()] WHERE tenant_id AND agent_id}; the scheduler
- *       uses {@code refreshHeartbeat=false} when downgrading (5xx → DEGRADED)
- *       and {@code true} when reaffirming (200 → ONLINE).</li>
- *   <li><b>searchByAgentId</b> — REQ-2026-004 replaces
- *       {@code searchByIntent} / {@code searchByCapability}. Single-value
- *       point lookup by PK {@code (tenant_id, agent_id)} with
- *       {@code status IN ('ONLINE','DEGRADED')} filter. The HD3-004 15-second
- *       visibility window is no longer applied at discovery — exact match
- *       on the PK, status filter only. DRAINING / OFFLINE entries return
- *       empty (treated as not-found from discovery's perspective).</li>
+ *       last_heartbeat = NOW()] WHERE tenant_id AND agent_id AND service_id};
+ *       REQ-2026-006: {@code service_id} added — health-probe results scoped
+ *       per instance, not per agentId.</li>
+ *   <li><b>listByAgentId</b> — REQ-2026-006 replaces
+ *       {@code searchByAgentId}. {@code SELECT ... WHERE tenant_id AND
+ *       agent_id AND status IN ('ONLINE','DEGRADED') ORDER BY weight DESC,
+ *       last_heartbeat DESC}. Returns {@code List<RegistryRow>} (empty list
+ *       = agent_not_found).</li>
  *   <li><b>findEndpoint</b> — {@code SELECT endpoint_url, route_key,
- *       contract_version WHERE tenant_id AND agent_id}; used by
- *       {@code AgentDiscoveryService.resolveRouteHandle} after the codec has
- *       decoded the opaque handle. Returns {@code Optional#empty()} when no
- *       row matches → mapped to {@code entry_not_found} (HTTP 404) by the
- *       caller.</li>
+ *       contract_version WHERE tenant_id AND agent_id AND service_id};
+ *       REQ-2026-006: {@code service_id} added — the codec decodes
+ *       {@code serviceId} from the v1: 5-field handle and passes the triple.</li>
  * </ul>
  *
  * <h2>Stage 24 RLS wiring</h2>
@@ -110,17 +113,18 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         Objects.requireNonNull(entry, "entry is required");
         requireNonBlank(entry.getTenantId(), "tenantId");
         requireNonBlank(entry.getAgentId(), "agentId");
+        requireNonBlank(entry.getServiceId(), "serviceId");
         Objects.requireNonNull(entry.getFrameworkType(), "frameworkType is required");
         String sql = "INSERT INTO " + TABLE + " ("
-                + "tenant_id, agent_id, agent_name, framework_type, "
+                + "tenant_id, agent_id, service_id, agent_name, framework_type, "
                 + "route_key, contract_version, "
                 + "capability_version, endpoint_url, max_concurrency, weight, region, "
                 + "a2a_agent_card, status, last_heartbeat) "
-                + "VALUES (:tenantId, :agentId, :agentName, :frameworkType, "
+                + "VALUES (:tenantId, :agentId, :serviceId, :agentName, :frameworkType, "
                 + ":routeKey, :contractVersion, "
                 + ":capabilityVersion, :endpointUrl, :maxConcurrency, :weight, :region, "
                 + ":a2aAgentCard::jsonb, 'ONLINE', CURRENT_TIMESTAMP) "
-                + "ON CONFLICT (tenant_id, agent_id) DO UPDATE SET "
+                + "ON CONFLICT (tenant_id, agent_id, service_id) DO UPDATE SET "
                 + "agent_name = EXCLUDED.agent_name, "
                 + "framework_type = EXCLUDED.framework_type, "
                 + "route_key = EXCLUDED.route_key, "
@@ -143,6 +147,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", entry.getTenantId())
                     .addValue("agentId", entry.getAgentId())
+                    .addValue("serviceId", entry.getServiceId())
                     .addValue("agentName", entry.getAgentName())
                     .addValue("frameworkType", entry.getFrameworkType().name())
                     .addValue("routeKey", entry.getRouteKey())
@@ -163,11 +168,32 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
         return withTenant(tenantId, () -> {
+            // REQ-2026-006: semantic generalization — delete ALL instances
+            // for the (tenantId, agentId) pair. Previously deleted a single
+            // row when PK was (tenant_id, agent_id); now deletes every
+            // instance row matching the pair.
             String sql = "DELETE FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
                     .addValue("agentId", agentId);
+            return jdbc.update(sql, params) > 0;
+        });
+    }
+
+    @Override
+    public boolean delete(String tenantId, String agentId, String serviceId) {
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(agentId, "agentId");
+        requireNonBlank(serviceId, "serviceId");
+        return withTenant(tenantId, () -> {
+            String sql = "DELETE FROM " + TABLE
+                    + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
+                    + " AND service_id = :serviceId";
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("tenantId", tenantId)
+                    .addValue("agentId", agentId)
+                    .addValue("serviceId", serviceId);
             return jdbc.update(sql, params) > 0;
         });
     }
@@ -183,7 +209,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         // to ONLINE (PR #389 review issue #4). Pull-based registration entries
         // (inserted by PullRegistrationBootstrap) are scanned here the same
         // as push-based ones — they share the same table and lifecycle.
-        String sql = "SELECT tenant_id, agent_id, endpoint_url FROM " + TABLE
+        // REQ-2026-006: SELECT service_id so the scheduler can call
+        // updateStatus with the right instance scope.
+        String sql = "SELECT tenant_id, agent_id, service_id, endpoint_url FROM " + TABLE
                 + " WHERE status IN ('ONLINE','DEGRADED') AND last_heartbeat < :staleBefore"
                 + " ORDER BY last_heartbeat ASC LIMIT :limit";
         MapSqlParameterSource params = new MapSqlParameterSource()
@@ -192,63 +220,73 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         return jdbc.query(sql, params, (rs, rowNum) -> new ProbeTarget(
                 rs.getString("tenant_id"),
                 rs.getString("agent_id"),
+                rs.getString("service_id"),
                 rs.getString("endpoint_url")));
     }
 
     @Override
-    public boolean updateStatus(String tenantId, String agentId, String newStatus, boolean refreshHeartbeat) {
+    public boolean updateStatus(String tenantId, String agentId, String serviceId,
+                                String newStatus, boolean refreshHeartbeat) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
+        requireNonBlank(serviceId, "serviceId");
         requireNonBlank(newStatus, "newStatus");
         return withTenant(tenantId, () -> {
             String setClause = refreshHeartbeat
                     ? "status = :newStatus, last_heartbeat = CURRENT_TIMESTAMP"
                     : "status = :newStatus";
+            // REQ-2026-006: WHERE includes service_id — health-probe results
+            // scoped per instance, not per agentId.
             String sql = "UPDATE " + TABLE + " SET " + setClause
-                    + " WHERE tenant_id = :tenantId AND agent_id = :agentId";
+                    + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
+                    + " AND service_id = :serviceId";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("newStatus", newStatus)
                     .addValue("tenantId", tenantId)
-                    .addValue("agentId", agentId);
+                    .addValue("agentId", agentId)
+                    .addValue("serviceId", serviceId);
             return jdbc.update(sql, params) > 0;
         });
     }
 
-    // ===== discovery (single-value point lookup) =====
+    // ===== discovery (list lookup, REQ-2026-006) =====
 
     @Override
-    public java.util.Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
+    public List<RegistryRow> listByAgentId(String tenantId, String agentId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
         return withTenant(tenantId, () -> {
-            String sql = "SELECT agent_id, agent_name, framework_type, "
+            String sql = "SELECT service_id, agent_id, agent_name, framework_type, "
                     + "route_key, contract_version, capability_version, "
-                    + "weight, region, status FROM " + TABLE
+                    + "weight, region, max_concurrency, status FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
-                    + " AND status IN ('ONLINE','DEGRADED')";
+                    + " AND status IN ('ONLINE','DEGRADED')"
+                    + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
                     .addValue("agentId", agentId);
-            List<RegistryRow> rows = jdbc.query(sql, params, RegistryRowMapper.INSTANCE);
-            return rows.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(rows.get(0));
+            return jdbc.query(sql, params, RegistryRowMapper.INSTANCE);
         });
     }
 
     @Override
-    public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId) {
+    public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
+        requireNonBlank(serviceId, "serviceId");
         return withTenant(tenantId, () -> {
             String sql = "SELECT endpoint_url, route_key, contract_version FROM " + TABLE
-                    + " WHERE tenant_id = :tenantId AND agent_id = :agentId";
+                    + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
+                    + " AND service_id = :serviceId";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
-                    .addValue("agentId", agentId);
+                    .addValue("agentId", agentId)
+                    .addValue("serviceId", serviceId);
             List<EndpointEntry> rows = jdbc.query(sql, params, (rs, rowNum) -> new EndpointEntry(
                     rs.getString("endpoint_url"),
                     rs.getString("route_key"),
                     rs.getString("contract_version")));
-            return rows.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(rows.get(0));
+            return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
         });
     }
 
@@ -276,6 +314,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             FrameworkType frameworkType = frameworkTypeName == null
                     ? null : FrameworkType.valueOf(frameworkTypeName);
             return new RegistryRow(
+                    rs.getString("service_id"),
                     rs.getString("agent_id"),
                     rs.getString("agent_name"),
                     frameworkType,
@@ -284,6 +323,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     rs.getString("capability_version"),
                     rs.getInt("weight"),
                     rs.getString("region"),
+                    rs.getInt("max_concurrency"),
                     rs.getString("status"));
         }
     }

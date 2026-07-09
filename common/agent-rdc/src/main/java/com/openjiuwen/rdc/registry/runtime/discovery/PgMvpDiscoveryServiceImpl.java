@@ -13,6 +13,7 @@ import org.slf4j.MDC;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,17 +22,21 @@ import java.util.UUID;
 /**
  * MVP phase-1 implementation of {@link AgentDiscoveryService} — single
  * PostgreSQL lookup (ADR-0160 decisions 2 / 4 / 5 / 6, revised by
- * REQ-2026-004).
+ * REQ-2026-004, then REQ-2026-006).
  *
  * <p>Thin orchestrator: delegates persistence to {@link AgentRegistryRepository}
  * (port, ADR-0160 decision 4) and route-handle encoding to {@link RouteHandleCodec}
  * (internal to this package, ADR-0160 decision 5). No JDBC imports — the
  * {@code req-2026-003-jdbc-confined-to-persistence} gate enforces that.
  *
- * <p>REQ-2026-004: the dual {@code discoverBestAgents} overloads (Method A
- * free-text + Method B capability-scoped) are removed; discovery collapses
- * to {@link #searchByAgentId(String, String)} single-value point lookup.
- * Free-text search infrastructure (tsvector + GIN index) is dropped in V4.
+ * <p>REQ-2026-006: discovery evolves from single-value point lookup to
+ * <em>list</em> lookup — {@link #searchInstancesByAgentId(String, String)}
+ * returns all ONLINE/DEGRADED instances for a given {@code agentId}, each
+ * with its own opaque {@code routeHandle} (encoding {@code serviceId}). The
+ * caller selects an instance and resolves it via
+ * {@link #resolveRouteHandle(String, String)}, which now passes the triple
+ * {@code (tenantId, agentId, serviceId)} to
+ * {@link AgentRegistryRepository#findEndpoint(String, String, String)}.
  *
  * <p>Tenant isolation (ADR-0160 decision 6, ESC-2 design pivot): HTTP-entry
  * callers pass {@code tenantId} explicitly — no {@code TenantFilter} populates
@@ -65,7 +70,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     @Override
-    public Optional<AgentCardDto> searchByAgentId(String tenantId, String agentId) {
+    public List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId) {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
@@ -73,13 +78,15 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         int resultCount = 0;
         try {
             verifyTenant(tenantId);
-            Optional<RegistryRow> row = repository.searchByAgentId(tenantId, agentId);
-            if (row.isEmpty()) {
+            List<RegistryRow> rows = repository.listByAgentId(tenantId, agentId);
+            resultCount = rows.size();
+            if (rows.isEmpty()) {
                 outcome = "not_found";
-                return Optional.empty();
+                return List.of();
             }
-            resultCount = 1;
-            return Optional.of(toDto(tenantId, row.get()));
+            return rows.stream()
+                    .map(row -> toDto(tenantId, row))
+                    .toList();
         } catch (TenantIsolationViolationException ex) {
             outcome = "tenant_isolation_violation";
             throw ex;
@@ -113,11 +120,15 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 throw new TenantIsolationViolationException(decoded.tenantId(), tenantId);
             }
             verifyTenant(tenantId);
-            Optional<EndpointEntry> endpoint = repository.findEndpoint(tenantId, decoded.agentId());
+            // REQ-2026-006: pass the triple (tenantId, agentId, serviceId)
+            // decoded from the v1: 5-field handle.
+            Optional<EndpointEntry> endpoint = repository.findEndpoint(
+                    tenantId, decoded.agentId(), decoded.serviceId());
             if (endpoint.isEmpty()) {
                 outcome = "entry_not_found";
                 throw new NoSuchElementException("entry_not_found: tenant=" + tenantId
-                        + ", agentId=" + decoded.agentId());
+                        + ", agentId=" + decoded.agentId()
+                        + ", serviceId=" + decoded.serviceId());
             }
             EndpointEntry ep = endpoint.get();
             return new RouteResolution(ep.endpointUrl(), ep.routeKey(), ep.contractVersion());
@@ -152,12 +163,15 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     /**
-     * Rich DTO — all ICD 5 routing fields + business definition fields
-     * populated (single-value lookup has no "minimal DTO" variant).
+     * Rich DTO — all routing fields + business definition fields populated.
+     * REQ-2026-006: encode includes {@code serviceId} (v1: 5-field); DTO
+     * includes {@code maxConcurrency} (9th field) for caller-side weighted
+     * load balancing.
      */
     private AgentCardDto toDto(String tenantId, RegistryRow row) {
         String handle = RouteHandleCodec.encode(
-                tenantId, row.agentId(), row.routeKey(), row.contractVersion());
+                tenantId, row.agentId(), row.serviceId(),
+                row.routeKey(), row.contractVersion());
         return AgentCardDto.builder()
                 .routeHandle(handle)
                 .health(row.status())
@@ -165,6 +179,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 .capabilityVersion(row.capabilityVersion())
                 .weight(row.weight())
                 .region(row.region())
+                .maxConcurrency(row.maxConcurrency())
                 .agentName(row.agentName())
                 .frameworkType(row.frameworkType())
                 .build();

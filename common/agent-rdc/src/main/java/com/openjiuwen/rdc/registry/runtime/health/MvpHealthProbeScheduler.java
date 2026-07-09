@@ -158,11 +158,13 @@ public class MvpHealthProbeScheduler {
                         .uri(composeProbeUrl(target.endpointUrl()))
                         .retrieve()
                         .toBodilessEntity();
-                repository.updateStatus(target.tenantId(), target.agentId(), "ONLINE", true);
+                repository.updateStatus(target.tenantId(), target.agentId(),
+                        target.serviceId(), "ONLINE", true);
                 outcome = "success";
                 health = "ONLINE";
             } catch (RuntimeException ex) {
-                repository.updateStatus(target.tenantId(), target.agentId(), "DEGRADED", false);
+                repository.updateStatus(target.tenantId(), target.agentId(),
+                        target.serviceId(), "DEGRADED", false);
                 // outcome / health already defaulted to probe_failed / DEGRADED
             } finally {
                 long latencyMs = (System.nanoTime() - start) / 1_000_000;

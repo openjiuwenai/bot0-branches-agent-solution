@@ -15,7 +15,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * V2/V3/V4 migration smoke test for {@code agent_registry_mvp}.
+ * V2/V3/V4/V5 migration smoke test for {@code agent_registry_mvp}.
  *
  * <p>REQ-2026-004 V4 migration changes:
  * <ul>
@@ -26,9 +26,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Renamed {@code agent_type} → {@code framework_type}.</li>
  * </ul>
  *
- * <p>Tests verify the post-V4 schema state: PK unchanged, partial heartbeat
- * index unchanged, RLS unchanged, CHECK constraints unchanged. Old
- * search_tsv / capability / agent_type artifacts must be gone.
+ * <p>REQ-2026-006 V5 migration changes:
+ * <ul>
+ *   <li>Added {@code service_id VARCHAR(64)} column (NOT NULL after
+ *       backfill).</li>
+ *   <li>PK rebuilt from {@code (tenant_id, agent_id)} →
+ *       {@code (tenant_id, agent_id, service_id)} so the same agentId can
+ *       host N runtime instances.</li>
+ * </ul>
+ *
+ * <p>Tests verify the post-V5 schema state: PK is the triple, partial
+ * heartbeat index unchanged, RLS unchanged, CHECK constraints unchanged.
+ * Old search_tsv / capability / agent_type artifacts must be gone.
  */
 class AgentRegistryMigrationTest {
 
@@ -59,13 +68,13 @@ class AgentRegistryMigrationTest {
     }
 
     @Test
-    void v2_through_v4_migrations_applied_cleanly() {
+    void v2_through_v5_migrations_applied_cleanly() {
         List<String> applied = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank",
                 String.class);
         assertThat(applied)
-                .as("V2/V3/V4 migrations must all apply cleanly")
-                .contains("2", "3", "4");
+                .as("V2/V3/V4/V5 migrations must all apply cleanly")
+                .contains("2", "3", "4", "5");
     }
 
     @Test
@@ -76,9 +85,34 @@ class AgentRegistryMigrationTest {
                 + "WHERE i.indrelid = 'agent_registry_mvp'::regclass AND i.indisprimary "
                 + "ORDER BY array_position(i.indkey, a.attnum)");
         assertThat(pkColumns)
-                .as("HD3-003: agent_registry_mvp PK must be (tenant_id, agent_id) — V4 unchanged")
+                .as("REQ-2026-006 V5: agent_registry_mvp PK must be "
+                    + "(tenant_id, agent_id, service_id) — was (tenant_id, agent_id) pre-V5")
                 .extracting(row -> row.get("attname"))
-                .containsExactly("tenant_id", "agent_id");
+                .containsExactly("tenant_id", "agent_id", "service_id");
+    }
+
+    // ---- V5: service_id column added (NOT NULL) -------------------------
+
+    @Test
+    void v5_adds_service_id_column() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pg_attribute "
+                + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'service_id'",
+                Integer.class);
+        assertThat(count)
+                .as("REQ-2026-006 V5: service_id column must exist")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void v5_service_id_column_is_not_null() {
+        Boolean attnotnull = jdbc.queryForObject(
+                "SELECT attnotnull FROM pg_attribute "
+                + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'service_id'",
+                Boolean.class);
+        assertThat(attnotnull)
+                .as("REQ-2026-006 V5: service_id column must be NOT NULL after backfill")
+                .isTrue();
     }
 
     // ---- V4: search_tsv + GIN index DROPPED ------------------------------
@@ -202,10 +236,10 @@ class AgentRegistryMigrationTest {
     void check_constraint_rejects_negative_weight() {
         try {
             jdbc.update("INSERT INTO agent_registry_mvp ("
-                    + "tenant_id, agent_id, agent_name, framework_type, "
+                    + "tenant_id, agent_id, service_id, agent_name, framework_type, "
                     + "route_key, contract_version, capability_version, "
                     + "endpoint_url, weight) "
-                    + "VALUES ('tenant-neg', 'agent-neg', 'name', 'JIUWEN', "
+                    + "VALUES ('tenant-neg', 'agent-neg', 'svc-neg', 'name', 'JIUWEN', "
                     + "'rk', '1.0', '1.0', 'http://x', -1)");
             org.assertj.core.api.Assertions.fail(
                     "CHECK constraint should have rejected weight=-1");
@@ -274,12 +308,16 @@ class AgentRegistryMigrationTest {
     // ---- helpers ---------------------------------------------------------
 
     private void insertValidRow(String tenantId, String agentId) {
+        // REQ-2026-006 V5: service_id is NOT NULL + part of the PK. Use a
+        // deterministic service_id derived from the agentId so multiple rows
+        // in the same test don't collide on the (tenant_id, agent_id,
+        // service_id) PK.
         jdbc.update("INSERT INTO agent_registry_mvp ("
-                + "tenant_id, agent_id, agent_name, framework_type, "
+                + "tenant_id, agent_id, service_id, agent_name, framework_type, "
                 + "route_key, contract_version, capability_version, "
                 + "endpoint_url, weight, status) "
-                + "VALUES (?, ?, 'name', 'JIUWEN', "
+                + "VALUES (?, ?, ?, 'name', 'JIUWEN', "
                 + "'rk', '1.0', '1.0', 'http://x', 100, 'ONLINE')",
-                tenantId, agentId);
+                tenantId, agentId, "svc-" + agentId);
     }
 }

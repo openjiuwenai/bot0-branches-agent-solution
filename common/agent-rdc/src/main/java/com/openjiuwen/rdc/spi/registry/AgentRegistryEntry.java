@@ -38,6 +38,25 @@ import org.a2aproject.sdk.spec.AgentCard;
  *       (was {@code tenantId + agentId + capability}).</li>
  * </ul>
  *
+ * <p>REQ-2026-006 changes (baseline-breaking):
+ * <ul>
+ *   <li>Added {@code serviceId} field — server-derived from
+ *       {@code endpointUrl} via {@link ServiceIdCodec#derive(String)} so the
+ *       same {@code agentId} can host N runtime instances (horizontal
+ *       scaling). The setter is package-private (H2-1 decision, 方案 a) so
+ *       HTTP callers cannot forge it; the runtime derivation layer (push
+ *       register controller / pull bootstrap) populates it via
+ *       {@link ServiceIdCodec#applyTo(AgentRegistryEntry)}.</li>
+ *   <li>Registry PK evolves to {@code (tenant_id, agent_id, service_id)} —
+ *       {@link #hasRegistryKey()} still checks {@code tenantId + agentId}
+ *       (the caller-supplied key pair); {@code serviceId} is server-derived
+ *       and not part of the caller-facing registry key.</li>
+ *   <li>{@link AgentDiscoveryService#searchByAgentId(String, String)} removed
+ *       (single-value lookup cannot represent N instances); replaced by
+ *       {@link AgentDiscoveryService#searchInstancesByAgentId(String, String)}
+ *       returning {@code List}.</li>
+ * </ul>
+ *
  * <p>The MVP controller persists the entry verbatim into
  * {@code agent_registry_mvp}; the A2A card is serialized to JSONB in the
  * {@code a2a_agent_card} column. The {@code search_tsv} GENERATED column
@@ -47,6 +66,7 @@ public final class AgentRegistryEntry {
 
     private String tenantId;
     private String agentId;
+    private String serviceId;
     private String agentName;
     private FrameworkType frameworkType;
     private String routeKey;
@@ -72,6 +92,25 @@ public final class AgentRegistryEntry {
 
     public void setAgentId(String agentId) {
         this.agentId = agentId;
+    }
+
+    /**
+     * Server-derived from {@code endpointUrl} via
+     * {@link ServiceIdCodec#derive(String)}; populated by
+     * {@link ServiceIdCodec#applyTo(AgentRegistryEntry)} at the runtime
+     * derivation layer (push register controller / pull bootstrap). The
+     * setter is package-private (H2-1 decision, 方案 a) so HTTP callers
+     * cannot forge it — Jackson deserialization in
+     * {@code MvpRegistryController} ignores unknown JSON fields via the
+     * {@code JsonIgnoreProperties(ignoreUnknown=true)} annotation on the
+     * controller side (not on this POJO, so spi.registry stays pure Java).
+     */
+    public String getServiceId() {
+        return serviceId;
+    }
+
+    void setServiceId(String serviceId) {
+        this.serviceId = serviceId;
     }
 
     public String getAgentName() {

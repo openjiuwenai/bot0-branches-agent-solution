@@ -39,7 +39,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * the try block (or the safety exceptions get their own observe path).
  *
  * <p>Authority: PR #389 review issue #1 (audit / monitor on security failure
- * paths). ADR-0160 decisions 5 / 6 + HD3-005 / HD3-006.
+ * paths). ADR-0160 decisions 5 / 6 + HD3-005 / HD3-006. Revised for
+ * REQ-2026-006 (RouteHandleCodec.encode takes serviceId; repo port returns
+ * List via listByAgentId; findEndpoint takes serviceId).
  */
 class Pr389SecurityBoundaryAuditFeedbackLoopTest {
 
@@ -60,20 +62,23 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
                     @Override
                     public boolean delete(String tenantId, String agentId) { return false; }
                     @Override
+                    public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
+                    @Override
                     public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
                         return List.of();
                     }
                     @Override
-                    public boolean updateStatus(String tenantId, String agentId,
+                    public boolean updateStatus(String tenantId, String agentId, String serviceId,
                                                 String newStatus, boolean refreshHeartbeat) {
                         return false;
                     }
                     @Override
-                    public Optional<RegistryRow> searchByAgentId(String tenantId, String agentId) {
-                        return Optional.empty();
+                    public List<RegistryRow> listByAgentId(String tenantId, String agentId) {
+                        return List.of();
                     }
                     @Override
-                    public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId) {
+                    public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
+                                                                String serviceId) {
                         return Optional.empty();
                     }
                 },
@@ -91,7 +96,7 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     @Test
     void tenant_isolation_violation_on_discover_increments_op_total_counter() {
         tenantContext.set("tenant-bound");
-        assertThatThrownBy(() -> discovery.searchByAgentId(
+        assertThatThrownBy(() -> discovery.searchInstancesByAgentId(
                 "tenant-A", "agent-001"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
@@ -109,7 +114,7 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
         // Encoded handle for tenant-A; caller passes tenant-B → codec-level
         // tenant mismatch raises TenantIsolationViolationException.
         String handle = RouteHandleCodec.encode(
-                "tenant-A", "agent-001", "rk://svc/default", "1.0.0");
+                "tenant-A", "agent-001", "test-host-8080", "rk://svc/default", "1.0.0");
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
