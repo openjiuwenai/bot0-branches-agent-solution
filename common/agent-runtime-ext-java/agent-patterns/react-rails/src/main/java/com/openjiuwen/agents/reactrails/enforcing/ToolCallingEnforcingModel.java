@@ -138,7 +138,6 @@ public class ToolCallingEnforcingModel extends Model {
      */
     private void doProbe(Float temperature, Float maxTokens, String model, Integer n, String stop,
             BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
-
         // Build a minimalist probe tool with a forced-call description.
         ToolInfo probeTool = ToolInfo.builder().type("function").name(PROBE_TOOL_NAME)
                 .description("Probe tool for tool-calling capability verification. "

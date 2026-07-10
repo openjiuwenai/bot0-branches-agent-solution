@@ -210,7 +210,6 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     @Override
     public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
             Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
-
         Object effectiveMessages = messages;
         InjectionMode currentMode = MODE.get();
 

@@ -91,7 +91,7 @@ class PreCompletionChecklistRailTest {
     @Test
     void beforeModelCallPreviousWasFinalSetsToolReminder() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(3);
-        // First round: produce a final answer (no tool calls) → wasPreviousFinal=true
+        // First round: produce a final answer (no tool calls) → hasPreviousFinalAnswer=true
         rail.afterModelCall(ctxWithFinalAnswer("I think the answer is 42"));
 
         rail.beforeModelCall(ctxWithExtra(Map.of()));
@@ -99,16 +99,16 @@ class PreCompletionChecklistRailTest {
         assertThat(SystemPromptInjectingModel.getInjectionMode())
                 .as("after first final-answer round, mode must still be PLAN_MODE").isEqualTo(InjectionMode.PLAN_MODE);
 
-        // The wasPreviousFinal flag is set, but toolNamesCalled is empty on first call
+        // The hasPreviousFinalAnswer flag is set, but toolNamesCalled is empty on first call
         // (the guard setPhaseOverride only triggers if !toolNamesCalled.isEmpty())
         // So we need a second round to test: first round with tools, second round text-only
 
         // Reset and do a second test that simulates "tools used before, now text-only"
         SystemPromptInjectingModel.resetToDefaults();
         PreCompletionChecklistRail rail2 = new PreCompletionChecklistRail(3);
-        // Round 1: tool call → toolNamesCalled populated, wasPreviousFinal=false
+        // Round 1: tool call → toolNamesCalled populated, hasPreviousFinalAnswer=false
         rail2.afterModelCall(ctxWithToolResult("search", "toolResult"));
-        // Round 2: final answer → wasPreviousFinal=true
+        // Round 2: final answer → hasPreviousFinalAnswer=true
         rail2.afterModelCall(ctxWithFinalAnswer("the answer is 42"));
 
         rail2.beforeModelCall(ctxWithExtra(Map.of()));
@@ -158,7 +158,6 @@ class PreCompletionChecklistRailTest {
 
         rail.afterModelCall(ctxWithToolResult("calc", "toolResult"));
         assertThat(rail.getCallCount()).isEqualTo(2);
-
         // mutation-RED: strip callCount++ → stays 0 → beforeModelCall never hits BUILD → RED
     }
     @Test
@@ -173,7 +172,6 @@ class PreCompletionChecklistRailTest {
 
         rail.afterModelCall(ctxWithToolResult("calc", "toolResult")); // new tool
         assertThat(rail.getToolDiversity()).isEqualTo(2);
-
         // mutation-RED: strip toolNamesCalled.add(tc.getName()) → diversity stays 0 → RED
     }
     @Test
@@ -186,17 +184,16 @@ class PreCompletionChecklistRailTest {
 
         rail.afterModelCall(ctxWithFinalAnswer("different output"));
         assertThat(rail.getOutputHashes()).hasSize(2);
-
         // mutation-RED: strip outputHashes.add(...) → size always 0 → RED
     }
     @Test
-    void afterModelCallFinalAnswerSetsPreviousWasFinal() {
+    void afterModelCallFinalAnswerSetsPreviousFinalAnswerFlag() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
 
         // Final answer (no tool calls)
         rail.afterModelCall(ctxWithFinalAnswer("my answer"));
 
-        // Now beforeModelCall should see wasPreviousFinal=true
+        // Now beforeModelCall should see hasPreviousFinalAnswer=true
         // (indirectly tested via phaseOverride set in the right conditions)
         // We already test this in testPreviousWasFinal_setsToolReminder
     }

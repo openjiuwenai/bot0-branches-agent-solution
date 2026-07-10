@@ -90,7 +90,6 @@ class MultiStepToolsE2eTest {
                 || output.contains("%");
         assertThat(hasToolProducedOutput)
                 .as("at least one deterministic tool must have produced output (温度/湿度/°C/%%)%n%s", output).isTrue();
-
         // ==================== 软观察 (no assertion) ====================
         // - 具体 node id / 数量（LLM 决定，不稳定）
         // - 工具是否全部命中（LLM 可能把某步走 LLM_CALL）

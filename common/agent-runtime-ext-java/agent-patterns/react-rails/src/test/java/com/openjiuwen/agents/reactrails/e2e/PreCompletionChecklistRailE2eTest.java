@@ -97,7 +97,6 @@ class PreCompletionChecklistRailE2eTest {
         assertThat(SystemPromptInjectingModel.getInjectionMode())
                 .as("after first beforeModelCall, mode must be PLAN_MODE (callCount < planMaxRounds)")
                 .isEqualTo(InjectionMode.PLAN_MODE);
-
     }
 
     /**
@@ -153,7 +152,6 @@ class PreCompletionChecklistRailE2eTest {
         // Before the second invoke, beforeModelCall runs again: callCount=1 >= planMaxRounds=1 → BUILD_MODE.
         Object result2 = agent.invoke("再补充一些关键数字。", null);
         assertThat(result2).isNotNull();
-
         // After second beforeModelCall, mode should be BUILD_MODE
         // Note: by the time we check, the second invoke() may have consumed the mode
         // (injectMode is static AtomicReference, not reset after invoke)
@@ -180,7 +178,6 @@ class PreCompletionChecklistRailE2eTest {
     void stagnationDetectionInjectsBreakLoop() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "skip");
         DefaultModelClientFactories.ensureRegistered();
-
         // This test validates the whole chain:
         // StagnationDetectionRail sets ctx.getExtra("stagnation_detected", true)
         // → PreCompletionChecklistRail.beforeModelCall reads it

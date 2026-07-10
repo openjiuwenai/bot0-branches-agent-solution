@@ -88,7 +88,6 @@ class DeviceFailureDegradesE2eTest {
         // ===== Hard断言 2: executor 只调一次（AcceptPartial 不重试） =====
         assertThat(executeInvocations.get()).as("DeviceFailure → RootCause.DeviceFailure → AcceptPartial（终态），"
                 + "executor.execute 不应重试（重试只会对坏设备重抛同一错误）").isEqualTo(1);
-
     }
 
     private static final class AlwaysFailToolException extends IllegalStateException {

@@ -27,7 +27,6 @@ import java.util.Set;
  */
 public sealed interface RootCause
         permits RootCause.DeviceFailure, RootCause.PlanOrAnswerError, RootCause.PerceptionUnreliable {
-
     /**
      * Tool / infrastructure failed on these nodes.
      */

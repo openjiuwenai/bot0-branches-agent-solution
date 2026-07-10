@@ -77,6 +77,7 @@ public class PreCompletionChecklistRail extends AgentRail {
      * Rolling window of output content prefixes (for observation, not used for detection).
      */
     private final List<String> outputHashes = new ArrayList<>();
+
     private static final int OUTPUT_HASH_WINDOW = 5;
 
     /**
@@ -87,7 +88,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     /**
      * Whether the previous iteration produced a final answer (no tool calls).
      */
-    private boolean wasPreviousFinal = false;
+    private boolean hasPreviousFinalAnswer = false;
 
     // ---- Construction ----
 
@@ -186,7 +187,7 @@ public class PreCompletionChecklistRail extends AgentRail {
                 SystemPromptInjectingModel.setInjectionMode(InjectionMode.PLAN_MODE);
             }
             // If previous iteration was pure text (no tool calls), remind to use tools
-            if (!toolNamesCalled.isEmpty() && wasPreviousFinal) {
+            if (!toolNamesCalled.isEmpty() && hasPreviousFinalAnswer) {
                 SystemPromptInjectingModel.setPhaseOverride("REMINDER: Your current approach is text-only. "
                         + "Use available tools to fetch real data or validate assumptions.");
             }
@@ -239,14 +240,14 @@ public class PreCompletionChecklistRail extends AgentRail {
 
         // Track tool names called
         if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
-            wasPreviousFinal = false;
+            hasPreviousFinalAnswer = false;
             for (ToolCall tc : msg.getToolCalls()) {
                 if (tc.getName() != null) {
                     toolNamesCalled.add(tc.getName());
                 }
             }
         } else {
-            wasPreviousFinal = true;
+            hasPreviousFinalAnswer = true;
         }
     }
 }

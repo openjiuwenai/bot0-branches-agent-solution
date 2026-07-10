@@ -120,11 +120,13 @@ final class ClaimTools {
             "calculation":{"claim_amount_fen":5000000,"approved_amount_fen":4250000,\
             "calculated_amount_fen":5000000,"medical_reduction_fen":0,\
             "note":"误用100%全额，应按85%共担比例，正确核定42500元（原误算50000元）"},\
-            "medical_review":{"reduction_fen":0,"reason":"无核减"}}""", """
+            "medical_review":{"reduction_fen":0,"reason":"无核减"}}
+            """, """
             {"case_no":"CLM-2026-REDUCE","score":20,"level":"LOW","indicators":"无明显异常"}""", """
             {"case_no":"CLM-2026-REDUCE","claim_amount_fen":5000000,"correct_payout_fen":4250000,\
             "applied_ratio":"0.85","liability_conclusion":"医疗费用理赔，被保人部分责任",\
-            "expected_decision":"减赔"}""", """
+            "expected_decision":"减赔"}
+            """, """
             {"case_no":"CLM-2026-REDUCE","claim_amount_fen":5000000,"insurance_type":"医疗",\
             "threshold_fen":5000000,"hits_threshold":true,"requires_escalation":true}""");
 

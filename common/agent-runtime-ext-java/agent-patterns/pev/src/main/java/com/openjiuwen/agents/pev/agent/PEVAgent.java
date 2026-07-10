@@ -60,6 +60,7 @@ public class PEVAgent extends BaseAgent {
          * Maximum replan retries before terminal degrade.
          */
         public final int maxRetries;
+
         public PevConfig(int maxRetries) {
             this.maxRetries = maxRetries;
         }

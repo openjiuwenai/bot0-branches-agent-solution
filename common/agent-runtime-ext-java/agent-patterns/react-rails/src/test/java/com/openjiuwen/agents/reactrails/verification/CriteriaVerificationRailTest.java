@@ -107,6 +107,7 @@ class CriteriaVerificationRailTest {
         TestModelClient(ModelRequestConfig r, ModelClientConfig c) {
             super(r, c);
         }
+
         @Override
         public AssistantMessage invoke(Object msgs, Object tools, Float temp, Float maxTok, String model, Integer n,
                 String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) {

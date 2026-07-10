@@ -17,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PevKernelTest {
     // ==================== diagnoseRootCause 优先级契约 ====================
-
     @Test
     void parseFailureDominatesAllOtherSignalsYieldsPerceptionUnreliable() {
         // 即使有 DeviceFailure 节点 + verify failed，hasParseFailure 仍最高优先

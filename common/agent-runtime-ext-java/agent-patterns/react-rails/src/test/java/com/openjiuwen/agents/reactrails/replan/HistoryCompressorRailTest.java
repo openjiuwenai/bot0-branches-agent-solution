@@ -80,7 +80,6 @@ class HistoryCompressorRailTest {
                 .isSameAs(replanMsg);
 
         assertThat(rail.lastBoundary()).as("lastBoundary must be updated to compact.size() - 1 = 3").isEqualTo(3);
-
         // mutation-RED: strip setMessages(compact, false) → context unchanged (size 5) → RED
     }
 
@@ -169,7 +168,6 @@ class HistoryCompressorRailTest {
         // Round2 compressed the segment (index 3 through 6) → index 3 is now summary2
         assertThat(context.getMessages().get(3).getContentAsString()).as("round 2 summary must contain round2_tool")
                 .contains("round2_tool");
-
         // mutation-RED: reset lastBoundary to 0 on each call → re-compresses from index 1
         // → summary1 lost, round1 segment would be restored (impossible without setMessages) → RED
     }

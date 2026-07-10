@@ -23,7 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PEVAgentRailsTest {
     // ==================== CriteriaVerificationRail 观测最终输出 ====================
-
     @Test
     void criteriaRailVerifiesOutputContainingCriteriaKeywords() {
         CriteriaVerificationRail rail = new CriteriaVerificationRail(Set.of("result"));

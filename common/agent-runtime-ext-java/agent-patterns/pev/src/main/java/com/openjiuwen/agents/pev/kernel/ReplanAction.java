@@ -24,7 +24,6 @@ import java.util.Set;
  */
 public sealed interface ReplanAction
         permits ReplanAction.LocalReplan, ReplanAction.GlobalReplan, ReplanAction.AcceptPartial {
-
     /**
      * Re-execute the failed nodes only, injecting corrective feedback.
      */
