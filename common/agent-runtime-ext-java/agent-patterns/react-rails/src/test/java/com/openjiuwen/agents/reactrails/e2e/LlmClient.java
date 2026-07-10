@@ -13,10 +13,8 @@ import java.time.Duration;
 
 /**
  * 最小化 OpenAI 兼容聊天客户端 for react-rails real-LLM e2e。
- *
  * <p>仅用于真 LLM e2e 测试（自含 HTTP 实现，无外部依赖）。
  * 请求体构造与响应解析均为最小实现，不支持流式（本测试场景无需流式响应）。
- *
  * <p>env 配置：
  * <ul>
  *   <li>OPENJIUWEN_API_KEY — API 密钥（必填）</li>

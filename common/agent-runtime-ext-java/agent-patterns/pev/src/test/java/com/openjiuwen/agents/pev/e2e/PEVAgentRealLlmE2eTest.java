@@ -23,7 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * mock control flow. Mirrors the honesty split from the spring-ai-ascend reference:
  * mock tests carry the hard control-flow断言; this e2e is soft-observe (real LLM, no
  * brittle content断言), gated by {@code requireEnv}.
- *
  * <p>Env required: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /
  * {@code OPENJIUWEN_MODEL} (BigModel GLM, OpenAI-compatible). Skipped via
  * {@link org.junit.jupiter.api.Assumptions#assumeTrue} when absent.

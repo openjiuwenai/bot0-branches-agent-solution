@@ -11,11 +11,9 @@ import java.util.Set;
 
 /**
  * PEV decision core — pure functions turning verify/execution signals into a dispatch action.
- *
  * <p>Zero LLM, zero framework coupling: the same logic can be unit-tested exhaustively and
  * reused by sibling agent patterns built on the same base (a future EDPA can depend on this
  * kernel for its diagnose/dispatch).
- *
  * <p>Two functions:
  * <ul>
  *   <li>{@link #diagnoseRootCause} — signals → {@link RootCause} (3-state diagnosis).</li>
@@ -30,7 +28,6 @@ public final class PevKernel {
 
     /**
      * Verifier's structured verdict.
-     *
      * <p>Two distinct PerceptionUnreliable signals (kept separate so the diagnose function
      * can tell <b>why</b> the verifier is untrustworthy):
      * <ul>
@@ -41,7 +38,6 @@ public final class PevKernel {
      * </ul>
      * Either signal triggers {@link RootCause.PerceptionUnreliable}; {@code threw} wins
      * over {@code parseFailure} when both happen to be true (a throw means no return value).
-     *
      * @since 2026-07
      */
     public record VerifyResult(boolean passed, Set<String> failedNodes, String feedback, boolean parseFailure,
@@ -59,7 +55,6 @@ public final class PevKernel {
 
     /**
      * Diagnose why verify failed, from deterministic signals — not LLM self-report.
-     *
      * <p>Priority: perception-unreliable > device-failure > plan/answer-error.
      * Cross-validates the failed-node set against the per-node {@link NodeResult} map,
      * so a lost side-channel still yields {@link RootCause.DeviceFailure} when the node
@@ -93,14 +88,13 @@ public final class PevKernel {
 
     /**
      * Map a root cause to a dispatch action — sealed switch, compiler-enforced exhaustive.
-     *
      * <p>IFF contract (deliberate, tested):
      * <ul>
      *   <li>{@link RootCause.DeviceFailure} / {@link RootCause.PerceptionUnreliable} →
      *       {@link ReplanAction.AcceptPartial} — <b>never retry</b>. A broken device does
-     *       not heal on retry; an untrustworthy verifier's FAILED verdict cannot be acted on.</li>
+    ot heal on retry; an untrustworthy verifier's FAILED verdict cannot be acted on.</li>
      *   <li>{@link RootCause.PlanOrAnswerError} → {@link ReplanAction.LocalReplan} (≤2 failed
-     *       nodes) / {@link ReplanAction.GlobalReplan} (&gt;2 or empty) — <b>never AcceptPartial</b>.
+    odes) / {@link ReplanAction.GlobalReplan} (&gt;2 or empty) — <b>never AcceptPartial</b>.
      *       Content errors are recoverable by replan; degrading early gives up recoverable work.</li>
      * </ul>
      */

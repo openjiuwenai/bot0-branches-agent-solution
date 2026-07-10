@@ -31,7 +31,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Mock tests for {@link ToolCallingEnforcingModel} (probe-based approach).
- *
  * <p>Verifies that the one-shot probe correctly:
  * <ul>
  *   <li>(a) Fail-fast on {@code LlmBackedModelClient}-style bypass (discards tools)</li>
@@ -113,9 +112,8 @@ class ToolCallingEnforcingModelTest {
      * (b) Mock client properly returns tool_calls for the probe, then returns
      * a legitimate final answer (content naturally mentions a tool name but
      * has no call intent, and toolCalls is empty) for the real invoke.
-     *
      * The predicate passes the probe and returns the real response unchanged —
-     * no false positive.
+    o false positive.
      */
     @Test
     void invokePassesThroughWhenClientHandlesTools() throws Exception {

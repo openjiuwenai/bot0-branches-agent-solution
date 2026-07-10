@@ -17,13 +17,11 @@ import java.util.regex.Pattern;
 /**
  * LLM-backed Planner — asks the LLM to produce a JSON plan for the task + available tools,
  * then parses it into {@link PevComponents.Plan}.
- *
  * <p><b>Robustness contract (铁律① 诚实边界 / minimal+robust):</b> LLM output is not trusted.
  * Any parse failure (malformed JSON, no nodes, missing id/description) falls back to a single
  * {@code LLM_CALL} node whose description is the raw task. The plan stage never throws on
  * bad LLM output — it degrades to a trivially-correct plan instead. {@code type} defaults to
  * {@code LLM_CALL}; unknown types are coerced to {@code LLM_CALL}.
- *
  * <p>This is test-scope shared infra for the real-LLM e2e. Mirrors the honesty split:
  * mock tests carry hard control-flow断言; real-LLM here is soft-observe.
  */

@@ -18,7 +18,6 @@ import java.util.Map;
 
 /**
  * Beta cognitive rail for ReActAgent — external-judge criteria verification gate.
- *
  * <p>Hooks {@code afterModelCall}: when the LLM produces a final answer (no tool calls),
  * verifies it against success criteria using an injected {@link CriteriaVerifier}.
  * Uses {@code requestForceFinish} as a double-direction gate:
@@ -26,22 +25,18 @@ import java.util.Map;
  *   <li><b>Pass</b> → {@code forceFinish(verified=true)}: locks the correct terminal state.</li>
  *   <li><b>Fail</b> → {@code forceFinish(degraded=true, unmet=[...])}: honestly marks unmet criteria.</li>
  * </ul>
- *
  * <p><b>Runtime-verified gate</b>: ReActAgent.invoke on agent-core-java 0.1.12 jar
  * consumes requestForceFinish at bytecode offset 225/700. Confirmed at runtime by
  * {@code SpikeForceFinishOnReActAgent}. This rail's forceFinish IS consumed → the gate
  * truly short-circuits the ReAct loop.
- *
  * <p>Honest boundary: afterModelCall gate cannot <b>force correction</b> (pushSteering
  * can't redirect a final-answer terminal). It can only lock or degrade. Forced correction
- * needs an outer shell (deferred).
- *
+eeds an outer shell (deferred).
  * <p><b>Porting simplification</b> (vs the spring-ai-ascend upstream variant):
  * 消除了 GoalSpec（→ List&lt;String&gt; successCriteria）、LLMDecision（→ 累积
  * tool-call 为 String decisionHistory）、Violation（→ 极简 record）。verify 签名从
  * verify(GoalSpec, List&lt;LLMDecision&gt;, LLMDecision.Complete) 改为
  * verify(List&lt;String&gt;, String, String)。语义等价但类型简化（jar 不含 beta.model 类型）。
- *
  * @since 2026-07
  */
 public class CriteriaVerificationRail extends AgentRail {

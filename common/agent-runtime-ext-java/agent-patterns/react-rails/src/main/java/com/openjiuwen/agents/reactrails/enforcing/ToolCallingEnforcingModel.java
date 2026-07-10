@@ -22,24 +22,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * One-shot probe on first {@link #invoke} to detect tool-calling bypass.
- *
  * <p>Sends a hard-to-refuse probe prompt with a minimalist {@code __probe_tool__}
  * on the very first call. If the underlying
  * {@link com.openjiuwen.core.foundation.llm.model_clients.BaseModelClient} returns a
  * response without tool_calls despite the forced prompt, the client is silently
  * discarding the tools parameter — a {@link ToolCallingBypassException} is thrown.
- *
  * <p>Construction is identical to {@link Model}: pass the same
  * {@link ModelClientConfig} and {@link ModelRequestConfig}. The real client is
  * created internally via the parent's private {@code createModelClient} path.
- *
  * <p>Drop-in replacement:
  * <pre>{@code
  *   // Before: Model m = new Model(cliCfg, reqCfg);
  *   Model m = new ToolCallingEnforcingModel(cliCfg, reqCfg);
  *   agent.setLlm(m);  // unchanged — polymorphism
  * }</pre>
- *
  * @since 2026-07
  */
 public class ToolCallingEnforcingModel extends Model {
@@ -51,7 +47,6 @@ public class ToolCallingEnforcingModel extends Model {
     /**
      * Constructs an enforcing model. The real {@code BaseModelClient} is created
      * internally via chaining to {@code super(config, requestConfig)}.
-     *
      * @param config        client-level configuration (provider, key, endpoint, etc.)
      * @param requestConfig request-level configuration (model name, temperature, etc.)
      */
@@ -61,7 +56,6 @@ public class ToolCallingEnforcingModel extends Model {
 
     /**
      * Overrides {@link Model#invoke} with a one-shot probe on the very first call.
-     *
      * <p>If the probe response has no tool_calls despite a forced prompt, a
      * {@link ToolCallingBypassException} is thrown — the client silently discards tools.
      * Subsequent invocations bypass probing and delegate directly to
@@ -108,11 +102,9 @@ public class ToolCallingEnforcingModel extends Model {
 
     /**
      * Sends a hard-to-refuse probe to verify the client forwards tools to the LLM.
-     *
      * <p>The probe constructs a minimalist tool ({@value #PROBE_TOOL_NAME}) and a
      * system/user prompt pair that leaves the LLM little room to avoid calling it.
      * If the response has null or empty tool_calls, the client is bypassing tools.
-     *
      * @throws ToolCallingBypassException when the client fails the probe
      * @throws Exception                  propagated from the underlying client
      */

@@ -21,13 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Adversarial-catch e2e — port of the spring-ai-ascend scenario
  * {@code fusionAdversarialClaimVerifierCatchesBadDecision} into the PEV module.
- *
  * <p><b>Scenario:</b> an ADVERSARY fixture (claim {@code CLM-2026-ADVERSARY}) baits the
  * executor LLM toward a wrong full-payout decision — the {@code assessLiability} docs claim
  * 100% / approved == claimed, while the ground truth (from {@code calcDeductible}) is still
  * 减赔 (correct_payout 4250000 fen = 85% 共担). The verify stage must run and judge the
  * decision against the correct verdict, not the lure.
- *
  * <p><b>What is asserted (honesty split):</b> this is a real-LLM e2e — soft-observe.
  * <ul>
  *   <li><b>Hard:</b> the verify channel ran (an {@link PevKernel.VerifyResult} was produced
@@ -40,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       point is that the verify <i>channel</i> catches a bad decision; here we prove the
  *       channel runs with adversary-aware prompt context.</li>
  * </ul>
- *
  * <p>Env required: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /
  * {@code OPENJIUWEN_MODEL} (BigModel GLM, OpenAI-compatible). Skipped via
  * {@link org.junit.jupiter.api.Assumptions#assumeTrue} when absent.
@@ -100,7 +97,6 @@ class AdversarialCatchE2eTest {
      * Verifier that judges the executed decision against the <b>correct</b> verdict
      * (减赔 / 85% 共担, ground truth from {@code calcDeductible}), explicitly warning the
      * judging LLM not to be misled by the {@code assessLiability} docs that push 100%.
-     *
      * <p>Same PASS/FAIL parsing convention as {@link LlmVerifier} /
      * {@link PEVAgentRealLlmE2eTest} so the kernel's perception signal stays comparable.
      * Captures its {@link PevKernel.VerifyResult} into {@link VerifyHolder} for test-side

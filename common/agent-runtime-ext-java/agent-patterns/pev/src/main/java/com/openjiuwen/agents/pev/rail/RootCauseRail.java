@@ -15,15 +15,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Beta cognitive rail — device-failure observability across PEV execution supersteps.
- *
  * <p>Hooks {@code afterToolCall} (per execute superstep): inspects the node-result map
  * that {@link com.openjiuwen.agents.pev.agent.PEVAgent} fires, accumulates
  * {@link NodeResult.DeviceFailure} occurrences. Provides an independent diagnostic
  * summary for observability — separate from PEV's internal diagnose (which drives
  * dispatch), this rail records device-failure telemetry across the whole run.
- *
  * <p>Composable: register via {@link com.openjiuwen.core.singleagent.BaseAgent#registerRail}.
- *
  * @since 2026-07
  */
 public class RootCauseRail extends AgentRail {

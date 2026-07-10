@@ -14,13 +14,11 @@ import java.util.Map;
 /**
  * Tool-backed Executor — routes each {@link PevComponents.PlanNode} to either a registered
  * tool or an LLM call.
- *
  * <p><b>Routing rule (minimal, robust):</b> a node is treated as a tool call iff its
  * description contains a registered tool name (longest-match wins to disambiguate prefixes).
  * The tool receives args parsed from the description (best-effort: {@code caseNo: ...} /
  * {@code "caseNo": "..."} patterns, else empty map). Otherwise the node runs through
  * {@link LlmClient#chat(String)} as a pure reasoning step.
- *
  * <p><b>Failure mapping (honesty edge):</b> a tool throwing maps to
  * {@link NodeResult.DeviceFailure}({@code isTimeout=false}) — matching the kernel's
  * 3-state sealed taxonomy so {@link com.openjiuwen.agents.pev.kernel.PevKernel} can dispatch

@@ -23,7 +23,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * PreCompletionChecklistRail 承重测试 — mock context 证 PLAN/BUILD 阶段切换 + guardrail 注入.
- *
  * <p>七出口验证：
  * <ol>
  *   <li>首次 beforeModelCall → setInjectionMode(PLAN_MODE)</li>
@@ -34,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *   <li>afterModelCall → callCount 递增</li>
  *   <li>afterModelCall → 工具调用记录到 toolNamesCalled</li>
  * </ol>
- *
  * <p>mutation-RED:
  * <ul>
  *   <li>剥 SystemPromptInjectingModel.setInjectionMode(PLAN_MODE) → mode=NONE → RED</li>

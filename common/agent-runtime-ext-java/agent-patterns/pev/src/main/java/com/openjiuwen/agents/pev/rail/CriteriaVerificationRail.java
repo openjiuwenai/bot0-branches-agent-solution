@@ -13,15 +13,12 @@ import java.util.Set;
 
 /**
  * Beta cognitive rail — secondary success-criteria gate on the final PEV output.
- *
  * <p>Hooks {@code afterInvoke} (terminal phase): reads the assembled output that
  * {@link com.openjiuwen.agents.pev.agent.PEVAgent} fires in the context payload, checks
  * every success-criterion keyword is present, records the verdict into observable fields.
- *
  * <p>This is <b>defense-in-depth</b> on top of PEV's internal verify (which drives dispatch):
  * a composable, independently-injected criteria check that other agent-service-app
  * implementations (e.g. a future EDPA) can reuse unchanged.
- *
  * @since 2026-07
  */
 public class CriteriaVerificationRail extends AgentRail {

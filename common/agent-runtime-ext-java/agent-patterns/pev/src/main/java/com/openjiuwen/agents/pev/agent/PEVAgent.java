@@ -21,7 +21,6 @@ import java.util.Map;
 /**
  * PEV agent — a general agent-service-app on agent-core-java, running the closed loop
  * Plan → Execute → Verify → Diagnose → Dispatch inside {@link #invoke}.
- *
  * <p>Design:
  * <ul>
  *   <li><b>Self-contained control flow</b>: {@code invoke} runs the whole PEV loop; the
@@ -38,7 +37,6 @@ import java.util.Map;
  *       exhaustively; dropping a case arm fails to compile.</li>
  *   <li><b>terminalGuard</b>: caps the verify loop at {@code maxRetries}.</li>
  * </ul>
- *
  * <p>Honest boundaries (single-agent, structurally deferred):
  * <ul>
  *   <li>{@code stream} degrades to a single chunk after one invoke — real streaming needs
@@ -46,7 +44,6 @@ import java.util.Map;
  *   <li>LocalReplan re-executes failed nodes within the same agent (whole-step retry with
  *       feedback); precise per-node re-execution needs a DAG/multi-agent runtime.</li>
  * </ul>
- *
  * @since 2026-07
  */
 public class PEVAgent extends BaseAgent {

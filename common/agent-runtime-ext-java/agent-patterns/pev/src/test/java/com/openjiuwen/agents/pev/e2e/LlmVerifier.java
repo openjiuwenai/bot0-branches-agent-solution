@@ -17,7 +17,6 @@ import java.util.Set;
  * LLM-backed Verifier — asks the LLM to judge PASS/FAIL for the whole task against the
  * combined goal + executed output, then folds the verdict into a structured
  * {@link PevKernel.VerifyResult}.
- *
  * <p><b>Verdict parsing (honesty edge):</b>
  * <ul>
  *   <li>{@code passed = contains "PASS" AND not contains "FAIL"} — same convention as the

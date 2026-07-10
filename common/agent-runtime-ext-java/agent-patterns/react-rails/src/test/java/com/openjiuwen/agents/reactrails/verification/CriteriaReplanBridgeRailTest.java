@@ -21,14 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * CriteriaReplanBridgeRail 承重测试 — mock context 证三出口控制流。
- *
  * <p>三出口验证：
  * <ol>
  *   <li>verify pass → requestForceFinish(verified=true)</li>
  *   <li>verify fail + under limit → pushSteering(hint), 不 forceFinish</li>
  *   <li>verify fail + over limit → requestForceFinish(degraded=true)</li>
  * </ol>
- *
  * <p>mutation-RED 每出口一个：
  * <ul>
  *   <li>出口1: 剥 forceFinish(verifiedResult) → hasForceFinishRequest false → RED</li>
@@ -189,7 +187,6 @@ class CriteriaReplanBridgeRailTest {
     /**
      * Minimal force-finish result capture — consumeForceFinish returns null
      * when not set, so we extract the result manually from the builder.
-     *
      * <p>(AgentCallbackContext.builder().forceFinishRequest() is not a getter,
      * so we rely on consumeForceFinish which returns the request on the real
      * context.)

@@ -22,10 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Real-LLM e2e: CriteriaVerificationRail on a real ReActAgent + real GLM-5.2.
- *
  * <p>Proves the full data channel: real LLM generates answer → CriteriaVerificationRail
  * verifies against criteria → requestForceFinish(verified/degraded) consumed by ReActAgent.
- *
  * <p>requireEnv gate: skips if OPENJIUWEN_* not set.
  */
 class CriteriaVerificationRailRealLlmE2eTest {

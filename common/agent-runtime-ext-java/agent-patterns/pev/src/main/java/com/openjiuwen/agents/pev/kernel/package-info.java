@@ -4,14 +4,11 @@
 
 /**
  * PEV decision core — sealed types + pure-function dispatch (Plan→Execute→Verify→Diagnose→Dispatch).
- *
  * <h2>Drift debt ledger — deliberate non-deduplication vs the spring-ai-ascend twin</h2>
- *
  * <p>This package is the <b>canonical</b> PEV kernel. A structurally-isomorphic twin lives in
  * the {@code spring-ai-ascend} repository:
  * {@code com.openjiuwen.core.alpha.verifier.{NodeResult,RootCause,ReplanAction,VerifyResult}}
  * plus {@code com.openjiuwen.runtime.beta.selfheal.{RootCauseDiagnoser,RootCauseDispatcher}}.
- *
  * <p><b>Decision: keep both, do not merge.</b> Rationale (code-level verification):
  * <ul>
  *   <li><b>Reachability is asymmetric.</b> This module depends only on the public
@@ -30,12 +27,9 @@
  *       twin is reachable <i>only</i> on the ReActAgent host, never on the PEV host. The two
  *       copies serve genuinely disjoint hosts; neither can call the other.</li>
  * </ul>
- *
  * <h3>Known drift points (re-audit on every change to either side)</h3>
- *
  * <p>When editing any of the five sealed types or the two dispatch functions below, mirror the
  * change here and verify the twin — or record an intentional divergence in this table.
- *
  * <table border="1">
  *   <caption>Drift ledger</caption>
  *   <tr><th>Concept</th><th>Here (canonical PEV)</th><th>spring-ai-ascend twin</th><th>Drift</th></tr>
@@ -75,9 +69,7 @@
  *           {@code criteriaResults} fields PEV does not. PEV nests it in PevKernel;
  *           ascend promotes to its own file.</td></tr>
  * </table>
- *
  * <h3>When to revisit (deferred)</h3>
- *
  * <ol>
  *   <li>If agent-core-java ever publishes these types under a neutral package
  *       ({@code com.openjiuwen.core.kernel.*}), both sides should delete their local copies
@@ -88,10 +80,8 @@
  *       sealed-switch compile guard on each side will catch it locally, but cross-side drift
  *       is silent — this table is the only cross-side guard. Update it on every edit.</li>
  * </ol>
- *
  * <p><b>This ledger is the deliverable.</b> Zero code merged, zero new coupling; the
  * isomorphism is acknowledged and made auditable instead of hidden.
- *
  * @since 2026-07
  */
 package com.openjiuwen.agents.pev.kernel;

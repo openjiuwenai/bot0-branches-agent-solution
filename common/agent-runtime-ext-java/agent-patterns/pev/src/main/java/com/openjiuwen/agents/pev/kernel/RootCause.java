@@ -8,7 +8,6 @@ import java.util.Set;
 
 /**
  * Why a verify step failed — 3-state sealed diagnosis, output of {@link PevKernel#diagnoseRootCause}.
- *
  * <p>The three states are prioritised by signal certainty (not LLM self-report):
  * <ul>
  *   <li>{@link DeviceFailure} — a tool / infrastructure node broke. Replanning cannot
@@ -18,7 +17,6 @@ import java.util.Set;
  *   <li>{@link PlanOrAnswerError} — device and perception are sound, but the plan or
  *       answer content is wrong. Replanning can fix this.</li>
  * </ul>
- *
  * <p>Sealed permits compile-time exhaustiveness: any switch over {@code RootCause}
  * that drops a case arm fails to compile, catching missed branches earlier than a
  * runtime test would.
@@ -46,7 +44,6 @@ public sealed interface RootCause
 
     /**
      * Verifier itself is untrustworthy.
-     *
      * @since 2026-07
      */
     record PerceptionUnreliable(boolean verifierThrew) implements RootCause {

@@ -17,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Straight-through real-LLM e2e — the simplest PEV happy path: plan → execute → verify pass,
  * over a single registered tool ({@code getClaimInfo}).
- *
  * <p>Ported (adapted, not copied) from the spring-ai-ascend reference
  * {@code PEVAlphaRealLlmE2eTest.straightThroughSimpleTool}. Differences from the reference:
  * <ul>
@@ -28,7 +27,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       <b>soft</b> — output non-empty + contains the tool artifact — never brittle content
  *       断言. The hard control-flow断言 live in the mock tests.</li>
  * </ul>
- *
  * <p>Env required: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /
  * {@code OPENJIUWEN_MODEL} (BigModel GLM, OpenAI-compatible). Skipped via
  * {@link org.junit.jupiter.api.Assumptions#assumeTrue} when absent.

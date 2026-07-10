@@ -16,7 +16,6 @@ import java.util.Map;
 
 /**
  * Virtual tool the LLM calls to express replan intent ("abandon current path, try new strategy").
- *
  * <p><b>Registration contract</b>: {@link com.openjiuwen.core.singleagent.AbilityManager#add(Object)}
  * only accepts {@link ToolCard} / WorkflowCard / AgentCard / McpServerConfig — passing a raw
  * {@code Tool} logs {@code "Unknown ability type"} and silently drops it (LLM never sees
@@ -35,7 +34,6 @@ import java.util.Map;
  * under {@code card.getId()} (auto-generated UUID when null). The two keys match ONLY when
  * {@code id} is set explicitly — hence the card sets {@code .id(__replan__)} == {@code .name(...)}.
  * Use {@link #registerOnto(ReActAgent)} to do both atomically.
- *
  * @since 2026-07
  */
 public class ReplanTool extends Tool {
@@ -86,9 +84,7 @@ public class ReplanTool extends Tool {
     /**
      * Correctly register this tool onto a {@link ReActAgent}: card into AbilityManager
      * (LLM visibility) + executable into {@link Runner#resourceMgr()} (dispatch).
-     *
      * <p>This is the only supported registration path — see class javadoc.
-     *
      * @param agent the target ReActAgent
      * @return the registered ReplanTool instance (for fluent assertions in tests)
      */
