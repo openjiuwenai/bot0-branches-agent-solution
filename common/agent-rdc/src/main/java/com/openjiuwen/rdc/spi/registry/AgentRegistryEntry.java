@@ -57,6 +57,21 @@ import org.a2aproject.sdk.spec.AgentCard;
  *       returning {@code List}.</li>
  * </ul>
  *
+ * <p>FEAT-016 阶段一 changes (baseline-breaking):
+ * <ul>
+ *   <li>{@code serviceId} semantics split: was "host-port" (REQ-2026-006),
+ *       now "host only" (logical service identifier, caller-overridable). The
+ *       setter is now {@code public} so callers may explicitly provide a
+ *       {@code serviceId} to override the default host-only derivation in
+ *       {@link ServiceIdCodec#derive(String)}.</li>
+ *   <li>Added {@code instanceId} field — server-derived host-port from
+ *       {@code endpointUrl} via {@link InstanceIdCodec#derive(String)};
+ *       distinguishes concrete instances under the same {@code serviceId}.
+ *       The setter is package-private so HTTP callers cannot forge it; the
+ *       runtime derivation layer populates it via
+ *       {@link InstanceIdCodec#applyTo(AgentRegistryEntry)}.</li>
+ * </ul>
+ *
  * <p>The MVP controller persists the entry verbatim into
  * {@code agent_registry_mvp}; the A2A card is serialized to JSONB in the
  * {@code a2a_agent_card} column. The {@code search_tsv} GENERATED column
@@ -67,6 +82,7 @@ public final class AgentRegistryEntry {
     private String tenantId;
     private String agentId;
     private String serviceId;
+    private String instanceId;
     private String agentName;
     private FrameworkType frameworkType;
     private String routeKey;
@@ -95,22 +111,37 @@ public final class AgentRegistryEntry {
     }
 
     /**
-     * Server-derived from {@code endpointUrl} via
-     * {@link ServiceIdCodec#derive(String)}; populated by
-     * {@link ServiceIdCodec#applyTo(AgentRegistryEntry)} at the runtime
-     * derivation layer (push register controller / pull bootstrap). The
-     * setter is package-private (H2-1 decision, 方案 a) so HTTP callers
-     * cannot forge it — Jackson deserialization in
-     * {@code MvpRegistryController} ignores unknown JSON fields via the
-     * {@code JsonIgnoreProperties(ignoreUnknown=true)} annotation on the
-     * controller side (not on this POJO, so spi.registry stays pure Java).
+     * Logical service identifier. Default-derived from {@code endpointUrl}
+     * via {@link ServiceIdCodec#derive(String)} (host only) by the runtime
+     * derivation layer, but the caller may explicitly provide a
+     * {@code serviceId} in the register body to override the default — hence
+     * the public setter. Multiple agents / instances can share the same
+     * {@code serviceId} to form a logical service group.
      */
     public String getServiceId() {
         return serviceId;
     }
 
-    void setServiceId(String serviceId) {
+    public void setServiceId(String serviceId) {
         this.serviceId = serviceId;
+    }
+
+    /**
+     * Server-derived from {@code endpointUrl} via
+     * {@link InstanceIdCodec#derive(String)}; populated by
+     * {@link InstanceIdCodec#applyTo(AgentRegistryEntry)} at the runtime
+     * derivation layer. Package-private setter so HTTP callers cannot forge
+     * it — Jackson deserialization in {@code MvpRegistryController} ignores
+     * unknown JSON fields via the {@code JsonIgnoreProperties(ignoreUnknown=true)}
+     * annotation on the controller side (not on this POJO, so spi.registry
+     * stays pure Java).
+     */
+    public String getInstanceId() {
+        return instanceId;
+    }
+
+    void setInstanceId(String instanceId) {
+        this.instanceId = instanceId;
     }
 
     public String getAgentName() {
