@@ -3,6 +3,7 @@ package com.openjiuwen.rdc.registry.runtime;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
+import com.openjiuwen.rdc.spi.registry.InstanceIdCodec;
 import com.openjiuwen.rdc.spi.registry.ServiceIdCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
@@ -217,7 +218,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         // serviceId is included (REQ-2026-006) but irrelevant here: the
         // tenant_id mismatch in the WHERE clause already excludes tenant-B's row.
         boolean updated = appRoleRepo.updateStatus(
-                "tenant-A", "agent-X", SERVICE_ID, "DEGRADED", false);
+                "tenant-A", "agent-X", SERVICE_ID, INSTANCE_ID, "DEGRADED", false);
         assertThat(updated)
                 .as("app_role update for tenant-A matched 0 rows (tenant-B's row "
                     + "is invisible under app.tenant_id=A both via RLS and the "
@@ -264,11 +265,11 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         upsertCard(appRoleRepo, sampleCard("tenant-A", "agent-Z"));
 
         // Row landed in tenant-A (the caller's tenantId), not anywhere else.
-        assertThat(ownerRepo.findEndpoint("tenant-A", "agent-Z", SERVICE_ID))
+        assertThat(ownerRepo.findEndpoint("tenant-A", "agent-Z", SERVICE_ID, INSTANCE_ID))
                 .as("app_role upsert with tenantId=A must insert into tenant-A")
                 .isPresent();
         // Cross-tenant leakage check: no tenant-B row with this agentId.
-        assertThat(ownerRepo.findEndpoint("tenant-B", "agent-Z", SERVICE_ID))
+        assertThat(ownerRepo.findEndpoint("tenant-B", "agent-Z", SERVICE_ID, INSTANCE_ID))
                 .as("app_role upsert must NOT leak into tenant-B")
                 .isEmpty();
     }
@@ -289,7 +290,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     void upsert_preserves_draining_status_across_re_registration() {
         // Register, then force into DRAINING (operator-initiated drain).
         upsertCard(ownerRepo, sampleCard("tenant-drain", "agent-drain"));
-        ownerRepo.updateStatus("tenant-drain", "agent-drain", SERVICE_ID, "DRAINING", false);
+        ownerRepo.updateStatus("tenant-drain", "agent-drain", SERVICE_ID, INSTANCE_ID, "DRAINING", false);
         assertThat(readStatus("tenant-drain", "agent-drain")).isEqualTo("DRAINING");
 
         // Re-register (upsert) the same agent — DRAINING must be preserved.
@@ -308,7 +309,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     @Test
     void upsert_resets_degraded_to_online_on_re_registration() {
         upsertCard(ownerRepo, sampleCard("tenant-rec2", "agent-rec2"));
-        ownerRepo.updateStatus("tenant-rec2", "agent-rec2", SERVICE_ID, "DEGRADED", false);
+        ownerRepo.updateStatus("tenant-rec2", "agent-rec2", SERVICE_ID, INSTANCE_ID, "DEGRADED", false);
         assertThat(readStatus("tenant-rec2", "agent-rec2")).isEqualTo("DEGRADED");
 
         upsertCard(ownerRepo, sampleCard("tenant-rec2", "agent-rec2"));
@@ -332,7 +333,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     void degraded_row_is_repicked_by_scan_and_restored_to_online_on_successful_probe() {
         // Register, then force-degrade to DEGRADED with a backdated heartbeat.
         upsertCard(ownerRepo, sampleCard("tenant-rec", "agent-rec"));
-        ownerRepo.updateStatus("tenant-rec", "agent-rec", SERVICE_ID, "DEGRADED", false);
+        ownerRepo.updateStatus("tenant-rec", "agent-rec", SERVICE_ID, INSTANCE_ID, "DEGRADED", false);
         backdateHeartbeat("tenant-rec", "agent-rec", "10 seconds");
 
         // Scan MUST include DEGRADED rows so the probe can retry them.
@@ -345,7 +346,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         assertThat(targets.get(0).agentId()).isEqualTo("agent-rec");
 
         // Simulate a successful probe → status restored to ONLINE.
-        ownerRepo.updateStatus("tenant-rec", "agent-rec", SERVICE_ID, "ONLINE", true);
+        ownerRepo.updateStatus("tenant-rec", "agent-rec", SERVICE_ID, INSTANCE_ID, "ONLINE", true);
         String statusAfterRecovery = readStatus("tenant-rec", "agent-rec");
         assertThat(statusAfterRecovery)
                 .as("DEGRADED → ONLINE recovery on successful probe")
@@ -359,19 +360,31 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     /**
      * The serviceId that {@link ServiceIdCodec#derive} produces for the
      * sample card's {@code endpointUrl = "https://agent.example/agent"} —
-     * host {@code agent.example} + https default port {@code 443}. Used in
-     * every {@code updateStatus} / {@code findEndpoint} call so the triple
-     * matches the row inserted by {@link #upsertCard}.
+     * host only {@code agent.example} (FEAT-016: serviceId is now host-only,
+     * was host-port in REQ-2026-006). Used in every {@code updateStatus} /
+     * {@code findEndpoint} call so the key matches the row inserted by
+     * {@link #upsertCard}.
      */
-    private static final String SERVICE_ID = "agent.example-443";
+    private static final String SERVICE_ID = "agent.example";
+
+    /**
+     * The instanceId that {@link InstanceIdCodec#derive} produces for the
+     * sample card's {@code endpointUrl = "https://agent.example/agent"} —
+     * host {@code agent.example} + https default port {@code 443}. FEAT-016
+     * new: the 4th PK column. Used in every {@code updateStatus} /
+     * {@code findEndpoint} call so the 4-field PK matches the row.
+     */
+    private static final String INSTANCE_ID = "agent.example-443";
 
     private static void upsertCard(AgentRegistryRepository repo, AgentRegistryEntry card) {
-        // REQ-2026-006: serviceId is server-derived from endpointUrl. The
-        // production push path (MvpRegistryController) and pull path
-        // (PullRegistrationBootstrap) both call ServiceIdCodec.applyTo; this
-        // test-only helper mirrors that so repo.upsert sees a non-null
-        // serviceId (the adapter rejects null with IllegalArgumentException).
+        // FEAT-016: serviceId (host-only) + instanceId (host-port) are both
+        // server-derived from endpointUrl. The production push path
+        // (MvpRegistryController) and pull path (PullRegistrationBootstrap)
+        // both call ServiceIdCodec.applyTo + InstanceIdCodec.applyTo; this
+        // test-only helper mirrors that so repo.upsert sees non-null values
+        // (the adapter rejects null with IllegalArgumentException).
         ServiceIdCodec.applyTo(card);
+        InstanceIdCodec.applyTo(card);
         repo.upsert(card, serializeA2a(card.getA2aAgentCard()));
     }
 

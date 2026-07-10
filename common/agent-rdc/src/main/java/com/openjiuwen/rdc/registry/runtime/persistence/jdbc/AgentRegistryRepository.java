@@ -14,40 +14,45 @@ import java.util.Optional;
  * subpackages call this port and never touch JDBC directly.
  *
  * <p>Authority: ADR-0160 decision 4 + HD3-001/003/004/005/006, revised by
- * REQ-2026-004, then <b>REQ-2026-006</b>. The port returns <em>raw row
- * snapshots</em> ({@link RegistryRow}) rather than {@code AgentCardDto} —
- * the {@code AgentDiscoveryService} implementation in
+ * REQ-2026-004, REQ-2026-006, then <b>FEAT-016</b>. The port returns
+ * <em>raw row snapshots</em> ({@link RegistryRow}) rather than
+ * {@code AgentCardDto} — the {@code AgentDiscoveryService} implementation in
  * {@code registry.runtime.discovery} is responsible for encoding the opaque
  * {@code routeHandle} via {@code RouteHandleCodec} and assembling the DTO so
  * the route handle format stays encapsulated in the discovery layer
  * (ADR-0160 decision 5).
  *
- * <p>REQ-2026-006 changes (baseline-breaking):
+ * <p>FEAT-016 changes (baseline-breaking):
  * <ul>
- *   <li>Removed {@code searchByAgentId(String, String)} — single-value
- *       lookup cannot represent N instances. Replaced by
- *       {@link #listByAgentId(String, String)} returning {@code List}.</li>
- *   <li>{@link #findEndpoint(String, String, String)} now takes
- *       {@code serviceId} as the third parameter — the routeHandle codec
- *       decodes {@code serviceId} from the v1: 5-field handle and passes
- *       the triple for instance-level endpoint resolution.</li>
- *   <li>{@link #updateStatus(String, String, String, String, boolean)} now
- *       takes {@code serviceId} — health-probe results are scoped per
- *       instance, not per agentId.</li>
- *   <li>Added {@link #delete(String, String, String)} overload — delete a
- *       single instance by triple. The existing
- *       {@link #delete(String, String)} now deletes <em>all</em> instances
- *       for the {@code (tenantId, agentId)} pair (semantic generalization;
- *       single-instance callers are backward compatible).</li>
- *   <li>{@link RegistryRow} record adds {@code serviceId} (first field) and
- *       {@code maxConcurrency} — both surfaced to the discovery layer for
- *       DTO assembly.</li>
- *   <li>{@link ProbeTarget} record adds {@code serviceId} — the health-probe
+ *   <li>Registry PK evolves to {@code (tenant_id, agent_id, service_id,
+ *       instance_id)} — the same {@code agentId} + {@code serviceId} can host
+ *       N concrete instances (host-port). The 3-field
+ *       {@code delete(tenantId, agentId, serviceId)} now deletes <em>all</em>
+ *       instances under the triple; a new 4-field
+ *       {@link #delete(String, String, String, String)} deletes a single
+ *       instance.</li>
+ *   <li>{@link #updateStatus(String, String, String, String, String, boolean)}
+ *       now takes {@code instanceId} — health-probe results are scoped per
+ *       concrete instance.</li>
+ *   <li>{@link #listByAgentId(String, String, String)} now takes a nullable
+ *       {@code contractVersion} filter; DRAINING is now included in the
+ *       status filter (was excluded in REQ-2026-006).</li>
+ *   <li>Added {@link #listByServiceId(String, String, String)} — query by
+ *       logical service identifier.</li>
+ *   <li>Added {@link #listByCapability(String, String, String)} — query by
+ *       capability tag (exact-match array-contains).</li>
+ *   <li>{@link #findEndpoint(String, String, String, String)} now takes
+ *       {@code instanceId} — the codec decodes {@code instanceId} from the
+ *       v2: 6-field handle and passes the 4-field PK.</li>
+ *   <li>{@link RegistryRow} record adds {@code instanceId} (2nd field) and
+ *       {@code capabilities} ({@code List<String>}, last field) — 13 fields
+ *       total.</li>
+ *   <li>{@link ProbeTarget} record adds {@code instanceId} — the health-probe
  *       scheduler needs it to call {@link #updateStatus} with the right
  *       instance scope.</li>
  *   <li>Upsert {@code ON CONFLICT} evolves to
- *       {@code (tenant_id, agent_id, service_id)} — instance-level idempotent
- *       overwrite.</li>
+ *       {@code (tenant_id, agent_id, service_id, instance_id)} —
+ *       instance-level idempotent overwrite.</li>
  * </ul>
  *
  * <p>Tenant isolation: every method takes {@code tenantId} as the first
@@ -66,8 +71,8 @@ public interface AgentRegistryRepository {
 
     /**
      * Upsert (insert or replace) a registered agent entry. On conflict
-     * {@code (tenant_id, agent_id, service_id)} the existing row is
-     * overwritten and the status reset to {@code ONLINE} with a fresh
+     * {@code (tenant_id, agent_id, service_id, instance_id)} the existing row
+     * is overwritten and the status reset to {@code ONLINE} with a fresh
      * {@code last_heartbeat} (the agent re-registers on restart). The
      * exception is {@code DRAINING}: an entry that the operator has marked
      * {@code DRAINING} (graceful drain in progress) is preserved across
@@ -75,17 +80,20 @@ public interface AgentRegistryRepository {
      * entry back to {@code ONLINE} and re-route traffic to it (PR #389
      * review issue #7).
      *
-     * <p>REQ-2026-006: {@code entry.serviceId} (server-derived from
-     * {@code endpointUrl} via {@code ServiceIdCodec}) is the third PK
-     * column. {@code ON CONFLICT} scopes to the instance level so N
-     * instances of the same {@code agentId} upsert independently.
+     * <p>FEAT-016: {@code entry.instanceId} (server-derived from
+     * {@code endpointUrl} via {@code InstanceIdCodec}) is the fourth PK
+     * column. {@code ON CONFLICT} scopes to the concrete-instance level so N
+     * instances of the same {@code agentId} + {@code serviceId} upsert
+     * independently.
      *
      * @param entry           registry entry from the {@code POST /register} body
      *                        (push mode) or from pull-based bootstrap
      *                        ({@code PullRegistrationBootstrap}, pull mode).
-     *                        {@code entry.serviceId} MUST be populated by the
-     *                        caller via {@code ServiceIdCodec.applyTo(entry)}
-     *                        before invoking upsert.
+     *                        {@code entry.serviceId} + {@code entry.instanceId}
+     *                        MUST be populated by the caller via
+     *                        {@code ServiceIdCodec.applyTo(entry)} +
+     *                        {@code InstanceIdCodec.applyTo(entry)} before
+     *                        invoking upsert.
      * @param a2aAgentCardJson pre-serialized JSON of
      *                        {@link AgentRegistryEntry#getA2aAgentCard()};
      *                        {@code null} when the entry carries no A2A card.
@@ -101,8 +109,7 @@ public interface AgentRegistryRepository {
      * {@code (tenantId, agentId)} pair. Semantic generalization in
      * REQ-2026-006: previously deleted a single row (PK was
      * {@code (tenant_id, agent_id)}); now deletes every instance row
-     * matching the pair. Callers that previously relied on single-row
-     * delete are backward compatible — they get all instances removed.
+     * matching the pair.
      *
      * @return {@code true} if at least one row was deleted, {@code false}
      *         if no entry existed for {@code (tenantId, agentId)}
@@ -110,21 +117,33 @@ public interface AgentRegistryRepository {
     boolean delete(String tenantId, String agentId);
 
     /**
-     * Delete a single registered instance by triple
-     * {@code (tenantId, agentId, serviceId)}. Added in REQ-2026-006 for the
-     * {@code DELETE /deregister/{tenantId}/{agentId}/{serviceId}} endpoint —
-     * rolling deploy of a single replica must not evict other replicas.
+     * Delete <em>all</em> registered instances for the given triple
+     * {@code (tenantId, agentId, serviceId)}. FEAT-016: with the 4-field PK,
+     * this deletes every concrete instance under the triple (was
+     * single-instance delete in REQ-2026-006).
      *
-     * @return {@code true} if a row was deleted, {@code false} if no entry
-     *         existed for the triple
+     * @return {@code true} if at least one row was deleted, {@code false}
+     *         if no entry existed for the triple
      */
     boolean delete(String tenantId, String agentId, String serviceId);
 
     /**
-     * Scan {@code ONLINE} entries whose {@code last_heartbeat} is older than
-     * {@code staleBeforeMillis} for the health-probe scheduler
-     * ({@code MvpHealthProbeScheduler}, HD3-004 lease/TTL). Returns at most
-     * {@code limit} rows ordered by oldest heartbeat first.
+     * Delete a single registered instance by 4-field PK
+     * {@code (tenantId, agentId, serviceId, instanceId)}. FEAT-016 new —
+     * rolling deploy of a single replica must not evict other replicas of
+     * the same {@code serviceId}.
+     *
+     * @return {@code true} if a row was deleted, {@code false} if no entry
+     *         existed for the 4-field PK
+     */
+    boolean delete(String tenantId, String agentId, String serviceId, String instanceId);
+
+    /**
+     * Scan {@code ONLINE} / {@code DEGRADED} entries whose
+     * {@code last_heartbeat} is older than {@code staleBeforeMillis} for the
+     * health-probe scheduler ({@code MvpHealthProbeScheduler}, HD3-004
+     * lease/TTL). Returns at most {@code limit} rows ordered by oldest
+     * heartbeat first.
      *
      * <p>Pull-based registration entries (inserted by
      * {@code PullRegistrationBootstrap}) are automatically picked up by this
@@ -135,15 +154,17 @@ public interface AgentRegistryRepository {
 
     /**
      * Update the lifecycle status of a single instance identified by the
-     * triple {@code (tenantId, agentId, serviceId)} and optionally refresh
-     * {@code last_heartbeat}. Used by the health-probe scheduler
-     * (5xx → {@code DEGRADED}, success → {@code ONLINE}).
+     * 4-field PK {@code (tenantId, agentId, serviceId, instanceId)} and
+     * optionally refresh {@code last_heartbeat}. Used by the health-probe
+     * scheduler (5xx → {@code DEGRADED}, success → {@code ONLINE}).
      *
-     * <p>REQ-2026-006: {@code serviceId} parameter added — health-probe
-     * results are scoped per instance, not per agentId. A failed probe on
-     * one replica must not degrade other replicas of the same agentId.
+     * <p>FEAT-016: {@code instanceId} parameter added — health-probe results
+     * are scoped per concrete instance, not per {@code serviceId}. A failed
+     * probe on one replica must not degrade other replicas of the same
+     * {@code serviceId}.
      *
-     * @param serviceId        the instance's server-derived service id
+     * @param serviceId        the instance's logical service identifier
+     * @param instanceId       the concrete instance identifier (host-port)
      * @param newStatus         one of {@code ONLINE} / {@code DEGRADED} /
      *                          {@code DRAINING} / {@code OFFLINE}
      * @param refreshHeartbeat  {@code true} stamps {@code last_heartbeat =
@@ -151,60 +172,91 @@ public interface AgentRegistryRepository {
      *                          untouched (used when downgrading)
      * @return {@code true} if a row was updated
      */
-    boolean updateStatus(String tenantId, String agentId, String serviceId, String newStatus, boolean refreshHeartbeat);
+    boolean updateStatus(String tenantId, String agentId, String serviceId,
+                         String instanceId, String newStatus, boolean refreshHeartbeat);
 
     /**
-     * List all ONLINE/DEGRADED instances for the given
-     * {@code (tenantId, agentId)} pair. Replaces
-     * {@code searchByAgentId(String, String)} (REQ-2026-004 single-value
-     * lookup, removed in REQ-2026-006). Filters by
-     * {@code tenant_id = :tenantId} AND {@code agent_id = :agentId} AND
-     * {@code status IN ('ONLINE','DEGRADED')} — {@code DRAINING} /
-     * {@code OFFLINE} entries are invisible to discovery.
+     * List all ONLINE/DEGRADED/DRAINING instances for the given
+     * {@code (tenantId, agentId)} pair. FEAT-016: DRAINING is now included
+     * (was excluded in REQ-2026-006). Added nullable {@code contractVersion}
+     * filter.
      *
      * <p>Sort order: {@code weight DESC, last_heartbeat DESC} — matches the
-     * discovery service's DTO ordering so the caller (Orchestrator) sees
-     * the healthiest, highest-capacity instances first.
+     * discovery service's DTO ordering so the caller (Orchestrator) sees the
+     * healthiest, highest-capacity instances first.
      *
-     * <p>The HD3-004 visibility window (15-second heartbeat filter) is no
-     * longer applied at the discovery layer — discovery is now a list
-     * lookup, and the visibility window applies only to the health-probe
-     * scheduler's {@link #scanDueForProbe} scan.
+     * <p>Anti-enumeration: empty list on no match (never {@code null}).
      *
+     * @param contractVersion nullable contract version filter; {@code null}
+     *                        = no filter; non-null = SQL
+     *                        {@code AND contract_version = :contractVersion}
      * @return immutable list of {@link RegistryRow}, one per matching
-     *         instance; empty list if no ONLINE/DEGRADED entry matches
-     *         (never {@code null})
+     *         instance; empty list if no ONLINE/DEGRADED/DRAINING entry
+     *         matches (never {@code null})
      */
-    List<RegistryRow> listByAgentId(String tenantId, String agentId);
+    List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion);
+
+    /**
+     * List all ONLINE/DEGRADED/DRAINING instances for the given
+     * {@code (tenantId, serviceId)} pair. FEAT-016 new — query by logical
+     * service identifier.
+     *
+     * <p>Sort order: {@code weight DESC, last_heartbeat DESC} (shared with
+     * {@link #listByAgentId}).
+     *
+     * <p>Anti-enumeration: empty list on no match (never {@code null}).
+     *
+     * @param contractVersion nullable contract version filter
+     * @return immutable list of {@link RegistryRow}; empty list on no match
+     */
+    List<RegistryRow> listByServiceId(String tenantId, String serviceId, String contractVersion);
+
+    /**
+     * List all ONLINE/DEGRADED/DRAINING instances that declare the given
+     * {@code capability} in their {@code capabilities} array column. FEAT-016
+     * new — exact-match array-contains query.
+     *
+     * <p>Sort order: {@code weight DESC, last_heartbeat DESC} (shared with
+     * {@link #listByAgentId}).
+     *
+     * <p>Anti-enumeration: empty list on no match (never {@code null}).
+     *
+     * @param contractVersion nullable contract version filter
+     * @return immutable list of {@link RegistryRow}; empty list on no match
+     */
+    List<RegistryRow> listByCapability(String tenantId, String capability, String contractVersion);
 
     /**
      * Resolve the physical endpoint for a single instance identified by the
-     * triple {@code (tenantId, agentId, serviceId)}. Called by
-     * {@code AgentDiscoveryService.resolveRouteHandle} after
-     * {@code RouteHandleCodec.decode} has extracted the triple from the
-     * v1: 5-field handle. Returns {@code Optional#empty()} when no row
+     * 4-field PK {@code (tenantId, agentId, serviceId, instanceId)}. Called
+     * by {@code AgentDiscoveryService.resolveRouteHandle} after
+     * {@code RouteHandleCodec.decode} has extracted the 4 fields from the
+     * v2: 6-field handle. Returns {@code Optional#empty()} when no row
      * matches — the discovery service maps that to {@code entry_not_found}
      * (HTTP 404).
      *
-     * <p>REQ-2026-006: {@code serviceId} parameter added — the codec now
-     * decodes {@code serviceId} from the handle and passes the triple.
+     * <p>FEAT-016: {@code instanceId} parameter added — the codec now
+     * decodes {@code instanceId} from the v2: 6-field handle and passes the
+     * 4-field PK.
      *
      * <p>Note: tenant mismatch is detected earlier by {@code RouteHandleCodec}
      * / the discovery service (the encoded tenant is compared to the caller's
      * tenant before this lookup runs); this method always scopes by the
      * caller's {@code tenantId}.
      */
-    Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId);
+    Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
+                                         String serviceId, String instanceId);
 
     /**
      * Raw row snapshot mirroring {@code agent_registry_mvp} columns. The
      * discovery service assembles {@code AgentCardDto} from this snapshot +
-     * the encoded route handle. REQ-2026-006 adds {@code serviceId} (first
-     * field, server-derived) and {@code maxConcurrency} (surfaced for DTO
-     * assembly — caller does weighted load balancing).
+     * the encoded route handle. FEAT-016 adds {@code instanceId} (2nd field,
+     * server-derived host-port) and {@code capabilities} (last field,
+     * {@code List<String>} from the VARCHAR(64)[] column).
      */
     record RegistryRow(
             String serviceId,
+            String instanceId,
             String agentId,
             String agentName,
             FrameworkType frameworkType,
@@ -214,7 +266,8 @@ public interface AgentRegistryRepository {
             int weight,
             String region,
             int maxConcurrency,
-            String status
+            String status,
+            List<String> capabilities
     ) {
     }
 
@@ -231,9 +284,10 @@ public interface AgentRegistryRepository {
      * Probe target for the health-probe scheduler — only the fields the
      * scheduler needs to issue an HTTP {@code GET {endpoint_url}/health} and
      * then call {@link #updateStatus} with the right instance scope.
-     * REQ-2026-006 adds {@code serviceId} so the scheduler can target a
-     * specific instance.
+     * FEAT-016 adds {@code instanceId} so the scheduler can target a specific
+     * concrete instance.
      */
-    record ProbeTarget(String tenantId, String agentId, String serviceId, String endpointUrl) {
+    record ProbeTarget(String tenantId, String agentId, String serviceId,
+                       String instanceId, String endpointUrl) {
     }
 }

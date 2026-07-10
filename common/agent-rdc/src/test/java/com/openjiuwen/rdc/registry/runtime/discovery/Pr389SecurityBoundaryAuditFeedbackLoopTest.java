@@ -40,10 +40,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>Authority: PR #389 review issue #1 (audit / monitor on security failure
  * paths). ADR-0160 decisions 5 / 6 + HD3-005 / HD3-006. Revised for
- * REQ-2026-006 (RouteHandleCodec.encode takes serviceId; repo port returns
- * List via listByAgentId; findEndpoint takes serviceId).
+ * FEAT-016 (RouteHandleCodec.encode takes instanceId; repo port returns
+ * List via listByAgentId + listByServiceId + listByCapability; findEndpoint
+ * takes instanceId; observeDiscover takes queryDimension/queryValue).
  */
 class Pr389SecurityBoundaryAuditFeedbackLoopTest {
+
+    private static final String SERVICE_ID = "wealth-svc";
+    private static final String INSTANCE_ID = "test-host-8080";
 
     private SimpleMeterRegistry meterRegistry;
     private RegistryObservabilityConfig observability;
@@ -64,21 +68,36 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
                     @Override
                     public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
                     @Override
+                    public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
+                        return false;
+                    }
+                    @Override
                     public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
                         return List.of();
                     }
                     @Override
                     public boolean updateStatus(String tenantId, String agentId, String serviceId,
-                                                String newStatus, boolean refreshHeartbeat) {
+                                                String instanceId, String newStatus, boolean refreshHeartbeat) {
                         return false;
                     }
                     @Override
-                    public List<RegistryRow> listByAgentId(String tenantId, String agentId) {
+                    public List<RegistryRow> listByAgentId(String tenantId, String agentId,
+                                                           String contractVersion) {
+                        return List.of();
+                    }
+                    @Override
+                    public List<RegistryRow> listByServiceId(String tenantId, String serviceId,
+                                                             String contractVersion) {
+                        return List.of();
+                    }
+                    @Override
+                    public List<RegistryRow> listByCapability(String tenantId, String capability,
+                                                              String contractVersion) {
                         return List.of();
                     }
                     @Override
                     public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
-                                                                String serviceId) {
+                                                                String serviceId, String instanceId) {
                         return Optional.empty();
                     }
                 },
@@ -97,7 +116,7 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     void tenant_isolation_violation_on_discover_increments_op_total_counter() {
         tenantContext.set("tenant-bound");
         assertThatThrownBy(() -> discovery.searchInstancesByAgentId(
-                "tenant-A", "agent-001"))
+                "tenant-A", "agent-001", null))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
         assertThat(counter("discover", "tenant_isolation_violation"))
@@ -111,10 +130,9 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
 
     @Test
     void tenant_isolation_violation_on_resolve_increments_op_total_counter() {
-        // Encoded handle for tenant-A; caller passes tenant-B → codec-level
-        // tenant mismatch raises TenantIsolationViolationException.
+        // FEAT-016: v2: 6-field encode (adds instanceId).
         String handle = RouteHandleCodec.encode(
-                "tenant-A", "agent-001", "test-host-8080", "rk://svc/default", "1.0.0");
+                "tenant-A", "agent-001", SERVICE_ID, INSTANCE_ID, "rk://svc/default", "1.0.0");
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 

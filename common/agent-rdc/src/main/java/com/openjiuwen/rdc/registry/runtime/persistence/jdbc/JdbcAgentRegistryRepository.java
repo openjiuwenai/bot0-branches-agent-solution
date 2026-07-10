@@ -10,6 +10,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
+import java.sql.Array;
+import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,46 +25,55 @@ import java.util.function.Supplier;
  * {@code org.springframework.jdbc.*} — enforced at test time by
  * {@code AgentRdcRegistryJdbcPurityTest} (S5).
  *
- * <h2>SQL contract (REQ-2026-006 revised)</h2>
+ * <h2>SQL contract (FEAT-016 revised)</h2>
  * <ul>
  *   <li><b>upsert</b> — {@code INSERT ... ON CONFLICT (tenant_id, agent_id,
- *       service_id) DO UPDATE SET ...} ; an agent restart overwrites the
- *       prior entry and resets {@code status = 'ONLINE'} +
+ *       service_id, instance_id) DO UPDATE SET ...} ; an agent restart
+ *       overwrites the prior entry and resets {@code status = 'ONLINE'} +
  *       {@code last_heartbeat = NOW()}, EXCEPT when the prior status is
  *       {@code DRAINING} (operator-initiated graceful drain) — DRAINING is
  *       preserved so a restart during drain does not re-route traffic to
- *       the agent (PR #389 review issue #7). REQ-2026-006: {@code service_id}
- *       is the third PK column (server-derived from {@code endpoint_url}
- *       via {@code ServiceIdCodec}); {@code ON CONFLICT} scopes to instance
- *       level so N instances of the same agentId upsert independently.</li>
+ *       the agent (PR #389 review issue #7). FEAT-016: {@code instance_id}
+ *       is the fourth PK column (server-derived from {@code endpoint_url}
+ *       via {@code InstanceIdCodec}); {@code capabilities} VARCHAR(64)[] is
+ *       written from {@code entry.getCapabilities()} (empty array when null);
+ *       {@code ON CONFLICT} scopes to concrete-instance level so N instances
+ *       of the same {@code agentId} + {@code serviceId} upsert independently.</li>
  *   <li><b>delete(tenantId, agentId)</b> — {@code DELETE WHERE tenant_id =
- *       :tenantId AND agent_id = :agentId}; semantic generalization in
- *       REQ-2026-006: deletes ALL instances for the pair (was single-row
- *       delete when PK was (tenant_id, agent_id)). Backward compatible —
- *       callers that previously deleted one row now delete all instances.</li>
- *   <li><b>delete(tenantId, agentId, serviceId)</b> — REQ-2026-006 new
- *       overload: {@code DELETE WHERE tenant_id AND agent_id AND service_id};
- *       deletes a single instance (rolling deploy of one replica).</li>
+ *       :tenantId AND agent_id = :agentId}; deletes ALL instances for the pair.</li>
+ *   <li><b>delete(tenantId, agentId, serviceId)</b> — {@code DELETE WHERE
+ *       tenant_id AND agent_id AND service_id}; deletes ALL concrete
+ *       instances under the triple (was single-instance in REQ-2026-006).</li>
+ *   <li><b>delete(tenantId, agentId, serviceId, instanceId)</b> — FEAT-016
+ *       new: {@code DELETE WHERE tenant_id AND agent_id AND service_id AND
+ *       instance_id}; deletes a single concrete instance (rolling deploy of
+ *       one replica).</li>
  *   <li><b>scanDueForProbe</b> — {@code SELECT tenant_id, agent_id,
- *       service_id, endpoint_url ... WHERE status IN ('ONLINE','DEGRADED')
- *       AND last_heartbeat < :staleBefore ORDER BY last_heartbeat ASC LIMIT
- *       :limit}. HD3-004 lease/TTL scan path. REQ-2026-006: returns
- *       {@code service_id} so the scheduler can call
- *       {@link #updateStatus(String, String, String, String, boolean)} with
- *       the right instance scope.</li>
+ *       service_id, instance_id, endpoint_url ... WHERE status IN
+ *       ('ONLINE','DEGRADED') AND last_heartbeat < :staleBefore ORDER BY
+ *       last_heartbeat ASC LIMIT :limit}. HD3-004 lease/TTL scan path.
+ *       FEAT-016: returns {@code instance_id} so the scheduler can call
+ *       {@link #updateStatus(String, String, String, String, String, boolean)}
+ *       with the right concrete-instance scope.</li>
  *   <li><b>updateStatus</b> — {@code UPDATE ... SET status = :newStatus [,
- *       last_heartbeat = NOW()] WHERE tenant_id AND agent_id AND service_id};
- *       REQ-2026-006: {@code service_id} added — health-probe results scoped
- *       per instance, not per agentId.</li>
- *   <li><b>listByAgentId</b> — REQ-2026-006 replaces
- *       {@code searchByAgentId}. {@code SELECT ... WHERE tenant_id AND
- *       agent_id AND status IN ('ONLINE','DEGRADED') ORDER BY weight DESC,
- *       last_heartbeat DESC}. Returns {@code List<RegistryRow>} (empty list
- *       = agent_not_found).</li>
+ *       last_heartbeat = NOW()] WHERE tenant_id AND agent_id AND service_id
+ *       AND instance_id}; FEAT-016: {@code instance_id} added — health-probe
+ *       results scoped per concrete instance.</li>
+ *   <li><b>listByAgentId</b> — {@code SELECT ... WHERE tenant_id AND
+ *       agent_id AND status IN ('ONLINE','DEGRADED','DRAINING') AND
+ *       (:contractVersion IS NULL OR contract_version = :contractVersion)
+ *       ORDER BY weight DESC, last_heartbeat DESC}. FEAT-016: DRAINING now
+ *       included (was excluded in REQ-2026-006); nullable contractVersion
+ *       filter added; SELECT reads {@code instance_id} + {@code capabilities}.</li>
+ *   <li><b>listByServiceId</b> — FEAT-016 new: same SELECT/sort as
+ *       listByAgentId, WHERE on {@code tenant_id AND service_id}.</li>
+ *   <li><b>listByCapability</b> — FEAT-016 new: same SELECT/sort, WHERE on
+ *       {@code tenant_id AND :capability = ANY(capabilities)}.</li>
  *   <li><b>findEndpoint</b> — {@code SELECT endpoint_url, route_key,
- *       contract_version WHERE tenant_id AND agent_id AND service_id};
- *       REQ-2026-006: {@code service_id} added — the codec decodes
- *       {@code serviceId} from the v1: 5-field handle and passes the triple.</li>
+ *       contract_version WHERE tenant_id AND agent_id AND service_id AND
+ *       instance_id}; FEAT-016: {@code instance_id} added — the codec
+ *       decodes {@code instanceId} from the v2: 6-field handle and passes
+ *       the 4-field PK.</li>
  * </ul>
  *
  * <h2>Stage 24 RLS wiring</h2>
@@ -114,17 +126,20 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         requireNonBlank(entry.getTenantId(), "tenantId");
         requireNonBlank(entry.getAgentId(), "agentId");
         requireNonBlank(entry.getServiceId(), "serviceId");
+        requireNonBlank(entry.getInstanceId(), "instanceId");
         Objects.requireNonNull(entry.getFrameworkType(), "frameworkType is required");
+        List<String> capabilities = entry.getCapabilities() != null
+                ? entry.getCapabilities() : List.of();
         String sql = "INSERT INTO " + TABLE + " ("
-                + "tenant_id, agent_id, service_id, agent_name, framework_type, "
+                + "tenant_id, agent_id, service_id, instance_id, agent_name, framework_type, "
                 + "route_key, contract_version, "
                 + "capability_version, endpoint_url, max_concurrency, weight, region, "
-                + "a2a_agent_card, status, last_heartbeat) "
-                + "VALUES (:tenantId, :agentId, :serviceId, :agentName, :frameworkType, "
+                + "a2a_agent_card, capabilities, status, last_heartbeat) "
+                + "VALUES (:tenantId, :agentId, :serviceId, :instanceId, :agentName, :frameworkType, "
                 + ":routeKey, :contractVersion, "
                 + ":capabilityVersion, :endpointUrl, :maxConcurrency, :weight, :region, "
-                + ":a2aAgentCard::jsonb, 'ONLINE', CURRENT_TIMESTAMP) "
-                + "ON CONFLICT (tenant_id, agent_id, service_id) DO UPDATE SET "
+                + ":a2aAgentCard::jsonb, :capabilities, 'ONLINE', CURRENT_TIMESTAMP) "
+                + "ON CONFLICT (tenant_id, agent_id, service_id, instance_id) DO UPDATE SET "
                 + "agent_name = EXCLUDED.agent_name, "
                 + "framework_type = EXCLUDED.framework_type, "
                 + "route_key = EXCLUDED.route_key, "
@@ -135,6 +150,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 + "weight = EXCLUDED.weight, "
                 + "region = EXCLUDED.region, "
                 + "a2a_agent_card = EXCLUDED.a2a_agent_card, "
+                + "capabilities = EXCLUDED.capabilities, "
                 // PR #389 #7: preserve DRAINING (operator-initiated graceful
                 // drain) across re-registration; an agent restart must not
                 // pull a draining entry back to ONLINE and re-route traffic
@@ -148,6 +164,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     .addValue("tenantId", entry.getTenantId())
                     .addValue("agentId", entry.getAgentId())
                     .addValue("serviceId", entry.getServiceId())
+                    .addValue("instanceId", entry.getInstanceId())
                     .addValue("agentName", entry.getAgentName())
                     .addValue("frameworkType", entry.getFrameworkType().name())
                     .addValue("routeKey", entry.getRouteKey())
@@ -157,7 +174,8 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     .addValue("maxConcurrency", entry.getMaxConcurrency())
                     .addValue("weight", entry.getWeight())
                     .addValue("region", entry.getRegion())
-                    .addValue("a2aAgentCard", a2aAgentCardJson);
+                    .addValue("a2aAgentCard", a2aAgentCardJson)
+                    .addValue("capabilities", capabilities.toArray(new String[0]));
             jdbc.update(sql, params);
             return null;
         });
@@ -168,10 +186,6 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
         return withTenant(tenantId, () -> {
-            // REQ-2026-006: semantic generalization — delete ALL instances
-            // for the (tenantId, agentId) pair. Previously deleted a single
-            // row when PK was (tenant_id, agent_id); now deletes every
-            // instance row matching the pair.
             String sql = "DELETE FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId";
             MapSqlParameterSource params = new MapSqlParameterSource()
@@ -187,6 +201,8 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         requireNonBlank(agentId, "agentId");
         requireNonBlank(serviceId, "serviceId");
         return withTenant(tenantId, () -> {
+            // FEAT-016: deletes ALL concrete instances under the triple
+            // (was single-instance in REQ-2026-006 when PK was 3-field).
             String sql = "DELETE FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
                     + " AND service_id = :serviceId";
@@ -194,6 +210,26 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     .addValue("tenantId", tenantId)
                     .addValue("agentId", agentId)
                     .addValue("serviceId", serviceId);
+            return jdbc.update(sql, params) > 0;
+        });
+    }
+
+    @Override
+    public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(agentId, "agentId");
+        requireNonBlank(serviceId, "serviceId");
+        requireNonBlank(instanceId, "instanceId");
+        return withTenant(tenantId, () -> {
+            // FEAT-016 new: delete a single concrete instance by 4-field PK.
+            String sql = "DELETE FROM " + TABLE
+                    + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
+                    + " AND service_id = :serviceId AND instance_id = :instanceId";
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("tenantId", tenantId)
+                    .addValue("agentId", agentId)
+                    .addValue("serviceId", serviceId)
+                    .addValue("instanceId", instanceId);
             return jdbc.update(sql, params) > 0;
         });
     }
@@ -209,9 +245,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         // to ONLINE (PR #389 review issue #4). Pull-based registration entries
         // (inserted by PullRegistrationBootstrap) are scanned here the same
         // as push-based ones — they share the same table and lifecycle.
-        // REQ-2026-006: SELECT service_id so the scheduler can call
-        // updateStatus with the right instance scope.
-        String sql = "SELECT tenant_id, agent_id, service_id, endpoint_url FROM " + TABLE
+        // FEAT-016: SELECT instance_id so the scheduler can call
+        // updateStatus with the right concrete-instance scope.
+        String sql = "SELECT tenant_id, agent_id, service_id, instance_id, endpoint_url FROM " + TABLE
                 + " WHERE status IN ('ONLINE','DEGRADED') AND last_heartbeat < :staleBefore"
                 + " ORDER BY last_heartbeat ASC LIMIT :limit";
         MapSqlParameterSource params = new MapSqlParameterSource()
@@ -221,67 +257,118 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 rs.getString("tenant_id"),
                 rs.getString("agent_id"),
                 rs.getString("service_id"),
+                rs.getString("instance_id"),
                 rs.getString("endpoint_url")));
     }
 
     @Override
     public boolean updateStatus(String tenantId, String agentId, String serviceId,
-                                String newStatus, boolean refreshHeartbeat) {
+                                String instanceId, String newStatus, boolean refreshHeartbeat) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
         requireNonBlank(serviceId, "serviceId");
+        requireNonBlank(instanceId, "instanceId");
         requireNonBlank(newStatus, "newStatus");
         return withTenant(tenantId, () -> {
             String setClause = refreshHeartbeat
                     ? "status = :newStatus, last_heartbeat = CURRENT_TIMESTAMP"
                     : "status = :newStatus";
-            // REQ-2026-006: WHERE includes service_id — health-probe results
-            // scoped per instance, not per agentId.
+            // FEAT-016: WHERE includes instance_id — health-probe results
+            // scoped per concrete instance, not per serviceId.
             String sql = "UPDATE " + TABLE + " SET " + setClause
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
-                    + " AND service_id = :serviceId";
+                    + " AND service_id = :serviceId AND instance_id = :instanceId";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("newStatus", newStatus)
                     .addValue("tenantId", tenantId)
                     .addValue("agentId", agentId)
-                    .addValue("serviceId", serviceId);
+                    .addValue("serviceId", serviceId)
+                    .addValue("instanceId", instanceId);
             return jdbc.update(sql, params) > 0;
         });
     }
 
-    // ===== discovery (list lookup, REQ-2026-006) =====
+    // ===== discovery (list lookup, FEAT-016) =====
 
     @Override
-    public List<RegistryRow> listByAgentId(String tenantId, String agentId) {
+    public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
         return withTenant(tenantId, () -> {
-            String sql = "SELECT service_id, agent_id, agent_name, framework_type, "
+            String sql = "SELECT service_id, instance_id, agent_id, agent_name, framework_type, "
                     + "route_key, contract_version, capability_version, "
-                    + "weight, region, max_concurrency, status FROM " + TABLE
+                    + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
-                    + " AND status IN ('ONLINE','DEGRADED')"
+                    // FEAT-016: DRAINING now included (was excluded in
+                    // REQ-2026-006). The caller sees DRAINING as a
+                    // limited-availability health state.
+                    + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
+                    + " AND (:contractVersion IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
-                    .addValue("agentId", agentId);
+                    .addValue("agentId", agentId)
+                    .addValue("contractVersion", contractVersion);
             return jdbc.query(sql, params, RegistryRowMapper.INSTANCE);
         });
     }
 
     @Override
-    public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId) {
+    public List<RegistryRow> listByServiceId(String tenantId, String serviceId, String contractVersion) {
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(serviceId, "serviceId");
+        return withTenant(tenantId, () -> {
+            String sql = "SELECT service_id, instance_id, agent_id, agent_name, framework_type, "
+                    + "route_key, contract_version, capability_version, "
+                    + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
+                    + " WHERE tenant_id = :tenantId AND service_id = :serviceId"
+                    + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
+                    + " AND (:contractVersion IS NULL OR contract_version = :contractVersion)"
+                    + " ORDER BY weight DESC, last_heartbeat DESC";
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("tenantId", tenantId)
+                    .addValue("serviceId", serviceId)
+                    .addValue("contractVersion", contractVersion);
+            return jdbc.query(sql, params, RegistryRowMapper.INSTANCE);
+        });
+    }
+
+    @Override
+    public List<RegistryRow> listByCapability(String tenantId, String capability, String contractVersion) {
+        requireNonBlank(tenantId, "tenantId");
+        requireNonBlank(capability, "capability");
+        return withTenant(tenantId, () -> {
+            String sql = "SELECT service_id, instance_id, agent_id, agent_name, framework_type, "
+                    + "route_key, contract_version, capability_version, "
+                    + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
+                    + " WHERE tenant_id = :tenantId AND :capability = ANY(capabilities)"
+                    + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
+                    + " AND (:contractVersion IS NULL OR contract_version = :contractVersion)"
+                    + " ORDER BY weight DESC, last_heartbeat DESC";
+            MapSqlParameterSource params = new MapSqlParameterSource()
+                    .addValue("tenantId", tenantId)
+                    .addValue("capability", capability)
+                    .addValue("contractVersion", contractVersion);
+            return jdbc.query(sql, params, RegistryRowMapper.INSTANCE);
+        });
+    }
+
+    @Override
+    public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
+                                                String serviceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
         requireNonBlank(serviceId, "serviceId");
+        requireNonBlank(instanceId, "instanceId");
         return withTenant(tenantId, () -> {
             String sql = "SELECT endpoint_url, route_key, contract_version FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
-                    + " AND service_id = :serviceId";
+                    + " AND service_id = :serviceId AND instance_id = :instanceId";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
                     .addValue("agentId", agentId)
-                    .addValue("serviceId", serviceId);
+                    .addValue("serviceId", serviceId)
+                    .addValue("instanceId", instanceId);
             List<EndpointEntry> rows = jdbc.query(sql, params, (rs, rowNum) -> new EndpointEntry(
                     rs.getString("endpoint_url"),
                     rs.getString("route_key"),
@@ -313,8 +400,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             String frameworkTypeName = rs.getString("framework_type");
             FrameworkType frameworkType = frameworkTypeName == null
                     ? null : FrameworkType.valueOf(frameworkTypeName);
+            // FEAT-016: read instance_id (2nd field) + capabilities (array).
+            // rs.getArray returns java.sql.Array; .getArray() yields String[].
+            // Null capabilities column → empty list.
+            List<String> capabilities = readCapabilities(rs);
             return new RegistryRow(
                     rs.getString("service_id"),
+                    rs.getString("instance_id"),
                     rs.getString("agent_id"),
                     rs.getString("agent_name"),
                     frameworkType,
@@ -324,7 +416,21 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     rs.getInt("weight"),
                     rs.getString("region"),
                     rs.getInt("max_concurrency"),
-                    rs.getString("status"));
+                    rs.getString("status"),
+                    capabilities);
+        }
+
+        private static List<String> readCapabilities(java.sql.ResultSet rs) throws SQLException {
+            Array arr = rs.getArray("capabilities");
+            if (arr == null) {
+                return List.of();
+            }
+            Object raw = arr.getArray();
+            if (raw instanceof String[]) {
+                String[] caps = (String[]) raw;
+                return caps.length == 0 ? List.of() : Arrays.asList(caps);
+            }
+            return List.of();
         }
     }
 

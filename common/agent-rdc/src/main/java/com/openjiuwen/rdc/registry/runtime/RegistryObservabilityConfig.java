@@ -31,15 +31,15 @@ import java.util.concurrent.TimeUnit;
  *       registry operation. {@link MeterRegistry} is constructor-injected.</li>
  * </ul>
  *
- * <p>REQ-2026-004 changes (baseline-breaking):
+ * <p>FEAT-016 changes (baseline-breaking):
  * <ul>
- *   <li>Removed {@code capability} parameter from {@link #observeRegister}
- *       and {@link #observeDiscover} — audit log format goes from 10 fields
- *       to 9 fields. Operations dashboards parsing the audit log must update
- *       their field count.</li>
- *   <li>{@code observeDiscover} now takes {@code agentId} instead of
- *       {@code capability} — single-value point lookup reports the agentId
- *       it searched for, not a capability scope.</li>
+ *   <li>{@code observeDiscover} now takes {@code queryDimension} +
+ *       {@code queryValue} instead of {@code agentId}. The discovery service
+ *       has three query dimensions (agentId / serviceId / capability); the
+ *       audit log now records which dimension was queried and the value
+ *       searched. Operations dashboards parsing the audit log must update
+ *       their field semantics (the agentId field now carries the
+ *       queryDimension for discover ops).</li>
  * </ul>
  *
  * <p>Each {@code observeXxx} method emits BOTH the audit line and the
@@ -83,12 +83,20 @@ public class RegistryObservabilityConfig {
         recordMetrics("probe", outcome, latencyMs);
     }
 
-    public void observeDiscover(String traceId, String tenantId, String agentId,
-                                String outcome, int resultCount, long latencyMs) {
-        AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} "
+    /**
+     * FEAT-016: takes {@code queryDimension} (agentId / serviceId /
+     * capability) + {@code queryValue} instead of {@code agentId}. The audit
+     * line records the dimension and value searched so dashboards can
+     * distinguish the three query paths.
+     */
+    public void observeDiscover(String traceId, String tenantId, String queryDimension,
+                                String queryValue, String outcome, int resultCount, long latencyMs) {
+        AUDIT.info("registryOp=discover traceId={} tenantId={} queryDimension={} queryValue={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={} resultCount={}",
-                traceId, tenantId, agentId == null ? PLACEHOLDER : agentId,
+                traceId, tenantId,
+                queryDimension == null ? PLACEHOLDER : queryDimension,
+                queryValue == null ? PLACEHOLDER : queryValue,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
                 resultCount < 0 ? PLACEHOLDER : resultCount);
         recordMetrics("discover", outcome, latencyMs);

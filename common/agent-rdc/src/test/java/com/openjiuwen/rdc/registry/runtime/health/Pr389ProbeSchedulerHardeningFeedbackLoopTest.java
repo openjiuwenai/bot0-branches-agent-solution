@@ -115,9 +115,9 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
 
         CountingRepository repo = new CountingRepository(List.of(
                 new AgentRegistryRepository.ProbeTarget(
-                        "tenant-A", "agent-slow", "slow-host-8080", slowUrl),
+                        "tenant-A", "agent-slow", "slow-host-svc", "slow-host-8080", slowUrl),
                 new AgentRegistryRepository.ProbeTarget(
-                        "tenant-A", "agent-fast", "fast-host-8080", fastUrl)));
+                        "tenant-A", "agent-fast", "fast-host-svc", "fast-host-8080", fastUrl)));
 
         MvpHealthProbeScheduler scheduler = new MvpHealthProbeScheduler(
                 repo, observability, /* staleBeforeMs = */ 1_000L, /* scanLimit = */ 100);
@@ -180,19 +180,31 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
         @Override public void upsert(com.openjiuwen.rdc.spi.registry.AgentRegistryEntry card, String a2aAgentCardJson) { }
         @Override public boolean delete(String tenantId, String agentId) { return false; }
         @Override public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
+        @Override public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
+            return false;
+        }
         @Override public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return targets;
         }
         @Override public boolean updateStatus(String tenantId, String agentId, String serviceId,
-                                              String newStatus, boolean refreshHeartbeat) {
+                                              String instanceId, String newStatus, boolean refreshHeartbeat) {
             updateStatusCalls.incrementAndGet();
             return true;
         }
-        @Override public List<RegistryRow> listByAgentId(String tenantId, String agentId) {
+        @Override public List<RegistryRow> listByAgentId(String tenantId, String agentId,
+                                                         String contractVersion) {
+            return List.of();
+        }
+        @Override public List<RegistryRow> listByServiceId(String tenantId, String serviceId,
+                                                           String contractVersion) {
+            return List.of();
+        }
+        @Override public List<RegistryRow> listByCapability(String tenantId, String capability,
+                                                            String contractVersion) {
             return List.of();
         }
         @Override public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
-                                                              String serviceId) {
+                                                              String serviceId, String instanceId) {
             return Optional.empty();
         }
     }

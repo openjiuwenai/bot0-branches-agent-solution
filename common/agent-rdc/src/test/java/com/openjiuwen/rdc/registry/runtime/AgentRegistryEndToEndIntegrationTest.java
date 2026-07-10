@@ -117,7 +117,7 @@ class AgentRegistryEndToEndIntegrationTest {
         assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
 
         // 2. searchInstancesByAgentId — rich DTO with all fields populated.
-        List<AgentCardDto> result = discovery.searchInstancesByAgentId(tenant, agent);
+        List<AgentCardDto> result = discovery.searchInstancesByAgentId(tenant, agent, null);
         assertThat(result).hasSize(1);
         AgentCardDto dto = result.get(0);
         assertThat(dto.getRouteHandle()).isNotBlank();
@@ -148,7 +148,7 @@ class AgentRegistryEndToEndIntegrationTest {
                 .isEqualTo("DEGRADED");
 
         // 5. DEGRADED visibility — searchInstancesByAgentId still returns the row.
-        List<AgentCardDto> degraded = discovery.searchInstancesByAgentId(tenant, agent);
+        List<AgentCardDto> degraded = discovery.searchInstancesByAgentId(tenant, agent, null);
         assertThat(degraded).hasSize(1);
         assertThat(degraded.get(0).getHealth()).isEqualTo("DEGRADED");
 
@@ -157,7 +157,7 @@ class AgentRegistryEndToEndIntegrationTest {
         assertThat(dereg.getStatusCode().is2xxSuccessful()).isTrue();
 
         // 7. searchInstancesByAgentId returns empty list after deregister
-        assertThat(discovery.searchInstancesByAgentId(tenant, agent)).isEmpty();
+        assertThat(discovery.searchInstancesByAgentId(tenant, agent, null)).isEmpty();
 
         // 8. resolve after deregister → entry_not_found
         assertThatThrownBy(() -> discovery.resolveRouteHandle(dto.getRouteHandle(), tenant))
@@ -172,12 +172,12 @@ class AgentRegistryEndToEndIntegrationTest {
         controller.register(sampleCard("tenant-A", "agent-x", agentEndpoint), null, null);
 
         // tenant-B search must not see tenant-A's row.
-        assertThat(discovery.searchInstancesByAgentId("tenant-B", "agent-x"))
+        assertThat(discovery.searchInstancesByAgentId("tenant-B", "agent-x", null))
                 .as("HD3-003: cross-tenant search returns empty list")
                 .isEmpty();
 
         // Obtain a real handle via tenant-A search.
-        List<AgentCardDto> aResult = discovery.searchInstancesByAgentId("tenant-A", "agent-x");
+        List<AgentCardDto> aResult = discovery.searchInstancesByAgentId("tenant-A", "agent-x", null);
         assertThat(aResult).hasSize(1);
         String handle = aResult.get(0).getRouteHandle();
 

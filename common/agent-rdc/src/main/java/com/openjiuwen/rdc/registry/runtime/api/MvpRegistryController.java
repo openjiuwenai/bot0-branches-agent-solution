@@ -144,7 +144,10 @@ public class MvpRegistryController {
                 || agentId == null || agentId.isBlank()) {
             throw new IllegalArgumentException("tenantId and agentId are required path variables");
         }
-        return discovery.searchInstancesByAgentId(tenantId, agentId);
+        // FEAT-016: searchInstancesByAgentId now takes a nullable
+        // contractVersion filter; the controller passes null (no filter) so
+        // the legacy 2-arg endpoint behavior is preserved.
+        return discovery.searchInstancesByAgentId(tenantId, agentId, null);
     }
 
     /**
