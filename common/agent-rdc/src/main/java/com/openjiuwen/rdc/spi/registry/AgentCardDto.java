@@ -4,17 +4,17 @@ import java.util.Objects;
 
 /**
  * Discovery-result DTO returned by
- * {@link AgentDiscoveryService#searchInstancesByAgentId(String, String)}.
+ * {@link AgentDiscoveryService#searchInstancesByAgentId(String, String, String)}.
  *
  * <p>Authority: ADR-0160 decision 2 (revised by REQ-2026-004, then
- * REQ-2026-006) + RB6. The ICD routing fields ({@code routeHandle} /
- * {@code health} / {@code contractVersion} / {@code capabilityVersion} /
- * {@code selectionHint = weight + region} / {@code maxConcurrency}) are
- * always populated when a match is found. The business definition fields
- * ({@code agentName} / {@code frameworkType}) are {@link Nullable @Nullable}
- * — {@code searchInstancesByAgentId} populates them for callers that need
- * the full card view. Per HD3-006 the DTO never carries the physical
- * endpoint or {@code routeKey} in plain form — only the opaque
+ * REQ-2026-006, then FEAT-016) + RB6. The ICD routing fields ({@code serviceId}
+ * / {@code routeHandle} / {@code health} / {@code contractVersion} /
+ * {@code capabilityVersion} / {@code selectionHint = weight + region} /
+ * {@code maxConcurrency}) are always populated when a match is found. The
+ * business definition fields ({@code agentName} / {@code frameworkType}) are
+ * {@link Nullable @Nullable} — {@code searchInstancesByAgentId} populates them
+ * for callers that need the full card view. Per HD3-006 the DTO never carries
+ * the physical endpoint or {@code routeKey} in plain form — only the opaque
  * {@code routeHandle}; the forwarding layer recovers the endpoint via
  * {@link AgentDiscoveryService#resolveRouteHandle(String, String)}.
  *
@@ -38,6 +38,14 @@ import java.util.Objects;
  *       {@code routeHandle}.</li>
  * </ul>
  *
+ * <p>FEAT-016 阶段一 changes (baseline-breaking):
+ * <ul>
+ *   <li>Added {@code serviceId} field — the logical service identifier
+ *       (host only, caller-overridable). Visible in the agent/client
+ *       projection layer per L2 §2.3.2 so callers can group instances by
+ *       logical service. Sourced from {@code RegistryRow.serviceId}.</li>
+ * </ul>
+ *
  * <p>Hand-written builder (no Lombok) so the {@code spi.registry} package
  * stays pure Java (ADR-0160 decision 1).
  */
@@ -45,6 +53,7 @@ public final class AgentCardDto {
 
     // ---- ICD routing fields (always populated on match) ----
 
+    private final String serviceId;
     private final String routeHandle;
     private final String health;
     private final String contractVersion;
@@ -59,6 +68,7 @@ public final class AgentCardDto {
     @Nullable private final FrameworkType frameworkType;
 
     private AgentCardDto(Builder b) {
+        this.serviceId = b.serviceId;
         this.routeHandle = b.routeHandle;
         this.health = b.health;
         this.contractVersion = b.contractVersion;
@@ -68,6 +78,15 @@ public final class AgentCardDto {
         this.maxConcurrency = b.maxConcurrency;
         this.agentName = b.agentName;
         this.frameworkType = b.frameworkType;
+    }
+
+    /**
+     * Logical service identifier (host only, caller-overridable). FEAT-016
+     * adds this field to the agent/client projection layer per L2 §2.3.2 —
+     * callers can group instances by logical service.
+     */
+    public String getServiceId() {
+        return serviceId;
     }
 
     public String getRouteHandle() {
@@ -113,6 +132,7 @@ public final class AgentCardDto {
     }
 
     public static final class Builder {
+        private String serviceId;
         private String routeHandle;
         private String health;
         private String contractVersion;
@@ -124,6 +144,11 @@ public final class AgentCardDto {
         private FrameworkType frameworkType;
 
         private Builder() {
+        }
+
+        public Builder serviceId(String serviceId) {
+            this.serviceId = serviceId;
+            return this;
         }
 
         public Builder routeHandle(String routeHandle) {
@@ -172,6 +197,7 @@ public final class AgentCardDto {
         }
 
         public AgentCardDto build() {
+            Objects.requireNonNull(serviceId, "serviceId");
             Objects.requireNonNull(routeHandle, "routeHandle");
             Objects.requireNonNull(health, "health");
             Objects.requireNonNull(contractVersion, "contractVersion");
