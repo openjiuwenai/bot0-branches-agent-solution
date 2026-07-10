@@ -46,6 +46,8 @@ import java.util.UUID;
  *       routeHandle to a physical endpoint (REQ-2026-006 new)</li>
  * </ul>
  *
+ * TODO FEAT-016 Task 7: serviceId is now caller-overridable (public setter); this paragraph is stale and will be rewritten in Task 7.
+ *
  * <p>REQ-2026-006: the register endpoint derives {@code serviceId} from
  * {@code endpointUrl} via {@link ServiceIdCodec#applyTo(AgentRegistryEntry)}
  * after deserialization. The entry's {@code setServiceId} is package-private
