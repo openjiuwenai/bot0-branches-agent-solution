@@ -22,8 +22,9 @@ import java.util.Map;
  *
  * <p><b>IFF 契约</b>: replan count ⟺ over-limit escalate. Strip the count increment
  * → canReplan永远 true →永不 forceFinish → 测试 RED.
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class ReplanRail extends AgentRail {
 
     public static final String REPLAN_EXCEEDED_KEY = "replan_exceeded";
@@ -34,17 +35,23 @@ public class ReplanRail extends AgentRail {
     private final int maxReplan;
     private int replanCount = 0;
 
-    /** 指定最大 replan 次数构造 rail。 */
+    /**
+     * 指定最大 replan 次数构造 rail。
+     */
     public ReplanRail(int maxReplan) {
         this.maxReplan = maxReplan;
     }
 
-    /** 默认构造，最大 replan 次数取 2。 */
+    /**
+     * 默认构造，最大 replan 次数取 2。
+     */
     public ReplanRail() {
         this(2);
     }
 
-    /** Current replan count (test observation). */
+    /**
+     * Current replan count (test observation).
+     */
     public synchronized int replanCount() {
         return replanCount;
     }
@@ -60,7 +67,9 @@ public class ReplanRail extends AgentRail {
         return replanCount > maxReplan;
     }
 
-    /** 模型回调钩子：检测 __replan__ 调用并计数，超限则 forceFinish 降级终态。 */
+    /**
+     * 模型回调钩子：检测 __replan__ 调用并计数，超限则 forceFinish 降级终态。
+     */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {

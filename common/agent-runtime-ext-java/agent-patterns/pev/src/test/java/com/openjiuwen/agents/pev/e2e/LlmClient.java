@@ -121,26 +121,32 @@ final class LlmClient {
      */
     private static String extractContent(String json) {
         String content = extractJsonStringField(json, "content");
-        if (content != null && !content.isEmpty())
+        if (content != null && !content.isEmpty()) {
             return content;
+        }
 
         String reasoningContent = extractJsonStringField(json, "reasoning_content");
-        if (reasoningContent != null && !reasoningContent.isEmpty())
+        if (reasoningContent != null && !reasoningContent.isEmpty()) {
             return reasoningContent;
+        }
 
         String reasoning = extractJsonStringField(json, "reasoning");
-        if (reasoning != null && !reasoning.isEmpty())
+        if (reasoning != null && !reasoning.isEmpty()) {
             return reasoning;
+        }
 
         return "";
     }
 
-    /** Extract the JSON string value for a given field name (best-effort, no Jackson). */
+    /**
+     * Extract the JSON string value for a given field name (best-effort, no Jackson).
+     */
     private static String extractJsonStringField(String json, String field) {
         String search = "\"" + field + "\":\"";
         int idx = json.indexOf(search);
-        if (idx < 0)
+        if (idx < 0) {
             return "";
+        }
         int start = idx + search.length();
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
@@ -150,8 +156,9 @@ final class LlmClient {
                 sb.append(n == 'n' ? (char) 10 : n);
                 continue;
             }
-            if (c == '"')
+            if (c == '"') {
                 break;
+            }
             sb.append(c);
         }
         return sb.toString();

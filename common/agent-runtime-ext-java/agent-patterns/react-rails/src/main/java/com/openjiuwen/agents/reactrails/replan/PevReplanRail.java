@@ -11,7 +11,6 @@ import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
-import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -70,8 +69,9 @@ import java.util.Set;
  *   <li>PerceptionUnreliable is not diagnosed here — no verifier is involved in the __replan__
  *       path. The dispatch function still handles it if called, but it's structurally deferred.</li>
  * </ul>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class PevReplanRail extends AgentRail {
 
     public static final String REPLAN_EXCEEDED_KEY = "replan_exceeded";
@@ -83,22 +83,30 @@ public class PevReplanRail extends AgentRail {
     private int replanCount = 0;
     private final Set<String> recentToolFailureNodes = new LinkedHashSet<>();
 
-    /** 指定最大 replan 次数构造 rail。 */
+    /**
+     * 指定最大 replan 次数构造 rail。
+     */
     public PevReplanRail(int maxReplan) {
         this.maxReplan = maxReplan;
     }
 
-    /** 默认构造，最大 replan 次数取 2。 */
+    /**
+     * 默认构造，最大 replan 次数取 2。
+     */
     public PevReplanRail() {
         this(2);
     }
 
-    /** Current replan count (test observation). */
+    /**
+     * Current replan count (test observation).
+     */
     public synchronized int replanCount() {
         return replanCount;
     }
 
-    /** Recent tool failure nodes (test observation). */
+    /**
+     * Recent tool failure nodes (test observation).
+     */
     public synchronized List<String> recentToolFailureNodes() {
         return List.copyOf(recentToolFailureNodes);
     }
@@ -126,10 +134,11 @@ public class PevReplanRail extends AgentRail {
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {
-        if (!(ctx.getInputs() instanceof ModelCallInputs)) {
+        Object rawInputs = ctx.getInputs();
+        if (!(rawInputs instanceof com.openjiuwen.core.singleagent.rail.ModelCallInputs)) {
             return;
         }
-        ModelCallInputs inputs = (ModelCallInputs) ctx.getInputs();
+        var inputs = (com.openjiuwen.core.singleagent.rail.ModelCallInputs) rawInputs;
         if (!(inputs.getResponse() instanceof AssistantMessage msg)) {
             return;
         }
@@ -212,12 +221,14 @@ public class PevReplanRail extends AgentRail {
      * Escaped quotes are not handled (not needed for LLM-generated tool call args in practice).
      */
     private static String extractJsonStringField(String json, String field) {
-        if (json == null || json.isBlank())
+        if (json == null || json.isBlank()) {
             return "";
+        }
         String search = "\"" + field + "\":\"";
         int start = json.indexOf(search);
-        if (start < 0)
+        if (start < 0) {
             return "";
+        }
         start += search.length();
         int end = json.indexOf('"', start);
         if (end < 0)

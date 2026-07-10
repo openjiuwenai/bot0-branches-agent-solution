@@ -23,19 +23,26 @@ import java.util.Set;
 public sealed interface ReplanAction
         permits ReplanAction.LocalReplan, ReplanAction.GlobalReplan, ReplanAction.AcceptPartial {
 
-    /** Re-execute the failed nodes only, injecting corrective feedback. */
+    /**
+     * Re-execute the failed nodes only, injecting corrective feedback.
+     */
     record LocalReplan(Set<String> failedNodes, String feedback) implements ReplanAction {
         public LocalReplan {
             failedNodes = Set.copyOf(failedNodes);
         }
     }
 
-    /** Discard the current plan and re-plan the whole goal. */
+    /**
+     * Discard the current plan and re-plan the whole goal.
+     */
     record GlobalReplan(String feedback) implements ReplanAction {
     }
 
-    /** Stop the loop and return a partial / degraded result honestly.
-    /** Stop the loop and return a partial / degraded result honestly.  * @since 2026-07*/
+    /**
+     * Stop the loop and return a partial / degraded result honestly.
+     *
+     * @since 2026-07
+     */
     record AcceptPartial(String reason) implements ReplanAction {
     }
 }

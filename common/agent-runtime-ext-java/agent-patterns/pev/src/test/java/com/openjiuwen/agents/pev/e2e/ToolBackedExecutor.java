@@ -65,7 +65,9 @@ final class ToolBackedExecutor implements PevComponents.Executor {
         return new NodeResult.Success(ans);
     }
 
-    /** Longest-name match so e.g. {@code getCaseStatus} wins over prefixes. */
+    /**
+     * Longest-name match so e.g. {@code getCaseStatus} wins over prefixes.
+     */
     private String matchTool(String description) {
         String hit = null;
         for (String name : tools.keySet()) {
@@ -76,7 +78,9 @@ final class ToolBackedExecutor implements PevComponents.Executor {
         return hit;
     }
 
-    /** Parse {@code key: value} / {@code "key":"value"} pairs from the description. */
+    /**
+     * Parse {@code key: value} / {@code "key":"value"} pairs from the description.
+     */
     private static Map<String, Object> parseArgs(String description) {
         Map<String, Object> args = new LinkedHashMap<>();
         // match: caseNo: CLM-2026-REDUCE  |  "caseNo": "CLM-2026-REDUCE"

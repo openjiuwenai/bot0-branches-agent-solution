@@ -18,8 +18,9 @@ import java.util.List;
  *   <li><b>Rule-based</b> (deterministic): keyword/pattern matching, no LLM call.</li>
  *   <li><b>LLM-as-judge</b> (probabilistic): a separate LLM call evaluates quality/coverage.</li>
  * </ul>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public interface CriteriaVerifier {
 
     /**

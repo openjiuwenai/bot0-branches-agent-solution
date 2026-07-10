@@ -43,8 +43,9 @@ import java.util.stream.Collectors;
  *   <li><b>verify fail + retries exhausted</b> → requestForceFinish(degraded=true, unmet=violations)
  *       — honest degrade terminal.</li>
  * </ul>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class CriteriaReplanBridgeRail extends AgentRail {
 
     private static final String LINE_SEPARATOR = System.lineSeparator();

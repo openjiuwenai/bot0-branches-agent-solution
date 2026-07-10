@@ -50,17 +50,26 @@ import java.util.concurrent.atomic.AtomicReference;
  * so all agents sharing this class see the same override. In a multi-agent scenario
  * each agent should have its own model instance; the static channel is the
  * cross-hook communication primitive.
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
-    /** Injection modes. */
+    /**
+     * Injection modes.
+     */
     public enum InjectionMode {
-        /** No injection — pass-through, identical to ToolCallingEnforcingModel. */
+        /**
+         * No injection — pass-through, identical to ToolCallingEnforcingModel.
+         */
         NONE,
-        /** Append text to the existing SystemMessage. */
+        /**
+         * Append text to the existing SystemMessage.
+         */
         SYSTEM_PROMPT_APPEND,
-        /** Inject a UserMessage with phase-override text before the call. */
+        /**
+         * Inject a UserMessage with phase-override text before the call.
+         */
         USER_MESSAGE_INJECT,
         /**
          * One-shot injection of the "先扩后收" (widen then converge)
@@ -69,13 +78,19 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
          */
         FIRST_PRINCIPLES,
         // PLAN mode: divergent/exploratory framing
-        /** Replace SystemMessage with divergent/exploratory framing (PLAN phase). */
+        /**
+         * Replace SystemMessage with divergent/exploratory framing (PLAN phase).
+         */
         PLAN_MODE,
-        /** Replace SystemMessage with convergent/execution framing (BUILD phase). */
+        /**
+         * Replace SystemMessage with convergent/execution framing (BUILD phase).
+         */
         BUILD_MODE
     }
 
-    /** Default injection mode. */
+    /**
+     * Default injection mode.
+     */
     public static final InjectionMode DEFAULT_MODE = InjectionMode.NONE;
 
     private static final AtomicReference<String> phaseOverride = new AtomicReference<>(null);
@@ -91,14 +106,18 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
             + "1. 【先扩】首先广泛探索可能的解决方案空间，从多个角度审视问题，提出发散性的思路和方法" + LINE_SEPARATOR + "2. 【后收】然后系统性地评估和对比各方案，收敛到最佳执行路径，深入实施"
             + LINE_SEPARATOR + LINE_SEPARATOR + "请在整个推理过程中有意识地应用这一策略，主动标记当前位置（扩/收阶段），确保不急于收敛也不过度发散。";
 
-    /** PLAN phase system prompt (divergent/exploratory framing). */
+    /**
+     * PLAN phase system prompt (divergent/exploratory framing).
+     */
     private static final String PLAN_SYSTEM_PROMPT = "You are in the DIVERGENT EXPLORATION phase. "
             + "Analyze the problem from at least 3 different angles. "
             + "Each angle should have concrete reasoning, evidence, and " + "data — not just bullet titles. "
             + "Use available tools to gather real information. "
             + "Do NOT converge on a single answer yet — explore first.";
 
-    /** BUILD phase system prompt (convergent/execution framing). */
+    /**
+     * BUILD phase system prompt (convergent/execution framing).
+     */
     private static final String BUILD_SYSTEM_PROMPT = "You are in the CONVERGENT EXECUTION phase. "
             + "Focus on producing a single complete answer that meets " + "all success criteria. "
             + "Incorporate insights from your earlier exploration. "
@@ -122,32 +141,44 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     // ---- Static channel (thread-safe) ----
 
-    /** Set the phase override for the next invoke. */
+    /**
+     * Set the phase override for the next invoke.
+     */
     public static void setPhaseOverride(String text) {
         phaseOverride.set(text);
     }
 
-    /** Read and clear the phase override. */
+    /**
+     * Read and clear the phase override.
+     */
     public static String consumePhaseOverride() {
         return phaseOverride.getAndSet(null);
     }
 
-    /** Peek at the current phase override without consuming. */
+    /**
+     * Peek at the current phase override without consuming.
+     */
     public static String peekPhaseOverride() {
         return phaseOverride.get();
     }
 
-    /** Set global injection mode. */
+    /**
+     * Set global injection mode.
+     */
     public static void setInjectionMode(InjectionMode m) {
         mode.set(m);
     }
 
-    /** Get current injection mode. */
+    /**
+     * Get current injection mode.
+     */
     public static InjectionMode getInjectionMode() {
         return mode.get();
     }
 
-    /** Reset to defaults (NONE, no override). */
+    /**
+     * Reset to defaults (NONE, no override).
+     */
     public static void resetToDefaults() {
         mode.set(DEFAULT_MODE);
         phaseOverride.set(null);

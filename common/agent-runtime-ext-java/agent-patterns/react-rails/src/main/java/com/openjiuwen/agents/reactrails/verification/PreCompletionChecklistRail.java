@@ -50,31 +50,44 @@ import java.util.Set;
  *   <li>Strip setInjectionMode(PLAN_MODE) → system prompt unchanged → LLM may skip
  *       divergent exploration → RED (mock-assert exploration keywords in output).</li>
  * </ul>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class PreCompletionChecklistRail extends AgentRail {
 
-    /** Priority: 80 — fires after VotingCriticVerifierRail (100)
-     *  and before StagnationDetectionRail (50) in afterModelCall.
-     *  Same priority applies to beforeModelCall (no other rail uses it today). */
+    /**
+     * Priority: 80 — fires after VotingCriticVerifierRail (100) and before
+     * StagnationDetectionRail (50) in afterModelCall. Same priority applies to
+     * beforeModelCall (no other rail uses it today).
+     */
     private static final int PRIORITY = 80;
 
-    /** Max iterations in PLAN phase before switching to BUILD. */
+    /**
+     * Max iterations in PLAN phase before switching to BUILD.
+     */
     private final int planMaxRounds;
 
     // ---- Internal state ----
 
-    /** Current iteration count (tracked by afterModelCall). */
+    /**
+     * Current iteration count (tracked by afterModelCall).
+     */
     private int callCount = 0;
 
-    /** Rolling window of output content prefixes (for observation, not used for detection). */
+    /**
+     * Rolling window of output content prefixes (for observation, not used for detection).
+     */
     private final List<String> outputHashes = new ArrayList<>();
     private static final int OUTPUT_HASH_WINDOW = 5;
 
-    /** Set of tool names ever called (for diversity check). */
+    /**
+     * Set of tool names ever called (for diversity check).
+     */
     private final Set<String> toolNamesCalled = new LinkedHashSet<>();
 
-    /** Whether the previous iteration produced a final answer (no tool calls). */
+    /**
+     * Whether the previous iteration produced a final answer (no tool calls).
+     */
     private boolean previousWasFinal = false;
 
     // ---- Construction ----

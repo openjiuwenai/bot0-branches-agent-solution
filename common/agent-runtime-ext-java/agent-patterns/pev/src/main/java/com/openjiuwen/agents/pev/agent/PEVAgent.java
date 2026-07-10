@@ -46,13 +46,16 @@ import java.util.Map;
  *   <li>LocalReplan re-executes failed nodes within the same agent (whole-step retry with
  *       feedback); precise per-node re-execution needs a DAG/multi-agent runtime.</li>
  * </ul>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class PEVAgent extends BaseAgent {
 
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
-    /** PEV config — narrow, only the switches the control flow actually reads. */
+    /**
+     * PEV config — narrow, only the switches the control flow actually reads.
+     */
     public static final class PevConfig {
         public final int maxRetries;
         public PevConfig(int maxRetries) {

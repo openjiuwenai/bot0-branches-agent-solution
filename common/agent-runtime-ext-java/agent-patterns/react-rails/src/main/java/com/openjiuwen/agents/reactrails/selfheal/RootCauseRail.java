@@ -45,8 +45,9 @@ import java.util.Map;
  * <p>Honest boundary: this rail covers DeviceFailure → Degrade only.
  * PerceptionUnreliable / PlanOrAnswerError need criteria-verify signal integration
  * ({@link com.openjiuwen.agents.reactrails.verification.CriteriaVerificationRail}), deferred.
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class RootCauseRail extends AgentRail {
 
     public static final String ROOT_CAUSE_DEGRADED_KEY = "root_cause_degraded";
@@ -57,12 +58,16 @@ public class RootCauseRail extends AgentRail {
     private boolean pendingDegrade = false;
     private String failedTool = null;
 
-    /** Test observation: is there a pending degrade (onToolException marked, afterModelCall not yet fired)? */
+    /**
+     * Test observation: is there a pending degrade (onToolException marked, afterModelCall not yet fired)?
+     */
     public synchronized boolean hasPendingDegrade() {
         return pendingDegrade;
     }
 
-    /** 工具异常钩子：设备故障信号→记录失败工具名并标记 pendingDegrade（不在本钩子终止）。 */
+    /**
+     * 工具异常钩子：设备故障信号→记录失败工具名并标记 pendingDegrade（不在本钩子终止）。
+     */
     @Override
     public synchronized void onToolException(AgentCallbackContext context) {
         // Tool failure → device breakdown → mark for degrade (afterModelCall will terminate)
@@ -70,7 +75,9 @@ public class RootCauseRail extends AgentRail {
         pendingDegrade = true;
     }
 
-    /** 模型回调钩子：若存在 pendingDegrade，触发 forceFinish 降级终态并清除标记。 */
+    /**
+     * 模型回调钩子：若存在 pendingDegrade，触发 forceFinish 降级终态并清除标记。
+     */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext context) {
         if (pendingDegrade) {

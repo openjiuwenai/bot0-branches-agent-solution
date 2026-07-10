@@ -48,19 +48,26 @@ import java.util.stream.Collectors;
  *
  * <p><b>Honest boundary</b>: Phase1 规则提取工具调用签名，Phase2 LLM 摘要已 deferred
  * （需在 rail 内发起 LLM 调用，涉及注入时序复杂度）。
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class HistoryCompressorRail extends AgentRail {
 
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
-    /** 上次压缩边界索引（初始 0 = 未压缩）。 */
+    /**
+     * 上次压缩边界索引（初始 0 = 未压缩）。
+     */
     private int lastBoundary = 0;
 
-    /** 可注入的压缩策略：Phase1 规则提取 → Phase2 LLM 摘要（deferred）。 */
+    /**
+     * 可注入的压缩策略：Phase1 规则提取 → Phase2 LLM 摘要（deferred）。
+     */
     private final Function<List<BaseMessage>, String> compressor;
 
-    /** 默认构造，使用规则提取压缩器（Phase1 only）。 */
+    /**
+     * 默认构造，使用规则提取压缩器（Phase1 only）。
+     */
     public HistoryCompressorRail() {
         this(HistoryCompressorRail::extractToolCallSummary);
     }
@@ -74,7 +81,9 @@ public class HistoryCompressorRail extends AgentRail {
         this.compressor = compressor;
     }
 
-    /** 测试观测点：当前压缩边界。 */
+    /**
+     * 测试观测点：当前压缩边界。
+     */
     public synchronized int lastBoundary() {
         return lastBoundary;
     }

@@ -12,8 +12,9 @@ package com.openjiuwen.agents.reactrails.enforcing;
  * <p>This is a hard runtime exception: the client has been proven unable to forward
  * tool definitions to the LLM API. The application should not attempt further
  * tool-requiring invocations with this client instance.
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class ToolCallingBypassException extends RuntimeException {
 
     public ToolCallingBypassException(String message) {

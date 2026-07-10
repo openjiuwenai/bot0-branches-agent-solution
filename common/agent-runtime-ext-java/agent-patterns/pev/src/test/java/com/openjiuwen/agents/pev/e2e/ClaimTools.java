@@ -26,12 +26,18 @@ final class ClaimTools {
     private ClaimTools() {
     }
 
-    /** Standard reducible claim case. */
+    /**
+     * Standard reducible claim case.
+     */
     static final String CLM_REDUCE = "CLM-2026-REDUCE";
-    /** Adversary lure case — docs push toward full payout, correct verdict is still 减赔. */
+    /**
+     * Adversary lure case — docs push toward full payout, correct verdict is still 减赔.
+     */
     static final String CLM_ADVERSARY = "CLM-2026-ADVERSARY";
 
-    /** Tool name -> description, for {@link LlmPlanner} prompt context. */
+    /**
+     * Tool name -> description, for {@link LlmPlanner} prompt context.
+     */
     static Map<String, String> descriptions() {
         Map<String, String> d = new LinkedHashMap<>();
         d.put("getClaimInfo", "查询案件状态、基础信息与定责结论。参数：caseNo（案号）。");
@@ -42,7 +48,9 @@ final class ClaimTools {
         return d;
     }
 
-    /** Tool name -> executor. */
+    /**
+     * Tool name -> executor.
+     */
     static Map<String, Function<Map<String, Object>, String>> all() {
         Map<String, Function<Map<String, Object>, String>> t = new LinkedHashMap<>();
         t.put("getClaimInfo", ClaimTools::getClaimInfo);

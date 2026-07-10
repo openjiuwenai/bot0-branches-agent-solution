@@ -23,8 +23,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * dispatch), this rail records device-failure telemetry across the whole run.
  *
  * <p>Composable: register via {@link com.openjiuwen.core.singleagent.BaseAgent#registerRail}.
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class RootCauseRail extends AgentRail {
 
     private final AtomicInteger deviceFailureCount = new AtomicInteger();
@@ -45,12 +46,16 @@ public class RootCauseRail extends AgentRail {
         }
     }
 
-    /** Total DeviceFailure occurrences observed across all supersteps. */
+    /**
+     * Total DeviceFailure occurrences observed across all supersteps.
+     */
     public int deviceFailureCount() {
         return deviceFailureCount.get();
     }
 
-    /** Distinct node IDs that produced a DeviceFailure. */
+    /**
+     * Distinct node IDs that produced a DeviceFailure.
+     */
     public Set<String> deviceFailedNodes() {
         return Set.copyOf(deviceFailedNodes);
     }

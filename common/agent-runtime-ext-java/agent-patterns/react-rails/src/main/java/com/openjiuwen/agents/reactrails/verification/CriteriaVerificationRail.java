@@ -41,8 +41,9 @@ import java.util.Map;
  * tool-call 为 String decisionHistory）、Violation（→ 极简 record）。verify 签名从
  * verify(GoalSpec, List&lt;LLMDecision&gt;, LLMDecision.Complete) 改为
  * verify(List&lt;String&gt;, String, String)。语义等价但类型简化（jar 不含 beta.model 类型）。
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class CriteriaVerificationRail extends AgentRail {
 
     public static final String OUTPUT_KEY = "output";
@@ -64,7 +65,9 @@ public class CriteriaVerificationRail extends AgentRail {
         this.successCriteria = List.copyOf(successCriteria);
     }
 
-    /** 模型回调钩子：终态答案走校验→forceFinish 双向门，工具轮则累积决策历史。 */
+    /**
+     * 模型回调钩子：终态答案走校验→forceFinish 双向门，工具轮则累积决策历史。
+     */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {

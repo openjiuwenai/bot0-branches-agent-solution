@@ -39,7 +39,9 @@ final class LlmClient {
     // HttpClient with default settings (standard JDK API).
     private final HttpClient http = HttpClient.newHttpClient();
 
-    /** 发送聊天请求并返回助手端响应内容。 */
+    /**
+     * 发送聊天请求并返回助手端响应内容。
+     */
     String chat(String userPrompt) {
         if (!envPresent()) {
             throw new IllegalStateException("OPENJIUWEN env not set");
@@ -75,22 +77,26 @@ final class LlmClient {
 
     private static String extractContent(String json) {
         String content = extractField(json, "content");
-        if (content != null && !content.isEmpty())
+        if (content != null && !content.isEmpty()) {
             return content;
+        }
         String reasoningContent = extractField(json, "reasoning_content");
-        if (reasoningContent != null && !reasoningContent.isEmpty())
+        if (reasoningContent != null && !reasoningContent.isEmpty()) {
             return reasoningContent;
+        }
         String reasoning = extractField(json, "reasoning");
-        if (reasoning != null && !reasoning.isEmpty())
+        if (reasoning != null && !reasoning.isEmpty()) {
             return reasoning;
+        }
         return "";
     }
 
     private static String extractField(String json, String field) {
         String search = "\"" + field + "\":\"";
         int idx = json.indexOf(search);
-        if (idx < 0)
+        if (idx < 0) {
             return "";
+        }
         int start = idx + search.length();
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
@@ -100,8 +106,9 @@ final class LlmClient {
                 sb.append(n == 'n' ? (char) 10 : n);
                 continue;
             }
-            if (c == '"')
+            if (c == '"') {
                 break;
+            }
             sb.append(c);
         }
         return sb.toString();

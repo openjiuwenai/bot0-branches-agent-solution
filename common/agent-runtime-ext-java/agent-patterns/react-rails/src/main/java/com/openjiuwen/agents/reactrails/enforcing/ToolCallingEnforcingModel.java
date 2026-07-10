@@ -39,8 +39,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   Model m = new ToolCallingEnforcingModel(cliCfg, reqCfg);
  *   agent.setLlm(m);  // unchanged — polymorphism
  * }</pre>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class ToolCallingEnforcingModel extends Model {
 
     private static final String PROBE_TOOL_NAME = "__probe_tool__";
@@ -84,8 +85,9 @@ public class ToolCallingEnforcingModel extends Model {
         String thinkingMode = System.getenv("LLM_THINKING");
         if (thinkingMode != null && !thinkingMode.isEmpty() && !"none".equals(thinkingMode)) {
             Map<String, Object> extendedKwargs = new HashMap<>();
-            if (kwargs != null)
+            if (kwargs != null) {
                 extendedKwargs.putAll(kwargs);
+            }
             if ("thinking-on".equals(thinkingMode) || "thinking-off".equals(thinkingMode)) {
                 Map<String, Object> thinkingParam = new HashMap<>();
                 thinkingParam.put("type", "thinking-on".equals(thinkingMode) ? "enabled" : "disabled");

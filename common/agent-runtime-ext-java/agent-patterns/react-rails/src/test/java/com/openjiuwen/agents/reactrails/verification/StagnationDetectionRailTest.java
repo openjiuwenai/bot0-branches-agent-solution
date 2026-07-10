@@ -252,7 +252,9 @@ class StagnationDetectionRailTest {
         return AgentCallbackContext.builder().agent(new Object()).inputs(inputs).build();
     }
 
-    /** Copy a context with a fresh steering queue (to avoid sharing captured list). */
+    /**
+     * Copy a context with a fresh steering queue (to avoid sharing captured list).
+     */
     private static AgentCallbackContext copyCtx(AgentCallbackContext template, SteeringQueue sq) {
         AgentCallbackContext copy = AgentCallbackContext.builder().agent(new Object()).inputs(template.getInputs())
                 .steeringQueue(sq).build();

@@ -34,12 +34,16 @@ final class LlmPlanner implements PevComponents.Planner {
     private final LlmClient llm;
     private final Map<String, String> tools; // name -> description (for prompt context)
 
-    /** Planner with no tools (pure LLM reasoning). */
+    /**
+     * Planner with no tools (pure LLM reasoning).
+     */
     LlmPlanner(LlmClient llm) {
         this(llm, Map.of());
     }
 
-    /** Planner aware of named tools — tool names are surfaced in the planning prompt. */
+    /**
+     * Planner aware of named tools — tool names are surfaced in the planning prompt.
+     */
     LlmPlanner(LlmClient llm, Map<String, String> tools) {
         this.llm = llm;
         this.tools = tools == null ? Map.of() : tools;
@@ -113,7 +117,9 @@ final class LlmPlanner implements PevComponents.Planner {
         return out;
     }
 
-    /** Extract a JSON string value for the given key from a flat object fragment. */
+    /**
+     * Extract a JSON string value for the given key from a flat object fragment.
+     */
     private static String extractString(String json, String key) {
         String needle = "\"" + key + "\"";
         int i = json.indexOf(needle);

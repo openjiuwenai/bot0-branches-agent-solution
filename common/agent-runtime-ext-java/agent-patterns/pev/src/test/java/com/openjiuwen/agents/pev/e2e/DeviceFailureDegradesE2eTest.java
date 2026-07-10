@@ -41,7 +41,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DeviceFailureDegradesE2eTest {
 
-    /** Always-throw tool — simulates an unreachable external data source. */
+    /**
+     * Always-throw tool — simulates an unreachable external data source.
+     */
     private static final String FAILING_TOOL = "fetchExternalData";
     private static final String FAILING_TOOL_DESC = "获取外部数据（当前不可用，会抛异常）";
     private static final String FAILING_ERROR = "连接超时：外部数据 API 不可达";

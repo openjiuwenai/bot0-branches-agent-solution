@@ -13,16 +13,23 @@ package com.openjiuwen.agents.pev.kernel;
  */
 public sealed interface NodeResult permits NodeResult.Success, NodeResult.DeviceFailure, NodeResult.VerifierFailure {
 
-    /** Node completed, carrying its return value. */
+    /**
+     * Node completed, carrying its return value.
+     */
     record Success(Object value) implements NodeResult {
     }
 
-    /** Tool / infrastructure failure (timeout, network, exception). */
+    /**
+     * Tool / infrastructure failure (timeout, network, exception).
+     */
     record DeviceFailure(String nodeId, String error, boolean isTimeout) implements NodeResult {
     }
 
-    /** Verifier judged the node's output not meeting expectations.
-    /** Verifier judged the node's output not meeting expectations.  * @since 2026-07*/
+    /**
+     * Verifier judged the node's output not meeting expectations.
+     *
+     * @since 2026-07
+     */
     record VerifierFailure(String nodeId, String reason) implements NodeResult {
     }
 }

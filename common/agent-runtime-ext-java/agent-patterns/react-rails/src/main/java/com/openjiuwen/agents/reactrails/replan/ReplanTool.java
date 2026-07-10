@@ -35,8 +35,9 @@ import java.util.Map;
  * under {@code card.getId()} (auto-generated UUID when null). The two keys match ONLY when
  * {@code id} is set explicitly — hence the card sets {@code .id(__replan__)} == {@code .name(...)}.
  * Use {@link #registerOnto(ReActAgent)} to do both atomically.
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class ReplanTool extends Tool {
 
     public static final String TOOL_NAME = "__replan__";
@@ -51,24 +52,32 @@ public class ReplanTool extends Tool {
                     "required", List.of(ARG_REPLAN_REASON)))
             .build();
 
-    /** 构造 ReplanTool，注册固定的 __replan__ 工具卡片。 */
+    /**
+     * 构造 ReplanTool，注册固定的 __replan__ 工具卡片。
+     */
     public ReplanTool() {
         super(CARD);
     }
 
-    /** 返回工具卡片（名称/描述），供 ability manager 注册与 LLM 可见。 */
+    /**
+     * 返回工具卡片（名称/描述），供 ability manager 注册与 LLM 可见。
+     */
     @Override
     public ToolCard getCard() {
         return CARD;
     }
 
-    /** 同步调用：返回结构化确认 Map，含"请总结教训"提示引导 LLM 主动做教训提炼。 */
+    /**
+     * 同步调用：返回结构化确认 Map，含"请总结教训"提示引导 LLM 主动做教训提炼。
+     */
     @Override
     public Object invoke(Map<String, Object> args, Map<String, Object> kwargs) {
         return Map.of("status", "replan_recorded", "message", "Replan 已确认。请总结之前的尝试经验（哪些可用、哪些需改变）" + "，然后基于新方向继续。");
     }
 
-    /** 流式调用：将同步结果包装成单元素迭代器返回。 */
+    /**
+     * 流式调用：将同步结果包装成单元素迭代器返回。
+     */
     @Override
     public Iterator<Object> stream(Map<String, Object> args, Map<String, Object> kwargs) {
         return List.<Object>of(invoke(args, kwargs)).iterator();

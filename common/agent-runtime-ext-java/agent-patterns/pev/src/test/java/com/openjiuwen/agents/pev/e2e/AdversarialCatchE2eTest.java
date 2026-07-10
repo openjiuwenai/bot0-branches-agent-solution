@@ -49,7 +49,9 @@ class AdversarialCatchE2eTest {
 
     private static final LlmClient LLM = new LlmClient();
 
-    /** Captured verify result — held out-of-band so the test can soft-assert the channel ran. */
+    /**
+     * Captured verify result — held out-of-band so the test can soft-assert the channel ran.
+     */
     private static final VerifyHolder VERIFY_HOLDER = new VerifyHolder();
 
     @Test
@@ -153,8 +155,9 @@ class AdversarialCatchE2eTest {
             }
             StringBuilder sb = new StringBuilder();
             completed.forEach((id, r) -> {
-                if (sb.length() > 0)
+                if (sb.length() > 0) {
                     sb.append(" | ");
+                }
                 sb.append('[').append(id).append("] ");
                 if (r instanceof NodeResult.Success s) {
                     sb.append(s.value());
@@ -169,7 +172,9 @@ class AdversarialCatchE2eTest {
             return sb.toString();
         }
 
-        /** FAIL ⇒ prefer structurally-failed nodes; else (content failure) implicate all. */
+        /**
+         * FAIL ⇒ prefer structurally-failed nodes; else (content failure) implicate all.
+         */
         private static Set<String> collectFailedNodes(Map<String, NodeResult> completed) {
             Set<String> failed = new LinkedHashSet<>();
             for (var e : completed.entrySet()) {
@@ -184,7 +189,9 @@ class AdversarialCatchE2eTest {
         }
     }
 
-    /** Minimal mutable holder so the test can confirm the verifier actually fired. */
+    /**
+     * Minimal mutable holder so the test can confirm the verifier actually fired.
+     */
     private static final class VerifyHolder {
         volatile PevKernel.VerifyResult last;
     }

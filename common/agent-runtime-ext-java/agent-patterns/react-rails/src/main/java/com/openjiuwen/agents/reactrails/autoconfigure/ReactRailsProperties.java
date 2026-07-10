@@ -17,18 +17,25 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * reactrails.criteria=给出配置建议,引用风险评估
  * reactrails.max-replan=2
  * </pre>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 @ConfigurationProperties(prefix = "reactrails")
 public class ReactRailsProperties {
 
-    /** Comma-separated success criteria for CriteriaVerificationRail. Empty = skip criteria rail. */
+    /**
+     * Comma-separated success criteria for CriteriaVerificationRail. Empty = skip criteria rail.
+     */
     private List<String> criteria = new ArrayList<>();
 
-    /** Maximum replan count for ReplanRail. -1 = disable replan rail. */
+    /**
+     * Maximum replan count for ReplanRail. -1 = disable replan rail.
+     */
     private int maxReplan = 2;
 
-    /** Enable message history compression on __replan__ tool call (default off). */
+    /**
+     * Enable message history compression on __replan__ tool call (default off).
+     */
     private boolean historyCompression = false;
 
     /**

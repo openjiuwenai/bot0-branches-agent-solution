@@ -180,7 +180,9 @@ class PevReplanRailTest {
         return ctx;
     }
 
-    /** Simple test stub for {@link SteeringQueue}. */
+    /**
+     * Simple test stub for {@link SteeringQueue}.
+     */
     static class TestSteeringQueue implements SteeringQueue {
         final List<String> steered = new ArrayList<>();
 

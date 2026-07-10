@@ -62,7 +62,9 @@ final class LlmVerifier implements PevComponents.Verifier {
         return new PevKernel.VerifyResult(false, failed, verdict);
     }
 
-    /** Concatenate Success values; structural failures surfaced inline so the LLM can see them. */
+    /**
+     * Concatenate Success values; structural failures surfaced inline so the LLM can see them.
+     */
     private static String assembleOutput(Map<String, NodeResult> completed) {
         if (completed == null || completed.isEmpty()) {
             return "(无执行结果)";

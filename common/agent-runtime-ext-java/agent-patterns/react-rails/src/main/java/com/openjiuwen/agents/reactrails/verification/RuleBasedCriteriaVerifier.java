@@ -20,11 +20,14 @@ import java.util.Locale;
  * <p>This is the default verifier for {@link CriteriaVerificationRail} when no
  * LLM-backed verifier is injected — it covers the rule-based path (output/history
  * keyword coverage), leaving the LLM-judge path to a future injected verifier.
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
 
-    /** When a criterion can't be keyword-checked, treat as violation (honest). */
+    /**
+     * When a criterion can't be keyword-checked, treat as violation (honest).
+     */
     public static final String ASSUME_FAIL_REASON = "无法用关键词验证，默认不通过（注入 LLM verifier 做质量判断）";
 
     @Override

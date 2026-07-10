@@ -60,26 +60,39 @@ import java.util.Objects;
  *   <li>Strip {@code ctx.pushSteering(...)} on brake → steering queue empty → test RED</li>
  *   <li>Strip {@code ctx.requestForceFinish(...)} on maxStagnations → loop spins forever → test RED</li>
  * </ul>
-
-  * @since 2026-07*/
+ *
+ * @since 2026-07
+ */
 public class StagnationDetectionRail extends AgentRail {
 
-    /** Priority: 50 — medium, between voting critic (100) and bridge rail (0). */
+    /**
+     * Priority: 50 — medium, between voting critic (100) and bridge rail (0).
+     */
     private static final int PRIORITY = 50;
 
-    /** Max identical final-answer outputs before brake steering. */
+    /**
+     * Max identical final-answer outputs before brake steering.
+     */
     public static final int MAX_OUTPUT_REPEATS = 3;
 
-    /** Max identical tool-call sequences before brake steering. */
+    /**
+     * Max identical tool-call sequences before brake steering.
+     */
     public static final int MAX_TOOL_CYCLE_REPEATS = 3;
 
-    /** Total stagnation events before forceFinish(degraded). */
+    /**
+     * Total stagnation events before forceFinish(degraded).
+     */
     public static final int MAX_STAGNATIONS = 2;
 
-    /** How many recent output hashes to keep in the sliding window. */
+    /**
+     * How many recent output hashes to keep in the sliding window.
+     */
     public static final int OUTPUT_HISTORY_SIZE = 5;
 
-    /** How many recent tool-call signatures to keep. */
+    /**
+     * How many recent tool-call signatures to keep.
+     */
     public static final int TOOL_HISTORY_SIZE = 8;
 
     // Result keys (aligned with bridge rail naming)
@@ -90,28 +103,44 @@ public class StagnationDetectionRail extends AgentRail {
 
     // ---- Stagnation state ----
 
-    /** Sliding window of recent final-answer content. */
+    /**
+     * Sliding window of recent final-answer content.
+     */
     private final List<String> outputHistory = new ArrayList<>();
 
-    /** Sliding window of tool-call signatures. */
+    /**
+     * Sliding window of tool-call signatures.
+     */
     private final List<String> toolSignatureHistory = new ArrayList<>();
 
-    /** How many of the last consecutive outputs were identical. */
+    /**
+     * How many of the last consecutive outputs were identical.
+     */
     private int consecutiveOutputRepeats = 0;
 
-    /** How many times the same tool sequence repeated. */
+    /**
+     * How many times the same tool sequence repeated.
+     */
     private int toolCycleRepeats = 0;
 
-    /** The last tool-call sequence signature (name1|name2|...). */
+    /**
+     * The last tool-call sequence signature (name1|name2|...).
+     */
     private String lastToolSignature = null;
 
-    /** Total stagnation events across all categories. */
+    /**
+     * Total stagnation events across all categories.
+     */
     private int totalStagnations = 0;
 
-    /** Last observed tool-call round (for onToolException correlation). */
+    /**
+     * Last observed tool-call round (for onToolException correlation).
+     */
     private String lastToolRoundSignature = null;
 
-    /** Track consecutive tool failures on the same tool. */
+    /**
+     * Track consecutive tool failures on the same tool.
+     */
     private String lastFailedTool = null;
     private int consecutiveToolFailures = 0;
 
@@ -124,22 +153,30 @@ public class StagnationDetectionRail extends AgentRail {
 
     // ---- Test observation points ----
 
-    /** Current consecutive output repeat count. */
+    /**
+     * Current consecutive output repeat count.
+     */
     public synchronized int getConsecutiveOutputRepeats() {
         return consecutiveOutputRepeats;
     }
 
-    /** Total stagnation events. */
+    /**
+     * Total stagnation events.
+     */
     public synchronized int getTotalStagnations() {
         return totalStagnations;
     }
 
-    /** Output history window (copy). */
+    /**
+     * Output history window (copy).
+     */
     public synchronized List<String> getOutputHistory() {
         return List.copyOf(outputHistory);
     }
 
-    /** Current tool cycle repeat count. */
+    /**
+     * Current tool cycle repeat count.
+     */
     public synchronized int getToolCycleRepeats() {
         return toolCycleRepeats;
     }
@@ -198,8 +235,9 @@ public class StagnationDetectionRail extends AgentRail {
 
     private void checkOutputStagnation(AgentCallbackContext ctx, AssistantMessage msg) {
         String output = contentOf(msg);
-        if (output == null || output.isEmpty())
+        if (output == null || output.isEmpty()) {
             return;
+        }
 
         // Build a lightweight content hash (first 200 chars for comparison)
         String hash = output.length() > 200 ? output.substring(0, 200) : output;
@@ -261,7 +299,7 @@ public class StagnationDetectionRail extends AgentRail {
 
         // Trigger brake when cycle repeats
         if (toolCycleRepeats >= MAX_TOOL_CYCLE_REPEATS) {
-            String brake = "【检测到工具调用循环】您正在重复使用相同的工具序列（第" + toolCycleRepeats + "次）。请尝试完全不同的工具或方法，" + "不要重复已证明无效的调用路径。";
+            String brake = "【检测到工具调用循环】您正在重复使用相同的工具序列（第" + toolCycleRepeats + "次）。" + "请尝试完全不同的工具或方法，不要重复已证明无效的调用路径。";
 
             ctx.pushSteering(brake);
             SystemPromptInjectingModel.setPhaseOverride("BREAK_LOOP: You are repeating the same tool-call sequence."
