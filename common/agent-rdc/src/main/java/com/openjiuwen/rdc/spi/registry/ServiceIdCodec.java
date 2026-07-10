@@ -26,7 +26,6 @@ import java.util.Locale;
  * @since 2026-07-10
  */
 public final class ServiceIdCodec {
-
     private ServiceIdCodec() {
     }
 

@@ -441,12 +441,8 @@ public class MvpRegistryController {
         String agentId = pathVars.get("agentId");
         String serviceId = pathVars.get("serviceId");
         String instanceId = pathVars.get("instanceId");
-        if (tenantId == null || tenantId.isBlank()
-                || agentId == null || agentId.isBlank()
-                || serviceId == null || serviceId.isBlank()
-                || instanceId == null || instanceId.isBlank()) {
-            throw new IllegalArgumentException("tenantId, agentId, serviceId and instanceId are required");
-        }
+        requireNonBlank("tenantId, agentId, serviceId and instanceId are required",
+                tenantId, agentId, serviceId, instanceId);
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();

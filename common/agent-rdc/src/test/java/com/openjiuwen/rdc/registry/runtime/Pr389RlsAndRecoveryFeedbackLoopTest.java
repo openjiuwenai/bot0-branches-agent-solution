@@ -14,6 +14,7 @@ import com.openjiuwen.rdc.spi.registry.InstanceIdCodec;
 import com.openjiuwen.rdc.spi.registry.ServiceIdCodec;
 
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -25,6 +26,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+
 import javax.sql.DataSource;
 
 /**
@@ -317,7 +319,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     void upsert_preserves_draining_status_across_re_registration() {
         // Register, then force into DRAINING (operator-initiated drain).
         upsertCard(ownerRepo, sampleCard("tenant-drain", "agent-drain"));
-        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate("tenant-drain", "agent-drain", SERVICE_ID, INSTANCE_ID, "DRAINING", false));
+        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate(
+                "tenant-drain", "agent-drain", SERVICE_ID, INSTANCE_ID, "DRAINING", false));
         assertThat(readStatus("tenant-drain", "agent-drain")).isEqualTo("DRAINING");
 
         // Re-register (upsert) the same agent — DRAINING must be preserved.
@@ -336,7 +339,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     @Test
     void upsert_resets_degraded_to_online_on_re_registration() {
         upsertCard(ownerRepo, sampleCard("tenant-rec2", "agent-rec2"));
-        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate("tenant-rec2", "agent-rec2", SERVICE_ID, INSTANCE_ID, "DEGRADED", false));
+        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate(
+                "tenant-rec2", "agent-rec2", SERVICE_ID, INSTANCE_ID, "DEGRADED", false));
         assertThat(readStatus("tenant-rec2", "agent-rec2")).isEqualTo("DEGRADED");
 
         upsertCard(ownerRepo, sampleCard("tenant-rec2", "agent-rec2"));
@@ -360,7 +364,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     void degraded_row_repicked_by_scan_restored_online_on_probe() {
         // Register, then force-degrade to DEGRADED with a backdated heartbeat.
         upsertCard(ownerRepo, sampleCard("tenant-rec", "agent-rec"));
-        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate("tenant-rec", "agent-rec", SERVICE_ID, INSTANCE_ID, "DEGRADED", false));
+        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate(
+                "tenant-rec", "agent-rec", SERVICE_ID, INSTANCE_ID, "DEGRADED", false));
         backdateHeartbeat("tenant-rec", "agent-rec", "10 seconds");
 
         // Scan MUST include DEGRADED rows so the probe can retry them.
@@ -373,7 +378,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         assertThat(targets.get(0).agentId()).isEqualTo("agent-rec");
 
         // Simulate a successful probe → status restored to ONLINE.
-        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate("tenant-rec", "agent-rec", SERVICE_ID, INSTANCE_ID, "ONLINE", true));
+        ownerRepo.updateStatus(new AgentRegistryRepository.StatusUpdate(
+                "tenant-rec", "agent-rec", SERVICE_ID, INSTANCE_ID, "ONLINE", true));
         String statusAfterRecovery = readStatus("tenant-rec", "agent-rec");
         assertThat(statusAfterRecovery)
                 .as("DEGRADED → ONLINE recovery on successful probe")

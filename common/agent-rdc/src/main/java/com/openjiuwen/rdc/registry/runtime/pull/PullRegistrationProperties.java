@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.rdc.registry.runtime.pull;
 
 import com.openjiuwen.rdc.spi.registry.FrameworkType;
@@ -75,8 +76,8 @@ public class PullRegistrationProperties {
         return isEnabled;
     }
 
-    public void setEnabled(boolean enabled) {
-        this.isEnabled = enabled;
+    public void setEnabled(boolean isEnabled) {
+        this.isEnabled = isEnabled;
     }
 
     public List<RuntimeEntry> getRuntimes() {

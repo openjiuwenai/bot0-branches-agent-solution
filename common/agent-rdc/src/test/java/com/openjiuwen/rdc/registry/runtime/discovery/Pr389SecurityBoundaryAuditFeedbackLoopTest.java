@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.rdc.registry.runtime.discovery;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,62 +67,66 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
         observability = new RegistryObservabilityConfig(meterRegistry);
         tenantContext = new TestTenantContext();
         discovery = new PgMvpDiscoveryServiceImpl(
-                new AgentRegistryRepository() {
-                    @Override
-                    public void upsert(AgentRegistryEntry card, String a2aAgentCardJson) {
-                    }
-
-                    @Override
-                    public boolean delete(String tenantId, String agentId) {
-                        return false;
-                    }
-
-                    @Override
-                    public boolean delete(String tenantId, String agentId, String serviceId) {
-                        return false;
-                    }
-
-                    @Override
-                    public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
-                        return false;
-                    }
-
-                    @Override
-                    public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
-                        return List.of();
-                    }
-
-                    @Override
-                    public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
-                        return false;
-                    }
-
-                    @Override
-                    public List<RegistryRow> listByAgentId(String tenantId, String agentId,
-                                                           String contractVersion) {
-                        return List.of();
-                    }
-
-                    @Override
-                    public List<RegistryRow> listByServiceId(String tenantId, String serviceId,
-                                                             String contractVersion) {
-                        return List.of();
-                    }
-
-                    @Override
-                    public List<RegistryRow> listByCapability(String tenantId, String capability,
-                                                              String contractVersion) {
-                        return List.of();
-                    }
-
-                    @Override
-                    public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
-                                                                String serviceId, String instanceId) {
-                        return Optional.empty();
-                    }
-                },
+                buildNoopRepository(),
                 tenantContext,
                 observability);
+    }
+
+    private AgentRegistryRepository buildNoopRepository() {
+        return new AgentRegistryRepository() {
+            @Override
+            public void upsert(AgentRegistryEntry card, String a2aAgentCardJson) {
+            }
+
+            @Override
+            public boolean delete(String tenantId, String agentId) {
+                return false;
+            }
+
+            @Override
+            public boolean delete(String tenantId, String agentId, String serviceId) {
+                return false;
+            }
+
+            @Override
+            public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
+                return false;
+            }
+
+            @Override
+            public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+                return List.of();
+            }
+
+            @Override
+            public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
+                return false;
+            }
+
+            @Override
+            public List<RegistryRow> listByAgentId(String tenantId, String agentId,
+                                                   String contractVersion) {
+                return List.of();
+            }
+
+            @Override
+            public List<RegistryRow> listByServiceId(String tenantId, String serviceId,
+                                                     String contractVersion) {
+                return List.of();
+            }
+
+            @Override
+            public List<RegistryRow> listByCapability(String tenantId, String capability,
+                                                      String contractVersion) {
+                return List.of();
+            }
+
+            @Override
+            public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
+                                                        String serviceId, String instanceId) {
+                return Optional.empty();
+            }
+        };
     }
 
     @AfterEach

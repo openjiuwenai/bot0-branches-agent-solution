@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.rdc;
 
 import org.springframework.boot.SpringApplication;
@@ -39,7 +40,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  */
 @SpringBootApplication
 public class AgentRdcApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(AgentRdcApplication.class, args);
     }

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.rdc.registry.runtime.pull;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,7 +14,6 @@ import com.openjiuwen.rdc.spi.registry.FrameworkType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 

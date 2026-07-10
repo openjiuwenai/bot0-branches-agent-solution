@@ -57,7 +57,6 @@ import java.util.Objects;
  */
 public final class AgentCardDto {
     // ---- ICD routing fields (always populated on match) ----
-
     private final String serviceId;
     private final String routeHandle;
     private final String health;
