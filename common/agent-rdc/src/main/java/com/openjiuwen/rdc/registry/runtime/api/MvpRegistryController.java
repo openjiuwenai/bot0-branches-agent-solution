@@ -304,8 +304,8 @@ public class MvpRegistryController {
      * {@code (tenantId, agentId, serviceId)}. REQ-2026-006 new endpoint:
      * rolling deploy of one replica must not evict other replicas.
      * {@code serviceId} is in the path — HD3-006 allows it because
-     * {@code serviceId} is the server-derived instance id, not the physical
-     * endpoint.
+     * {@code serviceId} is a logical service identifier (host-only,
+     * caller-overridable), not the physical endpoint.
      *
      * <p>FEAT-016: with the 4-field PK, this now deletes <em>all</em>
      * concrete instances under the triple. Use the 4-field

@@ -68,7 +68,9 @@ import java.util.function.Supplier;
  *   <li><b>listByServiceId</b> — FEAT-016 new: same SELECT/sort as
  *       listByAgentId, WHERE on {@code tenant_id AND service_id}.</li>
  *   <li><b>listByCapability</b> — FEAT-016 new: same SELECT/sort, WHERE on
- *       {@code tenant_id AND :capability = ANY(capabilities)}.</li>
+ *       {@code tenant_id AND capabilities @> ARRAY[:capability]::varchar[]}
+ *       (uses {@code @>} containment so the GIN index on {@code capabilities}
+ *       accelerates the lookup; {@code = ANY()} would fall back to seq scan).</li>
  *   <li><b>findEndpoint</b> — {@code SELECT endpoint_url, route_key,
  *       contract_version WHERE tenant_id AND agent_id AND service_id AND
  *       instance_id}; FEAT-016: {@code instance_id} added — the codec
@@ -345,7 +347,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             String sql = "SELECT service_id, instance_id, agent_id, agent_name, framework_type, "
                     + "route_key, contract_version, capability_version, "
                     + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
-                    + " WHERE tenant_id = :tenantId AND :capability = ANY(capabilities)"
+                    + " WHERE tenant_id = :tenantId AND capabilities @> ARRAY[:capability]::varchar[]"
                     + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
                     + " AND (CAST(:contractVersion AS varchar) IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";

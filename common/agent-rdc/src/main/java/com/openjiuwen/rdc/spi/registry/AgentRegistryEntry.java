@@ -29,7 +29,7 @@ import org.a2aproject.sdk.spec.AgentCard;
  * <ul>
  *   <li>Removed {@code capability} field — A2A AgentCard carries no such
  *       concept, pull-based registration cannot derive it. Discovery
- *       collapses to {@link AgentDiscoveryService#searchByAgentId} single
+ *       collapses to {@code AgentDiscoveryService.searchByAgentId} single
  *       value point lookup.</li>
  *   <li>Renamed {@code agentType} (String) → {@code frameworkType}
  *       ({@link FrameworkType} enum) — closed vocabulary replaces free
@@ -51,9 +51,9 @@ import org.a2aproject.sdk.spec.AgentCard;
  *       {@link #hasRegistryKey()} still checks {@code tenantId + agentId}
  *       (the caller-supplied key pair); {@code serviceId} is server-derived
  *       and not part of the caller-facing registry key.</li>
- *   <li>{@link AgentDiscoveryService#searchByAgentId(String, String)} removed
+ *   <li>{@code AgentDiscoveryService.searchByAgentId(String, String)} removed
  *       (single-value lookup cannot represent N instances); replaced by
- *       {@link AgentDiscoveryService#searchInstancesByAgentId(String, String)}
+ *       {@code AgentDiscoveryService.searchInstancesByAgentId(String, String)}
  *       returning {@code List}.</li>
  * </ul>
  *

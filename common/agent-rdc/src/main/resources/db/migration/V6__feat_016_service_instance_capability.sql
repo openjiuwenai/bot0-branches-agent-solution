@@ -42,11 +42,13 @@ ALTER TABLE agent_registry_mvp ADD PRIMARY KEY (tenant_id, agent_id, service_id,
 
 -- ===== Step 7: GIN 索引 on capabilities =====
 -- 支持 by-capability 查询（discovery by capability）。
--- 查询模式：WHERE tenant_id = :tenantId AND :capability = ANY(capabilities)
--- tenant_id 由 PK 前缀（BTREE）覆盖，此处仅需 GIN 加速 ANY(capabilities)。
--- 注：不能用 (tenant_id, capabilities) 复合 GIN —— 标量 VARCHAR 无默认
--- GIN operator class。拆为：PK BTREE 前缀 + 此 GIN 单列索引。
--- 索引名刻意区别于 V4 已删除的 idx_agent_registry_mvp_tenant_capability
--- （BTREE 标量列），避免与 V4 "该索引已删除" 断言冲突。
+-- 查询模式：WHERE tenant_id = :tenantId AND capabilities @> ARRAY[:capability]::varchar[]
+-- tenant_id 由 PK 前缀（BTREE）覆盖，此处仅需 GIN 加速 @> (containment) 操作。
+-- 注：= ANY() 不走 GIN（会退化为 seq scan），必须用 @>/&&/<@ 操作符；
+-- 这里用 @> 因为是「列包含某元素」语义。不能用 (tenant_id, capabilities)
+-- 复合 GIN —— 标量 VARCHAR 无默认 GIN operator class。拆为：PK BTREE 前缀
+-- + 此 GIN 单列索引。索引名刻意区别于 V4 已删除的
+-- idx_agent_registry_mvp_tenant_capability（BTREE 标量列），避免与 V4
+-- "该索引已删除" 断言冲突。
 CREATE INDEX idx_agent_registry_mvp_capabilities_gin
     ON agent_registry_mvp USING GIN (capabilities);
