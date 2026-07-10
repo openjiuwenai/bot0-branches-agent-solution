@@ -126,9 +126,10 @@ public class PevReplanRail extends AgentRail {
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {
-        if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
+        if (!(ctx.getInputs() instanceof ModelCallInputs)) {
             return;
         }
+        ModelCallInputs inputs = (ModelCallInputs) ctx.getInputs();
         if (!(inputs.getResponse() instanceof AssistantMessage msg)) {
             return;
         }

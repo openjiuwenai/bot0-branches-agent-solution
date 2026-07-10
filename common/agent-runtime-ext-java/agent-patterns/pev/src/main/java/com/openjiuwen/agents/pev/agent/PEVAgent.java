@@ -6,8 +6,6 @@ package com.openjiuwen.agents.pev.agent;
 
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
-import com.openjiuwen.agents.pev.kernel.ReplanAction;
-import com.openjiuwen.agents.pev.kernel.RootCause;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.core.singleagent.BaseAgent;
@@ -15,13 +13,10 @@ import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackEvent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * PEV agent — a general agent-service-app on agent-core-java, running the closed loop
@@ -132,7 +127,7 @@ public class PEVAgent extends BaseAgent {
         fire(AgentCallbackEvent.AFTER_TOOL_CALL, session, stepResults);
         completed.putAll(stepResults);
 
-        Set<String> failedToolNodes = new HashSet<>();
+        java.util.Set<String> failedToolNodes = new java.util.HashSet<>();
         for (Map.Entry<String, NodeResult> e : stepResults.entrySet()) {
             if (e.getValue() instanceof NodeResult.DeviceFailure) {
                 failedToolNodes.add(e.getKey());
@@ -144,10 +139,11 @@ public class PEVAgent extends BaseAgent {
         try {
             vr = verifier.verify(userInput, completed);
             if (vr == null) {
-                vr = new PevKernel.VerifyResult(false, Set.of(), "verifier returned null", true);
+                vr = new PevKernel.VerifyResult(false, java.util.Set.of(), "verifier returned null", true);
             }
         } catch (RuntimeException rex) {
-            vr = new PevKernel.VerifyResult(false, Set.of(), "verifier threw: " + rex.getMessage(), false, true);
+            vr = new PevKernel.VerifyResult(false, java.util.Set.of(), "verifier threw: " + rex.getMessage(), false,
+                    true);
         }
 
         if (vr.passed() && !vr.parseFailure()) {
@@ -157,20 +153,22 @@ public class PEVAgent extends BaseAgent {
         }
 
         // Diagnose + Dispatch
-        RootCause cause = PevKernel.diagnoseRootCause(vr, failedToolNodes, completed);
-        ReplanAction action = PevKernel.toReplanAction(cause, vr.feedback(), vr.failedNodes());
+        com.openjiuwen.agents.pev.kernel.RootCause cause = PevKernel.diagnoseRootCause(vr, failedToolNodes, completed);
+        com.openjiuwen.agents.pev.kernel.ReplanAction action = PevKernel.toReplanAction(cause, vr.feedback(),
+                vr.failedNodes());
 
         // terminalGuard: cap retries when still needing replan
-        if (retryCount >= config.maxRetries && !(action instanceof ReplanAction.AcceptPartial)) {
+        if (retryCount >= config.maxRetries
+                && !(action instanceof com.openjiuwen.agents.pev.kernel.ReplanAction.AcceptPartial)) {
             terminal[0] = true;
             return;
         }
 
         switch (action) {
-            case ReplanAction.AcceptPartial ignored -> terminal[0] = true;
-            case ReplanAction.LocalReplan lr -> {
-                List<PevComponents.PlanNode> redo = new ArrayList<>();
-                Set<String> failed = lr.failedNodes() == null ? Set.of() : lr.failedNodes();
+            case com.openjiuwen.agents.pev.kernel.ReplanAction.AcceptPartial ignored -> terminal[0] = true;
+            case com.openjiuwen.agents.pev.kernel.ReplanAction.LocalReplan lr -> {
+                List<PevComponents.PlanNode> redo = new java.util.ArrayList<>();
+                java.util.Set<String> failed = lr.failedNodes() == null ? java.util.Set.of() : lr.failedNodes();
                 for (PevComponents.PlanNode n : plan.nodes()) {
                     if (failed.contains(n.id())) {
                         redo.add(n);
@@ -182,7 +180,7 @@ public class PEVAgent extends BaseAgent {
                             verifyPassed, retryCount + 1, session);
                 }
             }
-            case ReplanAction.GlobalReplan gr -> {
+            case com.openjiuwen.agents.pev.kernel.ReplanAction.GlobalReplan gr -> {
                 PevComponents.Plan newPlan = planner.plan(userInput + " [correction: " + gr.feedback() + "]");
                 completed.clear();
                 runVerifyLoop(userInput, newPlan, completed, terminal, verifyPassed, retryCount + 1, session);

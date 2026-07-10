@@ -318,9 +318,13 @@ class SystemPromptInjectingModelTest {
 
         List<?> captured = capturedMessages.get();
         assertThat(captured).isNotNull();
-        assertThat(captured.get(0)).as("First message must be a SystemMessage when none existed")
+        Object firstMessage = captured.get(0);
+        assertThat(firstMessage).as("First message must be a SystemMessage when none existed")
                 .isInstanceOf(SystemMessage.class);
-        String content = ((SystemMessage) captured.get(0)).getContentAsString();
+        if (!(firstMessage instanceof SystemMessage systemMessage)) {
+            throw new AssertionError("first message should be a SystemMessage");
+        }
+        String content = systemMessage.getContentAsString();
         assertThat(content).as("Created SystemMessage must contain the first-principles prompt").contains("先扩后收")
                 .contains("第一性原理");
     }

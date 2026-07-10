@@ -66,7 +66,8 @@ class SystemPromptInjectLlmE2eTest {
     }
 
     private static int countSubstring(String s, String sub) {
-        int count = 0, idx = 0;
+        int count = 0;
+        int idx = 0;
         while ((idx = s.indexOf(sub, idx)) != -1) {
             count++;
             idx += sub.length();

@@ -129,12 +129,6 @@ public class CriteriaReplanBridgeRail extends AgentRail {
         if (hasGradient) {
             return buildGradientHint(violations);
         }
-        // Fallback: standard hint (backward compat with RuleBasedCriteriaVerifier /
-        // AdaptiveCriteriaVerifier / MultiPassBestOfKVerifier)
-        // Note: no __replan__ hint — empirical data shows imperative replan framing
-        // (data point #1: deepseek-v4-flash "请先调用 __replan__" → 2 replans + degrade)
-        // induces unnecessary replan. MultiPassBestOfKVerifier only signals replan when
-        // BOTH dimensions < FAIL_THRESHOLD, through the violation reason itself.
         return "您的回答未能满足以下成功标准，请据此修改后重新回答：" + LINE_SEPARATOR + violations.stream()
                 .map(v -> "- " + v.criterion() + ": " + v.reason()).collect(Collectors.joining(LINE_SEPARATOR));
     }

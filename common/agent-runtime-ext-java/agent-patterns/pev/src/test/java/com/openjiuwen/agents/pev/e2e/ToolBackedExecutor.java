@@ -55,7 +55,7 @@ final class ToolBackedExecutor implements PevComponents.Executor {
             try {
                 String result = fn.apply(args);
                 return new NodeResult.Success(result);
-            } catch (RuntimeException e) {
+            } catch (IllegalStateException e) {
                 // Device failure — kernel will dispatch AcceptPartial, never retry.
                 return new NodeResult.DeviceFailure(node.id(), e.getMessage(), false);
             }

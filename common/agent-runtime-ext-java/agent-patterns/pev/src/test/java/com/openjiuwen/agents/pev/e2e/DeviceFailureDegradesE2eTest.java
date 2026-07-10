@@ -6,7 +6,6 @@ package com.openjiuwen.agents.pev.e2e;
 
 import com.openjiuwen.agents.pev.agent.PEVAgent;
 import com.openjiuwen.agents.pev.agent.PevComponents;
-import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import org.junit.jupiter.api.Test;
@@ -22,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (spring-ai-ascend) into the PEV module.
  *
  * <p>Scenario: a registered tool always throws → {@link ToolBackedExecutor} maps the throw to
- * {@link NodeResult.DeviceFailure} → the real-LLM {@link LlmVerifier} judges FAIL →
+ * {@code NodeResult.DeviceFailure} → the real-LLM {@link LlmVerifier} judges FAIL →
  * {@link PevKernel#diagnoseRootCause} finds a DeviceFailure node intersecting the verify
  * failed-set → {@link PevKernel#toReplanAction} dispatches {@code AcceptPartial} →
  * {@link PEVAgent} terminates honestly with a degraded result, <b>never retrying</b> the
@@ -91,7 +90,7 @@ class DeviceFailureDegradesE2eTest {
 
     }
 
-    private static final class AlwaysFailToolException extends RuntimeException {
+    private static final class AlwaysFailToolException extends IllegalStateException {
         private AlwaysFailToolException(String message) {
             super(message);
         }
