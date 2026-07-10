@@ -4,22 +4,22 @@
 
 package com.openjiuwen.agents.reactrails.verification;
 
-import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel.InjectionMode;
+import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * PreCompletionChecklistRail 承重测试 — mock context 证 PLAN/BUILD 阶段切换 + guardrail 注入.

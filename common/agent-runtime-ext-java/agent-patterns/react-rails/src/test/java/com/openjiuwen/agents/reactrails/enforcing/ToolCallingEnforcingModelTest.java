@@ -4,6 +4,9 @@
 
 package com.openjiuwen.agents.reactrails.enforcing;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.core.foundation.llm.Model;
 import com.openjiuwen.core.foundation.llm.model_clients.BaseModelClient;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
@@ -19,15 +22,12 @@ import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.foundation.llm.schema.VideoGenerationResponse;
 import com.openjiuwen.core.foundation.tool.schema.ToolInfo;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Mock tests for {@link ToolCallingEnforcingModel} (probe-based approach).
@@ -45,6 +45,8 @@ class ToolCallingEnforcingModelTest {
      * The one-shot probe on the first invoke sends a forced __probe_tool__,
      * gets back text-only response without tool_calls, and throws
      * ToolCallingBypassException — fail-fast before any real invoke.
+     *
+     * @throws Exception when model invocation fails unexpectedly
      */
     @Test
     void invokeThrowsToolCallingBypassExceptionWhenClientDiscardsTools() throws Exception {
@@ -57,7 +59,7 @@ class ToolCallingEnforcingModelTest {
             }
             @Override
             public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
-                return new BaseModelClient(r, c) {
+                return new StubModelClient(r, c) {
                     @Override
                     public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens,
                             String model, Integer n, String stop, BaseOutputParser parser, Float topP,
@@ -65,42 +67,13 @@ class ToolCallingEnforcingModelTest {
                         // LlmBackedModelClient-style: discard tools, return text-only
                         return new AssistantMessage("我先调用 __replan__ 工具来重新规划方案");
                     }
-
-                    @Override
-                    public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float cc, Float d, String e,
-                            Integer f, String g, BaseOutputParser h, Float i, Map<String, Object> j) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c, String d,
-                            Map<String, Object> e) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
-                            Map<String, Object> l) {
-                        throw new UnsupportedOperationException();
-                    }
                 };
             }
         });
 
-        var cliCfg = ModelClientConfig.builder().clientId("test-enforcing-" + System.nanoTime())
-                .clientProvider(provider).apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
-        var reqCfg = ModelRequestConfig.builder().modelName("test-model").temperature(0.3).maxTokens(200).build();
-
-        var model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
+        var model = model(provider);
         List<?> messages = List.of();
-        List<ToolInfo> tools = List.of(new ToolInfo("function", "__replan__", null, null));
+        List<ToolInfo> tools = replanTools();
 
         // First invoke triggers the one-shot probe; the mock client discards tools
         // (returns text without tool_calls even for the probe's forced __probe_tool__).
@@ -116,6 +89,8 @@ class ToolCallingEnforcingModelTest {
      *
      * The predicate passes the probe and returns the real response unchanged —
      * no false positive.
+     *
+     * @throws Exception when model invocation fails unexpectedly
      */
     @Test
     void invokePassesThroughWhenClientHandlesTools() throws Exception {
@@ -128,7 +103,7 @@ class ToolCallingEnforcingModelTest {
             }
             @Override
             public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
-                return new BaseModelClient(r, c) {
+                return new StubModelClient(r, c) {
                     // Counter: 1st call = probe, 2nd call = real invoke
                     private final AtomicInteger callCount = new AtomicInteger(0);
 
@@ -149,42 +124,13 @@ class ToolCallingEnforcingModelTest {
                         // there is no call intent — toolCalls is empty/null.
                         return new AssistantMessage("在之前的分析中，__replan__ " + "工具已用于数据获取。现在根据已有信息，答案是 42。");
                     }
-
-                    @Override
-                    public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float cc, Float d, String e,
-                            Integer f, String g, BaseOutputParser h, Float i, Map<String, Object> j) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c, String d,
-                            Map<String, Object> e) {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
-                            Map<String, Object> l) {
-                        throw new UnsupportedOperationException();
-                    }
                 };
             }
         });
 
-        var cliCfg = ModelClientConfig.builder().clientId("test-legit-" + System.nanoTime()).clientProvider(provider)
-                .apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
-        var reqCfg = ModelRequestConfig.builder().modelName("test-model").temperature(0.3).maxTokens(200).build();
-
-        var model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
+        var model = model(provider);
         List<?> messages = List.of();
-        List<ToolInfo> tools = List.of(new ToolInfo("function", "__replan__", null, null));
+        List<ToolInfo> tools = replanTools();
 
         // First invoke: probe passes (mock returns tool_calls for __probe_tool__),
         // then real invoke returns legitimate answer without tool_calls.
@@ -196,5 +142,46 @@ class ToolCallingEnforcingModelTest {
         assertThat(response.getContentAsString()).contains("__replan__").contains("答案是 42");
         // The response should have no tool_calls (LLM legitimately chose not to call tools)
         assertThat(response.getToolCalls()).isNullOrEmpty();
+    }
+
+    private static ToolCallingEnforcingModel model(String provider) {
+        var cliCfg = ModelClientConfig.builder().clientId(provider + "-" + System.nanoTime()).clientProvider(provider)
+                .apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
+        var reqCfg = ModelRequestConfig.builder().modelName("test-model").temperature(0.3).maxTokens(200).build();
+        return new ToolCallingEnforcingModel(cliCfg, reqCfg);
+    }
+
+    private static List<ToolInfo> replanTools() {
+        return List.of(new ToolInfo("function", "__replan__", null, null));
+    }
+
+    private abstract static class StubModelClient extends BaseModelClient {
+        StubModelClient(ModelRequestConfig requestConfig, ModelClientConfig clientConfig) {
+            super(requestConfig, clientConfig);
+        }
+
+        @Override
+        public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float cc, Float d, String e, Integer f,
+                String g, BaseOutputParser h, Float i, Map<String, Object> j) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d, int e,
+                boolean isF, boolean isG, int h, Map<String, Object> i) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c, String d,
+                Map<String, Object> e) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d, String e,
+                String f, int g, boolean isH, boolean isI, String j, Integer k, Map<String, Object> l) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

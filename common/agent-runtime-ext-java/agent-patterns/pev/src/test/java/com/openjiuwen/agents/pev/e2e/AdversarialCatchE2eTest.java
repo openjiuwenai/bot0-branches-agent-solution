@@ -4,19 +4,20 @@
 
 package com.openjiuwen.agents.pev.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.pev.agent.PEVAgent;
 import com.openjiuwen.agents.pev.agent.PevComponents;
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
+
 import org.junit.jupiter.api.Test;
 
-import java.util.Locale;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Adversarial-catch e2e — port of the spring-ai-ascend scenario

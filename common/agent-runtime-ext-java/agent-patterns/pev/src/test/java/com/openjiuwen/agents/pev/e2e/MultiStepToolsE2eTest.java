@@ -4,15 +4,16 @@
 
 package com.openjiuwen.agents.pev.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.pev.agent.PEVAgent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Multi-step tools e2e — the LLM must plan several nodes over 2-3 registered tools, the

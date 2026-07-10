@@ -4,8 +4,10 @@
 
 package com.openjiuwen.agents.reactrails.e2e;
 
-import com.openjiuwen.agents.reactrails.selfheal.RootCauseRail;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
+import com.openjiuwen.agents.reactrails.selfheal.RootCauseRail;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
@@ -15,12 +17,10 @@ import com.openjiuwen.core.runner.Runner;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 
-import java.util.Iterator;
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * Real-LLM e2e: RootCauseRail on real ReActAgent + real GLM.

@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.reactrails.verification;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.reactrails.replan.ReplanRail;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -11,13 +13,11 @@ import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import com.openjiuwen.core.singleagent.rail.SteeringQueue;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * CriteriaReplanBridgeRail 承重测试 — mock context 证三出口控制流。

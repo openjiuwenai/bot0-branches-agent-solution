@@ -82,40 +82,54 @@ public class ToolCallingEnforcingModel extends Model {
     @Override
     public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
             Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
-        // Resolve model name: override from caller, or fall back to this Model's config.
-        // ReActAgent passes null/empty for model — the OpenAiCompatibleModelClient does
-        // not fall back to ModelRequestConfig.getModelName() from its own state.
-        if (model == null || model.isEmpty()) {
-            model = getModelConfig().getModelName();
-        }
-        // Inject thinking control from env:
-        //   LLM_THINKING=thinking-on → {"thinking":{"type":"enabled"}} (DeepSeek thinking)
-        //   LLM_THINKING=thinking-off → {"thinking":{"type":"disabled"}} (DeepSeek no-thinking)
-        //   LLM_THINKING=qwen-on → {"enable_thinking":true} (Qwen thinking)
-        //   LLM_THINKING=qwen-off → {"enable_thinking":false} (Qwen no-thinking)
-        //   LLM_THINKING=none or unset → no injection
-        String thinkingMode = System.getenv("LLM_THINKING");
-        if (thinkingMode != null && !thinkingMode.isEmpty() && !"none".equals(thinkingMode)) {
-            Map<String, Object> extendedKwargs = new HashMap<>();
-            if (kwargs != null) {
-                extendedKwargs.putAll(kwargs);
-            }
-            if ("thinking-on".equals(thinkingMode) || "thinking-off".equals(thinkingMode)) {
-                Map<String, Object> thinkingParam = new HashMap<>();
-                thinkingParam.put("type", "thinking-on".equals(thinkingMode) ? "enabled" : "disabled");
-                extendedKwargs.put("thinking", thinkingParam);
-            } else if ("qwen-on".equals(thinkingMode) || "qwen-off".equals(thinkingMode)) {
-                extendedKwargs.put("enable_thinking", "qwen-on".equals(thinkingMode));
-            }
-            kwargs = extendedKwargs;
-        }
+        String effectiveModel = effectiveModel(model);
+        Map<String, Object> effectiveKwargs = withThinkingKwargs(kwargs);
         // Probe exactly once (thread-safe via AtomicBoolean.CAS).
         // If the probe throws, the real invoke never executes — fail-fast.
         if (probeDone.compareAndSet(false, true)) {
-            doProbe(temperature, maxTokens, model, n, stop, parser, topP, kwargs);
+            ProbeRequest request = new ProbeRequest();
+            request.temperature = temperature;
+            request.maxTokens = maxTokens;
+            request.model = effectiveModel;
+            request.n = n;
+            request.stop = stop;
+            request.parser = parser;
+            request.topP = topP;
+            request.kwargs = effectiveKwargs;
+            doProbe(request);
         }
         // Forward the real invocation.
-        return super.invoke(messages, tools, temperature, maxTokens, model, n, stop, parser, topP, kwargs);
+        return super.invoke(messages, tools, temperature, maxTokens, effectiveModel, n, stop, parser, topP,
+                effectiveKwargs);
+    }
+
+    private String effectiveModel(String model) {
+        // ReActAgent passes null/empty for model; the client does not always fall back
+        // to ModelRequestConfig.getModelName() from its own state.
+        return model == null || model.isEmpty() ? getModelConfig().getModelName() : model;
+    }
+
+    private static Map<String, Object> withThinkingKwargs(Map<String, Object> kwargs) {
+        // LLM_THINKING values:
+        // thinking-on/off -> DeepSeek thinking, qwen-on/off -> Qwen thinking, none -> no injection.
+        String thinkingMode = System.getenv("LLM_THINKING");
+        if (thinkingMode == null || thinkingMode.isEmpty() || "none".equals(thinkingMode)) {
+            return kwargs;
+        }
+        Map<String, Object> extendedKwargs = new HashMap<>();
+        if (kwargs != null) {
+            extendedKwargs.putAll(kwargs);
+        }
+        if ("thinking-on".equals(thinkingMode) || "thinking-off".equals(thinkingMode)) {
+            Map<String, Object> thinkingParam = new HashMap<>();
+            thinkingParam.put("type", "thinking-on".equals(thinkingMode) ? "enabled" : "disabled");
+            extendedKwargs.put("thinking", thinkingParam);
+        } else if ("qwen-on".equals(thinkingMode) || "qwen-off".equals(thinkingMode)) {
+            extendedKwargs.put("enable_thinking", "qwen-on".equals(thinkingMode));
+        } else {
+            // Unknown modes are ignored so environment experiments do not break normal calls.
+        }
+        return extendedKwargs;
     }
 
     /**
@@ -136,8 +150,7 @@ public class ToolCallingEnforcingModel extends Model {
      * @throws ToolCallingBypassException when the client fails the probe
      * @throws Exception                  propagated from the underlying client
      */
-    private void doProbe(Float temperature, Float maxTokens, String model, Integer n, String stop,
-            BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
+    private void doProbe(ProbeRequest request) throws Exception {
         // Build a minimalist probe tool with a forced-call description.
         ToolInfo probeTool = ToolInfo.builder().type("function").name(PROBE_TOOL_NAME)
                 .description("Probe tool for tool-calling capability verification. "
@@ -154,8 +167,9 @@ public class ToolCallingEnforcingModel extends Model {
                 new UserMessage("Call " + PROBE_TOOL_NAME + " with reason='probe' " + "and return its output."));
 
         // Probe goes through super.invoke() which delegates to this.client.invoke().
-        AssistantMessage probeResponse = super.invoke(probeMessages, List.of(probeTool), temperature, maxTokens, model,
-                n, stop, parser, topP, kwargs);
+        AssistantMessage probeResponse = super.invoke(probeMessages, List.of(probeTool), request.temperature,
+                request.maxTokens, request.model, request.n, request.stop, request.parser, request.topP,
+                request.kwargs);
 
         // Null response is an unambiguous failure.
         if (probeResponse == null) {
@@ -172,5 +186,16 @@ public class ToolCallingEnforcingModel extends Model {
                             + "Verify that the BaseModelClient implementation ("
                             + getModelClientConfig().getClientProvider() + ") forwards tools to the LLM API.");
         }
+    }
+
+    private static final class ProbeRequest {
+        private Float temperature;
+        private Float maxTokens;
+        private String model;
+        private Integer n;
+        private String stop;
+        private BaseOutputParser parser;
+        private Float topP;
+        private Map<String, Object> kwargs;
     }
 }

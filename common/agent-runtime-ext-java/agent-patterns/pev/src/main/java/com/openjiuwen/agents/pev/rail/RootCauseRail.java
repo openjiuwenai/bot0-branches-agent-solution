@@ -33,15 +33,21 @@ public class RootCauseRail extends AgentRail {
     @Override
     public void afterToolCall(AgentCallbackContext ctx) {
         Object payload = (ctx.getExtra() == null) ? null : ctx.getExtra().get("payload");
-        if (payload instanceof Map<?, ?> map) {
-            for (Map.Entry<?, ?> e : map.entrySet()) {
-                if (e.getValue() instanceof NodeResult.DeviceFailure df) {
-                    deviceFailureCount.incrementAndGet();
-                    if (df.nodeId() != null) {
-                        deviceFailedNodes.add(df.nodeId());
-                    }
-                }
-            }
+        if (!(payload instanceof Map<?, ?> map)) {
+            return;
+        }
+        for (Map.Entry<?, ?> e : map.entrySet()) {
+            recordDeviceFailure(e.getValue());
+        }
+    }
+
+    private void recordDeviceFailure(Object value) {
+        if (!(value instanceof NodeResult.DeviceFailure df)) {
+            return;
+        }
+        deviceFailureCount.incrementAndGet();
+        if (df.nodeId() != null) {
+            deviceFailedNodes.add(df.nodeId());
         }
     }
 

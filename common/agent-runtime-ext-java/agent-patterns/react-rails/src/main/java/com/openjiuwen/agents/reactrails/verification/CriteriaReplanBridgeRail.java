@@ -47,8 +47,6 @@ import java.util.stream.Collectors;
  * @since 2026-07
  */
 public class CriteriaReplanBridgeRail extends AgentRail {
-    private static final String LINE_SEPARATOR = System.lineSeparator();
-
     /** Result key for checked output text. */
     public static final String OUTPUT_KEY = "output";
 
@@ -66,6 +64,8 @@ public class CriteriaReplanBridgeRail extends AgentRail {
 
     /** Result key for criteria retry count. */
     public static final String RETRY_COUNT_KEY = "criteria_retry_count";
+
+    private static final String LINE_SEPARATOR = System.lineSeparator();
 
     private final CriteriaVerifier verifier;
     private final List<String> successCriteria;

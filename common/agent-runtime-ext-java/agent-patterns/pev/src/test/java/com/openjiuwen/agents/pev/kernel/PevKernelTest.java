@@ -4,12 +4,12 @@
 
 package com.openjiuwen.agents.pev.kernel;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * PEV decision core 承重测试 — mock 证 diagnose/dispatch 控制流（硬断言）。

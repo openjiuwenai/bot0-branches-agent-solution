@@ -66,11 +66,6 @@ import java.util.Objects;
  */
 public class StagnationDetectionRail extends AgentRail {
     /**
-     * Priority: 50 — medium, between voting critic (100) and bridge rail (0).
-     */
-    private static final int PRIORITY = 50;
-
-    /**
      * Max identical final-answer outputs before brake steering.
      */
     public static final int MAX_OUTPUT_REPEATS = 3;
@@ -107,6 +102,11 @@ public class StagnationDetectionRail extends AgentRail {
 
     /** Result key for output text. */
     public static final String OUTPUT_KEY = "output";
+
+    /**
+     * Priority: 50 — medium, between voting critic (100) and bridge rail (0).
+     */
+    private static final int PRIORITY = 50;
 
     // ---- Stagnation state ----
 

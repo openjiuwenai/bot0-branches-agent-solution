@@ -4,15 +4,16 @@
 
 package com.openjiuwen.agents.pev.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.pev.agent.PEVAgent;
 import com.openjiuwen.agents.pev.agent.PevComponents;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Straight-through real-LLM e2e — the simplest PEV happy path: plan → execute → verify pass,

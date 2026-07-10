@@ -4,16 +4,16 @@
 
 package com.openjiuwen.agents.reactrails.replan;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
 
 /**
  * ReplanRail 承重测试 — mock context 证 replan 计数 + 超限 escalate 控制流。

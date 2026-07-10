@@ -4,11 +4,11 @@
 
 package com.openjiuwen.agents.reactrails.selfheal;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * RootCauseRail 承重测试 — mock context 证双钩子控制流。

@@ -4,8 +4,8 @@
 
 package com.openjiuwen.agents.reactrails.verification;
 
-import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel.InjectionMode;
+import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
@@ -61,6 +61,8 @@ public class PreCompletionChecklistRail extends AgentRail {
      */
     private static final int PRIORITY = 80;
 
+    private static final int OUTPUT_HASH_WINDOW = 5;
+
     /**
      * Max iterations in PLAN phase before switching to BUILD.
      */
@@ -77,8 +79,6 @@ public class PreCompletionChecklistRail extends AgentRail {
      * Rolling window of output content prefixes (for observation, not used for detection).
      */
     private final List<String> outputHashes = new ArrayList<>();
-
-    private static final int OUTPUT_HASH_WINDOW = 5;
 
     /**
      * Set of tool names ever called (for diversity check).

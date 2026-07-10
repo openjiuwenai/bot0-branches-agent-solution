@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.reactrails.enforcing;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.core.foundation.llm.Model;
 import com.openjiuwen.core.foundation.llm.model_clients.BaseModelClient;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
@@ -20,16 +22,14 @@ import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.foundation.llm.schema.VideoGenerationResponse;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * SystemPromptInjectingModel 单元测试 — 验证注入模式 + 静态通道。
@@ -137,76 +137,14 @@ class SystemPromptInjectingModelTest {
      *   <li>剥 {@code injectFirstPrinciples} 中 {@code SystemMessage} 追加逻辑
      *       (line 269-274) → system message 不变 → RED</li>
      * </ul>
+     *
+     * @throws Exception when model invocation fails unexpectedly
      */
     @Test
     void firstPrinciplesModeOneShotInjectionOnFirstInvoke() throws Exception {
         String provider = "test-fp-" + System.nanoTime();
-        DefaultModelClientFactories.ensureRegistered();
-
-        // Capture all messages received by the mock client
-        AtomicInteger callCount = new AtomicInteger(0);
-        AtomicReference<List<?>> capturedMessages1 = new AtomicReference<>();
-        AtomicReference<List<?>> capturedMessages2 = new AtomicReference<>();
-
-        Model.registerFactory(new Model.ModelClientFactory() {
-            @Override
-            public String providerName() {
-                return provider;
-            }
-            @Override
-            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
-                return new BaseModelClient(r, c) {
-                    @Override
-                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens,
-                            String model, Integer n, String stop, BaseOutputParser parser, Float topP,
-                            Map<String, Object> kwargs) {
-                        int count = callCount.getAndIncrement();
-                        if (count == 0) {
-                            // Probe call: must return tool_calls to pass probe
-                            AssistantMessage msg = new AssistantMessage("__probe__");
-                            msg.setToolCalls(List
-                                    .of(new ToolCall("1", "function", "__probe_tool__", "{\"reason\":\"probe\"}", 0)));
-                            return msg;
-                        }
-                        // Real invokes: capture messages for verification
-                        if (count == 1) {
-                            capturedMessages1.set(messages instanceof List ? (List<?>) messages : List.of());
-                        } else if (count == 2) {
-                            capturedMessages2.set(messages instanceof List ? (List<?>) messages : List.of());
-                        }
-                        return new AssistantMessage("Final answer for call #" + count);
-                    }
-
-                    @Override
-                    public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float cc, Float d, String e,
-                            Integer f, String g, BaseOutputParser h, Float i, Map<String, Object> j) {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c, String d,
-                            Map<String, Object> e) {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
-                            Map<String, Object> l) {
-                        throw new UnsupportedOperationException();
-                    }
-                };
-            }
-        });
-
-        var cliCfg = ModelClientConfig.builder().clientId("test-fp-" + System.nanoTime()).clientProvider(provider)
-                .apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
-        var reqCfg = ModelRequestConfig.builder().modelName("test-model").temperature(0.3).maxTokens(200).build();
-
-        var enforcingModel = new SystemPromptInjectingModel(cliCfg, reqCfg);
+        FirstPrinciplesCapture capture = registerFirstPrinciplesProvider(provider);
+        var enforcingModel = model(provider);
         SystemPromptInjectingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
 
         // Build messages with a SystemMessage to receive the injection
@@ -222,7 +160,7 @@ class SystemPromptInjectingModelTest {
         // --- Assertions ---
 
         // First real call (client call #1, after probe call #0)
-        List<?> firstMessages = capturedMessages1.get();
+        List<?> firstMessages = capture.firstMessages.get();
         assertThat(firstMessages).isNotNull();
         boolean hasFirstFp = firstMessages.stream().filter(SystemMessage.class::isInstance)
                 .map(SystemMessage.class::cast).anyMatch(m -> m.getContentAsString().contains("先扩后收"));
@@ -231,7 +169,7 @@ class SystemPromptInjectingModelTest {
         // Second real call (client call #2, from the second model invoke)
         // One-shot: the injection must NOT fire again, so the original
         // SystemMessage (without "先扩后收") passes through unchanged.
-        List<?> secondMessages = capturedMessages2.get();
+        List<?> secondMessages = capture.secondMessages.get();
         assertThat(secondMessages).isNotNull();
 
         boolean hasSecondFp = secondMessages.stream().filter(SystemMessage.class::isInstance)
@@ -248,66 +186,14 @@ class SystemPromptInjectingModelTest {
      * <p>Mutation-RED: 剥 {@code injectFirstPrinciples} 中
      * {@code msgList.add(0, new SystemMessage(...))} 末尾插入逻辑 (line 279)
      * → 无 SystemMessage 时不插入 → RED
+     *
+     * @throws Exception when model invocation fails unexpectedly
      */
     @Test
     void firstPrinciplesModeCreatesSystemMessageWhenNoneExists() throws Exception {
         String provider = "test-fp-nosys-" + System.nanoTime();
-        DefaultModelClientFactories.ensureRegistered();
-        AtomicInteger callCount = new AtomicInteger(0);
-        AtomicReference<List<?>> capturedMessages = new AtomicReference<>();
-
-        Model.registerFactory(new Model.ModelClientFactory() {
-            @Override
-            public String providerName() {
-                return provider;
-            }
-            @Override
-            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
-                return new BaseModelClient(r, c) {
-                    @Override
-                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens,
-                            String model, Integer n, String stop, BaseOutputParser parser, Float topP,
-                            Map<String, Object> kwargs) {
-                        if (callCount.getAndIncrement() == 0) {
-                            AssistantMessage msg = new AssistantMessage("__probe__");
-                            msg.setToolCalls(List
-                                    .of(new ToolCall("1", "function", "__probe_tool__", "{\"reason\":\"probe\"}", 0)));
-                            return msg;
-                        }
-                        capturedMessages.set(messages instanceof List ? (List<?>) messages : List.of());
-                        return new AssistantMessage("Final answer");
-                    }
-
-                    @Override
-                    public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float cc, Float d, String e,
-                            Integer f, String g, BaseOutputParser h, Float i, Map<String, Object> j) {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c, String d,
-                            Map<String, Object> e) {
-                        throw new UnsupportedOperationException();
-                    }
-                    @Override
-                    public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
-                            Map<String, Object> l) {
-                        throw new UnsupportedOperationException();
-                    }
-                };
-            }
-        });
-
-        var cliCfg = ModelClientConfig.builder().clientId("test-fp-nosys-" + System.nanoTime()).clientProvider(provider)
-                .apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
-        var reqCfg = ModelRequestConfig.builder().modelName("test-model").temperature(0.3).maxTokens(200).build();
-
-        var enforcingModel = new SystemPromptInjectingModel(cliCfg, reqCfg);
+        AtomicReference<List<?>> capturedMessages = registerNoSystemProvider(provider);
+        var enforcingModel = model(provider);
         SystemPromptInjectingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
 
         // Messages with NO SystemMessage — only UserMessage
@@ -326,5 +212,122 @@ class SystemPromptInjectingModelTest {
         String content = systemMessage.getContentAsString();
         assertThat(content).as("Created SystemMessage must contain the first-principles prompt").contains("先扩后收")
                 .contains("第一性原理");
+    }
+
+    private static SystemPromptInjectingModel model(String provider) {
+        var cliCfg = ModelClientConfig.builder().clientId(provider + "-" + System.nanoTime()).clientProvider(provider)
+                .apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
+        var reqCfg = ModelRequestConfig.builder().modelName("test-model").temperature(0.3).maxTokens(200).build();
+        return new SystemPromptInjectingModel(cliCfg, reqCfg);
+    }
+
+    private static FirstPrinciplesCapture registerFirstPrinciplesProvider(String provider) {
+        DefaultModelClientFactories.ensureRegistered();
+        FirstPrinciplesCapture capture = new FirstPrinciplesCapture();
+        Model.registerFactory(new Model.ModelClientFactory() {
+            @Override
+            public String providerName() {
+                return provider;
+            }
+
+            @Override
+            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
+                return new StubModelClient(r, c) {
+                    @Override
+                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens,
+                            String model, Integer n, String stop, BaseOutputParser parser, Float topP,
+                            Map<String, Object> kwargs) {
+                        int count = capture.callCount.getAndIncrement();
+                        if (count == 0) {
+                            return probeMessage();
+                        }
+                        captureRealInvoke(messages, count, capture);
+                        return new AssistantMessage("Final answer for call #" + count);
+                    }
+                };
+            }
+        });
+        return capture;
+    }
+
+    private static AtomicReference<List<?>> registerNoSystemProvider(String provider) {
+        DefaultModelClientFactories.ensureRegistered();
+        AtomicInteger callCount = new AtomicInteger(0);
+        AtomicReference<List<?>> capturedMessages = new AtomicReference<>();
+        Model.registerFactory(new Model.ModelClientFactory() {
+            @Override
+            public String providerName() {
+                return provider;
+            }
+
+            @Override
+            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
+                return new StubModelClient(r, c) {
+                    @Override
+                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens,
+                            String model, Integer n, String stop, BaseOutputParser parser, Float topP,
+                            Map<String, Object> kwargs) {
+                        if (callCount.getAndIncrement() == 0) {
+                            return probeMessage();
+                        }
+                        capturedMessages.set(messages instanceof List ? (List<?>) messages : List.of());
+                        return new AssistantMessage("Final answer");
+                    }
+                };
+            }
+        });
+        return capturedMessages;
+    }
+
+    private static AssistantMessage probeMessage() {
+        AssistantMessage msg = new AssistantMessage("__probe__");
+        msg.setToolCalls(List.of(new ToolCall("1", "function", "__probe_tool__", "{\"reason\":\"probe\"}", 0)));
+        return msg;
+    }
+
+    private static void captureRealInvoke(Object messages, int count, FirstPrinciplesCapture capture) {
+        if (count == 1) {
+            capture.firstMessages.set(messages instanceof List ? (List<?>) messages : List.of());
+        } else if (count == 2) {
+            capture.secondMessages.set(messages instanceof List ? (List<?>) messages : List.of());
+        } else {
+            // Later calls are irrelevant for this two-invoke test.
+        }
+    }
+
+    private static final class FirstPrinciplesCapture {
+        private final AtomicInteger callCount = new AtomicInteger(0);
+        private final AtomicReference<List<?>> firstMessages = new AtomicReference<>();
+        private final AtomicReference<List<?>> secondMessages = new AtomicReference<>();
+    }
+
+    private abstract static class StubModelClient extends BaseModelClient {
+        StubModelClient(ModelRequestConfig requestConfig, ModelClientConfig clientConfig) {
+            super(requestConfig, clientConfig);
+        }
+
+        @Override
+        public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float cc, Float d, String e, Integer f,
+                String g, BaseOutputParser h, Float i, Map<String, Object> j) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d, int e,
+                boolean isF, boolean isG, int h, Map<String, Object> i) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c, String d,
+                Map<String, Object> e) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d, String e,
+                String f, int g, boolean isH, boolean isI, String j, Integer k, Map<String, Object> l) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

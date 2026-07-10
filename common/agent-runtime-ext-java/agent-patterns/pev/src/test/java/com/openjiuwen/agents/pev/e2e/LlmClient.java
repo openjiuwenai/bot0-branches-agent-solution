@@ -24,12 +24,12 @@ final class LlmClient {
     private static final String MODEL = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "glm-5.2");
     private static final String KEY = System.getenv("OPENJIUWEN_API_KEY");
 
+    // HttpClient with default settings (standard JDK API, not derived from any third-party source).
+    private final HttpClient http = HttpClient.newHttpClient();
+
     static boolean envPresent() {
         return KEY != null && !KEY.isBlank() && !BASE.isBlank();
     }
-
-    // HttpClient with default settings (standard JDK API, not derived from any third-party source).
-    private final HttpClient http = HttpClient.newHttpClient();
 
     /**
      * Send a single user message, return the assistant content (empty string on any parse failure).
@@ -46,7 +46,6 @@ final class LlmClient {
         if (!envPresent()) {
             throw new IllegalStateException("OPENJIUWEN_API_KEY / BASE_URL not set");
         }
-        String url = BASE + PATH;
         // Thinking control — env LLM_THINKING selects the param shape per provider/model:
         //   glm-off (default): GLM-5.2 "thinking":{"type":"disabled"} — GLM-5.2 thinking on complex
         //     prompts produces 16-47KB reasoning + 74-211s+ variance (verified), so the structured
@@ -67,6 +66,7 @@ final class LlmClient {
         String body = """
                 {"model":"%s","messages":[{"role":"user","content":%s}],"temperature":0.3%s%s}
                 """.formatted(MODEL, jsonString(userPrompt), thinkingJson.isEmpty() ? "" : ",", thinkingJson);
+        String url = BASE + PATH;
         HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json")
                 // 300s covers GLM-4.7 thinking=on complex scenarios (ClaimsAdjudication

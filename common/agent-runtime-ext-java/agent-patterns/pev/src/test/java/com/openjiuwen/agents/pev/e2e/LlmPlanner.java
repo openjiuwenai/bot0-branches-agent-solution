@@ -29,6 +29,7 @@ import java.util.regex.Pattern;
  */
 final class LlmPlanner implements PevComponents.Planner {
     private static final String LINE_SEPARATOR = System.lineSeparator();
+    private static final Pattern NODE_OBJECT = Pattern.compile("\\{[^{}]*\"id\"[^{}]*\\}", Pattern.DOTALL);
 
     private final LlmClient llm;
     private final Map<String, String> tools; // name -> description (for prompt context)
@@ -87,8 +88,6 @@ final class LlmPlanner implements PevComponents.Planner {
                 - TOOL_CALL 的 description 里写明要用的工具名
                 """.formatted(task, toolBlock);
     }
-
-    private static final Pattern NODE_OBJECT = Pattern.compile("\\{[^{}]*\"id\"[^{}]*\\}", Pattern.DOTALL);
 
     private static List<PevComponents.PlanNode> parseNodes(String raw) {
         if (raw == null || raw.isBlank()) {

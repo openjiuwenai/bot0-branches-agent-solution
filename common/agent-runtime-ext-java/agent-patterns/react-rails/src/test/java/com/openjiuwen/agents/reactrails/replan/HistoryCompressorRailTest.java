@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.reactrails.replan;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.core.context.ContextStats;
 import com.openjiuwen.core.context.ContextWindow;
 import com.openjiuwen.core.context.ModelContext;
@@ -18,13 +20,11 @@ import com.openjiuwen.core.foundation.tool.schema.ToolInfo;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * HistoryCompressorRail 承重测试 — mock ModelContext 证 replan 触发上下文压缩。

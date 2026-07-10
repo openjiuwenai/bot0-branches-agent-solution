@@ -4,23 +4,23 @@
 
 package com.openjiuwen.agents.reactrails.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
 import com.openjiuwen.agents.reactrails.replan.ReplanRail;
 import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.agents.reactrails.verification.CriteriaVerificationRail;
 import com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier;
-import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 
-import java.util.List;
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Real-LLM e2e: ReplanRail on real ReActAgent + real GLM.

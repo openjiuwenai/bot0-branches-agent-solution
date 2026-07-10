@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.reactrails.verification;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -12,14 +14,12 @@ import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import com.openjiuwen.core.singleagent.rail.SteeringQueue;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
  * StagnationDetectionRail 承重测试 — mock context 证 stagnation 检测 + brake steering + forceFinish.

@@ -4,17 +4,18 @@
 
 package com.openjiuwen.agents.pev.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.pev.agent.PEVAgent;
 import com.openjiuwen.agents.pev.agent.PevComponents;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Real-LLM e2e — port of {@code RealLlmFusionE2eTest.fusionRootCauseToolExceptionDegrades}

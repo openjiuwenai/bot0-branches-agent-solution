@@ -4,17 +4,18 @@
 
 package com.openjiuwen.agents.pev.agent;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * PEVAgent 控制流承重测试 — mock 三阶段（Planner/Executor/Verifier），证 Plan→Execute→Verify→Diagnose→Dispatch

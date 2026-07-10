@@ -31,12 +31,12 @@ final class LlmClient {
     private static final String MODEL = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "glm-5.2");
     private static final String KEY = System.getenv("OPENJIUWEN_API_KEY");
 
+    // HttpClient with default settings (standard JDK API).
+    private final HttpClient http = HttpClient.newHttpClient();
+
     static boolean envPresent() {
         return KEY != null && !KEY.isBlank() && !BASE.isBlank();
     }
-
-    // HttpClient with default settings (standard JDK API).
-    private final HttpClient http = HttpClient.newHttpClient();
 
     /**
      * 发送聊天请求并返回助手端响应内容。

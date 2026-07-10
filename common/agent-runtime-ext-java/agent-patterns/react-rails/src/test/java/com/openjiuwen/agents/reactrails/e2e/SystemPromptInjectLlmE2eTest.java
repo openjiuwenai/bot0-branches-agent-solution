@@ -4,15 +4,17 @@
 
 package com.openjiuwen.agents.reactrails.e2e;
 
-import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel.InjectionMode;
+import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
+
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Real-LLM smoke test for first-principles system prompt injection.

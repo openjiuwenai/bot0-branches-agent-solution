@@ -4,10 +4,10 @@
 
 package com.openjiuwen.agents.reactrails.autoconfigure;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import java.util.ArrayList;
 import java.util.List;
-
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Configuration properties for react-rails cognitive rails.

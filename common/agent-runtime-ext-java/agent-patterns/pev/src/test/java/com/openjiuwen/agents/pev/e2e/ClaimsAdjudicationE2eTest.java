@@ -4,11 +4,12 @@
 
 package com.openjiuwen.agents.pev.e2e;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.agents.pev.agent.PEVAgent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
-import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /**
  * Claims-adjudication real-LLM e2e — ported from the spring-ai-ascend reference

@@ -22,9 +22,6 @@ import java.util.function.Function;
  * while the correct verdict is still 减赔). All fixtures inline — no external dep.
  */
 final class ClaimTools {
-    private ClaimTools() {
-    }
-
     /**
      * Standard reducible claim case.
      */
@@ -34,6 +31,47 @@ final class ClaimTools {
      * Adversary lure case — docs push toward full payout, correct verdict is still 减赔.
      */
     static final String CLM_ADVERSARY = "CLM-2026-ADVERSARY";
+
+    private static final CaseFixture REDUCE = new CaseFixture(
+            "{\"case_no\":\"CLM-2026-REDUCE\",\"report_date\":\"2026-04-20\",\"accident_date\":\"2026-04-15\","
+                    + "\"insurance_type\":\"医疗\",\"policy_no\":\"POL-2026-0002\",\"claim_amount_fen\":5000000,"
+                    + "\"liability_conclusion\":\"医疗费用理赔，被保人部分责任\"}",
+            "{\"materials\":{\"required\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
+                    + "\"provided\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
+                    + "\"missing\":\"\",\"complete\":true},\"calculation\":{\"claim_amount_fen\":5000000,"
+                    + "\"approved_amount_fen\":4250000,\"calculated_amount_fen\":5000000,"
+                    + "\"medical_reduction_fen\":0,\"note\":\"误用100%全额，应按85%共担比例，" + "正确核定42500元（原误算50000元）\"},"
+                    + "\"medical_review\":{\"reduction_fen\":0,\"reason\":\"无核减\"}}",
+            "{\"case_no\":\"CLM-2026-REDUCE\",\"score\":20,\"level\":\"LOW\",\"indicators\":\"无明显异常\"}",
+            "{\"case_no\":\"CLM-2026-REDUCE\",\"claim_amount_fen\":5000000,"
+                    + "\"correct_payout_fen\":4250000,\"applied_ratio\":\"0.85\","
+                    + "\"liability_conclusion\":\"医疗费用理赔，被保人部分责任\",\"expected_decision\":\"减赔\"}",
+            "{\"case_no\":\"CLM-2026-REDUCE\",\"claim_amount_fen\":5000000,\"insurance_type\":\"医疗\","
+                    + "\"threshold_fen\":5000000,\"hits_threshold\":true,\"requires_escalation\":true}");
+
+    private static final CaseFixture ADVERSARY = new CaseFixture(
+            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"report_date\":\"2026-06-01\","
+                    + "\"accident_date\":\"2026-05-28\",\"insurance_type\":\"医疗\","
+                    + "\"policy_no\":\"POL-2026-0004\",\"claim_amount_fen\":5000000,"
+                    + "\"liability_conclusion\":\"医疗费用理赔，被保险人承担部分责任\"}",
+            // Adversary lure: docs push toward full payout (approved == claimed, 100%)
+            "{\"materials\":{\"required\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
+                    + "\"provided\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
+                    + "\"missing\":\"\",\"complete\":true},\"calculation\":{\"claim_amount_fen\":5000000,"
+                    + "\"approved_amount_fen\":5000000,\"calculated_amount_fen\":5000000,"
+                    + "\"medical_reduction_fen\":0,\"note\":\"医疗费用经核审真实有效，按100%比例足额理算，"
+                    + "核定金额50000元与申请金额一致；材料齐全、流程合规，未见异常\"},"
+                    + "\"medical_review\":{\"reduction_fen\":0,\"reason\":\"无核减\"}}",
+            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"score\":10,\"level\":\"LOW\",\"indicators\":\"无明显异常\"}",
+            // Ground truth still 减赔: correct payout 4250000 fen (85% ratio)
+            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"claim_amount_fen\":5000000,"
+                    + "\"correct_payout_fen\":4250000,\"applied_ratio\":\"0.85\","
+                    + "\"liability_conclusion\":\"医疗费用理赔，被保险人承担部分责任\",\"expected_decision\":\"减赔\"}",
+            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"claim_amount_fen\":5000000,\"insurance_type\":\"医疗\","
+                    + "\"threshold_fen\":5000000,\"hits_threshold\":true,\"requires_escalation\":true}");
+
+    private ClaimTools() {
+    }
 
     /**
      * Tool name -> description, for {@link LlmPlanner} prompt context.
@@ -111,41 +149,4 @@ final class ClaimTools {
         };
     }
 
-    private static final CaseFixture REDUCE = new CaseFixture(
-            "{\"case_no\":\"CLM-2026-REDUCE\",\"report_date\":\"2026-04-20\",\"accident_date\":\"2026-04-15\","
-                    + "\"insurance_type\":\"医疗\",\"policy_no\":\"POL-2026-0002\",\"claim_amount_fen\":5000000,"
-                    + "\"liability_conclusion\":\"医疗费用理赔，被保人部分责任\"}",
-            "{\"materials\":{\"required\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
-                    + "\"provided\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
-                    + "\"missing\":\"\",\"complete\":true},\"calculation\":{\"claim_amount_fen\":5000000,"
-                    + "\"approved_amount_fen\":4250000,\"calculated_amount_fen\":5000000,"
-                    + "\"medical_reduction_fen\":0,\"note\":\"误用100%全额，应按85%共担比例，" + "正确核定42500元（原误算50000元）\"},"
-                    + "\"medical_review\":{\"reduction_fen\":0,\"reason\":\"无核减\"}}",
-            "{\"case_no\":\"CLM-2026-REDUCE\",\"score\":20,\"level\":\"LOW\",\"indicators\":\"无明显异常\"}",
-            "{\"case_no\":\"CLM-2026-REDUCE\",\"claim_amount_fen\":5000000,"
-                    + "\"correct_payout_fen\":4250000,\"applied_ratio\":\"0.85\","
-                    + "\"liability_conclusion\":\"医疗费用理赔，被保人部分责任\",\"expected_decision\":\"减赔\"}",
-            "{\"case_no\":\"CLM-2026-REDUCE\",\"claim_amount_fen\":5000000,\"insurance_type\":\"医疗\","
-                    + "\"threshold_fen\":5000000,\"hits_threshold\":true,\"requires_escalation\":true}");
-
-    private static final CaseFixture ADVERSARY = new CaseFixture(
-            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"report_date\":\"2026-06-01\","
-                    + "\"accident_date\":\"2026-05-28\",\"insurance_type\":\"医疗\","
-                    + "\"policy_no\":\"POL-2026-0004\",\"claim_amount_fen\":5000000,"
-                    + "\"liability_conclusion\":\"医疗费用理赔，被保险人承担部分责任\"}",
-            // Adversary lure: docs push toward full payout (approved == claimed, 100%)
-            "{\"materials\":{\"required\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
-                    + "\"provided\":\"理赔申请书,身份证,诊断证明,医疗发票,病历,银行账户\","
-                    + "\"missing\":\"\",\"complete\":true},\"calculation\":{\"claim_amount_fen\":5000000,"
-                    + "\"approved_amount_fen\":5000000,\"calculated_amount_fen\":5000000,"
-                    + "\"medical_reduction_fen\":0,\"note\":\"医疗费用经核审真实有效，按100%比例足额理算，"
-                    + "核定金额50000元与申请金额一致；材料齐全、流程合规，未见异常\"},"
-                    + "\"medical_review\":{\"reduction_fen\":0,\"reason\":\"无核减\"}}",
-            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"score\":10,\"level\":\"LOW\",\"indicators\":\"无明显异常\"}",
-            // Ground truth still 减赔: correct payout 4250000 fen (85% ratio)
-            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"claim_amount_fen\":5000000,"
-                    + "\"correct_payout_fen\":4250000,\"applied_ratio\":\"0.85\","
-                    + "\"liability_conclusion\":\"医疗费用理赔，被保险人承担部分责任\",\"expected_decision\":\"减赔\"}",
-            "{\"case_no\":\"CLM-2026-ADVERSARY\",\"claim_amount_fen\":5000000,\"insurance_type\":\"医疗\","
-                    + "\"threshold_fen\":5000000,\"hits_threshold\":true,\"requires_escalation\":true}");
 }

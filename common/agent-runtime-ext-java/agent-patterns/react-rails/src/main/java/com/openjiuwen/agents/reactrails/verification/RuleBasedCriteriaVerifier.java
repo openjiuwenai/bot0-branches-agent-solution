@@ -29,6 +29,11 @@ public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
      */
     public static final String ASSUME_FAIL_REASON = "无法用关键词验证，默认不通过（注入 LLM verifier 做质量判断）";
 
+    private static final java.util.Set<String> STOP_WORDS = java.util.Set.of("的", "了", "在", "是", "和", "就", "不", "都",
+            "一", "一个", "上", "也", "the", "a", "an", "is", "are", "was", "to", "of", "in", "for", "on", "with", "at",
+            "by", "from", "as", "into", "and", "or", "not", "be", "this", "that", "it", "its", "must", "should",
+            "will");
+
     @Override
     public List<Violation> verify(List<String> successCriteria, String output, String decisionHistory) {
         List<Violation> violations = new ArrayList<>();
@@ -61,11 +66,6 @@ public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
         }
         return violations;
     }
-
-    private static final java.util.Set<String> STOP_WORDS = java.util.Set.of("的", "了", "在", "是", "和", "就", "不", "都",
-            "一", "一个", "上", "也", "the", "a", "an", "is", "are", "was", "to", "of", "in", "for", "on", "with", "at",
-            "by", "from", "as", "into", "and", "or", "not", "be", "this", "that", "it", "its", "must", "should",
-            "will");
 
     private static boolean isStopWord(String w) {
         return STOP_WORDS.contains(w);

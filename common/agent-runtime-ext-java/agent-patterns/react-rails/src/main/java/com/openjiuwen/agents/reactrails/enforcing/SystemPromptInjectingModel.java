@@ -55,39 +55,6 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     /**
-     * Injection modes.
-     */
-    public enum InjectionMode {
-        /**
-         * No injection — pass-through, identical to ToolCallingEnforcingModel.
-         */
-        NONE,
-        /**
-         * Append text to the existing SystemMessage.
-         */
-        SYSTEM_PROMPT_APPEND,
-        /**
-         * Inject a UserMessage with phase-override text before the call.
-         */
-        USER_MESSAGE_INJECT,
-        /**
-         * One-shot injection of the "先扩后收" (widen then converge)
-         * first-principles strategy prompt into the SystemMessage on the
-         * first real {@code invoke()}.
-         */
-        FIRST_PRINCIPLES,
-        // PLAN mode: divergent/exploratory framing
-        /**
-         * Replace SystemMessage with divergent/exploratory framing (PLAN phase).
-         */
-        PLAN_MODE,
-        /**
-         * Replace SystemMessage with convergent/execution framing (BUILD phase).
-         */
-        BUILD_MODE
-    }
-
-    /**
      * Default injection mode.
      */
     public static final InjectionMode DEFAULT_MODE = InjectionMode.NONE;
@@ -308,5 +275,37 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
             msgList.add(0, new SystemMessage(FIRST_PRINCIPLES_PROMPT));
         }
         return msgList;
+    }
+
+    /**
+     * Injection modes.
+     */
+    public enum InjectionMode {
+        /**
+         * No injection — pass-through, identical to ToolCallingEnforcingModel.
+         */
+        NONE,
+        /**
+         * Append text to the existing SystemMessage.
+         */
+        SYSTEM_PROMPT_APPEND,
+        /**
+         * Inject a UserMessage with phase-override text before the call.
+         */
+        USER_MESSAGE_INJECT,
+        /**
+         * One-shot injection of the "先扩后收" (widen then converge)
+         * first-principles strategy prompt into the SystemMessage on the
+         * first real {@code invoke()}.
+         */
+        FIRST_PRINCIPLES,
+        /**
+         * Replace SystemMessage with divergent/exploratory framing (PLAN phase).
+         */
+        PLAN_MODE,
+        /**
+         * Replace SystemMessage with convergent/execution framing (BUILD phase).
+         */
+        BUILD_MODE
     }
 }
