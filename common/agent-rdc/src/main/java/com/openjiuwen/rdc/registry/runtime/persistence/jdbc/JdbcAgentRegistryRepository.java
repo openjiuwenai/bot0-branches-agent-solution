@@ -428,7 +428,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             Object raw = arr.getArray();
             if (raw instanceof String[]) {
                 String[] caps = (String[]) raw;
-                return caps.length == 0 ? List.of() : Arrays.asList(caps);
+                return caps.length == 0 ? List.of() : List.copyOf(Arrays.asList(caps));
             }
             return List.of();
         }

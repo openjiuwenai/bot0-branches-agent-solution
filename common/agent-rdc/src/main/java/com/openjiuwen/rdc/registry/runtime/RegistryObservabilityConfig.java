@@ -17,14 +17,14 @@ import java.util.concurrent.TimeUnit;
  * service stay thin:
  * <ul>
  *   <li><b>Audit</b> — structured SLF4J log lines on the {@code registry.audit}
- *       logger, 9 fields per line (REQ-2026-004 removed {@code capability}
- *       from the audit schema): {@code traceId}, {@code tenantId},
+ *       logger. Operations register/deregister/probe/resolve emit 10 fields
+ *       via shared audit helper: {@code traceId}, {@code tenantId},
  *       {@code agentId}, {@code contractVersion}, {@code capabilityVersion},
- *       {@code health}, {@code routeHandleId}, {@code outcome},
- *       {@code latencyMs}. The {@code registryOp} tag (register / deregister
- *       / probe / discover / resolve) prefixes each line. Unavailable fields
- *       are emitted as {@code "-"} so log parsers can rely on a stable
- *       9-field shape.</li>
+ *       {@code health}, {@code routeHandleId}, {@code outcome}, {@code latencyMs}.
+ *       Discover emits 12 fields: {@code registryOp, traceId, tenantId, queryDimension,
+ *       queryValue, contractVersion, capabilityVersion, health, routeHandleId, outcome,
+ *       latencyMs, resultCount}. The {@code registryOp} tag prefixes each line.
+ *       Unavailable fields are emitted as {@code "-"}</li>
  *   <li><b>Metrics</b> — Micrometer {@link Counter} ({@code agent_bus_registry_op_total},
  *       tags {@code op} + {@code outcome}) and {@link Timer}
  *       ({@code agent_bus_registry_op_duration_ms}, tag {@code op}) per
