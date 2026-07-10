@@ -15,7 +15,7 @@ import java.util.Map;
  * precision steering (e.g. listing covered vs missing dimensions) in the bridge rail's
  * correction hint. Backward-compatible: {@code new Violation(criterion, reason)} defaults
  * to an empty metadata map.
- 
+
   * @since 2026-07*/
 public record Violation(String criterion, String reason, Map<String, Object> metadata) {
 

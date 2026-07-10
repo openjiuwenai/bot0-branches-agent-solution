@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * reactrails.criteria=给出配置建议,引用风险评估
  * reactrails.max-replan=2
  * </pre>
- 
+
   * @since 2026-07*/
 @ConfigurationProperties(prefix = "reactrails")
 public class ReactRailsProperties {
@@ -138,8 +138,7 @@ public class ReactRailsProperties {
      */
     public void setChecklistMaxPlanRounds(int v) {
         if (v < 1) {
-            throw new IllegalArgumentException(
-                    "checklistMaxPlanRounds must be >= 1, got: " + v);
+            throw new IllegalArgumentException("checklistMaxPlanRounds must be >= 1, got: " + v);
         }
         this.checklistMaxPlanRounds = v;
     }

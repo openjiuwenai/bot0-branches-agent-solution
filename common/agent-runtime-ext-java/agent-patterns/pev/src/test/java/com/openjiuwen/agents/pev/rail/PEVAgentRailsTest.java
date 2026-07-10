@@ -26,7 +26,7 @@ class PEVAgentRailsTest {
     // ==================== CriteriaVerificationRail 观测最终输出 ====================
 
     @Test
-    void criteriaRail_verifiesOutputContainingCriteriaKeywords() {
+    void criteriaRailVerifiesOutputContainingCriteriaKeywords() {
         CriteriaVerificationRail rail = new CriteriaVerificationRail(Set.of("result"));
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A")));
@@ -43,7 +43,7 @@ class PEVAgentRailsTest {
     }
 
     @Test
-    void criteriaRail_flagsMissingCriteriaAsUnmet() {
+    void criteriaRailFlagsMissingCriteriaAsUnmet() {
         CriteriaVerificationRail rail = new CriteriaVerificationRail(Set.of("missing-keyword"));
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A")));
@@ -61,12 +61,11 @@ class PEVAgentRailsTest {
     // ==================== RootCauseRail 观测 DeviceFailure ====================
 
     @Test
-    void rootCauseRail_observesDeviceFailureFromExecuteSuperstep() {
+    void rootCauseRailObservesDeviceFailureFromExecuteSuperstep() {
         RootCauseRail rail = new RootCauseRail();
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A")));
-        PevComponents.Executor executor = nodes -> Map.of(
-                "A", new NodeResult.DeviceFailure("A", "timeout", true));
+        PevComponents.Executor executor = nodes -> Map.of("A", new NodeResult.DeviceFailure("A", "timeout", true));
         PevComponents.Verifier verifier = (in, r) -> new PevKernel.VerifyResult(false, Set.of("A"), "A failed");
 
         PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier);
@@ -79,7 +78,7 @@ class PEVAgentRailsTest {
     }
 
     @Test
-    void rootCauseRail_noDeviceFailureOnHappyPath() {
+    void rootCauseRailNoDeviceFailureOnHappyPath() {
         RootCauseRail rail = new RootCauseRail();
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A")));

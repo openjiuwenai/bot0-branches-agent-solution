@@ -5,7 +5,6 @@
 package com.openjiuwen.agents.pev.e2e;
 
 import com.openjiuwen.agents.pev.agent.PEVAgent;
-import java.util.Locale;
 import com.openjiuwen.agents.pev.agent.PevComponents;
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
@@ -49,18 +48,16 @@ class DeviceFailureDegradesE2eTest {
     private static final String FAILING_ERROR = "连接超时：外部数据 API 不可达";
 
     @Test
-    void deviceFailureDegrades_toolThrows_acceptPartialNoRetry() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(),
-                "OPENJIUWEN_API_KEY 未设，跳过真 LLM e2e");
+    void deviceFailureDegradesToolThrowsAcceptPartialNoRetry() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设，跳过真 LLM e2e");
 
         LlmClient llm = new LlmClient();
 
         // Always-throw tool fn — maps to NodeResult.DeviceFailure via ToolBackedExecutor.
         Function<Map<String, Object>, String> failingTool = inputs -> {
-            throw new RuntimeException(FAILING_ERROR);
+            throw new AlwaysFailToolException(FAILING_ERROR);
         };
-        Map<String, Function<Map<String, Object>, String>> tools =
-                Map.of(FAILING_TOOL, failingTool);
+        Map<String, Function<Map<String, Object>, String>> tools = Map.of(FAILING_TOOL, failingTool);
 
         LlmPlanner planner = new LlmPlanner(llm, Map.of(FAILING_TOOL, FAILING_TOOL_DESC));
 
@@ -74,8 +71,7 @@ class DeviceFailureDegradesE2eTest {
 
         LlmVerifier verifier = new LlmVerifier(llm);
 
-        PEVAgent agent = new PEVAgent(
-                AgentCard.builder().build(), planner, countingExecutor, verifier);
+        PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, countingExecutor, verifier);
 
         String task = """
                 请执行以下两步任务：
@@ -85,29 +81,19 @@ class DeviceFailureDegradesE2eTest {
 
         Object out = agent.invoke(task, null);
         String output = out == null ? "" : out.toString();
-
-        System.out.println("[pev-device-failure-e2e] output:\n" + output);
-        System.out.println("[pev-device-failure-e2e] executor.execute 调用次数: "
-                + executeInvocations.get());
-
         // ===== Hard断言 1: output 含 DeviceFailure 标记 =====
         // assembleOutput renders a non-Success node as "[DeviceFailure]".
-        assertThat(output)
-                .as("工具异常应被映射为 NodeResult.DeviceFailure，output 含 DeviceFailure 标记")
-                .contains("DeviceFailure");
+        assertThat(output).as("工具异常应被映射为 NodeResult.DeviceFailure，output 含 DeviceFailure 标记").contains("DeviceFailure");
 
         // ===== Hard断言 2: executor 只调一次（AcceptPartial 不重试） =====
-        assertThat(executeInvocations.get())
-                .as("DeviceFailure → RootCause.DeviceFailure → AcceptPartial（终态），"
-                        + "executor.execute 不应重试（重试只会对坏设备重抛同一错误）")
-                .isEqualTo(1);
+        assertThat(executeInvocations.get()).as("DeviceFailure → RootCause.DeviceFailure → AcceptPartial（终态），"
+                + "executor.execute 不应重试（重试只会对坏设备重抛同一错误）").isEqualTo(1);
 
-        // 软观察：degraded output 里应能看出错误线索（真 LLM 可能让 verifier 写不同措辞，
-        // 故只 soft-observe，不进 hard断言）。
-        if (!output.toLowerCase(Locale.ROOT).contains("timeout")
-                && !output.contains("超时") && !output.contains("不可达")) {
-            System.out.println("[pev-device-failure-e2e] (soft) output 未含超时线索，"
-                    + "可接受——硬断言已由 DeviceFailure 标记 + 不重试覆盖。");
+    }
+
+    private static final class AlwaysFailToolException extends RuntimeException {
+        private AlwaysFailToolException(String message) {
+            super(message);
         }
     }
 }

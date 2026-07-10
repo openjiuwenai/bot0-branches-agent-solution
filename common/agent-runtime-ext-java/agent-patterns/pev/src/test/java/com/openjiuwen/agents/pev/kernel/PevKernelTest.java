@@ -20,12 +20,11 @@ class PevKernelTest {
     // ==================== diagnoseRootCause 优先级契约 ====================
 
     @Test
-    void parseFailure_dominates_allOtherSignals_yieldsPerceptionUnreliable() {
+    void parseFailureDominatesAllOtherSignalsYieldsPerceptionUnreliable() {
         // 即使有 DeviceFailure 节点 + verify failed，parseFailure 仍最高优先
         PevKernel.VerifyResult vr = new PevKernel.VerifyResult(false, Set.of("A"), "fb", true);
 
-        RootCause c = PevKernel.diagnoseRootCause(vr,
-                Set.of("A"),
+        RootCause c = PevKernel.diagnoseRootCause(vr, Set.of("A"),
                 Map.of("A", new NodeResult.DeviceFailure("A", "e", true)));
 
         assertThat(c).isInstanceOf(RootCause.PerceptionUnreliable.class);
@@ -33,20 +32,19 @@ class PevKernelTest {
     }
 
     @Test
-    void deviceFailureNodeIntersectVerifyFailed_yieldsDeviceFailure() {
+    void deviceFailureNodeIntersectVerifyFailedYieldsDeviceFailure() {
         PevKernel.VerifyResult vr = new PevKernel.VerifyResult(false, Set.of("A", "B"), "fb", false);
 
-        RootCause c = PevKernel.diagnoseRootCause(vr,
-                Set.of("A"),
+        RootCause c = PevKernel.diagnoseRootCause(vr, Set.of("A"),
                 Map.of("A", new NodeResult.DeviceFailure("A", "e", true)));
 
-        assertThat(c).isInstanceOf(RootCause.DeviceFailure.class);
-        assertThat(((RootCause.DeviceFailure) c).nodes()).containsExactly("A");
+        assertThat(c).isInstanceOfSatisfying(RootCause.DeviceFailure.class,
+                failure -> assertThat(failure.nodes()).containsExactly("A"));
         // mutation-RED: 剥 nodeResults DeviceFailure 收集 → 不识别 A → 退化为 PlanOrAnswerError → RED
     }
 
     @Test
-    void noDeviceSignal_yieldsPlanOrAnswerError() {
+    void noDeviceSignalYieldsPlanOrAnswerError() {
         PevKernel.VerifyResult vr = new PevKernel.VerifyResult(false, Set.of("A", "B"), "fb", false);
 
         RootCause c = PevKernel.diagnoseRootCause(vr, Set.of(), Map.of());
@@ -58,45 +56,41 @@ class PevKernelTest {
     // ==================== toReplanAction IFF 契约 ====================
 
     @Test
-    void deviceFailure_yieldsAcceptPartial_neverRetry() {
-        ReplanAction a = PevKernel.toReplanAction(
-                new RootCause.DeviceFailure(Set.of("A")), "fb", Set.of("A"));
+    void deviceFailureYieldsAcceptPartialNeverRetry() {
+        ReplanAction a = PevKernel.toReplanAction(new RootCause.DeviceFailure(Set.of("A")), "fb", Set.of("A"));
 
         assertThat(a).isInstanceOf(ReplanAction.AcceptPartial.class);
         // mutation-RED: 剥 toReplanAction 的 DeviceFailure case arm → sealed switch 非穷举 → 编译红（编译期证，比运行时 RED 更早）
     }
 
     @Test
-    void perceptionUnreliable_yieldsAcceptPartial_neverTrustFailed() {
-        ReplanAction a = PevKernel.toReplanAction(
-                new RootCause.PerceptionUnreliable(true), "fb", Set.of("A"));
+    void perceptionUnreliableYieldsAcceptPartialNeverTrustFailed() {
+        ReplanAction a = PevKernel.toReplanAction(new RootCause.PerceptionUnreliable(true), "fb", Set.of("A"));
 
         assertThat(a).isInstanceOf(ReplanAction.AcceptPartial.class);
     }
 
     @Test
-    void planError_fewFailed_yieldsLocalReplan() {
-        ReplanAction a = PevKernel.toReplanAction(
-                new RootCause.PlanOrAnswerError(Set.of()), "fb", Set.of("A", "B"));
+    void planErrorFewFailedYieldsLocalReplan() {
+        ReplanAction a = PevKernel.toReplanAction(new RootCause.PlanOrAnswerError(Set.of()), "fb", Set.of("A", "B"));
 
-        assertThat(a).isInstanceOf(ReplanAction.LocalReplan.class);
-        assertThat(((ReplanAction.LocalReplan) a).failedNodes()).containsExactlyInAnyOrder("A", "B");
+        assertThat(a).isInstanceOfSatisfying(ReplanAction.LocalReplan.class,
+                replan -> assertThat(replan.failedNodes()).containsExactlyInAnyOrder("A", "B"));
         // mutation-RED: 改 threshold <=2 → <2 → AB 用例退化为 GlobalReplan → RED
     }
 
     @Test
-    void planError_manyFailed_yieldsGlobalReplan() {
-        ReplanAction a = PevKernel.toReplanAction(
-                new RootCause.PlanOrAnswerError(Set.of()), "fb", Set.of("A", "B", "C"));
+    void planErrorManyFailedYieldsGlobalReplan() {
+        ReplanAction a = PevKernel.toReplanAction(new RootCause.PlanOrAnswerError(Set.of()), "fb",
+                Set.of("A", "B", "C"));
 
         assertThat(a).isInstanceOf(ReplanAction.GlobalReplan.class);
         // mutation-RED: 改 threshold <=2 → <=3 → ABC 退化为 LocalReplan → RED
     }
 
     @Test
-    void planError_emptyFailed_yieldsGlobalReplan() {
-        ReplanAction a = PevKernel.toReplanAction(
-                new RootCause.PlanOrAnswerError(Set.of()), "fb", Set.of());
+    void planErrorEmptyFailedYieldsGlobalReplan() {
+        ReplanAction a = PevKernel.toReplanAction(new RootCause.PlanOrAnswerError(Set.of()), "fb", Set.of());
 
         assertThat(a).isInstanceOf(ReplanAction.GlobalReplan.class);
         // mutation-RED: 剥 isEmpty 分支 → 空 failedNodes 走 size<=2 → LocalReplan → RED

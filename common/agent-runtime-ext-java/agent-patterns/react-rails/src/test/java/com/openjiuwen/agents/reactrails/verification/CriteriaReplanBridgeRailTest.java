@@ -37,17 +37,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  */
 class CriteriaReplanBridgeRailTest {
-
-    // ==================== Exit 1: verify pass → forceFinish(verified) ====================
-
     @Test
-    void verifyPass_locksVerifiedTerminal() {
+    void verifyPassLocksVerifiedTerminal() {
         // Given: RuleBasedCriteriaVerifier matches keywords in output
         ReplanRail replanRail = new ReplanRail(3);
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"),
-                replanRail);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
 
         // When: afterModelCall with passing final answer ("建议增配债券" contains "建议" and "债券")
         AgentCallbackContext ctx = ctxWithFinalAnswer("建议增配债券");
@@ -55,39 +50,29 @@ class CriteriaReplanBridgeRailTest {
         rail.afterModelCall(ctx);
 
         // Then: forceFinish(verified=true)
-        assertThat(ctx.hasForceFinishRequest())
-                .as("verify pass must fire requestForceFinish(verified=true)")
-                .isTrue();
+        assertThat(ctx.hasForceFinishRequest()).as("verify pass must fire requestForceFinish(verified=true)").isTrue();
         // mutation-RED: strip forceFinish(verifiedResult) → hasForceFinishRequest false → RED
     }
 
     @Test
-    void verifyPass_resultContainsVerifiedTrue() {
+    void verifyPassResultContainsVerifiedTrue() {
         ReplanRail replanRail = new ReplanRail(3);
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"),
-                replanRail);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
 
         AgentCallbackContext ctx = ctxWithFinalAnswer("建议增配债券");
         rail.afterModelCall(ctx);
 
         ForceFinishRequestCapture cap = consumeForceFinish(ctx);
-        assertThat(cap.result())
-                .as("verified forceFinish result must contain VERIFIED_KEY=true")
+        assertThat(cap.result()).as("verified forceFinish result must contain VERIFIED_KEY=true")
                 .containsEntry(CriteriaReplanBridgeRail.VERIFIED_KEY, true);
     }
-
-    // ==================== Exit 2: verify fail + under limit → pushSteering, no forceFinish ====================
-
     @Test
-    void verifyFail_underLimit_pushSteering_noForceFinish() {
+    void verifyFailUnderLimitPushSteeringNoForceFinish() {
         ReplanRail replanRail = new ReplanRail(3); // max=3, first call is under limit
         CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"),
-                replanRail);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
 
         // When: afterModelCall with failing answer, under replan limit
         AgentCallbackContext ctx = ctxWithFinalAnswer("I don't know", steeringQ);
@@ -95,69 +80,51 @@ class CriteriaReplanBridgeRailTest {
 
         // Then: no forceFinish, steering was pushed with correction hint
         assertThat(ctx.hasForceFinishRequest())
-                .as("under-limit verify fail must NOT forceFinish — loop continues for retry")
-                .isFalse();
-        assertThat(steeringQ.captured)
-                .as("under-limit verify fail must push steering correction hint")
-                .isNotEmpty();
-        assertThat(steeringQ.captured.get(0))
-                .contains("建议")
-                .contains("债券");
+                .as("under-limit verify fail must NOT forceFinish — loop continues for retry").isFalse();
+        assertThat(steeringQ.captured).as("under-limit verify fail must push steering correction hint").isNotEmpty();
+        assertThat(steeringQ.captured.get(0)).contains("建议").contains("债券");
         // mutation-RED: strip ctx.pushSteering(...) → captured empty → RED
     }
 
     @Test
-    void verifyFail_underLimit_replanCountIncremented() {
+    void verifyFailUnderLimitReplanCountIncremented() {
         ReplanRail replanRail = new ReplanRail(3);
         CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"),
-                replanRail);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
 
         int beforeCount = replanRail.replanCount();
         rail.afterModelCall(ctxWithFinalAnswer("I don't know", steeringQ));
 
-        assertThat(replanRail.replanCount())
-                .as("verify-fail retry must increment shared replan count")
+        assertThat(replanRail.replanCount()).as("verify-fail retry must increment shared replan count")
                 .isEqualTo(beforeCount + 1);
     }
-
-    // ==================== Exit 3: verify fail + over limit → forceFinish(degraded) ====================
-
     @Test
-    void verifyFail_overLimit_forceFinishDegraded() {
+    void verifyFailOverLimitForceFinishDegraded() {
         ReplanRail replanRail = new ReplanRail(1); // max=1 → overLimit on 2nd call
         CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"),
-                replanRail);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
 
         // First fail: under limit → pushSteering, no forceFinish
         AgentCallbackContext ctx1 = ctxWithFinalAnswer("I don't know", new CaptureSteeringQueue());
         rail.afterModelCall(ctx1);
-        assertThat(ctx1.hasForceFinishRequest())
-                .as("first fail (under limit) must NOT forceFinish")
-                .isFalse();
+        assertThat(ctx1.hasForceFinishRequest()).as("first fail (under limit) must NOT forceFinish").isFalse();
 
         // Second fail: over limit (count=2 > max=1) → forceFinish degraded
         AgentCallbackContext ctx2 = ctxWithFinalAnswer("I don't know either", steeringQ);
         rail.afterModelCall(ctx2);
-        assertThat(ctx2.hasForceFinishRequest())
-                .as("over-limit verify fail must fire requestForceFinish(degraded)")
+        assertThat(ctx2.hasForceFinishRequest()).as("over-limit verify fail must fire requestForceFinish(degraded)")
                 .isTrue();
         // mutation-RED: strip forceFinish(degradedResult) → hasForceFinishRequest false → RED
     }
 
     @Test
-    void verifyFail_overLimit_resultContainsDegradedTrue() {
+    void verifyFailOverLimitResultContainsDegradedTrue() {
         ReplanRail replanRail = new ReplanRail(1);
         CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"),
-                replanRail);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
 
         // First fail (under limit)
         rail.afterModelCall(ctxWithFinalAnswer("I don't know", new CaptureSteeringQueue()));
@@ -167,23 +134,16 @@ class CriteriaReplanBridgeRailTest {
         rail.afterModelCall(ctx2);
 
         ForceFinishRequestCapture cap = consumeForceFinish(ctx2);
-        assertThat(cap.result())
-                .as("over-limit forceFinish result must contain DEGRADED_KEY=true")
+        assertThat(cap.result()).as("over-limit forceFinish result must contain DEGRADED_KEY=true")
                 .containsEntry(CriteriaReplanBridgeRail.DEGRADED_KEY, true);
-        assertThat(cap.result())
-                .containsKey(CriteriaReplanBridgeRail.RETRY_COUNT_KEY);
+        assertThat(cap.result()).containsKey(CriteriaReplanBridgeRail.RETRY_COUNT_KEY);
     }
-
-    // ==================== Tool-call accumulation ====================
-
     @Test
-    void toolCallRound_accumulatesDecisionHistory_noTerminalDecision() {
+    void toolCallRoundAccumulatesDecisionHistoryNoTerminalDecision() {
         ReplanRail replanRail = new ReplanRail(3);
         CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"),
-                replanRail);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
 
         // When: afterModelCall with a tool-call message (not final answer)
         ToolCall tc = new ToolCall();
@@ -198,25 +158,15 @@ class CriteriaReplanBridgeRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        AgentCallbackContext ctx = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .steeringQueue(steeringQ)
-                .build();
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs)
+                .steeringQueue(steeringQ).build();
 
         rail.afterModelCall(ctx);
 
         // Then: no terminal decision (neither forceFinish nor pushSteering)
-        assertThat(ctx.hasForceFinishRequest())
-                .as("tool-call round must NOT forceFinish")
-                .isFalse();
-        assertThat(steeringQ.captured)
-                .as("tool-call round must NOT push steering")
-                .isEmpty();
+        assertThat(ctx.hasForceFinishRequest()).as("tool-call round must NOT forceFinish").isFalse();
+        assertThat(steeringQ.captured).as("tool-call round must NOT push steering").isEmpty();
     }
-
-    // ==================== helpers ====================
-
     /**
      * Capture steering queue spy — records pushSteering calls for mutation-RED assertions.
      */
@@ -244,7 +194,8 @@ class CriteriaReplanBridgeRailTest {
      * so we rely on consumeForceFinish which returns the request on the real
      * context.)
      */
-    record ForceFinishRequestCapture(Map<String, Object> result) {}
+    record ForceFinishRequestCapture(Map<String, Object> result) {
+    }
 
     private static ForceFinishRequestCapture consumeForceFinish(AgentCallbackContext ctx) {
         var req = ctx.consumeForceFinish();
@@ -262,10 +213,6 @@ class CriteriaReplanBridgeRailTest {
         AssistantMessage msg = new AssistantMessage(answer);
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
-        return AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .steeringQueue(steeringQ)
-                .build();
+        return AgentCallbackContext.builder().agent(new Object()).inputs(inputs).steeringQueue(steeringQ).build();
     }
 }

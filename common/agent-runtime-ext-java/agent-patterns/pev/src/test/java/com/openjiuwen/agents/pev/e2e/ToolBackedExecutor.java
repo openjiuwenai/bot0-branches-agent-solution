@@ -33,8 +33,7 @@ final class ToolBackedExecutor implements PevComponents.Executor {
     private final LlmClient llm;
     private final Map<String, java.util.function.Function<Map<String, Object>, String>> tools;
 
-    ToolBackedExecutor(LlmClient llm,
-                       Map<String, java.util.function.Function<Map<String, Object>, String>> tools) {
+    ToolBackedExecutor(LlmClient llm, Map<String, java.util.function.Function<Map<String, Object>, String>> tools) {
         this.llm = llm;
         this.tools = tools == null ? Map.of() : tools;
     }
@@ -81,9 +80,8 @@ final class ToolBackedExecutor implements PevComponents.Executor {
     private static Map<String, Object> parseArgs(String description) {
         Map<String, Object> args = new LinkedHashMap<>();
         // match: caseNo: CLM-2026-REDUCE  |  "caseNo": "CLM-2026-REDUCE"
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s*:\\s*\"?([A-Za-z0-9_\\-]+)\"?")
-                .matcher(description);
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s*:\\s*\"?([A-Za-z0-9_\\-]+)\"?").matcher(description);
         while (m.find()) {
             args.put(m.group(1), m.group(2));
         }
@@ -95,8 +93,7 @@ final class ToolBackedExecutor implements PevComponents.Executor {
         // tool channel honest: only a genuinely thrown tool (DeviceFailure* fixture) maps to
         // DeviceFailure, not a parser gap.
         if (!args.containsKey("caseNo")) {
-            java.util.regex.Matcher cm = java.util.regex.Pattern.compile(
-                    "CLM-\\d{4}-[A-Z]+").matcher(description);
+            java.util.regex.Matcher cm = java.util.regex.Pattern.compile("CLM-\\d{4}-[A-Z]+").matcher(description);
             if (cm.find()) {
                 args.put("caseNo", cm.group());
             }

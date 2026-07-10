@@ -60,7 +60,7 @@ import java.util.Objects;
  *   <li>Strip {@code ctx.pushSteering(...)} on brake → steering queue empty → test RED</li>
  *   <li>Strip {@code ctx.requestForceFinish(...)} on maxStagnations → loop spins forever → test RED</li>
  * </ul>
- 
+
   * @since 2026-07*/
 public class StagnationDetectionRail extends AgentRail {
 
@@ -180,9 +180,8 @@ public class StagnationDetectionRail extends AgentRail {
                 consecutiveToolFailures++;
                 if (consecutiveToolFailures >= 3) {
                     String failureTool = lastFailedTool;
-                    SystemPromptInjectingModel.setPhaseOverride(
-                            "Tool " + failureTool + " has failed " + consecutiveToolFailures
-                            + " consecutive times. Do NOT retry this tool — use a different"
+                    SystemPromptInjectingModel.setPhaseOverride("Tool " + failureTool + " has failed "
+                            + consecutiveToolFailures + " consecutive times. Do NOT retry this tool — use a different"
                             + " tool or change your strategy.");
                     consecutiveToolFailures = 0; // Reset after signal
                 }
@@ -199,7 +198,8 @@ public class StagnationDetectionRail extends AgentRail {
 
     private void checkOutputStagnation(AgentCallbackContext ctx, AssistantMessage msg) {
         String output = contentOf(msg);
-        if (output == null || output.isEmpty()) return;
+        if (output == null || output.isEmpty())
+            return;
 
         // Build a lightweight content hash (first 200 chars for comparison)
         String hash = output.length() > 200 ? output.substring(0, 200) : output;
@@ -220,21 +220,17 @@ public class StagnationDetectionRail extends AgentRail {
 
         // Trigger brake when consecutive repeats reach threshold
         if (consecutiveOutputRepeats >= MAX_OUTPUT_REPEATS) {
-            String brake = "【检测到输出重复】您的回答与之前的回答高度相似（第"
-                    + consecutiveOutputRepeats + "次重复）。"
-                    + "请提供全新的分析，使用不同的论据和方法。";
+            String brake = "【检测到输出重复】您的回答与之前的回答高度相似（第" + consecutiveOutputRepeats + "次重复）。" + "请提供全新的分析，使用不同的论据和方法。";
 
             ctx.pushSteering(brake);
             SystemPromptInjectingModel.setPhaseOverride(
-                    "BREAK_STAGNATION: You are producing repetitive output."
-                    + " Change your approach entirely.");
+                    "BREAK_STAGNATION: You are producing repetitive output." + " Change your approach entirely.");
 
             totalStagnations++;
             consecutiveOutputRepeats = 0; // Reset count after brake
 
             if (totalStagnations >= MAX_STAGNATIONS) {
-                ctx.requestForceFinish(degradedResult(
-                        "输出重复已达" + totalStagnations + "次，强制降级终态"));
+                ctx.requestForceFinish(degradedResult("输出重复已达" + totalStagnations + "次，强制降级终态"));
             }
         }
     }
@@ -245,7 +241,8 @@ public class StagnationDetectionRail extends AgentRail {
 
     private void checkToolCycleStagnation(AgentCallbackContext ctx, AssistantMessage msg) {
         String signature = buildToolSignature(msg);
-        if (signature == null || signature.isEmpty()) return;
+        if (signature == null || signature.isEmpty())
+            return;
 
         toolSignatureHistory.add(signature);
         while (toolSignatureHistory.size() > TOOL_HISTORY_SIZE) {
@@ -264,21 +261,17 @@ public class StagnationDetectionRail extends AgentRail {
 
         // Trigger brake when cycle repeats
         if (toolCycleRepeats >= MAX_TOOL_CYCLE_REPEATS) {
-            String brake = "【检测到工具调用循环】您正在重复使用相同的工具序列（第"
-                    + toolCycleRepeats + "次）。请尝试完全不同的工具或方法，"
-                    + "不要重复已证明无效的调用路径。";
+            String brake = "【检测到工具调用循环】您正在重复使用相同的工具序列（第" + toolCycleRepeats + "次）。请尝试完全不同的工具或方法，" + "不要重复已证明无效的调用路径。";
 
             ctx.pushSteering(brake);
-            SystemPromptInjectingModel.setPhaseOverride(
-                    "BREAK_LOOP: You are repeating the same tool-call sequence."
+            SystemPromptInjectingModel.setPhaseOverride("BREAK_LOOP: You are repeating the same tool-call sequence."
                     + " This loop is ineffective. Change strategy now.");
 
             totalStagnations++;
             toolCycleRepeats = 0; // Reset after brake
 
             if (totalStagnations >= MAX_STAGNATIONS) {
-                ctx.requestForceFinish(degradedResult(
-                        "工具调用循环已达" + totalStagnations + "次，强制降级终态"));
+                ctx.requestForceFinish(degradedResult("工具调用循环已达" + totalStagnations + "次，强制降级终态"));
             }
         }
     }
@@ -291,9 +284,7 @@ public class StagnationDetectionRail extends AgentRail {
         if (msg.getToolCalls() == null || msg.getToolCalls().isEmpty()) {
             return "";
         }
-        return msg.getToolCalls().stream()
-                .map(ToolCall::getName)
-                .filter(Objects::nonNull)
+        return msg.getToolCalls().stream().map(ToolCall::getName).filter(Objects::nonNull)
                 .collect(java.util.stream.Collectors.joining("|"));
     }
 
@@ -304,7 +295,8 @@ public class StagnationDetectionRail extends AgentRail {
      */
     private boolean detectToolCycle() {
         int sz = toolSignatureHistory.size();
-        if (sz < 4 || (sz & 1) != 0) return false; // need even size for equal halves
+        if (sz < 4 || (sz & 1) != 0)
+            return false; // need even size for equal halves
         int half = sz / 2;
         List<String> firstHalf = toolSignatureHistory.subList(0, half);
         List<String> secondHalf = toolSignatureHistory.subList(half, sz);

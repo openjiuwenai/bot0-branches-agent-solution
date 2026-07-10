@@ -18,14 +18,17 @@ import java.util.Map;
  */
 public final class PevComponents {
 
-    private PevComponents() {}
+    private PevComponents() {
+    }
 
-    /** 单个执行节点（Plan 的组成单元）。 
+    /** 单个执行节点（Plan 的组成单元）。
     /** 单个执行节点（Plan 的组成单元）。  * @since 2026-07*/
-    public record PlanNode(String id, String description) {}
+    public record PlanNode(String id, String description) {
+    }
 
     /** Plan 阶段产物：目标 + 节点列表。 */
-    public record Plan(String goal, List<PlanNode> nodes) {}
+    public record Plan(String goal, List<PlanNode> nodes) {
+    }
 
     /** Plan 阶段：NL 目标 → Plan。 */
     public interface Planner {

@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -69,7 +70,7 @@ import java.util.Set;
  *   <li>PerceptionUnreliable is not diagnosed here — no verifier is involved in the __replan__
  *       path. The dispatch function still handles it if called, but it's structurally deferred.</li>
  * </ul>
- 
+
   * @since 2026-07*/
 public class PevReplanRail extends AgentRail {
 
@@ -135,10 +136,11 @@ public class PevReplanRail extends AgentRail {
             return;
         }
 
-        ToolCall replanCall = findReplanCall(msg);
-        if (replanCall == null) {
+        Optional<ToolCall> maybeReplanCall = findReplanCall(msg);
+        if (maybeReplanCall.isEmpty()) {
             return;
         }
+        ToolCall replanCall = maybeReplanCall.get();
 
         replanCount++;
         if (replanCount > maxReplan) {
@@ -157,20 +159,17 @@ public class PevReplanRail extends AgentRail {
         RootCause cause = diagnose(reason, newApproach);
 
         // PEV dispatch — pure function, compiler-enforced exhaustive
-        Set<String> failedNodes = cause instanceof RootCause.PlanOrAnswerError pe
-                ? pe.nodes() : Set.of();
+        Set<String> failedNodes = cause instanceof RootCause.PlanOrAnswerError pe ? pe.nodes() : Set.of();
         ReplanAction action = PevKernel.toReplanAction(cause, reason, failedNodes);
 
         // Execute dispatch
         switch (action) {
             case ReplanAction.GlobalReplan gr -> {
-                String steering = "【全局重规划】" + gr.feedback()
-                        + "。请基于以下指导重新制定方案：" + newApproach;
+                String steering = "【全局重规划】" + gr.feedback() + "。请基于以下指导重新制定方案：" + newApproach;
                 ctx.pushSteering(steering);
             }
             case ReplanAction.LocalReplan lr -> {
-                String steering = "【局部修正】节点 " + lr.failedNodes()
-                        + " 需要重新处理。修正提示：" + lr.feedback();
+                String steering = "【局部修正】节点 " + lr.failedNodes() + " 需要重新处理。修正提示：" + lr.feedback();
                 ctx.pushSteering(steering);
             }
             case ReplanAction.AcceptPartial ap -> {
@@ -189,21 +188,20 @@ public class PevReplanRail extends AgentRail {
      */
     private RootCause diagnose(String reason, String newApproach) {
         // If recent tool failures exist AND reason mentions the failed tools → DeviceFailure
-        if (!recentToolFailureNodes.isEmpty()
-                && recentToolFailureNodes.stream().anyMatch(reason::contains)) {
+        if (!recentToolFailureNodes.isEmpty() && recentToolFailureNodes.stream().anyMatch(reason::contains)) {
             return new RootCause.DeviceFailure(new LinkedHashSet<>(recentToolFailureNodes));
         }
         // LLM self-initiated replan → PlanOrAnswerError with empty nodes → GlobalReplan
         return new RootCause.PlanOrAnswerError(Set.of());
     }
 
-    private static ToolCall findReplanCall(AssistantMessage msg) {
+    private static Optional<ToolCall> findReplanCall(AssistantMessage msg) {
         for (ToolCall tc : msg.getToolCalls()) {
             if (ReplanTool.TOOL_NAME.equals(tc.getName())) {
-                return tc;
+                return Optional.of(tc);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -213,13 +211,16 @@ public class PevReplanRail extends AgentRail {
      * Escaped quotes are not handled (not needed for LLM-generated tool call args in practice).
      */
     private static String extractJsonStringField(String json, String field) {
-        if (json == null || json.isBlank()) return "";
+        if (json == null || json.isBlank())
+            return "";
         String search = "\"" + field + "\":\"";
         int start = json.indexOf(search);
-        if (start < 0) return "";
+        if (start < 0)
+            return "";
         start += search.length();
         int end = json.indexOf('"', start);
-        if (end < 0) return "";
+        if (end < 0)
+            return "";
         return json.substring(start, end);
     }
 

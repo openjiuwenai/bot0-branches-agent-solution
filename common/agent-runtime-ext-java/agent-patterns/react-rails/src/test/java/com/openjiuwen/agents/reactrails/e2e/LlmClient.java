@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 
 /**
@@ -44,56 +45,75 @@ final class LlmClient {
             throw new IllegalStateException("OPENJIUWEN env not set");
         }
         String body = """
-                {"model":"%s","messages":[{"role":"user","content":%s}],"temperature":0.3,"thinking":{"type":"disabled"}}
-                """.formatted(MODEL, jsonString(userPrompt));
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(BASE + PATH))
-                .header("Authorization", "Bearer " + KEY)
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(300))
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+                {"model":"%s","messages":[{"role":"user","content":%s}],
+                "temperature":0.3,"thinking":{"type":"disabled"}}
+                """.replace(System.lineSeparator(), "").formatted(MODEL, jsonString(userPrompt));
+        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(BASE + PATH)).header("Authorization", "Bearer " + KEY)
+                .header("Content-Type", "application/json").timeout(Duration.ofSeconds(300))
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         try {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() != 200)
-                throw new RuntimeException("LLM HTTP " + resp.statusCode() + ": "
+                throw new LlmCallException("LLM HTTP " + resp.statusCode() + ": "
                         + resp.body().substring(0, Math.min(200, resp.body().length())));
             return extractContent(resp.body());
-        } catch (RuntimeException e) { throw e; }
-        catch (Exception e) { throw new RuntimeException("LLM call failed: " + e.getMessage(), e); }
+        } catch (HttpTimeoutException e) {
+            throw new LlmCallException("LLM request timed out: " + e.getMessage(), e);
+        } catch (java.io.IOException e) {
+            throw new LlmCallException("LLM I/O error: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            throw new LlmCallException("LLM call interrupted: " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            throw e;
+        }
     }
 
     private static String jsonString(String s) {
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "") + "\"";
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace(String.valueOf((char) 10), "\\" + "n")
+                .replace(String.valueOf((char) 13), "") + "\"";
     }
 
     private static String extractContent(String json) {
         String content = extractField(json, "content");
-        if (content != null && !content.isEmpty()) return content;
+        if (content != null && !content.isEmpty())
+            return content;
         String reasoningContent = extractField(json, "reasoning_content");
-        if (reasoningContent != null && !reasoningContent.isEmpty()) return reasoningContent;
+        if (reasoningContent != null && !reasoningContent.isEmpty())
+            return reasoningContent;
         String reasoning = extractField(json, "reasoning");
-        if (reasoning != null && !reasoning.isEmpty()) return reasoning;
+        if (reasoning != null && !reasoning.isEmpty())
+            return reasoning;
         return "";
     }
 
     private static String extractField(String json, String field) {
         String search = "\"" + field + "\":\"";
         int idx = json.indexOf(search);
-        if (idx < 0) return null;
+        if (idx < 0)
+            return "";
         int start = idx + search.length();
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
             char c = json.charAt(i);
             if (c == '\\' && i + 1 < json.length()) {
                 char n = json.charAt(++i);
-                sb.append(n == 'n' ? '\n' : n);
+                sb.append(n == 'n' ? (char) 10 : n);
                 continue;
             }
-            if (c == '"') break;
+            if (c == '"')
+                break;
             sb.append(c);
         }
         return sb.toString();
+    }
+
+    static final class LlmCallException extends RuntimeException {
+        LlmCallException(String message) {
+            super(message);
+        }
+
+        LlmCallException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

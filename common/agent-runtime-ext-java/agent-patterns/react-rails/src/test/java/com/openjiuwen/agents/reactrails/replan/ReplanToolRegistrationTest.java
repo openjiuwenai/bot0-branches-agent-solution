@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ReplanToolRegistrationTest {
 
     @Test
-    void registerOnto_cardIsVisibleToLlmViaAbilityManager() {
+    void registerOntoCardIsVisibleToLlmViaAbilityManager() {
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("reg-visibility").build());
 
         ReplanTool.registerOnto(agent);
@@ -40,15 +40,14 @@ class ReplanToolRegistrationTest {
         AbilityManager am = agent.getAbilityManager();
         List<ToolInfo> visible = am.listToolInfo();
 
-        assertThat(visible)
-                .as("AbilityManager.listToolInfo must surface __replan__ (card registered, not raw Tool)")
+        assertThat(visible).as("AbilityManager.listToolInfo must surface __replan__ (card registered, not raw Tool)")
                 .anyMatch(t -> ReplanTool.TOOL_NAME.equals(t.getName()));
         // mutation-RED: revert registerOnto to add(new ReplanTool()) → addSingle drops Tool
         //   (Tool not instanceof ToolCard) → listToolInfo empty → RED
     }
 
     @Test
-    void registerOnto_executableResolvesViaResourceMgrByName() {
+    void registerOntoExecutableResolvesViaResourceMgrByName() {
         // Use a fresh agent (still global Runner.resourceMgr, but addTool under __replan__)
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("reg-dispatch").build());
 
@@ -56,8 +55,7 @@ class ReplanToolRegistrationTest {
 
         Object resolved = Runner.resourceMgr().getTool(ReplanTool.TOOL_NAME);
 
-        assertThat(resolved)
-                .as("Runner.resourceMgr must resolve __replan__ → ReplanTool (id==name invariant)")
+        assertThat(resolved).as("Runner.resourceMgr must resolve __replan__ → ReplanTool (id==name invariant)")
                 .isInstanceOf(ReplanTool.class);
         // mutation-RED: remove .id(TOOL_NAME) on the card → ResourceMgr stores random UUID
         //   key → getTool(__replan__) returns null → RED

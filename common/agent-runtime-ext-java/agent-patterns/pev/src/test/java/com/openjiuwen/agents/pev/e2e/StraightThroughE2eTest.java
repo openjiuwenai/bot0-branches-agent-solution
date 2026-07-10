@@ -38,9 +38,8 @@ class StraightThroughE2eTest {
     private static final LlmClient LLM = new LlmClient();
 
     @Test
-    void straightThrough_singleTool_planExecuteVerifyPass() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(),
-                "OPENJIUWEN_API_KEY 未设，跳过真 LLM e2e");
+    void straightThroughSingleToolPlanExecuteVerifyPass() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设，跳过真 LLM e2e");
 
         // Task that is trivially satisfiable by a single getClaimInfo call.
         String task = "查询案件 CLM-2026-REDUCE 的状态、基础信息与定责结论。";
@@ -62,10 +61,6 @@ class StraightThroughE2eTest {
         Object out = agent.invoke(task, null);
 
         String output = String.valueOf(out);
-        System.out.println("[pev-straight-through-e2e] output:\n" + output);
-        System.out.println("[pev-straight-through-e2e] env MODEL="
-                + System.getenv().getOrDefault("OPENJIUWEN_MODEL", "(unset)"));
-
         // Soft断言 (real LLM e2e — no brittle content断言):
         //   1. output non-empty — the loop produced something.
         assertThat(output).isNotEmpty();

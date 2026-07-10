@@ -38,8 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li><b>Soft (no pass/fail断言):</b> we do NOT hard-assert the verifier returns FAIL —
  *       LLM behavior under an adversarial lure is non-deterministic. The reference scenario's
  *       point is that the verify <i>channel</i> catches a bad decision; here we prove the
- *       channel runs with adversary-aware prompt context and surface the actual verdict for
- *       human observation via {@code System.out}.</li>
+ *       channel runs with adversary-aware prompt context.</li>
  * </ul>
  *
  * <p>Env required: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /
@@ -54,9 +53,8 @@ class AdversarialCatchE2eTest {
     private static final VerifyHolder VERIFY_HOLDER = new VerifyHolder();
 
     @Test
-    void adversarialClaim_verifyCatchesBadDecision_channelProven() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(),
-                "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
+    void adversarialClaimVerifyCatchesBadDecisionChannelProven() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
 
         // Task explicitly names the ADVERSARY case + the available tools, so the planner/executor
         // are steered toward the claim-adjudication flow over the lure fixture.
@@ -82,28 +80,16 @@ class AdversarialCatchE2eTest {
         String output = out == null ? "" : out.toString();
 
         // ---- Hard断言: executor 真的跑了 ADVERSARY 工具（输出触及案件赔付面）—— 证 fixture 通道 ----
-        assertThat(output)
-                .as("executor 应产出含案号或赔付结论的输出（证 ClaimTools fixture 通道工作）")
-                .isNotEmpty()
-                .containsAnyOf("CLM-2026-ADVERSARY", "4250000", "5000000",
-                        "减赔", "足额", "核定", "赔付");
+        assertThat(output).as("executor 应产出含案号或赔付结论的输出（证 ClaimTools fixture 通道工作）").isNotEmpty()
+                .containsAnyOf("CLM-2026-ADVERSARY", "4250000", "5000000", "减赔", "足额", "核定", "赔付");
 
-        // ---- 软观察 verify 通道：捕获到就打印判定；没捕获到 = verifier LLM 调用方差抛了
+        // ---- 软观察 verify 通道：捕获到即说明 verifier 正常返回；没捕获到 = verifier LLM 调用方差抛了
         //      （PEVAgent 正确 catch → verifyThrew → PerceptionUnreliable → AcceptPartial），
         //      也是有效 verify 通道信号，不强断 captor（captor 硬断言对 GLM 方差过脆）。----
         PevKernel.VerifyResult vr = VERIFY_HOLDER.last;
         if (vr != null) {
-            System.out.println("[adversarial-catch-e2e] verify.passed     = " + vr.passed());
-            System.out.println("[adversarial-catch-e2e] verify.failedNodes = " + vr.failedNodes());
-            System.out.println("[adversarial-catch-e2e] verify.feedback   = " + vr.feedback());
-            System.out.println("[adversarial-catch-e2e] SOFT-OBSERVE: verifier " +
-                    (vr.passed() ? "rubber-stamped (may have missed the lure)"
-                            : "flagged the decision (catch worked)"));
-        } else {
-            System.out.println("[adversarial-catch-e2e] verifier threw (captor=null) — "
-                    + "PEVAgent 走 verifyThrew→PerceptionUnreliable→AcceptPartial 路径，也是有效 verify 通道信号");
+            assertThat(vr.feedback()).as("verifier feedback channel should be readable").isNotNull();
         }
-        System.out.println("[adversarial-catch-e2e] agent.output:\n" + output);
     }
 
     // ==================== Adversary-aware verifier ====================
@@ -167,7 +153,8 @@ class AdversarialCatchE2eTest {
             }
             StringBuilder sb = new StringBuilder();
             completed.forEach((id, r) -> {
-                if (sb.length() > 0) sb.append(" | ");
+                if (sb.length() > 0)
+                    sb.append(" | ");
                 sb.append('[').append(id).append("] ");
                 if (r instanceof NodeResult.Success s) {
                     sb.append(s.value());

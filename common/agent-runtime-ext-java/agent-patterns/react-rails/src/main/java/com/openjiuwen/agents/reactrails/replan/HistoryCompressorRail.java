@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  *   <li>{@code SystemMessage}</li>
  *   <li>{@code UserMessage(initial query)}</li>
  *   <li>Prior summaries (if any) — each from a previous compression cycle</li>
- *   <li>{@code UserMessage("[尝试摘要]\\n" + summary)} — new structured summary</li>
+ *   <li>{@code UserMessage} containing the structured summary</li>
  *   <li>Current {@code AssistantMessage(__replan__)} — preserved</li>
  * </ol>
  * Multiple replan cycles accumulate: each compression appends a new summary after prior ones,
@@ -48,9 +48,11 @@ import java.util.stream.Collectors;
  *
  * <p><b>Honest boundary</b>: Phase1 规则提取工具调用签名，Phase2 LLM 摘要已 deferred
  * （需在 rail 内发起 LLM 调用，涉及注入时序复杂度）。
- 
+
   * @since 2026-07*/
 public class HistoryCompressorRail extends AgentRail {
+
+    private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /** 上次压缩边界索引（初始 0 = 未压缩）。 */
     private int lastBoundary = 0;
@@ -104,8 +106,7 @@ public class HistoryCompressorRail extends AgentRail {
         }
 
         // 检测 __replan__ 工具调用
-        boolean hasReplan = msg.getToolCalls().stream()
-                .anyMatch(tc -> ReplanTool.TOOL_NAME.equals(tc.getName()));
+        boolean hasReplan = msg.getToolCalls().stream().anyMatch(tc -> ReplanTool.TOOL_NAME.equals(tc.getName()));
         if (!hasReplan) {
             return;
         }
@@ -121,7 +122,7 @@ public class HistoryCompressorRail extends AgentRail {
         //    保留 messages.get(messages.size() - 1) = 当前含 __replan__ 的 AssistantMessage
         //    segStart >= 2 保证 System(0) 和 UserMessage(initial query)(1) 不被压缩
         int segStart = Math.max(2, lastBoundary);
-        int segEnd = messages.size() - 1;            // 排除当前 __replan__ 消息
+        int segEnd = messages.size() - 1; // 排除当前 __replan__ 消息
         if (segStart >= segEnd) {
             // 没有可压缩的中间段
             return;
@@ -134,18 +135,18 @@ public class HistoryCompressorRail extends AgentRail {
         //    [0] SystemMessage
         //    [1] UserMessage(initial query)
         //    [2..segStart) 已有摘要（累积保留）
-        //    [segStart..segEnd) 被压缩为 [n] UserMessage("[尝试摘要]\n" + summary)
+        //    [segStart..segEnd) 被压缩为 [n] UserMessage("[尝试摘要]" + LINE_SEPARATOR + summary)
         //    [n+1] 当前 __replan__ 消息
         List<BaseMessage> compact = new ArrayList<>();
         // 永保留 system + initial query
-        compact.add(messages.get(0));                                          // SystemMessage
-        compact.add(messages.get(1));                                          // UserMessage(initial query)
+        compact.add(messages.get(0)); // SystemMessage
+        compact.add(messages.get(1)); // UserMessage(initial query)
         // 累积保留已有摘要（index 2 到 segStart 间的消息，如之前的压缩摘要）
         for (int i = 2; i < segStart; i++) {
             compact.add(messages.get(i));
         }
-        compact.add(new UserMessage("[尝试摘要]\n" + summary));                // 本次压缩摘要
-        compact.add(msg);                                                      // 当前 __replan__ 消息
+        compact.add(new UserMessage("[尝试摘要]" + LINE_SEPARATOR + summary)); // 本次压缩摘要
+        compact.add(msg); // 当前 __replan__ 消息
 
         ctx.getContext().setMessages(compact, false);
         lastBoundary = compact.size() - 1;
@@ -161,14 +162,12 @@ public class HistoryCompressorRail extends AgentRail {
      * @return 结构化摘要字符串
      */
     private static String extractToolCallSummary(List<BaseMessage> segment) {
-        List<String> calls = segment.stream()
-                .filter(m -> m instanceof AssistantMessage)
+        List<String> calls = segment.stream().filter(m -> m instanceof AssistantMessage)
                 .flatMap(m -> ((AssistantMessage) m).getToolCalls().stream())
-                .map(tc -> "  - " + tc.getName() + "(" + tc.getArguments() + ")")
-                .collect(Collectors.toList());
+                .map(tc -> "  - " + tc.getName() + "(" + tc.getArguments() + ")").collect(Collectors.toList());
         if (calls.isEmpty()) {
             return "未产生工具调用，对话直接触发 replan。";
         }
-        return "尝试了以下工具调用：\n" + String.join("\n", calls) + "\n以上尝试未能解决问题。";
+        return "尝试了以下工具调用：" + LINE_SEPARATOR + String.join(LINE_SEPARATOR, calls) + LINE_SEPARATOR + "以上尝试未能解决问题。";
     }
 }

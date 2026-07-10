@@ -31,49 +31,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CriteriaVerificationRailRealLlmE2eTest {
 
     @Test
-    void realLlm_criteriaRailVerifiesAnswer() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(),
-                "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
+    void realLlmCriteriaRailVerifiesAnswer() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
 
         DefaultModelClientFactories.ensureRegistered();
-        var cliCfg = ModelClientConfig.builder()
-                .clientId("react-rails-e2e-" + System.nanoTime())
-                .clientProvider("OpenAI")
-                .apiKey(System.getenv("OPENJIUWEN_API_KEY"))
-                .apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
-                .verifySsl(false).build();
+        var cliCfg = ModelClientConfig.builder().clientId("react-rails-e2e-" + System.nanoTime())
+                .clientProvider("OpenAI").apiKey(System.getenv("OPENJIUWEN_API_KEY"))
+                .apiBase(System.getenv("OPENJIUWEN_BASE_URL")).verifySsl(false).build();
         String effectiveModel = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-pro");
-        var reqCfg = ModelRequestConfig.builder()
-                .modelName(effectiveModel)
-                .temperature(0.3).maxTokens(200).build();
+        var reqCfg = ModelRequestConfig.builder().modelName(effectiveModel).temperature(0.3).maxTokens(200).build();
         ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
 
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("e2e-agent").build());
         agent.setLlm(model);
 
         // Register criteria rail — criteria that a good answer should meet
-        agent.registerRail(new CriteriaVerificationRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("Plan", "Execute", "Verify")));
+        agent.registerRail(
+                new CriteriaVerificationRail(new RuleBasedCriteriaVerifier(), List.of("Plan", "Execute", "Verify")));
 
         // Task: ask the LLM to explain PEV (should produce keywords Plan/Execute/Verify)
-        Object result = agent.invoke(
-                "用一句话解释 PEV（Plan-Execute-Verify）模式。回答中要包含 Plan、Execute、Verify 这三个词。",
-                null);
-
-        System.out.println("[react-rails-e2e] result type: " + result.getClass().getName());
-        System.out.println("[react-rails-e2e] result: " + result);
-
+        Object result = agent.invoke("用一句话解释 PEV（Plan-Execute-Verify）模式。回答中要包含 Plan、Execute、Verify 这三个词。", null);
         // Hard assertion: result MUST be a Map (proves forceFinish was consumed = channel live).
         // forceFinish on agent-core-java 0.1.12 swaps the return into a forcedMap; a String
         // result means the rail never fired / forceFinish was ignored — channel dead.
-        assertThat(result)
-                .as("forceFinish must be consumed by ReActAgent → result is Map, not String")
+        assertThat(result).as("forceFinish must be consumed by ReActAgent → result is Map, not String")
                 .isInstanceOf(Map.class);
 
         // Soft-observe (non-deterministic, no assert): which branch fired.
         Map<?, ?> map = (Map<?, ?>) result;
-        System.out.println("[react-rails-e2e] criteria_verified: " + map.get(CriteriaVerificationRail.VERIFIED_KEY));
-        System.out.println("[react-rails-e2e] criteria_result: " + map.get(CriteriaVerificationRail.RESULT_KEY));
     }
 }

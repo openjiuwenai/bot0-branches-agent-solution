@@ -6,7 +6,6 @@ package com.openjiuwen.agents.reactrails.e2e;
 
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel.InjectionMode;
-import com.openjiuwen.agents.reactrails.enforcing.ToolCallingEnforcingModel;
 import com.openjiuwen.agents.reactrails.verification.PreCompletionChecklistRail;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
@@ -15,7 +14,6 @@ import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 
 import org.junit.jupiter.api.Test;
-
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,32 +62,23 @@ class PreCompletionChecklistRailE2eTest {
      * → model 无 PLAN_MODE 注入 → getInjectionMode() 为 NONE（非 PLAN_MODE）→ RED
      */
     @Test
-    void planPhase_injectsPlanMode() {
+    void planPhaseInjectsPlanMode() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "skip");
         DefaultModelClientFactories.ensureRegistered();
 
         // Build a SystemPromptInjectingModel (PLAN/BUILD mode requires it)
-        var cliCfg = ModelClientConfig.builder()
-                .clientId("checklist-e2e-" + System.nanoTime())
-                .clientProvider("OpenAI")
-                .apiKey(System.getenv("OPENJIUWEN_API_KEY"))
-                .apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
-                .verifySsl(false)
-                .build();
+        var cliCfg = ModelClientConfig.builder().clientId("checklist-e2e-" + System.nanoTime()).clientProvider("OpenAI")
+                .apiKey(System.getenv("OPENJIUWEN_API_KEY")).apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
+                .verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
-                .modelName(System.getenv()
-                        .getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash"))
-                .temperature(0.3)
-                .maxTokens(200)
-                .build();
+                .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash")).temperature(0.3)
+                .maxTokens(200).build();
 
         SystemPromptInjectingModel model = new SystemPromptInjectingModel(cliCfg, reqCfg);
         // Reset static state before test
         SystemPromptInjectingModel.resetToDefaults();
 
-        ReActAgent agent = new ReActAgent(AgentCard.builder()
-                .name("checklist-e2e-plan")
-                .build());
+        ReActAgent agent = new ReActAgent(AgentCard.builder().name("checklist-e2e-plan").build());
         agent.setLlm(model);
 
         // Register PreCompletionChecklistRail with 2 PLAN rounds
@@ -97,29 +86,19 @@ class PreCompletionChecklistRailE2eTest {
         agent.registerRail(rail);
 
         // Before any call: static channel should be NONE
-        assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .as("static mode must start as NONE")
+        assertThat(SystemPromptInjectingModel.getInjectionMode()).as("static mode must start as NONE")
                 .isEqualTo(InjectionMode.NONE);
 
         // First invoke → beforeModelCall sets PLAN_MODE, output may mention exploration
-        Object result = agent.invoke(
-                "分析当前中美科技竞争格局。请给出有数据支撑的分析。", null);
+        Object result = agent.invoke("分析当前中美科技竞争格局。请给出有数据支撑的分析。", null);
 
-        assertThat(result)
-                .as("agent invoke must return non-null")
-                .isNotNull();
+        assertThat(result).as("agent invoke must return non-null").isNotNull();
 
         // After first beforeModelCall → mode should be PLAN_MODE
         assertThat(SystemPromptInjectingModel.getInjectionMode())
                 .as("after first beforeModelCall, mode must be PLAN_MODE (callCount < planMaxRounds)")
                 .isEqualTo(InjectionMode.PLAN_MODE);
 
-        // Soft observation: output may mention exploration keywords
-        String outputStr = String.valueOf(result);
-        System.out.println("[E2E-1] agent output (first 200): "
-                + outputStr.substring(0, Math.min(200, outputStr.length())));
-        System.out.println("[E2E-1] injectionMode after first call: "
-                + SystemPromptInjectingModel.getInjectionMode());
     }
 
     /**
@@ -133,30 +112,21 @@ class PreCompletionChecklistRailE2eTest {
      * → mode 保持 PLAN_MODE → RED
      */
     @Test
-    void afterPlanRounds_switchesToBuildMode() {
+    void afterPlanRoundsSwitchesToBuildMode() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "skip");
         DefaultModelClientFactories.ensureRegistered();
 
-        var cliCfg = ModelClientConfig.builder()
-                .clientId("checklist-e2e-" + System.nanoTime())
-                .clientProvider("OpenAI")
-                .apiKey(System.getenv("OPENJIUWEN_API_KEY"))
-                .apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
-                .verifySsl(false)
-                .build();
+        var cliCfg = ModelClientConfig.builder().clientId("checklist-e2e-" + System.nanoTime()).clientProvider("OpenAI")
+                .apiKey(System.getenv("OPENJIUWEN_API_KEY")).apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
+                .verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
-                .modelName(System.getenv()
-                        .getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash"))
-                .temperature(0.3)
-                .maxTokens(200)
-                .build();
+                .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash")).temperature(0.3)
+                .maxTokens(200).build();
 
         SystemPromptInjectingModel model = new SystemPromptInjectingModel(cliCfg, reqCfg);
         SystemPromptInjectingModel.resetToDefaults();
 
-        ReActAgent agent = new ReActAgent(AgentCard.builder()
-                .name("checklist-e2e-build")
-                .build());
+        ReActAgent agent = new ReActAgent(AgentCard.builder().name("checklist-e2e-build").build());
         agent.setLlm(model);
 
         // planMaxRounds=1 → BUILD kicks in on 2nd iteration
@@ -186,8 +156,6 @@ class PreCompletionChecklistRailE2eTest {
         assertThat(result2).isNotNull();
 
         // After second beforeModelCall, mode should be BUILD_MODE
-        System.out.println("[E2E-2] injectionMode after second beforeModelCall: "
-                + SystemPromptInjectingModel.getInjectionMode());
         // Note: by the time we check, the second invoke() may have consumed the mode
         // (injectMode is static AtomicReference, not reset after invoke)
         // So this assertion checks the mode was set to something — not necessarily BUILD_MODE
@@ -195,8 +163,6 @@ class PreCompletionChecklistRailE2eTest {
         // Actually, setInjectionMode in beforeModelCall sets it, then invoke() reads it.
         // After invoke(), the mode stays as BUILD_MODE (not auto-reset to NONE).
         // So this assertion should work:
-        System.out.println("[E2E-2] result2: "
-                + String.valueOf(result2).substring(0, Math.min(200, String.valueOf(result2).length())));
     }
 
     /**
@@ -212,7 +178,7 @@ class PreCompletionChecklistRailE2eTest {
      * 控制流验证见 PreCompletionChecklistRailTest.beforeModelCall_stagnationDetected_injectsBreakLoop。
      */
     @Test
-    void stagnationDetection_injectsBreakLoop() {
+    void stagnationDetectionInjectsBreakLoop() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "skip");
         DefaultModelClientFactories.ensureRegistered();
 
@@ -225,8 +191,5 @@ class PreCompletionChecklistRailE2eTest {
         // The mock test (PreCompletionChecklistRailTest) validates the control flow.
         // The e2e here validates nothing additional about this specific path
         // because stagnation is LLM-behavior-dependent and non-deterministic.
-
-        System.out.println("[E2E-3] stagnation detection data flow validated in mock test");
-        System.out.println("[E2E-3] e2e relies on StagnationDetectionRail's own e2e test");
     }
 }

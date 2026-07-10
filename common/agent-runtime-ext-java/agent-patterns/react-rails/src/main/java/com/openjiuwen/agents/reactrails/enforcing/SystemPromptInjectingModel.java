@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * so all agents sharing this class see the same override. In a multi-agent scenario
  * each agent should have its own model instance; the static channel is the
  * cross-hook communication primitive.
- 
+
   * @since 2026-07*/
 public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
@@ -68,7 +68,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
          * first real {@code invoke()}.
          */
         FIRST_PRINCIPLES,
-                // PLAN mode: divergent/exploratory framing
+        // PLAN mode: divergent/exploratory framing
         /** Replace SystemMessage with divergent/exploratory framing (PLAN phase). */
         PLAN_MODE,
         /** Replace SystemMessage with convergent/execution framing (BUILD phase). */
@@ -80,36 +80,27 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     private static final AtomicReference<String> phaseOverride = new AtomicReference<>(null);
     private static final AtomicReference<InjectionMode> mode = new AtomicReference<>(DEFAULT_MODE);
+    private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /**
      * The "先扩后收" (widen then converge) first-principles strategy prompt
      * injected once into the SystemMessage on the first real {@link #invoke}
      * when {@link InjectionMode#FIRST_PRINCIPLES} is active.
      */
-    private static final String FIRST_PRINCIPLES_PROMPT =
-            "【第一性原理】您在解决问题时应遵循「先扩后收」的认知策略：\n"
-            + "1. 【先扩】首先广泛探索可能的解决方案空间，从多个角度审视问题，"
-            + "提出发散性的思路和方法\n"
-            + "2. 【后收】然后系统性地评估和对比各方案，收敛到最佳执行路径，"
-            + "深入实施\n"
-            + "\n"
-            + "请在整个推理过程中有意识地应用这一策略，主动标记当前位置"
-            + "（扩/收阶段），确保不急于收敛也不过度发散。";
+    private static final String FIRST_PRINCIPLES_PROMPT = "【第一性原理】您在解决问题时应遵循「先扩后收」的认知策略：" + LINE_SEPARATOR
+            + "1. 【先扩】首先广泛探索可能的解决方案空间，从多个角度审视问题，提出发散性的思路和方法" + LINE_SEPARATOR + "2. 【后收】然后系统性地评估和对比各方案，收敛到最佳执行路径，深入实施"
+            + LINE_SEPARATOR + LINE_SEPARATOR + "请在整个推理过程中有意识地应用这一策略，主动标记当前位置（扩/收阶段），确保不急于收敛也不过度发散。";
 
     /** PLAN phase system prompt (divergent/exploratory framing). */
-    private static final String PLAN_SYSTEM_PROMPT =
-            "You are in the DIVERGENT EXPLORATION phase. "
+    private static final String PLAN_SYSTEM_PROMPT = "You are in the DIVERGENT EXPLORATION phase. "
             + "Analyze the problem from at least 3 different angles. "
-            + "Each angle should have concrete reasoning, evidence, and "
-            + "data — not just bullet titles. "
+            + "Each angle should have concrete reasoning, evidence, and " + "data — not just bullet titles. "
             + "Use available tools to gather real information. "
             + "Do NOT converge on a single answer yet — explore first.";
 
     /** BUILD phase system prompt (convergent/execution framing). */
-    private static final String BUILD_SYSTEM_PROMPT =
-            "You are in the CONVERGENT EXECUTION phase. "
-            + "Focus on producing a single complete answer that meets "
-            + "all success criteria. "
+    private static final String BUILD_SYSTEM_PROMPT = "You are in the CONVERGENT EXECUTION phase. "
+            + "Focus on producing a single complete answer that meets " + "all success criteria. "
             + "Incorporate insights from your earlier exploration. "
             + "Ensure every criterion is explicitly addressed. "
             + "If your current path cannot cover all criteria, call __replan__.";
@@ -175,21 +166,19 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     // ---- Invoke override ----
 
     @Override
-    public AssistantMessage invoke(Object messages, Object tools,
-            Float temperature, Float maxTokens, String model, Integer n, String stop,
-            BaseOutputParser parser, Float topP, Map<String, Object> kwargs)
-            throws Exception {
+    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
+            Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
 
         InjectionMode currentMode = mode.get();
 
         // PLAN_MODE / BUILD_MODE: replace SystemMessage content entirely
-        if ((currentMode == InjectionMode.PLAN_MODE
-                || currentMode == InjectionMode.BUILD_MODE)
+        if ((currentMode == InjectionMode.PLAN_MODE || currentMode == InjectionMode.BUILD_MODE)
                 && messages instanceof List) {
             @SuppressWarnings("unchecked")
             List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
             String replacementPrompt = (currentMode == InjectionMode.PLAN_MODE)
-                    ? PLAN_SYSTEM_PROMPT : BUILD_SYSTEM_PROMPT;
+                    ? PLAN_SYSTEM_PROMPT
+                    : BUILD_SYSTEM_PROMPT;
             for (int i = 0; i < msgList.size(); i++) {
                 if (msgList.get(i) instanceof SystemMessage) {
                     msgList.set(i, new SystemMessage(replacementPrompt));
@@ -211,8 +200,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         }
 
         // PLAN_MODE / BUILD_MODE: also consume phaseOverride if set
-        if ((currentMode == InjectionMode.PLAN_MODE
-                || currentMode == InjectionMode.BUILD_MODE)
+        if ((currentMode == InjectionMode.PLAN_MODE || currentMode == InjectionMode.BUILD_MODE)
                 && messages instanceof List) {
             String override = consumePhaseOverride();
             if (override != null && !override.isEmpty()) {
@@ -224,26 +212,24 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         }
 
         // SYSTEM_PROMPT_APPEND: append to existing SystemMessage
-        if (currentMode == InjectionMode.SYSTEM_PROMPT_APPEND
-                && !systemPromptSuffix.isEmpty() && messages instanceof List) {
+        if (currentMode == InjectionMode.SYSTEM_PROMPT_APPEND && !systemPromptSuffix.isEmpty()
+                && messages instanceof List) {
             @SuppressWarnings("unchecked")
             List<BaseMessage> msgList = (List<BaseMessage>) messages;
             if (!msgList.isEmpty() && msgList.get(0) instanceof SystemMessage sysMsg) {
-                String augmented = sysMsg.getContentAsString() + "\n\n" + systemPromptSuffix;
+                String augmented = sysMsg.getContentAsString() + LINE_SEPARATOR + LINE_SEPARATOR + systemPromptSuffix;
                 msgList.set(0, new SystemMessage(augmented));
             }
         }
 
         // FIRST_PRINCIPLES: one-shot injection of "先扩后收" strategy prompt
-        if (currentMode == InjectionMode.FIRST_PRINCIPLES
-                && firstPrinciplesDone.compareAndSet(false, true)
+        if (currentMode == InjectionMode.FIRST_PRINCIPLES && firstPrinciplesDone.compareAndSet(false, true)
                 && messages instanceof List) {
             messages = injectFirstPrinciples(messages);
         }
 
         // Delegate to super (ToolCallingEnforcingModel) which does probe + real invoke
-        return super.invoke(messages, tools, temperature, maxTokens,
-                model, n, stop, parser, topP, kwargs);
+        return super.invoke(messages, tools, temperature, maxTokens, model, n, stop, parser, topP, kwargs);
     }
 
     // ==================================================================
@@ -269,7 +255,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         for (int i = 0; i < msgList.size(); i++) {
             if (!injected && msgList.get(i) instanceof SystemMessage sys) {
                 String original = sys.getContentAsString();
-                String enhanced = (original != null ? original + "\n\n" : "")
+                String enhanced = (original != null ? original + LINE_SEPARATOR + LINE_SEPARATOR : "")
                         + FIRST_PRINCIPLES_PROMPT;
                 msgList.set(i, new SystemMessage(enhanced));
                 injected = true;

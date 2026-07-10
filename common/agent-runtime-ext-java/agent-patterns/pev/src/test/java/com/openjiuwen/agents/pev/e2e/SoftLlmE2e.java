@@ -25,7 +25,8 @@ import java.util.function.Supplier;
  */
 final class SoftLlmE2e {
 
-    private SoftLlmE2e() {}
+    private SoftLlmE2e() {
+    }
 
     /**
      * Run a real-LLM test body; on {@link LlmClient.LlmUnavailableException} soft-skip the
@@ -37,10 +38,9 @@ final class SoftLlmE2e {
             return body.get();
         } catch (LlmClient.LlmUnavailableException e) {
             String reason = "[" + tag + "] LLM endpoint unavailable, soft-skip: " + e.getMessage();
-            System.out.println(reason);
             // assumeTrue(false) marks the test as SKIPPED (aborted) — honest, not green-not-red.
             org.junit.jupiter.api.Assumptions.assumeTrue(false, reason);
-            return null; // unreachable
+            throw new AssertionError("unreachable after soft-skip");
         }
     }
 }

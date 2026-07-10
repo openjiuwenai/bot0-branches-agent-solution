@@ -29,7 +29,7 @@ class PEVAgentControlFlowTest {
     // ==================== happy path ====================
 
     @Test
-    void happyPath_planExecuteVerifyPass_returnsAssembledOutput() {
+    void happyPathPlanExecuteVerifyPassReturnsAssembledOutput() {
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A")));
         PevComponents.Executor executor = nodes -> Map.of("A", new NodeResult.Success("a-result"));
@@ -45,7 +45,7 @@ class PEVAgentControlFlowTest {
     // ==================== DeviceFailure → AcceptPartial（不重试）====================
 
     @Test
-    void deviceFailure_diagnoseAcceptPartial_terminatesWithoutRetry() {
+    void deviceFailureDiagnoseAcceptPartialTerminatesWithoutRetry() {
         AtomicInteger execCount = new AtomicInteger();
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A")));
@@ -61,13 +61,14 @@ class PEVAgentControlFlowTest {
 
         assertThat(execCount.get()).isEqualTo(1); // AcceptPartial 不重试，executor 只调一次
         assertThat(out.toString()).contains("DeviceFailure");
-        // mutation-RED: 剥 AcceptPartial → terminal[0]=true → executor 会被 LocalReplan/GlobalReplan 再调 → execCount>1 → RED
+        // mutation-RED: 剥 AcceptPartial → terminal[0]=true →
+        // executor 会被 LocalReplan/GlobalReplan 再调 → execCount>1 → RED
     }
 
     // ==================== PlanOrAnswerError → LocalReplan → 重做后 verify pass ====================
 
     @Test
-    void planError_fewFailed_localReplanRetriesUntilPass() {
+    void planErrorFewFailedLocalReplanRetriesUntilPass() {
         AtomicInteger execCount = new AtomicInteger();
         AtomicInteger verifyCount = new AtomicInteger();
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
@@ -96,12 +97,12 @@ class PEVAgentControlFlowTest {
     // ==================== maxRetries exceeded → terminal ====================
 
     @Test
-    void maxRetriesExceeded_planErrorTerminates() {
+    void maxRetriesExceededPlanErrorTerminates() {
         AtomicInteger verifyCount = new AtomicInteger();
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A"), new PevComponents.PlanNode("B", "do B")));
-        PevComponents.Executor executor = nodes -> Map.of(
-                "A", new NodeResult.Success("a"), "B", new NodeResult.Success("b"));
+        PevComponents.Executor executor = nodes -> Map.of("A", new NodeResult.Success("a"), "B",
+                new NodeResult.Success("b"));
         PevComponents.Verifier verifier = (in, r) -> {
             verifyCount.incrementAndGet();
             return new PevKernel.VerifyResult(false, Set.of("A", "B"), "always wrong");

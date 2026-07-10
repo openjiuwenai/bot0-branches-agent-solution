@@ -64,24 +64,18 @@ final class LlmClient {
         };
         String body = """
                 {"model":"%s","messages":[{"role":"user","content":%s}],"temperature":0.3%s%s}
-                """.formatted(MODEL, jsonString(userPrompt),
-                        thinkingJson.isEmpty() ? "" : ",", thinkingJson);
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Authorization", "Bearer " + KEY)
+                """.formatted(MODEL, jsonString(userPrompt), thinkingJson.isEmpty() ? "" : ",", thinkingJson);
+        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json")
                 // 300s covers GLM-4.7 thinking=on complex scenarios (ClaimsAdjudication
                 // takes 20s off / 120s+ on). The prior 120s cap caused false soft-skips.
                 // reasoning_content fallback (GLM/Qwen) fixed the infinite-loop root cause.
-                .timeout(Duration.ofSeconds(300))
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
+                .timeout(Duration.ofSeconds(300)).POST(HttpRequest.BodyPublishers.ofString(body)).build();
         try {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() != 200) {
                 // Gateway / rate-limit / 5xx — treat as infra outage (soft-skip), not a logic bug.
-                throw new LlmUnavailableException("LLM HTTP " + resp.statusCode() + ": "
-                        + safeBody(resp.body()));
+                throw new LlmUnavailableException("LLM HTTP " + resp.statusCode() + ": " + safeBody(resp.body()));
             }
             return extractContent(resp.body());
         } catch (LlmUnavailableException e) {
@@ -94,12 +88,9 @@ final class LlmClient {
             // Connection reset / unreachable host — infra outage.
             throw new LlmUnavailableException("LLM I/O error: " + e.getMessage(), e);
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             throw new LlmUnavailableException("LLM call interrupted: " + e.getMessage(), e);
         } catch (RuntimeException e) {
             throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("LLM call failed: " + e.getMessage(), e);
         }
     }
 
@@ -108,8 +99,8 @@ final class LlmClient {
     }
 
     private static String jsonString(String s) {
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "") + "\"";
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace(String.valueOf((char) 10), "\\" + "n")
+                .replace(String.valueOf((char) 13), "") + "\"";
     }
 
     /**
@@ -130,13 +121,16 @@ final class LlmClient {
      */
     private static String extractContent(String json) {
         String content = extractJsonStringField(json, "content");
-        if (content != null && !content.isEmpty()) return content;
+        if (content != null && !content.isEmpty())
+            return content;
 
         String reasoningContent = extractJsonStringField(json, "reasoning_content");
-        if (reasoningContent != null && !reasoningContent.isEmpty()) return reasoningContent;
+        if (reasoningContent != null && !reasoningContent.isEmpty())
+            return reasoningContent;
 
         String reasoning = extractJsonStringField(json, "reasoning");
-        if (reasoning != null && !reasoning.isEmpty()) return reasoning;
+        if (reasoning != null && !reasoning.isEmpty())
+            return reasoning;
 
         return "";
     }
@@ -145,17 +139,19 @@ final class LlmClient {
     private static String extractJsonStringField(String json, String field) {
         String search = "\"" + field + "\":\"";
         int idx = json.indexOf(search);
-        if (idx < 0) return null;
+        if (idx < 0)
+            return "";
         int start = idx + search.length();
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < json.length(); i++) {
             char c = json.charAt(i);
             if (c == '\\' && i + 1 < json.length()) {
                 char n = json.charAt(++i);
-                sb.append(n == 'n' ? '\n' : n);
+                sb.append(n == 'n' ? (char) 10 : n);
                 continue;
             }
-            if (c == '"') break;
+            if (c == '"')
+                break;
             sb.append(c);
         }
         return sb.toString();
@@ -167,7 +163,11 @@ final class LlmClient {
      * reported as skipped-with-reason, never as a red test that masks a real defect.
      */
     static final class LlmUnavailableException extends RuntimeException {
-        LlmUnavailableException(String msg) { super(msg); }
-        LlmUnavailableException(String msg, Throwable cause) { super(msg, cause); }
+        LlmUnavailableException(String msg) {
+            super(msg);
+        }
+        LlmUnavailableException(String msg, Throwable cause) {
+            super(msg, cause);
+        }
     }
 }

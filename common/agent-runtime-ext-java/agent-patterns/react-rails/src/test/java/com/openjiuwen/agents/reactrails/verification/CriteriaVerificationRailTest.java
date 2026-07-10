@@ -40,12 +40,10 @@ class CriteriaVerificationRailTest {
     }
 
     @Test
-    void criteriaPass_locksVerifiedTerminal() {
+    void criteriaPassLocksVerifiedTerminal() {
         TestModelClient.stubResponse = "经过分析，给出配置建议：增配债券。引用风险评估：中等偏激进。";
         ReActAgent agent = newAgentWithStub();
-        agent.registerRail(new CriteriaVerificationRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("给出配置建议", "引用风险评估")));
+        agent.registerRail(new CriteriaVerificationRail(new RuleBasedCriteriaVerifier(), List.of("给出配置建议", "引用风险评估")));
 
         Object result = agent.invoke("give advice", null);
         Map<?, ?> map = toMap(result);
@@ -56,12 +54,10 @@ class CriteriaVerificationRailTest {
     }
 
     @Test
-    void criteriaFail_marksDegradedTerminal() {
+    void criteriaFailMarksDegradedTerminal() {
         TestModelClient.stubResponse = "I don't know";
         ReActAgent agent = newAgentWithStub();
-        agent.registerRail(new CriteriaVerificationRail(
-                new RuleBasedCriteriaVerifier(),
-                List.of("给出配置建议", "引用风险评估")));
+        agent.registerRail(new CriteriaVerificationRail(new RuleBasedCriteriaVerifier(), List.of("给出配置建议", "引用风险评估")));
 
         Object result = agent.invoke("give advice", null);
         Map<?, ?> map = toMap(result);
@@ -74,15 +70,12 @@ class CriteriaVerificationRailTest {
     }
 
     @Test
-    void noRail_invokeReturnsNaturalAnswer() {
+    void noRailInvokeReturnsNaturalAnswer() {
         TestModelClient.stubResponse = "natural answer";
         ReActAgent agent = newAgentWithStub();
         Object result = agent.invoke("test", null);
         assertThat(result).asString().contains("natural answer");
     }
-
-    // ==================== helpers ====================
-
     @SuppressWarnings("unchecked")
     private static Map<?, ?> toMap(Object result) {
         assertThat(result).isInstanceOf(Map.class);
@@ -90,24 +83,21 @@ class CriteriaVerificationRailTest {
     }
 
     private static ReActAgent newAgentWithStub() {
-        var cliCfg = ModelClientConfig.builder()
-                .clientId("test-" + System.nanoTime())
-                .clientProvider("test-stub")
-                .apiKey("dummy").apiBase("http://localhost:0")
-                .verifySsl(false).build();
-        var reqCfg = ModelRequestConfig.builder()
-                .modelName("test").temperature(0.1).maxTokens(100).build();
+        var cliCfg = ModelClientConfig.builder().clientId("test-" + System.nanoTime()).clientProvider("test-stub")
+                .apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
+        var reqCfg = ModelRequestConfig.builder().modelName("test").temperature(0.1).maxTokens(100).build();
         Model model = new Model(cliCfg, reqCfg);
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("test").build());
         agent.setLlm(model);
         return agent;
     }
-
-    // ==================== Stub ModelClient ====================
-
     static class TestModelClientFactory implements Model.ModelClientFactory {
-        @Override public String providerName() { return "test-stub"; }
-        @Override public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
+        @Override
+        public String providerName() {
+            return "test-stub";
+        }
+        @Override
+        public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
             return new TestModelClient(r, c);
         }
     }
@@ -115,25 +105,33 @@ class CriteriaVerificationRailTest {
     static class TestModelClient extends BaseModelClient {
         static volatile String stubResponse = "default";
 
-        TestModelClient(ModelRequestConfig r, ModelClientConfig c) { super(r, c); }
+        TestModelClient(ModelRequestConfig r, ModelClientConfig c) {
+            super(r, c);
+        }
         @Override
-        public AssistantMessage invoke(Object msgs, Object tools, Float temp, Float maxTok,
-                String model, Integer n, String stop, BaseOutputParser parser, Float topP,
-                Map<String, Object> kwargs) {
+        public AssistantMessage invoke(Object msgs, Object tools, Float temp, Float maxTok, String model, Integer n,
+                String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) {
             return new AssistantMessage(stubResponse);
         }
-        @Override public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float c, Float d,
-                String e, Integer f, String g, BaseOutputParser h, Float i, Map<String, Object> j) {
+        @Override
+        public Iterator<AssistantMessageChunk> stream(Object a, Object b, Float c, Float d, String e, Integer f,
+                String g, BaseOutputParser h, Float i, Map<String, Object> j) {
             throw new UnsupportedOperationException();
         }
-        @Override public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c,
-                String d, int e, boolean f, boolean g, int h, Map<String, Object> i) {
+        @Override
+        public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d, int e,
+                boolean f, boolean g, int h, Map<String, Object> i) {
             throw new UnsupportedOperationException();
         }
-        @Override public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c,
-                String d, Map<String, Object> e) { throw new UnsupportedOperationException(); }
-        @Override public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c,
-                String d, String e, String f, int g, boolean h, boolean i, String j, Integer k,
-                Map<String, Object> l) { throw new UnsupportedOperationException(); }
+        @Override
+        public AudioGenerationResponse generateSpeech(List<UserMessage> a, String b, String c, String d,
+                Map<String, Object> e) {
+            throw new UnsupportedOperationException();
+        }
+        @Override
+        public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d, String e,
+                String f, int g, boolean h, boolean i, String j, Integer k, Map<String, Object> l) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

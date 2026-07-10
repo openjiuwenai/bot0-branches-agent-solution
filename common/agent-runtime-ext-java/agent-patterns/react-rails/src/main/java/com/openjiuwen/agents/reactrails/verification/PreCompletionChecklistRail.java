@@ -50,7 +50,7 @@ import java.util.Set;
  *   <li>Strip setInjectionMode(PLAN_MODE) → system prompt unchanged → LLM may skip
  *       divergent exploration → RED (mock-assert exploration keywords in output).</li>
  * </ul>
- 
+
   * @since 2026-07*/
 public class PreCompletionChecklistRail extends AgentRail {
 
@@ -85,8 +85,7 @@ public class PreCompletionChecklistRail extends AgentRail {
      */
     public PreCompletionChecklistRail(int planMaxRounds) {
         if (planMaxRounds < 1) {
-            throw new IllegalArgumentException(
-                    "planMaxRounds must be >= 1: " + planMaxRounds);
+            throw new IllegalArgumentException("planMaxRounds must be >= 1: " + planMaxRounds);
         }
         this.planMaxRounds = planMaxRounds;
         setPriority(PRIORITY);
@@ -94,12 +93,18 @@ public class PreCompletionChecklistRail extends AgentRail {
 
     // ---- Test observation points ----
 
-    public synchronized int getCallCount() { return callCount; }
-    public synchronized int getToolDiversity() { return toolNamesCalled.size(); }
+    public synchronized int getCallCount() {
+        return callCount;
+    }
+    public synchronized int getToolDiversity() {
+        return toolNamesCalled.size();
+    }
     public synchronized List<String> getOutputHashes() {
         return List.copyOf(outputHashes);
     }
-    public int getPlanMaxRounds() { return planMaxRounds; }
+    public int getPlanMaxRounds() {
+        return planMaxRounds;
+    }
 
     // ============================================================
     // beforeModelCall: INJECT GUARDRAILS
@@ -129,8 +134,7 @@ public class PreCompletionChecklistRail extends AgentRail {
         // [1] Check stagnation from ctx.getExtra (written by StagnationDetectionRail)
         Object stagnationRaw = ctx.getExtra().get("stagnation_detected");
         if (stagnationRaw instanceof Boolean stagnated && stagnated) {
-            SystemPromptInjectingModel.setPhaseOverride(
-                    "BREAK_STAGNATION: The system detects that your output or "
+            SystemPromptInjectingModel.setPhaseOverride("BREAK_STAGNATION: The system detects that your output or "
                     + "tool-call pattern has become repetitive. Change your approach "
                     + "entirely — use a different set of tools or reframe the problem.");
             return;
@@ -144,8 +148,7 @@ public class PreCompletionChecklistRail extends AgentRail {
             }
             // If previous iteration was pure text (no tool calls), remind to use tools
             if (!toolNamesCalled.isEmpty() && previousWasFinal) {
-                SystemPromptInjectingModel.setPhaseOverride(
-                        "REMINDER: Your current approach is text-only. "
+                SystemPromptInjectingModel.setPhaseOverride("REMINDER: Your current approach is text-only. "
                         + "Use available tools to fetch real data or validate assumptions.");
             }
         } else {
@@ -155,8 +158,7 @@ public class PreCompletionChecklistRail extends AgentRail {
             }
             // Low tool diversity hint
             if (toolNamesCalled.size() <= 1 && callCount > 2) {
-                SystemPromptInjectingModel.setPhaseOverride(
-                        "COVERAGE: You are using very few tool types. "
+                SystemPromptInjectingModel.setPhaseOverride("COVERAGE: You are using very few tool types. "
                         + "If the current approach is not making progress, "
                         + "try a different tool or call __replan__.");
             }
@@ -187,9 +189,7 @@ public class PreCompletionChecklistRail extends AgentRail {
         // Track output hash for stagnancy observation
         String content = msg.getContentAsString();
         if (content != null && !content.isEmpty()) {
-            String hash = content.length() > 200
-                    ? content.substring(0, 200)
-                    : content;
+            String hash = content.length() > 200 ? content.substring(0, 200) : content;
             outputHashes.add(hash);
             while (outputHashes.size() > OUTPUT_HASH_WINDOW) {
                 outputHashes.remove(0);

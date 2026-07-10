@@ -50,11 +50,8 @@ class PreCompletionChecklistRailTest {
     void setUp() {
         SystemPromptInjectingModel.resetToDefaults();
     }
-
-    // ==================== Construction ====================
-
     @Test
-    void constructor_withValidRounds() {
+    void constructorWithValidRounds() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(3);
         assertThat(rail.getPlanMaxRounds()).isEqualTo(3);
         assertThat(rail.getCallCount()).isZero();
@@ -62,33 +59,24 @@ class PreCompletionChecklistRailTest {
     }
 
     @Test
-    void constructor_rejectsZeroRounds() {
-        assertThatThrownBy(() -> new PreCompletionChecklistRail(0))
-                .isInstanceOf(IllegalArgumentException.class);
+    void constructorRejectsZeroRounds() {
+        assertThatThrownBy(() -> new PreCompletionChecklistRail(0)).isInstanceOf(IllegalArgumentException.class);
     }
-
-    // ==================== beforeModelCall: first call ====================
-
     @Test
-    void beforeModelCall_firstCall_setsPlanMode() {
+    void beforeModelCallFirstCallSetsPlanMode() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
         AgentCallbackContext ctx = ctxWithExtra(Map.of());
 
         rail.beforeModelCall(ctx);
 
-        assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .as("first call must set PLAN_MODE")
+        assertThat(SystemPromptInjectingModel.getInjectionMode()).as("first call must set PLAN_MODE")
                 .isEqualTo(InjectionMode.PLAN_MODE);
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("first call must NOT set phase override")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("first call must NOT set phase override")
                 .isNull();
         // mutation-RED: strip setInjectionMode(PLAN_MODE) → mode stays NONE → RED
     }
-
-    // ==================== beforeModelCall: PLAN phase ====================
-
     @Test
-    void beforeModelCall_planPhase_keepsPlanMode() {
+    void beforeModelCallPlanPhaseKeepsPlanMode() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(3);
         // Simulate 1 afterModelCall → callCount=1
         rail.afterModelCall(ctxWithToolResult("search", "toolResult"));
@@ -96,14 +84,13 @@ class PreCompletionChecklistRailTest {
 
         rail.beforeModelCall(ctxWithExtra(Map.of()));
 
-        assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .as("before planMaxRounds must set PLAN_MODE")
+        assertThat(SystemPromptInjectingModel.getInjectionMode()).as("before planMaxRounds must set PLAN_MODE")
                 .isEqualTo(InjectionMode.PLAN_MODE);
         // mutation-RED: strip setInjectionMode(PLAN_MODE) → mode stays NONE → RED
     }
 
     @Test
-    void beforeModelCall_previousWasFinal_setsToolReminder() {
+    void beforeModelCallPreviousWasFinalSetsToolReminder() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(3);
         // First round: produce a final answer (no tool calls) → previousWasFinal=true
         rail.afterModelCall(ctxWithFinalAnswer("I think the answer is 42"));
@@ -111,8 +98,7 @@ class PreCompletionChecklistRailTest {
         rail.beforeModelCall(ctxWithExtra(Map.of()));
 
         assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .as("after first final-answer round, mode must still be PLAN_MODE")
-                .isEqualTo(InjectionMode.PLAN_MODE);
+                .as("after first final-answer round, mode must still be PLAN_MODE").isEqualTo(InjectionMode.PLAN_MODE);
 
         // The previousWasFinal flag is set, but toolNamesCalled is empty on first call
         // (the guard setPhaseOverride only triggers if !toolNamesCalled.isEmpty())
@@ -133,11 +119,8 @@ class PreCompletionChecklistRailTest {
                 .contains("REMINDER");
         // mutation-RED: strip setPhaseOverride("REMINDER") → peek null → RED
     }
-
-    // ==================== beforeModelCall: BUILD phase ====================
-
     @Test
-    void beforeModelCall_buildPhase_switchesToBuildMode() {
+    void beforeModelCallBuildPhaseSwitchesToBuildMode() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
         // Simulate 2 afterModelCall rounds → callCount=2, triggers BUILD
         rail.afterModelCall(ctxWithToolResult("search", "toolResult"));
@@ -148,15 +131,11 @@ class PreCompletionChecklistRailTest {
         rail.beforeModelCall(ctxWithExtra(Map.of()));
 
         assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .as("after planMaxRounds, mode must switch to BUILD_MODE")
-                .isEqualTo(InjectionMode.BUILD_MODE);
+                .as("after planMaxRounds, mode must switch to BUILD_MODE").isEqualTo(InjectionMode.BUILD_MODE);
         // mutation-RED: strip setInjectionMode(BUILD_MODE) → mode stays PLAN_MODE → RED
     }
-
-    // ==================== beforeModelCall: stagnation ====================
-
     @Test
-    void beforeModelCall_stagnationDetected_injectsBreakLoop() {
+    void beforeModelCallStagnationDetectedInjectsBreakLoop() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
         // First round to set callCount > 0
         rail.afterModelCall(ctxWithToolResult("search", "toolResult"));
@@ -166,15 +145,11 @@ class PreCompletionChecklistRailTest {
         rail.beforeModelCall(ctx);
 
         assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("stagnation detected must inject BREAK_STAGNATION phase override")
-                .contains("BREAK_STAGNATION");
+                .as("stagnation detected must inject BREAK_STAGNATION phase override").contains("BREAK_STAGNATION");
         // mutation-RED: strip setPhaseOverride(BREAK_STAGNATION) → peek null → RED
     }
-
-    // ==================== afterModelCall: call count ====================
-
     @Test
-    void afterModelCall_incrementsCallCount() {
+    void afterModelCallIncrementsCallCount() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
 
         assertThat(rail.getCallCount()).isZero();
@@ -187,11 +162,8 @@ class PreCompletionChecklistRailTest {
 
         // mutation-RED: strip callCount++ → stays 0 → beforeModelCall never hits BUILD → RED
     }
-
-    // ==================== afterModelCall: tool diversity ====================
-
     @Test
-    void afterModelCall_tracksToolDiversity() {
+    void afterModelCallTracksToolDiversity() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
 
         rail.afterModelCall(ctxWithToolResult("search", "toolResult"));
@@ -205,11 +177,8 @@ class PreCompletionChecklistRailTest {
 
         // mutation-RED: strip toolNamesCalled.add(tc.getName()) → diversity stays 0 → RED
     }
-
-    // ==================== afterModelCall: output hashes ====================
-
     @Test
-    void afterModelCall_tracksOutputHashes() {
+    void afterModelCallTracksOutputHashes() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
 
         rail.afterModelCall(ctxWithFinalAnswer("short output"));
@@ -221,11 +190,8 @@ class PreCompletionChecklistRailTest {
 
         // mutation-RED: strip outputHashes.add(...) → size always 0 → RED
     }
-
-    // ==================== afterModelCall: previousWasFinal ====================
-
     @Test
-    void afterModelCall_finalAnswer_setsPreviousWasFinal() {
+    void afterModelCallFinalAnswerSetsPreviousWasFinal() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
 
         // Final answer (no tool calls)
@@ -235,31 +201,22 @@ class PreCompletionChecklistRailTest {
         // (indirectly tested via phaseOverride set in the right conditions)
         // We already test this in testPreviousWasFinal_setsToolReminder
     }
-
-    // ==================== afterModelCall: non-AssistantMessage ====================
-
     @Test
-    void afterModelCall_nonAssistantResponse_noAction() {
+    void afterModelCallNonAssistantResponseNoAction() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
 
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse("plain string, not AssistantMessage");
 
-        AgentCallbackContext ctx = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .build();
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs).build();
         ctx.setExtra(new LinkedHashMap<>());
 
         rail.afterModelCall(ctx);
 
         assertThat(rail.getCallCount()).isZero();
     }
-
-    // ==================== Config-driven test (maxPlanRounds boundary) ====================
-
     @Test
-    void planPhaseBoundary_switchesAtCorrectCount() {
+    void planPhaseBoundarySwitchesAtCorrectCount() {
         // planMaxRounds=2: PLAN for callCount 0-1, BUILD for callCount >= 2
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
 
@@ -267,8 +224,7 @@ class PreCompletionChecklistRailTest {
         // (first call is special: callCount==0 → PLAN_MODE, returns early)
         rail.beforeModelCall(ctxWithExtra(Map.of()));
         assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .as("before any afterModelCall, mode must be PLAN_MODE")
-                .isEqualTo(InjectionMode.PLAN_MODE);
+                .as("before any afterModelCall, mode must be PLAN_MODE").isEqualTo(InjectionMode.PLAN_MODE);
 
         // 1st afterModelCall → callCount=1
         rail.afterModelCall(ctxWithToolResult("search", "toolResult"));
@@ -276,8 +232,7 @@ class PreCompletionChecklistRailTest {
         // beforeModelCall: callCount=1 < 2 → PLAN_MODE
         rail.beforeModelCall(ctxWithExtra(Map.of()));
         assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .as("callCount=1 < planMaxRounds=2, mode must be PLAN_MODE")
-                .isEqualTo(InjectionMode.PLAN_MODE);
+                .as("callCount=1 < planMaxRounds=2, mode must be PLAN_MODE").isEqualTo(InjectionMode.PLAN_MODE);
 
         // 2nd afterModelCall → callCount=2
         rail.afterModelCall(ctxWithToolResult("calc", "toolResult"));
@@ -289,13 +244,8 @@ class PreCompletionChecklistRailTest {
                 .isEqualTo(InjectionMode.BUILD_MODE);
         // mutation-RED: strip callCount++ → callCount stays < 2 → never BUILD → RED
     }
-
-    // ==================== Helpers ====================
-
     private static AgentCallbackContext ctxWithExtra(Map<String, Object> extra) {
-        AgentCallbackContext ctx = AgentCallbackContext.builder()
-                .agent(new Object())
-                .build();
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).build();
         ctx.setExtra(new LinkedHashMap<>(extra));
         return ctx;
     }
@@ -312,10 +262,7 @@ class PreCompletionChecklistRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        AgentCallbackContext ctx = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .build();
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs).build();
         ctx.setExtra(new LinkedHashMap<>());
         return ctx;
     }
@@ -325,10 +272,7 @@ class PreCompletionChecklistRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        AgentCallbackContext ctx = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .build();
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs).build();
         ctx.setExtra(new LinkedHashMap<>());
         return ctx;
     }

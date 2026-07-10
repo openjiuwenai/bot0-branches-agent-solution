@@ -51,9 +51,11 @@ import java.util.Set;
  *   <li>LocalReplan re-executes failed nodes within the same agent (whole-step retry with
  *       feedback); precise per-node re-execution needs a DAG/multi-agent runtime.</li>
  * </ul>
- 
+
   * @since 2026-07*/
 public class PEVAgent extends BaseAgent {
+
+    private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /** PEV config — narrow, only the switches the control flow actually reads. */
     public static final class PevConfig {
@@ -71,10 +73,8 @@ public class PEVAgent extends BaseAgent {
     private final PevComponents.Verifier verifier;
     private PevConfig config;
 
-    public PEVAgent(AgentCard card,
-                    PevComponents.Planner planner,
-                    PevComponents.Executor executor,
-                    PevComponents.Verifier verifier) {
+    public PEVAgent(AgentCard card, PevComponents.Planner planner, PevComponents.Executor executor,
+            PevComponents.Verifier verifier) {
         super(card);
         this.planner = planner;
         this.executor = executor;
@@ -121,11 +121,8 @@ public class PEVAgent extends BaseAgent {
         return List.of(invoke(input, session)).iterator();
     }
 
-
-    private void runVerifyLoop(String userInput, PevComponents.Plan plan,
-                               Map<String, NodeResult> completed,
-                               boolean[] terminal, boolean[] verifyPassed,
-                               int retryCount, Session session) {
+    private void runVerifyLoop(String userInput, PevComponents.Plan plan, Map<String, NodeResult> completed,
+            boolean[] terminal, boolean[] verifyPassed, int retryCount, Session session) {
         if (terminal[0]) {
             return;
         }
@@ -181,9 +178,8 @@ public class PEVAgent extends BaseAgent {
                     }
                 }
                 if (!redo.isEmpty()) {
-                    runVerifyLoop(userInput,
-                            new PevComponents.Plan(plan.goal() + " (局部重做)", redo),
-                            completed, terminal, verifyPassed, retryCount + 1, session);
+                    runVerifyLoop(userInput, new PevComponents.Plan(plan.goal() + " (局部重做)", redo), completed, terminal,
+                            verifyPassed, retryCount + 1, session);
                 }
             }
             case ReplanAction.GlobalReplan gr -> {
@@ -194,18 +190,14 @@ public class PEVAgent extends BaseAgent {
         }
     }
 
-
     private void fire(AgentCallbackEvent event, Session session, Object payload) {
-        AgentCallbackContext.AgentCallbackContextBuilder b = AgentCallbackContext.builder()
-                .agent(this)
-                .event(event)
+        AgentCallbackContext.AgentCallbackContextBuilder b = AgentCallbackContext.builder().agent(this).event(event)
                 .session(session);
         if (payload != null) {
             b.extra(Map.of("payload", payload));
         }
         fireCallbackEvent(event, b.build());
     }
-
 
     private static String assembleOutput(Map<String, NodeResult> results) {
         if (results.isEmpty()) {
@@ -216,7 +208,7 @@ public class PEVAgent extends BaseAgent {
             String display = (e.getValue() instanceof NodeResult.Success s)
                     ? String.valueOf(s.value())
                     : "[" + e.getValue().getClass().getSimpleName() + "]";
-            sb.append(e.getKey()).append(": ").append(display).append("\n");
+            sb.append(e.getKey()).append(": ").append(display).append(LINE_SEPARATOR);
         }
         return sb.toString().trim();
     }

@@ -43,9 +43,11 @@ import java.util.stream.Collectors;
  *   <li><b>verify fail + retries exhausted</b> → requestForceFinish(degraded=true, unmet=violations)
  *       — honest degrade terminal.</li>
  * </ul>
- 
+
   * @since 2026-07*/
 public class CriteriaReplanBridgeRail extends AgentRail {
+
+    private static final String LINE_SEPARATOR = System.lineSeparator();
 
     public static final String OUTPUT_KEY = "output";
     public static final String VERIFIED_KEY = "criteria_verified";
@@ -64,9 +66,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
      * @param successCriteria  the criteria to check against the final output
      * @param replanRail       shared replan counter (used for overlap budget)
      */
-    public CriteriaReplanBridgeRail(CriteriaVerifier verifier,
-                                    List<String> successCriteria,
-                                    ReplanRail replanRail) {
+    public CriteriaReplanBridgeRail(CriteriaVerifier verifier, List<String> successCriteria, ReplanRail replanRail) {
         this.verifier = verifier;
         this.successCriteria = List.copyOf(successCriteria);
         this.replanRail = replanRail;
@@ -117,7 +117,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
         }
     }
 
-/**
+    /**
      * IFF 范式：剥离 gradient metadata → 降级到通用纠正提示 → LLM 看不到精确定位的缺失维度 → RED。
      *
      * <p>当 violations 携带 gradient metadata（来自 {@code RuleBasedCriteriaVerifier}）时，
@@ -129,15 +129,14 @@ public class CriteriaReplanBridgeRail extends AgentRail {
         if (hasGradient) {
             return buildGradientHint(violations);
         }
-        // Fallback: standard hint (backward compat with RuleBasedCriteriaVerifier / AdaptiveCriteriaVerifier / MultiPassBestOfKVerifier)
+        // Fallback: standard hint (backward compat with RuleBasedCriteriaVerifier /
+        // AdaptiveCriteriaVerifier / MultiPassBestOfKVerifier)
         // Note: no __replan__ hint — empirical data shows imperative replan framing
         // (data point #1: deepseek-v4-flash "请先调用 __replan__" → 2 replans + degrade)
         // induces unnecessary replan. MultiPassBestOfKVerifier only signals replan when
         // BOTH dimensions < FAIL_THRESHOLD, through the violation reason itself.
-        return "您的回答未能满足以下成功标准，请据此修改后重新回答：\n"
-            + violations.stream()
-                .map(v -> "- " + v.criterion() + ": " + v.reason())
-                .collect(Collectors.joining("\n"));
+        return "您的回答未能满足以下成功标准，请据此修改后重新回答：" + LINE_SEPARATOR + violations.stream()
+                .map(v -> "- " + v.criterion() + ": " + v.reason()).collect(Collectors.joining(LINE_SEPARATOR));
     }
 
     /**
@@ -152,22 +151,22 @@ public class CriteriaReplanBridgeRail extends AgentRail {
      */
     @SuppressWarnings("unchecked")
     private static String buildGradientHint(List<Violation> violations) {
-        StringBuilder sb = new StringBuilder("您的回答未能完全满足以下标准：\n");
+        StringBuilder sb = new StringBuilder("您的回答未能完全满足以下标准：").append(LINE_SEPARATOR);
         for (Violation v : violations) {
             Map<String, Object> meta = v.metadata();
-            sb.append("· ").append(v.criterion()).append("\n");
+            sb.append("· ").append(v.criterion()).append(LINE_SEPARATOR);
             if (meta != null && (boolean) meta.getOrDefault("isPartial", false)) {
                 List<String> covered = (List<String>) meta.getOrDefault("covered", List.of());
                 List<String> missing = (List<String>) meta.getOrDefault("missing", List.of());
                 if (!covered.isEmpty()) {
-                    sb.append("  ✅ 已覆盖: ").append(String.join("、", covered)).append("\n");
+                    sb.append("  ✅ 已覆盖: ").append(String.join("、", covered)).append(LINE_SEPARATOR);
                 }
-                sb.append("  ❌ 请补充: ").append(String.join("、", missing)).append("\n");
+                sb.append("  ❌ 请补充: ").append(String.join("、", missing)).append(LINE_SEPARATOR);
             } else if (meta != null && meta.containsKey("allDimensions")) {
                 List<String> allDims = (List<String>) meta.get("allDimensions");
-                sb.append("  需要覆盖的维度: ").append(String.join("、", allDims)).append("\n");
+                sb.append("  需要覆盖的维度: ").append(String.join("、", allDims)).append(LINE_SEPARATOR);
             } else {
-                sb.append("  ").append(v.reason()).append("\n");
+                sb.append("  ").append(v.reason()).append(LINE_SEPARATOR);
             }
         }
         sb.append("如需调整当前分析方法或方向，请调用 __replan__ 工具。");
@@ -207,9 +206,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
         result.put(RESULT_KEY, "FAIL");
         result.put(DEGRADED_KEY, true);
         result.put(RETRY_COUNT_KEY, replanRail.replanCount());
-        result.put(UNMET_KEY, violations.stream()
-                .map(v -> v.criterion() + ": " + v.reason())
-                .toList());
+        result.put(UNMET_KEY, violations.stream().map(v -> v.criterion() + ": " + v.reason()).toList());
         return result;
     }
 }

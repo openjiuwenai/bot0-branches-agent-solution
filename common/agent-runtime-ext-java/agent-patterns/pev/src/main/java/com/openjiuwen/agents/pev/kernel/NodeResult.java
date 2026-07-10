@@ -11,18 +11,18 @@ package com.openjiuwen.agents.pev.kernel;
  * taxonomy the verifier/diagnoser can switch over exhaustively. Dropping a state
  * here makes any matching switch fail to compile.
  */
-public sealed interface NodeResult permits
-        NodeResult.Success,
-        NodeResult.DeviceFailure,
-        NodeResult.VerifierFailure {
+public sealed interface NodeResult permits NodeResult.Success, NodeResult.DeviceFailure, NodeResult.VerifierFailure {
 
     /** Node completed, carrying its return value. */
-    record Success(Object value) implements NodeResult {}
+    record Success(Object value) implements NodeResult {
+    }
 
     /** Tool / infrastructure failure (timeout, network, exception). */
-    record DeviceFailure(String nodeId, String error, boolean isTimeout) implements NodeResult {}
+    record DeviceFailure(String nodeId, String error, boolean isTimeout) implements NodeResult {
+    }
 
-    /** Verifier judged the node's output not meeting expectations. 
+    /** Verifier judged the node's output not meeting expectations.
     /** Verifier judged the node's output not meeting expectations.  * @since 2026-07*/
-    record VerifierFailure(String nodeId, String reason) implements NodeResult {}
+    record VerifierFailure(String nodeId, String reason) implements NodeResult {
+    }
 }

@@ -32,8 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Hard断言: data channel + control flow end-to-end (output non-empty, contains the
  *       expected multi-node layout with at least two {@code nodeId:} segments — proves the
  *       planner produced a multi-node plan and the executor ran them all).</li>
- *   <li>Soft-observe (System.out, no assertion): the exact node ids, tool routing, and the
- *       verifier's PASS/FAIL verdict — these are LLM-dependent and brittle to hard-assert.</li>
+ *   <li>Soft-observe: the exact node ids, tool routing, and the verifier's PASS/FAIL verdict
+ *       are LLM-dependent and brittle to hard-assert.</li>
  * </ul>
  *
  * <p>Env-gated via {@link org.junit.jupiter.api.Assumptions#assumeTrue} on
@@ -44,9 +44,8 @@ class MultiStepToolsE2eTest {
     private static final LlmClient LLM = new LlmClient();
 
     @Test
-    void multiStepWithTools_plansAndExecutesMultipleNodes_endToEnd() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(),
-                "OPENJIUWEN_API_KEY 未设，跳过真 LLM e2e");
+    void multiStepWithToolsPlansAndExecutesMultipleNodesEndToEnd() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设，跳过真 LLM e2e");
 
         // ---- Register 2-3 deterministic tools (same shape as the spring-ai-ascend reference) ----
         // name -> description (feeds LlmPlanner's prompt so the LLM knows what each tool does)
@@ -73,42 +72,30 @@ class MultiStepToolsE2eTest {
         // ---- Run the full Plan → Execute → Verify loop against the real LLM ----
         Object out = agent.invoke(task, null);
         String output = out == null ? "" : out.toString();
-
-        System.out.println("[pev-multi-step-tools-e2e] task: " + task);
-        System.out.println("[pev-multi-step-tools-e2e] output:\n" + output);
-
         // ==================== 断言 (hard: data channel + multi-node control flow) ====================
 
         // 1. 数据通道：output 非空（真 LLM 跑通 + assembleOutput 产出了内容）
         assertThat(output).as("real-LLM multi-step PEV must produce non-empty output").isNotEmpty();
 
         // 2. 多节点控制流：output 至少含两个 "nodeId: value" 段（证 planner 产出了多节点 plan，
-        //    且 executor 依次执行了它们 —— assembleOutput 按 "\n" 拼接每个 nodeId: value）
+        //    且 executor 依次执行了它们 —— assembleOutput 按平台换行拼接每个 nodeId: value）
         //    软边界：不硬断言具体 node id（LLM 决定），只证"多节点"结构性事实。
-        long nodeSegments = java.util.Arrays.stream(output.split("\n"))
-                .filter(line -> line.contains(": "))
-                .count();
-        assertThat(nodeSegments)
-                .as("multi-step plan must yield >= 2 executed node results in output (got: %d)%n%s",
-                        nodeSegments, output)
-                .isGreaterThanOrEqualTo(2);
+        long nodeSegments = output.lines().filter(line -> line.contains(": ")).count();
+        assertThat(nodeSegments).as("multi-step plan must yield >= 2 executed node results in output (got: %d)%n%s",
+                nodeSegments, output).isGreaterThanOrEqualTo(2);
 
         // 3. 工具真被执行：output 含至少一个确定性工具的产出特征串（temperature/humidity），
         //    证 ToolBackedExecutor 把节点路由到了注册工具而非全走 LLM。
         //    软断言（or）—— 任一工具特征命中即证工具通道活。
-        boolean toolProduced = output.contains("温度") || output.contains("湿度")
-                || output.contains("°C") || output.contains("%");
+        boolean toolProduced = output.contains("温度") || output.contains("湿度") || output.contains("°C")
+                || output.contains("%");
         assertThat(toolProduced)
-                .as("at least one deterministic tool must have produced output (温度/湿度/°C/%%)%n%s",
-                        output)
-                .isTrue();
+                .as("at least one deterministic tool must have produced output (温度/湿度/°C/%%)%n%s", output).isTrue();
 
-        // ==================== 软观察 (System.out only, no assertion) ====================
+        // ==================== 软观察 (no assertion) ====================
         // - 具体 node id / 数量（LLM 决定，不稳定）
         // - 工具是否全部命中（LLM 可能把某步走 LLM_CALL）
         // - verifier PASS/FAIL（真 LLM 判定，content-level 不可硬断）
-        System.out.println("[pev-multi-step-tools-e2e] nodeSegments=" + nodeSegments
-                + ", toolProduced=" + toolProduced);
     }
 
     // ==================== deterministic tools (ported from spring-ai-ascend reference) ====================

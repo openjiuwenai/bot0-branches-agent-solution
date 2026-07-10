@@ -23,22 +23,25 @@ import java.util.Set;
  * that drops a case arm fails to compile, catching missed branches earlier than a
  * runtime test would.
  */
-public sealed interface RootCause permits
-        RootCause.DeviceFailure,
-        RootCause.PlanOrAnswerError,
-        RootCause.PerceptionUnreliable {
+public sealed interface RootCause
+        permits RootCause.DeviceFailure, RootCause.PlanOrAnswerError, RootCause.PerceptionUnreliable {
 
     /** Tool / infrastructure failed on these nodes. */
     record DeviceFailure(Set<String> nodes) implements RootCause {
-        public DeviceFailure { nodes = Set.copyOf(nodes); }
+        public DeviceFailure {
+            nodes = Set.copyOf(nodes);
+        }
     }
 
     /** Plan or answer content is wrong; device and perception are sound. */
     record PlanOrAnswerError(Set<String> nodes) implements RootCause {
-        public PlanOrAnswerError { nodes = Set.copyOf(nodes); }
+        public PlanOrAnswerError {
+            nodes = Set.copyOf(nodes);
+        }
     }
 
-    /** Verifier itself is untrustworthy. 
+    /** Verifier itself is untrustworthy.
     /** Verifier itself is untrustworthy.  * @since 2026-07*/
-    record PerceptionUnreliable(boolean verifierThrew) implements RootCause {}
+    record PerceptionUnreliable(boolean verifierThrew) implements RootCause {
+    }
 }

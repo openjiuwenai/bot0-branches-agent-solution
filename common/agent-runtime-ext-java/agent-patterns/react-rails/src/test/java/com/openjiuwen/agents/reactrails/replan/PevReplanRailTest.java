@@ -30,11 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ol>
  */
 class PevReplanRailTest {
-
-    // ==================== replan counting (same contract as ReplanRail) ====================
-
     @Test
-    void underLimit_replanAllowed_noForceFinish() {
+    void underLimitReplanAllowedNoForceFinish() {
         PevReplanRail rail = new PevReplanRail(2);
 
         rail.afterModelCall(ctxWithReplanToolCall("first replan", ""));
@@ -44,10 +41,10 @@ class PevReplanRailTest {
     }
 
     @Test
-    void atLimit_stillAllowed_noForceFinish() {
+    void atLimitStillAllowedNoForceFinish() {
         PevReplanRail rail = new PevReplanRail(2);
 
-        rail.afterModelCall(ctxWithReplanToolCall("first replan", ""));   // count=1
+        rail.afterModelCall(ctxWithReplanToolCall("first replan", "")); // count=1
         rail.afterModelCall(ctxWithReplanToolCall("second replan", "")); // count=2 (==max)
 
         assertThat(rail.replanCount()).isEqualTo(2);
@@ -55,23 +52,21 @@ class PevReplanRailTest {
     }
 
     @Test
-    void overLimit_escalatesForceFinish() {
+    void overLimitEscalatesForceFinish() {
         PevReplanRail rail = new PevReplanRail(2);
 
-        rail.afterModelCall(ctxWithReplanToolCall("r1", ""));  // count=1
-        rail.afterModelCall(ctxWithReplanToolCall("r2", ""));  // count=2
+        rail.afterModelCall(ctxWithReplanToolCall("r1", "")); // count=1
+        rail.afterModelCall(ctxWithReplanToolCall("r2", "")); // count=2
         AgentCallbackContext ctx3 = ctxWithReplanToolCall("r3", "");
-        rail.afterModelCall(ctx3);                               // count=3 (>max) → forceFinish
+        rail.afterModelCall(ctx3); // count=3 (>max) → forceFinish
 
         assertThat(rail.replanCount()).isEqualTo(3);
-        assertThat(ctx3.hasForceFinishRequest())
-                .as("count>max must fire requestForceFinish(degraded)")
-                .isTrue();
+        assertThat(ctx3.hasForceFinishRequest()).as("count>max must fire requestForceFinish(degraded)").isTrue();
         // mutation-RED: strip replanCount++ → count never >max → false → RED
     }
 
     @Test
-    void noReplanToolCall_noCounting() {
+    void noReplanToolCallNoCounting() {
         PevReplanRail rail = new PevReplanRail(2);
 
         rail.afterModelCall(ctxWithNormalAnswer());
@@ -80,7 +75,7 @@ class PevReplanRailTest {
     }
 
     @Test
-    void noToolCalls_noCounting() {
+    void noToolCallsNoCounting() {
         PevReplanRail rail = new PevReplanRail(2);
 
         // AssistantMessage with null toolCalls (final answer)
@@ -88,36 +83,23 @@ class PevReplanRailTest {
 
         assertThat(rail.replanCount()).isEqualTo(0);
     }
-
-    // ==================== PEV dispatch: GlobalReplan → pushSteering ====================
-
     @Test
-    void globalReplan_pushesSteering() {
+    void globalReplanPushesSteering() {
         PevReplanRail rail = new PevReplanRail(5);
         TestSteeringQueue sq = new TestSteeringQueue();
 
-        AgentCallbackContext ctx = ctxWithSteeringQueue(
-                ctxWithReplanToolCall("方向错误，需要重新规划", "先调研再执行"),
-                sq);
+        AgentCallbackContext ctx = ctxWithSteeringQueue(ctxWithReplanToolCall("方向错误，需要重新规划", "先调研再执行"), sq);
         rail.afterModelCall(ctx);
 
         // GlobalReplan: pushSteering called, no forceFinish
         assertThat(ctx.hasForceFinishRequest())
-                .as("GlobalReplan must NOT forceFinish — steering survives for next iteration")
-                .isFalse();
-        assertThat(sq.steered)
-                .as("GlobalReplan must push steering text to SteeringQueue")
-                .isNotEmpty();
-        assertThat(sq.steered.get(0))
-                .contains("【全局重规划】")
-                .contains("方向错误");
+                .as("GlobalReplan must NOT forceFinish — steering survives for next iteration").isFalse();
+        assertThat(sq.steered).as("GlobalReplan must push steering text to SteeringQueue").isNotEmpty();
+        assertThat(sq.steered.get(0)).contains("【全局重规划】").contains("方向错误");
         // mutation-RED: strip ctx.pushSteering(...) in GlobalReplan branch → sq.steered empty → RED
     }
-
-    // ==================== PEV dispatch: AcceptPartial → forceFinish ====================
-
     @Test
-    void acceptPartial_forceFinishes() {
+    void acceptPartialForceFinishes() {
         PevReplanRail rail = new PevReplanRail(5);
         TestSteeringQueue sq = new TestSteeringQueue();
 
@@ -125,59 +107,45 @@ class PevReplanRailTest {
         rail.recordToolFailure("search_tool");
 
         // LLM calls __replan__ with reason mentioning the failed tool
-        AgentCallbackContext ctx = ctxWithSteeringQueue(
-                ctxWithReplanToolCall("search_tool failed, need to replan", ""),
+        AgentCallbackContext ctx = ctxWithSteeringQueue(ctxWithReplanToolCall("search_tool failed, need to replan", ""),
                 sq);
         rail.afterModelCall(ctx);
 
         // DeviceFailure → AcceptPartial → forceFinish, no steering
-        assertThat(ctx.hasForceFinishRequest())
-                .as("DeviceFailure → AcceptPartial must forceFinish")
-                .isTrue();
-        assertThat(sq.steered)
-                .as("AcceptPartial must NOT push steering — no more iterations")
-                .isEmpty();
+        assertThat(ctx.hasForceFinishRequest()).as("DeviceFailure → AcceptPartial must forceFinish").isTrue();
+        assertThat(sq.steered).as("AcceptPartial must NOT push steering — no more iterations").isEmpty();
         // mutation-RED: strip ctx.requestForceFinish(...) in AcceptPartial branch → false → RED
     }
-
-    // ==================== tool failure recording ====================
-
     @Test
-    void recordToolFailure_accumulates() {
+    void recordToolFailureAccumulates() {
         PevReplanRail rail = new PevReplanRail(2);
 
         rail.recordToolFailure("tool_a");
         rail.recordToolFailure("tool_b");
 
-        assertThat(rail.recentToolFailureNodes())
-                .containsExactly("tool_a", "tool_b");
+        assertThat(rail.recentToolFailureNodes()).containsExactly("tool_a", "tool_b");
     }
 
     @Test
-    void diagnose_planOrAnswerError_whenNoToolFailureMatch() {
+    void diagnosePlanOrAnswerErrorWhenNoToolFailureMatch() {
         PevReplanRail rail = new PevReplanRail(5);
         rail.recordToolFailure("search_tool");
 
         // LLM calls __replan__ but reason does NOT mention search_tool
-        AgentCallbackContext ctx = ctxWithSteeringQueue(
-                ctxWithReplanToolCall("策略需要调整", "新方法"),
+        AgentCallbackContext ctx = ctxWithSteeringQueue(ctxWithReplanToolCall("策略需要调整", "新方法"),
                 new TestSteeringQueue());
         rail.afterModelCall(ctx);
 
         // PlanOrAnswerError → GlobalReplan → pushSteering, no forceFinish
         assertThat(ctx.hasForceFinishRequest())
-                .as("No tool failure correlation → PlanOrAnswerError → GlobalReplan → no forceFinish")
-                .isFalse();
+                .as("No tool failure correlation → PlanOrAnswerError → GlobalReplan → no forceFinish").isFalse();
     }
-
-    // ==================== helpers ====================
-
     private static AgentCallbackContext ctxWithReplanToolCall(String reason, String newApproach) {
         ToolCall replanCall = new ToolCall();
         replanCall.setId("call-1");
         replanCall.setName(ReplanTool.TOOL_NAME);
-        replanCall.setArguments("{\"" + ReplanTool.ARG_REPLAN_REASON + "\":\"" + reason
-                + "\",\"" + ReplanTool.ARG_NEW_APPROACH + "\":\"" + newApproach + "\"}");
+        replanCall.setArguments("{\"" + ReplanTool.ARG_REPLAN_REASON + "\":\"" + reason + "\",\""
+                + ReplanTool.ARG_NEW_APPROACH + "\":\"" + newApproach + "\"}");
 
         AssistantMessage msg = new AssistantMessage();
         msg.setToolCalls(List.of(replanCall));
@@ -185,11 +153,7 @@ class PevReplanRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        return AgentCallbackContext.builder()
-                .agent(new Object())
-                .event(null)
-                .inputs(inputs)
-                .build();
+        return AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs).build();
     }
 
     private static AgentCallbackContext ctxWithNormalAnswer() {
@@ -198,11 +162,7 @@ class PevReplanRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        return AgentCallbackContext.builder()
-                .agent(new Object())
-                .event(null)
-                .inputs(inputs)
-                .build();
+        return AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs).build();
     }
 
     private static AgentCallbackContext ctxWithNoToolCalls() {
@@ -212,15 +172,10 @@ class PevReplanRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        return AgentCallbackContext.builder()
-                .agent(new Object())
-                .event(null)
-                .inputs(inputs)
-                .build();
+        return AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs).build();
     }
 
-    private static AgentCallbackContext ctxWithSteeringQueue(AgentCallbackContext ctx,
-                                                              SteeringQueue sq) {
+    private static AgentCallbackContext ctxWithSteeringQueue(AgentCallbackContext ctx, SteeringQueue sq) {
         ctx.setSteeringQueue(sq);
         return ctx;
     }

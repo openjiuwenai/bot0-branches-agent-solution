@@ -44,19 +44,10 @@ class SpikeForceFinishOnReActAgent {
     }
 
     @Test
-    void afterModelCallForceFinish_shortCircuitsInvoke() {
-        var cliCfg = ModelClientConfig.builder()
-                .clientId("spike-" + System.nanoTime())
-                .clientProvider("spike-stub")
-                .apiKey("dummy")
-                .apiBase("http://localhost:0")
-                .verifySsl(false)
-                .build();
-        var reqCfg = ModelRequestConfig.builder()
-                .modelName("spike-model")
-                .temperature(0.1)
-                .maxTokens(100)
-                .build();
+    void afterModelCallForceFinishShortCircuitsInvoke() {
+        var cliCfg = ModelClientConfig.builder().clientId("spike-" + System.nanoTime()).clientProvider("spike-stub")
+                .apiKey("dummy").apiBase("http://localhost:0").verifySsl(false).build();
+        var reqCfg = ModelRequestConfig.builder().modelName("spike-model").temperature(0.1).maxTokens(100).build();
         Model model = new Model(cliCfg, reqCfg);
 
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("spike-agent").build());
@@ -66,23 +57,16 @@ class SpikeForceFinishOnReActAgent {
         agent.registerRail(new ForceFinishRail(forcedMap));
 
         Object result = agent.invoke("test input", null);
-
-        System.out.println("[spike] invoke returned: " + result);
-        System.out.println("[spike] type: " + (result == null ? "null" : result.getClass().getName()));
-
-        assertThat(result)
-                .as("invoke must return the forcedMap from afterModelCall requestForceFinish")
-                .isNotNull();
+        assertThat(result).as("invoke must return the forcedMap from afterModelCall requestForceFinish").isNotNull();
         assertThat(String.valueOf(result))
                 .as("result must contain 'FORCED' — proves consumeForceFinish short-circuited invoke")
                 .contains("FORCED");
     }
-
-    // ==================== Stub ModelClient ====================
-
     static class SpikeModelClientFactory implements Model.ModelClientFactory {
         @Override
-        public String providerName() { return "spike-stub"; }
+        public String providerName() {
+            return "spike-stub";
+        }
 
         @Override
         public BaseModelClient create(ModelRequestConfig reqCfg, ModelClientConfig cliCfg) {
@@ -90,48 +74,41 @@ class SpikeForceFinishOnReActAgent {
         }
     }
 
-    
     static class SpikeModelClient extends BaseModelClient {
         SpikeModelClient(ModelRequestConfig reqCfg, ModelClientConfig cliCfg) {
             super(reqCfg, cliCfg);
         }
 
         @Override
-        public AssistantMessage invoke(Object messages, Object tools, Float temperature,
-                Float maxTokens, String model, Integer n, String stop,
-                BaseOutputParser parser, Float topP, Map<String, Object> kwargs) {
+        public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
+                Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) {
             return new AssistantMessage("natural-final-answer");
         }
 
         @Override
-        public Iterator<AssistantMessageChunk> stream(Object messages, Object tools,
-                Float temperature, Float maxTokens, String model, Integer n, String stop,
-                BaseOutputParser parser, Float topP, Map<String, Object> kwargs) {
+        public Iterator<AssistantMessageChunk> stream(Object messages, Object tools, Float temperature, Float maxTokens,
+                String model, Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) {
             throw new UnsupportedOperationException("spike: stream not supported");
         }
 
         @Override
-        public ImageGenerationResponse generateImage(List<UserMessage> msgs, String a, String b,
-                String c, int d, boolean e, boolean f, int g, Map<String, Object> h) {
+        public ImageGenerationResponse generateImage(List<UserMessage> msgs, String a, String b, String c, int d,
+                boolean e, boolean f, int g, Map<String, Object> h) {
             throw new UnsupportedOperationException("spike");
         }
 
         @Override
-        public AudioGenerationResponse generateSpeech(List<UserMessage> msgs, String a, String b,
-                String c, Map<String, Object> d) {
+        public AudioGenerationResponse generateSpeech(List<UserMessage> msgs, String a, String b, String c,
+                Map<String, Object> d) {
             throw new UnsupportedOperationException("spike");
         }
 
         @Override
-        public VideoGenerationResponse generateVideo(List<UserMessage> msgs, String a, String b,
-                String c, String d, String e, int f, boolean g, boolean h, String i, Integer j,
-                Map<String, Object> k) {
+        public VideoGenerationResponse generateVideo(List<UserMessage> msgs, String a, String b, String c, String d,
+                String e, int f, boolean g, boolean h, String i, Integer j, Map<String, Object> k) {
             throw new UnsupportedOperationException("spike");
         }
     }
-
-    // ==================== Force-Finish Test Rail ====================
-
     static class ForceFinishRail extends AgentRail {
         private final Map<String, Object> forcedMap;
         private boolean fired = false;

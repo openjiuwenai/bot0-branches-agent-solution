@@ -46,30 +46,20 @@ class StagnationDetectionRailTest {
     void setUp() {
         SystemPromptInjectingModel.resetToDefaults();
     }
-
-    // ==================== No stagnation → no action ====================
-
     @Test
-    void uniqueOutputs_noAction() {
+    void uniqueOutputsNoAction() {
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
         rail.afterModelCall(ctxWithFinalAnswer("第一次输出", sq));
         rail.afterModelCall(ctxWithFinalAnswer("第二次输出", sq));
 
-        assertThat(sq.captured)
-                .as("unique outputs must NOT trigger stagnation brake")
-                .isEmpty();
-        assertThat(rail.getConsecutiveOutputRepeats())
-                .as("consecutive repeat count must be 0")
-                .isZero();
+        assertThat(sq.captured).as("unique outputs must NOT trigger stagnation brake").isEmpty();
+        assertThat(rail.getConsecutiveOutputRepeats()).as("consecutive repeat count must be 0").isZero();
         // mutation-RED: strip outputHistory.contains(hash) → always false → never increments count → RED
     }
-
-    // ==================== Output stagnation → brake steering ====================
-
     @Test
-    void repeatedOutput_reachesThreshold_pushSteeringBrake() {
+    void repeatedOutputReachesThresholdPushSteeringBrake() {
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
@@ -79,17 +69,13 @@ class StagnationDetectionRailTest {
         rail.afterModelCall(ctxWithFinalAnswer("相同输出", sq));
         rail.afterModelCall(ctxWithFinalAnswer("相同输出", sq));
 
-        assertThat(sq.captured)
-                .as("output repeated 4 times → pushSteering brake")
-                .isNotEmpty();
-        assertThat(sq.captured.get(0))
-                .as("brake steering must mention output repetition")
-                .contains("输出重复");
+        assertThat(sq.captured).as("output repeated 4 times → pushSteering brake").isNotEmpty();
+        assertThat(sq.captured.get(0)).as("brake steering must mention output repetition").contains("输出重复");
         // mutation-RED: strip consecutiveOutputRepeats++ → count never reaches 3 → steering empty → RED
     }
 
     @Test
-    void repeatedOutput_setsPhaseOverride() {
+    void repeatedOutputSetsPhaseOverride() {
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
@@ -99,16 +85,12 @@ class StagnationDetectionRailTest {
         rail.afterModelCall(ctxWithFinalAnswer("重复", sq));
         rail.afterModelCall(ctxWithFinalAnswer("重复", sq));
 
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("output stagnation must set phase override")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("output stagnation must set phase override")
                 .contains("BREAK_STAGNATION");
         // mutation-RED: strip SystemPromptInjectingModel.setPhaseOverride(...) → null → RED
     }
-
-    // ==================== Persistent stagnation → forceFinish ====================
-
     @Test
-    void persistentStagnation_forceFinishes() {
+    void persistentStagnationForceFinishes() {
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
@@ -123,8 +105,7 @@ class StagnationDetectionRailTest {
         rail.afterModelCall(ctxWithFinalAnswer("停滞输出", sq)); // 2nd (1st repeat)
         rail.afterModelCall(ctxWithFinalAnswer("停滞输出", sq)); // 3rd (2nd repeat)
         rail.afterModelCall(ctxWithFinalAnswer("停滞输出", sq)); // 4th (3rd repeat → brake)
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("first brake cycle must produce phase override")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("first brake cycle must produce phase override")
                 .contains("BREAK_STAGNATION");
 
         // After first brake consecutiveRepeats resets to 0. 3 more identical outputs.
@@ -134,14 +115,13 @@ class StagnationDetectionRailTest {
         AgentCallbackContext ctx7 = ctxWithFinalAnswer("停滞输出", sq); // 7th (count=3 → second brake + forceFinish)
         rail.afterModelCall(ctx7);
 
-        assertThat(ctx7.hasForceFinishRequest())
-                .as("persistent stagnation after max brakes must forceFinish(degraded)")
+        assertThat(ctx7.hasForceFinishRequest()).as("persistent stagnation after max brakes must forceFinish(degraded)")
                 .isTrue();
         // mutation-RED: strip ctx.requestForceFinish(...) in stagnation escalation → hasForceFinishRequest false → RED
     }
 
     @Test
-    void stagnationReset_onNewOutput() {
+    void stagnationResetOnNewOutput() {
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
@@ -149,15 +129,11 @@ class StagnationDetectionRailTest {
         rail.afterModelCall(ctxWithFinalAnswer("输出A", sq));
         rail.afterModelCall(ctxWithFinalAnswer("输出B", sq)); // ← new output, resets counter
 
-        assertThat(rail.getConsecutiveOutputRepeats())
-                .as("new unique output must reset consecutive repeat counter")
+        assertThat(rail.getConsecutiveOutputRepeats()).as("new unique output must reset consecutive repeat counter")
                 .isZero();
     }
-
-    // ==================== Tool cycle detection ====================
-
     @Test
-    void toolCycle_repeats_pushSteeringBrake() {
+    void toolCycleRepeatsPushSteeringBrake() {
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
@@ -172,10 +148,7 @@ class StagnationDetectionRailTest {
         ModelCallInputs inputs1 = new ModelCallInputs();
         inputs1.setResponse(msg1);
 
-        AgentCallbackContext ctx1 = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs1)
-                .steeringQueue(sq)
+        AgentCallbackContext ctx1 = AgentCallbackContext.builder().agent(new Object()).inputs(inputs1).steeringQueue(sq)
                 .build();
 
         // detectToolCycle only fires at even history sizes (half-div match).
@@ -191,38 +164,31 @@ class StagnationDetectionRailTest {
         // Verify via phase override — pushSteering on mock AgentCallbackContext
         // may not populate the test steering queue, but SystemPromptInjectingModel
         // is a static channel that the rail definitely writes to.
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("tool cycle must set phase override")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("tool cycle must set phase override")
                 .contains("BREAK_LOOP");
         // mutation-RED: strip toolCycleRepeats++ → never triggers → phaseOverride null → RED
     }
-
-    // ==================== onToolException → tool failure tracking ====================
-
     @Test
-    void consecutiveToolFailures_triggerPhaseOverride() {
+    void consecutiveToolFailuresTriggerPhaseOverride() {
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
         // Same tool fails 3 times
         rail.onToolException(ctxWithToolFailure("search_tool"));
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("only 1 failure → no phase override yet")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("only 1 failure → no phase override yet")
                 .isNull();
 
         rail.onToolException(ctxWithToolFailure("search_tool"));
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("only 2 failures → no phase override yet")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("only 2 failures → no phase override yet")
                 .isNull();
 
         rail.onToolException(ctxWithToolFailure("search_tool"));
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("3 consecutive failures → phase override set")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("3 consecutive failures → phase override set")
                 .contains("search_tool");
         // mutation-RED: strip consecutiveToolFailures++ → never reaches 3 → phaseOverride null → RED
     }
 
     @Test
-    void differentTool_resetsFailureCounter() {
+    void differentToolResetsFailureCounter() {
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
         rail.onToolException(ctxWithToolFailure("search_tool"));
@@ -231,34 +197,24 @@ class StagnationDetectionRailTest {
         rail.onToolException(ctxWithToolFailure("different_tool"));
         rail.onToolException(ctxWithToolFailure("different_tool")); // 3rd for different_tool
 
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride())
-                .as("same consecutive tool failure should trigger")
+        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).as("same consecutive tool failure should trigger")
                 .contains("different_tool");
     }
-
-    // ==================== no-op cases ====================
-
     @Test
-    void nonAssistantResponse_noAction() {
+    void nonAssistantResponseNoAction() {
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
         StagnationDetectionRail rail = new StagnationDetectionRail();
 
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse("plain string, not AssistantMessage");
 
-        AgentCallbackContext ctx = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .steeringQueue(sq)
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs).steeringQueue(sq)
                 .build();
 
         rail.afterModelCall(ctx);
 
         assertThat(rail.getConsecutiveOutputRepeats()).isZero();
     }
-
-    // ==================== Helpers ====================
-
     static class CaptureSteeringQueue implements SteeringQueue {
         final List<String> captured = new ArrayList<>();
 
@@ -280,10 +236,7 @@ class StagnationDetectionRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        AgentCallbackContext ctx = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .steeringQueue(sq)
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs).steeringQueue(sq)
                 .build();
         ctx.setExtra(new LinkedHashMap<>());
         return ctx;
@@ -296,19 +249,13 @@ class StagnationDetectionRailTest {
         inputs.setToolName(toolName);
         inputs.setToolCall(tc);
 
-        return AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(inputs)
-                .build();
+        return AgentCallbackContext.builder().agent(new Object()).inputs(inputs).build();
     }
 
     /** Copy a context with a fresh steering queue (to avoid sharing captured list). */
     private static AgentCallbackContext copyCtx(AgentCallbackContext template, SteeringQueue sq) {
-        AgentCallbackContext copy = AgentCallbackContext.builder()
-                .agent(new Object())
-                .inputs(template.getInputs())
-                .steeringQueue(sq)
-                .build();
+        AgentCallbackContext copy = AgentCallbackContext.builder().agent(new Object()).inputs(template.getInputs())
+                .steeringQueue(sq).build();
         copy.setExtra(new LinkedHashMap<>());
         return copy;
     }

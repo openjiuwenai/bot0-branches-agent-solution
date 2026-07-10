@@ -20,7 +20,7 @@ import java.util.Locale;
  * <p>This is the default verifier for {@link CriteriaVerificationRail} when no
  * LLM-backed verifier is injected — it covers the rule-based path (output/history
  * keyword coverage), leaving the LLM-judge path to a future injected verifier.
- 
+
   * @since 2026-07*/
 public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
 
@@ -49,8 +49,7 @@ public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
                 continue;
             }
             // Check: at least half the keywords appear in output or history
-            long matched = keywords.stream()
-                    .filter(kw -> outputLower.contains(kw) || historyLower.contains(kw))
+            long matched = keywords.stream().filter(kw -> outputLower.contains(kw) || historyLower.contains(kw))
                     .count();
             int threshold = Math.max(1, (keywords.size() + 1) / 2);
             if (matched < threshold) {
@@ -61,12 +60,10 @@ public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
         return violations;
     }
 
-    private static final java.util.Set<String> STOP_WORDS = java.util.Set.of(
-            "的", "了", "在", "是", "和", "就", "不", "都", "一", "一个", "上", "也",
-            "the", "a", "an", "is", "are", "was", "to", "of", "in", "for", "on",
-            "with", "at", "by", "from", "as", "into", "and", "or", "not", "be",
-            "this", "that", "it", "its", "must", "should", "will"
-    );
+    private static final java.util.Set<String> STOP_WORDS = java.util.Set.of("的", "了", "在", "是", "和", "就", "不", "都",
+            "一", "一个", "上", "也", "the", "a", "an", "is", "are", "was", "to", "of", "in", "for", "on", "with", "at",
+            "by", "from", "as", "into", "and", "or", "not", "be", "this", "that", "it", "its", "must", "should",
+            "will");
 
     private static boolean isStopWord(String w) {
         return STOP_WORDS.contains(w);

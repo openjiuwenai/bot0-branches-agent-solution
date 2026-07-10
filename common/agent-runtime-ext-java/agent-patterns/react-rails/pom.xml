@@ -17,6 +17,9 @@
 
     <properties>
         <agent-runtime-ext.java.release>21</agent-runtime-ext.java.release>
+        <formatter.plugin.version>2.24.1</formatter.plugin.version>
+        <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
+        <checkstyle.version>10.21.0</checkstyle.version>
     </properties>
 
     <dependencies>
@@ -51,4 +54,59 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>net.revelc.code.formatter</groupId>
+                <artifactId>formatter-maven-plugin</artifactId>
+                <version>${formatter.plugin.version}</version>
+                <configuration>
+                    <configFile>${project.parent.basedir}/.devtools/eclipse-java-formatter.xml</configFile>
+                    <lineEnding>LF</lineEnding>
+                    <encoding>UTF-8</encoding>
+                    <directories>
+                        <directory>${project.basedir}/src/main/java</directory>
+                        <directory>${project.basedir}/src/test/java</directory>
+                    </directories>
+                    <includes>
+                        <include>**/*.java</include>
+                    </includes>
+                    <excludes>
+                        <exclude>**/target/**</exclude>
+                    </excludes>
+                    <skipCssFormatting>true</skipCssFormatting>
+                    <skipJsonFormatting>true</skipJsonFormatting>
+                    <skipHtmlFormatting>true</skipHtmlFormatting>
+                    <skipXmlFormatting>true</skipXmlFormatting>
+                    <skipJsFormatting>true</skipJsFormatting>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle.plugin.version}</version>
+                <configuration>
+                    <configLocation>${project.parent.basedir}/.devtools/checkstyle.xml</configLocation>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+                        <sourceDirectory>${project.basedir}/src/test/java</sourceDirectory>
+                    </sourceDirectories>
+                    <excludes>**/target/**</excludes>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    <inputEncoding>UTF-8</inputEncoding>
+                    <consoleOutput>true</consoleOutput>
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>warning</violationSeverity>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
 </project>

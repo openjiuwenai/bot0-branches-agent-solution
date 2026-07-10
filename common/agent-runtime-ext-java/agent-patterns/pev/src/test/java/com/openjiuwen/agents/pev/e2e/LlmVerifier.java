@@ -34,6 +34,8 @@ import java.util.Set;
  */
 final class LlmVerifier implements PevComponents.Verifier {
 
+    private static final String LINE_SEPARATOR = System.lineSeparator();
+
     private final LlmClient llm;
 
     LlmVerifier(LlmClient llm) {
@@ -43,9 +45,8 @@ final class LlmVerifier implements PevComponents.Verifier {
     @Override
     public PevKernel.VerifyResult verify(String userInput, Map<String, NodeResult> completed) {
         String output = assembleOutput(completed);
-        String verdict = llm.chat(
-                "判断以下任务的执行结果是否满足要求。只回复 PASS 或 FAIL，不要其他内容。\n"
-                        + "任务要求：" + userInput + "\n执行结果：" + output);
+        String verdict = llm.chat("判断以下任务的执行结果是否满足要求。只回复 PASS 或 FAIL，不要其他内容。" + LINE_SEPARATOR + "任务要求：" + userInput
+                + LINE_SEPARATOR + "执行结果：" + output);
 
         String up = verdict == null ? "" : verdict.toUpperCase(Locale.ROOT);
         boolean parseFailure = up.isBlank();

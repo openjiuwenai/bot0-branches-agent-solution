@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * <p><b>IFF 契约</b>: replan count ⟺ over-limit escalate. Strip the count increment
  * → canReplan永远 true →永不 forceFinish → 测试 RED.
- 
+
   * @since 2026-07*/
 public class ReplanRail extends AgentRail {
 

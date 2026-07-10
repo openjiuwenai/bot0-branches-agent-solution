@@ -36,14 +36,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ClaimsAdjudicationE2eTest {
 
     @Test
-    void claimsAdjudication_runsRealLlmPlanExecuteVerify_endToEnd() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(),
-                "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
+    void claimsAdjudicationRunsRealLlmPlanExecuteVerifyEndToEnd() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
 
         // Standard reducible claim case from the ClaimTools fixture (5 tools over 2 cases).
         String caseNo = ClaimTools.CLM_REDUCE;
-        String task = "审核 " + caseNo + " 标准理赔：调用理赔工具核实案件信息、责任理算、欺诈风险，"
-                + "计算正确赔付额并判断是否需要大额复核，最终给出理赔结论。";
+        String task = "审核 " + caseNo + " 标准理赔：调用理赔工具核实案件信息、责任理算、欺诈风险，" + "计算正确赔付额并判断是否需要大额复核，最终给出理赔结论。";
 
         LlmClient llm = new LlmClient();
 
@@ -60,8 +58,7 @@ class ClaimsAdjudicationE2eTest {
         PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier);
         // Soft-skip on LLM infra outage (GLM 5-tool planner prompts can 0-byte-timeout at the
         // gateway) — honesty split: an unavailable endpoint is env, not a logic defect.
-        String output = SoftLlmE2e.runSoft("claims-adjudication",
-                () -> String.valueOf(agent.invoke(task, null)));
+        String output = SoftLlmE2e.runSoft("claims-adjudication", () -> String.valueOf(agent.invoke(task, null)));
 
         // 软观察（真 LLM e2e 不硬断言具体金额/措辞，只证 PEV 数据通道端到端跑通 + 工具被驱动）。
         assertThat(output).isNotEmpty();
@@ -69,8 +66,5 @@ class ClaimsAdjudicationE2eTest {
         assertThat(output).contains(":");
         // 案号应当在工具回填的结果中出现（getClaimInfo 等工具的 fixture 都带 caseNo 字段）。
         assertThat(output).containsIgnoringCase(caseNo);
-
-        System.out.println("[claims-adjudication-real-llm-e2e] task: " + task);
-        System.out.println("[claims-adjudication-real-llm-e2e] output:\n" + output);
     }
 }

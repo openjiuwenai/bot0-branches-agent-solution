@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ReplanRailTest {
 
     @Test
-    void underLimit_replanAllowed_noForceFinish() {
+    void underLimitReplanAllowedNoForceFinish() {
         ReplanRail rail = new ReplanRail(2);
 
         // First __replan__ call (count=1, under limit=2)
@@ -33,41 +33,38 @@ class ReplanRailTest {
     }
 
     @Test
-    void atLimit_stillAllowed_noForceFinish() {
+    void atLimitStillAllowedNoForceFinish() {
         ReplanRail rail = new ReplanRail(2);
 
-        rail.afterModelCall(ctxWithReplanToolCall());  // count=1
-        rail.afterModelCall(ctxWithReplanToolCall());  // count=2 (== max, still allowed — > is the trigger)
+        rail.afterModelCall(ctxWithReplanToolCall()); // count=1
+        rail.afterModelCall(ctxWithReplanToolCall()); // count=2 (== max, still allowed — > is the trigger)
 
         assertThat(rail.replanCount()).isEqualTo(2);
         // IFF: count==max → allow (not escalate). Only count>max → escalate.
     }
 
     @Test
-    void overLimit_escalatesForceFinish() {
-        ReplanRail rail = new ReplanRail(2);  // max=2
+    void overLimitEscalatesForceFinish() {
+        ReplanRail rail = new ReplanRail(2);
 
-        rail.afterModelCall(ctxWithReplanToolCall());  // count=1, OK
-        rail.afterModelCall(ctxWithReplanToolCall());  // count=2, OK (==max)
+        rail.afterModelCall(ctxWithReplanToolCall());
+        rail.afterModelCall(ctxWithReplanToolCall());
         AgentCallbackContext ctx3 = ctxWithReplanToolCall();
-        rail.afterModelCall(ctx3);                       // count=3 (>max) → forceFinish(degraded)
+        rail.afterModelCall(ctx3);
 
         assertThat(rail.replanCount()).isEqualTo(3);
-        assertThat(ctx3.hasForceFinishRequest())
-                .as("count>max must fire requestForceFinish(degraded)")
-                .isTrue();
+        assertThat(ctx3.hasForceFinishRequest()).as("count>max must fire requestForceFinish(degraded)").isTrue();
         // mutation-RED: strip forceFinish degraded call → hasForceFinishRequest false → RED
     }
 
     @Test
-    void noReplanToolCall_noCounting() {
+    void noReplanToolCallNoCounting() {
         ReplanRail rail = new ReplanRail(2);
 
-        rail.afterModelCall(ctxWithNormalAnswer());  // final answer, no tool calls
+        rail.afterModelCall(ctxWithNormalAnswer()); // final answer, no tool calls
 
         assertThat(rail.replanCount()).isEqualTo(0);
     }
-
 
     private static AgentCallbackContext ctxWithReplanToolCall() {
         ToolCall replanCall = new ToolCall();
@@ -81,11 +78,7 @@ class ReplanRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        return AgentCallbackContext.builder()
-                .agent(new Object())
-                .event(null)
-                .inputs(inputs)
-                .build();
+        return AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs).build();
     }
 
     private static AgentCallbackContext ctxWithNormalAnswer() {
@@ -95,10 +88,6 @@ class ReplanRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
-        return AgentCallbackContext.builder()
-                .agent(new Object())
-                .event(null)
-                .inputs(inputs)
-                .build();
+        return AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs).build();
     }
 }

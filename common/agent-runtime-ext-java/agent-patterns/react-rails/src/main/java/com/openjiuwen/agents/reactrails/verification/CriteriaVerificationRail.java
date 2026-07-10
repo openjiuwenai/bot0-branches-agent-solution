@@ -41,7 +41,7 @@ import java.util.Map;
  * tool-call 为 String decisionHistory）、Violation（→ 极简 record）。verify 签名从
  * verify(GoalSpec, List&lt;LLMDecision&gt;, LLMDecision.Complete) 改为
  * verify(List&lt;String&gt;, String, String)。语义等价但类型简化（jar 不含 beta.model 类型）。
- 
+
   * @since 2026-07*/
 public class CriteriaVerificationRail extends AgentRail {
 
@@ -96,7 +96,8 @@ public class CriteriaVerificationRail extends AgentRail {
     }
 
     private void accumulateToolCalls(AssistantMessage msg) {
-        if (msg.getToolCalls() == null) return;
+        if (msg.getToolCalls() == null)
+            return;
         for (ToolCall tc : msg.getToolCalls()) {
             decisionHistory.add(tc.getName() + "(" + tc.getArguments() + ")");
         }

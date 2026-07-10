@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class PEVAgentRealLlmE2eTest {
 
+    private static final String LINE_SEPARATOR = System.lineSeparator();
+
     private static final LlmClient LLM = new LlmClient();
 
     private static boolean envPresent() {
@@ -37,9 +39,8 @@ class PEVAgentRealLlmE2eTest {
     }
 
     @Test
-    void pevAgent_runsRealLlmTask_endToEnd_dataChannelProven() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(envPresent(),
-                "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
+    void pevAgentRunsRealLlmTaskEndToEndDataChannelProven() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
 
         String task = "用一句话（不超过30字）解释什么是 Plan-Execute-Verify 模式。";
 
@@ -57,9 +58,8 @@ class PEVAgentRealLlmE2eTest {
         PevComponents.Verifier verifier = (in, r) -> {
             Object v = r.get("answer");
             String output = (v instanceof NodeResult.Success s) ? String.valueOf(s.value()) : "";
-            String verdict = LLM.chat(
-                    "判断以下回答是否满足要求。只回复 PASS 或 FAIL，不要其他内容。\n"
-                            + "要求：" + in + "\n回答：" + output);
+            String verdict = LLM.chat("判断以下回答是否满足要求。只回复 PASS 或 FAIL，不要其他内容。" + LINE_SEPARATOR + "要求：" + in
+                    + LINE_SEPARATOR + "回答：" + output);
             boolean pass = verdict.toUpperCase(Locale.ROOT).contains("PASS")
                     && !verdict.toUpperCase(Locale.ROOT).contains("FAIL");
             return new PevKernel.VerifyResult(pass, pass ? Set.of() : Set.of("answer"), verdict);
@@ -71,6 +71,5 @@ class PEVAgentRealLlmE2eTest {
         // 软观察（真 LLM e2e 不硬断言具体内容，只证数据通道 + 控制流端到端跑通）
         assertThat(out).asString().isNotEmpty();
         assertThat(out.toString()).contains("answer:");
-        System.out.println("[pev-real-llm-e2e] output:\n" + out);
     }
 }

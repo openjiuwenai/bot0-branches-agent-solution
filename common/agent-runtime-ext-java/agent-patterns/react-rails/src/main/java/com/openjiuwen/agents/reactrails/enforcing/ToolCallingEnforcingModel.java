@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   Model m = new ToolCallingEnforcingModel(cliCfg, reqCfg);
  *   agent.setLlm(m);  // unchanged — polymorphism
  * }</pre>
- 
+
   * @since 2026-07*/
 public class ToolCallingEnforcingModel extends Model {
 
@@ -67,10 +67,8 @@ public class ToolCallingEnforcingModel extends Model {
      * {@link Model#invoke}.
      */
     @Override
-    public AssistantMessage invoke(Object messages, Object tools,
-            Float temperature, Float maxTokens, String model, Integer n, String stop,
-            BaseOutputParser parser, Float topP, Map<String, Object> kwargs)
-            throws Exception {
+    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
+            Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
         // Resolve model name: override from caller, or fall back to this Model's config.
         // ReActAgent passes null/empty for model — the OpenAiCompatibleModelClient does
         // not fall back to ModelRequestConfig.getModelName() from its own state.
@@ -86,7 +84,8 @@ public class ToolCallingEnforcingModel extends Model {
         String thinkingMode = System.getenv("LLM_THINKING");
         if (thinkingMode != null && !thinkingMode.isEmpty() && !"none".equals(thinkingMode)) {
             Map<String, Object> extendedKwargs = new HashMap<>();
-            if (kwargs != null) extendedKwargs.putAll(kwargs);
+            if (kwargs != null)
+                extendedKwargs.putAll(kwargs);
             if ("thinking-on".equals(thinkingMode) || "thinking-off".equals(thinkingMode)) {
                 Map<String, Object> thinkingParam = new HashMap<>();
                 thinkingParam.put("type", "thinking-on".equals(thinkingMode) ? "enabled" : "disabled");
@@ -102,8 +101,7 @@ public class ToolCallingEnforcingModel extends Model {
             doProbe(temperature, maxTokens, model, n, stop, parser, topP, kwargs);
         }
         // Forward the real invocation.
-        return super.invoke(messages, tools, temperature, maxTokens,
-                model, n, stop, parser, topP, kwargs);
+        return super.invoke(messages, tools, temperature, maxTokens, model, n, stop, parser, topP, kwargs);
     }
 
     /**
@@ -116,35 +114,27 @@ public class ToolCallingEnforcingModel extends Model {
      * @throws ToolCallingBypassException when the client fails the probe
      * @throws Exception                  propagated from the underlying client
      */
-    private void doProbe(Float temperature, Float maxTokens, String model,
-            Integer n, String stop, BaseOutputParser parser, Float topP,
-            Map<String, Object> kwargs) throws Exception {
+    private void doProbe(Float temperature, Float maxTokens, String model, Integer n, String stop,
+            BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
 
         // Build a minimalist probe tool with a forced-call description.
-        ToolInfo probeTool = ToolInfo.builder()
-                .type("function")
-                .name(PROBE_TOOL_NAME)
+        ToolInfo probeTool = ToolInfo.builder().type("function").name(PROBE_TOOL_NAME)
                 .description("Probe tool for tool-calling capability verification. "
                         + "Call this tool with reason='probe' immediately.")
-                .parameters(Map.of(
-                        "type", "object",
-                        "properties", Map.of(
-                                "reason", Map.of("type", "string",
-                                        "description", "Reason for probe")),
-                        "required", List.of("reason")))
+                .parameters(Map.of("type", "object", "properties",
+                        Map.of("reason", Map.of("type", "string", "description", "Reason for probe")), "required",
+                        List.of("reason")))
                 .build();
 
         // Build probe messages that leave the LLM no room to refuse calling the tool.
         List<BaseMessage> probeMessages = List.of(
                 new SystemMessage("You are a function-calling assistant. "
                         + "You MUST call the provided function with reason='probe'."),
-                new UserMessage("Call " + PROBE_TOOL_NAME + " with reason='probe' "
-                        + "and return its output."));
+                new UserMessage("Call " + PROBE_TOOL_NAME + " with reason='probe' " + "and return its output."));
 
         // Probe goes through super.invoke() which delegates to this.client.invoke().
-        AssistantMessage probeResponse = super.invoke(
-                probeMessages, List.of(probeTool),
-                temperature, maxTokens, model, n, stop, parser, topP, kwargs);
+        AssistantMessage probeResponse = super.invoke(probeMessages, List.of(probeTool), temperature, maxTokens, model,
+                n, stop, parser, topP, kwargs);
 
         // Null response is an unambiguous failure.
         if (probeResponse == null) {
@@ -157,10 +147,9 @@ public class ToolCallingEnforcingModel extends Model {
         if (calls == null || calls.isEmpty()) {
             throw new ToolCallingBypassException(
                     "Tool-calling bypass detected: the underlying BaseModelClient discarded "
-                    + "the tools parameter. Response has no tool_calls despite a forced probe. "
-                    + "Verify that the BaseModelClient implementation ("
-                    + getModelClientConfig().getClientProvider()
-                    + ") forwards tools to the LLM API.");
+                            + "the tools parameter. Response has no tool_calls despite a forced probe. "
+                            + "Verify that the BaseModelClient implementation ("
+                            + getModelClientConfig().getClientProvider() + ") forwards tools to the LLM API.");
         }
     }
 }

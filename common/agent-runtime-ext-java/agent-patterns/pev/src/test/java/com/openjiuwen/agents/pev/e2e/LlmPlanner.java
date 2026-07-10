@@ -29,6 +29,8 @@ import java.util.regex.Pattern;
  */
 final class LlmPlanner implements PevComponents.Planner {
 
+    private static final String LINE_SEPARATOR = System.lineSeparator();
+
     private final LlmClient llm;
     private final Map<String, String> tools; // name -> description (for prompt context)
 
@@ -54,15 +56,14 @@ final class LlmPlanner implements PevComponents.Planner {
         return new PevComponents.Plan(userInput, nodes);
     }
 
-
     private String buildPrompt(String task) {
         StringBuilder toolBlock = new StringBuilder();
         if (tools.isEmpty()) {
             toolBlock.append("（无可用工具）");
         } else {
-            toolBlock.append("可用工具：\n");
-            tools.forEach((name, desc) ->
-                    toolBlock.append("- ").append(name).append(": ").append(desc).append('\n'));
+            toolBlock.append("可用工具：").append(LINE_SEPARATOR);
+            tools.forEach((name, desc) -> toolBlock.append("- ").append(name).append(": ").append(desc)
+                    .append(LINE_SEPARATOR));
         }
         return """
                 你是一个任务规划器。请把下面的任务拆成 1-5 个执行步骤，每步调用一个工具或做一段 LLM 推理。
@@ -79,9 +80,7 @@ final class LlmPlanner implements PevComponents.Planner {
                 """.formatted(task, toolBlock);
     }
 
-
-    private static final Pattern NODE_OBJECT = Pattern.compile(
-            "\\{[^{}]*\"id\"[^{}]*\\}", Pattern.DOTALL);
+    private static final Pattern NODE_OBJECT = Pattern.compile("\\{[^{}]*\"id\"[^{}]*\\}", Pattern.DOTALL);
 
     private static List<PevComponents.PlanNode> parseNodes(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -134,7 +133,7 @@ final class LlmPlanner implements PevComponents.Planner {
             char c = json.charAt(j);
             if (c == '\\' && j + 1 < json.length()) {
                 char n = json.charAt(++j);
-                sb.append(n == 'n' ? '\n' : n);
+                sb.append(n == 'n' ? (char) 10 : n);
                 continue;
             }
             if (c == '"') {

@@ -48,7 +48,7 @@ import org.springframework.context.annotation.Bean;
  * reactrails.checklist-enabled=true                # PreCompletionChecklistRail switch (default true)
  * reactrails.checklist-max-plan-rounds=2           # PLAN phase max rounds (default 2)
  * </pre>
- 
+
   * @since 2026-07*/
 @AutoConfiguration
 @ConditionalOnClass({ReActAgent.class, AgentRail.class})
@@ -76,9 +76,7 @@ public class ReactRailsAutoConfiguration {
      * @return the rail-registering post-processor
      */
     @Bean
-    public BeanPostProcessor reactRailsRegistrar(
-            CriteriaVerifier criteriaVerifier,
-            ReactRailsProperties properties) {
+    public BeanPostProcessor reactRailsRegistrar(CriteriaVerifier criteriaVerifier, ReactRailsProperties properties) {
         return new BeanPostProcessor() {
             @Override
             public Object postProcessAfterInitialization(Object bean, String beanName) {
@@ -87,33 +85,28 @@ public class ReactRailsAutoConfiguration {
                     // verify 失败 → steering 修正 + retry，超限才 forceFinish(degraded)
                     if (properties.getCriteria() != null && !properties.getCriteria().isEmpty()) {
                         ReplanRail sharedCounter = new ReplanRail(properties.getMaxReplan());
-                        agent.registerRail(new CriteriaReplanBridgeRail(
-                                criteriaVerifier, properties.getCriteria(), sharedCounter));
+                        agent.registerRail(new CriteriaReplanBridgeRail(criteriaVerifier, properties.getCriteria(),
+                                sharedCounter));
                     }
-                    // PevReplanRail (replaces ReplanRail) + ReplanTool
                     if (properties.getMaxReplan() >= 0) {
                         agent.registerRail(new PevReplanRail(properties.getMaxReplan()));
                         ReplanTool.registerOnto(agent);
                     }
-                    // RootCauseRail (always)
                     agent.registerRail(new RootCauseRail());
-                    // HistoryCompressorRail (optional): compress message history on __replan__
-                    // (default off, enable via reactrails.history-compression=true)
                     if (properties.isHistoryCompression()) {
                         agent.registerRail(new HistoryCompressorRail());
                     }
                     // First-principles inject: set global mode so any
                     // SystemPromptInjectingModel instance uses it.
                     if (properties.isFirstPrinciplesInject()) {
-                        SystemPromptInjectingModel.setInjectionMode(
-                                SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
+                        SystemPromptInjectingModel
+                                .setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
                     }
                     // PreCompletionChecklistRail (optional, PLAN/BUILD phase guardrail):
                     // injects phase-aware system prompts via SystemPromptInjectingModel.
                     // Enabled by default (checklist-enabled=true).
                     if (properties.isChecklistEnabled()) {
-                        agent.registerRail(new PreCompletionChecklistRail(
-                                properties.getChecklistMaxPlanRounds()));
+                        agent.registerRail(new PreCompletionChecklistRail(properties.getChecklistMaxPlanRounds()));
                     }
                 }
                 return bean;

@@ -32,21 +32,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RootCauseRailRealLlmE2eTest {
 
     @Test
-    void realLlm_toolFailure_rootCauseRailDegrades() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(),
-                "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
+    void realLlmToolFailureRootCauseRailDegrades() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
 
         DefaultModelClientFactories.ensureRegistered();
-        var cliCfg = ModelClientConfig.builder()
-                .clientId("rootcause-e2e-" + System.nanoTime())
-                .clientProvider("OpenAI")
-                .apiKey(System.getenv("OPENJIUWEN_API_KEY"))
-                .apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
+        var cliCfg = ModelClientConfig.builder().clientId("rootcause-e2e-" + System.nanoTime()).clientProvider("OpenAI")
+                .apiKey(System.getenv("OPENJIUWEN_API_KEY")).apiBase(System.getenv("OPENJIUWEN_BASE_URL"))
                 .verifySsl(false).build();
         String effectiveModel = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-pro");
-        var reqCfg = ModelRequestConfig.builder()
-                .modelName(effectiveModel)
-                .temperature(0.3).maxTokens(200).build();
+        var reqCfg = ModelRequestConfig.builder().modelName(effectiveModel).temperature(0.3).maxTokens(200).build();
         ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
 
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("e2e-rootcause").build());
@@ -70,15 +64,9 @@ class RootCauseRailRealLlmE2eTest {
         // ReActAgent → 工具执行 → rail 链路畅通）。这不是承重断言——通道装配的硬证明由
         // RootCauseRailTest（mock）承担；此处只证 e2e 跑通，避免 LLM 不走预期路径时无断言。
         assertThat(result).as("agent 必须返回结果（e2e infra 健康基线）").isNotNull();
-
-        System.out.println("[rootcause-e2e] result type: " + result.getClass().getName());
-        System.out.println("[rootcause-e2e] result: " + result);
-
         // The result should be a forcedMap from RootCauseRail's forceFinish(degraded)
         // (tool failed → onToolException → pendingDegrade → afterModelCall → forceFinish)
         if (result instanceof Map<?, ?> map) {
-            System.out.println("[rootcause-e2e] root_cause: " + map.get(RootCauseRail.ROOT_CAUSE_KEY));
-            System.out.println("[rootcause-e2e] degraded: " + map.get(RootCauseRail.DEGRADED_KEY));
             // 软观察：rail 是否触发取决于 LLM 是否真调失败工具（非确定）。若触发，硬校验降级标记。
             if (map.containsKey(RootCauseRail.DEGRADED_KEY)) {
                 assertThat(map.get(RootCauseRail.DEGRADED_KEY)).isEqualTo(true);
@@ -89,33 +77,38 @@ class RootCauseRailRealLlmE2eTest {
         // 通道装配由 RootCauseRailTest（mock 硬断言）承重。
     }
 
-    
     static class AlwaysFailTool extends Tool {
         // inputParams 必填：缺 schema 时 LLM 倾向"叙述"使用工具而非真调（实测 GLM/deepseek 均如此）。
-        private static final ToolCard CARD = ToolCard.builder()
-                        .id("fetchData")
-                        .name("fetchData")
-                        .description("获取数据。参数：source（数据源名称，如 orders/users）。")
-                        .inputParams(java.util.Map.of(
-                                "type", "object",
-                                "properties", java.util.Map.of(
-                                        "source", java.util.Map.of("type", "string", "description", "数据源名称")),
-                                "required", java.util.List.of("source")))
-                        .build();
+        private static final ToolCard CARD = ToolCard.builder().id("fetchData").name("fetchData")
+                .description("获取数据。参数：source（数据源名称，如 orders/users）。")
+                .inputParams(java.util.Map.of("type", "object", "properties",
+                        java.util.Map.of("source", java.util.Map.of("type", "string", "description", "数据源名称")),
+                        "required", java.util.List.of("source")))
+                .build();
 
-        public AlwaysFailTool() { super(CARD); }
+        public AlwaysFailTool() {
+            super(CARD);
+        }
 
         @Override
-        public ToolCard getCard() { return CARD; }
+        public ToolCard getCard() {
+            return CARD;
+        }
 
         @Override
         public Object invoke(Map<String, Object> args, Map<String, Object> kwargs) {
-            throw new RuntimeException("模拟设备故障：数据库连接超时");
+            throw new AlwaysFailToolException("模拟设备故障：数据库连接超时");
         }
 
         @Override
         public Iterator<Object> stream(Map<String, Object> args, Map<String, Object> kwargs) {
             throw new UnsupportedOperationException();
+        }
+
+        private static final class AlwaysFailToolException extends RuntimeException {
+            private AlwaysFailToolException(String message) {
+                super(message);
+            }
         }
     }
 }
