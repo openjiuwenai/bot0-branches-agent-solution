@@ -43,6 +43,10 @@
     <embedded-postgres.version>2.0.7</embedded-postgres.version>
     <embedded-postgres-binaries.version>16.2.0</embedded-postgres-binaries.version>
     <a2a-sdk-spec.version>1.0.0.CR1</a2a-sdk-spec.version>
+    <!-- springdoc-openapi 3.0.x targets Spring Boot 4.x (artifact names like
+         spring-boot-starter-webmvc-test confirm Boot 4 baseline). Pinned
+         explicitly — not managed by spring-boot-starter-parent BOM. -->
+    <springdoc.version>3.0.3</springdoc.version>
 
 
     <!-- Test parallelization toggle. -DjunitParallel=false reverts to sequential. -->
@@ -163,6 +167,23 @@
       <groupId>org.a2aproject.sdk</groupId>
       <artifactId>a2a-java-sdk-spec</artifactId>
       <version>${a2a-sdk-spec.version}</version>
+    </dependency>
+    <!--
+      OpenAPI 3.1 documentation + Swagger UI (REQ-2026-007).
+      springdoc-openapi-starter-webmvc-ui 3.0.x autoconfigures three endpoints:
+        /swagger-ui.html (302 → /swagger-ui/index.html)
+        /v3/api-docs      (OpenAPI 3.1 JSON)
+        /v3/api-docs.yaml (OpenAPI 3.1 YAML)
+      No Spring Security / actuator / profile gate / project-level toggle is
+      added — registry API is unauthenticated and the doc endpoints add no
+      real attack surface (VR-10, prod-exposure decision A). OpenApiConfig
+      provides @Bean OpenAPI metadata; controllers stay annotation-free
+      (springdoc reflects over @RequestMapping at runtime).
+    -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
     </dependency>
 
     <dependency>
