@@ -126,8 +126,6 @@ public class ToolCallingEnforcingModel extends Model {
             extendedKwargs.put("thinking", thinkingParam);
         } else if ("qwen-on".equals(thinkingMode) || "qwen-off".equals(thinkingMode)) {
             extendedKwargs.put("enable_thinking", "qwen-on".equals(thinkingMode));
-        } else {
-            // Unknown modes are ignored so environment experiments do not break normal calls.
         }
         return extendedKwargs;
     }
@@ -139,14 +137,7 @@ public class ToolCallingEnforcingModel extends Model {
      * system/user prompt pair that leaves the LLM little room to avoid calling it.
      * If the response has null or empty tool_calls, the client is bypassing tools.
      *
-     * @param temperature sampling temperature override
-     * @param maxTokens maximum token override
-     * @param model resolved model name
-     * @param n number of completions
-     * @param stop stop sequence
-     * @param parser output parser
-     * @param topP nucleus sampling override
-     * @param kwargs provider-specific request parameters
+     * @param request resolved model call parameters for the probe
      * @throws ToolCallingBypassException when the client fails the probe
      * @throws Exception                  propagated from the underlying client
      */

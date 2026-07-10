@@ -148,5 +148,4 @@ final class ClaimTools {
             default -> REDUCE;
         };
     }
-
 }
