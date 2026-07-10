@@ -140,11 +140,6 @@ class CriteriaReplanBridgeRailTest {
     }
     @Test
     void toolCallRoundAccumulatesDecisionHistoryNoTerminalDecision() {
-        ReplanRail replanRail = new ReplanRail(3);
-        CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
-        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
-                List.of("建议", "债券"), replanRail);
-
         // When: afterModelCall with a tool-call message (not final answer)
         ToolCall tc = new ToolCall();
         tc.setId("call-1");
@@ -158,9 +153,13 @@ class CriteriaReplanBridgeRailTest {
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
 
+        CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
         AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs)
                 .steeringQueue(steeringQ).build();
 
+        ReplanRail replanRail = new ReplanRail(3);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
         rail.afterModelCall(ctx);
 
         // Then: no terminal decision (neither forceFinish nor pushSteering)

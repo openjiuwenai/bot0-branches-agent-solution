@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *       {@link SystemMessage} on every {@code invoke()}.</li>
  *   <li><b>USER_MESSAGE_INJECT</b> — prepends a {@link UserMessage} carrying the
  *       current phase override text (set via static {@link #setPhaseOverride}),
- *       read by {@link #phaseOverride()} on each call.</li>
+ *       read by {@link #consumePhaseOverride()} on each call.</li>
  *   <li><b>PLAN_MODE</b> — replaces the first {@link SystemMessage} with a divergent
  *       exploration framing (PLAN phase). Also consumes phaseOverride if set.</li>
  *   <li><b>BUILD_MODE</b> — replaces the first {@link SystemMessage} with a convergent
@@ -93,8 +93,8 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      */
     public static final InjectionMode DEFAULT_MODE = InjectionMode.NONE;
 
-    private static final AtomicReference<String> phaseOverride = new AtomicReference<>(null);
-    private static final AtomicReference<InjectionMode> mode = new AtomicReference<>(DEFAULT_MODE);
+    private static final AtomicReference<String> PHASE_OVERRIDE = new AtomicReference<>(null);
+    private static final AtomicReference<InjectionMode> MODE = new AtomicReference<>(DEFAULT_MODE);
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /**
@@ -143,9 +143,11 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     /**
      * Set the phase override for the next invoke.
+     *
+     * @param text override text to inject on the next invocation
      */
     public static void setPhaseOverride(String text) {
-        phaseOverride.set(text);
+        PHASE_OVERRIDE.set(text);
     }
 
     /**
@@ -154,7 +156,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      * @return previous phase override, or null when none is set
      */
     public static String consumePhaseOverride() {
-        return phaseOverride.getAndSet(null);
+        return PHASE_OVERRIDE.getAndSet(null);
     }
 
     /**
@@ -163,14 +165,16 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      * @return current phase override, or null when none is set
      */
     public static String peekPhaseOverride() {
-        return phaseOverride.get();
+        return PHASE_OVERRIDE.get();
     }
 
     /**
      * Set global injection mode.
+     *
+     * @param m injection mode to apply globally
      */
     public static void setInjectionMode(InjectionMode m) {
-        mode.set(m);
+        MODE.set(m);
     }
 
     /**
@@ -179,15 +183,15 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      * @return current injection mode
      */
     public static InjectionMode getInjectionMode() {
-        return mode.get();
+        return MODE.get();
     }
 
     /**
      * Reset to defaults (NONE, no override).
      */
     public static void resetToDefaults() {
-        mode.set(DEFAULT_MODE);
-        phaseOverride.set(null);
+        MODE.set(DEFAULT_MODE);
+        PHASE_OVERRIDE.set(null);
     }
 
     // ---- Instance configuration ----
@@ -195,6 +199,8 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     /**
      * Set the system prompt suffix to append in SYSTEM_PROMPT_APPEND mode.
      * Text is appended to the first {@link SystemMessage} in the message list.
+     *
+     * @param suffix prompt suffix to append
      */
     public void setSystemPromptSuffix(String suffix) {
         this.systemPromptSuffix = suffix != null ? suffix : "";
@@ -206,13 +212,14 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
             Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
 
-        InjectionMode currentMode = mode.get();
+        Object effectiveMessages = messages;
+        InjectionMode currentMode = MODE.get();
 
         // PLAN_MODE / BUILD_MODE: replace SystemMessage content entirely
         if ((currentMode == InjectionMode.PLAN_MODE || currentMode == InjectionMode.BUILD_MODE)
-                && messages instanceof List) {
+                && effectiveMessages instanceof List) {
             @SuppressWarnings("unchecked")
-            List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
+            List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
             String replacementPrompt = (currentMode == InjectionMode.PLAN_MODE)
                     ? PLAN_SYSTEM_PROMPT
                     : BUILD_SYSTEM_PROMPT;
@@ -222,37 +229,37 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
                     break;
                 }
             }
-            messages = msgList;
+            effectiveMessages = msgList;
         }
 
         // USER_MESSAGE_INJECT: inject phase-override text as UserMessage
-        if (currentMode == InjectionMode.USER_MESSAGE_INJECT && messages instanceof List) {
+        if (currentMode == InjectionMode.USER_MESSAGE_INJECT && effectiveMessages instanceof List) {
             String override = consumePhaseOverride();
             if (override != null && !override.isEmpty()) {
                 @SuppressWarnings("unchecked")
-                List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
+                List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
                 msgList.add(new UserMessage("[系统提示] " + override));
-                messages = msgList;
+                effectiveMessages = msgList;
             }
         }
 
         // PLAN_MODE / BUILD_MODE: also consume phaseOverride if set
         if ((currentMode == InjectionMode.PLAN_MODE || currentMode == InjectionMode.BUILD_MODE)
-                && messages instanceof List) {
+                && effectiveMessages instanceof List) {
             String override = consumePhaseOverride();
             if (override != null && !override.isEmpty()) {
                 @SuppressWarnings("unchecked")
-                List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
+                List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
                 msgList.add(new UserMessage("[系统提示] " + override));
-                messages = msgList;
+                effectiveMessages = msgList;
             }
         }
 
         // SYSTEM_PROMPT_APPEND: append to existing SystemMessage
         if (currentMode == InjectionMode.SYSTEM_PROMPT_APPEND && !systemPromptSuffix.isEmpty()
-                && messages instanceof List) {
+                && effectiveMessages instanceof List) {
             @SuppressWarnings("unchecked")
-            List<BaseMessage> msgList = (List<BaseMessage>) messages;
+            List<BaseMessage> msgList = (List<BaseMessage>) effectiveMessages;
             if (!msgList.isEmpty() && msgList.get(0) instanceof SystemMessage sysMsg) {
                 String augmented = sysMsg.getContentAsString() + LINE_SEPARATOR + LINE_SEPARATOR + systemPromptSuffix;
                 msgList.set(0, new SystemMessage(augmented));
@@ -261,12 +268,12 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
         // FIRST_PRINCIPLES: one-shot injection of "先扩后收" strategy prompt
         if (currentMode == InjectionMode.FIRST_PRINCIPLES && firstPrinciplesDone.compareAndSet(false, true)
-                && messages instanceof List) {
-            messages = injectFirstPrinciples(messages);
+                && effectiveMessages instanceof List) {
+            effectiveMessages = injectFirstPrinciples(effectiveMessages);
         }
 
         // Delegate to super (ToolCallingEnforcingModel) which does probe + real invoke
-        return super.invoke(messages, tools, temperature, maxTokens, model, n, stop, parser, topP, kwargs);
+        return super.invoke(effectiveMessages, tools, temperature, maxTokens, model, n, stop, parser, topP, kwargs);
     }
 
     // ==================================================================

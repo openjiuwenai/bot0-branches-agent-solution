@@ -55,9 +55,10 @@ final class LlmClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         try {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() != 200)
+            if (resp.statusCode() != 200) {
                 throw new LlmCallException("LLM HTTP " + resp.statusCode() + ": "
                         + resp.body().substring(0, Math.min(200, resp.body().length())));
+            }
             return extractContent(resp.body());
         } catch (HttpTimeoutException e) {
             throw new LlmCallException("LLM request timed out: " + e.getMessage(), e);

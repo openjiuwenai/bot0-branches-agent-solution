@@ -220,6 +220,8 @@ public class StagnationDetectionRail extends AgentRail {
     /**
      * Track consecutive tool failures for stagnation.
      * If the same tool fails {@code >= 3} times, it's a stagnation pattern.
+     *
+     * @param context callback context carrying tool-call failure inputs
      */
     @Override
     public synchronized void onToolException(AgentCallbackContext context) {
@@ -291,8 +293,9 @@ public class StagnationDetectionRail extends AgentRail {
 
     private void checkToolCycleStagnation(AgentCallbackContext ctx, AssistantMessage msg) {
         String signature = buildToolSignature(msg);
-        if (signature == null || signature.isEmpty())
+        if (signature == null || signature.isEmpty()) {
             return;
+        }
 
         toolSignatureHistory.add(signature);
         while (toolSignatureHistory.size() > TOOL_HISTORY_SIZE) {
@@ -330,6 +333,7 @@ public class StagnationDetectionRail extends AgentRail {
      * Build a signature string from the tool calls in this response.
      * Format: "toolName1|toolName2|..." (order-preserved for sequence matching).
      *
+     * @param msg assistant message whose tool calls form the signature
      * @return pipe-separated tool signature, or empty string when there are no tool calls
      */
     private static String buildToolSignature(AssistantMessage msg) {
@@ -349,8 +353,9 @@ public class StagnationDetectionRail extends AgentRail {
      */
     private boolean detectToolCycle() {
         int sz = toolSignatureHistory.size();
-        if (sz < 4 || (sz & 1) != 0)
+        if (sz < 4 || (sz & 1) != 0) {
             return false; // need even size for equal halves
+        }
         int half = sz / 2;
         List<String> firstHalf = toolSignatureHistory.subList(0, half);
         List<String> secondHalf = toolSignatureHistory.subList(half, sz);

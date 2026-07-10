@@ -63,6 +63,8 @@ public class ReactRailsProperties {
     private int checklistMaxPlanRounds = 2;
 
     /**
+     * Gets configured success criteria.
+     *
      * @return the success criteria list
      */
     public List<String> getCriteria() {
@@ -70,6 +72,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Sets configured success criteria.
+     *
      * @param criteria the success criteria to set
      */
     public void setCriteria(List<String> criteria) {
@@ -77,6 +81,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Gets the maximum allowed replan count.
+     *
      * @return the max replan count
      */
     public int getMaxReplan() {
@@ -84,6 +90,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Sets the maximum allowed replan count.
+     *
      * @param maxReplan the max replan count to set
      */
     public void setMaxReplan(int maxReplan) {
@@ -91,6 +99,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Checks whether history compression is enabled.
+     *
      * @return true if history compression on __replan__ is enabled
      */
     public boolean isHistoryCompression() {
@@ -98,6 +108,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Enables or disables history compression.
+     *
      * @param historyCompression enable or disable history compression
      */
     public void setHistoryCompression(boolean historyCompression) {
@@ -105,6 +117,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Checks whether first-principles prompt injection is enabled.
+     *
      * @return true if first-principles inject is enabled
      */
     public boolean isFirstPrinciplesInject() {
@@ -112,6 +126,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Enables or disables first-principles prompt injection.
+     *
      * @param firstPrinciplesInject enable or disable first-principles injection
      */
     public void setFirstPrinciplesInject(boolean firstPrinciplesInject) {
@@ -119,6 +135,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Checks whether the pre-completion checklist rail is enabled.
+     *
      * @return true if PreCompletionChecklistRail is enabled
      */
     public boolean isChecklistEnabled() {
@@ -126,6 +144,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Enables or disables the pre-completion checklist rail.
+     *
      * @param checklistEnabled enable or disable PreCompletionChecklistRail
      */
     public void setChecklistEnabled(boolean checklistEnabled) {
@@ -133,6 +153,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Gets the maximum PLAN phase rounds.
+     *
      * @return max PLAN phase rounds before switching to BUILD
      */
     public int getChecklistMaxPlanRounds() {
@@ -140,6 +162,8 @@ public class ReactRailsProperties {
     }
 
     /**
+     * Sets the maximum PLAN phase rounds.
+     *
      * @param v max PLAN phase rounds (must be >= 1)
      * @throws IllegalArgumentException if v < 1
      */

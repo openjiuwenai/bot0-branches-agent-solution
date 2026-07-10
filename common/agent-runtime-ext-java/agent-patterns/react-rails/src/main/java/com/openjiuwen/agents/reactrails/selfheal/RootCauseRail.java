@@ -64,6 +64,8 @@ public class RootCauseRail extends AgentRail {
 
     /**
      * Test observation: is there a pending degrade (onToolException marked, afterModelCall not yet fired)?
+     *
+     * @return true when a tool failure is waiting to be degraded
      */
     public synchronized boolean hasPendingDegrade() {
         return pendingDegrade;
@@ -71,6 +73,8 @@ public class RootCauseRail extends AgentRail {
 
     /**
      * 工具异常钩子：设备故障信号→记录失败工具名并标记 pendingDegrade（不在本钩子终止）。
+     *
+     * @param context callback context carrying tool-call failure inputs
      */
     @Override
     public synchronized void onToolException(AgentCallbackContext context) {
@@ -81,6 +85,8 @@ public class RootCauseRail extends AgentRail {
 
     /**
      * 模型回调钩子：若存在 pendingDegrade，触发 forceFinish 降级终态并清除标记。
+     *
+     * @param context callback context used to request forced finish
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext context) {

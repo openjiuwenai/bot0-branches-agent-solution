@@ -69,6 +69,8 @@ public class CriteriaReplanBridgeRail extends AgentRail {
     private final ReplanRail replanRail;
 
     /**
+     * Creates a bridge rail backed by a verifier and shared replan budget.
+     *
      * @param verifier         the external-judge verifier
      * @param successCriteria  the criteria to check against the final output
      * @param replanRail       shared replan counter (used for overlap budget)
@@ -129,6 +131,9 @@ public class CriteriaReplanBridgeRail extends AgentRail {
      *
      * <p>当 violations 携带 gradient metadata（来自 {@code RuleBasedCriteriaVerifier}）时，
      * 生成维度级精确定位的纠正提示（区分已覆盖/缺失维度）；否则回退到通用提示格式。
+     *
+     * @param violations unmet criteria from the verifier
+     * @return steering hint for the next model iteration
      */
     private static String buildCorrectionHint(List<Violation> violations) {
         boolean hasGradient = violations.stream()
@@ -149,6 +154,9 @@ public class CriteriaReplanBridgeRail extends AgentRail {
      *   <li>isPartial=false + allDimensions → "需要覆盖的维度: X、Y、Z"</li>
      *   <li>fallback → 逐条显示 criterion: reason</li>
      * </ul>
+     *
+     * @param violations unmet criteria with optional gradient metadata
+     * @return gradient-aware steering hint
      */
     @SuppressWarnings("unchecked")
     private static String buildGradientHint(List<Violation> violations) {

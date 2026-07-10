@@ -39,6 +39,9 @@ final class LlmClient {
      * surface as {@link LlmUnavailableException} — a distinct, catchable type so real-LLM e2e
      * tests can honestly soft-skip on a runtime/env outage instead of hard-failing the suite
      * (honesty split, 铁律①: an unavailable endpoint is an env signal, not a logic defect).
+     *
+     * @param userPrompt user prompt to send
+     * @return assistant content, or empty string when parsing fails
      */
     String chat(String userPrompt) {
         if (!envPresent()) {
@@ -118,6 +121,9 @@ final class LlmClient {
      *       is not needed as a fallback.</li>
      * </ul>
      * Fallback chain: content → reasoning_content (GLM) → reasoning (Qwen) → "".
+     *
+     * @param json raw OpenAI-compatible response body
+     * @return extracted assistant content, or empty string when absent
      */
     private static String extractContent(String json) {
         String content = extractJsonStringField(json, "content");
@@ -140,6 +146,10 @@ final class LlmClient {
 
     /**
      * Extract the JSON string value for a given field name (best-effort, no Jackson).
+     *
+     * @param json JSON text to inspect
+     * @param field target field name
+     * @return extracted value, or empty string when absent
      */
     private static String extractJsonStringField(String json, String field) {
         String search = "\"" + field + "\":\"";

@@ -67,6 +67,9 @@ final class ToolBackedExecutor implements PevComponents.Executor {
 
     /**
      * Longest-name match so e.g. {@code getCaseStatus} wins over prefixes.
+     *
+     * @param description plan node description
+     * @return matched tool name, or null when no registered tool is mentioned
      */
     private String matchTool(String description) {
         String hit = null;
@@ -80,6 +83,9 @@ final class ToolBackedExecutor implements PevComponents.Executor {
 
     /**
      * Parse {@code key: value} / {@code "key":"value"} pairs from the description.
+     *
+     * @param description plan node description
+     * @return parsed argument map
      */
     private static Map<String, Object> parseArgs(String description) {
         Map<String, Object> args = new LinkedHashMap<>();

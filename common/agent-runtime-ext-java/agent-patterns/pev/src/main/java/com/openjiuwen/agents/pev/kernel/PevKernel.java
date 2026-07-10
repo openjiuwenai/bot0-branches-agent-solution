@@ -22,6 +22,8 @@ import java.util.Set;
  *   <li>{@link #toReplanAction} — {@link RootCause} → {@link ReplanAction} (3-state dispatch,
  *       sealed switch, compiler-enforced exhaustive).</li>
  * </ul>
+ *
+ * @since 2026-07
  */
 public final class PevKernel {
 
@@ -65,6 +67,9 @@ public final class PevKernel {
      * so a lost side-channel still yields {@link RootCause.DeviceFailure} when the node
      * map carries structural DeviceFailure evidence.
      *
+     * @param verify verifier verdict carrying failed nodes and reliability flags
+     * @param execFailedNodes nodes that failed during execution
+     * @param nodeResults execution results keyed by node id
      * @return root cause derived from verifier and execution signals
      */
     public static RootCause diagnoseRootCause(VerifyResult verify, Set<String> execFailedNodes,
@@ -106,6 +111,9 @@ public final class PevKernel {
      *       Content errors are recoverable by replan; degrading early gives up recoverable work.</li>
      * </ul>
      *
+     * @param cause diagnosed reason for the failed verification
+     * @param feedback verifier or replanning feedback to carry into the action
+     * @param failedNodes nodes reported as failed by the verifier
      * @return dispatch action selected for the diagnosed root cause
      */
     public static ReplanAction toReplanAction(RootCause cause, String feedback, Set<String> failedNodes) {

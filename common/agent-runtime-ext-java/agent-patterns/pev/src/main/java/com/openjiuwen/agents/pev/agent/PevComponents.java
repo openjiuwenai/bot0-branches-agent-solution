@@ -15,6 +15,8 @@ import java.util.Map;
  *
  * <p>注入式设计让单测可 mock 三阶段（控制流证据：mock 每个 stage 返回特定结果 → 断言 dispatch 走对分支），
  * 生产实现可接 LLM/工具/真 verifier。
+ *
+ * @since 2026-07
  */
 public final class PevComponents {
 

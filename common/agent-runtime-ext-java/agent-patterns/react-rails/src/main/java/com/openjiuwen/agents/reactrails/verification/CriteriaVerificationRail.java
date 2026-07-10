@@ -62,6 +62,8 @@ public class CriteriaVerificationRail extends AgentRail {
     private final List<String> decisionHistory = new ArrayList<>();
 
     /**
+     * Creates a verification rail with external judge criteria.
+     *
      * @param verifier         the external-judge verifier (use {@link RuleBasedCriteriaVerifier} for default)
      * @param successCriteria  the criteria to check against the final output
      */
@@ -72,6 +74,8 @@ public class CriteriaVerificationRail extends AgentRail {
 
     /**
      * 模型回调钩子：终态答案走校验→forceFinish 双向门，工具轮则累积决策历史。
+     *
+     * @param ctx callback context carrying model-call inputs
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {
@@ -104,8 +108,9 @@ public class CriteriaVerificationRail extends AgentRail {
     }
 
     private void accumulateToolCalls(AssistantMessage msg) {
-        if (msg.getToolCalls() == null)
+        if (msg.getToolCalls() == null) {
             return;
+        }
         for (ToolCall tc : msg.getToolCalls()) {
             decisionHistory.add(tc.getName() + "(" + tc.getArguments() + ")");
         }

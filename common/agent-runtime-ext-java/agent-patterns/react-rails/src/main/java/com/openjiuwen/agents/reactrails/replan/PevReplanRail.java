@@ -89,6 +89,8 @@ public class PevReplanRail extends AgentRail {
 
     /**
      * 指定最大 replan 次数构造 rail。
+     *
+     * @param maxReplan maximum replan count before degradation
      */
     public PevReplanRail(int maxReplan) {
         this.maxReplan = maxReplan;
@@ -123,6 +125,8 @@ public class PevReplanRail extends AgentRail {
      * Record a tool failure for cross-correlation in diagnose. Called externally (e.g. from
      * {@link com.openjiuwen.agents.reactrails.selfheal.RootCauseRail}) to register device
      * failures that should tilt the next __replan__ diagnosis toward DeviceFailure.
+     *
+     * @param toolName failed tool name to remember
      */
     public synchronized void recordToolFailure(String toolName) {
         recentToolFailureNodes.add(toolName);
@@ -139,6 +143,8 @@ public class PevReplanRail extends AgentRail {
      *   <li>PEV dispatch GlobalReplan → pushSteering（不 forceFinish）</li>
      *   <li>PEV dispatch AcceptPartial → forceFinish（不投 steering）</li>
      * </ul>
+     *
+     * @param ctx callback context carrying model-call inputs
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {
@@ -204,6 +210,8 @@ public class PevReplanRail extends AgentRail {
      * tool failures (registered via {@link #recordToolFailure}) correlate with the LLM's stated
      * reason, the diagnosis tilts to DeviceFailure — a broken tool cannot be healed by replanning.
      *
+     * @param reason reason supplied by the replan tool call
+     * @param newApproach proposed new approach from the replan tool call
      * @return root cause inferred for the replan request
      */
     private RootCause diagnose(String reason, String newApproach) {
@@ -230,6 +238,8 @@ public class PevReplanRail extends AgentRail {
      * <p>Handles the basic case {@code {"field":"value"}} without Jackson dependency.
      * Escaped quotes are not handled (not needed for LLM-generated tool call args in practice).
      *
+     * @param json JSON object text
+     * @param field field name to extract
      * @return extracted value, or empty string when the field is absent
      */
     private static String extractJsonStringField(String json, String field) {
@@ -243,8 +253,9 @@ public class PevReplanRail extends AgentRail {
         }
         start += search.length();
         int end = json.indexOf('"', start);
-        if (end < 0)
+        if (end < 0) {
             return "";
+        }
         return json.substring(start, end);
     }
 

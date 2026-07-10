@@ -75,6 +75,8 @@ public class ReplanTool extends Tool {
     /**
      * 同步调用：返回结构化确认 Map，含"请总结教训"提示引导 LLM 主动做教训提炼。
      *
+     * @param args invocation arguments
+     * @param kwargs provider-specific invocation options
      * @return structured confirmation map
      */
     @Override
@@ -85,6 +87,8 @@ public class ReplanTool extends Tool {
     /**
      * 流式调用：将同步结果包装成单元素迭代器返回。
      *
+     * @param args invocation arguments
+     * @param kwargs provider-specific invocation options
      * @return iterator containing the synchronous result
      */
     @Override

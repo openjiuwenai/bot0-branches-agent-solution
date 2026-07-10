@@ -93,6 +93,8 @@ public class PreCompletionChecklistRail extends AgentRail {
     // ---- Construction ----
 
     /**
+     * Creates a checklist rail with a bounded PLAN phase.
+     *
      * @param planMaxRounds max iterations for PLAN phase before BUILD takes over.
      *                      Must be >= 1.
      */
@@ -130,6 +132,11 @@ public class PreCompletionChecklistRail extends AgentRail {
     public synchronized List<String> getOutputHashes() {
         return List.copyOf(outputHashes);
     }
+    /**
+     * Gets the configured PLAN phase limit.
+     *
+     * @return maximum PLAN phase rounds
+     */
     public int getPlanMaxRounds() {
         return planMaxRounds;
     }
@@ -150,6 +157,8 @@ public class PreCompletionChecklistRail extends AgentRail {
      *   <li>Stagnancy detected via ctx.getExtra("stagnation_detected"):
      *       injects BREAK_LOOP override regardless of phase.</li>
      * </ol>
+     *
+     * @param ctx callback context for the pending model call
      */
     @Override
     public synchronized void beforeModelCall(AgentCallbackContext ctx) {
@@ -202,6 +211,8 @@ public class PreCompletionChecklistRail extends AgentRail {
      *
      * <p>Tracks: call count, output content hashes, tool diversity.
      * Does NOT call pushSteering or requestForceFinish.
+     *
+     * @param ctx callback context carrying model-call inputs
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {

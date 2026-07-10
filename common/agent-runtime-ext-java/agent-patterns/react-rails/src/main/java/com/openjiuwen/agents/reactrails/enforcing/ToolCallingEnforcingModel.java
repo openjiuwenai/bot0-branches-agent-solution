@@ -66,6 +66,19 @@ public class ToolCallingEnforcingModel extends Model {
      * {@link ToolCallingBypassException} is thrown — the client silently discards tools.
      * Subsequent invocations bypass probing and delegate directly to
      * {@link Model#invoke}.
+     *
+     * @param messages chat messages passed to the model
+     * @param tools tool definitions visible to the model
+     * @param temperature sampling temperature override
+     * @param maxTokens maximum token override
+     * @param model model name override
+     * @param n number of completions
+     * @param stop stop sequence
+     * @param parser output parser
+     * @param topP nucleus sampling override
+     * @param kwargs provider-specific request parameters
+     * @return assistant message returned by the model
+     * @throws Exception propagated from the underlying model invocation
      */
     @Override
     public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
@@ -113,6 +126,14 @@ public class ToolCallingEnforcingModel extends Model {
      * system/user prompt pair that leaves the LLM little room to avoid calling it.
      * If the response has null or empty tool_calls, the client is bypassing tools.
      *
+     * @param temperature sampling temperature override
+     * @param maxTokens maximum token override
+     * @param model resolved model name
+     * @param n number of completions
+     * @param stop stop sequence
+     * @param parser output parser
+     * @param topP nucleus sampling override
+     * @param kwargs provider-specific request parameters
      * @throws ToolCallingBypassException when the client fails the probe
      * @throws Exception                  propagated from the underlying client
      */

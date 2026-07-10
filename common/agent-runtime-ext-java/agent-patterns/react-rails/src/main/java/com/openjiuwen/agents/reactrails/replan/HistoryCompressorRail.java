@@ -83,6 +83,8 @@ public class HistoryCompressorRail extends AgentRail {
 
     /**
      * 测试观测点：当前压缩边界。
+     *
+     * @return last compressed message boundary
      */
     public synchronized int lastBoundary() {
         return lastBoundary;

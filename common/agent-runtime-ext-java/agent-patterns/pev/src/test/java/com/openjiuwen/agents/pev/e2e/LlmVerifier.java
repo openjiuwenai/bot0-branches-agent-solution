@@ -64,6 +64,9 @@ final class LlmVerifier implements PevComponents.Verifier {
 
     /**
      * Concatenate Success values; structural failures surfaced inline so the LLM can see them.
+     *
+     * @param completed completed node results
+     * @return readable output summary for verification
      */
     private static String assembleOutput(Map<String, NodeResult> completed) {
         if (completed == null || completed.isEmpty()) {
@@ -91,6 +94,9 @@ final class LlmVerifier implements PevComponents.Verifier {
     /**
      * On a FAIL verdict: prefer structurally-failed nodes; if none (pure content failure
      * against the goal), implicates all executed nodes.
+     *
+     * @param completed completed node results
+     * @return nodes implicated by a FAIL verdict
      */
     private static Set<String> collectFailedNodes(Map<String, NodeResult> completed) {
         Set<String> failed = new LinkedHashSet<>();

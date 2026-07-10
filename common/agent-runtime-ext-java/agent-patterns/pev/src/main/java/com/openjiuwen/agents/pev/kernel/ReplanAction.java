@@ -19,6 +19,8 @@ import java.util.Set;
  *
  * <p>Sealed permits compile-time exhaustiveness: any switch over {@code ReplanAction}
  * that drops a case arm fails to compile.
+ *
+ * @since 2026-07
  */
 public sealed interface ReplanAction
         permits ReplanAction.LocalReplan, ReplanAction.GlobalReplan, ReplanAction.AcceptPartial {

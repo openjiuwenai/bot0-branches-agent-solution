@@ -22,6 +22,8 @@ import java.util.Set;
  * <p>Sealed permits compile-time exhaustiveness: any switch over {@code RootCause}
  * that drops a case arm fails to compile, catching missed branches earlier than a
  * runtime test would.
+ *
+ * @since 2026-07
  */
 public sealed interface RootCause
         permits RootCause.DeviceFailure, RootCause.PlanOrAnswerError, RootCause.PerceptionUnreliable {

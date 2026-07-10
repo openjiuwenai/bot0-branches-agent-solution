@@ -40,8 +40,6 @@ class HistoryCompressorRailTest {
 
     @Test
     void replanTriggeredCompressesMessages() {
-        HistoryCompressorRail rail = new HistoryCompressorRail();
-
         // Context: [System, User(query), Assistant(search), User(result), Assistant(__replan__)]
         List<BaseMessage> initial = new ArrayList<>();
         initial.add(new SystemMessage("You are a helpful assistant."));
@@ -60,6 +58,7 @@ class HistoryCompressorRailTest {
         AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs)
                 .context(context).build();
 
+        HistoryCompressorRail rail = new HistoryCompressorRail();
         rail.afterModelCall(ctx);
         // After compression: [System, User(query), User(summary), Assistant(__replan__)]
         List<BaseMessage> compressed = context.getMessages();
@@ -88,8 +87,6 @@ class HistoryCompressorRailTest {
 
     @Test
     void noReplanToolCallNoCompression() {
-        HistoryCompressorRail rail = new HistoryCompressorRail();
-
         List<BaseMessage> initial = new ArrayList<>();
         initial.add(new SystemMessage("system"));
         initial.add(new UserMessage("query"));
@@ -106,6 +103,7 @@ class HistoryCompressorRailTest {
         AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs)
                 .context(context).build();
 
+        HistoryCompressorRail rail = new HistoryCompressorRail();
         rail.afterModelCall(ctx);
 
         assertThat(context.getMessages()).as("no __replan__ → context unchanged").hasSize(3);
@@ -115,8 +113,6 @@ class HistoryCompressorRailTest {
 
     @Test
     void multipleReplansAccumulativeCompression() {
-        HistoryCompressorRail rail = new HistoryCompressorRail();
-
         // Round 1 context: [System, User(query), Assistant(step1), User(result1), Assistant(__replan__)]
         List<BaseMessage> round1 = new ArrayList<>();
         round1.add(new SystemMessage("system"));
@@ -135,6 +131,7 @@ class HistoryCompressorRailTest {
         AgentCallbackContext ctx1 = AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs1)
                 .context(context).build();
 
+        HistoryCompressorRail rail = new HistoryCompressorRail();
         rail.afterModelCall(ctx1);
 
         // After round 1: [System, User(query), User(summary1), Assistant(__replan__)]
@@ -180,9 +177,6 @@ class HistoryCompressorRailTest {
 
     @Test
     void customCompressorApplied() {
-        HistoryCompressorRail rail = new HistoryCompressorRail(
-                segment -> "CUSTOM_SUMMARY: " + segment.size() + " messages compressed");
-
         List<BaseMessage> initial = new ArrayList<>();
         initial.add(new SystemMessage("system"));
         initial.add(new UserMessage("query"));
@@ -199,6 +193,8 @@ class HistoryCompressorRailTest {
         AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs)
                 .context(context).build();
 
+        HistoryCompressorRail rail = new HistoryCompressorRail(
+                segment -> "CUSTOM_SUMMARY: " + segment.size() + " messages compressed");
         rail.afterModelCall(ctx);
 
         assertThat(context.getMessages()).hasSize(4);

@@ -24,6 +24,9 @@ public record Violation(String criterion, String reason, Map<String, Object> met
      * Backward-compatible constructor for verifiers that do not produce gradient metadata
      * ({@link com.openjiuwen.agents.reactrails.verification.RuleBasedCriteriaVerifier},
      * {@link com.openjiuwen.agents.reactrails.verification.AdaptiveCriteriaVerifier}).
+     *
+     * @param criterion unmet criterion
+     * @param reason explanation of the violation
      */
     public Violation(String criterion, String reason) {
         this(criterion, reason, Map.of());

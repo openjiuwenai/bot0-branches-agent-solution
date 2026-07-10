@@ -41,6 +41,8 @@ public class ReplanRail extends AgentRail {
 
     /**
      * 指定最大 replan 次数构造 rail。
+     *
+     * @param maxReplan maximum replan count before degradation
      */
     public ReplanRail(int maxReplan) {
         this.maxReplan = maxReplan;
@@ -55,6 +57,8 @@ public class ReplanRail extends AgentRail {
 
     /**
      * Current replan count (test observation).
+     *
+     * @return current replan count
      */
     public synchronized int replanCount() {
         return replanCount;
@@ -73,6 +77,8 @@ public class ReplanRail extends AgentRail {
 
     /**
      * 模型回调钩子：检测 __replan__ 调用并计数，超限则 forceFinish 降级终态。
+     *
+     * @param ctx callback context carrying model-call inputs
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {

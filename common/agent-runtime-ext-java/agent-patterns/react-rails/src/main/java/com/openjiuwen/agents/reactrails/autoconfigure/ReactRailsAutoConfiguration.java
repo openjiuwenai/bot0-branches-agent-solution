@@ -74,6 +74,7 @@ public class ReactRailsAutoConfiguration {
      * it registers the rails via {@code registerRail()} + {@code getAbilityManager().add()}.
      *
      * @param criteriaVerifier the injected verifier (default or custom)
+     * @param properties react-rails configuration properties
      * @return the rail-registering post-processor
      */
     @Bean
