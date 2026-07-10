@@ -225,6 +225,21 @@ public final class AgentRegistryEntry {
     }
 
     /**
+     * FEAT-016 阶段一：rebuilds the capability field removed in REQ-2026-004 as a multi-value
+     * List&lt;String&gt; (caller-optional). Backs the VARCHAR(64)[] DB column. Null when
+     * caller doesn't provide; repository persists as empty array.
+     */
+    public java.util.List<String> getCapabilities() {
+        return capabilities;
+    }
+
+    public void setCapabilities(java.util.List<String> capabilities) {
+        this.capabilities = capabilities;
+    }
+
+    private java.util.List<String> capabilities;
+
+    /**
      * Convenience for tests / internal callers that want to assert the
      * registry-key pair is present before persisting. The registry PK is
      * {@code (tenant_id, agent_id)}; {@code capability} was removed in
