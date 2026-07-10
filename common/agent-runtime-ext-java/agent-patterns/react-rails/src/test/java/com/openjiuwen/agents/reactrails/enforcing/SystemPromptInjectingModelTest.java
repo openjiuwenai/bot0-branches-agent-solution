@@ -290,6 +290,8 @@ class SystemPromptInjectingModelTest {
             capture.firstMessages.set(messages instanceof List ? (List<?>) messages : List.of());
         } else if (count == 2) {
             capture.secondMessages.set(messages instanceof List ? (List<?>) messages : List.of());
+        } else {
+            return;
         }
     }
 

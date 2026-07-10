@@ -126,6 +126,8 @@ public class ToolCallingEnforcingModel extends Model {
             extendedKwargs.put("thinking", thinkingParam);
         } else if ("qwen-on".equals(thinkingMode) || "qwen-off".equals(thinkingMode)) {
             extendedKwargs.put("enable_thinking", "qwen-on".equals(thinkingMode));
+        } else {
+            return extendedKwargs;
         }
         return extendedKwargs;
     }
