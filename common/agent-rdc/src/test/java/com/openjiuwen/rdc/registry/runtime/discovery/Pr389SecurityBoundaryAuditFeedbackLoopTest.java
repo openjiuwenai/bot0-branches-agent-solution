@@ -1,20 +1,25 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.registry.runtime.discovery;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
 import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Feedback-loop tests for PR #389 review issue #1: security-boundary failure
@@ -43,9 +48,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * FEAT-016 (RouteHandleCodec.encode takes instanceId; repo port returns
  * List via listByAgentId + listByServiceId + listByCapability; findEndpoint
  * takes instanceId; observeDiscover takes queryDimension/queryValue).
+ *
+ * @since 2026-07-10
  */
 class Pr389SecurityBoundaryAuditFeedbackLoopTest {
-
     private static final String SERVICE_ID = "wealth-svc";
     private static final String INSTANCE_ID = "test-host-8080";
 
@@ -62,39 +68,52 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
         discovery = new PgMvpDiscoveryServiceImpl(
                 new AgentRegistryRepository() {
                     @Override
-                    public void upsert(AgentRegistryEntry card, String a2aAgentCardJson) { }
+                    public void upsert(AgentRegistryEntry card, String a2aAgentCardJson) {
+                    }
+
                     @Override
-                    public boolean delete(String tenantId, String agentId) { return false; }
+                    public boolean delete(String tenantId, String agentId) {
+                        return false;
+                    }
+
                     @Override
-                    public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
+                    public boolean delete(String tenantId, String agentId, String serviceId) {
+                        return false;
+                    }
+
                     @Override
                     public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
                         return false;
                     }
+
                     @Override
                     public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
                         return List.of();
                     }
+
                     @Override
-                    public boolean updateStatus(String tenantId, String agentId, String serviceId,
-                                                String instanceId, String newStatus, boolean refreshHeartbeat) {
+                    public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
                         return false;
                     }
+
                     @Override
                     public List<RegistryRow> listByAgentId(String tenantId, String agentId,
                                                            String contractVersion) {
                         return List.of();
                     }
+
                     @Override
                     public List<RegistryRow> listByServiceId(String tenantId, String serviceId,
                                                              String contractVersion) {
                         return List.of();
                     }
+
                     @Override
                     public List<RegistryRow> listByCapability(String tenantId, String capability,
                                                               String contractVersion) {
                         return List.of();
                     }
+
                     @Override
                     public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
                                                                 String serviceId, String instanceId) {
@@ -113,7 +132,7 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     // ---- #1-A: tenant_isolation_violation must increment op_total ----------------
 
     @Test
-    void tenant_isolation_violation_on_discover_increments_op_total_counter() {
+    void tenant_isolation_violation_on_discover_increments_op_total() {
         tenantContext.set("tenant-bound");
         assertThatThrownBy(() -> discovery.searchInstancesByAgentId(
                 "tenant-A", "agent-001", null))
@@ -129,10 +148,10 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     }
 
     @Test
-    void tenant_isolation_violation_on_resolve_increments_op_total_counter() {
+    void tenant_isolation_violation_on_resolve_increments_op_total() {
         // FEAT-016: v2: 6-field encode (adds instanceId).
-        String handle = RouteHandleCodec.encode(
-                "tenant-A", "agent-001", SERVICE_ID, INSTANCE_ID, "rk://svc/default", "1.0.0");
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                "tenant-A", "agent-001", SERVICE_ID, INSTANCE_ID, "rk://svc/default", "1.0.0"));
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
@@ -171,8 +190,18 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
 
     private static final class TestTenantContext implements TenantContext {
         private String current;
-        @Override public String current() { return current; }
-        void set(String tenantId) { this.current = tenantId; }
-        void clear() { this.current = null; }
+
+        @Override
+        public String current() {
+            return current;
+        }
+
+        void set(String tenantId) {
+            this.current = tenantId;
+        }
+
+        void clear() {
+            this.current = null;
+        }
     }
 }

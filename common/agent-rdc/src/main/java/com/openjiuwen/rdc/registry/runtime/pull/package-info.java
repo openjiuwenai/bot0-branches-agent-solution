@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * Pull-based agent registration runtime (REQ-2026-004).
  *

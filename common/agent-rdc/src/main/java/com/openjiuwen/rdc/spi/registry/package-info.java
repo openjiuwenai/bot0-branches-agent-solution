@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * agent-bus registry discovery SPI — runtime route index + opaque route handle
  * contract surface owned by the Bus &amp; State Hub plane.

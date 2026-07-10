@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * HTTP entry point for the agent registry MVP (ADR-0160 decisions 4 / 6 / 7).
  *

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.spi.registry;
 
 import java.util.Objects;
@@ -48,9 +52,10 @@ import java.util.Objects;
  *
  * <p>Hand-written builder (no Lombok) so the {@code spi.registry} package
  * stays pure Java (ADR-0160 decision 1).
+ *
+ * @since 2026-07-10
  */
 public final class AgentCardDto {
-
     // ---- ICD routing fields (always populated on match) ----
 
     private final String serviceId;
@@ -64,8 +69,10 @@ public final class AgentCardDto {
 
     // ---- Business definition fields (populated by searchInstancesByAgentId) ----
 
-    @Nullable private final String agentName;
-    @Nullable private final FrameworkType frameworkType;
+    @Nullable
+    private final String agentName;
+    @Nullable
+    private final FrameworkType frameworkType;
 
     private AgentCardDto(Builder b) {
         this.serviceId = b.serviceId;
@@ -84,6 +91,8 @@ public final class AgentCardDto {
      * Logical service identifier (host only, caller-overridable). FEAT-016
      * adds this field to the agent/client projection layer per L2 §2.3.2 —
      * callers can group instances by logical service.
+     *
+     * @return the logical service identifier (never {@code null})
      */
     public String getServiceId() {
         return serviceId;
@@ -127,10 +136,21 @@ public final class AgentCardDto {
         return frameworkType;
     }
 
+    /**
+     * Create a new fluent {@link Builder} for an {@link AgentCardDto}.
+     *
+     * @return a fresh builder (never {@code null})
+     */
     public static Builder builder() {
         return new Builder();
     }
 
+    /**
+     * Hand-written fluent builder for {@link AgentCardDto}. Mandatory fields
+     * are checked in {@link #build()} via {@link Objects#requireNonNull}.
+     *
+     * @since 2026-07-10
+     */
     public static final class Builder {
         private String serviceId;
         private String routeHandle;
@@ -146,56 +166,122 @@ public final class AgentCardDto {
         private Builder() {
         }
 
+        /**
+         * Set the logical service identifier.
+         *
+         * @param serviceId logical service identifier (host only, caller-overridable)
+         * @return this builder for chaining
+         */
         public Builder serviceId(String serviceId) {
             this.serviceId = serviceId;
             return this;
         }
 
+        /**
+         * Set the opaque route handle produced by {@code RouteHandleCodec}.
+         *
+         * @param routeHandle opaque route handle (v2: 6-field)
+         * @return this builder for chaining
+         */
         public Builder routeHandle(String routeHandle) {
             this.routeHandle = routeHandle;
             return this;
         }
 
+        /**
+         * Set the lifecycle health state.
+         *
+         * @param health one of {@code ONLINE}/{@code DEGRADED}/{@code DRAINING}
+         * @return this builder for chaining
+         */
         public Builder health(String health) {
             this.health = health;
             return this;
         }
 
+        /**
+         * Set the contract version pinned at registration.
+         *
+         * @param contractVersion contract version string
+         * @return this builder for chaining
+         */
         public Builder contractVersion(String contractVersion) {
             this.contractVersion = contractVersion;
             return this;
         }
 
+        /**
+         * Set the capability version pinned at registration.
+         *
+         * @param capabilityVersion capability version string
+         * @return this builder for chaining
+         */
         public Builder capabilityVersion(String capabilityVersion) {
             this.capabilityVersion = capabilityVersion;
             return this;
         }
 
+        /**
+         * Set the selection weight (higher = preferred).
+         *
+         * @param weight selection weight
+         * @return this builder for chaining
+         */
         public Builder weight(int weight) {
             this.weight = weight;
             return this;
         }
 
+        /**
+         * Set the deployment region tag.
+         *
+         * @param region region tag (e.g. {@code cn-east-1})
+         * @return this builder for chaining
+         */
         public Builder region(String region) {
             this.region = region;
             return this;
         }
 
+        /**
+         * Set the max in-flight concurrency the agent accepts.
+         *
+         * @param maxConcurrency max concurrency
+         * @return this builder for chaining
+         */
         public Builder maxConcurrency(int maxConcurrency) {
             this.maxConcurrency = maxConcurrency;
             return this;
         }
 
+        /**
+         * Set the agent display name (business definition field).
+         *
+         * @param agentName agent display name; {@code null} when not populated
+         * @return this builder for chaining
+         */
         public Builder agentName(String agentName) {
             this.agentName = agentName;
             return this;
         }
 
+        /**
+         * Set the runtime framework type (business definition field).
+         *
+         * @param frameworkType framework type; {@code null} when not populated
+         * @return this builder for chaining
+         */
         public Builder frameworkType(FrameworkType frameworkType) {
             this.frameworkType = frameworkType;
             return this;
         }
 
+        /**
+         * Build the immutable {@link AgentCardDto}.
+         *
+         * @return a new immutable DTO (never {@code null})
+         * @throws NullPointerException if any mandatory routing field is {@code null}
+         */
         public AgentCardDto build() {
             Objects.requireNonNull(serviceId, "serviceId");
             Objects.requireNonNull(routeHandle, "routeHandle");

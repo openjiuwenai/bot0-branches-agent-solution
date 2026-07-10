@@ -1,4 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.registry.runtime.discovery;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
@@ -7,6 +14,7 @@ import com.openjiuwen.rdc.spi.registry.FrameworkType;
 import com.openjiuwen.rdc.spi.registry.RouteResolution;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
 import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,9 +23,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for {@link PgMvpDiscoveryServiceImpl} —
@@ -33,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 4-field PK to findEndpoint.
  */
 class PgMvpDiscoveryServiceImplTest {
-
     private static final String TENANT = "tenant-A";
     private static final String AGENT_001 = "agent-001";
     private static final String AGENT_002 = "agent-002";
@@ -62,7 +66,7 @@ class PgMvpDiscoveryServiceImplTest {
     // ---- searchInstancesByAgentId: rich DTO populated ---------------------
 
     @Test
-    void search_instances_by_agent_id_returns_rich_dto_with_all_fields_populated() {
+    void search_by_agent_id_returns_rich_dto_all_fields_populated() {
         List<AgentCardDto> result = discovery.searchInstancesByAgentId(TENANT, AGENT_001, null);
 
         assertThat(result).hasSize(1);
@@ -95,13 +99,13 @@ class PgMvpDiscoveryServiceImplTest {
     }
 
     @Test
-    void search_instances_by_agent_id_returns_empty_list_for_unknown_tenant() {
+    void search_by_agent_id_returns_empty_for_unknown_tenant() {
         List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-unknown", AGENT_001, null);
         assertThat(result).isEmpty();
     }
 
     @Test
-    void search_instances_by_agent_id_returns_draining_as_limited_available() {
+    void search_by_agent_id_returns_draining_as_limited_available() {
         // FEAT-016: DRAINING is now included in discovery results (was
         // excluded in REQ-2026-006). The caller sees DRAINING as a
         // limited-availability health state.
@@ -164,8 +168,8 @@ class PgMvpDiscoveryServiceImplTest {
 
     @Test
     void resolve_route_handle_returns_endpoint_for_existing_entry() {
-        String handle = RouteHandleCodec.encode(
-                TENANT, AGENT_001, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT_001, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT));
 
         RouteResolution resolution = discovery.resolveRouteHandle(handle, TENANT);
 
@@ -177,8 +181,8 @@ class PgMvpDiscoveryServiceImplTest {
 
     @Test
     void resolve_route_handle_tenant_mismatch_raises_isolation_violation() {
-        String handle = RouteHandleCodec.encode(
-                TENANT, AGENT_001, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT_001, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class)
@@ -193,8 +197,8 @@ class PgMvpDiscoveryServiceImplTest {
 
     @Test
     void resolve_route_handle_nonexistent_entry_raises_no_such_element() {
-        String handle = RouteHandleCodec.encode(
-                TENANT, "agent-999", SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, "agent-999", SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, TENANT))
                 .isInstanceOf(NoSuchElementException.class)
@@ -202,10 +206,10 @@ class PgMvpDiscoveryServiceImplTest {
     }
 
     @Test
-    void resolve_route_handle_with_bound_mismatched_tenant_raises_isolation_violation() {
+    void resolve_route_handle_bound_mismatched_tenant_isolation_violation() {
         tenantContext.set("tenant-C");
-        String handle = RouteHandleCodec.encode(
-                TENANT, AGENT_001, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT_001, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, TENANT))
                 .isInstanceOf(TenantIsolationViolationException.class);
@@ -239,8 +243,7 @@ class PgMvpDiscoveryServiceImplTest {
         }
 
         @Override
-        public boolean updateStatus(String tenantId, String agentId, String serviceId,
-                                    String instanceId, String newStatus, boolean refreshHeartbeat) {
+        public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
             return false;
         }
 
@@ -253,7 +256,7 @@ class PgMvpDiscoveryServiceImplTest {
                 if (contractVersion != null && !"1.0.0".equals(contractVersion)) {
                     return List.of();
                 }
-                return List.of(sampleRow(SERVICE_ID, INSTANCE_ID, AGENT_001, "财务助手", "ONLINE",
+                return List.of(sampleRow(AGENT_001, "财务助手", "ONLINE",
                         java.util.List.of(CAPABILITY)));
             }
             if ("agent-002".equals(agentId)) {
@@ -261,7 +264,7 @@ class PgMvpDiscoveryServiceImplTest {
                 if (contractVersion != null && !"1.0.0".equals(contractVersion)) {
                     return List.of();
                 }
-                return List.of(sampleRow(SERVICE_ID, INSTANCE_ID, AGENT_002, "draining-agent",
+                return List.of(sampleRow(AGENT_002, "draining-agent",
                         "DRAINING", java.util.List.of()));
             }
             return List.of();
@@ -275,7 +278,7 @@ class PgMvpDiscoveryServiceImplTest {
             if (contractVersion != null && !"1.0.0".equals(contractVersion)) {
                 return List.of();
             }
-            return List.of(sampleRow(SERVICE_ID, INSTANCE_ID, AGENT_001, "财务助手", "ONLINE",
+            return List.of(sampleRow(AGENT_001, "财务助手", "ONLINE",
                     java.util.List.of(CAPABILITY)));
         }
 
@@ -287,7 +290,7 @@ class PgMvpDiscoveryServiceImplTest {
             if (contractVersion != null && !"1.0.0".equals(contractVersion)) {
                 return List.of();
             }
-            return List.of(sampleRow(SERVICE_ID, INSTANCE_ID, AGENT_001, "财务助手", "ONLINE",
+            return List.of(sampleRow(AGENT_001, "财务助手", "ONLINE",
                     java.util.List.of(CAPABILITY)));
         }
 
@@ -302,11 +305,10 @@ class PgMvpDiscoveryServiceImplTest {
             return Optional.empty();
         }
 
-        private static RegistryRow sampleRow(String serviceId, String instanceId, String agentId,
-                                             String agentName, String status,
+        private static RegistryRow sampleRow(String agentId, String agentName, String status,
                                              java.util.List<String> capabilities) {
             return new RegistryRow(
-                    serviceId, instanceId, agentId, agentName, FrameworkType.JIUWEN,
+                    SERVICE_ID, INSTANCE_ID, agentId, agentName, FrameworkType.JIUWEN,
                     ROUTE_KEY, CONTRACT, "2.1.0",
                     100, "cn-east-1", 10, status, capabilities);
         }

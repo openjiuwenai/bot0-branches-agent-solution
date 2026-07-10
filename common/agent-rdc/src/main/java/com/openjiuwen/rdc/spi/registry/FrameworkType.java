@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.spi.registry;
 
 /**
@@ -19,6 +23,8 @@ package com.openjiuwen.rdc.spi.registry;
  * <p>Pure Java — no Spring / JDBC / Jackson imports (ADR-0160 decision 1).
  * Jackson (in {@code registry.runtime.api}) deserialises via enum name by
  * default, no annotation needed (ADR-0160 decision 3/5).
+ *
+ * @since 2026-07-10
  */
 public enum FrameworkType {
     /** Jiuwen agent runtime. */

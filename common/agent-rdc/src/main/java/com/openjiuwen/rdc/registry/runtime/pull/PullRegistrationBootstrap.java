@@ -1,12 +1,18 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.registry.runtime.pull;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 import com.openjiuwen.rdc.spi.registry.FrameworkType;
 import com.openjiuwen.rdc.spi.registry.InstanceIdCodec;
 import com.openjiuwen.rdc.spi.registry.ServiceIdCodec;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -42,6 +48,8 @@ import java.util.UUID;
  * but never {@code java.sql} / {@code javax.sql} /
  * {@code org.springframework.jdbc.*} — runtime.pull is NOT a JDBC package
  * (ADR-0160 decision 4 unchanged).
+ *
+ * @since 2026-07-10
  */
 @Component
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
@@ -50,7 +58,6 @@ import java.util.UUID;
         havingValue = "true"
 )
 public class PullRegistrationBootstrap implements ApplicationListener<ApplicationReadyEvent> {
-
     private static final Logger LOG = LoggerFactory.getLogger(PullRegistrationBootstrap.class);
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
@@ -93,7 +100,11 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
             MDC.put("traceId", traceId);
             try {
                 pullOne(runtime, traceId);
-            } catch (RuntimeException ex) {
+            } catch (IllegalStateException | IllegalArgumentException
+                     | org.springframework.web.client.RestClientException
+                     | org.springframework.dao.DataAccessException ex) {
+                // A single runtime failure must not abort the whole bootstrap;
+                // log + continue so the remaining runtimes still register.
                 LOG.warn("pull-bootstrap runtime {} failed: {}", runtime.getBaseUrl(), ex.getMessage(), ex);
             } finally {
                 MDC.remove("traceId");
@@ -103,7 +114,7 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
 
     private void pullOne(PullRegistrationProperties.RuntimeEntry runtime, String traceId) {
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
             requireRequired(runtime);
             String cardUrl = runtime.getBaseUrl() + runtime.getCardPath();
@@ -127,17 +138,17 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
             repository.upsert(entry, cardJson);
             LOG.info("pull-bootstrap registered tenant={} agent={} baseUrl={}",
                     entry.getTenantId(), entry.getAgentId(), entry.getEndpointUrl());
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
-        } catch (Exception ex) {
-            outcome = "error";
+            outcome = "success";
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException("pull-bootstrap failed: " + ex.getMessage(), ex);
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeRegister(traceId, runtime.getTenantId(), runtime.getAgentId(),
-                    runtime.getContractVersion(),
-                    runtime.getCapabilityVersion(), "ONLINE", null, outcome, latencyMs);
+            RegistryOpContext ctx = RegistryOpContext.of(traceId, runtime.getTenantId(), runtime.getAgentId())
+                    .contractVersion(runtime.getContractVersion())
+                    .capabilityVersion(runtime.getCapabilityVersion())
+                    .health("ONLINE")
+                    .build();
+            observability.observeRegister(ctx, outcome, latencyMs);
         }
     }
 

@@ -1,13 +1,17 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.architecture;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
-import com.tngtech.archunit.lang.ArchRule;
-import org.junit.jupiter.api.Test;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /**
  * SPI-purity harness for {@code agent-bus} (Stage 1, Slice 1).
@@ -31,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Assertion ID: HA-001.
  */
 class AgentRdcSpiPurityTest {
-
     /**
      * Production SPI classes only ({@code com.openjiuwen.rdc.spi} and
      * sub-packages). Test classes are excluded — the rule constrains the shipped
@@ -47,7 +50,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("org.springframework..")
                 .because("agent-bus SPI must stay pure Java; Spring belongs in runtime bindings, "
-                       + "never in the transport-agnostic contract surface.")
+                        + "never in the transport-agnostic contract surface.")
                 .check(SPI_PRODUCTION);
     }
 
@@ -57,7 +60,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("reactor..")
                 .because("agent-bus SPI must stay pure Java; java.util.concurrent.Flow is the "
-                       + "allowed reactive-streams abstraction, not Project Reactor.")
+                        + "allowed reactive-streams abstraction, not Project Reactor.")
                 .check(SPI_PRODUCTION);
     }
 
@@ -67,7 +70,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
                 .because("agent-bus SPI must stay transport-agnostic; serialisation belongs in "
-                       + "the wire binding layer, not the envelope contract.")
+                        + "the wire binding layer, not the envelope contract.")
                 .check(SPI_PRODUCTION);
     }
 
@@ -77,7 +80,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
                 .because("agent-bus SPI must stay pure Java; metrics instrumentation belongs in "
-                       + "runtime, not in the contract surface.")
+                        + "runtime, not in the contract surface.")
                 .check(SPI_PRODUCTION);
     }
 
@@ -87,7 +90,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("io.opentelemetry..")
                 .because("agent-bus SPI must stay pure Java; tracing SDK belongs in runtime, "
-                       + "not in the contract surface.")
+                        + "not in the contract surface.")
                 .check(SPI_PRODUCTION);
     }
 
@@ -97,7 +100,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("org.apache.kafka..")
                 .because("agent-bus SPI must stay broker-agnostic; Kafka is a candidate runtime "
-                       + "binding, never an SPI dependency (per Stage 1 forbidden scope).")
+                        + "binding, never an SPI dependency (per Stage 1 forbidden scope).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -107,7 +110,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("io.nats..")
                 .because("agent-bus SPI must stay broker-agnostic; NATS is a candidate runtime "
-                       + "binding, never an SPI dependency (per Stage 1 forbidden scope).")
+                        + "binding, never an SPI dependency (per Stage 1 forbidden scope).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -123,7 +126,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("jakarta.servlet..")
                 .because("agent-bus SPI must stay transport-agnostic; the Servlet API belongs "
-                       + "in an HTTP wire binding, never in the contract surface (MI-001).")
+                        + "in an HTTP wire binding, never in the contract surface (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -133,7 +136,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("javax.servlet..")
                 .because("agent-bus SPI must stay transport-agnostic; the legacy Servlet API "
-                       + "belongs in an HTTP wire binding, never in the contract surface (MI-001).")
+                        + "belongs in an HTTP wire binding, never in the contract surface (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -143,7 +146,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("jakarta.ws.rs..")
                 .because("agent-bus SPI must stay transport-agnostic; JAX-RS belongs in a REST "
-                       + "wire binding, never in the contract surface (MI-001).")
+                        + "wire binding, never in the contract surface (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -153,7 +156,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("javax.ws.rs..")
                 .because("agent-bus SPI must stay transport-agnostic; the legacy JAX-RS API "
-                       + "belongs in a REST wire binding, never in the contract surface (MI-001).")
+                        + "belongs in a REST wire binding, never in the contract surface (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -163,7 +166,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("org.apache.http..")
                 .because("agent-bus SPI must stay transport-agnostic; Apache HttpClient belongs "
-                       + "in an HTTP wire binding, never in the contract surface (MI-001).")
+                        + "in an HTTP wire binding, never in the contract surface (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -173,7 +176,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("okhttp3..")
                 .because("agent-bus SPI must stay transport-agnostic; OkHttp belongs in an HTTP "
-                       + "wire binding, never in the contract surface (MI-001).")
+                        + "wire binding, never in the contract surface (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -183,7 +186,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("io.netty..")
                 .because("agent-bus SPI must stay transport-agnostic; Netty is a network runtime, "
-                       + "never a contract-surface dependency (MI-001).")
+                        + "never a contract-surface dependency (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 
@@ -193,7 +196,7 @@ class AgentRdcSpiPurityTest {
                 .that().resideInAPackage("com.openjiuwen.rdc.spi..")
                 .should().dependOnClassesThat().resideInAPackage("io.vertx..")
                 .because("agent-bus SPI must stay transport-agnostic; Vert.x is a network/reactive "
-                       + "runtime, never a contract-surface dependency (MI-001).")
+                        + "runtime, never a contract-surface dependency (MI-001).")
                 .check(SPI_PRODUCTION);
     }
 

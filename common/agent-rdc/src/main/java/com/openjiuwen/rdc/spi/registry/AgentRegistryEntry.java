@@ -1,8 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.spi.registry;
 
-import java.util.Objects;
-
 import org.a2aproject.sdk.spec.AgentCard;
+
+import java.util.Objects;
 
 /**
  * Registry entry — the request body for {@code POST /api/registry/register}.
@@ -76,9 +79,10 @@ import org.a2aproject.sdk.spec.AgentCard;
  * {@code agent_registry_mvp}; the A2A card is serialized to JSONB in the
  * {@code a2a_agent_card} column. The {@code search_tsv} GENERATED column
  * and {@code capability} column were removed in V4 (REQ-2026-004).
+ *
+ * @since 2026-07-10
  */
 public final class AgentRegistryEntry {
-
     private String tenantId;
     private String agentId;
     private String serviceId;
@@ -93,6 +97,7 @@ public final class AgentRegistryEntry {
     private Integer weight;
     private String region;
     private AgentCard a2aAgentCard;
+    private java.util.List<String> capabilities;
 
     public String getTenantId() {
         return tenantId;
@@ -117,6 +122,8 @@ public final class AgentRegistryEntry {
      * {@code serviceId} in the register body to override the default — hence
      * the public setter. Multiple agents / instances can share the same
      * {@code serviceId} to form a logical service group.
+     *
+     * @return the logical service identifier, possibly null when unset
      */
     public String getServiceId() {
         return serviceId;
@@ -135,6 +142,8 @@ public final class AgentRegistryEntry {
      * unknown JSON fields via the {@code JsonIgnoreProperties(ignoreUnknown=true)}
      * annotation on the controller side (not on this POJO, so spi.registry
      * stays pure Java).
+     *
+     * @return the concrete instance identifier (host-port), possibly null when unset
      */
     public String getInstanceId() {
         return instanceId;
@@ -228,6 +237,8 @@ public final class AgentRegistryEntry {
      * FEAT-016 阶段一：rebuilds the capability field removed in REQ-2026-004 as a multi-value
      * List&lt;String&gt; (caller-optional). Backs the VARCHAR(64)[] DB column. Null when
      * caller doesn't provide; repository persists as empty array.
+     *
+     * @return the capability list, possibly null when the caller omitted it
      */
     public java.util.List<String> getCapabilities() {
         return capabilities;
@@ -237,13 +248,13 @@ public final class AgentRegistryEntry {
         this.capabilities = capabilities;
     }
 
-    private java.util.List<String> capabilities;
-
     /**
      * Convenience for tests / internal callers that want to assert the
      * registry-key pair is present before persisting. The registry PK is
      * {@code (tenant_id, agent_id)}; {@code capability} was removed in
      * REQ-2026-004 so the key check narrows to the PK pair.
+     *
+     * @return {@code true} if both {@code tenantId} and {@code agentId} are non-null
      */
     public boolean hasRegistryKey() {
         return Objects.nonNull(tenantId) && Objects.nonNull(agentId);

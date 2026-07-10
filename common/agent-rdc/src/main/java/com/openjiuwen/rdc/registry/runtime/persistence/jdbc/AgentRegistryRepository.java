@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
@@ -31,7 +35,7 @@ import java.util.Optional;
  *       instances under the triple; a new 4-field
  *       {@link #delete(String, String, String, String)} deletes a single
  *       instance.</li>
- *   <li>{@link #updateStatus(String, String, String, String, String, boolean)}
+ *   <li>{@link #updateStatus(StatusUpdate)}
  *       now takes {@code instanceId} — health-probe results are scoped per
  *       concrete instance.</li>
  *   <li>{@link #listByAgentId(String, String, String)} now takes a nullable
@@ -66,9 +70,10 @@ import java.util.Optional;
  * {@code api} / {@code discovery} / {@code health} stay JDBC-free. The port
  * depends only on {@link AgentRegistryEntry} + {@link FrameworkType} from
  * {@code spi.registry} and on the nested record types declared below.
+ *
+ * @since 2026-07-10
  */
 public interface AgentRegistryRepository {
-
     /**
      * Upsert (insert or replace) a registered agent entry. On conflict
      * {@code (tenant_id, agent_id, service_id, instance_id)} the existing row
@@ -111,6 +116,8 @@ public interface AgentRegistryRepository {
      * {@code (tenant_id, agent_id)}); now deletes every instance row
      * matching the pair.
      *
+     * @param tenantId tenant dimension of the registry PK
+     * @param agentId  agent dimension of the registry PK
      * @return {@code true} if at least one row was deleted, {@code false}
      *         if no entry existed for {@code (tenantId, agentId)}
      */
@@ -122,6 +129,9 @@ public interface AgentRegistryRepository {
      * this deletes every concrete instance under the triple (was
      * single-instance delete in REQ-2026-006).
      *
+     * @param tenantId tenant dimension of the registry PK
+     * @param agentId  agent dimension of the registry PK
+     * @param serviceId logical service identifier
      * @return {@code true} if at least one row was deleted, {@code false}
      *         if no entry existed for the triple
      */
@@ -133,6 +143,10 @@ public interface AgentRegistryRepository {
      * rolling deploy of a single replica must not evict other replicas of
      * the same {@code serviceId}.
      *
+     * @param tenantId   tenant dimension of the registry PK
+     * @param agentId    agent dimension of the registry PK
+     * @param serviceId  logical service identifier
+     * @param instanceId concrete instance identifier (host-port)
      * @return {@code true} if a row was deleted, {@code false} if no entry
      *         existed for the 4-field PK
      */
@@ -149,6 +163,11 @@ public interface AgentRegistryRepository {
      * {@code PullRegistrationBootstrap}) are automatically picked up by this
      * scan — they live in the same {@code agent_registry_mvp} table and
      * follow the same heartbeat / status lifecycle as push-based entries.
+     *
+     * @param staleBeforeMillis epoch-millis cutoff; rows whose
+     *                          {@code last_heartbeat} is older are returned
+     * @param limit             max number of rows to return
+     * @return immutable list of {@link ProbeTarget}; empty list on no match
      */
     List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit);
 
@@ -163,17 +182,24 @@ public interface AgentRegistryRepository {
      * probe on one replica must not degrade other replicas of the same
      * {@code serviceId}.
      *
-     * @param serviceId        the instance's logical service identifier
-     * @param instanceId       the concrete instance identifier (host-port)
-     * @param newStatus         one of {@code ONLINE} / {@code DEGRADED} /
-     *                          {@code DRAINING} / {@code OFFLINE}
-     * @param refreshHeartbeat  {@code true} stamps {@code last_heartbeat =
-     *                          CURRENT_TIMESTAMP}; {@code false} leaves it
-     *                          untouched (used when downgrading)
+     * @param update the status-update request (PK + new status + heartbeat flag)
      * @return {@code true} if a row was updated
      */
-    boolean updateStatus(String tenantId, String agentId, String serviceId,
-                         String instanceId, String newStatus, boolean refreshHeartbeat);
+    boolean updateStatus(StatusUpdate update);
+
+    /**
+     * Immutable status-update request for {@link #updateStatus(StatusUpdate)}.
+     * Carries the 4-field registry PK plus the new lifecycle status and the
+     * heartbeat-refresh flag.
+     */
+    record StatusUpdate(
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String instanceId,
+            String newStatus,
+            boolean shouldRefreshHeartbeat) {
+    }
 
     /**
      * List all ONLINE/DEGRADED/DRAINING instances for the given
@@ -187,6 +213,8 @@ public interface AgentRegistryRepository {
      *
      * <p>Anti-enumeration: empty list on no match (never {@code null}).
      *
+     * @param tenantId        tenant dimension of the registry PK
+     * @param agentId         agent dimension of the registry PK
      * @param contractVersion nullable contract version filter; {@code null}
      *                        = no filter; non-null = SQL
      *                        {@code AND contract_version = :contractVersion}
@@ -206,6 +234,8 @@ public interface AgentRegistryRepository {
      *
      * <p>Anti-enumeration: empty list on no match (never {@code null}).
      *
+     * @param tenantId        tenant dimension of the registry PK
+     * @param serviceId       logical service identifier
      * @param contractVersion nullable contract version filter
      * @return immutable list of {@link RegistryRow}; empty list on no match
      */
@@ -221,6 +251,8 @@ public interface AgentRegistryRepository {
      *
      * <p>Anti-enumeration: empty list on no match (never {@code null}).
      *
+     * @param tenantId        tenant dimension of the registry PK
+     * @param capability      capability tag to match
      * @param contractVersion nullable contract version filter
      * @return immutable list of {@link RegistryRow}; empty list on no match
      */
@@ -243,6 +275,13 @@ public interface AgentRegistryRepository {
      * / the discovery service (the encoded tenant is compared to the caller's
      * tenant before this lookup runs); this method always scopes by the
      * caller's {@code tenantId}.
+     *
+     * @param tenantId   tenant dimension of the registry PK
+     * @param agentId    agent dimension of the registry PK
+     * @param serviceId  logical service identifier
+     * @param instanceId concrete instance identifier (host-port)
+     * @return {@link EndpointEntry} when a row matches; {@code Optional#empty()}
+     *         when no row matches
      */
     Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
                                          String serviceId, String instanceId);
@@ -287,7 +326,8 @@ public interface AgentRegistryRepository {
      * FEAT-016 adds {@code instanceId} so the scheduler can target a specific
      * concrete instance.
      */
-    record ProbeTarget(String tenantId, String agentId, String serviceId,
-                       String instanceId, String endpointUrl) {
+    record ProbeTarget(
+            String tenantId, String agentId, String serviceId,
+            String instanceId, String endpointUrl) {
     }
 }

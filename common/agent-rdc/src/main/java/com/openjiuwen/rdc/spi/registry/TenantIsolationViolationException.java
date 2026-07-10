@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.spi.registry;
 
 /**
@@ -12,15 +16,19 @@ package com.openjiuwen.rdc.spi.registry;
  * without forcing callers to declare checked exceptions; the
  * {@code MvpRegistryController} maps it to HTTP 400
  * {@code tenant_isolation_violation}.
+ *
+ * @since 2026-07-10
  */
 public class TenantIsolationViolationException extends RuntimeException {
-
     private static final long serialVersionUID = 1L;
 
     private final String requestedTenant;
     private final String currentTenant;
 
     /**
+     * Construct a tenant-isolation violation carrying both the requested and
+     * current tenant ids for diagnostics.
+     *
      * @param requestedTenant tenant id appearing in the request path / route handle
      * @param currentTenant   tenant id bound to the caller's {@link TenantContext}
      */

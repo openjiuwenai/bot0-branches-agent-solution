@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.spi.registry;
 
 /**
@@ -23,7 +27,9 @@ package com.openjiuwen.rdc.spi.registry;
  * @param contractVersion contract version the registered agent pinned at
  *                        registration time; the forwarding layer forwards it
  *                        as-is to the agent
+ * @since 2026-07-10
  */
-public record RouteResolution(String instanceId, String endpointUrl,
-                              String routeKey, String contractVersion) {
+public record RouteResolution(
+        String instanceId, String endpointUrl,
+        String routeKey, String contractVersion) {
 }

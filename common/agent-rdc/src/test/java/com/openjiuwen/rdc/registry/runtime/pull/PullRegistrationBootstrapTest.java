@@ -1,25 +1,30 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.registry.runtime.pull;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 import com.openjiuwen.rdc.spi.registry.FrameworkType;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link PullRegistrationBootstrap} — serial GET + upsert +
@@ -27,9 +32,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Uses {@link MockWebServer} to serve A2A AgentCard JSON and a recording
  * fake {@link AgentRegistryRepository} to assert upsert calls.
+ *
+ * @since 2026-07-10
  */
 class PullRegistrationBootstrapTest {
-
     private static MockWebServer server;
     private static RegistryObservabilityConfig observability;
     private static ObjectMapper objectMapper;
@@ -181,6 +187,9 @@ class PullRegistrationBootstrapTest {
     /**
      * Minimum-viable RuntimeEntry for buildEntry tests — baseUrl + tenantId +
      * agentId + frameworkType are the required fields (see {@code requireRequired}).
+     *
+     * @param baseUrl the runtime base URL to set
+     * @return a minimum-viable {@link PullRegistrationProperties.RuntimeEntry}
      */
     private static PullRegistrationProperties.RuntimeEntry baseRuntime(String baseUrl) {
         PullRegistrationProperties.RuntimeEntry runtime = new PullRegistrationProperties.RuntimeEntry();
@@ -194,6 +203,10 @@ class PullRegistrationBootstrapTest {
     /**
      * Direct package-private call to {@link PullRegistrationBootstrap#buildEntry}
      * — exercises the entry-construction logic without spinning up MockWebServer.
+     *
+     * @param runtime   the runtime entry to build from
+     * @param agentName the agent name to stamp
+     * @return the constructed {@link AgentRegistryEntry}
      */
     private static AgentRegistryEntry invokeBuildEntry(
             PullRegistrationProperties.RuntimeEntry runtime, String agentName) {
@@ -232,8 +245,7 @@ class PullRegistrationBootstrapTest {
         }
 
         @Override
-        public boolean updateStatus(String tenantId, String agentId, String serviceId,
-                                    String instanceId, String newStatus, boolean refreshHeartbeat) {
+        public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
             return false;
         }
 

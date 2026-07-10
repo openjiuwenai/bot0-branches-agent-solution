@@ -1,8 +1,23 @@
+/*
+ * Copyright (C) 2026 Huawei Technologies Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.openjiuwen.rdc.registry.runtime;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
@@ -45,41 +60,60 @@ import java.util.concurrent.TimeUnit;
  * <p>Each {@code observeXxx} method emits BOTH the audit line and the
  * metric update for one operation, so callers make a single call per op
  * (no risk of audit-without-metric or vice versa).
+ *
+ * @since 2026-07-10
  */
 @Configuration
 public class RegistryObservabilityConfig {
-
     private static final Logger AUDIT = LoggerFactory.getLogger("registry.audit");
 
     private static final String PLACEHOLDER = "-";
 
     private final MeterRegistry meterRegistry;
 
+    /**
+     * Constructs the facade with the injected meter registry.
+     *
+     * @param meterRegistry the Micrometer registry used to record op counters/timers
+     */
     public RegistryObservabilityConfig(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
     }
 
-    // ---- audit + metrics per operation ----
-
-    public void observeRegister(String traceId, String tenantId, String agentId,
-                                String contractVersion, String capabilityVersion,
-                                String health, String routeHandleId, String outcome, long latencyMs) {
-        audit("register", traceId, tenantId, agentId,
-                contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
+    /**
+     * Records a register operation's audit line + metrics.
+     *
+     * @param context the audit context (traceId/tenantId/agentId/contractVersion/
+     *                capabilityVersion/health/routeHandleId)
+     * @param outcome the operation outcome tag (success/error/...)
+     * @param latencyMs the operation latency in milliseconds
+     */
+    public void observeRegister(RegistryOpContext context, String outcome, long latencyMs) {
+        audit("register", context, outcome, latencyMs);
         recordMetrics("register", outcome, latencyMs);
     }
 
-    public void observeDeregister(String traceId, String tenantId, String agentId,
-                                  String outcome, long latencyMs) {
-        audit("deregister", traceId, tenantId, agentId,
-                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs);
+    /**
+     * Records a deregister operation's audit line + metrics.
+     *
+     * @param context the audit context (traceId/tenantId/agentId)
+     * @param outcome the operation outcome tag
+     * @param latencyMs the operation latency in milliseconds
+     */
+    public void observeDeregister(RegistryOpContext context, String outcome, long latencyMs) {
+        audit("deregister", context, outcome, latencyMs);
         recordMetrics("deregister", outcome, latencyMs);
     }
 
-    public void observeProbe(String traceId, String tenantId, String agentId,
-                             String health, String outcome, long latencyMs) {
-        audit("probe", traceId, tenantId, agentId,
-                PLACEHOLDER, PLACEHOLDER, health, PLACEHOLDER, outcome, latencyMs);
+    /**
+     * Records a probe operation's audit line + metrics.
+     *
+     * @param context the audit context (traceId/tenantId/agentId/health)
+     * @param outcome the operation outcome tag
+     * @param latencyMs the operation latency in milliseconds
+     */
+    public void observeProbe(RegistryOpContext context, String outcome, long latencyMs) {
+        audit("probe", context, outcome, latencyMs);
         recordMetrics("probe", outcome, latencyMs);
     }
 
@@ -88,37 +122,60 @@ public class RegistryObservabilityConfig {
      * capability) + {@code queryValue} instead of {@code agentId}. The audit
      * line records the dimension and value searched so dashboards can
      * distinguish the three query paths.
+     *
+     * @param context the audit context (traceId/tenantId/queryDimension/queryValue)
+     * @param outcome the operation outcome tag
+     * @param resultCount the number of rows returned by the discovery query
+     * @param latencyMs the operation latency in milliseconds
      */
-    public void observeDiscover(String traceId, String tenantId, String queryDimension,
-                                String queryValue, String outcome, int resultCount, long latencyMs) {
+    public void observeDiscover(RegistryOpContext context, String outcome,
+                                int resultCount, long latencyMs) {
+        String queryDimension = context.getQueryDimension();
+        String queryValue = context.getQueryValue();
         AUDIT.info("registryOp=discover traceId={} tenantId={} queryDimension={} queryValue={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={} resultCount={}",
-                traceId, tenantId,
+                context.getTraceId(), context.getTenantId(),
                 queryDimension == null ? PLACEHOLDER : queryDimension,
                 queryValue == null ? PLACEHOLDER : queryValue,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
-                resultCount < 0 ? PLACEHOLDER : resultCount);
+                resultCount < 0 ? PLACEHOLDER : String.valueOf(resultCount));
         recordMetrics("discover", outcome, latencyMs);
     }
 
-    public void observeResolve(String traceId, String tenantId, String routeHandleId,
-                               String outcome, long latencyMs) {
-        audit("resolve", traceId, tenantId, PLACEHOLDER,
-                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, routeHandleId, outcome, latencyMs);
+    /**
+     * Records a resolve operation's audit line + metrics.
+     *
+     * @param context the audit context (traceId/tenantId/routeHandleId)
+     * @param outcome the operation outcome tag
+     * @param latencyMs the operation latency in milliseconds
+     */
+    public void observeResolve(RegistryOpContext context, String outcome, long latencyMs) {
+        audit("resolve", context, outcome, latencyMs);
         recordMetrics("resolve", outcome, latencyMs);
     }
 
-    // ---- internals ----
-
-    private void audit(String op, String traceId, String tenantId, String agentId,
-                       String contractVersion, String capabilityVersion,
-                       String health, String routeHandleId, String outcome, long latencyMs) {
+    /**
+     * Emits the shared 10-field audit log line for an operation.
+     *
+     * @param op the operation name (register/deregister/probe/resolve)
+     * @param context the audit context carrying the per-op fields
+     * @param outcome the operation outcome tag
+     * @param latencyMs the operation latency in milliseconds
+     */
+    private void audit(String op, RegistryOpContext context, String outcome, long latencyMs) {
+        String contractVersion = context.getContractVersion();
+        String capabilityVersion = context.getCapabilityVersion();
+        String health = context.getHealth();
+        String routeHandleId = context.getRouteHandleId();
         AUDIT.info("registryOp={} traceId={} tenantId={} agentId={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={}",
-                op, traceId, tenantId, agentId,
-                contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
+                op, context.getTraceId(), context.getTenantId(), context.getAgentId(),
+                contractVersion == null ? PLACEHOLDER : contractVersion,
+                capabilityVersion == null ? PLACEHOLDER : capabilityVersion,
+                health == null ? PLACEHOLDER : health,
+                routeHandleId == null ? PLACEHOLDER : routeHandleId, outcome, latencyMs);
     }
 
     private void recordMetrics(String op, String outcome, long latencyMs) {

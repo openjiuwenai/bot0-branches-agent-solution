@@ -1,9 +1,13 @@
-package com.openjiuwen.rdc.registry.runtime.discovery;
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 
-import org.junit.jupiter.api.Test;
+package com.openjiuwen.rdc.registry.runtime.discovery;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Round-trip + baseline-breaking rejection tests for {@link RouteHandleCodec}
@@ -31,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * rule prevents accidental removal of the {@code v2:} prefix recognition.
  */
 class RouteHandleCodecTest {
-
     private static final String TENANT = "tenant-A";
     private static final String AGENT = "agent-001";
     private static final String SERVICE_ID = "wealth-svc";
@@ -43,10 +46,10 @@ class RouteHandleCodecTest {
 
     @Test
     void encode_then_decode_round_trips_all_six_fields() {
-        String handle = RouteHandleCodec.encode(
-                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT));
 
-        RouteHandleCodec.DecodedHandle decoded = RouteHandleCodec.decode(handle);
+        RouteHandleCodec.HandleFields decoded = RouteHandleCodec.decode(handle);
 
         assertThat(decoded.tenantId()).isEqualTo(TENANT);
         assertThat(decoded.agentId()).isEqualTo(AGENT);
@@ -65,9 +68,9 @@ class RouteHandleCodecTest {
         String routeKey = "rk://服务/默认";
         String contract = "v2-β";
 
-        String handle = RouteHandleCodec.encode(
-                tenant, agent, serviceId, instanceId, routeKey, contract);
-        RouteHandleCodec.DecodedHandle decoded = RouteHandleCodec.decode(handle);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                tenant, agent, serviceId, instanceId, routeKey, contract));
+        RouteHandleCodec.HandleFields decoded = RouteHandleCodec.decode(handle);
 
         assertThat(decoded.tenantId()).isEqualTo(tenant);
         assertThat(decoded.agentId()).isEqualTo(agent);
@@ -79,8 +82,8 @@ class RouteHandleCodecTest {
 
     @Test
     void encode_always_produces_v2_prefix() {
-        String handle = RouteHandleCodec.encode(
-                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT));
         assertThat(handle)
                 .as("FEAT-016: encode always produces the v2: prefix (6-field format)")
                 .startsWith(RouteHandleCodec.V2_PREFIX);
@@ -88,8 +91,8 @@ class RouteHandleCodecTest {
 
     @Test
     void encoded_payload_after_v2_prefix_is_base64_text() {
-        String handle = RouteHandleCodec.encode(
-                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT);
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT));
         assertThat(handle).startsWith(RouteHandleCodec.V2_PREFIX);
         String payload = handle.substring(RouteHandleCodec.V2_PREFIX.length());
         assertThat(payload)
@@ -102,11 +105,18 @@ class RouteHandleCodecTest {
     @Test
     void decode_accepts_v2_prefix_and_ignores_extra_fields() {
         // Simulate a phase-2 encoder: v2: prefix + extra consul fields.
-        String phase2Handle = encodeV2WithExtraFields(
-                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT,
-                "consul.example", 8500);
+        java.util.Map<String, Object> phase2Fields = new java.util.LinkedHashMap<>();
+        phase2Fields.put("tenantId", TENANT);
+        phase2Fields.put("agentId", AGENT);
+        phase2Fields.put("serviceId", SERVICE_ID);
+        phase2Fields.put("instanceId", INSTANCE_ID);
+        phase2Fields.put("routeKey", ROUTE_KEY);
+        phase2Fields.put("contractVersion", CONTRACT);
+        phase2Fields.put("consulAddr", "consul.example");
+        phase2Fields.put("consulPort", 8500);
+        String phase2Handle = encodeV2WithExtraFields(phase2Fields);
 
-        RouteHandleCodec.DecodedHandle decoded = RouteHandleCodec.decode(phase2Handle);
+        RouteHandleCodec.HandleFields decoded = RouteHandleCodec.decode(phase2Handle);
 
         assertThat(decoded.tenantId()).isEqualTo(TENANT);
         assertThat(decoded.agentId()).isEqualTo(AGENT);
@@ -222,48 +232,48 @@ class RouteHandleCodecTest {
 
     @Test
     void encode_rejects_null_tenant() {
-        assertThatThrownBy(() -> RouteHandleCodec.encode(
-                null, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT))
+        assertThatThrownBy(() -> RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                null, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("tenantId");
     }
 
     @Test
     void encode_rejects_blank_agent() {
-        assertThatThrownBy(() -> RouteHandleCodec.encode(
-                TENANT, "  ", SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT))
+        assertThatThrownBy(() -> RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, "  ", SERVICE_ID, INSTANCE_ID, ROUTE_KEY, CONTRACT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("agentId");
     }
 
     @Test
     void encode_rejects_blank_service_id() {
-        assertThatThrownBy(() -> RouteHandleCodec.encode(
-                TENANT, AGENT, "  ", INSTANCE_ID, ROUTE_KEY, CONTRACT))
+        assertThatThrownBy(() -> RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT, "  ", INSTANCE_ID, ROUTE_KEY, CONTRACT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("serviceId");
     }
 
     @Test
     void encode_rejects_blank_instance_id() {
-        assertThatThrownBy(() -> RouteHandleCodec.encode(
-                TENANT, AGENT, SERVICE_ID, "  ", ROUTE_KEY, CONTRACT))
+        assertThatThrownBy(() -> RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT, SERVICE_ID, "  ", ROUTE_KEY, CONTRACT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("instanceId");
     }
 
     @Test
     void encode_rejects_null_route_key() {
-        assertThatThrownBy(() -> RouteHandleCodec.encode(
-                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, null, CONTRACT))
+        assertThatThrownBy(() -> RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, null, CONTRACT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("routeKey");
     }
 
     @Test
     void encode_rejects_blank_contract_version() {
-        assertThatThrownBy(() -> RouteHandleCodec.encode(
-                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, ""))
+        assertThatThrownBy(() -> RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
+                TENANT, AGENT, SERVICE_ID, INSTANCE_ID, ROUTE_KEY, "")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("contractVersion");
     }
@@ -275,25 +285,27 @@ class RouteHandleCodecTest {
      * fields plus two phase-2 extra fields ({@code consulAddr},
      * {@code consulPort}). Mirrors what a phase-2 Consul-backed encoder would
      * produce. MVP decode MUST accept and ignore the extras.
+     *
+     * @param fields the JSON fields to encode (tenantId, agentId, serviceId,
+     *               instanceId, routeKey, contractVersion, consulAddr,
+     *               consulPort)
+     * @return the {@code v2:} + base64(JSON) encoded handle
      */
-    private static String encodeV2WithExtraFields(String tenantId, String agentId, String serviceId,
-                                                  String instanceId, String routeKey, String contractVersion,
-                                                  String consulAddr, int consulPort) {
+    private static String encodeV2WithExtraFields(java.util.Map<String, Object> fields) {
         try {
             com.fasterxml.jackson.databind.node.ObjectNode node =
                     new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-            node.put("tenantId", tenantId);
-            node.put("agentId", agentId);
-            node.put("serviceId", serviceId);
-            node.put("instanceId", instanceId);
-            node.put("routeKey", routeKey);
-            node.put("contractVersion", contractVersion);
-            node.put("consulAddr", consulAddr);
-            node.put("consulPort", consulPort);
+            fields.forEach((key, value) -> {
+                if (value instanceof Integer) {
+                    node.put(key, (Integer) value);
+                } else {
+                    node.put(key, String.valueOf(value));
+                }
+            });
             byte[] json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(node);
             String base64 = java.util.Base64.getEncoder().encodeToString(json);
             return RouteHandleCodec.V2_PREFIX + base64;
-        } catch (Exception ex) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException(ex);
         }
     }
@@ -302,6 +314,13 @@ class RouteHandleCodecTest {
      * Hand-encode a pre-FEAT-016 {@code v1:} prefixed 5-field handle (the
      * REQ-2026-006 format). FEAT-016 baseline-breaking: decode now rejects
      * this format (the v1: prefix is no longer recognized).
+     *
+     * @param tenantId        the tenant id
+     * @param agentId         the agent id
+     * @param serviceId       the service id
+     * @param routeKey        the route key
+     * @param contractVersion the contract version
+     * @return the {@code v1:} + base64(JSON) encoded handle
      */
     private static String encodeLegacyV1Prefix(String tenantId, String agentId, String serviceId,
                                                String routeKey, String contractVersion) {
@@ -316,7 +335,7 @@ class RouteHandleCodecTest {
             byte[] json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(node);
             String base64 = java.util.Base64.getEncoder().encodeToString(json);
             return "v1:" + base64;
-        } catch (Exception ex) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException(ex);
         }
     }
@@ -325,6 +344,12 @@ class RouteHandleCodecTest {
      * Hand-encode a pre-REQ-2026-006 no-prefix 4-field handle (the format
      * decode used to accept). FEAT-016 baseline-breaking: decode now rejects
      * this format.
+     *
+     * @param tenantId        the tenant id
+     * @param agentId         the agent id
+     * @param routeKey        the route key
+     * @param contractVersion the contract version
+     * @return the base64(JSON) encoded handle (no prefix)
      */
     private static String encodeLegacyNoPrefix(String tenantId, String agentId,
                                                String routeKey, String contractVersion) {
@@ -337,7 +362,7 @@ class RouteHandleCodecTest {
             node.put("contractVersion", contractVersion);
             byte[] json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(node);
             return java.util.Base64.getEncoder().encodeToString(json);
-        } catch (Exception ex) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException(ex);
         }
     }

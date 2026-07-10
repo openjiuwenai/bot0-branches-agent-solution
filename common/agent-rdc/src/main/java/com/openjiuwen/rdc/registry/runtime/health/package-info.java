@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * Background health-probe scheduler for the agent registry MVP (ADR-0160 +
  * HD3-004 lease/TTL).

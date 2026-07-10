@@ -1,17 +1,23 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.registry.runtime.tenant;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.rdc.spi.registry.TenantContext;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for {@link ThreadLocalTenantContext} (HD3-003 tenant isolation,
@@ -48,7 +54,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * </ul>
  */
 class ThreadLocalTenantContextTest {
-
     private final ThreadLocalTenantContext context = new ThreadLocalTenantContext();
 
     @AfterEach
@@ -164,7 +169,8 @@ class ThreadLocalTenantContextTest {
 
     @Test
     void bind_for_scope_rejects_null_work() {
-        assertThatThrownBy(() -> ThreadLocalTenantContext.bindForScope("tenant-A", (Runnable) null))
+        Runnable nullWork = null;
+        assertThatThrownBy(() -> ThreadLocalTenantContext.bindForScope("tenant-A", nullWork))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("work");
     }
@@ -173,7 +179,11 @@ class ThreadLocalTenantContextTest {
 
     @Test
     void tenant_bound_on_one_thread_is_not_visible_on_another() throws Exception {
-        ExecutorService pool = Executors.newSingleThreadExecutor();
+        // Use a raw ThreadPoolExecutor (G.CON.12) instead of Executors factory;
+        // cooperative cancellation via the 'release' CountDownLatch avoids
+        // Thread.interrupt() (G.CON.10).
+        ExecutorService pool = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         CountDownLatch bound = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         AtomicReference<String> otherThreadSees = new AtomicReference<>("unset");
@@ -185,7 +195,8 @@ class ThreadLocalTenantContextTest {
                     try {
                         release.await(2, TimeUnit.SECONDS);
                     } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+                        // Cooperative cancellation: the 'release' latch is the
+                        // shutdown signal; interrupt status is not relied upon.
                     }
                 });
                 return null;

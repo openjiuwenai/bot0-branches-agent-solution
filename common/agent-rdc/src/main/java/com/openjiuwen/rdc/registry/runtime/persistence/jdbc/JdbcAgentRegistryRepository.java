@@ -1,3 +1,17 @@
+/*
+ * Copyright (C) 2026 Huawei Technologies Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
@@ -9,7 +23,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import javax.sql.DataSource;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -17,6 +30,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
+
+import javax.sql.DataSource;
 
 /**
  * Postgres JDBC adapter for {@code agent_registry_mvp} (Stage 4 / ADR-0160
@@ -53,7 +68,7 @@ import java.util.function.Supplier;
  *       ('ONLINE','DEGRADED') AND last_heartbeat < :staleBefore ORDER BY
  *       last_heartbeat ASC LIMIT :limit}. HD3-004 lease/TTL scan path.
  *       FEAT-016: returns {@code instance_id} so the scheduler can call
- *       {@link #updateStatus(String, String, String, String, String, boolean)}
+ *       {@link #updateStatus(StatusUpdate)}
  *       with the right concrete-instance scope.</li>
  *   <li><b>updateStatus</b> — {@code UPDATE ... SET status = :newStatus [,
  *       last_heartbeat = NOW()] WHERE tenant_id AND agent_id AND service_id
@@ -89,10 +104,41 @@ import java.util.function.Supplier;
  * (Rule R-C.c); RLS is the defence-in-depth fallback. The table owner
  * (superuser) bypasses RLS, so superuser-backed integration tests are
  * unaffected.
+ *
+ * @since 2026-07-10
  */
 public final class JdbcAgentRegistryRepository implements AgentRegistryRepository {
-
     private static final String TABLE = "agent_registry_mvp";
+
+    private static final String UPSERT_SQL = "INSERT INTO " + TABLE + " ("
+            + "tenant_id, agent_id, service_id, instance_id, agent_name, framework_type, "
+            + "route_key, contract_version, "
+            + "capability_version, endpoint_url, max_concurrency, weight, region, "
+            + "a2a_agent_card, capabilities, status, last_heartbeat) "
+            + "VALUES (:tenantId, :agentId, :serviceId, :instanceId, :agentName, :frameworkType, "
+            + ":routeKey, :contractVersion, "
+            + ":capabilityVersion, :endpointUrl, :maxConcurrency, :weight, :region, "
+            + ":a2aAgentCard::jsonb, :capabilities, 'ONLINE', CURRENT_TIMESTAMP) "
+            + "ON CONFLICT (tenant_id, agent_id, service_id, instance_id) DO UPDATE SET "
+            + "agent_name = EXCLUDED.agent_name, "
+            + "framework_type = EXCLUDED.framework_type, "
+            + "route_key = EXCLUDED.route_key, "
+            + "contract_version = EXCLUDED.contract_version, "
+            + "capability_version = EXCLUDED.capability_version, "
+            + "endpoint_url = EXCLUDED.endpoint_url, "
+            + "max_concurrency = EXCLUDED.max_concurrency, "
+            + "weight = EXCLUDED.weight, "
+            + "region = EXCLUDED.region, "
+            + "a2a_agent_card = EXCLUDED.a2a_agent_card, "
+            + "capabilities = EXCLUDED.capabilities, "
+            // PR #389 #7: preserve DRAINING (operator-initiated graceful
+            // drain) across re-registration; an agent restart must not
+            // pull a draining entry back to ONLINE and re-route traffic
+            // to it. ONLINE / DEGRADED / OFFLINE all reset to ONLINE
+            // (agent restart semantics).
+            + "status = CASE WHEN agent_registry_mvp.status = 'DRAINING' "
+            + "THEN 'DRAINING' ELSE 'ONLINE' END, "
+            + "last_heartbeat = CURRENT_TIMESTAMP";
 
     private final NamedParameterJdbcTemplate jdbc;
     private final TransactionTemplate txTemplate;
@@ -101,6 +147,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * Backwards-compatible constructor: derives a per-DataSource
      * {@link DataSourceTransactionManager} so every method runs inside a
      * short transaction that sets {@code app.tenant_id} (Stage 24 RLS wiring).
+     *
+     * @param dataSource the registry DataSource (must supply non-superuser
+     *                   connections for RLS to take effect)
      */
     public JdbcAgentRegistryRepository(DataSource dataSource) {
         this(dataSource, new DataSourceTransactionManager(dataSource));
@@ -112,6 +161,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * inject a controlled one. The manager must bind connections from the
      * same {@link DataSource} so the transactional connection is the one
      * {@code app.tenant_id} is set on.
+     *
+     * @param dataSource the registry DataSource
+     * @param txManager  the transaction manager binding connections from
+     *                   {@code dataSource} (so the RLS set_config runs on the
+     *                   same connection as the business SQL)
      */
     public JdbcAgentRegistryRepository(DataSource dataSource, PlatformTransactionManager txManager) {
         Objects.requireNonNull(dataSource, "dataSource is required");
@@ -119,8 +173,6 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
         this.txTemplate = new TransactionTemplate(txManager);
     }
-
-    // ===== upsert / delete / scan / update =====
 
     @Override
     public void upsert(AgentRegistryEntry entry, String a2aAgentCardJson) {
@@ -130,38 +182,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         requireNonBlank(entry.getServiceId(), "serviceId");
         requireNonBlank(entry.getInstanceId(), "instanceId");
         Objects.requireNonNull(entry.getFrameworkType(), "frameworkType is required");
-        List<String> capabilities = entry.getCapabilities() != null
-                ? entry.getCapabilities() : List.of();
-        String sql = "INSERT INTO " + TABLE + " ("
-                + "tenant_id, agent_id, service_id, instance_id, agent_name, framework_type, "
-                + "route_key, contract_version, "
-                + "capability_version, endpoint_url, max_concurrency, weight, region, "
-                + "a2a_agent_card, capabilities, status, last_heartbeat) "
-                + "VALUES (:tenantId, :agentId, :serviceId, :instanceId, :agentName, :frameworkType, "
-                + ":routeKey, :contractVersion, "
-                + ":capabilityVersion, :endpointUrl, :maxConcurrency, :weight, :region, "
-                + ":a2aAgentCard::jsonb, :capabilities, 'ONLINE', CURRENT_TIMESTAMP) "
-                + "ON CONFLICT (tenant_id, agent_id, service_id, instance_id) DO UPDATE SET "
-                + "agent_name = EXCLUDED.agent_name, "
-                + "framework_type = EXCLUDED.framework_type, "
-                + "route_key = EXCLUDED.route_key, "
-                + "contract_version = EXCLUDED.contract_version, "
-                + "capability_version = EXCLUDED.capability_version, "
-                + "endpoint_url = EXCLUDED.endpoint_url, "
-                + "max_concurrency = EXCLUDED.max_concurrency, "
-                + "weight = EXCLUDED.weight, "
-                + "region = EXCLUDED.region, "
-                + "a2a_agent_card = EXCLUDED.a2a_agent_card, "
-                + "capabilities = EXCLUDED.capabilities, "
-                // PR #389 #7: preserve DRAINING (operator-initiated graceful
-                // drain) across re-registration; an agent restart must not
-                // pull a draining entry back to ONLINE and re-route traffic
-                // to it. ONLINE / DEGRADED / OFFLINE all reset to ONLINE
-                // (agent restart semantics).
-                + "status = CASE WHEN agent_registry_mvp.status = 'DRAINING' "
-                + "THEN 'DRAINING' ELSE 'ONLINE' END, "
-                + "last_heartbeat = CURRENT_TIMESTAMP";
         withTenant(entry.getTenantId(), () -> {
+            List<String> capabilities = entry.getCapabilities() != null
+                    ? entry.getCapabilities() : List.of();
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", entry.getTenantId())
                     .addValue("agentId", entry.getAgentId())
@@ -178,7 +201,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     .addValue("region", entry.getRegion())
                     .addValue("a2aAgentCard", a2aAgentCardJson)
                     .addValue("capabilities", capabilities.toArray(new String[0]));
-            jdbc.update(sql, params);
+            jdbc.update(UPSERT_SQL, params);
             return null;
         });
     }
@@ -264,15 +287,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
-    public boolean updateStatus(String tenantId, String agentId, String serviceId,
-                                String instanceId, String newStatus, boolean refreshHeartbeat) {
-        requireNonBlank(tenantId, "tenantId");
-        requireNonBlank(agentId, "agentId");
-        requireNonBlank(serviceId, "serviceId");
-        requireNonBlank(instanceId, "instanceId");
-        requireNonBlank(newStatus, "newStatus");
-        return withTenant(tenantId, () -> {
-            String setClause = refreshHeartbeat
+    public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
+        requireNonBlank(update.tenantId(), "tenantId");
+        requireNonBlank(update.agentId(), "agentId");
+        requireNonBlank(update.serviceId(), "serviceId");
+        requireNonBlank(update.instanceId(), "instanceId");
+        requireNonBlank(update.newStatus(), "newStatus");
+        return withTenant(update.tenantId(), () -> {
+            String setClause = update.shouldRefreshHeartbeat()
                     ? "status = :newStatus, last_heartbeat = CURRENT_TIMESTAMP"
                     : "status = :newStatus";
             // FEAT-016: WHERE includes instance_id — health-probe results
@@ -281,16 +303,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     + " WHERE tenant_id = :tenantId AND agent_id = :agentId"
                     + " AND service_id = :serviceId AND instance_id = :instanceId";
             MapSqlParameterSource params = new MapSqlParameterSource()
-                    .addValue("newStatus", newStatus)
-                    .addValue("tenantId", tenantId)
-                    .addValue("agentId", agentId)
-                    .addValue("serviceId", serviceId)
-                    .addValue("instanceId", instanceId);
+                    .addValue("newStatus", update.newStatus())
+                    .addValue("tenantId", update.tenantId())
+                    .addValue("agentId", update.agentId())
+                    .addValue("serviceId", update.serviceId())
+                    .addValue("instanceId", update.instanceId());
             return jdbc.update(sql, params) > 0;
         });
     }
-
-    // ===== discovery (list lookup, FEAT-016) =====
 
     @Override
     public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
@@ -383,10 +403,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    // ===== internals =====
-
     /**
-     * Stage 24 RLS wiring — see class javadoc.
+     * Stage 24 RLS wiring — see class javadoc. Runs {@code work} inside a
+     * short transaction that first sets {@code app.tenant_id} so a
+     * restricted (non-owner) connection is filtered by tenant.
+     *
+     * @param tenantId the tenant id to bind on the transactional connection
+     * @param work     the business SQL to run with the tenant context set
+     * @param <T>      the result type
+     * @return the value produced by {@code work}
      */
     private <T> T withTenant(String tenantId, Supplier<T> work) {
         return txTemplate.execute(status -> {

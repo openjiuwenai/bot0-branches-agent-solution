@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.spi.registry;
 
 import java.util.List;
@@ -7,6 +11,8 @@ import java.util.List;
  * Orchestrator / Gateway depends on this interface only; the persistence
  * form (single PostgreSQL in MVP, Consul + PGVector in phase 2) is
  * invisible to the caller.
+ *
+ * @since 2026-07-10
  *
  * <p>Authority: ADR-0160 decision 2 — revised by REQ-2026-006, then
  * <b>FEAT-016</b>. The registry PK evolves from {@code (tenant_id, agent_id,
@@ -70,7 +76,6 @@ import java.util.List;
  * decision 1).
  */
 public interface AgentDiscoveryService {
-
     /**
      * List all ONLINE/DEGRADED/DRAINING runtime instances registered under
      * the given {@code (tenantId, agentId)} pair. Each instance gets its own

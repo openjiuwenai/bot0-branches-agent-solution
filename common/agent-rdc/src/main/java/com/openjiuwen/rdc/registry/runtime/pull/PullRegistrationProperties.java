@@ -1,6 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.registry.runtime.pull;
 
 import com.openjiuwen.rdc.spi.registry.FrameworkType;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -20,17 +24,45 @@ import java.util.Map;
  * <p>HTTP client timeouts are code-defaulted (not exposed as config keys)
  * to prevent operator misconfiguration that could block bootstrap:
  * connect 5s, read 10s (OQ-3 H2 resolution).
+ *
+ * @since 2026-07-10
  */
 @Component
 @ConfigurationProperties(prefix = "rdc.pull-registration")
 public class PullRegistrationProperties {
+    /**
+     * HTTP connect timeout for the pull GET. Code-defaulted (OQ-3 H2).
+     * Not exposed as a config key to prevent operator misconfiguration.
+     */
+    public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+    /**
+     * HTTP read timeout for the pull GET. Code-defaulted (OQ-3 H2).
+     * Not exposed as a config key to prevent operator misconfiguration.
+     */
+    public static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
+    /**
+     * Default {@code maxConcurrency} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.max_concurrency}
+     * and the push-path convention documented in the README.
+     */
+    public static final int DEFAULT_MAX_CONCURRENCY = 10;
+
+    /**
+     * Default {@code weight} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.weight}.
+     */
+    public static final int DEFAULT_WEIGHT = 100;
 
     /**
      * Master switch. Default {@code false} — pull registration is opt-in.
      * When {@code false}, {@link PullRegistrationBootstrap} no-ops on
      * {@code ApplicationReadyEvent}.
      */
-    private boolean enabled = false;
+    private boolean isEnabled = false;
 
     /**
      * Runtime list. Each entry produces one {@code upsert} call on
@@ -40,11 +72,11 @@ public class PullRegistrationProperties {
     private List<RuntimeEntry> runtimes = new ArrayList<>();
 
     public boolean isEnabled() {
-        return enabled;
+        return isEnabled;
     }
 
     public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
+        this.isEnabled = enabled;
     }
 
     public List<RuntimeEntry> getRuntimes() {
@@ -66,7 +98,6 @@ public class PullRegistrationProperties {
      * {@code capabilities} (FEAT-016 — default: empty).
      */
     public static class RuntimeEntry {
-
         /** Runtime origin URL, e.g. {@code http://localhost:8090}. Also used as endpointUrl. */
         private String baseUrl;
 
@@ -130,7 +161,7 @@ public class PullRegistrationProperties {
          * {@code agent_registry_mvp} (V6 migration). Lets the pull path
          * populate the same column the push register endpoint populates.
          */
-        private java.util.List<String> capabilities;
+        private List<String> capabilities;
 
         public String getBaseUrl() {
             return baseUrl;
@@ -236,39 +267,12 @@ public class PullRegistrationProperties {
             this.serviceId = serviceId;
         }
 
-        public java.util.List<String> getCapabilities() {
+        public List<String> getCapabilities() {
             return capabilities;
         }
 
-        public void setCapabilities(java.util.List<String> capabilities) {
+        public void setCapabilities(List<String> capabilities) {
             this.capabilities = capabilities;
         }
     }
-
-    /**
-     * HTTP connect timeout for the pull GET. Code-defaulted (OQ-3 H2).
-     * Not exposed as a config key to prevent operator misconfiguration.
-     */
-    public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-
-    /**
-     * HTTP read timeout for the pull GET. Code-defaulted (OQ-3 H2).
-     * Not exposed as a config key to prevent operator misconfiguration.
-     */
-    public static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
-
-    /**
-     * Default {@code maxConcurrency} applied by
-     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
-     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.max_concurrency}
-     * and the push-path convention documented in the README.
-     */
-    public static final int DEFAULT_MAX_CONCURRENCY = 10;
-
-    /**
-     * Default {@code weight} applied by
-     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
-     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.weight}.
-     */
-    public static final int DEFAULT_WEIGHT = 100;
 }

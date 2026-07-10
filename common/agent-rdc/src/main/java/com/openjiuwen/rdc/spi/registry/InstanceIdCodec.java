@@ -1,7 +1,12 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.spi.registry;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Locale;
 
 /**
  * Derive the {@code instance_id} column value (server-derived host-port)
@@ -15,9 +20,10 @@ import java.net.URISyntaxException;
  * <p>Pure Java (ADR-0160 decision 1) — uses only {@link java.net.URI} from the
  * JDK. No Jackson / Spring / JDBC imports so the {@code spi.registry} package
  * stays ArchUnit-pure.
+ *
+ * @since 2026-07-10
  */
 public final class InstanceIdCodec {
-
     private InstanceIdCodec() {
     }
 
@@ -66,13 +72,13 @@ public final class InstanceIdCodec {
         if (host == null || host.isBlank()) {
             throw new IllegalArgumentException("endpointUrl has no host: " + endpointUrl);
         }
-        host = host.toLowerCase();
+        host = host.toLowerCase(Locale.ROOT);
         if (port == -1) {
             String scheme = uri.getScheme();
             if (scheme == null) {
                 scheme = "http";
             }
-            scheme = scheme.toLowerCase();
+            scheme = scheme.toLowerCase(Locale.ROOT);
             port = "https".equals(scheme) ? 443 : 80;
         }
         return host + "-" + port;

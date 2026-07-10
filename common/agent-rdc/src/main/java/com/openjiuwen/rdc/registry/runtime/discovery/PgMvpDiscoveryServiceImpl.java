@@ -1,6 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.registry.runtime.discovery;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository.EndpointEntry;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository.RegistryRow;
@@ -9,6 +13,7 @@ import com.openjiuwen.rdc.spi.registry.AgentDiscoveryService;
 import com.openjiuwen.rdc.spi.registry.RouteResolution;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
 import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
+
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
@@ -53,11 +58,12 @@ import java.util.UUID;
  * {@code entry_not_found}); tenant mismatch →
  * {@link TenantIsolationViolationException} (HTTP 400
  * {@code tenant_isolation_violation}).
+ *
+ * @since 2026-07-10
  */
 @Primary
 @Service
 public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
-
     private static final String DIM_AGENT_ID = "agentId";
     private static final String DIM_SERVICE_ID = "serviceId";
     private static final String DIM_CAPABILITY = "capability";
@@ -79,7 +85,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         int resultCount = 0;
         try {
             verifyTenant(tenantId);
@@ -89,19 +95,19 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 outcome = "not_found";
                 return List.of();
             }
+            outcome = "success";
             return rows.stream()
                     .map(row -> toDto(tenantId, row))
                     .toList();
         } catch (TenantIsolationViolationException ex) {
             outcome = "tenant_isolation_violation";
             throw ex;
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDiscover(traceId, tenantId, DIM_AGENT_ID, agentId,
-                    outcome, resultCount, latencyMs);
+            RegistryOpContext ctx = RegistryOpContext.of(traceId, tenantId)
+                    .query(DIM_AGENT_ID, agentId)
+                    .build();
+            observability.observeDiscover(ctx, outcome, resultCount, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -111,7 +117,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         int resultCount = 0;
         try {
             verifyTenant(tenantId);
@@ -121,19 +127,19 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 outcome = "not_found";
                 return List.of();
             }
+            outcome = "success";
             return rows.stream()
                     .map(row -> toDto(tenantId, row))
                     .toList();
         } catch (TenantIsolationViolationException ex) {
             outcome = "tenant_isolation_violation";
             throw ex;
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDiscover(traceId, tenantId, DIM_SERVICE_ID, serviceId,
-                    outcome, resultCount, latencyMs);
+            RegistryOpContext ctx = RegistryOpContext.of(traceId, tenantId)
+                    .query(DIM_SERVICE_ID, serviceId)
+                    .build();
+            observability.observeDiscover(ctx, outcome, resultCount, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -143,7 +149,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         int resultCount = 0;
         try {
             verifyTenant(tenantId);
@@ -153,19 +159,19 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 outcome = "not_found";
                 return List.of();
             }
+            outcome = "success";
             return rows.stream()
                     .map(row -> toDto(tenantId, row))
                     .toList();
         } catch (TenantIsolationViolationException ex) {
             outcome = "tenant_isolation_violation";
             throw ex;
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDiscover(traceId, tenantId, DIM_CAPABILITY, capability,
-                    outcome, resultCount, latencyMs);
+            RegistryOpContext ctx = RegistryOpContext.of(traceId, tenantId)
+                    .query(DIM_CAPABILITY, capability)
+                    .build();
+            observability.observeDiscover(ctx, outcome, resultCount, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -175,9 +181,9 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
-            RouteHandleCodec.DecodedHandle decoded;
+            RouteHandleCodec.HandleFields decoded;
             try {
                 decoded = RouteHandleCodec.decode(routeHandle);
             } catch (IllegalArgumentException ex) {
@@ -201,20 +207,14 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                         + ", instanceId=" + decoded.instanceId());
             }
             EndpointEntry ep = endpoint.get();
+            outcome = "success";
             return new RouteResolution(decoded.instanceId(), ep.endpointUrl(),
                     ep.routeKey(), ep.contractVersion());
-        } catch (RuntimeException ex) {
-            if ("entry_not_found".equals(outcome)
-                    || "malformed_handle".equals(outcome)
-                    || "tenant_isolation_violation".equals(outcome)) {
-                // already set; keep outcome
-            } else {
-                outcome = "error";
-            }
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeResolve(traceId, tenantId, routeHandle, outcome, latencyMs);
+            observability.observeResolve(
+                    RegistryOpContext.of(traceId, tenantId).routeHandleId(routeHandle).build(),
+                    outcome, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -225,6 +225,11 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
      * {@code bindForScope}), mismatch raises {@link TenantIsolationViolationException}.
      * When unbound (HTTP entry passes {@code tenantId} explicitly), the check
      * is skipped — the explicit parameter is the source of truth.
+     *
+     * @param tenantId the tenant ID passed explicitly by the caller (HTTP entry) —
+     *                 the source of truth against which any thread-bound tenant is checked
+     * @throws TenantIsolationViolationException if a tenant is bound to the current
+     *                                          thread and does not match {@code tenantId}
      */
     private void verifyTenant(String tenantId) {
         String bound = tenantContext.current();
@@ -238,11 +243,15 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
      * FEAT-016: encode includes {@code instanceId} (v2: 6-field); DTO
      * includes {@code serviceId} (logical service identifier, visible in the
      * agent/client projection layer per L2 §2.3.2).
+     *
+     * @param tenantId the tenant ID owning the row (encoded into the route handle)
+     * @param row      the persistence row to project
+     * @return a fully-populated {@link AgentCardDto} with a fresh route handle
      */
     private AgentCardDto toDto(String tenantId, RegistryRow row) {
-        String handle = RouteHandleCodec.encode(
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
                 tenantId, row.agentId(), row.serviceId(), row.instanceId(),
-                row.routeKey(), row.contractVersion());
+                row.routeKey(), row.contractVersion()));
         return AgentCardDto.builder()
                 .serviceId(row.serviceId())
                 .routeHandle(handle)

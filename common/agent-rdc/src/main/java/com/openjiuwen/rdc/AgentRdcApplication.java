@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc;
 
 import org.springframework.boot.SpringApplication;
@@ -31,6 +34,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *
  * <p>Authority: PR #389 review issue #6 + ADR-0160 decision 7 (scope
  * evolution: provided → compile, agent-bus now ships its own runtime).
+ *
+ * @since 2026-07-10
  */
 @SpringBootApplication
 public class AgentRdcApplication {

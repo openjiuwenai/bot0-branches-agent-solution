@@ -1,4 +1,20 @@
+/*
+ * Copyright (C) 2026 Huawei Technologies Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import org.flywaydb.core.Flyway;
@@ -8,11 +24,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * V2/V3/V4/V5/V6 migration smoke test for {@code agent_registry_mvp}.
@@ -51,9 +66,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Tests verify the post-V6 schema state: PK is the 4-field tuple, partial
  * heartbeat index unchanged, RLS unchanged, CHECK constraints unchanged.
  * Old search_tsv / capability / agent_type artifacts must be gone.
+ *
+ * @since 2026-07-10
  */
 class AgentRegistryMigrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static JdbcTemplate jdbc;
@@ -93,7 +109,7 @@ class AgentRegistryMigrationTest {
     // ---- V6: serviceId/instanceId split + capabilities + 4-field PK ------
 
     @Test
-    void v6_migration_separates_service_id_and_instance_id_and_adds_capabilities() {
+    void v6_separates_service_and_instance_ids_adds_capabilities() {
         Integer pkCols = jdbc.queryForObject(
                 "SELECT count(*) FROM information_schema.key_column_usage "
                         + "WHERE table_name = 'agent_registry_mvp' "
@@ -169,11 +185,11 @@ class AgentRegistryMigrationTest {
 
     @Test
     void v5_service_id_column_is_not_null() {
-        Boolean attnotnull = jdbc.queryForObject(
+        Boolean isAttnotnull = jdbc.queryForObject(
                 "SELECT attnotnull FROM pg_attribute "
                 + "WHERE attrelid = 'agent_registry_mvp'::regclass AND attname = 'service_id'",
                 Boolean.class);
-        assertThat(attnotnull)
+        assertThat(isAttnotnull)
                 .as("REQ-2026-006 V5: service_id column must be NOT NULL after backfill")
                 .isTrue();
     }
@@ -250,7 +266,7 @@ class AgentRegistryMigrationTest {
     // ---- RB1-S4: partial index on last_heartbeat WHERE status IN ('ONLINE','DEGRADED') ----
 
     @Test
-    void partial_index_on_last_heartbeat_for_online_and_degraded_rows_exists() {
+    void partial_index_on_last_heartbeat_for_online_degraded_exists() {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes "
                 + "WHERE tablename = 'agent_registry_mvp' AND indexname = ?",
@@ -315,10 +331,10 @@ class AgentRegistryMigrationTest {
 
     @Test
     void rls_is_enabled_on_agent_registry_mvp() {
-        Boolean rlsEnabled = jdbc.queryForObject(
+        Boolean isRlsEnabled = jdbc.queryForObject(
                 "SELECT relrowsecurity FROM pg_class WHERE relname = 'agent_registry_mvp'",
                 Boolean.class);
-        assertThat(rlsEnabled)
+        assertThat(isRlsEnabled)
                 .as("HD3-003 defence-in-depth: RLS must be enabled on agent_registry_mvp — V4 unchanged")
                 .isTrue();
     }

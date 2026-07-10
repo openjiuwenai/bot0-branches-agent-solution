@@ -1,12 +1,16 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.architecture;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
-import org.junit.jupiter.api.Test;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /**
  * Layered purity harness for the Stage 4 registry/discovery runtime
@@ -47,9 +51,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the shipped runtime surface, not test scaffolding.
  *
  * <p>Assertion ID: HA-002-REG.
+ *
+ * @since 2026-07-10
  */
 class AgentRdcRegistryJdbcPurityTest {
-
     /**
      * Production registry runtime classes only
      * ({@code com.openjiuwen.rdc.registry} and sub-packages). Test
@@ -85,7 +90,7 @@ class AgentRdcRegistryJdbcPurityTest {
             "com.openjiuwen.rdc.registry.runtime..",
             "com.openjiuwen.rdc.registry.runtime.api..",
             "com.openjiuwen.rdc.registry.runtime.discovery..",
-            "com.openjiuwen.rdc.registry.runtime.health..",
+            "com.openjiuwen.rdc.registry.runtime.health.."
     };
 
     // ---- 1. JDBC confinement (ADR-0160 decision 4) -----------------------
@@ -96,8 +101,8 @@ class AgentRdcRegistryJdbcPurityTest {
                 .and().resideOutsideOfPackage(JDBC_ADAPTER)
                 .should().dependOnClassesThat().resideInAPackage("java.sql..")
                 .because("JDBC lives only in registry.runtime.persistence.jdbc.. (ADR-0160 "
-                       + "decision 4); api / discovery / health / tenant call the "
-                       + "AgentRegistryRepository port and never touch JDBC directly.")
+                        + "decision 4); api / discovery / health / tenant call the "
+                        + "AgentRegistryRepository port and never touch JDBC directly.")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -108,9 +113,9 @@ class AgentRdcRegistryJdbcPurityTest {
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")
                 .should().dependOnClassesThat().resideInAPackage("javax.sql..")
                 .because("javax.sql (DataSource) lives only in registry.runtime.persistence.jdbc.. "
-                       + "(ADR-0160 decision 4) and the registry.runtime root wiring package "
-                       + "(RegistryRuntimeBeanConfig constructs JdbcAgentRegistryRepository + "
-                       + "Flyway from a DataSource); every other subpackage stays pure Java.")
+                        + "(ADR-0160 decision 4) and the registry.runtime root wiring package "
+                        + "(RegistryRuntimeBeanConfig constructs JdbcAgentRegistryRepository + "
+                        + "Flyway from a DataSource); every other subpackage stays pure Java.")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -120,7 +125,7 @@ class AgentRdcRegistryJdbcPurityTest {
                 .and().resideOutsideOfPackage(JDBC_ADAPTER)
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.jdbc..")
                 .because("Spring JDBC (NamedParameterJdbcTemplate / RowMapper) lives only in "
-                       + "registry.runtime.persistence.jdbc.. (ADR-0160 decision 4).")
+                        + "registry.runtime.persistence.jdbc.. (ADR-0160 decision 4).")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -140,11 +145,11 @@ class AgentRdcRegistryJdbcPurityTest {
                 .and().resideOutsideOfPackage(JDBC_ADAPTER)
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.transaction..")
                 .because("Spring transaction (TransactionTemplate / PlatformTransactionManager) "
-                       + "lives only in registry.runtime.persistence.jdbc.. (Stage 24 RLS wiring "
-                       + "via set_config('app.tenant_id', ...) inside a short transaction). PR #389 "
-                       + "review issue: the original purity test banned org.springframework.jdbc.. "
-                       + "but missed org.springframework.transaction.. — the adapter had already "
-                       + "pulled in TransactionTemplate, the gate just did not say so.")
+                        + "lives only in registry.runtime.persistence.jdbc.. (Stage 24 RLS wiring "
+                        + "via set_config('app.tenant_id', ...) inside a short transaction). PR #389 "
+                        + "review issue: the original purity test banned org.springframework.jdbc.. "
+                        + "but missed org.springframework.transaction.. — the adapter had already "
+                        + "pulled in TransactionTemplate, the gate just did not say so.")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -155,7 +160,7 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry..")
                 .should().dependOnClassesThat().resideInAPackage("com.ecwid.consul..")
                 .because("MVP registry runtime is Consul-free; phase 2 introduces Consul under "
-                       + "an ADR-gated exemption (ADR-0160 decision 2 / NFR-2 trip-wire).")
+                        + "an ADR-gated exemption (ADR-0160 decision 2 / NFR-2 trip-wire).")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -164,7 +169,7 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry..")
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.cloud.consul..")
                 .because("MVP registry runtime is Consul-free; Spring Cloud Consul is a phase-2 "
-                       + "candidate, never a Stage 4 dependency.")
+                        + "candidate, never a Stage 4 dependency.")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -187,7 +192,7 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage(JDBC_ADAPTER)
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.web..")
                 .because("persistence.jdbc adapter is Spring JDBC / transaction only — Spring "
-                       + "Web must not leak in (ESC-2(b) confinement, ADR-0160 decision 7).")
+                        + "Web must not leak in (ESC-2(b) confinement, ADR-0160 decision 7).")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -196,8 +201,8 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry.runtime.tenant..")
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.web..")
                 .because("tenant subpackage stays pure Java so background schedulers / async "
-                       + "handlers can use ThreadLocalTenantContext without pulling Spring Web "
-                       + "onto the classpath (ESC-2 design pivot, ADR-0160 decision 6).")
+                        + "handlers can use ThreadLocalTenantContext without pulling Spring Web "
+                        + "onto the classpath (ESC-2 design pivot, ADR-0160 decision 6).")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -206,7 +211,7 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage(JDBC_ADAPTER)
                 .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
                 .because("persistence.jdbc adapter is Spring JDBC / transaction only — "
-                       + "Micrometer must not leak in (ESC-2(b) confinement).")
+                        + "Micrometer must not leak in (ESC-2(b) confinement).")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -215,8 +220,8 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry.runtime.tenant..")
                 .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
                 .because("tenant subpackage stays pure Java so background schedulers / async "
-                       + "handlers can use ThreadLocalTenantContext without pulling Micrometer "
-                       + "onto the classpath (ESC-2 design pivot).")
+                        + "handlers can use ThreadLocalTenantContext without pulling Micrometer "
+                        + "onto the classpath (ESC-2 design pivot).")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -230,8 +235,8 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry..")
                 .should().dependOnClassesThat().resideInAPackage("jakarta.servlet..")
                 .because("ESC-2 design pivot: no Servlet API in the registry runtime — tenant "
-                       + "isolation has no filter entry point. MvpRegistryController uses Spring "
-                       + "Web annotations but never jakarta.servlet.* directly.")
+                        + "isolation has no filter entry point. MvpRegistryController uses Spring "
+                        + "Web annotations but never jakarta.servlet.* directly.")
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -257,14 +262,14 @@ class AgentRdcRegistryJdbcPurityTest {
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")
                 .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
                 .because("Jackson is licensed only inside registry.runtime.discovery (for "
-                       + "RouteHandleCodec's opaque handle encoding), "
-                       + "registry.runtime.api (for A2A AgentCard JSON serialization at the "
-                       + "HTTP boundary, per REQ-2026-001), registry.runtime.pull (for "
-                       + "A2A AgentCard JSON deserialization in pull-based registration, per "
-                       + "REQ-2026-004), and the registry.runtime root (for "
-                       + "RegistryRuntimeBeanConfig's ObjectMapper bean wiring); every other "
-                       + "subpackage stays serialisation-agnostic (ADR-0160 decision 3/5, "
-                       + "relaxed per REQ-2026-001 / REQ-2026-004).")
+                        + "RouteHandleCodec's opaque handle encoding), "
+                        + "registry.runtime.api (for A2A AgentCard JSON serialization at the "
+                        + "HTTP boundary, per REQ-2026-001), registry.runtime.pull (for "
+                        + "A2A AgentCard JSON deserialization in pull-based registration, per "
+                        + "REQ-2026-004), and the registry.runtime root (for "
+                        + "RegistryRuntimeBeanConfig's ObjectMapper bean wiring); every other "
+                        + "subpackage stays serialisation-agnostic (ADR-0160 decision 3/5, "
+                        + "relaxed per REQ-2026-001 / REQ-2026-004).")
                 .check(REGISTRY_RUNTIME);
     }
 

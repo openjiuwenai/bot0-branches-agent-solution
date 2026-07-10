@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * agent-bus registry runtime — persistence JDBC adapter (ADR-0160 decision 4).
  *

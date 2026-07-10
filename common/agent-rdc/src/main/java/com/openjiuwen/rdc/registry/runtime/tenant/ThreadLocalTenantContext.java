@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.registry.runtime.tenant;
 
 import com.openjiuwen.rdc.spi.registry.TenantContext;
@@ -22,9 +26,10 @@ import java.util.Objects;
  *
  * <p>Phase-2 swap path: a reactor-context-backed implementation may replace
  * this class without touching the {@link TenantContext} port or any caller.
+ *
+ * @since 2026-07-10
  */
 public final class ThreadLocalTenantContext implements TenantContext {
-
     private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
 
     /**
@@ -48,6 +53,11 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * {@code work}, then clear the binding regardless of outcome, returning
      * the supplier's result. Use this for background scheduling paths that
      * need to return a value.
+     *
+     * @param tenantId tenant to bind; must not be {@code null} or blank
+     * @param work     supplier to execute with the tenant bound
+     * @param <T>      result type produced by the supplier
+     * @return the supplier's result
      */
     public static <T> T bindForScope(String tenantId, java.util.function.Supplier<T> work) {
         String prior = CURRENT.get();
@@ -63,6 +73,8 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * Set the current thread's tenant. Called by {@link #bindForScope};
      * package-private so external callers cannot bypass the
      * {@code bindForScope} lifecycle.
+     *
+     * @param tenantId tenant to bind; must not be {@code null} or blank
      */
     static void set(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {

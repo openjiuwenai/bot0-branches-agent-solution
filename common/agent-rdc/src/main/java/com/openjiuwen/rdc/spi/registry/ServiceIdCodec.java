@@ -1,7 +1,12 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.spi.registry;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Locale;
 
 /**
  * Derive the {@code service_id} column value (logical service identifier)
@@ -17,6 +22,8 @@ import java.net.URISyntaxException;
  * <p>Pure Java (ADR-0160 decision 1) — uses only {@link java.net.URI} from the
  * JDK. No Jackson / Spring / JDBC imports so the {@code spi.registry} package
  * stays ArchUnit-pure.
+ *
+ * @since 2026-07-10
  */
 public final class ServiceIdCodec {
 
@@ -51,7 +58,7 @@ public final class ServiceIdCodec {
         if (host == null || host.isBlank()) {
             throw new IllegalArgumentException("endpointUrl has no host: " + endpointUrl);
         }
-        return host.toLowerCase();
+        return host.toLowerCase(Locale.ROOT);
     }
 
     /**

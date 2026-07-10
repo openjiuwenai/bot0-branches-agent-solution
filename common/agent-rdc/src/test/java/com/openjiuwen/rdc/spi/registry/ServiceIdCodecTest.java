@@ -1,12 +1,22 @@
-package com.openjiuwen.rdc.spi.registry;
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 
-import org.junit.jupiter.api.Test;
+package com.openjiuwen.rdc.spi.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class ServiceIdCodecTest {
+import org.junit.jupiter.api.Test;
 
+/**
+ * Unit tests for {@link ServiceIdCodec} — host-only {@code serviceId}
+ * derivation (FEAT-016 phase one: serviceId semantics changed from
+ * "host-port" to "host only").
+ *
+ * @since 2026-07-10
+ */
+class ServiceIdCodecTest {
     @Test
     void derive_returns_host_only_without_port() {
         assertThat(ServiceIdCodec.derive("http://10.0.0.1:8080")).isEqualTo("10.0.0.1");

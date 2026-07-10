@@ -1,6 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.registry.runtime.api;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentCardDto;
 import com.openjiuwen.rdc.spi.registry.AgentDiscoveryService;
@@ -9,8 +14,10 @@ import com.openjiuwen.rdc.spi.registry.InstanceIdCodec;
 import com.openjiuwen.rdc.spi.registry.RouteResolution;
 import com.openjiuwen.rdc.spi.registry.ServiceIdCodec;
 import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -103,11 +110,12 @@ import java.util.UUID;
  * caller-overridable serviceId, always-derived instanceId, capabilities
  * column, 3 query dimensions with contractVersion filter, DRAINING
  * visibility, single-instance delete).
+ *
+ * @since 2026-07-10
  */
 @RestController
 @RequestMapping("/api/registry")
 public class MvpRegistryController {
-
     private static final String TRACE_PARENT_HEADER = "traceparent";
     private static final String X_TRACE_ID_HEADER = "X-Trace-Id";
 
@@ -116,6 +124,14 @@ public class MvpRegistryController {
     private final RegistryObservabilityConfig observability;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Construct the controller with its collaborators.
+     *
+     * @param repository   persistent registry store
+     * @param discovery    discovery / route-handle resolution port
+     * @param observability register / deregister metrics recorder
+     * @param objectMapper  Jackson serializer for the a2aAgentCard JSON column
+     */
     public MvpRegistryController(AgentRegistryRepository repository,
                                  AgentDiscoveryService discovery,
                                  RegistryObservabilityConfig observability,
@@ -126,6 +142,18 @@ public class MvpRegistryController {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Upsert an {@link AgentRegistryEntry} into the registry. FEAT-016:
+     * derives {@code instanceId} server-side, applies a default
+     * {@code serviceId} when the caller omits it, persists the
+     * {@code a2aAgentCard} as JSON, then records register observability.
+     *
+     * @param card       registry entry to upsert; must carry tenantId + agentId
+     * @param traceparent optional W3C traceparent header; the third dash
+     *                    segment is used as the audit trace id
+     * @param xTraceId   optional fallback trace id header
+     * @return HTTP 200 on success
+     */
     @PostMapping("/register")
     public ResponseEntity<Void> register(
             @RequestBody AgentRegistryEntry card,
@@ -138,7 +166,7 @@ public class MvpRegistryController {
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
             applyDefaults(card);
             // FEAT-016: serviceId is caller-overridable. When the caller
@@ -159,17 +187,18 @@ public class MvpRegistryController {
             // capabilities list (caller-optional) is read by repository.upsert
             // and persisted into the VARCHAR(64)[] column. No derivation or
             // normalization at this boundary.
-            String a2aCardJson = serializeA2aCard(card.getA2aAgentCard());
+            String a2aCardJson = serializeA2aCard(card.getA2aAgentCard()).orElse(null);
             repository.upsert(card, a2aCardJson);
+            outcome = "success";
             return ResponseEntity.ok().build();
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeRegister(traceId, card.getTenantId(), card.getAgentId(),
-                    card.getContractVersion(),
-                    card.getCapabilityVersion(), "ONLINE", null, outcome, latencyMs);
+            RegistryOpContext ctx = RegistryOpContext.of(traceId, card.getTenantId(), card.getAgentId())
+                    .contractVersion(card.getContractVersion())
+                    .capabilityVersion(card.getCapabilityVersion())
+                    .health("ONLINE")
+                    .build();
+            observability.observeRegister(ctx, outcome, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -188,6 +217,14 @@ public class MvpRegistryController {
      * {@code ?contractVersion=} query param — when present, filters results
      * by {@code AND contract_version = :contractVersion}; when absent, no
      * filter is applied.
+     *
+     * @param tenantId        registry key mandatory dimension
+     * @param agentId         agent identifier within the tenant
+     * @param contractVersion optional contract version filter; {@code null}
+     *                        applies no filter
+     * @param traceparent     optional W3C traceparent header
+     * @param xTraceId        optional fallback trace id header
+     * @return immutable list of matching {@link AgentCardDto}; empty on no match
      */
     @GetMapping("/instances/{tenantId}/{agentId}")
     public List<AgentCardDto> listInstances(
@@ -210,6 +247,14 @@ public class MvpRegistryController {
      * JSON array of {@link AgentCardDto}, each carrying an opaque
      * {@code routeHandle}. Optional {@code ?contractVersion=} query param
      * filters by contract version.
+     *
+     * @param tenantId        registry key mandatory dimension
+     * @param serviceId       logical service identifier (host only)
+     * @param contractVersion optional contract version filter; {@code null}
+     *                        applies no filter
+     * @param traceparent     optional W3C traceparent header
+     * @param xTraceId        optional fallback trace id header
+     * @return immutable list of matching {@link AgentCardDto}; empty on no match
      */
     @GetMapping("/instances/by-service/{tenantId}/{serviceId}")
     public List<AgentCardDto> listInstancesByService(
@@ -233,6 +278,14 @@ public class MvpRegistryController {
      * {@link AgentCardDto}, each carrying an opaque {@code routeHandle}.
      * Optional {@code ?contractVersion=} query param filters by contract
      * version.
+     *
+     * @param tenantId        registry key mandatory dimension
+     * @param capability      capability tag to match (exact string)
+     * @param contractVersion optional contract version filter; {@code null}
+     *                        applies no filter
+     * @param traceparent     optional W3C traceparent header
+     * @param xTraceId        optional fallback trace id header
+     * @return immutable list of matching {@link AgentCardDto}; empty on no match
      */
     @GetMapping("/instances/by-capability/{tenantId}/{capability}")
     public List<AgentCardDto> listInstancesByCapability(
@@ -253,11 +306,17 @@ public class MvpRegistryController {
      * REQ-2026-006 new endpoint. The caller (Orchestrator forwarding layer)
      * passes a handle from {@code GET /instances} and the tenant id; the
      * response carries the endpoint URL, route key, and contract version.
+     *
+     * @param request     body carrying the route handle and caller tenant id
+     * @param traceparent optional W3C traceparent header
+     * @param xTraceId    optional fallback trace id header
+     * @return resolved endpoint / route key / contract version
      */
     @PostMapping("/route-handle/resolve")
-    public RouteResolution resolveRouteHandle(@RequestBody ResolveRequest request,
-                                               @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
-                                               @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
+    public RouteResolution resolveRouteHandle(
+            @RequestBody ResolveRequest request,
+            @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
+            @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
         if (request == null
                 || request.routeHandle() == null || request.routeHandle().isBlank()
                 || request.tenantId() == null || request.tenantId().isBlank()) {
@@ -271,12 +330,19 @@ public class MvpRegistryController {
      * pair. REQ-2026-006 semantic generalization: previously deleted a single
      * row; now deletes every instance matching the pair. Single-instance
      * callers are backward compatible — they get all instances removed.
+     *
+     * @param tenantId    registry key mandatory dimension
+     * @param agentId     agent identifier within the tenant
+     * @param traceparent optional W3C traceparent header
+     * @param xTraceId    optional fallback trace id header
+     * @return HTTP 204 No Content regardless of whether any row matched
      */
     @DeleteMapping("/deregister/{tenantId}/{agentId}")
-    public ResponseEntity<Void> deregister(@PathVariable String tenantId,
-                                           @PathVariable String agentId,
-                                           @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
-                                           @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
+    public ResponseEntity<Void> deregister(
+            @PathVariable String tenantId,
+            @PathVariable String agentId,
+            @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
+            @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
         if (tenantId == null || tenantId.isBlank()
                 || agentId == null || agentId.isBlank()) {
             throw new IllegalArgumentException("tenantId and agentId are required path variables");
@@ -284,17 +350,15 @@ public class MvpRegistryController {
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
-            boolean deleted = repository.delete(tenantId, agentId);
-            outcome = deleted ? "success" : "not_found";
+            boolean isDeleted = repository.delete(tenantId, agentId);
+            outcome = isDeleted ? "success" : "not_found";
             return ResponseEntity.noContent().build();
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDeregister(traceId, tenantId, agentId, outcome, latencyMs);
+            observability.observeDeregister(
+                    RegistryOpContext.of(traceId, tenantId, agentId).build(), outcome, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -311,13 +375,21 @@ public class MvpRegistryController {
      * concrete instances under the triple. Use the 4-field
      * {@link #deregisterSingleInstance} endpoint to target a specific
      * concrete instance.
+     *
+     * @param tenantId    registry key mandatory dimension
+     * @param agentId     agent identifier within the tenant
+     * @param serviceId   logical service identifier (host only)
+     * @param traceparent optional W3C traceparent header
+     * @param xTraceId    optional fallback trace id header
+     * @return HTTP 204 No Content regardless of whether any row matched
      */
     @DeleteMapping("/deregister/{tenantId}/{agentId}/{serviceId}")
-    public ResponseEntity<Void> deregisterSingle(@PathVariable String tenantId,
-                                                 @PathVariable String agentId,
-                                                 @PathVariable String serviceId,
-                                                 @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
-                                                 @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
+    public ResponseEntity<Void> deregisterSingle(
+            @PathVariable String tenantId,
+            @PathVariable String agentId,
+            @PathVariable String serviceId,
+            @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
+            @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
         if (tenantId == null || tenantId.isBlank()
                 || agentId == null || agentId.isBlank()
                 || serviceId == null || serviceId.isBlank()) {
@@ -326,17 +398,15 @@ public class MvpRegistryController {
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
-            boolean deleted = repository.delete(tenantId, agentId, serviceId);
-            outcome = deleted ? "success" : "not_found";
+            boolean isDeleted = repository.delete(tenantId, agentId, serviceId);
+            outcome = isDeleted ? "success" : "not_found";
             return ResponseEntity.noContent().build();
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDeregister(traceId, tenantId, agentId, outcome, latencyMs);
+            observability.observeDeregister(
+                    RegistryOpContext.of(traceId, tenantId, agentId).build(), outcome, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -355,15 +425,22 @@ public class MvpRegistryController {
      * during register). The caller obtains it from a prior
      * {@code GET /instances/*} response's {@code routeHandle} (decoded
      * client-side) or from the {@code AgentCardDto.serviceId} grouping.
+     *
+     * @param pathVars    path-variable map carrying tenantId, agentId,
+     *                    serviceId and instanceId
+     * @param traceparent optional W3C traceparent header
+     * @param xTraceId    optional fallback trace id header
+     * @return HTTP 204 No Content regardless of whether any row matched
      */
     @DeleteMapping("/deregister/{tenantId}/{agentId}/{serviceId}/{instanceId}")
     public ResponseEntity<Void> deregisterSingleInstance(
-            @PathVariable String tenantId,
-            @PathVariable String agentId,
-            @PathVariable String serviceId,
-            @PathVariable String instanceId,
+            @PathVariable Map<String, String> pathVars,
             @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
             @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
+        String tenantId = pathVars.get("tenantId");
+        String agentId = pathVars.get("agentId");
+        String serviceId = pathVars.get("serviceId");
+        String instanceId = pathVars.get("instanceId");
         if (tenantId == null || tenantId.isBlank()
                 || agentId == null || agentId.isBlank()
                 || serviceId == null || serviceId.isBlank()
@@ -373,23 +450,27 @@ public class MvpRegistryController {
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
-            boolean deleted = repository.delete(tenantId, agentId, serviceId, instanceId);
-            outcome = deleted ? "success" : "not_found";
+            boolean isDeleted = repository.delete(tenantId, agentId, serviceId, instanceId);
+            outcome = isDeleted ? "success" : "not_found";
             return ResponseEntity.noContent().build();
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeDeregister(traceId, tenantId, agentId, outcome, latencyMs);
+            observability.observeDeregister(
+                    RegistryOpContext.of(traceId, tenantId, agentId).build(), outcome, latencyMs);
             MDC.remove("traceId");
         }
     }
 
-    // ===== exception handlers (HTTP status mapping) =====
-
+    /**
+     * Map {@link IllegalArgumentException} to HTTP 400. Handles both
+     * malformed route-handle errors ({@code malformed_handle}) and generic
+     * invalid-request errors ({@code invalid_request}).
+     *
+     * @param ex the illegal-argument exception raised by a controller method
+     * @return error code + message body
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, String> handleBadRequest(IllegalArgumentException ex) {
@@ -398,19 +479,30 @@ public class MvpRegistryController {
         return Map.of("error", code, "message", ex.getMessage());
     }
 
+    /**
+     * Map {@link TenantIsolationViolationException} to HTTP 400
+     * {@code tenant_isolation_violation}.
+     *
+     * @param ex the tenant-isolation violation raised by the discovery layer
+     * @return error code + message body
+     */
     @ExceptionHandler(TenantIsolationViolationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, String> handleTenantViolation(TenantIsolationViolationException ex) {
         return Map.of("error", "tenant_isolation_violation", "message", ex.getMessage());
     }
 
+    /**
+     * Map {@link NoSuchElementException} to HTTP 404 {@code entry_not_found}.
+     *
+     * @param ex the no-such-element exception raised when a lookup misses
+     * @return error code + message body
+     */
     @ExceptionHandler(NoSuchElementException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Map<String, String> handleNotFound(NoSuchElementException ex) {
         return Map.of("error", "entry_not_found", "message", ex.getMessage());
     }
-
-    // ===== helpers =====
 
     /**
      * Apply default values to optional selection-hint fields the push caller
@@ -420,6 +512,9 @@ public class MvpRegistryController {
      * binds these columns explicitly (so the DB-level DEFAULT does not apply
      * when the entry carries null). Push callers therefore rely on this
      * boundary to materialise the README-documented defaults (10 / 100).
+     *
+     * @param card entry whose optional fields may need defaulting; modified
+     *             in place
      */
     private static void applyDefaults(AgentRegistryEntry card) {
         if (card.getMaxConcurrency() == null) {
@@ -443,12 +538,27 @@ public class MvpRegistryController {
         return UUID.randomUUID().toString();
     }
 
-    private String serializeA2aCard(org.a2aproject.sdk.spec.AgentCard card) {
+    /**
+     * Validate that none of the supplied values are {@code null} or blank.
+     *
+     * @param message error message for the thrown exception
+     * @param values  values to check
+     * @throws IllegalArgumentException if any value is {@code null} or blank
+     */
+    private static void requireNonBlank(String message, String... values) {
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                throw new IllegalArgumentException(message);
+            }
+        }
+    }
+
+    private java.util.Optional<String> serializeA2aCard(org.a2aproject.sdk.spec.AgentCard card) {
         if (card == null) {
-            return null;
+            return java.util.Optional.empty();
         }
         try {
-            return objectMapper.writeValueAsString(card);
+            return java.util.Optional.of(objectMapper.writeValueAsString(card));
         } catch (JsonProcessingException ex) {
             throw new IllegalArgumentException("Failed to serialize a2aAgentCard to JSON", ex);
         }

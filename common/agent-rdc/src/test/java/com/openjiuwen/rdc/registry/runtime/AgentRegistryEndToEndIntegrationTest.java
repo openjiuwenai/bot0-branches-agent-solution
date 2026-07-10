@@ -1,13 +1,22 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.registry.runtime;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.registry.runtime.api.MvpRegistryController;
 import com.openjiuwen.rdc.registry.runtime.discovery.PgMvpDiscoveryServiceImpl;
 import com.openjiuwen.rdc.registry.runtime.health.MvpHealthProbeScheduler;
+import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 import com.openjiuwen.rdc.spi.registry.AgentCardDto;
 import com.openjiuwen.rdc.spi.registry.FrameworkType;
 import com.openjiuwen.rdc.spi.registry.RouteResolution;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import okhttp3.mockwebserver.MockResponse;
@@ -19,11 +28,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
-import javax.sql.DataSource;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import javax.sql.DataSource;
 
 /**
  * End-to-end integration test for the Stage 4 agent registry MVP (RB5),
@@ -55,7 +61,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * window applies only to the health-probe scheduler scan.
  */
 class AgentRegistryEndToEndIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static MockWebServer agentServer;
@@ -85,8 +90,8 @@ class AgentRegistryEndToEndIntegrationTest {
                 repository, discovery, observability, new com.fasterxml.jackson.databind.ObjectMapper());
         scheduler = new MvpHealthProbeScheduler(
                 repository, observability,
-                /* staleBeforeMs = */ 1_000L,
-                /* scanLimit = */ 200);
+                1_000L,
+                200);
     }
 
     @AfterAll
@@ -187,7 +192,7 @@ class AgentRegistryEndToEndIntegrationTest {
     }
 
     @Test
-    void register_applies_defaults_when_request_body_omits_max_concurrency_and_weight() throws Exception {
+    void register_applies_defaults_when_body_omits_concurrency_weight() throws Exception {
         String agentEndpoint = agentServer.url("/").toString().replaceAll("/$", "");
         String tenant = "tenant-defaults";
         String agent = "agent-defaults";
@@ -218,7 +223,7 @@ class AgentRegistryEndToEndIntegrationTest {
     }
 
     @Test
-    void register_with_explicit_service_id_and_capabilities_persists_and_queries() {
+    void register_with_service_id_and_capabilities_persists_queries() {
         AgentRegistryEntry card = sampleCard("tenant-A", "agent-001", "http://10.0.0.1:8080");
         card.setServiceId("wealth-svc");
         card.setCapabilities(java.util.List.of("wealth.purchase", "wealth.assessment"));
@@ -264,9 +269,9 @@ class AgentRegistryEndToEndIntegrationTest {
 
         // Manually set DRAINING via repository (bypass controller) — uses the
         // 4-field PK so instanceId MUST have been derived by register.
-        boolean updated = repository.updateStatus("tenant-A", "agent-003",
-                card.getServiceId(), card.getInstanceId(), "DRAINING", false);
-        assertThat(updated).as("updateStatus must hit the row registered by the controller").isTrue();
+        boolean isUpdated = repository.updateStatus(new AgentRegistryRepository.StatusUpdate("tenant-A", "agent-003",
+                card.getServiceId(), card.getInstanceId(), "DRAINING", false));
+        assertThat(isUpdated).as("updateStatus must hit the row registered by the controller").isTrue();
 
         // FEAT-016: DRAINING is now included in discovery results (was
         // excluded in REQ-2026-006). The caller sees DRAINING as a
@@ -289,8 +294,8 @@ class AgentRegistryEndToEndIntegrationTest {
         assertThat(regB.getStatusCode().is2xxSuccessful()).isTrue();
 
         // 4-field delete targets only replica a; replica b stays.
-        boolean deleted = repository.delete("tenant-A", "agent-004", "svc-x", a.getInstanceId());
-        assertThat(deleted).isTrue();
+        boolean isDeleted = repository.delete("tenant-A", "agent-004", "svc-x", a.getInstanceId());
+        assertThat(isDeleted).isTrue();
 
         List<AgentCardDto> remaining = discovery.searchInstancesByAgentId("tenant-A", "agent-004", null);
         assertThat(remaining).hasSize(1);

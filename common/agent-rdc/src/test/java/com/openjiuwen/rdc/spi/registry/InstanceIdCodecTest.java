@@ -1,12 +1,21 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.rdc.spi.registry;
-
-import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class InstanceIdCodecTest {
+import org.junit.jupiter.api.Test;
 
+/**
+ * Unit tests for {@link InstanceIdCodec} — derives a concrete instance
+ * identifier (host-port) from an {@code endpointUrl} and stamps it onto an
+ * {@link AgentRegistryEntry} via {@link InstanceIdCodec#applyTo}.
+ *
+ * @since 2026-07-10
+ */
+class InstanceIdCodecTest {
     @Test
     void derive_returns_host_port_with_explicit_port() {
         assertThat(InstanceIdCodec.derive("http://10.0.0.1:8080")).isEqualTo("10.0.0.1-8080");
