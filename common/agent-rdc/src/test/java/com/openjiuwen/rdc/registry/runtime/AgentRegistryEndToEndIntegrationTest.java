@@ -217,6 +217,90 @@ class AgentRegistryEndToEndIntegrationTest {
                 .isEqualTo(100);
     }
 
+    @Test
+    void register_with_explicit_service_id_and_capabilities_persists_and_queries() {
+        AgentRegistryEntry card = sampleCard("tenant-A", "agent-001", "http://10.0.0.1:8080");
+        card.setServiceId("wealth-svc");
+        card.setCapabilities(java.util.List.of("wealth.purchase", "wealth.assessment"));
+        ResponseEntity<Void> reg = controller.register(card, null, null);
+        assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
+
+        // serviceId caller-overridable: caller value "wealth-svc" wins; the
+        // controller must NOT overwrite it with the host-only derivation.
+        List<AgentCardDto> byService = discovery.searchByServiceId("tenant-A", "wealth-svc", null);
+        assertThat(byService).hasSize(1);
+        assertThat(byService.get(0).getServiceId()).isEqualTo("wealth-svc");
+
+        // capability dimension: exact-match array-contains on the new
+        // VARCHAR(64)[] column.
+        List<AgentCardDto> byCap = discovery.searchByCapability("tenant-A", "wealth.purchase", null);
+        assertThat(byCap).hasSize(1);
+
+        // contractVersion filter narrows the result; a non-matching filter
+        // returns empty.
+        List<AgentCardDto> byCapV2 = discovery.searchByCapability("tenant-A", "wealth.purchase", "v-nonexistent");
+        assertThat(byCapV2).isEmpty();
+    }
+
+    @Test
+    void register_without_service_id_derives_from_endpoint_host() {
+        AgentRegistryEntry card = sampleCard("tenant-A", "agent-002", "http://10.0.0.2:9000");
+        ResponseEntity<Void> reg = controller.register(card, null, null);
+        assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
+
+        // controller derives serviceId = host only when caller omits; this
+        // also confirms instanceId was derived (host-port) — otherwise the
+        // row could not have been upserted (instance_id is NOT NULL PK col).
+        List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-A", "agent-002", null);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getServiceId()).isEqualTo("10.0.0.2");
+    }
+
+    @Test
+    void draining_instance_returned_as_limited_available() {
+        AgentRegistryEntry card = sampleCard("tenant-A", "agent-003", "http://10.0.0.3:8080");
+        ResponseEntity<Void> reg = controller.register(card, null, null);
+        assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
+
+        // Manually set DRAINING via repository (bypass controller) — uses the
+        // 4-field PK so instanceId MUST have been derived by register.
+        boolean updated = repository.updateStatus("tenant-A", "agent-003",
+                card.getServiceId(), card.getInstanceId(), "DRAINING", false);
+        assertThat(updated).as("updateStatus must hit the row registered by the controller").isTrue();
+
+        // FEAT-016: DRAINING is now included in discovery results (was
+        // excluded in REQ-2026-006). The caller sees DRAINING as a
+        // limited-availability health state.
+        List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-A", "agent-003", null);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getHealth()).isEqualTo("DRAINING");
+    }
+
+    @Test
+    void delete_single_instance_by_4_field_does_not_evict_other_replicas() {
+        AgentRegistryEntry a = sampleCard("tenant-A", "agent-004", "http://10.0.0.4:8080");
+        a.setServiceId("svc-x");
+        ResponseEntity<Void> regA = controller.register(a, null, null);
+        assertThat(regA.getStatusCode().is2xxSuccessful()).isTrue();
+
+        AgentRegistryEntry b = sampleCard("tenant-A", "agent-004", "http://10.0.0.5:8080");
+        b.setServiceId("svc-x");
+        ResponseEntity<Void> regB = controller.register(b, null, null);
+        assertThat(regB.getStatusCode().is2xxSuccessful()).isTrue();
+
+        // 4-field delete targets only replica a; replica b stays.
+        boolean deleted = repository.delete("tenant-A", "agent-004", "svc-x", a.getInstanceId());
+        assertThat(deleted).isTrue();
+
+        List<AgentCardDto> remaining = discovery.searchInstancesByAgentId("tenant-A", "agent-004", null);
+        assertThat(remaining).hasSize(1);
+        assertThat(remaining.get(0).getServiceId()).isEqualTo("svc-x");
+        // the surviving replica is b (instanceId derived from 10.0.0.5:8080);
+        // resolving its handle must yield b's endpoint, not a's.
+        RouteResolution survivor = discovery.resolveRouteHandle(remaining.get(0).getRouteHandle(), "tenant-A");
+        assertThat(survivor.endpointUrl()).isEqualTo("http://10.0.0.5:8080");
+    }
+
     // ---- helpers ---------------------------------------------------------
 
     private static AgentRegistryEntry sampleCard(String tenant, String agent, String endpoint) {

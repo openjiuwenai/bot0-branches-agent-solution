@@ -303,7 +303,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     // REQ-2026-006). The caller sees DRAINING as a
                     // limited-availability health state.
                     + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
-                    + " AND (:contractVersion IS NULL OR contract_version = :contractVersion)"
+                    // FEAT-016: nullable contractVersion filter. The CAST
+                    // gives PostgreSQL a type hint for the null case —
+                    // without it the driver raises "could not determine data
+                    // type of parameter" when contractVersion is null.
+                    + " AND (CAST(:contractVersion AS varchar) IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
@@ -323,7 +327,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND service_id = :serviceId"
                     + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
-                    + " AND (:contractVersion IS NULL OR contract_version = :contractVersion)"
+                    + " AND (CAST(:contractVersion AS varchar) IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
@@ -343,7 +347,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     + "weight, region, max_concurrency, status, capabilities FROM " + TABLE
                     + " WHERE tenant_id = :tenantId AND :capability = ANY(capabilities)"
                     + " AND status IN ('ONLINE','DEGRADED','DRAINING')"
-                    + " AND (:contractVersion IS NULL OR contract_version = :contractVersion)"
+                    + " AND (CAST(:contractVersion AS varchar) IS NULL OR contract_version = :contractVersion)"
                     + " ORDER BY weight DESC, last_heartbeat DESC";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", tenantId)
