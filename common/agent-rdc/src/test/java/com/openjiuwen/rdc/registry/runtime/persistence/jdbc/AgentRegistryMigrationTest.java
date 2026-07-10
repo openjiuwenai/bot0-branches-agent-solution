@@ -129,6 +129,17 @@ class AgentRegistryMigrationTest {
     }
 
     @Test
+    void v6_creates_gin_index_on_capabilities() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes "
+                + "WHERE tablename = 'agent_registry_mvp' AND indexname = ?",
+                Integer.class, "idx_agent_registry_mvp_capabilities_gin");
+        assertThat(count)
+                .as("FEAT-016 V6: GIN index on capabilities must be created")
+                .isEqualTo(1);
+    }
+
+    @Test
     void agent_registry_mvp_has_composite_primary_key() {
         List<Map<String, Object>> pkColumns = jdbc.queryForList(
                 "SELECT a.attname FROM pg_index i "
