@@ -21,7 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 主循环 + terminalGuard + sealed dispatch 各分支。每个测试标 mutation-RED。
  */
 class PEVAgentControlFlowTest {
-
     private static AgentCard card() {
         return AgentCard.builder().build();
     }

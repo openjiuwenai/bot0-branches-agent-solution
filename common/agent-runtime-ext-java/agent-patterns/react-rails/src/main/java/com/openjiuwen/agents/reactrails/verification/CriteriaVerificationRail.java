@@ -45,15 +45,18 @@ import java.util.Map;
  * @since 2026-07
  */
 public class CriteriaVerificationRail extends AgentRail {
-
     /** Result key for checked output text. */
     public static final String OUTPUT_KEY = "output";
+
     /** Result key for criteria verification status. */
     public static final String VERIFIED_KEY = "criteria_verified";
+
     /** Result key for criteria verification result. */
     public static final String RESULT_KEY = "criteria_result";
+
     /** Result key for degraded terminal state. */
     public static final String DEGRADED_KEY = "degraded";
+
     /** Result key for unmet criteria. */
     public static final String UNMET_KEY = "unmet_criteria";
 

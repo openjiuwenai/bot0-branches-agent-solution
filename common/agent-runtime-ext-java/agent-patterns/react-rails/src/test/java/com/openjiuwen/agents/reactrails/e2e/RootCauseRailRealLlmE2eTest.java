@@ -30,7 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The LLM drives the ReActAgent loop; when the tool fails, the rail degrades honestly.
  */
 class RootCauseRailRealLlmE2eTest {
-
     @Test
     void realLlmToolFailureRootCauseRailDegrades() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
@@ -65,7 +64,7 @@ class RootCauseRailRealLlmE2eTest {
         // RootCauseRailTest（mock）承担；此处只证 e2e 跑通，避免 LLM 不走预期路径时无断言。
         assertThat(result).as("agent 必须返回结果（e2e infra 健康基线）").isNotNull();
         // The result should be a forcedMap from RootCauseRail's forceFinish(degraded)
-        // (tool failed → onToolException → pendingDegrade → afterModelCall → forceFinish)
+        // (tool failed → onToolException → hasPendingDegrade → afterModelCall → forceFinish)
         if (result instanceof Map<?, ?> map) {
             // 软观察：rail 是否触发取决于 LLM 是否真调失败工具（非确定）。若触发，硬校验降级标记。
             if (map.containsKey(RootCauseRail.DEGRADED_KEY)) {

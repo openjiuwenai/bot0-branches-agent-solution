@@ -18,7 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Real-LLM smoke test for first-principles system prompt injection.
  */
 class SystemPromptInjectLlmE2eTest {
-
     @Test
     void firstPrinciplesInjectedAffectsLLmOutput() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "skip");

@@ -24,7 +24,6 @@ import java.util.Locale;
  * @since 2026-07
  */
 public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
-
     /**
      * When a criterion can't be keyword-checked, treat as violation (honest).
      */

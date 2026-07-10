@@ -16,7 +16,6 @@ package com.openjiuwen.agents.reactrails.enforcing;
  * @since 2026-07
  */
 public class ToolCallingBypassException extends RuntimeException {
-
     public ToolCallingBypassException(String message) {
         super(message);
     }

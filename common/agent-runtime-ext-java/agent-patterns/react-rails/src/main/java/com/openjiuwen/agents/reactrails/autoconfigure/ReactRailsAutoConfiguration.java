@@ -56,7 +56,6 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnClass({ReActAgent.class, AgentRail.class})
 @ConditionalOnProperty(name = "reactrails.enabled", havingValue = "true", matchIfMissing = true)
 public class ReactRailsAutoConfiguration {
-
     /**
      * Default rule-based criteria verifier (when no custom CriteriaVerifier bean exists).
      *

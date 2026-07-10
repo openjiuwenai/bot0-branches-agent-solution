@@ -74,7 +74,7 @@ class ToolCallingEnforcingModelTest {
 
                     @Override
                     public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean f, boolean g, int h, Map<String, Object> i) {
+                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
                         throw new UnsupportedOperationException();
                     }
 
@@ -86,7 +86,7 @@ class ToolCallingEnforcingModelTest {
 
                     @Override
                     public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean h, boolean i, String j, Integer k,
+                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
                             Map<String, Object> l) {
                         throw new UnsupportedOperationException();
                     }
@@ -158,7 +158,7 @@ class ToolCallingEnforcingModelTest {
 
                     @Override
                     public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean f, boolean g, int h, Map<String, Object> i) {
+                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
                         throw new UnsupportedOperationException();
                     }
 
@@ -170,7 +170,7 @@ class ToolCallingEnforcingModelTest {
 
                     @Override
                     public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean h, boolean i, String j, Integer k,
+                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
                             Map<String, Object> l) {
                         throw new UnsupportedOperationException();
                     }

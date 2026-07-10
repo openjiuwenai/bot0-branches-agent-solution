@@ -34,9 +34,9 @@ import java.util.Map;
  * same-iteration) would also terminate the loop:
  * <ul>
  *   <li>{@code onToolException}: tool failure signal → record failed tool name, mark
- *       {@code pendingDegrade}. Defers termination on purpose so the loop can still surface any
+ *       pending degrade. Defers termination on purpose so the loop can still surface any
  *       remaining tool messages from the same batch before degrading.</li>
- *   <li>{@code afterModelCall} (next iteration, offset 700): if pendingDegrade, fire
+ *   <li>{@code afterModelCall} (next iteration, offset 700): if pending degrade exists, fire
  *       {@code requestForceFinish(degraded)} — consumed at offset 700, short-circuits before
  *       the next tool batch runs.</li>
  * </ul>
@@ -49,17 +49,19 @@ import java.util.Map;
  * @since 2026-07
  */
 public class RootCauseRail extends AgentRail {
-
     /** Result key indicating root-cause degrade. */
     public static final String ROOT_CAUSE_DEGRADED_KEY = "root_cause_degraded";
+
     /** Result key for degraded terminal state. */
     public static final String DEGRADED_KEY = "degraded";
+
     /** Result key for root cause category. */
     public static final String ROOT_CAUSE_KEY = "root_cause";
+
     /** Result key for degrade reason. */
     public static final String REASON_KEY = "reason";
 
-    private boolean pendingDegrade = false;
+    private boolean hasPendingDegrade = false;
     private String failedTool = null;
 
     /**
@@ -68,11 +70,11 @@ public class RootCauseRail extends AgentRail {
      * @return true when a tool failure is waiting to be degraded
      */
     public synchronized boolean hasPendingDegrade() {
-        return pendingDegrade;
+        return hasPendingDegrade;
     }
 
     /**
-     * 工具异常钩子：设备故障信号→记录失败工具名并标记 pendingDegrade（不在本钩子终止）。
+     * 工具异常钩子：设备故障信号→记录失败工具名并标记待降级（不在本钩子终止）。
      *
      * @param context callback context carrying tool-call failure inputs
      */
@@ -80,19 +82,19 @@ public class RootCauseRail extends AgentRail {
     public synchronized void onToolException(AgentCallbackContext context) {
         // Tool failure → device breakdown → mark for degrade (afterModelCall will terminate)
         failedTool = extractToolName(context);
-        pendingDegrade = true;
+        hasPendingDegrade = true;
     }
 
     /**
-     * 模型回调钩子：若存在 pendingDegrade，触发 forceFinish 降级终态并清除标记。
+     * 模型回调钩子：若存在待降级标记，触发 forceFinish 降级终态并清除标记。
      *
      * @param context callback context used to request forced finish
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext context) {
-        if (pendingDegrade) {
+        if (hasPendingDegrade) {
             context.requestForceFinish(degradedMap(failedTool));
-            pendingDegrade = false;
+            hasPendingDegrade = false;
         }
     }
 

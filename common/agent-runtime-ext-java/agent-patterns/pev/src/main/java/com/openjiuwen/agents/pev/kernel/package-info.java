@@ -66,10 +66,10 @@
  *   <tr><td>VerifyResult</td>
  *       <td>{@link PevKernel.VerifyResult} (nested record)</td>
  *       <td>{@code ...alpha.verifier.VerifyResult}</td>
- *       <td><b>Shape drift</b>: PEV side has 5 fields (passed, failedNodes, feedback,
- *           parseFailure, threw) — {@code threw} distinguishes "verify raised" from
+ *       <td><b>Shape drift</b>: PEV side has 5 fields (isPassed, failedNodes, feedback,
+ *           hasParseFailure, hasThrown) — {@code hasThrown} distinguishes "verify raised" from
  *           "verify returned non-JSON", which {@link PevKernel#diagnoseRootCause} reads
- *           to set {@code PerceptionUnreliable.verifierThrew}. Ascend twin carries the
+ *           to set {@code PerceptionUnreliable.isVerifierThrown}. Ascend twin carries the
  *           same {@code verifyThrew} signal as a separate RootCauseDiagnoser argument
  *           (not on VerifyResult) and additionally exposes {@code nodeResults} /
  *           {@code criteriaResults} fields PEV does not. PEV nests it in PevKernel;

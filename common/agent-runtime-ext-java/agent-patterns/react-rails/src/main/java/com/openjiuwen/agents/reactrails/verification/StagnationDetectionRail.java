@@ -65,7 +65,6 @@ import java.util.Objects;
  * @since 2026-07
  */
 public class StagnationDetectionRail extends AgentRail {
-
     /**
      * Priority: 50 — medium, between voting critic (100) and bridge rail (0).
      */
@@ -99,10 +98,13 @@ public class StagnationDetectionRail extends AgentRail {
     // Result keys (aligned with bridge rail naming)
     /** Result key for degraded terminal state. */
     public static final String DEGRADED_KEY = "degraded";
+
     /** Result key indicating stagnation detection. */
     public static final String STAGNATION_KEY = "stagnation_detected";
+
     /** Result key for stagnation reason. */
     public static final String STAGNATION_REASON_KEY = "stagnation_reason";
+
     /** Result key for output text. */
     public static final String OUTPUT_KEY = "output";
 

@@ -26,7 +26,6 @@ import java.util.Set;
  * @since 2026-07
  */
 public final class PevKernel {
-
     private PevKernel() {
     }
 
@@ -36,26 +35,26 @@ public final class PevKernel {
      * <p>Two distinct PerceptionUnreliable signals (kept separate so the diagnose function
      * can tell <b>why</b> the verifier is untrustworthy):
      * <ul>
-     *   <li>{@code threw} — the verifier raised a {@link RuntimeException} (verify threw).
+     *   <li>{@code hasThrown} — the verifier raised a {@link RuntimeException} (verify threw).
      *       Set by {@link com.openjiuwen.agents.pev.agent.PEVAgent}'s catch block.</li>
-     *   <li>{@code parseFailure} — the verifier returned non-JSON / blank output
+     *   <li>{@code hasParseFailure} — the verifier returned non-JSON / blank output
      *       (returned, but unparseable).</li>
      * </ul>
-     * Either signal triggers {@link RootCause.PerceptionUnreliable}; {@code threw} wins
-     * over {@code parseFailure} when both happen to be true (a throw means no return value).
+     * Either signal triggers {@link RootCause.PerceptionUnreliable}; {@code hasThrown} wins
+     * over {@code hasParseFailure} when both happen to be true (a throw means no return value).
      *
      * @since 2026-07
      */
-    public record VerifyResult(boolean passed, Set<String> failedNodes, String feedback, boolean parseFailure,
-            boolean threw) {
+    public record VerifyResult(boolean isPassed, Set<String> failedNodes, String feedback, boolean hasParseFailure,
+            boolean hasThrown) {
         public VerifyResult {
             failedNodes = Set.copyOf(failedNodes);
         }
-        public VerifyResult(boolean passed, Set<String> failedNodes, String feedback) {
-            this(passed, failedNodes, feedback, false, false);
+        public VerifyResult(boolean isPassed, Set<String> failedNodes, String feedback) {
+            this(isPassed, failedNodes, feedback, false, false);
         }
-        public VerifyResult(boolean passed, Set<String> failedNodes, String feedback, boolean parseFailure) {
-            this(passed, failedNodes, feedback, parseFailure, false);
+        public VerifyResult(boolean isPassed, Set<String> failedNodes, String feedback, boolean hasParseFailure) {
+            this(isPassed, failedNodes, feedback, hasParseFailure, false);
         }
     }
 
@@ -74,11 +73,11 @@ public final class PevKernel {
      */
     public static RootCause diagnoseRootCause(VerifyResult verify, Set<String> execFailedNodes,
             Map<String, NodeResult> nodeResults) {
-        // threw dominates parseFailure: a throw means no return value to parse at all.
-        if (verify.threw()) {
+        // A thrown verifier dominates parse failure: no return value exists to parse.
+        if (verify.hasThrown()) {
             return new RootCause.PerceptionUnreliable(true);
         }
-        if (verify.parseFailure()) {
+        if (verify.hasParseFailure()) {
             return new RootCause.PerceptionUnreliable(false);
         }
         Set<String> device = new LinkedHashSet<>();
@@ -121,7 +120,7 @@ public final class PevKernel {
             case RootCause.DeviceFailure d -> new ReplanAction.AcceptPartial(
                     "Device failure: " + d.nodes() + " — replan cannot fix broken tools/infra");
             case RootCause.PerceptionUnreliable p -> new ReplanAction.AcceptPartial("Perception unreliable: verifier "
-                    + (p.verifierThrew() ? "threw" : "returned null") + " — cannot trust its FAILED verdict");
+                    + (p.isVerifierThrown() ? "threw" : "returned null") + " — cannot trust its FAILED verdict");
             case RootCause.PlanOrAnswerError pe -> {
                 Set<String> nodes = failedNodes == null ? Set.of() : failedNodes;
                 if (nodes.isEmpty()) {

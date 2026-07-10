@@ -29,7 +29,6 @@ import java.util.Map;
  * is the correct signal, not a silent degraded result).
  */
 final class ToolBackedExecutor implements PevComponents.Executor {
-
     private final LlmClient llm;
     private final Map<String, java.util.function.Function<Map<String, Object>, String>> tools;
 

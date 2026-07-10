@@ -24,7 +24,6 @@ import java.util.function.Supplier;
  * }</pre>
  */
 final class SoftLlmE2e {
-
     private SoftLlmE2e() {
     }
 

@@ -25,10 +25,9 @@ import java.util.Set;
  * @since 2026-07
  */
 public class CriteriaVerificationRail extends AgentRail {
-
     private final Set<String> successCriteria;
 
-    private boolean lastVerified = false;
+    private boolean isLastVerified = false;
     private Set<String> lastUnmet = new LinkedHashSet<>();
 
     public CriteriaVerificationRail(Set<String> successCriteria) {
@@ -48,7 +47,7 @@ public class CriteriaVerificationRail extends AgentRail {
             }
         }
         this.lastUnmet = unmet;
-        this.lastVerified = unmet.isEmpty();
+        this.isLastVerified = unmet.isEmpty();
     }
 
     /**
@@ -57,7 +56,7 @@ public class CriteriaVerificationRail extends AgentRail {
      * @return true when the last output satisfied all criteria
      */
     public boolean lastVerified() {
-        return lastVerified;
+        return isLastVerified;
     }
 
     /**

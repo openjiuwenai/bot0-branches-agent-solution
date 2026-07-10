@@ -28,7 +28,6 @@ import java.util.regex.Pattern;
  * mock tests carry hard control-flow断言; real-LLM here is soft-observe.
  */
 final class LlmPlanner implements PevComponents.Planner {
-
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     private final LlmClient llm;

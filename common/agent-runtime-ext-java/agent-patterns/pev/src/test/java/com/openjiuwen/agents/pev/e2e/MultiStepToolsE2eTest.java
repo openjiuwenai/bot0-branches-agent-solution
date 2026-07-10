@@ -40,7 +40,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code OPENJIUWEN_API_KEY}; skipped when the env is absent.
  */
 class MultiStepToolsE2eTest {
-
     private static final LlmClient LLM = new LlmClient();
 
     @Test
@@ -87,9 +86,9 @@ class MultiStepToolsE2eTest {
         // 3. 工具真被执行：output 含至少一个确定性工具的产出特征串（temperature/humidity），
         //    证 ToolBackedExecutor 把节点路由到了注册工具而非全走 LLM。
         //    软断言（or）—— 任一工具特征命中即证工具通道活。
-        boolean toolProduced = output.contains("温度") || output.contains("湿度") || output.contains("°C")
+        boolean hasToolProducedOutput = output.contains("温度") || output.contains("湿度") || output.contains("°C")
                 || output.contains("%");
-        assertThat(toolProduced)
+        assertThat(hasToolProducedOutput)
                 .as("at least one deterministic tool must have produced output (温度/湿度/°C/%%)%n%s", output).isTrue();
 
         // ==================== 软观察 (no assertion) ====================

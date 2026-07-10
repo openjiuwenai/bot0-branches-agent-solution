@@ -29,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link org.junit.jupiter.api.Assumptions#assumeTrue} when absent.
  */
 class PEVAgentRealLlmE2eTest {
-
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     private static final LlmClient LLM = new LlmClient();
@@ -60,9 +59,9 @@ class PEVAgentRealLlmE2eTest {
             String output = (v instanceof NodeResult.Success s) ? String.valueOf(s.value()) : "";
             String verdict = LLM.chat("判断以下回答是否满足要求。只回复 PASS 或 FAIL，不要其他内容。" + LINE_SEPARATOR + "要求：" + in
                     + LINE_SEPARATOR + "回答：" + output);
-            boolean pass = verdict.toUpperCase(Locale.ROOT).contains("PASS")
+            boolean isPassed = verdict.toUpperCase(Locale.ROOT).contains("PASS")
                     && !verdict.toUpperCase(Locale.ROOT).contains("FAIL");
-            return new PevKernel.VerifyResult(pass, pass ? Set.of() : Set.of("answer"), verdict);
+            return new PevKernel.VerifyResult(isPassed, isPassed ? Set.of() : Set.of("answer"), verdict);
         };
 
         PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier);

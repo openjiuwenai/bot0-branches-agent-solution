@@ -23,7 +23,7 @@ import java.util.Set;
  *   <li>{@code passed = contains "PASS" AND not contains "FAIL"} — same convention as the
  *       existing {@link PEVAgentRealLlmE2eTest} one-step e2e, kept consistent so the kernel's
  *       perception signal is comparable across scenarios.</li>
- *   <li>Empty/whitespace-only verdict ⇒ {@code parseFailure=true} (PerceptionUnreliable
+ *   <li>Empty/whitespace-only verdict ⇒ {@code hasParseFailure=true} (PerceptionUnreliable
  *       signal in {@link PevKernel}), so the kernel dispatches {@code AcceptPartial} rather
  *       than trusting a vacuous verdict.</li>
  *   <li>{@code failedNodes} on FAIL = all nodes whose {@link NodeResult} is not
@@ -33,7 +33,6 @@ import java.util.Set;
  * </ul>
  */
 final class LlmVerifier implements PevComponents.Verifier {
-
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     private final LlmClient llm;
@@ -49,13 +48,13 @@ final class LlmVerifier implements PevComponents.Verifier {
                 + LINE_SEPARATOR + "执行结果：" + output);
 
         String up = verdict == null ? "" : verdict.toUpperCase(Locale.ROOT);
-        boolean parseFailure = up.isBlank();
-        boolean pass = !parseFailure && up.contains("PASS") && !up.contains("FAIL");
+        boolean hasParseFailure = up.isBlank();
+        boolean isPassed = !hasParseFailure && up.contains("PASS") && !up.contains("FAIL");
 
-        if (pass) {
+        if (isPassed) {
             return new PevKernel.VerifyResult(true, Set.of(), verdict);
         }
-        if (parseFailure) {
+        if (hasParseFailure) {
             return new PevKernel.VerifyResult(false, Set.of(), verdict, true);
         }
         Set<String> failed = collectFailedNodes(completed);

@@ -20,7 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * mutation-RED: strip replanCount++ → count永远 0 →永不 forceFinish → RED。
  */
 class ReplanRailTest {
-
     @Test
     void underLimitReplanAllowedNoForceFinish() {
         ReplanRail rail = new ReplanRail(2);

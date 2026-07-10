@@ -45,7 +45,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * </ul>
  */
 class PreCompletionChecklistRailTest {
-
     @BeforeEach
     void setUp() {
         SystemPromptInjectingModel.resetToDefaults();
@@ -92,7 +91,7 @@ class PreCompletionChecklistRailTest {
     @Test
     void beforeModelCallPreviousWasFinalSetsToolReminder() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(3);
-        // First round: produce a final answer (no tool calls) → previousWasFinal=true
+        // First round: produce a final answer (no tool calls) → wasPreviousFinal=true
         rail.afterModelCall(ctxWithFinalAnswer("I think the answer is 42"));
 
         rail.beforeModelCall(ctxWithExtra(Map.of()));
@@ -100,16 +99,16 @@ class PreCompletionChecklistRailTest {
         assertThat(SystemPromptInjectingModel.getInjectionMode())
                 .as("after first final-answer round, mode must still be PLAN_MODE").isEqualTo(InjectionMode.PLAN_MODE);
 
-        // The previousWasFinal flag is set, but toolNamesCalled is empty on first call
+        // The wasPreviousFinal flag is set, but toolNamesCalled is empty on first call
         // (the guard setPhaseOverride only triggers if !toolNamesCalled.isEmpty())
         // So we need a second round to test: first round with tools, second round text-only
 
         // Reset and do a second test that simulates "tools used before, now text-only"
         SystemPromptInjectingModel.resetToDefaults();
         PreCompletionChecklistRail rail2 = new PreCompletionChecklistRail(3);
-        // Round 1: tool call → toolNamesCalled populated, previousWasFinal=false
+        // Round 1: tool call → toolNamesCalled populated, wasPreviousFinal=false
         rail2.afterModelCall(ctxWithToolResult("search", "toolResult"));
-        // Round 2: final answer → previousWasFinal=true
+        // Round 2: final answer → wasPreviousFinal=true
         rail2.afterModelCall(ctxWithFinalAnswer("the answer is 42"));
 
         rail2.beforeModelCall(ctxWithExtra(Map.of()));
@@ -197,7 +196,7 @@ class PreCompletionChecklistRailTest {
         // Final answer (no tool calls)
         rail.afterModelCall(ctxWithFinalAnswer("my answer"));
 
-        // Now beforeModelCall should see previousWasFinal=true
+        // Now beforeModelCall should see wasPreviousFinal=true
         // (indirectly tested via phaseOverride set in the right conditions)
         // We already test this in testPreviousWasFinal_setsToolReminder
     }

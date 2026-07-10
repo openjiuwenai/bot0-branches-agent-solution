@@ -39,11 +39,12 @@ import java.util.Map;
  * @since 2026-07
  */
 public class ReplanTool extends Tool {
-
     /** Tool name visible to the LLM. */
     public static final String TOOL_NAME = "__replan__";
+
     /** Argument key for the replan reason. */
     public static final String ARG_REPLAN_REASON = "replan_reason";
+
     /** Argument key for the proposed new approach. */
     public static final String ARG_NEW_APPROACH = "new_approach";
 

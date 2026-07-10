@@ -43,7 +43,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2026-07
  */
 public class ToolCallingEnforcingModel extends Model {
-
     private static final String PROBE_TOOL_NAME = "__probe_tool__";
 
     private final AtomicBoolean probeDone = new AtomicBoolean(false);

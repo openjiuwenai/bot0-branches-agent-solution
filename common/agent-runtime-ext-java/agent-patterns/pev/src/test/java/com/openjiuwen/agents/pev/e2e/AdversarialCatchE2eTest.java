@@ -46,7 +46,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link org.junit.jupiter.api.Assumptions#assumeTrue} when absent.
  */
 class AdversarialCatchE2eTest {
-
     private static final LlmClient LLM = new LlmClient();
 
     /**
@@ -134,13 +133,13 @@ class AdversarialCatchE2eTest {
 
             String verdict = llm.chat(prompt);
             String up = verdict == null ? "" : verdict.toUpperCase(Locale.ROOT);
-            boolean parseFailure = up.isBlank();
-            boolean pass = !parseFailure && up.contains("PASS") && !up.contains("FAIL");
+            boolean hasParseFailure = up.isBlank();
+            boolean isPassed = !hasParseFailure && up.contains("PASS") && !up.contains("FAIL");
 
             PevKernel.VerifyResult vr;
-            if (pass) {
+            if (isPassed) {
                 vr = new PevKernel.VerifyResult(true, Set.of(), verdict);
-            } else if (parseFailure) {
+            } else if (hasParseFailure) {
                 vr = new PevKernel.VerifyResult(false, Set.of(), verdict, true);
             } else {
                 vr = new PevKernel.VerifyResult(false, collectFailedNodes(completed), verdict);

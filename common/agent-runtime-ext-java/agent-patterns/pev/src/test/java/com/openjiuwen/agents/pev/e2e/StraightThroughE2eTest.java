@@ -34,7 +34,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link org.junit.jupiter.api.Assumptions#assumeTrue} when absent.
  */
 class StraightThroughE2eTest {
-
     private static final LlmClient LLM = new LlmClient();
 
     @Test

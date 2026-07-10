@@ -30,7 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ol>
  */
 class ReplanToolRegistrationTest {
-
     @Test
     void registerOntoCardIsVisibleToLlmViaAbilityManager() {
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("reg-visibility").build());

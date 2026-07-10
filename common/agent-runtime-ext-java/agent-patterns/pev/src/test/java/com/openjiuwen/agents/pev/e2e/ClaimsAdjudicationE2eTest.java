@@ -34,7 +34,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code OPENJIUWEN_MODEL} (BigModel GLM, OpenAI-compatible).
  */
 class ClaimsAdjudicationE2eTest {
-
     @Test
     void claimsAdjudicationRunsRealLlmPlanExecuteVerifyEndToEnd() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");

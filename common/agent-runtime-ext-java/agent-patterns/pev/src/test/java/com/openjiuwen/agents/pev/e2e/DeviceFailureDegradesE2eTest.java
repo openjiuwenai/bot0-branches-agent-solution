@@ -40,7 +40,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code OPENJIUWEN_BASE_URL} / {@code OPENJIUWEN_MODEL} = BigModel GLM, OpenAI-compatible).
  */
 class DeviceFailureDegradesE2eTest {
-
     /**
      * Always-throw tool — simulates an unreachable external data source.
      */

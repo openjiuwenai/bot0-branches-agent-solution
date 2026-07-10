@@ -22,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 证 rail 与 PEV 主循环的横切共存（SYN 的 S9 组合范式）。
  */
 class PEVAgentRailsTest {
-
     // ==================== CriteriaVerificationRail 观测最终输出 ====================
 
     @Test

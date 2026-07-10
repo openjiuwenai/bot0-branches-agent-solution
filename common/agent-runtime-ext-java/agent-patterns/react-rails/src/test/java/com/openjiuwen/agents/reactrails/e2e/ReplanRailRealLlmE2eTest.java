@@ -33,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (non-deterministic). The test proves the channel works when the LLM does call it.
  */
 class ReplanRailRealLlmE2eTest {
-
     @Test
     void realLlmReplanRailCountsWithRealAgent() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");

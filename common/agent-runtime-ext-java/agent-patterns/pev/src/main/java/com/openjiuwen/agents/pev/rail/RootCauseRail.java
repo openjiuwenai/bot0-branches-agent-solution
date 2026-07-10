@@ -27,7 +27,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2026-07
  */
 public class RootCauseRail extends AgentRail {
-
     private final AtomicInteger deviceFailureCount = new AtomicInteger();
     private final Set<String> deviceFailedNodes = new LinkedHashSet<>();
 

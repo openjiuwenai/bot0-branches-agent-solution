@@ -52,7 +52,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  */
 class SystemPromptInjectingModelTest {
-
     private SystemPromptInjectingModel model;
 
     @BeforeEach
@@ -185,7 +184,7 @@ class SystemPromptInjectingModelTest {
                     }
                     @Override
                     public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean f, boolean g, int h, Map<String, Object> i) {
+                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
                         throw new UnsupportedOperationException();
                     }
                     @Override
@@ -195,7 +194,7 @@ class SystemPromptInjectingModelTest {
                     }
                     @Override
                     public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean h, boolean i, String j, Integer k,
+                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
                             Map<String, Object> l) {
                         throw new UnsupportedOperationException();
                     }
@@ -225,9 +224,9 @@ class SystemPromptInjectingModelTest {
         // First real call (client call #1, after probe call #0)
         List<?> firstMessages = capturedMessages1.get();
         assertThat(firstMessages).isNotNull();
-        boolean firstHasFp = firstMessages.stream().filter(SystemMessage.class::isInstance)
+        boolean hasFirstFp = firstMessages.stream().filter(SystemMessage.class::isInstance)
                 .map(SystemMessage.class::cast).anyMatch(m -> m.getContentAsString().contains("先扩后收"));
-        assertThat(firstHasFp).as("FIRST_PRINCIPLES injection must appear on first real invoke").isTrue();
+        assertThat(hasFirstFp).as("FIRST_PRINCIPLES injection must appear on first real invoke").isTrue();
 
         // Second real call (client call #2, from the second model invoke)
         // One-shot: the injection must NOT fire again, so the original
@@ -235,9 +234,9 @@ class SystemPromptInjectingModelTest {
         List<?> secondMessages = capturedMessages2.get();
         assertThat(secondMessages).isNotNull();
 
-        boolean secondHasFp = secondMessages.stream().filter(SystemMessage.class::isInstance)
+        boolean hasSecondFp = secondMessages.stream().filter(SystemMessage.class::isInstance)
                 .map(SystemMessage.class::cast).anyMatch(m -> m.getContentAsString().contains("先扩后收"));
-        assertThat(secondHasFp)
+        assertThat(hasSecondFp)
                 .as("FIRST_PRINCIPLES prompt must NOT appear on second invoke" + " (one-shot via AtomicBoolean CAS)")
                 .isFalse();
     }
@@ -286,7 +285,7 @@ class SystemPromptInjectingModelTest {
                     }
                     @Override
                     public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d,
-                            int e, boolean f, boolean g, int h, Map<String, Object> i) {
+                            int e, boolean isF, boolean isG, int h, Map<String, Object> i) {
                         throw new UnsupportedOperationException();
                     }
                     @Override
@@ -296,7 +295,7 @@ class SystemPromptInjectingModelTest {
                     }
                     @Override
                     public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d,
-                            String e, String f, int g, boolean h, boolean i, String j, Integer k,
+                            String e, String f, int g, boolean isH, boolean isI, String j, Integer k,
                             Map<String, Object> l) {
                         throw new UnsupportedOperationException();
                     }

@@ -41,7 +41,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  */
 class StagnationDetectionRailTest {
-
     @BeforeEach
     void setUp() {
         SystemPromptInjectingModel.resetToDefaults();

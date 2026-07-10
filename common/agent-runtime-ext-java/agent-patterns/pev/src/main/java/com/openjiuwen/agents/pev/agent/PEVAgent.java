@@ -50,7 +50,6 @@ import java.util.Map;
  * @since 2026-07
  */
 public class PEVAgent extends BaseAgent {
-
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /**
@@ -64,6 +63,7 @@ public class PEVAgent extends BaseAgent {
         public PevConfig(int maxRetries) {
             this.maxRetries = maxRetries;
         }
+
         /**
          * Create default PEV config.
          *
@@ -145,7 +145,7 @@ public class PEVAgent extends BaseAgent {
             }
         }
 
-        // Verify (a throw / null → parseFailure signal → PerceptionUnreliable)
+        // Verify (a throw / null → parse-failure signal → PerceptionUnreliable)
         PevKernel.VerifyResult vr;
         try {
             vr = verifier.verify(userInput, completed);
@@ -157,7 +157,7 @@ public class PEVAgent extends BaseAgent {
                     true);
         }
 
-        if (vr.passed() && !vr.parseFailure()) {
+        if (vr.isPassed() && !vr.hasParseFailure()) {
             verifyPassed[0] = true;
             terminal[0] = true;
             return;

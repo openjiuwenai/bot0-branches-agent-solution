@@ -22,7 +22,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "reactrails")
 public class ReactRailsProperties {
-
     /**
      * Comma-separated success criteria for CriteriaVerificationRail. Empty = skip criteria rail.
      */
@@ -36,7 +35,7 @@ public class ReactRailsProperties {
     /**
      * Enable message history compression on __replan__ tool call (default off).
      */
-    private boolean historyCompression = false;
+    private boolean isHistoryCompression = false;
 
     /**
      * Enable one-shot injection of the "先扩后收" (widen then converge)
@@ -47,14 +46,14 @@ public class ReactRailsProperties {
      * {@link com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel}
      * instance. The mode is set globally via the static channel.
      */
-    private boolean firstPrinciplesInject = false;
+    private boolean isFirstPrinciplesInject = false;
 
     /**
      * Enable the PreCompletionChecklistRail (PLAN/BUILD phase guardrail).
      * Default = true. When enabled, the rail injects phase-aware system prompts
      * via {@link com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel}.
      */
-    private boolean checklistEnabled = true;
+    private boolean isChecklistEnabled = true;
 
     /**
      * Max iterations in PLAN phase before switching to BUILD.
@@ -104,16 +103,16 @@ public class ReactRailsProperties {
      * @return true if history compression on __replan__ is enabled
      */
     public boolean isHistoryCompression() {
-        return historyCompression;
+        return isHistoryCompression;
     }
 
     /**
      * Enables or disables history compression.
      *
-     * @param historyCompression enable or disable history compression
+     * @param isHistoryCompression enable or disable history compression
      */
-    public void setHistoryCompression(boolean historyCompression) {
-        this.historyCompression = historyCompression;
+    public void setHistoryCompression(boolean isHistoryCompression) {
+        this.isHistoryCompression = isHistoryCompression;
     }
 
     /**
@@ -122,16 +121,16 @@ public class ReactRailsProperties {
      * @return true if first-principles inject is enabled
      */
     public boolean isFirstPrinciplesInject() {
-        return firstPrinciplesInject;
+        return isFirstPrinciplesInject;
     }
 
     /**
      * Enables or disables first-principles prompt injection.
      *
-     * @param firstPrinciplesInject enable or disable first-principles injection
+     * @param isFirstPrinciplesInject enable or disable first-principles injection
      */
-    public void setFirstPrinciplesInject(boolean firstPrinciplesInject) {
-        this.firstPrinciplesInject = firstPrinciplesInject;
+    public void setFirstPrinciplesInject(boolean isFirstPrinciplesInject) {
+        this.isFirstPrinciplesInject = isFirstPrinciplesInject;
     }
 
     /**
@@ -140,16 +139,16 @@ public class ReactRailsProperties {
      * @return true if PreCompletionChecklistRail is enabled
      */
     public boolean isChecklistEnabled() {
-        return checklistEnabled;
+        return isChecklistEnabled;
     }
 
     /**
      * Enables or disables the pre-completion checklist rail.
      *
-     * @param checklistEnabled enable or disable PreCompletionChecklistRail
+     * @param isChecklistEnabled enable or disable PreCompletionChecklistRail
      */
-    public void setChecklistEnabled(boolean checklistEnabled) {
-        this.checklistEnabled = checklistEnabled;
+    public void setChecklistEnabled(boolean isChecklistEnabled) {
+        this.isChecklistEnabled = isChecklistEnabled;
     }
 
     /**

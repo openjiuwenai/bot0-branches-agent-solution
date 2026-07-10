@@ -37,7 +37,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  */
 class HistoryCompressorRailTest {
-
     @Test
     void replanTriggeredCompressesMessages() {
         // Context: [System, User(query), Assistant(search), User(result), Assistant(__replan__)]
@@ -214,6 +213,7 @@ class HistoryCompressorRailTest {
         msg.setToolCalls(List.of(tc));
         return msg;
     }
+
     /**
      * Minimal stub ModelContext that stores messages in a simple list.
      * Only implements methods needed by HistoryCompressorRail.afterModelCall:
@@ -233,23 +233,23 @@ class HistoryCompressorRailTest {
         }
 
         @Override
-        public List<BaseMessage> getMessages(Integer windowSize, boolean sortDesc) {
+        public List<BaseMessage> getMessages(Integer windowSize, boolean isSortDesc) {
             return messages;
         }
 
         @Override
-        public void setMessages(List<BaseMessage> newMessages, boolean sortDesc) {
+        public void setMessages(List<BaseMessage> newMessages, boolean isSortDesc) {
             messages.clear();
             messages.addAll(newMessages);
         }
 
         @Override
-        public List<BaseMessage> popMessages(int n, boolean sortDesc) {
+        public List<BaseMessage> popMessages(int n, boolean isSortDesc) {
             throw new UnsupportedOperationException("stub");
         }
 
         @Override
-        public void clearMessages(boolean sortDesc) {
+        public void clearMessages(boolean isSortDesc) {
             messages.clear();
         }
 

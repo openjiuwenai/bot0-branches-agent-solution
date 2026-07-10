@@ -19,7 +19,6 @@ import java.time.Duration;
  * parsing is intentionally minimal (soft-observe e2e, not a production client).
  */
 final class LlmClient {
-
     private static final String BASE = System.getenv().getOrDefault("OPENJIUWEN_BASE_URL", "");
     private static final String PATH = System.getenv().getOrDefault("OPENJIUWEN_COMPLETIONS_PATH", "/chat/completions");
     private static final String MODEL = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "glm-5.2");

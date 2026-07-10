@@ -51,6 +51,6 @@ public sealed interface RootCause
      *
      * @since 2026-07
      */
-    record PerceptionUnreliable(boolean verifierThrew) implements RootCause {
+    record PerceptionUnreliable(boolean isVerifierThrown) implements RootCause {
     }
 }

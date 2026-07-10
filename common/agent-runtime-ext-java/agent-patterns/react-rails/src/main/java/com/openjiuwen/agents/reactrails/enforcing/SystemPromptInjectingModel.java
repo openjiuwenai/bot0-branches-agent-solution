@@ -54,7 +54,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * @since 2026-07
  */
 public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
-
     /**
      * Injection modes.
      */
@@ -295,17 +294,17 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     private static Object injectFirstPrinciples(Object messages) {
         @SuppressWarnings("unchecked")
         List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
-        boolean injected = false;
+        boolean hasInjected = false;
         for (int i = 0; i < msgList.size(); i++) {
-            if (!injected && msgList.get(i) instanceof SystemMessage sys) {
+            if (!hasInjected && msgList.get(i) instanceof SystemMessage sys) {
                 String original = sys.getContentAsString();
                 String enhanced = (original != null ? original + LINE_SEPARATOR + LINE_SEPARATOR : "")
                         + FIRST_PRINCIPLES_PROMPT;
                 msgList.set(i, new SystemMessage(enhanced));
-                injected = true;
+                hasInjected = true;
             }
         }
-        if (!injected) {
+        if (!hasInjected) {
             // No existing SystemMessage — insert at the beginning
             msgList.add(0, new SystemMessage(FIRST_PRINCIPLES_PROMPT));
         }

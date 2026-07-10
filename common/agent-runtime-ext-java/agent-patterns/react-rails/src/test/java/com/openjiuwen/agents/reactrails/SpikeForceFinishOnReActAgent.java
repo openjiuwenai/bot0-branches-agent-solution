@@ -37,7 +37,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Pass = react-rails unblocked. Fail = structurally infeasible on this jar version.
  */
 class SpikeForceFinishOnReActAgent {
-
     static {
         DefaultModelClientFactories.ensureRegistered();
         Model.registerFactory(new SpikeModelClientFactory());
@@ -93,7 +92,7 @@ class SpikeForceFinishOnReActAgent {
 
         @Override
         public ImageGenerationResponse generateImage(List<UserMessage> msgs, String a, String b, String c, int d,
-                boolean e, boolean f, int g, Map<String, Object> h) {
+                boolean isE, boolean isF, int g, Map<String, Object> h) {
             throw new UnsupportedOperationException("spike");
         }
 
@@ -105,13 +104,13 @@ class SpikeForceFinishOnReActAgent {
 
         @Override
         public VideoGenerationResponse generateVideo(List<UserMessage> msgs, String a, String b, String c, String d,
-                String e, int f, boolean g, boolean h, String i, Integer j, Map<String, Object> k) {
+                String e, int f, boolean isG, boolean isH, String i, Integer j, Map<String, Object> k) {
             throw new UnsupportedOperationException("spike");
         }
     }
     static class ForceFinishRail extends AgentRail {
         private final Map<String, Object> forcedMap;
-        private boolean fired = false;
+        private boolean hasFired = false;
 
         ForceFinishRail(Map<String, Object> forcedMap) {
             this.forcedMap = forcedMap;
@@ -119,8 +118,8 @@ class SpikeForceFinishOnReActAgent {
 
         @Override
         public void afterModelCall(AgentCallbackContext ctx) {
-            if (!fired) {
-                fired = true;
+            if (!hasFired) {
+                hasFired = true;
                 ctx.requestForceFinish(forcedMap);
             }
         }

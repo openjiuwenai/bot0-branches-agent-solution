@@ -33,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * mutation-RED: strip verify → rail doesn't forceFinish → invoke returns natural LLM response → RED.
  */
 class CriteriaVerificationRailTest {
-
     static {
         DefaultModelClientFactories.ensureRegistered();
         Model.registerFactory(new TestModelClientFactory());
@@ -120,7 +119,7 @@ class CriteriaVerificationRailTest {
         }
         @Override
         public ImageGenerationResponse generateImage(List<UserMessage> a, String b, String c, String d, int e,
-                boolean f, boolean g, int h, Map<String, Object> i) {
+                boolean isF, boolean isG, int h, Map<String, Object> i) {
             throw new UnsupportedOperationException();
         }
         @Override
@@ -130,7 +129,7 @@ class CriteriaVerificationRailTest {
         }
         @Override
         public VideoGenerationResponse generateVideo(List<UserMessage> a, String b, String c, String d, String e,
-                String f, int g, boolean h, boolean i, String j, Integer k, Map<String, Object> l) {
+                String f, int g, boolean isH, boolean isI, String j, Integer k, Map<String, Object> l) {
             throw new UnsupportedOperationException();
         }
     }

@@ -22,7 +22,6 @@ import java.util.List;
  * @since 2026-07
  */
 public interface CriteriaVerifier {
-
     /**
      * Verify all success criteria against the agent's output + decision history.
      *

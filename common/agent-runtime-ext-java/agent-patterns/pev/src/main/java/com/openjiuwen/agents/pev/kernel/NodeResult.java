@@ -14,7 +14,6 @@ package com.openjiuwen.agents.pev.kernel;
  * @since 2026-07
  */
 public sealed interface NodeResult permits NodeResult.Success, NodeResult.DeviceFailure, NodeResult.VerifierFailure {
-
     /**
      * Node completed, carrying its return value.
      */

@@ -19,7 +19,6 @@ import java.util.Map;
  * @since 2026-07
  */
 public final class PevComponents {
-
     private PevComponents() {
     }
 

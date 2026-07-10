@@ -29,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>requireEnv gate: skips if OPENJIUWEN_* not set.
  */
 class CriteriaVerificationRailRealLlmE2eTest {
-
     @Test
     void realLlmCriteriaRailVerifiesAnswer() {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");

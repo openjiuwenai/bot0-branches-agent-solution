@@ -22,7 +22,6 @@ import java.util.function.Function;
  * while the correct verdict is still 减赔). All fixtures inline — no external dep.
  */
 final class ClaimTools {
-
     private ClaimTools() {
     }
 
@@ -30,6 +29,7 @@ final class ClaimTools {
      * Standard reducible claim case.
      */
     static final String CLM_REDUCE = "CLM-2026-REDUCE";
+
     /**
      * Adversary lure case — docs push toward full payout, correct verdict is still 减赔.
      */

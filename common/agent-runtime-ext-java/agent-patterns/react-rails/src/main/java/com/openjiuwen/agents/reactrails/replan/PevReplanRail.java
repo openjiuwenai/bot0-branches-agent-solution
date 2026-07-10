@@ -73,13 +73,15 @@ import java.util.Set;
  * @since 2026-07
  */
 public class PevReplanRail extends AgentRail {
-
     /** Result key for whether replan limit was exceeded. */
     public static final String REPLAN_EXCEEDED_KEY = "replan_exceeded";
+
     /** Result key for degraded terminal state. */
     public static final String DEGRADED_KEY = "degraded";
+
     /** Result key for current replan count. */
     public static final String REPLAN_COUNT_KEY = "replan_count";
+
     /** Result key for configured maximum replan count. */
     public static final String MAX_REPLAN_KEY = "max_replan";
 

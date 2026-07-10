@@ -47,7 +47,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * </ul>
  */
 class PreCompletionChecklistRailE2eTest {
-
     /**
      * [E2E-1] PLAN phase → agent output shows exploration framing.
      *

@@ -16,19 +16,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 每个测试标注 mutation-RED：剥什么会红。
  */
 class PevKernelTest {
-
     // ==================== diagnoseRootCause 优先级契约 ====================
 
     @Test
     void parseFailureDominatesAllOtherSignalsYieldsPerceptionUnreliable() {
-        // 即使有 DeviceFailure 节点 + verify failed，parseFailure 仍最高优先
+        // 即使有 DeviceFailure 节点 + verify failed，hasParseFailure 仍最高优先
         PevKernel.VerifyResult vr = new PevKernel.VerifyResult(false, Set.of("A"), "fb", true);
 
         RootCause c = PevKernel.diagnoseRootCause(vr, Set.of("A"),
                 Map.of("A", new NodeResult.DeviceFailure("A", "e", true)));
 
         assertThat(c).isInstanceOf(RootCause.PerceptionUnreliable.class);
-        // mutation-RED: 剥 parseFailure 优先判定（拿掉 if）→ 该用例拿到 DeviceFailure → RED
+        // mutation-RED: 剥 hasParseFailure 优先判定（拿掉 if）→ 该用例拿到 DeviceFailure → RED
     }
 
     @Test

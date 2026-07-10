@@ -52,7 +52,6 @@ import java.util.stream.Collectors;
  * @since 2026-07
  */
 public class HistoryCompressorRail extends AgentRail {
-
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /**

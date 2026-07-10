@@ -54,7 +54,6 @@ import java.util.Set;
  * @since 2026-07
  */
 public class PreCompletionChecklistRail extends AgentRail {
-
     /**
      * Priority: 80 — fires after VotingCriticVerifierRail (100) and before
      * StagnationDetectionRail (50) in afterModelCall. Same priority applies to
@@ -88,7 +87,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     /**
      * Whether the previous iteration produced a final answer (no tool calls).
      */
-    private boolean previousWasFinal = false;
+    private boolean wasPreviousFinal = false;
 
     // ---- Construction ----
 
@@ -116,6 +115,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     public synchronized int getCallCount() {
         return callCount;
     }
+
     /**
      * Number of distinct tool names called.
      *
@@ -124,6 +124,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     public synchronized int getToolDiversity() {
         return toolNamesCalled.size();
     }
+
     /**
      * Output hash observation window.
      *
@@ -132,6 +133,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     public synchronized List<String> getOutputHashes() {
         return List.copyOf(outputHashes);
     }
+
     /**
      * Gets the configured PLAN phase limit.
      *
@@ -170,7 +172,7 @@ public class PreCompletionChecklistRail extends AgentRail {
 
         // [1] Check stagnation from ctx.getExtra (written by StagnationDetectionRail)
         Object stagnationRaw = ctx.getExtra().get("stagnation_detected");
-        if (stagnationRaw instanceof Boolean stagnated && stagnated) {
+        if (stagnationRaw instanceof Boolean isStagnated && isStagnated) {
             SystemPromptInjectingModel.setPhaseOverride("BREAK_STAGNATION: The system detects that your output or "
                     + "tool-call pattern has become repetitive. Change your approach "
                     + "entirely — use a different set of tools or reframe the problem.");
@@ -184,7 +186,7 @@ public class PreCompletionChecklistRail extends AgentRail {
                 SystemPromptInjectingModel.setInjectionMode(InjectionMode.PLAN_MODE);
             }
             // If previous iteration was pure text (no tool calls), remind to use tools
-            if (!toolNamesCalled.isEmpty() && previousWasFinal) {
+            if (!toolNamesCalled.isEmpty() && wasPreviousFinal) {
                 SystemPromptInjectingModel.setPhaseOverride("REMINDER: Your current approach is text-only. "
                         + "Use available tools to fetch real data or validate assumptions.");
             }
@@ -237,14 +239,14 @@ public class PreCompletionChecklistRail extends AgentRail {
 
         // Track tool names called
         if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
-            previousWasFinal = false;
+            wasPreviousFinal = false;
             for (ToolCall tc : msg.getToolCalls()) {
                 if (tc.getName() != null) {
                     toolNamesCalled.add(tc.getName());
                 }
             }
         } else {
-            previousWasFinal = true;
+            wasPreviousFinal = true;
         }
     }
 }
