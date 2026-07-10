@@ -4,6 +4,7 @@ import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
 import com.openjiuwen.rdc.spi.registry.FrameworkType;
+import com.openjiuwen.rdc.spi.registry.InstanceIdCodec;
 import com.openjiuwen.rdc.spi.registry.ServiceIdCodec;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -150,8 +151,8 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
         }
     }
 
-    private static AgentRegistryEntry buildEntry(PullRegistrationProperties.RuntimeEntry runtime,
-                                                  String agentName) {
+    static AgentRegistryEntry buildEntry(PullRegistrationProperties.RuntimeEntry runtime,
+                                        String agentName) {
         AgentRegistryEntry entry = new AgentRegistryEntry();
         entry.setTenantId(runtime.getTenantId());
         entry.setAgentId(runtime.getAgentId());
@@ -168,12 +169,20 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
         entry.setWeight(runtime.getWeight() != null
                 ? runtime.getWeight()
                 : PullRegistrationProperties.DEFAULT_WEIGHT);
-        // a2aAgentCard left null — the raw JSON is passed to upsert as
-        // a2aAgentCardJson, so the a2a_agent_card jsonb column is populated
-        // without needing to deserialize the 17-field A2A record.
-        // REQ-2026-006: derive serviceId from baseUrl via ServiceIdCodec
-        // (H2-1 方案 a — package-private setter bridge).
-        ServiceIdCodec.applyTo(entry);
+        // FEAT-016: capabilities caller-optional; default to empty so the
+        // capabilities VARCHAR(64)[] column (V6 migration) is never null.
+        entry.setCapabilities(runtime.getCapabilities() != null
+                ? runtime.getCapabilities()
+                : java.util.List.of());
+        // FEAT-016: serviceId caller-optional; derive from baseUrl host
+        // (host-only, logical service identifier) when the operator omits it.
+        if (runtime.getServiceId() != null && !runtime.getServiceId().isBlank()) {
+            entry.setServiceId(runtime.getServiceId());
+        } else {
+            ServiceIdCodec.applyTo(entry);
+        }
+        // instanceId always server-derived (host-port) — caller cannot forge.
+        InstanceIdCodec.applyTo(entry);
         return entry;
     }
 }

@@ -144,6 +144,62 @@ class PullRegistrationBootstrapTest {
         assertThat(repo.upserts.get(0).entry().getAgentId()).isEqualTo("agent-good");
     }
 
+    // --- FEAT-016 Task 8: buildEntry serviceId / instanceId / capabilities ---
+
+    @Test
+    void build_entry_uses_explicit_service_id_when_provided() {
+        PullRegistrationProperties.RuntimeEntry runtime = baseRuntime("http://10.0.0.1:8080");
+        runtime.setServiceId("wealth-svc");
+        AgentRegistryEntry entry = invokeBuildEntry(runtime, "wealth-agent");
+        assertThat(entry.getServiceId()).isEqualTo("wealth-svc");
+        assertThat(entry.getInstanceId()).isEqualTo("10.0.0.1-8080");
+    }
+
+    @Test
+    void build_entry_derives_service_id_from_base_url_host_when_absent() {
+        PullRegistrationProperties.RuntimeEntry runtime = baseRuntime("http://10.0.0.2:9000");
+        AgentRegistryEntry entry = invokeBuildEntry(runtime, "wealth-agent");
+        assertThat(entry.getServiceId()).isEqualTo("10.0.0.2");
+        assertThat(entry.getInstanceId()).isEqualTo("10.0.0.2-9000");
+    }
+
+    @Test
+    void build_entry_passes_capabilities_through() {
+        PullRegistrationProperties.RuntimeEntry runtime = baseRuntime("http://10.0.0.3:8080");
+        runtime.setCapabilities(java.util.List.of("wealth.purchase"));
+        AgentRegistryEntry entry = invokeBuildEntry(runtime, "wealth-agent");
+        assertThat(entry.getCapabilities()).containsExactly("wealth.purchase");
+    }
+
+    @Test
+    void build_entry_defaults_capabilities_to_empty_when_absent() {
+        PullRegistrationProperties.RuntimeEntry runtime = baseRuntime("http://10.0.0.4:8080");
+        AgentRegistryEntry entry = invokeBuildEntry(runtime, "wealth-agent");
+        assertThat(entry.getCapabilities()).isEmpty();
+    }
+
+    /**
+     * Minimum-viable RuntimeEntry for buildEntry tests — baseUrl + tenantId +
+     * agentId + frameworkType are the required fields (see {@code requireRequired}).
+     */
+    private static PullRegistrationProperties.RuntimeEntry baseRuntime(String baseUrl) {
+        PullRegistrationProperties.RuntimeEntry runtime = new PullRegistrationProperties.RuntimeEntry();
+        runtime.setBaseUrl(baseUrl);
+        runtime.setTenantId("tenant-test");
+        runtime.setAgentId("agent-test");
+        runtime.setFrameworkType(FrameworkType.JIUWEN);
+        return runtime;
+    }
+
+    /**
+     * Direct package-private call to {@link PullRegistrationBootstrap#buildEntry}
+     * — exercises the entry-construction logic without spinning up MockWebServer.
+     */
+    private static AgentRegistryEntry invokeBuildEntry(
+            PullRegistrationProperties.RuntimeEntry runtime, String agentName) {
+        return PullRegistrationBootstrap.buildEntry(runtime, agentName);
+    }
+
     private static final class RecordingRepository implements AgentRegistryRepository {
         final List<UpsertCall> upserts = new ArrayList<>();
 

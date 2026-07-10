@@ -61,7 +61,9 @@ public class PullRegistrationProperties {
      * <p>Required fields: {@code baseUrl}, {@code tenantId}, {@code agentId},
      * {@code frameworkType}. Optional fields: {@code cardPath},
      * {@code headers}, {@code routeKey}, {@code region},
-     * {@code contractVersion}, {@code capabilityVersion}.
+     * {@code contractVersion}, {@code capabilityVersion},
+     * {@code serviceId} (FEAT-016 — default: derived from {@code baseUrl} host),
+     * {@code capabilities} (FEAT-016 — default: empty).
      */
     public static class RuntimeEntry {
 
@@ -112,6 +114,23 @@ public class PullRegistrationProperties {
          * ({@link PullRegistrationProperties#DEFAULT_WEIGHT}).
          */
         private Integer weight;
+
+        /**
+         * Optional logical service identifier (FEAT-016). Default: derived
+         * from {@code baseUrl} host by {@link ServiceIdCodec#derive(String)}.
+         * When the operator pins one, it overrides the derived value so
+         * multiple agents / instances can share the same {@code serviceId}
+         * as a logical service group.
+         */
+        private String serviceId;
+
+        /**
+         * Optional capability list (FEAT-016). Default: empty. Backed by the
+         * {@code capabilities VARCHAR(64)[]} column on
+         * {@code agent_registry_mvp} (V6 migration). Lets the pull path
+         * populate the same column the push register endpoint populates.
+         */
+        private java.util.List<String> capabilities;
 
         public String getBaseUrl() {
             return baseUrl;
@@ -207,6 +226,22 @@ public class PullRegistrationProperties {
 
         public void setWeight(Integer weight) {
             this.weight = weight;
+        }
+
+        public String getServiceId() {
+            return serviceId;
+        }
+
+        public void setServiceId(String serviceId) {
+            this.serviceId = serviceId;
+        }
+
+        public java.util.List<String> getCapabilities() {
+            return capabilities;
+        }
+
+        public void setCapabilities(java.util.List<String> capabilities) {
+            this.capabilities = capabilities;
         }
     }
 
