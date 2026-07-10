@@ -48,6 +48,8 @@ public class RootCauseRail extends AgentRail {
 
     /**
      * Total DeviceFailure occurrences observed across all supersteps.
+     *
+     * @return number of observed device failures
      */
     public int deviceFailureCount() {
         return deviceFailureCount.get();
@@ -55,6 +57,8 @@ public class RootCauseRail extends AgentRail {
 
     /**
      * Distinct node IDs that produced a DeviceFailure.
+     *
+     * @return copied set of failed node IDs
      */
     public Set<String> deviceFailedNodes() {
         return Set.copyOf(deviceFailedNodes);

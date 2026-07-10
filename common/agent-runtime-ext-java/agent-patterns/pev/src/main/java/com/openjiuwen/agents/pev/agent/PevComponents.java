@@ -39,6 +39,12 @@ public final class PevComponents {
      * Plan 阶段：NL 目标 → Plan。
      */
     public interface Planner {
+        /**
+         * Build an execution plan for the user input.
+         *
+         * @param userInput user request text
+         * @return planned goal and execution nodes
+         */
         Plan plan(String userInput);
     }
 
@@ -46,6 +52,12 @@ public final class PevComponents {
      * Execute 阶段：执行节点，返回 nodeId → {@link NodeResult}。
      */
     public interface Executor {
+        /**
+         * Execute plan nodes.
+         *
+         * @param nodes nodes to execute
+         * @return node id to execution result
+         */
         Map<String, NodeResult> execute(List<PlanNode> nodes);
     }
 
@@ -53,6 +65,13 @@ public final class PevComponents {
      * Verify 阶段：评估执行结果，返回结构化判定（{@link PevKernel.VerifyResult}）。
      */
     public interface Verifier {
+        /**
+         * Verify completed node results.
+         *
+         * @param userInput original user request
+         * @param completed completed node results
+         * @return structured verification result
+         */
         PevKernel.VerifyResult verify(String userInput, Map<String, NodeResult> completed);
     }
 }

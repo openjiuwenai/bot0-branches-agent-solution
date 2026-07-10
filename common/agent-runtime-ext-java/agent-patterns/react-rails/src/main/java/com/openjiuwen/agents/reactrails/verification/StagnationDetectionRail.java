@@ -96,9 +96,13 @@ public class StagnationDetectionRail extends AgentRail {
     public static final int TOOL_HISTORY_SIZE = 8;
 
     // Result keys (aligned with bridge rail naming)
+    /** Result key for degraded terminal state. */
     public static final String DEGRADED_KEY = "degraded";
+    /** Result key indicating stagnation detection. */
     public static final String STAGNATION_KEY = "stagnation_detected";
+    /** Result key for stagnation reason. */
     public static final String STAGNATION_REASON_KEY = "stagnation_reason";
+    /** Result key for output text. */
     public static final String OUTPUT_KEY = "output";
 
     // ---- Stagnation state ----
@@ -155,6 +159,8 @@ public class StagnationDetectionRail extends AgentRail {
 
     /**
      * Current consecutive output repeat count.
+     *
+     * @return current consecutive output repeat count
      */
     public synchronized int getConsecutiveOutputRepeats() {
         return consecutiveOutputRepeats;
@@ -162,6 +168,8 @@ public class StagnationDetectionRail extends AgentRail {
 
     /**
      * Total stagnation events.
+     *
+     * @return total number of stagnation events
      */
     public synchronized int getTotalStagnations() {
         return totalStagnations;
@@ -169,6 +177,8 @@ public class StagnationDetectionRail extends AgentRail {
 
     /**
      * Output history window (copy).
+     *
+     * @return copied output history window
      */
     public synchronized List<String> getOutputHistory() {
         return List.copyOf(outputHistory);
@@ -176,6 +186,8 @@ public class StagnationDetectionRail extends AgentRail {
 
     /**
      * Current tool cycle repeat count.
+     *
+     * @return current tool cycle repeat count
      */
     public synchronized int getToolCycleRepeats() {
         return toolCycleRepeats;
@@ -317,6 +329,8 @@ public class StagnationDetectionRail extends AgentRail {
     /**
      * Build a signature string from the tool calls in this response.
      * Format: "toolName1|toolName2|..." (order-preserved for sequence matching).
+     *
+     * @return pipe-separated tool signature, or empty string when there are no tool calls
      */
     private static String buildToolSignature(AssistantMessage msg) {
         if (msg.getToolCalls() == null || msg.getToolCalls().isEmpty()) {
@@ -330,6 +344,8 @@ public class StagnationDetectionRail extends AgentRail {
      * Simple cycle detection: check if the last half of the history
      * repeats the half before it. Only fires on even-sized histories
      * so the two halves have equal length (odd size → halves differ).
+     *
+     * @return true when the recent tool signatures form a repeated cycle
      */
     private boolean detectToolCycle() {
         int sz = toolSignatureHistory.size();

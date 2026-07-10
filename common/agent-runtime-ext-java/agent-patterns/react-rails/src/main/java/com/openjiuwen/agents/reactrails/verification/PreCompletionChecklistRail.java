@@ -106,12 +106,27 @@ public class PreCompletionChecklistRail extends AgentRail {
 
     // ---- Test observation points ----
 
+    /**
+     * Number of observed model-call hooks.
+     *
+     * @return total hook call count
+     */
     public synchronized int getCallCount() {
         return callCount;
     }
+    /**
+     * Number of distinct tool names called.
+     *
+     * @return distinct tool name count
+     */
     public synchronized int getToolDiversity() {
         return toolNamesCalled.size();
     }
+    /**
+     * Output hash observation window.
+     *
+     * @return copied output hash list
+     */
     public synchronized List<String> getOutputHashes() {
         return List.copyOf(outputHashes);
     }

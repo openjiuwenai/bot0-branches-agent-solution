@@ -53,6 +53,8 @@ public class CriteriaVerificationRail extends AgentRail {
 
     /**
      * Whether the last observed output met all criteria.
+     *
+     * @return true when the last output satisfied all criteria
      */
     public boolean lastVerified() {
         return lastVerified;
@@ -60,6 +62,8 @@ public class CriteriaVerificationRail extends AgentRail {
 
     /**
      * Criteria not found in the last output (empty when verified).
+     *
+     * @return copied set of unmet criteria
      */
     public Set<String> lastUnmet() {
         return lastUnmet;

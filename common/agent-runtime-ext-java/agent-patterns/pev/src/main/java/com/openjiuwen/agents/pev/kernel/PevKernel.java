@@ -64,6 +64,8 @@ public final class PevKernel {
      * Cross-validates the failed-node set against the per-node {@link NodeResult} map,
      * so a lost side-channel still yields {@link RootCause.DeviceFailure} when the node
      * map carries structural DeviceFailure evidence.
+     *
+     * @return root cause derived from verifier and execution signals
      */
     public static RootCause diagnoseRootCause(VerifyResult verify, Set<String> execFailedNodes,
             Map<String, NodeResult> nodeResults) {
@@ -103,6 +105,8 @@ public final class PevKernel {
      *       nodes) / {@link ReplanAction.GlobalReplan} (&gt;2 or empty) — <b>never AcceptPartial</b>.
      *       Content errors are recoverable by replan; degrading early gives up recoverable work.</li>
      * </ul>
+     *
+     * @return dispatch action selected for the diagnosed root cause
      */
     public static ReplanAction toReplanAction(RootCause cause, String feedback, Set<String> failedNodes) {
         return switch (cause) {

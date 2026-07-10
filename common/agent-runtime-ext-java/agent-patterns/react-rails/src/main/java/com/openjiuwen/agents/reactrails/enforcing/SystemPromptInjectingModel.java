@@ -150,6 +150,8 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     /**
      * Read and clear the phase override.
+     *
+     * @return previous phase override, or null when none is set
      */
     public static String consumePhaseOverride() {
         return phaseOverride.getAndSet(null);
@@ -157,6 +159,8 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     /**
      * Peek at the current phase override without consuming.
+     *
+     * @return current phase override, or null when none is set
      */
     public static String peekPhaseOverride() {
         return phaseOverride.get();
@@ -171,6 +175,8 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     /**
      * Get current injection mode.
+     *
+     * @return current injection mode
      */
     public static InjectionMode getInjectionMode() {
         return mode.get();

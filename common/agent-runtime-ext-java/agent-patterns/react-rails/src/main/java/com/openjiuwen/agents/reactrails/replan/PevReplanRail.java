@@ -74,9 +74,13 @@ import java.util.Set;
  */
 public class PevReplanRail extends AgentRail {
 
+    /** Result key for whether replan limit was exceeded. */
     public static final String REPLAN_EXCEEDED_KEY = "replan_exceeded";
+    /** Result key for degraded terminal state. */
     public static final String DEGRADED_KEY = "degraded";
+    /** Result key for current replan count. */
     public static final String REPLAN_COUNT_KEY = "replan_count";
+    /** Result key for configured maximum replan count. */
     public static final String MAX_REPLAN_KEY = "max_replan";
 
     private final int maxReplan;
@@ -99,6 +103,8 @@ public class PevReplanRail extends AgentRail {
 
     /**
      * Current replan count (test observation).
+     *
+     * @return current replan count
      */
     public synchronized int replanCount() {
         return replanCount;
@@ -106,6 +112,8 @@ public class PevReplanRail extends AgentRail {
 
     /**
      * Recent tool failure nodes (test observation).
+     *
+     * @return copied list of recent tool failure node IDs
      */
     public synchronized List<String> recentToolFailureNodes() {
         return List.copyOf(recentToolFailureNodes);
@@ -195,6 +203,8 @@ public class PevReplanRail extends AgentRail {
      * self-perceives that its current approach is flawed and requests redirection. If recent
      * tool failures (registered via {@link #recordToolFailure}) correlate with the LLM's stated
      * reason, the diagnosis tilts to DeviceFailure — a broken tool cannot be healed by replanning.
+     *
+     * @return root cause inferred for the replan request
      */
     private RootCause diagnose(String reason, String newApproach) {
         // If recent tool failures exist AND reason mentions the failed tools → DeviceFailure
@@ -219,6 +229,8 @@ public class PevReplanRail extends AgentRail {
      *
      * <p>Handles the basic case {@code {"field":"value"}} without Jackson dependency.
      * Escaped quotes are not handled (not needed for LLM-generated tool call args in practice).
+     *
+     * @return extracted value, or empty string when the field is absent
      */
     private static String extractJsonStringField(String json, String field) {
         if (json == null || json.isBlank()) {

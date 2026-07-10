@@ -40,8 +40,11 @@ import java.util.Map;
  */
 public class ReplanTool extends Tool {
 
+    /** Tool name visible to the LLM. */
     public static final String TOOL_NAME = "__replan__";
+    /** Argument key for the replan reason. */
     public static final String ARG_REPLAN_REASON = "replan_reason";
+    /** Argument key for the proposed new approach. */
     public static final String ARG_NEW_APPROACH = "new_approach";
 
     private static final ToolCard CARD = ToolCard.builder().id(TOOL_NAME).name(TOOL_NAME)
@@ -61,6 +64,8 @@ public class ReplanTool extends Tool {
 
     /**
      * 返回工具卡片（名称/描述），供 ability manager 注册与 LLM 可见。
+     *
+     * @return replan tool card
      */
     @Override
     public ToolCard getCard() {
@@ -69,6 +74,8 @@ public class ReplanTool extends Tool {
 
     /**
      * 同步调用：返回结构化确认 Map，含"请总结教训"提示引导 LLM 主动做教训提炼。
+     *
+     * @return structured confirmation map
      */
     @Override
     public Object invoke(Map<String, Object> args, Map<String, Object> kwargs) {
@@ -77,6 +84,8 @@ public class ReplanTool extends Tool {
 
     /**
      * 流式调用：将同步结果包装成单元素迭代器返回。
+     *
+     * @return iterator containing the synchronous result
      */
     @Override
     public Iterator<Object> stream(Map<String, Object> args, Map<String, Object> kwargs) {

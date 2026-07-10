@@ -57,10 +57,18 @@ public class PEVAgent extends BaseAgent {
      * PEV config — narrow, only the switches the control flow actually reads.
      */
     public static final class PevConfig {
+        /**
+         * Maximum replan retries before terminal degrade.
+         */
         public final int maxRetries;
         public PevConfig(int maxRetries) {
             this.maxRetries = maxRetries;
         }
+        /**
+         * Create default PEV config.
+         *
+         * @return default config
+         */
         public static PevConfig defaults() {
             return new PevConfig(2);
         }

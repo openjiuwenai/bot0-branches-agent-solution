@@ -50,9 +50,13 @@ import java.util.Map;
  */
 public class RootCauseRail extends AgentRail {
 
+    /** Result key indicating root-cause degrade. */
     public static final String ROOT_CAUSE_DEGRADED_KEY = "root_cause_degraded";
+    /** Result key for degraded terminal state. */
     public static final String DEGRADED_KEY = "degraded";
+    /** Result key for root cause category. */
     public static final String ROOT_CAUSE_KEY = "root_cause";
+    /** Result key for degrade reason. */
     public static final String REASON_KEY = "reason";
 
     private boolean pendingDegrade = false;
