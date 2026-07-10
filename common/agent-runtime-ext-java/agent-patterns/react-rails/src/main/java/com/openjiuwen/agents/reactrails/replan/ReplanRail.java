@@ -15,11 +15,14 @@ import java.util.Map;
 
 /**
  * Beta cognitive rail for ReActAgent — replan counting + over-limit escalation.
+ *
  * <p>Hooks {@code afterModelCall}: when the LLM calls {@code __replan__} (via
  * {@link ReplanTool}), increments the replan counter. If count exceeds maxReplan,
  * escalates to {@code forceFinish(degraded)} — honest terminal, stops the loop.
+ *
  * <p><b>IFF 契约</b>: replan count ⟺ over-limit escalate. Strip the count increment
  * → canReplan永远 true →永不 forceFinish → 测试 RED.
+ *
  * @since 2026-07
  */
 public class ReplanRail extends AgentRail {
@@ -56,6 +59,7 @@ public class ReplanRail extends AgentRail {
     /**
      * 公开计数方法 — bridge rail 调用同一计数器。递增 replan 并返回是否超限。
      * 让 LLM 发起的 __replan__ 和系统发起的 verify-failure retry 共享总预算。
+     *
      * @return true if replanCount > maxReplan (超限，应降级)
      */
     public synchronized boolean incrementAndCheckOverLimit() {

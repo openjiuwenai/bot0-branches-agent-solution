@@ -24,9 +24,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Real-LLM e2e: ReplanRail on real ReActAgent + real GLM.
+ *
  * <p>Tests the replan counting channel: LLM calls __replan__ tool → ReplanRail counts →
  * if over limit → forceFinish(degraded). With maxReplan=1, a single __replan__ call is
  * allowed but a second escalates.
+ *
  * <p>Soft-observe: whether the LLM actually calls __replan__ depends on the task/prompt
  * (non-deterministic). The test proves the channel works when the LLM does call it.
  */

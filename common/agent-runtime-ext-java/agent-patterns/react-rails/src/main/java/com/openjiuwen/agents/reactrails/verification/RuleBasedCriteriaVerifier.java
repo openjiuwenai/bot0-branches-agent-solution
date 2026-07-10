@@ -12,12 +12,15 @@ import java.util.Locale;
 
 /**
  * Deterministic rule-based criteria verifier — keyword matching (no LLM call).
+ *
  * <p>Checks each criterion's keywords against the output + decision history.
  * Fast, deterministic, zero LLM cost. Falls back to ASSUME_FAIL when a criterion
  * can't be checked by keyword (honest: don't rubber-stamp what you can't verify).
+ *
  * <p>This is the default verifier for {@link CriteriaVerificationRail} when no
  * LLM-backed verifier is injected — it covers the rule-based path (output/history
  * keyword coverage), leaving the LLM-judge path to a future injected verifier.
+ *
  * @since 2026-07
  */
 public class RuleBasedCriteriaVerifier implements CriteriaVerifier {

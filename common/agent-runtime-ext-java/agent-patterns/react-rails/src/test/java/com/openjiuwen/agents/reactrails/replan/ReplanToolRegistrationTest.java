@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Blocker B2 承重测试 — ReplanTool 注册真化（visibility + dispatch 双通道）。
+ *
  * <p>mock 单测证两条独立通道：
  * <ol>
  *   <li><b>visibility</b>: {@code registerOnto} 后 {@code listToolInfo()} 含 {@code __replan__}

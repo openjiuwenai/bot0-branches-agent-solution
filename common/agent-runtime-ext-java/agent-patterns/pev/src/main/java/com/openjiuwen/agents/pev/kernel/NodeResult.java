@@ -6,6 +6,7 @@ package com.openjiuwen.agents.pev.kernel;
 
 /**
  * A single node's terminal state inside one execution superstep — 3-state sealed.
+ *
  * <p>Replaces the untyped {@code "FAILED:" + msg} string convention with a closed
  * taxonomy the verifier/diagnoser can switch over exhaustively. Dropping a state
  * here makes any matching switch fail to compile.
@@ -26,6 +27,7 @@ public sealed interface NodeResult permits NodeResult.Success, NodeResult.Device
 
     /**
      * Verifier judged the node's output not meeting expectations.
+     *
      * @since 2026-07
      */
     record VerifierFailure(String nodeId, String reason) implements NodeResult {

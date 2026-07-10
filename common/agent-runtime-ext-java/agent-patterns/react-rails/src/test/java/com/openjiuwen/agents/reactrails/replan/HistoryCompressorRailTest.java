@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * HistoryCompressorRail 承重测试 — mock ModelContext 证 replan 触发上下文压缩。
+ *
  * <p>mutation-RED:
  * <ul>
  *   <li>strip setMessages(compact, false) → 上下文保留全量消息 → assertHasSize(4) → RED</li>

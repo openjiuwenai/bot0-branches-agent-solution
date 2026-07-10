@@ -21,9 +21,11 @@ import java.util.Set;
 
 /**
  * PEV-gated replan rail for ReActAgent — replaces {@link ReplanRail}.
+ *
  * <p>Like the original {@link ReplanRail}, this hooks {@code afterModelCall} and detects
  * {@code __replan__} tool calls (via {@link ReplanTool}). Unlike the original, it replaces
  * the simple count-and-escalate logic with PEV kernel dispatch:
+ *
  * <ol>
  *   <li><b>Diagnose</b> ReActAgent signals (tool failure correlation, LLM self-report) into
  *       a {@link RootCause} — replaces {@code PevKernel.diagnoseRootCause} (which is PEV-agent
@@ -43,7 +45,9 @@ import java.util.Set;
  *   <li><b>Over-limit guard</b>: when {@code replanCount > maxReplan}, forceFinish directly
  *       without PEV dispatch — same semantics as the original.</li>
  * </ol>
+ *
  * <h3>Steering vs forceFinish (bytecode-verified)</h3>
+ *
  * <p>On agent-core-java 0.1.12 jar, ReActAgent.invoke has three consumeForceFinish sites
  * (offsets 225/700/878) and one injectPendingSteering site (offset 675). Steering is consumed
  * at iteration boundaries:
@@ -56,6 +60,7 @@ import java.util.Set;
  * terminated loop. For verify failures, only AcceptPartial/forceFinish is viable.
  * This rail handles the __replan__-has-tool-calls path; CriteriaVerificationRail handles the
  * verify-failure path with forceFinish (existing behavior).
+ *
  * <h3>Honest boundary</h3>
  * <ul>
  *   <li>RootCause correlation is single-thread best-effort via {@link #recordToolFailure}.
@@ -64,6 +69,7 @@ import java.util.Set;
  *   <li>PerceptionUnreliable is not diagnosed here — no verifier is involved in the __replan__
  *       path. The dispatch function still handles it if called, but it's structurally deferred.</li>
  * </ul>
+ *
  * @since 2026-07
  */
 public class PevReplanRail extends AgentRail {
@@ -116,6 +122,7 @@ public class PevReplanRail extends AgentRail {
 
     /**
      * 模型回调钩子：检测 __replan__ 调用 → PEV 诊断 + dispatch.
+     *
      * <p>控制流（字节码验证 agent-core-java 0.1.12）：
      * <ul>
      *   <li>有 __replan__ 工具调用 → 工具会执行 → 循环继续 → next iteration 的
@@ -183,6 +190,7 @@ public class PevReplanRail extends AgentRail {
 
     /**
      * ReActAgent-specific diagnosis: map agent signals to {@link RootCause}.
+     *
      * <p>For {@code __replan__} tool calls, the baseline signal is PlanOrAnswerError — the LLM
      * self-perceives that its current approach is flawed and requests redirection. If recent
      * tool failures (registered via {@link #recordToolFailure}) correlate with the LLM's stated
@@ -208,6 +216,7 @@ public class PevReplanRail extends AgentRail {
 
     /**
      * Extract a JSON string field value from a plain JSON object string.
+     *
      * <p>Handles the basic case {@code {"field":"value"}} without Jackson dependency.
      * Escaped quotes are not handled (not needed for LLM-generated tool call args in practice).
      */

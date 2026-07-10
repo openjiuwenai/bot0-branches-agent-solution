@@ -21,6 +21,7 @@ import java.util.Objects;
 /**
  * LangChain-style Loop Detection Rail — detects output stagnation and tool-call
  * cycles, breaks them with targeted steering, and forceFinishes if persistent.
+ *
  * <p><b>Dual-hook design</b> (same consumption pattern as {@link com.openjiuwen.agents.reactrails.selfheal.RootCauseRail}):
  * <ul>
  *   <li>{@link #afterModelCall} — detects output repetition (same final answer)
@@ -29,30 +30,37 @@ import java.util.Objects;
  *   <li>{@link #onToolException} — records tool failures for context. Repeated
  *       failures on the same tool are a stagnation signal.</li>
  * </ul>
+ *
  * <p><b>Stagnation detection — output hash</b>:
  * Tracks the last N final-answer content hashes (via sliding window of size
  * {@link #OUTPUT_HISTORY_SIZE}). When the same output hash appears
  * {@link #MAX_OUTPUT_REPEATS} consecutive times → brake steering is injected
  * on the next beforeModelCall / via pushSteering.
+ *
  * <p><b>Stagnation detection — tool cycle</b>:
  * Tracks the last M tool-call signatures (tool-name sequence). When the same
  * sequence repeats {@link #MAX_TOOL_CYCLE_REPEATS} times → brake steering.
+ *
  * <p><b>Escalation</b>: after {@link #MAX_STAGNATIONS} total triggers, the rail
  * calls {@code ctx.requestForceFinish(degraded)} — honest terminal, stops the loop.
+ *
  * <p><b>Priority</b>: MEDIUM (50) — fires after VotingCriticVerifierRail (100)
  * and before CriteriaReplanBridgeRail (0). This lets the critic's data inform
  * the stagnation analysis, while the bridge rail still has final say on forceFinish.
+ *
  * <p><b>Phase override communication</b>:
  * When stagnation is detected, this rail calls
  * {@link SystemPromptInjectingModel#setPhaseOverride(String)} to inject a
  * loop-break prompt on the next model invocation. The override is consumed
  * by {@code SystemPromptInjectingModel.invoke()} in USER_MESSAGE_INJECT mode.
+ *
  * <p><b>IFF 契约</b>:
  * <ul>
  *   <li>Strip {@code consecutiveOutputRepeats++} → never triggers brake → test RED</li>
  *   <li>Strip {@code ctx.pushSteering(...)} on brake → steering queue empty → test RED</li>
  *   <li>Strip {@code ctx.requestForceFinish(...)} on maxStagnations → loop spins forever → test RED</li>
  * </ul>
+ *
  * @since 2026-07
  */
 public class StagnationDetectionRail extends AgentRail {

@@ -19,9 +19,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 真 LLM e2e 测试：PreCompletionChecklistRail PLAN/BUILD 阶段切换.
+ *
  * <p>前置条件：需要 OPENJIUWEN_API_KEY + OPENJIUWEN_BASE_URL 环境变量（或默认 deepseek/GLM 配置）。
  * 测试用 Model = SystemPromptInjectingModel (而非 ToolCallingEnforcingModel)，
  * 因为 PLAN_MODE/BUILD_MODE 的注入必须经过 SystemPromptInjectingModel.invoke()。
+ *
  * <p>测试策略（软观察 + 硬断言）：
  * <ul>
  *   <li><b>硬断言</b>：agent.invoke() 返回非 null；注册的 rail 在 agent 上可观测</li>
@@ -29,12 +31,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       反映 PLAN_MODE（前 2 轮）→ BUILD_MODE（第 3+ 轮）。真实 LLM 输出内容
  *       因模型/温度/提示而异，仅做关键词探测（非硬断言）</li>
  * </ul>
+ *
  * <p>承重契约（见 CLAUDE.md beta-bearing-hardening gate）：
  * <ul>
  *   <li>真 LLM e2e 验证静态通道通信（rail → SystemPromptInjectingModel）在全链路工作</li>
  *   <li>Plan-related specific config is tested via mock tests (PreCompletionChecklistRailTest)</li>
  *   <li>本 e2e 验证 "整个链通"——rail.beforeModelCall → 静态通道 → EnforcingModel.invoke</li>
  * </ul>
+ *
  * <p>已知局限（caveats）：
  * <ul>
  *   <li>静态 AtomicReference 是 per-class 而非 per-instance，多 agent 场景下互相影响</li>
@@ -46,11 +50,14 @@ class PreCompletionChecklistRailE2eTest {
 
     /**
      * [E2E-1] PLAN phase → agent output shows exploration framing.
+     *
      * <p>验证：agent 使用 SystemPromptInjectingModel +
      * PreCompletionChecklistRail (planMaxRounds=2) 时，
      * 前 2 轮 beforeModelCall 注入 PLAN_MODE。
+     *
      * <p>软观察：LLM 在第一轮中可能提到 "angle/角度/explore/探索" 等关键词。
      * 硬断言：injectionMode 在 afterModelCall 前为 PLAN_MODE。
+     *
      * <p>mutation-RED: 剥 beforeModelCall 中 setInjectionMode(PLAN_MODE)
      * → model 无 PLAN_MODE 注入 → getInjectionMode() 为 NONE（非 PLAN_MODE）→ RED
      */
@@ -96,8 +103,11 @@ class PreCompletionChecklistRailE2eTest {
 
     /**
      * [E2E-2] After planMaxRounds, mode switches to BUILD_MODE.
+     *
      * <p>验证：planMaxRounds=1 时，第二轮 beforeModelCall 切为 BUILD_MODE。
+     *
      * <p>硬断言：第二轮 beforeModelCall 后 getInjectionMode() == BUILD_MODE。
+     *
      * <p>mutation-RED: 剥 beforeModelCall 中 setInjectionMode(BUILD_MODE)
      * → mode 保持 PLAN_MODE → RED
      */
@@ -157,10 +167,13 @@ class PreCompletionChecklistRailE2eTest {
 
     /**
      * [E2E-3] Stagnation detected → phaseOverride is injected.
+     *
      * <p>验证：当 StagnationDetectionRail 在 extra 中设 stagnation_detected=true 时，
      * PreCompletionChecklistRail 的 beforeModelCall 应注入 BREAK_STAGNATION phaseOverride。
+     *
      * <p>软观察：通过 SystemPromptInjectingModel.peekPhaseOverride() 检查。
      * 真实 e2e 中需要 StagnationDetectionRail 也注册，且 LLM 触发了停滞。
+     *
      * <p>此测试仅为框架演示，实际停滞触发依赖 LLM 行为难以可靠复现。
      * 控制流验证见 PreCompletionChecklistRailTest.beforeModelCall_stagnationDetected_injectsBreakLoop。
      */

@@ -13,9 +13,11 @@ import java.util.Map;
 
 /**
  * Beta cognitive rail for ReActAgent — device-failure self-heal gate.
+ *
  * <p>Tool failures (exceptions during tool execution) signal device breakdown — retrying
  * the same input re-raises the same error. This rail detects tool failures and degrades
  * honestly instead of letting ReActAgent spin through maxIterations on a broken tool.
+ *
  * <p><b>Dual-hook collaboration</b> (bytecode-verified consumption at offsets 700 & 878).
  * ReActAgent.invoke has THREE consumeForceFinish sites on the 0.1.12 jar, all reading the same
  * shared AgentCallbackContext.forceFinishRequest field (context built once at invoke-entry, astore 8):
@@ -39,9 +41,11 @@ import java.util.Map;
  *       the next tool batch runs.</li>
  * </ul>
  * The deferral is a conservative choice, not a structural necessity on this jar version.
+ *
  * <p>Honest boundary: this rail covers DeviceFailure → Degrade only.
  * PerceptionUnreliable / PlanOrAnswerError need criteria-verify signal integration
  * ({@link com.openjiuwen.agents.reactrails.verification.CriteriaVerificationRail}), deferred.
+ *
  * @since 2026-07
  */
 public class RootCauseRail extends AgentRail {

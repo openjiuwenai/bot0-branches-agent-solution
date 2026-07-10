@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Real-LLM e2e: RootCauseRail on real ReActAgent + real GLM.
+ *
  * <p>Tests the device-failure degrade channel: a tool that throws on first call →
  * RootCauseRail.onToolException marks → next afterModelCall → forceFinish(degraded).
  * The LLM drives the ReActAgent loop; when the tool fails, the rail degrades honestly.

@@ -8,11 +8,13 @@ import java.util.function.Supplier;
 
 /**
  * Soft-observe harness for real-LLM e2e tests.
+ *
  * <p>Soft-skip a test body when the LLM endpoint is unavailable
  * ({@link LlmClient.LlmUnavailableException}: timeout / I/O / non-200) — a runtime/env
  * outage is reported as an <b>honest skipped-with-reason</b>, never as a red test that
  * masks a real defect (honesty split, 铁律①). Other failures (assertions, logic bugs)
  * propagate unchanged so genuine regressions still surface.
+ *
  * <p>Usage in a real-LLM e2e:
  * <pre>{@code
  *   String output = SoftLlmE2e.runSoft("claims-adjudication", () -> {

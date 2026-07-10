@@ -12,9 +12,11 @@ import java.util.function.Function;
  * Insurance-claim adjudication tool set for the PEV real-LLM e2e — plain-Java
  * {@code Function<Map<String,Object>,String>} tools, business semantics ported from the
  * spring-ai-ascend {@code ClaimTools} reference (which used agent-core's Tool/ToolCard).
+ *
  * <p><b>Adapted, not copied:</b> the reference lived on {@code DefaultAgentKernel}'s
  * ToolExecutor/ToolDefinition; here we expose plain functions keyed by name, ready to feed
  * {@link ToolBackedExecutor} and to be named in {@link LlmPlanner}'s prompt.
+ *
  * <p>5 deterministic tools over 2 fixture cases (CLM-2026-REDUCE = standard reducible claim,
  * CLM-2026-ADVERSARY = adversary lure: same surface facts but the docs claim a full payout
  * while the correct verdict is still 减赔). All fixtures inline — no external dep.

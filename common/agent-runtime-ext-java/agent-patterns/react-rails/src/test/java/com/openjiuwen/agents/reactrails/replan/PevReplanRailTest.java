@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * PevReplanRail 承重测试 — mock context 证 PEV dispatch 控制流:
  * replan 计数 + 超限 escalate + GlobalReplan→pushSteering + AcceptPartial→forceFinish.
+ *
  * <p>mutation-RED (剥 token → RED):
  * <ol>
  *   <li>{@code replanCount++} 剥 → 永不超限 → test {@link #overLimit_escalatesForceFinish()} RED</li>

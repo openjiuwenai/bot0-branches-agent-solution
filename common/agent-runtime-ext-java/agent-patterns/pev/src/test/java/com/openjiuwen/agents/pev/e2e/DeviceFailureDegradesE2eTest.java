@@ -19,20 +19,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Real-LLM e2e — port of {@code RealLlmFusionE2eTest.fusionRootCauseToolExceptionDegrades}
  * (spring-ai-ascend) into the PEV module.
+ *
  * <p>Scenario: a registered tool always throws → {@link ToolBackedExecutor} maps the throw to
  * {@code NodeResult.DeviceFailure} → the real-LLM {@link LlmVerifier} judges FAIL →
  * {@link PevKernel#diagnoseRootCause} finds a DeviceFailure node intersecting the verify
  * failed-set → {@link PevKernel#toReplanAction} dispatches {@code AcceptPartial} →
  * {@link PEVAgent} terminates honestly with a degraded result, <b>never retrying</b> the
  * broken device (executor invoked exactly once).
+ *
  * <p><b>Hard断言</b> (this test carries control-flow evidence, unlike the soft-observe
  * {@link PEVAgentRealLlmE2eTest}):
  * <ul>
  *   <li>output contains a {@code DeviceFailure} marker — the structural-failure class
-ame surfaced by {@link PEVAgent}'s {@code assembleOutput} on a non-Success node.</li>
+ *       name surfaced by {@link PEVAgent}'s {@code assembleOutput} on a non-Success node.</li>
  *   <li>{@code executor.execute(...)} is called exactly once — {@code AcceptPartial} is
  *       terminal; a retry would re-raise the same error against a broken device.</li>
  * </ul>
+ *
  * <p>Gated by {@link LlmClient#envPresent()} ({@code OPENJIUWEN_API_KEY} /
  * {@code OPENJIUWEN_BASE_URL} / {@code OPENJIUWEN_MODEL} = BigModel GLM, OpenAI-compatible).
  */

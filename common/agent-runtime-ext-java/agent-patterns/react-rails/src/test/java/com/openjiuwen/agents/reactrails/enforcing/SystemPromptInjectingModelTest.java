@@ -33,8 +33,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * SystemPromptInjectingModel 单元测试 — 验证注入模式 + 静态通道。
+ *
  * <p>注意: 完整功能需要真实 ModelClient（LLM 调用），此测试只验证消息改造逻辑。
  * {@code invoke()} 的真实调用需要 e2e 测试。
+ *
  * <p>四出口验证：
  * <ol>
  *   <li>NONE 模式 → 消息不变</li>
@@ -42,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>SYSTEM_PROMPT_APPEND → systemPromptSuffix 追加到 SystemMessage</li>
  *   <li>无 phaseOverride → USER_MESSAGE_INJECT 不注入额外消息</li>
  * </ol>
+ *
  * <p>mutation-RED:
  * <ul>
  *   <li>剥 msgList.add(new UserMessage(...)) → 无额外 user message → RED</li>
@@ -125,6 +128,7 @@ class SystemPromptInjectingModelTest {
      * FIRST_PRINCIPLES mode injects the first-principles prompt on the
      * first real invoke (after the probe), and does NOT inject again on
      * subsequent invokes (one-shot via AtomicBoolean CAS).
+     *
      * <p>Mutation-RED (IFF 范式):
      * <ul>
      *   <li>剥 {@link SystemPromptInjectingModel#injectFirstPrinciples} 调用
@@ -241,6 +245,7 @@ class SystemPromptInjectingModelTest {
     /**
      * FIRST_PRINCIPLES mode with NO existing SystemMessage:
      * injectFirstPrinciples creates a new SystemMessage at position 0.
+     *
      * <p>Mutation-RED: 剥 {@code injectFirstPrinciples} 中
      * {@code msgList.add(0, new SystemMessage(...))} 末尾插入逻辑 (line 279)
      * → 无 SystemMessage 时不插入 → RED

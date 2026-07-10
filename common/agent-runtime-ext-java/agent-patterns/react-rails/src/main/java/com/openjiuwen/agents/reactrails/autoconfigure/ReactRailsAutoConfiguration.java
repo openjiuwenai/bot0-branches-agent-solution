@@ -26,6 +26,7 @@ import org.springframework.context.annotation.Bean;
 
 /**
  * Spring Boot auto-configuration for react-rails.
+ *
  * <p>When Spring Boot is present + a {@link ReActAgent} bean exists in the context,
  * this auto-config registers cognitive rails onto the agent:
  * <ul>
@@ -37,6 +38,7 @@ import org.springframework.context.annotation.Bean;
  *   <li>{@link PreCompletionChecklistRail} — optional, enabled via {@code reactrails.checklist-enabled=true}
  *       (default on), PLAN/BUILD phase guardrail</li>
  * </ul>
+ *
  * <p>Properties (application.properties/yml):
  * <pre>
  * reactrails.enabled=true                          # master switch (default true)
@@ -46,6 +48,7 @@ import org.springframework.context.annotation.Bean;
  * reactrails.checklist-enabled=true                # PreCompletionChecklistRail switch (default true)
  * reactrails.checklist-max-plan-rounds=2           # PLAN phase max rounds (default 2)
  * </pre>
+ *
  * @since 2026-07
  */
 @AutoConfiguration
@@ -55,6 +58,7 @@ public class ReactRailsAutoConfiguration {
 
     /**
      * Default rule-based criteria verifier (when no custom CriteriaVerifier bean exists).
+     *
      * @return a {@link RuleBasedCriteriaVerifier} instance
      */
     @Bean
@@ -65,8 +69,10 @@ public class ReactRailsAutoConfiguration {
 
     /**
      * BeanPostProcessor that registers cognitive rails onto every {@link ReActAgent} bean.
+     *
      * <p>Uses a customizer pattern: the processor checks each bean; if it's a ReActAgent,
      * it registers the rails via {@code registerRail()} + {@code getAbilityManager().add()}.
+     *
      * @param criteriaVerifier the injected verifier (default or custom)
      * @return the rail-registering post-processor
      */
@@ -111,6 +117,7 @@ public class ReactRailsAutoConfiguration {
 
     /**
      * Properties bean for react-rails configuration.
+     *
      * @return the properties holder
      */
     @Bean

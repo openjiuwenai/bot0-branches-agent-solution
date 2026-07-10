@@ -12,6 +12,7 @@ import java.util.Map;
 
 /**
  * PEV 阶段组件 SPI — Planner / Executor / Verifier 注入式接口。
+ *
  * <p>注入式设计让单测可 mock 三阶段（控制流证据：mock 每个 stage 返回特定结果 → 断言 dispatch 走对分支），
  * 生产实现可接 LLM/工具/真 verifier。
  */
@@ -22,6 +23,7 @@ public final class PevComponents {
 
     /**
      * 单个执行节点（Plan 的组成单元）。
+     *
      * @since 2026-07
      */
     public record PlanNode(String id, String description) {

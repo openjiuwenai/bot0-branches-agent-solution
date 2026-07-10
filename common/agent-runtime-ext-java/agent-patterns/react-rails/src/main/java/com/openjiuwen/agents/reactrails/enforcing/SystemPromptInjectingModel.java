@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Injection-capable EnforcingModel — extends {@link ToolCallingEnforcingModel} with
  * optional system-prompt augmentation and a static phase override channel.
+ *
  * <p>Injection modes (set via {@link #setInjectionMode}):
  * <ul>
  *   <li><b>NONE</b> (default) — behaves exactly as {@link ToolCallingEnforcingModel}.</li>
@@ -35,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li><b>BUILD_MODE</b> — replaces the first {@link SystemMessage} with a convergent
  *       execution framing (BUILD phase). Also consumes phaseOverride if set.</li>
  * </ul>
+ *
  * <p>The static phase-override channel allows a {@link com.openjiuwen.core.singleagent.rail.AgentRail}
  * (e.g. {@link com.openjiuwen.agents.reactrails.verification.StagnationDetectionRail})
  * to communicate phase transitions to the model layer without jar modification:
@@ -43,10 +45,12 @@ import java.util.concurrent.atomic.AtomicReference;
  *   SystemPromptInjectingModel.setPhaseOverride("BREAK_LOOP: your output is repetitive");
  *   // Next invoke() will inject the brake prompt as a UserMessage
  * }</pre>
+ *
  * <p>Thread-safe via {@link AtomicReference} — the phase override is stored per-class,
  * so all agents sharing this class see the same override. In a multi-agent scenario
  * each agent should have its own model instance; the static channel is the
  * cross-hook communication primitive.
+ *
  * @since 2026-07
  */
 public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
@@ -127,6 +131,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     /**
      * Constructs an injecting model. Delegates to {@link ToolCallingEnforcingModel}
      * which creates the real {@code BaseModelClient} via {@link Model#Model}.
+     *
      * @param config        client-level configuration
      * @param requestConfig request-level configuration
      */
@@ -266,9 +271,11 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      * Injects the "先扩后收" first-principles prompt into the messages list
      * by appending to the existing SystemMessage, or inserting a new one
      * at position 0 if none exists.
+     *
      * <p>Creates a new ArrayList copy — the original list from ReActAgent
      * ({@link com.openjiuwen.core.singleagent.rail.ModelCallInputs#getMessages})
      * is not modified in-place.
+     *
      * @param messages the original messages object (must be {@code List<BaseMessage>})
      * @return a new or modified list with the first-principles prompt injected
      */

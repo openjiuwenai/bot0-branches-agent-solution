@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * StagnationDetectionRail 承重测试 — mock context 证 stagnation 检测 + brake steering + forceFinish.
+ *
  * <p>五出口验证：
  * <ol>
  *   <li>输出不重复 → 不触发</li>
@@ -31,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>工具调用循环达阈值 → pushSteering(brake)</li>
  *   <li>工具调用循环超限 → forceFinish(degraded)</li>
  * </ol>
+ *
  * <p>mutation-RED:
  * <ul>
  *   <li>剥 consecutiveOutputRepeats++ → 永不触发 brake → RED</li>

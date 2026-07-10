@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code RealLlmFusionE2eTest.fusionClaimsAdjudicationCompletes} (adapted to the PEV module,
  * reference not changed). Exercises the full Plan-Execute-Verify loop on a claim-review
  * business scenario against BigModel GLM via the shared {@link LlmClient}.
+ *
  * <p>Wiring (only this test file is new — every collaborator below is read-only shared infra):
  * <ul>
  *   <li>{@link LlmPlanner} — LLM produces a multi-step plan; tool names from
@@ -24,9 +25,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       description names a tool route to it, others fall back to an LLM reasoning step.</li>
  *   <li>{@link LlmVerifier} — LLM judges PASS/FAIL of the assembled output against the task.</li>
  * </ul>
+ *
  * <p>Honesty split (mirrors {@link PEVAgentRealLlmE2eTest}): mock tests carry the hard
  * control-flow断言; this e2e is soft-observe — real LLM in the loop, no brittle content断言.
  * Gated by {@code requireEnv} so CI without {@code OPENJIUWEN_*} skips cleanly.
+ *
  * <p>Env required: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /
  * {@code OPENJIUWEN_MODEL} (BigModel GLM, OpenAI-compatible).
  */

@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 /**
  * Beta cognitive rail for ReActAgent — compress failed-attempt message history on
  * {@code __replan__} tool call.
+ *
  * <p>Hooks {@code afterModelCall}: when the LLM calls {@code __replan__} (via
  * {@link ReplanTool}), compresses the message segment between the previous
  * compression boundary and the current replan response into a structured summary,
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
  * </ol>
  * Multiple replan cycles accumulate: each compression appends a new summary after prior ones,
  * keeping all prior summaries intact. No information is lost across cycles.
+ *
  * <p><b>字节码实证修正</b>:
  * <ul>
  *   <li>{@code AgentCallbackContext.pushSteering(String)} — 参数为 {@code String}，非 {@code BaseMessage}</li>
@@ -40,10 +42,13 @@ import java.util.stream.Collectors;
  * </ul>
  * 本 rail 使用 {@code setMessages} 而非 {@code pushSteering}，因为压缩摘要是永久性上下文替换，
  * 而非临时 steering。不涉及 pushSteering 调用。
+ *
  * <p><b>IFF 契约</b>: strip {@code setMessages} call → 上下文保留全量消息 → token 数不减少 → RED.
  * Strip {@code hasReplan} detection → 永不压缩 → RED.
+ *
  * <p><b>Honest boundary</b>: Phase1 规则提取工具调用签名，Phase2 LLM 摘要已 deferred
  * （需在 rail 内发起 LLM 调用，涉及注入时序复杂度）。
+ *
  * @since 2026-07
  */
 public class HistoryCompressorRail extends AgentRail {
@@ -69,6 +74,7 @@ public class HistoryCompressorRail extends AgentRail {
 
     /**
      * 可注入自定义压缩策略的构造。
+     *
      * @param compressor 接收失败消息段，返回结构化摘要字符串
      */
     public HistoryCompressorRail(Function<List<BaseMessage>, String> compressor) {
@@ -84,6 +90,7 @@ public class HistoryCompressorRail extends AgentRail {
 
     /**
      * 模型回调钩子：检测 {@code __replan__} 调用并压缩失败尝试段上下文。
+     *
      * <p>时序（字节码 offset 实证）：
      * <ul>
      *   <li>{@code railedModelCall} 内 {@code LAMBDA → AFTER} 触发</li>
@@ -156,8 +163,10 @@ public class HistoryCompressorRail extends AgentRail {
 
     /**
      * Phase1 规则提取：收集 segment 中所有 {@code AssistantMessage} 的工具调用签名。
+     *
      * <p>Phase2 LLM 摘要（deferred）：需要 rail 内发起 LLM 调用，涉及注入时序复杂度，
      * 当前 Phase1 已覆盖承重控制流，Phase2 不改变 IFF 契约。
+     *
      * @param segment 待压缩的消息段
      * @return 结构化摘要字符串
      */

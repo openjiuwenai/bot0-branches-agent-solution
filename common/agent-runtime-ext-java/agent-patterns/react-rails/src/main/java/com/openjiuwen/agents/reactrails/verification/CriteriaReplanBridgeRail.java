@@ -22,8 +22,10 @@ import java.util.stream.Collectors;
  * Criteria verification bridge rail — instead of immediate degrade on verify
  * failure, injects steering correction and retries. Only forceFinish(degraded)
  * after maxRetries exhausted.
+ *
  * <p>Drop-in replacement for {@link CriteriaVerificationRail}
  * — same constructor signature + ReplanRail for shared counter.
+ *
  * <p><b>Mechanism</b> (bytecode-verified on agent-core-java 0.1.12):
  * <ul>
  *   <li>afterModelCall fires INSIDE railedModelCall (callModel offset 687).</li>
@@ -32,14 +34,16 @@ import java.util.stream.Collectors;
  *   <li>requestForceFinish and pushSteering are independent — call both or just one.</li>
  *   <li>consumeForceFinish(700) fires AFTER full afterModelCall returns.</li>
  * </ul>
+ *
  * <p>Three exit paths:
  * <ul>
  *   <li><b>verify pass</b> → requestForceFinish(verified=true) — lock correct terminal state.</li>
  *   <li><b>verify fail + retries remaining</b> → pushSteering(correctionHint),
-o forceFinish. Next loop iteration injects the steering into LLM context for retry.</li>
+ *       no forceFinish. Next loop iteration injects the steering into LLM context for retry.</li>
  *   <li><b>verify fail + retries exhausted</b> → requestForceFinish(degraded=true, unmet=violations)
  *       — honest degrade terminal.</li>
  * </ul>
+ *
  * @since 2026-07
  */
 public class CriteriaReplanBridgeRail extends AgentRail {
@@ -71,6 +75,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
 
     /**
      * 模型回调钩子：终态答案走 verify → 三出口门，工具轮则累积决策历史。
+     *
      * <p>三出口：
      * <ol>
      *   <li>verify pass → forceFinish(verified=true)</li>
@@ -115,6 +120,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
 
     /**
      * IFF 范式：剥离 gradient metadata → 降级到通用纠正提示 → LLM 看不到精确定位的缺失维度 → RED。
+     *
      * <p>当 violations 携带 gradient metadata（来自 {@code RuleBasedCriteriaVerifier}）时，
      * 生成维度级精确定位的纠正提示（区分已覆盖/缺失维度）；否则回退到通用提示格式。
      */
@@ -130,6 +136,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
 
     /**
      * 梯度纠正提示 — 利用 Violation.metadata 中的梯度信息生成精确定位的 steering。
+     *
      * <p>Three formats based on metadata:
      * <ul>
      *   <li>isPartial=true → "已覆盖: X, 请补充: Y" (最小化 LLM 重新开始倾向)</li>

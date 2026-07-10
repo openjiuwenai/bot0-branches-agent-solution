@@ -19,13 +19,15 @@ import java.util.Set;
 
 /**
  * LangChain-style PreCompletionChecklist + AgentScope 2.0 PLAN/BUILD phase guard.
+ *
  * <p>Dual-hook design:
  * <ul>
  *   <li>{@link #beforeModelCall} (priority=80) — injects phase-aware guardrails via
  *       {@link SystemPromptInjectingModel}'s static channel BEFORE every LLM call.</li>
  *   <li>{@link #afterModelCall} (priority=80) — updates internal metrics for the
-ext checklist decision (call count, output diversity, tool coverage).</li>
+ *       next checklist decision (call count, output diversity, tool coverage).</li>
  * </ul>
+ *
  * <p>Checklist items (decided per-iteration in beforeModelCall):
  * <ol>
  *   <li><b>Iteration &lt; planMaxRounds</b> → {@code PLAN_MODE}: exploratory system prompt,
@@ -35,9 +37,12 @@ ext checklist decision (call count, output diversity, tool coverage).</li>
  *   <li><b>Stagnation detected</b> (peek from ctx.getExtra("stagnation_count")) → inject
  *       BREAK_LOOP override.</li>
  * </ol>
+ *
  * <p>Zero forceFinish — this rail only injects. Decision authority stays with
  * {@link CriteriaReplanBridgeRail} (afterModelCall).
+ *
  * <p>Zero pushSteering — this rail communicates through EnforcingModel's static channel.
+ *
  * <p>IFF 契约:
  * <ul>
  *   <li>Strip setPhaseOverride in beforeModelCall → no guardrail injected during
@@ -45,6 +50,7 @@ ext checklist decision (call count, output diversity, tool coverage).</li>
  *   <li>Strip setInjectionMode(PLAN_MODE) → system prompt unchanged → LLM may skip
  *       divergent exploration → RED (mock-assert exploration keywords in output).</li>
  * </ul>
+ *
  * @since 2026-07
  */
 public class PreCompletionChecklistRail extends AgentRail {
@@ -119,6 +125,7 @@ public class PreCompletionChecklistRail extends AgentRail {
 
     /**
      * Runs before every model invocation.
+     *
      * <p>Decides what guardrail to inject based on current state:
      * <ol>
      *   <li>First few iterations (callCount < planMaxRounds): PLAN_MODE
@@ -177,6 +184,7 @@ public class PreCompletionChecklistRail extends AgentRail {
 
     /**
      * Updates internal metrics for the next beforeModelCall decision.
+     *
      * <p>Tracks: call count, output content hashes, tool diversity.
      * Does NOT call pushSteering or requestForceFinish.
      */

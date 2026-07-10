@@ -13,6 +13,7 @@ import java.time.Duration;
 
 /**
  * Minimal OpenAI-compatible chat-completions client for the real-LLM e2e test.
+ *
  * <p>Test-scope only — proves the PEV data channel against a real LLM (OPENJIUWEN_*
  * env, BigModel/GLM). Uses only {@code java.net.http} (no extra dep). The response
  * parsing is intentionally minimal (soft-observe e2e, not a production client).
@@ -33,6 +34,7 @@ final class LlmClient {
 
     /**
      * Send a single user message, return the assistant content (empty string on any parse failure).
+     *
      * <p>Infrastructure outages (connect/read timeout, non-200 from the gateway, I/O errors)
      * surface as {@link LlmUnavailableException} — a distinct, catchable type so real-LLM e2e
      * tests can honestly soft-skip on a runtime/env outage instead of hard-failing the suite
@@ -103,6 +105,7 @@ final class LlmClient {
 
     /**
      * Extract {@code choices[0].message.content} from an OpenAI-compatible response (best-effort).
+     *
      * <p>Three providers, three field names for the same "thinking overflow" behavior:
      * <ul>
      *   <li><b>GLM-5.2</b>: writes into {@code reasoning_content}, leaves {@code content} empty

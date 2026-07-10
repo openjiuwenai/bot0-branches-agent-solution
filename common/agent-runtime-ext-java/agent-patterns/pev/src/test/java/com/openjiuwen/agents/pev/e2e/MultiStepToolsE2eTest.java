@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Multi-step tools e2e — the LLM must plan several nodes over 2-3 registered tools, the
  * executor runs them in order, and the verifier judges the combined output.
+ *
  * <p>Ported from the spring-ai-ascend {@code PEVAlphaRealLlmE2e.multiStepWithTools} reference,
  * adapted (not copied) to this module's injected-SPI shape:
  * <ul>
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       registered deterministic tool, or falls back to an LLM call.</li>
  *   <li>{@link LlmVerifier} judges the assembled output PASS/FAIL.</li>
  * </ul>
+ *
  * <p><b>Honesty split (铁律①):</b> real-LLM e2e is soft-observe.
  * <ul>
  *   <li>Hard断言: data channel + control flow end-to-end (output non-empty, contains the
@@ -33,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Soft-observe: the exact node ids, tool routing, and the verifier's PASS/FAIL verdict
  *       are LLM-dependent and brittle to hard-assert.</li>
  * </ul>
+ *
  * <p>Env-gated via {@link org.junit.jupiter.api.Assumptions#assumeTrue} on
  * {@code OPENJIUWEN_API_KEY}; skipped when the env is absent.
  */

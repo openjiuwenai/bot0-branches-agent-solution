@@ -11,11 +11,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Configuration properties for react-rails cognitive rails.
+ *
  * <p>Bind via {@code reactrails.*} prefix in application.properties/yml:
  * <pre>
  * reactrails.criteria=给出配置建议,引用风险评估
  * reactrails.max-replan=2
  * </pre>
+ *
  * @since 2026-07
  */
 @ConfigurationProperties(prefix = "reactrails")
@@ -40,6 +42,7 @@ public class ReactRailsProperties {
      * Enable one-shot injection of the "先扩后收" (widen then converge)
      * first-principles strategy prompt into the LLM system message on the
      * first real model invocation.
+     *
      * <p>Only effective when the agent's LLM is a
      * {@link com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel}
      * instance. The mode is set globally via the static channel.
