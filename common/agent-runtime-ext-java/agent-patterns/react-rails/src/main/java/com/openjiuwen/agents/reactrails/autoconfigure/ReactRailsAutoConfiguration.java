@@ -31,7 +31,8 @@ import org.springframework.context.annotation.Bean;
  * this auto-config registers cognitive rails onto the agent:
  * <ul>
  *   <li>{@link CriteriaVerificationRail} — requires {@code reactrails.criteria} property (comma-separated)</li>
- *   <li>{@link PevReplanRail} (replaces {@code ReplanRail}) — optional, maxReplan configurable via {@code reactrails.max-replan}</li>
+ *   <li>{@link PevReplanRail} (replaces {@code ReplanRail}) — optional, maxReplan configurable
+ *       via {@code reactrails.max-replan}</li>
  *   <li>{@link RootCauseRail} — always registered</li>
  *   <li>{@link ReplanTool} — registered via {@code agent.getAbilityManager().add(...)} if PevReplanRail is active</li>
  *   <li>{@link HistoryCompressorRail} — optional, enabled via {@code reactrails.history-compression=true}</li>

@@ -90,6 +90,8 @@ public class CriteriaReplanBridgeRail extends AgentRail {
      *   <li>verify fail + under limit → pushSteering(correction), 不 forceFinish</li>
      *   <li>verify fail + over limit → forceFinish(degraded=true)</li>
      * </ol>
+     *
+     * @param ctx callback context carrying model-call inputs
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {

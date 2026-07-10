@@ -100,6 +100,8 @@ public class HistoryCompressorRail extends AgentRail {
      *   <li>{@code consumeForceFinish} (offset 700) 尚未执行</li>
      *   <li>下一轮循环：{@code injectPendingSteering}(offset 675) → {@code callModel}(offset 687)</li>
      * </ul>
+     *
+     * @param ctx callback context carrying model-call inputs
      */
     @Override
     public synchronized void afterModelCall(AgentCallbackContext ctx) {

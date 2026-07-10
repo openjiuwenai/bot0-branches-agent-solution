@@ -41,6 +41,9 @@ final class LlmClient {
 
     /**
      * 发送聊天请求并返回助手端响应内容。
+     *
+     * @param userPrompt user prompt to send
+     * @return assistant response content
      */
     String chat(String userPrompt) {
         if (!envPresent()) {

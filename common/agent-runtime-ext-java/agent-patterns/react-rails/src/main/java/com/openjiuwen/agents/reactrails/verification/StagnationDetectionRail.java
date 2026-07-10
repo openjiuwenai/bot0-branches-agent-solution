@@ -22,7 +22,8 @@ import java.util.Objects;
  * LangChain-style Loop Detection Rail — detects output stagnation and tool-call
  * cycles, breaks them with targeted steering, and forceFinishes if persistent.
  *
- * <p><b>Dual-hook design</b> (same consumption pattern as {@link com.openjiuwen.agents.reactrails.selfheal.RootCauseRail}):
+ * <p><b>Dual-hook design</b> (same consumption pattern as
+ * {@link com.openjiuwen.agents.reactrails.selfheal.RootCauseRail}):
  * <ul>
  *   <li>{@link #afterModelCall} — detects output repetition (same final answer)
  *       and tool-call cycles (same tool sequence). Pushes brake steering when

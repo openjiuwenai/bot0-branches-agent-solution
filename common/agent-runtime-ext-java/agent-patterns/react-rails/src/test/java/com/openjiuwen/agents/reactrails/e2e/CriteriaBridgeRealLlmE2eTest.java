@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.agents.reactrails.e2e;
 
 import com.openjiuwen.agents.reactrails.replan.ReplanRail;
@@ -13,6 +17,9 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 
+/**
+ * Real-LLM smoke test for criteria bridge steering and retry.
+ */
 class CriteriaBridgeRealLlmE2eTest {
     @Test
     void realLlmVerifyFailSteeringRetry() {

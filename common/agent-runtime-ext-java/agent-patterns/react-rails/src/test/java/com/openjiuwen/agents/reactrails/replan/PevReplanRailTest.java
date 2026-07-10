@@ -25,7 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <ol>
  *   <li>{@code replanCount++} 剥 → 永不超限 → test {@link #overLimit_escalatesForceFinish()} RED</li>
  *   <li>{@code ctx.pushSteering(...)} 从 GlobalReplan 分支剥 → {@link #globalReplan_pushesSteering()} RED</li>
- *   <li>{@code ctx.requestForceFinish(degradedResult(...))} 从 AcceptPartial 分支剥 → {@link #acceptPartial_forceFinishes()} RED</li>
+ *   <li>{@code ctx.requestForceFinish(degradedResult(...))} 从 AcceptPartial 分支剥 →
+ *       {@link #acceptPartial_forceFinishes()} RED</li>
  *   <li>{@code PevKernel.toReplanAction} 调用剥 → dispatch 不执行 → {@link #globalReplan_pushesSteering()} RED</li>
  * </ol>
  */

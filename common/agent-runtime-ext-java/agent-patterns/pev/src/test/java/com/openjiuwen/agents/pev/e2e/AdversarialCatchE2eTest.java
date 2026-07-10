@@ -174,6 +174,9 @@ class AdversarialCatchE2eTest {
 
         /**
          * FAIL ⇒ prefer structurally-failed nodes; else (content failure) implicate all.
+         *
+         * @param completed completed node results
+         * @return nodes implicated by the failed verdict
          */
         private static Set<String> collectFailedNodes(Map<String, NodeResult> completed) {
             Set<String> failed = new LinkedHashSet<>();

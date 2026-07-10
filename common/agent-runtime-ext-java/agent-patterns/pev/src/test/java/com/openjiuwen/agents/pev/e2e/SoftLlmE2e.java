@@ -32,6 +32,11 @@ final class SoftLlmE2e {
      * Run a real-LLM test body; on {@link LlmClient.LlmUnavailableException} soft-skip the
      * test with an explicit reason. The test's own assertions still run after the body —
      * this only shields the invoke/LLM-bound portion from infra outages.
+     *
+     * @param tag test scenario label for the skip reason
+     * @param body LLM-bound test body
+     * @param <T> returned body type
+     * @return body result when the LLM endpoint is available
      */
     static <T> T runSoft(String tag, Supplier<T> body) {
         try {

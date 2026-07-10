@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.agents.reactrails.e2e;
 
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
@@ -10,6 +14,9 @@ import com.openjiuwen.core.singleagent.schema.AgentCard;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Real-LLM smoke test for first-principles system prompt injection.
+ */
 class SystemPromptInjectLlmE2eTest {
 
     @Test
