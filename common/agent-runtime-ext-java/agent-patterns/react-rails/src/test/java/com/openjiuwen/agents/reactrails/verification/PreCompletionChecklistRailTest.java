@@ -191,7 +191,6 @@ class PreCompletionChecklistRailTest {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
         // Final answer (no tool calls)
         rail.afterModelCall(ctxWithFinalAnswer("my answer"));
-
         // Now beforeModelCall should see hasPreviousFinalAnswer=true
         // (indirectly tested via phaseOverride set in the right conditions)
         // We already test this in testPreviousWasFinal_setsToolReminder
