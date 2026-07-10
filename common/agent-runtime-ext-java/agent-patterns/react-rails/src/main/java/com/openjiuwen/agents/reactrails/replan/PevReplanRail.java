@@ -31,8 +31,7 @@ import java.util.Set;
  *       a {@link RootCause} — replaces {@code PevKernel.diagnoseRootCause} (which is PEV-agent
  *       specific, relying on {@code VerifyResult} and {@code NodeResult} types unavailable to
  *       ReActAgent).</li>
- *   <li><b>Dispatch</b> via {@link PevKernel#toReplanAction} — sealed switch, compiler-enforced
- *       exhaustive over the three outcomes:
+ *   <li><b>Dispatch</b> via {@link PevKernel#toReplanAction} over the three outcomes:
  *       <ul>
  *         <li>{@link ReplanAction.GlobalReplan} / {@link ReplanAction.LocalReplan} → push
  *             steering (consumed by injectPendingSteering on the next iteration, offsets
@@ -184,24 +183,26 @@ public class PevReplanRail extends AgentRail {
         // ReActAgent-specific diagnosis (replaces PevKernel.diagnoseRootCause)
         RootCause cause = diagnose(reason, newApproach);
 
-        // PEV dispatch — pure function, compiler-enforced exhaustive
+        // PEV dispatch — pure function shared with the PEV agent.
         Set<String> failedNodes = cause instanceof RootCause.PlanOrAnswerError pe ? pe.nodes() : Set.of();
         ReplanAction action = PevKernel.toReplanAction(cause, reason, failedNodes);
 
         // Execute dispatch
-        switch (action) {
-            case ReplanAction.GlobalReplan gr -> {
-                String steering = "【全局重规划】" + gr.feedback() + "。请基于以下指导重新制定方案：" + newApproach;
-                ctx.pushSteering(steering);
-            }
-            case ReplanAction.LocalReplan lr -> {
-                String steering = "【局部修正】节点 " + lr.failedNodes() + " 需要重新处理。修正提示：" + lr.feedback();
-                ctx.pushSteering(steering);
-            }
-            case ReplanAction.AcceptPartial ap -> {
-                ctx.requestForceFinish(degradedResult(ap.reason()));
-            }
+        if (action instanceof ReplanAction.GlobalReplan globalReplan) {
+            String steering = "【全局重规划】" + globalReplan.feedback() + "。请基于以下指导重新制定方案：" + newApproach;
+            ctx.pushSteering(steering);
+            return;
         }
+        if (action instanceof ReplanAction.LocalReplan localReplan) {
+            String steering = "【局部修正】节点 " + localReplan.failedNodes() + " 需要重新处理。修正提示：" + localReplan.feedback();
+            ctx.pushSteering(steering);
+            return;
+        }
+        if (action instanceof ReplanAction.AcceptPartial acceptPartial) {
+            ctx.requestForceFinish(degradedResult(acceptPartial.reason()));
+            return;
+        }
+        throw new IllegalArgumentException("Unsupported replan action: " + action);
     }
 
     /**

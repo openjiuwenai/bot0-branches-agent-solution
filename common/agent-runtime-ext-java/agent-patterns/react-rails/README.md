@@ -104,7 +104,7 @@ src/main/java/com/openjiuwen/agents/reactrails/
 
 ## 依赖
 
-`agent-core-java` 0.1.12-jdk17（ReActAgent / AgentRail / AgentCallbackContext / Tool / ToolCard / AbilityManager）；Java 21。
+`agent-core-java` 0.1.12-jdk17（ReActAgent / AgentRail / AgentCallbackContext / Tool / ToolCard / AbilityManager）；Java 17（继承父工程 release）。
 
 ## 设计背景
 

@@ -16,7 +16,6 @@
     <description>Beta cognitive rails grafted onto agent-core-java's ReActAgent. Three rails (CriteriaVerificationRail / ReplanRail / RootCauseRail) using afterModelCall forceFinish gate + external-judge CriteriaVerifier. Fills ReActAgent's verify+GEPA-lite gap. Sibling to pev module.</description>
 
     <properties>
-        <agent-runtime-ext.java.release>21</agent-runtime-ext.java.release>
         <formatter.plugin.version>2.24.1</formatter.plugin.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <checkstyle.version>10.21.0</checkstyle.version>

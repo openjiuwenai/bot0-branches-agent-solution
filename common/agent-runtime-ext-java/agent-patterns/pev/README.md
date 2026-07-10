@@ -273,7 +273,7 @@ Object out = agent.invoke(task, null);
 - `CriteriaVerificationRail`（afterInvoke）— 对最终输出做 success-criteria 关键字校验，defense-in-depth。
 - `RootCauseRail`（afterToolCall）— 累积 DeviceFailure 节点，observability。
 
-**自定义 rail**：继承 `AgentRail`，覆写 `afterModelCall` / `afterToolCall` / `afterInvoke` 等钩子，`registerRail` 注册。rail 是**观察者 + 横切**（不驱动 PEV 的 dispatch，那是 sealed switch 的职责）。
+**自定义 rail**：继承 `AgentRail`，覆写 `afterModelCall` / `afterToolCall` / `afterInvoke` 等钩子，`registerRail` 注册。rail 是**观察者 + 横切**（不驱动 PEV 的 dispatch，那是 kernel 决策函数的职责）。
 
 ---
 
@@ -323,7 +323,7 @@ src/main/java/com/openjiuwen/agents/pev/
 src/test/java/.../pev/e2e/   real LLM e2e 参考（LlmClient/LlmPlanner/ToolBackedExecutor/LlmVerifier/ClaimTools）
 ```
 
-**依赖**：`agent-core-java`（0.1.12-jdk17，`BaseAgent` / `AgentRail` / `AgentCallbackContext`）；Java 21（sealed + pattern switch）。
+**依赖**：`agent-core-java`（0.1.12-jdk17，`BaseAgent` / `AgentRail` / `AgentCallbackContext`）；Java 17（继承父工程 release，使用 sealed 类型）。
 
 **构建**：
 ```bash

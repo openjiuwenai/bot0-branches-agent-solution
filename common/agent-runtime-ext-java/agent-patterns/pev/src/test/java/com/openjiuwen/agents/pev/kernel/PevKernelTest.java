@@ -58,7 +58,7 @@ class PevKernelTest {
         ReplanAction a = PevKernel.toReplanAction(new RootCause.DeviceFailure(Set.of("A")), "fb", Set.of("A"));
 
         assertThat(a).isInstanceOf(ReplanAction.AcceptPartial.class);
-        // mutation-RED: 剥 toReplanAction 的 DeviceFailure case arm → sealed switch 非穷举 → 编译红（编译期证，比运行时 RED 更早）
+        // mutation-RED: 剥 toReplanAction 的 DeviceFailure 分支 → 该用例 RED
     }
 
     @Test

@@ -19,8 +19,7 @@ import java.util.Set;
  * <p>Two functions:
  * <ul>
  *   <li>{@link #diagnoseRootCause} — signals → {@link RootCause} (3-state diagnosis).</li>
- *   <li>{@link #toReplanAction} — {@link RootCause} → {@link ReplanAction} (3-state dispatch,
- *       sealed switch, compiler-enforced exhaustive).</li>
+ *   <li>{@link #toReplanAction} — {@link RootCause} → {@link ReplanAction} (3-state dispatch).</li>
  * </ul>
  *
  * @since 2026-07
@@ -98,7 +97,7 @@ public final class PevKernel {
     }
 
     /**
-     * Map a root cause to a dispatch action — sealed switch, compiler-enforced exhaustive.
+     * Map a root cause to a dispatch action.
      *
      * <p>IFF contract (deliberate, tested):
      * <ul>
@@ -116,21 +115,25 @@ public final class PevKernel {
      * @return dispatch action selected for the diagnosed root cause
      */
     public static ReplanAction toReplanAction(RootCause cause, String feedback, Set<String> failedNodes) {
-        return switch (cause) {
-            case RootCause.DeviceFailure d -> new ReplanAction.AcceptPartial(
-                    "Device failure: " + d.nodes() + " — replan cannot fix broken tools/infra");
-            case RootCause.PerceptionUnreliable p -> new ReplanAction.AcceptPartial("Perception unreliable: verifier "
-                    + (p.isVerifierThrown() ? "threw" : "returned null") + " — cannot trust its FAILED verdict");
-            case RootCause.PlanOrAnswerError pe -> {
-                Set<String> nodes = failedNodes == null ? Set.of() : failedNodes;
-                if (nodes.isEmpty()) {
-                    yield new ReplanAction.GlobalReplan(feedback);
-                }
-                if (nodes.size() <= 2) {
-                    yield new ReplanAction.LocalReplan(nodes, feedback);
-                }
-                yield new ReplanAction.GlobalReplan(feedback);
+        if (cause instanceof RootCause.DeviceFailure deviceFailure) {
+            return new ReplanAction.AcceptPartial(
+                    "Device failure: " + deviceFailure.nodes() + " — replan cannot fix broken tools/infra");
+        }
+        if (cause instanceof RootCause.PerceptionUnreliable perceptionUnreliable) {
+            return new ReplanAction.AcceptPartial("Perception unreliable: verifier "
+                    + (perceptionUnreliable.isVerifierThrown() ? "threw" : "returned null")
+                    + " — cannot trust its FAILED verdict");
+        }
+        if (cause instanceof RootCause.PlanOrAnswerError) {
+            Set<String> nodes = failedNodes == null ? Set.of() : failedNodes;
+            if (nodes.isEmpty()) {
+                return new ReplanAction.GlobalReplan(feedback);
             }
-        };
+            if (nodes.size() <= 2) {
+                return new ReplanAction.LocalReplan(nodes, feedback);
+            }
+            return new ReplanAction.GlobalReplan(feedback);
+        }
+        throw new IllegalArgumentException("Unsupported root cause: " + cause);
     }
 }

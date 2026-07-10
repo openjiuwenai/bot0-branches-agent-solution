@@ -15,10 +15,7 @@
     <name>pev — PEV agent-service-app (canonical template)</name>
     <description>PEV (Plan→Execute→Verify→Diagnose→Dispatch) as a canonical agent-service-app on agent-core-java. Self-contained: kernel (sealed types + pure functions) + agent (extends BaseAgent) + rails (Beta cognitive). Not an ext adapter — PEV is itself an agent-service-app, a sibling pattern to EDPA.</description>
 
-    <!-- PEV 用 sealed types + pattern switch（Java 21 稳定）；覆盖父 pom 的 17。
-         Java 21 对 agent-core-java 的 jdk17 artifact 向后兼容。 -->
     <properties>
-        <agent-runtime-ext.java.release>21</agent-runtime-ext.java.release>
         <formatter.plugin.version>2.24.1</formatter.plugin.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <checkstyle.version>10.21.0</checkstyle.version>

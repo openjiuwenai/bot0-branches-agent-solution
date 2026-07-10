@@ -176,28 +176,34 @@ public class PEVAgent extends BaseAgent {
             return;
         }
 
-        switch (action) {
-            case com.openjiuwen.agents.pev.kernel.ReplanAction.AcceptPartial ignored -> terminal[0] = true;
-            case com.openjiuwen.agents.pev.kernel.ReplanAction.LocalReplan lr -> {
-                List<PevComponents.PlanNode> redo = new java.util.ArrayList<>();
-                java.util.Set<String> failed = lr.failedNodes() == null ? java.util.Set.of() : lr.failedNodes();
-                for (PevComponents.PlanNode n : plan.nodes()) {
-                    if (failed.contains(n.id())) {
-                        redo.add(n);
-                        completed.remove(n.id());
-                    }
-                }
-                if (!redo.isEmpty()) {
-                    runVerifyLoop(userInput, new PevComponents.Plan(plan.goal() + " (局部重做)", redo), completed, terminal,
-                            verifyPassed, retryCount + 1, session);
-                }
-            }
-            case com.openjiuwen.agents.pev.kernel.ReplanAction.GlobalReplan gr -> {
-                PevComponents.Plan newPlan = planner.plan(userInput + " [correction: " + gr.feedback() + "]");
-                completed.clear();
-                runVerifyLoop(userInput, newPlan, completed, terminal, verifyPassed, retryCount + 1, session);
-            }
+        if (action instanceof com.openjiuwen.agents.pev.kernel.ReplanAction.AcceptPartial) {
+            terminal[0] = true;
+            return;
         }
+        if (action instanceof com.openjiuwen.agents.pev.kernel.ReplanAction.LocalReplan localReplan) {
+            List<PevComponents.PlanNode> redo = new java.util.ArrayList<>();
+            java.util.Set<String> failed = localReplan.failedNodes() == null
+                    ? java.util.Set.of()
+                    : localReplan.failedNodes();
+            for (PevComponents.PlanNode n : plan.nodes()) {
+                if (failed.contains(n.id())) {
+                    redo.add(n);
+                    completed.remove(n.id());
+                }
+            }
+            if (!redo.isEmpty()) {
+                runVerifyLoop(userInput, new PevComponents.Plan(plan.goal() + " (局部重做)", redo), completed, terminal,
+                        verifyPassed, retryCount + 1, session);
+            }
+            return;
+        }
+        if (action instanceof com.openjiuwen.agents.pev.kernel.ReplanAction.GlobalReplan globalReplan) {
+            PevComponents.Plan newPlan = planner.plan(userInput + " [correction: " + globalReplan.feedback() + "]");
+            completed.clear();
+            runVerifyLoop(userInput, newPlan, completed, terminal, verifyPassed, retryCount + 1, session);
+            return;
+        }
+        throw new IllegalArgumentException("Unsupported replan action: " + action);
     }
 
     private void fire(AgentCallbackEvent event, Session session, Object payload) {
