@@ -189,7 +189,6 @@ class PreCompletionChecklistRailTest {
     @Test
     void afterModelCallFinalAnswerSetsPreviousFinalAnswerFlag() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2);
-
         // Final answer (no tool calls)
         rail.afterModelCall(ctxWithFinalAnswer("my answer"));
 

@@ -183,7 +183,6 @@ class PreCompletionChecklistRailE2eTest {
         // → PreCompletionChecklistRail.beforeModelCall reads it
         // → sets SystemPromptInjectingModel.setPhaseOverride("BREAK_STAGNATION: ...")
         // → next SystemPromptInjectingModel.invoke() injects it as UserMessage
-
         // The mock test (PreCompletionChecklistRailTest) validates the control flow.
         // The e2e here validates nothing additional about this specific path
         // because stagnation is LLM-behavior-dependent and non-deterministic.
