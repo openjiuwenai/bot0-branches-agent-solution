@@ -21,6 +21,7 @@ common
 `-- example
     |-- agentcore-ext-deepagent-remote-a2a-demo
     |-- agentcore-ext-remote-a2a-tool-demo
+    |-- intent-recognition-runtime-demo
     `-- versatile-a2a-adapter-demo
 ```
 
@@ -44,6 +45,7 @@ common
   - `agent-a-deepagent-runtime`：Agent A，通过注入的远端 A2A 工具委托 Agent B。
   - `agent-b-deepagent-runtime`：Agent B，通过 A2A 暴露 DeepAgent runtime。
 - `example/versatile-a2a-adapter-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
+- `example/intent-recognition-runtime-demo`：两个独立 Spring Boot runtime，分别通过 ReAct Agent Tool 和 Workflow Component 验证标准 A2A AgentCard 意图匹配。
 
 ## 编译打包流程
 
@@ -68,6 +70,9 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
   clean install
 
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
+  clean install
+
+mvn -f common\example\intent-recognition-runtime-demo\pom.xml `
   clean install
 ```
 
@@ -117,5 +122,8 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
   clean install
 
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
+  clean install
+
+mvn -f common\example\intent-recognition-runtime-demo\pom.xml `
   clean install
 ```

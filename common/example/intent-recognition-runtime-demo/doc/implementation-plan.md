@@ -20,10 +20,10 @@
 - Create: `demo-support/src/main/java/com/openjiuwen/example/intent/support/IntentDemoProperties.java`
 - Create: `demo-support/src/main/java/com/openjiuwen/example/intent/support/IntentDemoContext.java`
 
-- [ ] Write tests requiring exact YAML-to-core configuration mapping and three standard A2A cards.
-- [ ] Run `mvn -pl demo-support test` and confirm compilation fails because support classes do not exist.
-- [ ] Implement validated properties and the shared recognizer/card factory with `StandardReranker`.
-- [ ] Run support tests and confirm they pass.
+- [x] Write tests requiring exact YAML-to-core configuration mapping and three standard A2A cards.
+- [x] Run `mvn -pl demo-support test` and confirm compilation fails because support classes do not exist.
+- [x] Implement validated properties and the shared recognizer/card factory with `StandardReranker`.
+- [x] Run support tests and confirm they pass.
 
 ### Task 2: ReAct Agent runtime
 
@@ -32,10 +32,10 @@
 - Test: `react-agent-runtime/src/test/java/com/openjiuwen/example/intent/react/ReactIntentRuntimeApplicationTest.java`
 - Create: `react-agent-runtime/src/main/java/com/openjiuwen/example/intent/react/ReactIntentRuntimeApplication.java`
 
-- [ ] Write a context test requiring a `ReActAgent`, registered `IntentRecognitionTool`, and `JiuwenCoreAgentExtHandler`.
-- [ ] Run the module test and confirm it fails because the application is absent.
-- [ ] Implement the Spring Boot application, real model configuration, tool registration, and handler bean.
-- [ ] Run the module test and confirm it passes without making a model request.
+- [x] Write a context test requiring a `ReActAgent`, registered `IntentRecognitionTool`, and `JiuwenCoreAgentExtHandler`.
+- [x] Run the module test and confirm it fails because the application is absent.
+- [x] Implement the Spring Boot application, real model configuration, tool registration, and handler bean.
+- [x] Run the module test and confirm it passes without making a model request.
 
 ### Task 3: Workflow runtime
 
@@ -44,11 +44,11 @@
 - Test: `workflow-runtime/src/test/java/com/openjiuwen/example/intent/workflow/WorkflowIntentRuntimeApplicationTest.java`
 - Create: `workflow-runtime/src/main/java/com/openjiuwen/example/intent/workflow/WorkflowIntentRuntimeApplication.java`
 
-- [ ] Write a context test requiring a `WorkflowAgent`, an intent workflow, and `JiuwenCoreAgentExtHandler`.
-- [ ] Run the module test and confirm it fails because the application is absent.
-- [ ] Implement `Start -> IntentRecognitionComponent -> End`, attach it to `WorkflowAgent`, and expose the handler.
-- [ ] Invoke the workflow in the test with a deterministic test reranker and verify the selected card.
-- [ ] Run the module test and confirm it passes.
+- [x] Write a context test requiring a `WorkflowAgent`, an intent workflow, and `JiuwenCoreAgentExtHandler`.
+- [x] Run the module test and confirm it fails because the application is absent.
+- [x] Implement `Start -> IntentRecognitionComponent -> End`, attach it to `WorkflowAgent`, and expose the handler.
+- [x] Invoke the workflow in the test with a deterministic test reranker and verify the selected card.
+- [x] Run the module test and confirm it passes.
 
 ### Task 4: Runtime configuration and operator guide
 
@@ -60,14 +60,15 @@
 - Create: `common/example/intent-recognition-runtime-demo/README.md`
 - Modify: `common/README.md`
 
-- [ ] Add explicit real model/reranker placeholders and distinct ports.
-- [ ] Add equivalent A2A `SendMessage` requests for both runtimes.
-- [ ] Document installation, startup, curl commands, expected AgentCard, and failure diagnosis.
-- [ ] Run `mvn clean verify` for the full demo reactor.
+- [x] Add explicit real model/reranker placeholders and distinct ports.
+- [x] Add equivalent A2A `SendMessage` requests for both runtimes.
+- [x] Document installation, startup, curl commands, expected AgentCard, and failure diagnosis.
+- [x] Run `mvn clean verify` for the full demo reactor.
 
 ### Task 5: End-to-end protocol verification
 
-- [ ] Start each application with local test model/reranker endpoints or user-provided real endpoints.
-- [ ] Send the documented curl requests to both `/a2a/` endpoints.
+- [x] Start each application with non-empty endpoint configuration and verify both A2A discovery documents.
+- [ ] Start each application with user-provided real chat model and reranker endpoints.
+- [ ] Send the documented curl requests to both `/a2a` endpoints.
 - [ ] Verify HTTP success and that both responses select the Order Agent card.
-- [ ] Run `git diff --check` and inspect final branch status.
+- [x] Run `git diff --check` and inspect final branch status.

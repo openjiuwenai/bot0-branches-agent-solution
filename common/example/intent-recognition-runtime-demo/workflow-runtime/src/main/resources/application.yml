@@ -1,0 +1,64 @@
+server:
+  port: ${WORKFLOW_INTENT_PORT:18111}
+
+spring:
+  application:
+    name: intent-recognition-workflow-agent
+
+openjiuwen:
+  service:
+    agent-id: intent-recognition-workflow-agent
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-description: "Workflow Agent containing an IntentRecognitionComponent node"
+      provider-organization: "OpenJiuwen"
+      streaming: false
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "application/json"]
+      skills:
+        - id: "intent_recognition_workflow"
+          name: "Intent Recognition Workflow"
+          description: "Run the intent recognition workflow and return the selected A2A AgentCard"
+          tags: ["intent", "workflow", "a2a"]
+          examples: ["查询订单物流", "明天北京天气如何", "查询退款政策"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "application/json"]
+  demo:
+    intent:
+      llm:
+        provider: ${CHAT_MODEL_PROVIDER:OpenAI}
+        api-key: ${CHAT_MODEL_API_KEY:}
+        api-base: ${CHAT_MODEL_API_BASE:}
+        model-name: ${CHAT_MODEL_NAME:}
+        ssl-verify: ${CHAT_MODEL_SSL_VERIFY:true}
+        timeout-seconds: ${CHAT_MODEL_TIMEOUT_SECONDS:120}
+        temperature: ${CHAT_MODEL_TEMPERATURE:0.0}
+        top-p: ${CHAT_MODEL_TOP_P:0.8}
+        max-tokens: ${CHAT_MODEL_MAX_TOKENS:1024}
+        max-iterations: 4
+        system-prompt: >
+          You are a workflow routing agent. For every user request, select and
+          execute IntentRecognitionWorkflow exactly once. Return the workflow
+          result unchanged, without markdown or additional explanation.
+      reranker:
+        api-key: ${RERANKER_API_KEY:}
+        api-base: ${RERANKER_API_BASE:}
+        model-name: ${RERANKER_MODEL_NAME:}
+        timeout-seconds: ${RERANKER_TIMEOUT_SECONDS:30}
+        max-retries: ${RERANKER_MAX_RETRIES:3}
+        extra-body: {}
+      recognition:
+        score-threshold: ${INTENT_SCORE_THRESHOLD:0.5}
+        margin-threshold: ${INTENT_MARGIN_THRESHOLD:0.1}
+        max-utterance-length: 4096
+        max-batch-size: 128
+        max-concurrent-recognitions: 8
+
+logging:
+  level:
+    com.openjiuwen.example.intent: INFO
+    com.openjiuwen.service.adapters.agentcore: INFO
