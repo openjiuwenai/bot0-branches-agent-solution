@@ -7,7 +7,8 @@
 ```text
 common
 |-- agent-core-ext-java
-|   `-- agent-core-ext-react-rails
+|   |-- agent-core-ext-react-rails
+|   `-- intent-recognition
 |-- agent-runtime-ext-java
 |   `-- agent-service-adapters
 |       |-- agent-service-adapters-agentcore-ext
@@ -26,7 +27,8 @@ common
 ## 扩展工程
 
 - `agent-runtime-ext-java`：运行时扩展模块的 Maven 父工程。
-- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，当前包含 `agent-core-ext-react-rails`。
+- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，包含 `agent-core-ext-react-rails` 和 `intent-recognition`。
+  - `intent-recognition`：提供共享意图识别内核、标准 A2A AgentCard 适配、Agent Tool 和 Workflow Component。
 - `agents`：具体 Agent 实现工程，当前包含 PEV Agent。
 - `agent-evolve/evoagent`：Skill/managed-doc 自进化服务，Python 3.12 + uv 独立工程。
 - `agent-evolve/evoagent-adapter`：日志、Skill 与 managed-doc sidecar，Python 3.12 + uv 独立工程。
