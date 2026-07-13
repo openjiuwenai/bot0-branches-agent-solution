@@ -22,8 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * PEV agent — a general agent-service-app on agent-core-java, running the closed loop
@@ -140,19 +140,17 @@ public class PEVAgent extends BaseAgent {
     }
 
     private PevKernel.VerifyResult verify(String userInput, Map<String, NodeResult> completed) {
-        FutureTask<PevKernel.VerifyResult> verification = new FutureTask<>(() -> verifier.verify(userInput, completed));
-        verification.run();
+        CompletableFuture<PevKernel.VerifyResult> verification = CompletableFuture
+                .supplyAsync(() -> verifier.verify(userInput, completed), Runnable::run);
         try {
-            PevKernel.VerifyResult result = verification.get();
+            PevKernel.VerifyResult result = verification.join();
             if (result == null) {
                 return new PevKernel.VerifyResult(false, Set.of(), "verifier returned null", true);
             }
             return result;
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Completed verifier invocation was interrupted", ex);
-        } catch (ExecutionException ex) {
-            return handleVerifierFailure(ex.getCause());
+        } catch (CompletionException ex) {
+            Throwable failure = ex.getCause() == null ? ex : ex.getCause();
+            return handleVerifierFailure(failure);
         }
     }
 
