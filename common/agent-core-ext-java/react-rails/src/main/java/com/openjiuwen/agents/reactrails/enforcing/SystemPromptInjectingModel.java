@@ -7,6 +7,7 @@ package com.openjiuwen.agents.reactrails.enforcing;
 import com.openjiuwen.core.foundation.llm.Model;
 import com.openjiuwen.core.foundation.llm.output_parsers.BaseOutputParser;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
+import com.openjiuwen.core.foundation.llm.schema.AssistantMessageChunk;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
@@ -14,6 +15,7 @@ import com.openjiuwen.core.foundation.llm.schema.SystemMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -142,7 +144,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     /**
      * Set the injection mode for this model on the current invocation thread.
      *
-     * @param m injection mode to apply globally
+     * @param m model default and current-thread injection mode
      */
     public void setInjectionMode(InjectionMode m) {
         injectionState.setConfiguredMode(m);
@@ -179,8 +181,24 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     // ---- Invoke override ----
 
     @Override
-    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
-            Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
+    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float topP, String model,
+            Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout, Map<String, Object> kwargs)
+            throws Exception {
+        Object effectiveMessages = prepareMessages(messages);
+        return super.invoke(effectiveMessages, tools, temperature, topP, model, maxTokens, stop, outputParser, timeout,
+                kwargs);
+    }
+
+    @Override
+    public Iterator<AssistantMessageChunk> stream(Object messages, Object tools, Float temperature, Float topP,
+            String model, Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout,
+            Map<String, Object> kwargs) throws Exception {
+        Object effectiveMessages = prepareMessages(messages);
+        return super.stream(effectiveMessages, tools, temperature, topP, model, maxTokens, stop, outputParser, timeout,
+                kwargs);
+    }
+
+    private Object prepareMessages(Object messages) {
         Object effectiveMessages = messages;
         InjectionMode currentMode = injectionState.getMode();
 
@@ -228,10 +246,11 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         if (currentMode == InjectionMode.SYSTEM_PROMPT_APPEND && !systemPromptSuffix.isEmpty()
                 && effectiveMessages instanceof List) {
             @SuppressWarnings("unchecked")
-            List<BaseMessage> msgList = (List<BaseMessage>) effectiveMessages;
+            List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
             if (!msgList.isEmpty() && msgList.get(0) instanceof SystemMessage sysMsg) {
                 String augmented = sysMsg.getContentAsString() + LINE_SEPARATOR + LINE_SEPARATOR + systemPromptSuffix;
                 msgList.set(0, new SystemMessage(augmented));
+                effectiveMessages = msgList;
             }
         }
 
@@ -241,8 +260,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
             effectiveMessages = injectFirstPrinciples(effectiveMessages);
         }
 
-        // Delegate to super (ToolCallingEnforcingModel) which does probe + real invoke
-        return super.invoke(effectiveMessages, tools, temperature, maxTokens, model, n, stop, parser, topP, kwargs);
+        return effectiveMessages;
     }
 
     // ==================================================================

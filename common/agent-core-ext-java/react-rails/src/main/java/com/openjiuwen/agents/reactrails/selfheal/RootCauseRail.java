@@ -20,7 +20,7 @@ import java.util.Map;
  * honestly instead of letting ReActAgent spin through maxIterations on a broken tool.
  *
  * <p><b>Dual-hook collaboration</b> (bytecode-verified consumption at offsets 700 & 878).
- * ReActAgent.invoke has THREE consumeForceFinish sites on the 0.1.12 jar, all reading the same
+ * ReActAgent.invoke has multiple consumeForceFinish sites on the 0.1.13 jar, all reading the same
  * shared AgentCallbackContext.forceFinishRequest field (context built once at invoke-entry, astore 8):
  * <ul>
  *   <li>offset 225: BEFORE_INVOKE → before the loop (not used here).</li>

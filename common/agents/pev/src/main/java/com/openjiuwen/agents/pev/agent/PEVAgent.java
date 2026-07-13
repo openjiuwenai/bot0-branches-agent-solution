@@ -39,8 +39,8 @@ import java.util.Set;
  *       {@code AFTER_INVOKE} (terminal). Any {@link com.openjiuwen.core.singleagent.rail.AgentRail}
  *       registered via {@link #registerRail} observes PEV phases — the seam for composing
  *       cognitive rails (Beta) and autoharness rails.</li>
- *   <li><b>Sealed dispatch</b>: {@link PevKernel#toReplanAction} output switched over
- *       exhaustively; dropping a case arm fails to compile.</li>
+ *   <li><b>Closed dispatch</b>: {@link PevKernel#toReplanAction} returns a sealed action
+ *       hierarchy whose currently permitted variants are handled explicitly.</li>
  *   <li><b>terminalGuard</b>: caps the verify loop at {@code maxRetries}.</li>
  * </ul>
  *
@@ -144,7 +144,7 @@ public class PEVAgent extends BaseAgent {
                 return new PevKernel.VerifyResult(false, Set.of(), "verifier returned null", true);
             }
             return result;
-        } catch (IllegalArgumentException | IllegalStateException ex) {
+        } catch (RuntimeException ex) {
             return new PevKernel.VerifyResult(false, Set.of(), "verifier threw: " + ex.getMessage(), false, true);
         }
     }

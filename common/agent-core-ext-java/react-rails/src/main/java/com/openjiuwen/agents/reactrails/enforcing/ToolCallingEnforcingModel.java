@@ -7,6 +7,7 @@ package com.openjiuwen.agents.reactrails.enforcing;
 import com.openjiuwen.core.foundation.llm.Model;
 import com.openjiuwen.core.foundation.llm.output_parsers.BaseOutputParser;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
+import com.openjiuwen.core.foundation.llm.schema.AssistantMessageChunk;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
@@ -16,12 +17,14 @@ import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.foundation.tool.schema.ToolInfo;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * One-shot probe on first {@link #invoke} to detect tool-calling bypass.
+ * One-shot successful probe before the first synchronous or streaming call to detect
+ * tool-calling bypass.
  *
  * <p>Sends a hard-to-refuse probe prompt with a minimalist {@code __probe_tool__}
  * on the very first call. If the underlying
@@ -59,7 +62,7 @@ public class ToolCallingEnforcingModel extends Model {
     }
 
     /**
-     * Overrides {@link Model#invoke} with a one-shot probe on the very first call.
+     * Overrides {@link Model#invoke} with a capability probe before the first successful call.
      *
      * <p>If the probe response has no tool_calls despite a forced prompt, a
      * {@link ToolCallingBypassException} is thrown — the client silently discards tools.
@@ -69,38 +72,71 @@ public class ToolCallingEnforcingModel extends Model {
      * @param messages chat messages passed to the model
      * @param tools tool definitions visible to the model
      * @param temperature sampling temperature override
-     * @param maxTokens maximum token override
-     * @param model model name override
-     * @param n number of completions
-     * @param stop stop sequence
-     * @param parser output parser
      * @param topP nucleus sampling override
+     * @param model model name override
+     * @param maxTokens maximum token override
+     * @param stop stop sequence
+     * @param outputParser output parser
+     * @param timeout request timeout override
      * @param kwargs provider-specific request parameters
      * @return assistant message returned by the model
      * @throws Exception propagated from the underlying model invocation
      */
     @Override
-    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
-            Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
+    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float topP, String model,
+            Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout, Map<String, Object> kwargs)
+            throws Exception {
         String effectiveModel = effectiveModel(model);
         Map<String, Object> effectiveKwargs = withThinkingKwargs(kwargs);
-        // Probe exactly once (thread-safe via AtomicBoolean.CAS).
-        // If the probe throws, the real invoke never executes — fail-fast.
-        if (probeDone.compareAndSet(false, true)) {
+        // Probe exactly once after a successful capability check. A failed probe remains
+        // retryable, so later calls cannot silently bypass enforcement.
+        if (!probeDone.get()) {
             ProbeRequest request = new ProbeRequest();
             request.temperature = temperature;
-            request.maxTokens = maxTokens;
-            request.model = effectiveModel;
-            request.n = n;
-            request.stop = stop;
-            request.parser = parser;
             request.topP = topP;
+            request.model = effectiveModel;
+            request.maxTokens = maxTokens;
+            request.stop = stop;
+            request.outputParser = outputParser;
+            request.timeout = timeout;
             request.kwargs = effectiveKwargs;
-            doProbe(request);
+            ensureProbe(request);
         }
         // Forward the real invocation.
-        return super.invoke(messages, tools, temperature, maxTokens, effectiveModel, n, stop, parser, topP,
+        return super.invoke(messages, tools, temperature, topP, effectiveModel, maxTokens, stop, outputParser, timeout,
                 effectiveKwargs);
+    }
+
+    @Override
+    public Iterator<AssistantMessageChunk> stream(Object messages, Object tools, Float temperature, Float topP,
+            String model, Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout,
+            Map<String, Object> kwargs) throws Exception {
+        String effectiveModel = effectiveModel(model);
+        Map<String, Object> effectiveKwargs = withThinkingKwargs(kwargs);
+        if (!probeDone.get()) {
+            ProbeRequest request = new ProbeRequest();
+            request.temperature = temperature;
+            request.topP = topP;
+            request.model = effectiveModel;
+            request.maxTokens = maxTokens;
+            request.stop = stop;
+            request.outputParser = outputParser;
+            request.timeout = timeout;
+            request.kwargs = effectiveKwargs;
+            ensureProbe(request);
+        }
+        return super.stream(messages, tools, temperature, topP, effectiveModel, maxTokens, stop, outputParser, timeout,
+                effectiveKwargs);
+    }
+
+    private void ensureProbe(ProbeRequest request) throws Exception {
+        synchronized (probeDone) {
+            if (probeDone.get()) {
+                return;
+            }
+            doProbe(request);
+            probeDone.set(true);
+        }
     }
 
     private String effectiveModel(String model) {
@@ -161,7 +197,7 @@ public class ToolCallingEnforcingModel extends Model {
 
         // Probe goes through super.invoke() which delegates to this.client.invoke().
         AssistantMessage probeResponse = super.invoke(probeMessages, List.of(probeTool), request.temperature,
-                request.maxTokens, request.model, request.n, request.stop, request.parser, request.topP,
+                request.topP, request.model, request.maxTokens, request.stop, request.outputParser, request.timeout,
                 request.kwargs);
 
         // Null response is an unambiguous failure.
@@ -183,12 +219,12 @@ public class ToolCallingEnforcingModel extends Model {
 
     private static final class ProbeRequest {
         private Float temperature;
-        private Float maxTokens;
-        private String model;
-        private Integer n;
-        private String stop;
-        private BaseOutputParser parser;
         private Float topP;
+        private String model;
+        private Integer maxTokens;
+        private String stop;
+        private BaseOutputParser outputParser;
+        private Float timeout;
         private Map<String, Object> kwargs;
     }
 }

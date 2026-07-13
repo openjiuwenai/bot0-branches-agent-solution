@@ -43,7 +43,8 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>提示状态按模型实例和调用线程隔离。</li>
  *   <li>LLM 输出是否真的"发散探索"无法可靠断言，仅做软观察</li>
- *   <li>Run with: {@code mvn -pl agent-patterns/react-rails test -Dtest="PreCompletionChecklistRailE2eTest"}</li>
+ *   <li>Run with: {@code mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails
+ *       -Dtest=PreCompletionChecklistRailE2eTest test}</li>
  * </ul>
  */
 class PreCompletionChecklistRailE2eTest {
@@ -152,7 +153,7 @@ class PreCompletionChecklistRailE2eTest {
         assertThat(result2).isNotNull();
         // After second beforeModelCall, mode should be BUILD_MODE
         // Note: by the time we check, the second invoke() may have consumed the mode
-        // (injectMode is static AtomicReference, not reset after invoke)
+        // (the model-owned mode remains available after invoke)
         // So this assertion checks the mode was set to something — not necessarily BUILD_MODE
         // because it's consumed during invoke() before we can read it.
         // Actually, setInjectionMode in beforeModelCall sets it, then invoke() reads it.

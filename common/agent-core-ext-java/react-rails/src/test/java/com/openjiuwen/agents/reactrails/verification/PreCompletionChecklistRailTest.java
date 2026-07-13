@@ -102,24 +102,8 @@ class PreCompletionChecklistRailTest {
 
         assertThat(injectionState.getMode()).as("after first final-answer round, mode must still be PLAN_MODE")
                 .isEqualTo(InjectionMode.PLAN_MODE);
-
-        // The hasPreviousFinalAnswer flag is set, but toolNamesCalled is empty on first call
-        // (the guard setPhaseOverride only triggers if !toolNamesCalled.isEmpty())
-        // So we need a second round to test: first round with tools, second round text-only
-
-        // Reset and do a second test that simulates "tools used before, now text-only"
-        injectionState.reset();
-        PreCompletionChecklistRail rail2 = new PreCompletionChecklistRail(3, injectionState);
-        // Round 1: tool call → toolNamesCalled populated, hasPreviousFinalAnswer=false
-        rail2.afterModelCall(ctxWithToolResult("search", "toolResult"));
-        // Round 2: final answer → hasPreviousFinalAnswer=true
-        rail2.afterModelCall(ctxWithFinalAnswer("the answer is 42"));
-
-        rail2.beforeModelCall(ctxWithExtra(Map.of()));
-
         assertThat(injectionState.peekPhaseOverride())
-                .as("after tool-using round followed by text-only round, phaseOverride must be tool reminder")
-                .contains("REMINDER");
+                .as("a text-only first round must trigger the tool-usage reminder").contains("REMINDER");
         // mutation-RED: strip setPhaseOverride("REMINDER") → peek null → RED
     }
     @Test
@@ -258,6 +242,26 @@ class PreCompletionChecklistRailTest {
         assertThat(injectionState.getMode()).as("a fresh invocation must start in PLAN mode")
                 .isEqualTo(InjectionMode.PLAN_MODE);
     }
+
+    @Test
+    void checklistDoesNotOverwriteStagnationBrake() {
+        PreCompletionChecklistRail checklist = new PreCompletionChecklistRail(10, injectionState);
+        StagnationDetectionRail stagnation = new StagnationDetectionRail(injectionState);
+
+        for (int i = 0; i < 4; i++) {
+            AgentCallbackContext ctx = ctxWithFinalAnswer("same answer");
+            checklist.afterModelCall(ctx);
+            stagnation.afterModelCall(ctx);
+        }
+        assertThat(injectionState.peekPhaseOverride()).contains("BREAK_STAGNATION");
+
+        checklist.beforeModelCall(ctxWithExtra(Map.of()));
+
+        assertThat(injectionState.peekPhaseOverride())
+                .as("the higher-priority checklist must preserve an existing stagnation brake")
+                .contains("BREAK_STAGNATION");
+    }
+
     private AgentCallbackContext ctxWithExtra(Map<String, Object> extra) {
         invocationExtra.putAll(extra);
         AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).build();

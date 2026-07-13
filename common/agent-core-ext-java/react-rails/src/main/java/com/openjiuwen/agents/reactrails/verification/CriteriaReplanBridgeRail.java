@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  * <p>Drop-in replacement for {@link CriteriaVerificationRail}
  * — same constructor signature + ReplanRail for shared counter.
  *
- * <p><b>Mechanism</b> (bytecode-verified on agent-core-java 0.1.12):
+ * <p><b>Mechanism</b> (runtime-verified on agent-core-java 0.1.13):
  * <ul>
  *   <li>afterModelCall fires INSIDE railedModelCall (callModel offset 687).</li>
  *   <li>ctx.pushSteering(String) queues string; consumed NEXT iteration's

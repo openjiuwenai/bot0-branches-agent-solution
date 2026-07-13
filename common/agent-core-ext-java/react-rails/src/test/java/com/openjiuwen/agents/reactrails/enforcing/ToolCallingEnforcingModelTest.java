@@ -28,6 +28,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Mock tests for {@link ToolCallingEnforcingModel} (probe-based approach).
@@ -79,6 +80,9 @@ class ToolCallingEnforcingModelTest {
         // (returns text without tool_calls even for the probe's forced __probe_tool__).
         // The predicate detects bypass and throws before the real invoke executes.
         assertThatThrownBy(() -> model.invoke(messages, tools, 0.3f, null, "test-model", null, null, null, null, null))
+                .isInstanceOf(ToolCallingBypassException.class).hasMessageContaining("bypass");
+        assertThatThrownBy(() -> model.invoke(messages, tools, 0.3f, null, "test-model", null, null, null, null, null))
+                .as("a failed probe must not disable enforcement for later calls")
                 .isInstanceOf(ToolCallingBypassException.class).hasMessageContaining("bypass");
     }
     // Test (b): legitimate response — no false positive
@@ -142,6 +146,48 @@ class ToolCallingEnforcingModelTest {
         assertThat(response.getContentAsString()).contains("__replan__").contains("答案是 42");
         // The response should have no tool_calls (LLM legitimately chose not to call tools)
         assertThat(response.getToolCalls()).isNullOrEmpty();
+    }
+
+    @Test
+    void streamRunsCapabilityProbeBeforeDelegating() throws Exception {
+        String provider = "test-stream-" + System.nanoTime();
+        AtomicInteger probeCalls = new AtomicInteger();
+        AtomicReference<Object> streamedMessages = new AtomicReference<>();
+        Model.registerFactory(new Model.ModelClientFactory() {
+            @Override
+            public String providerName() {
+                return provider;
+            }
+            @Override
+            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
+                return new StubModelClient(r, c) {
+                    @Override
+                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float topP,
+                            String model, Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout,
+                            Map<String, Object> kwargs) {
+                        probeCalls.incrementAndGet();
+                        AssistantMessage response = new AssistantMessage("probe");
+                        response.setToolCalls(
+                                List.of(new ToolCall("1", "function", "__probe_tool__", "{\"reason\":\"probe\"}", 0)));
+                        return response;
+                    }
+                    @Override
+                    public Iterator<AssistantMessageChunk> stream(Object messages, Object tools, Float temperature,
+                            Float topP, String model, Integer maxTokens, String stop, BaseOutputParser outputParser,
+                            Float timeout, Map<String, Object> kwargs) {
+                        streamedMessages.set(messages);
+                        return List.of(AssistantMessageChunk.builder().content("streamed").build()).iterator();
+                    }
+                };
+            }
+        });
+
+        Iterator<AssistantMessageChunk> chunks = model(provider).stream(List.of(new UserMessage("question")),
+                replanTools(), 0.3f, null, null, null, null, null, null, null);
+
+        assertThat(probeCalls.get()).as("streaming must enforce tool capability before delegation").isOne();
+        assertThat(streamedMessages.get()).isNotNull();
+        assertThat(chunks.next().getContentAsString()).isEqualTo("streamed");
     }
 
     private static ToolCallingEnforcingModel model(String provider) {

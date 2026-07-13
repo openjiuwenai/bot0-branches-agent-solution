@@ -65,6 +65,25 @@ class PEVAgentControlFlowTest {
         // executor 会被 LocalReplan/GlobalReplan 再调 → execCount>1 → RED
     }
 
+    @Test
+    void verifierRuntimeFailureDegradesWithoutRetry() {
+        AtomicInteger execCount = new AtomicInteger();
+        PevComponents.Planner planner = in -> new PevComponents.Plan("g",
+                List.of(new PevComponents.PlanNode("A", "do A")));
+        PevComponents.Executor executor = nodes -> {
+            execCount.incrementAndGet();
+            return Map.of("A", new NodeResult.Success("partial-result"));
+        };
+        PevComponents.Verifier verifier = (in, r) -> {
+            throw new UnsupportedOperationException("verifier unavailable");
+        };
+
+        PEVAgent agent = new PEVAgent(card(), planner, executor, verifier);
+
+        assertThat(agent.invoke("do A", null)).isEqualTo("A: partial-result");
+        assertThat(execCount.get()).isEqualTo(1);
+    }
+
     // ==================== PlanOrAnswerError → LocalReplan → 重做后 verify pass ====================
 
     @Test

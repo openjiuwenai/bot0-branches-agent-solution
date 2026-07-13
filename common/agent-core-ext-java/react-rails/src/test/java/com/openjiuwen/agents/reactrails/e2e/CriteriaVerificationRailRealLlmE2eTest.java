@@ -51,7 +51,7 @@ class CriteriaVerificationRailRealLlmE2eTest {
         // Task: ask the LLM to explain PEV (should produce keywords Plan/Execute/Verify)
         Object result = agent.invoke("用一句话解释 PEV（Plan-Execute-Verify）模式。回答中要包含 Plan、Execute、Verify 这三个词。", null);
         // Hard assertion: result MUST be a Map (proves forceFinish was consumed = channel live).
-        // forceFinish on agent-core-java 0.1.12 swaps the return into a forcedMap; a String
+        // forceFinish on agent-core-java 0.1.13 swaps the return into a forcedMap; a String
         // result means the rail never fired / forceFinish was ignored — channel dead.
         assertThat(result).as("forceFinish must be consumed by ReActAgent → result is Map, not String")
                 .isInstanceOf(Map.class);

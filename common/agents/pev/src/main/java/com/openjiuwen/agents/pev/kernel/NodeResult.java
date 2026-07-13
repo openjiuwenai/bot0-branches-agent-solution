@@ -8,8 +8,7 @@ package com.openjiuwen.agents.pev.kernel;
  * A single node's terminal state inside one execution superstep — 3-state sealed.
  *
  * <p>Replaces the untyped {@code "FAILED:" + msg} string convention with a closed
- * taxonomy the verifier/diagnoser can switch over exhaustively. Dropping a state
- * here makes any matching switch fail to compile.
+ * taxonomy whose permitted result variants are explicit to the verifier and diagnoser.
  *
  * @since 2026-07
  */

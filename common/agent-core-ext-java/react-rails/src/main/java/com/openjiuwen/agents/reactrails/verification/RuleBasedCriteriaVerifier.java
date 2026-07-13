@@ -53,6 +53,7 @@ public class RuleBasedCriteriaVerifier implements CriteriaVerifier {
                 }
             }
             if (keywords.isEmpty()) {
+                violations.add(new Violation(criterion, ASSUME_FAIL_REASON));
                 continue;
             }
             // Check: at least half the keywords appear in output or history

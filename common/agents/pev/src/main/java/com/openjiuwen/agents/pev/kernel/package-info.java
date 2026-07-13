@@ -15,7 +15,7 @@
  * <p><b>Decision: keep both, do not merge.</b> Rationale (code-level verification):
  * <ul>
  *   <li><b>Reachability is asymmetric.</b> This module depends only on the public
- *       {@code agent-core-java:0.1.12-jdk17} jar (which contains {@code singleagent.rail.*}
+ *       {@code agent-core-java:0.1.13} jar (which contains {@code singleagent.rail.*}
  *       but NO {@code alpha/} or {@code beta/} packages — confirmed via {@code jar tf}). The
  *       ascend twin's {@code com.openjiuwen.core.alpha.verifier.*} sources live <i>inside</i>
  *       the ascend repo (not in the public jar), so the two cannot share a type without one
@@ -85,8 +85,8 @@
  *   <li>If the ReAct agent lands a native rails rewrite, the ascend twin may be
  *       retired in favor of this kernel + a thin rail adapter — re-audit then.</li>
  *   <li>If divergence appears (a 4th {@code RootCause} state added on one side only), the
- *       sealed-switch compile guard on each side will catch it locally, but cross-side drift
- *       is silent — this table is the only cross-side guard. Update it on every edit.</li>
+ *       local dispatch tests must be updated on each side, while cross-side drift remains
+ *       silent — this table is the cross-side guard. Update it on every edit.</li>
  * </ol>
  *
  * <p><b>This ledger is the deliverable.</b> Zero code merged, zero new coupling; the

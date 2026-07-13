@@ -31,7 +31,7 @@ import java.util.Map;
 
 /**
  * SPIKE GATE (承重铁律①): prove ReActAgent.invoke on gitcode's public agent-core-java
- * 0.1.12 jar TRULY consumes requestForceFinish fired in afterModelCall.
+ * 0.1.13 jar consumes requestForceFinish fired in afterModelCall.
  *
  * javap -c proved bytecode offset 225/700 consumeForceFinish — this is the RUNTIME proof.
  * Pass = react-rails unblocked. Fail = structurally infeasible on this jar version.

@@ -28,10 +28,9 @@ import java.util.Map;
  *   <li><b>Fail</b> → {@code forceFinish(degraded=true, unmet=[...])}: honestly marks unmet criteria.</li>
  * </ul>
  *
- * <p><b>Runtime-verified gate</b>: ReActAgent.invoke on agent-core-java 0.1.12 jar
- * consumes requestForceFinish at bytecode offset 225/700. Confirmed at runtime by
- * {@code SpikeForceFinishOnReActAgent}. This rail's forceFinish IS consumed → the gate
- * truly short-circuits the ReAct loop.
+ * <p><b>Runtime-verified gate</b>: ReActAgent.invoke on agent-core-java 0.1.13 consumes
+ * requestForceFinish after model callbacks. {@code SpikeForceFinishOnReActAgent} and the
+ * integration tests confirm that this gate short-circuits the ReAct loop.
  *
  * <p>Honest boundary: afterModelCall gate cannot <b>force correction</b> (pushSteering
  * can't redirect a final-answer terminal). It can only lock or degrade. Forced correction

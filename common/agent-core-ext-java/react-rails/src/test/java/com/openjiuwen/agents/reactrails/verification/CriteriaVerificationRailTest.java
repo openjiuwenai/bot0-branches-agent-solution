@@ -81,6 +81,14 @@ class CriteriaVerificationRailTest {
     }
 
     @Test
+    void ruleBasedVerifierFailsNonBlankCriterionWithoutCheckableKeywords() {
+        List<?> violations = new RuleBasedCriteriaVerifier().verify(List.of("the and"), "any output", "");
+
+        assertThat(violations).singleElement().satisfies(
+                violation -> assertThat(violation.toString()).contains(RuleBasedCriteriaVerifier.ASSUME_FAIL_REASON));
+    }
+
+    @Test
     void decisionHistoryDoesNotCrossInvocationContexts() {
         AtomicReference<String> observedHistory = new AtomicReference<>();
         CriteriaVerifier verifier = (criteria, output, history) -> {

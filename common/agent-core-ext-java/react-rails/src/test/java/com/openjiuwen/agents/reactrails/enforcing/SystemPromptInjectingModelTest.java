@@ -25,6 +25,7 @@ import com.openjiuwen.core.foundation.llm.schema.VideoGenerationResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -163,9 +164,83 @@ class SystemPromptInjectingModelTest {
     }
 
     @Test
-    void systemPromptSuffixSetAndGet() {
-        // Can't easily instantiate without a real LLM client config
-        // but the setter is tested via the config path
+    void systemPromptAppendDoesNotMutateCallerMessages() throws Exception {
+        String provider = "test-system-append-" + System.nanoTime();
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<List<?>> capturedMessages = new AtomicReference<>();
+        Model.registerFactory(new Model.ModelClientFactory() {
+            @Override
+            public String providerName() {
+                return provider;
+            }
+            @Override
+            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
+                return new StubModelClient(r, c) {
+                    @Override
+                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float topP,
+                            String model, Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout,
+                            Map<String, Object> kwargs) {
+                        if (calls.getAndIncrement() == 0) {
+                            return probeMessage();
+                        }
+                        capturedMessages.set(messages instanceof List ? (List<?>) messages : List.of());
+                        return new AssistantMessage("answer");
+                    }
+                };
+            }
+        });
+        SystemPromptInjectingModel model = model(provider);
+        model.setInjectionMode(SystemPromptInjectingModel.InjectionMode.SYSTEM_PROMPT_APPEND);
+        model.setSystemPromptSuffix("extension suffix");
+        List<BaseMessage> callerMessages = new ArrayList<>(List.of(new SystemMessage("base system")));
+
+        model.invoke(callerMessages, List.of(), 0.3f, null, null, null, null, null, null, null);
+
+        assertThat(callerMessages.get(0).getContentAsString()).isEqualTo("base system");
+        assertThat(capturedMessages.get()).first().isInstanceOfSatisfying(SystemMessage.class,
+                message -> assertThat(message.getContentAsString()).contains("base system")
+                        .contains("extension suffix"));
+    }
+
+    @Test
+    void streamInjectsPhaseOverrideBeforeDelegating() throws Exception {
+        String provider = "test-stream-injection-" + System.nanoTime();
+        AtomicReference<List<?>> streamedMessages = new AtomicReference<>();
+        Model.registerFactory(new Model.ModelClientFactory() {
+            @Override
+            public String providerName() {
+                return provider;
+            }
+            @Override
+            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
+                return new StubModelClient(r, c) {
+                    @Override
+                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float topP,
+                            String model, Integer maxTokens, String stop, BaseOutputParser outputParser, Float timeout,
+                            Map<String, Object> kwargs) {
+                        return probeMessage();
+                    }
+                    @Override
+                    public Iterator<AssistantMessageChunk> stream(Object messages, Object tools, Float temperature,
+                            Float topP, String model, Integer maxTokens, String stop, BaseOutputParser outputParser,
+                            Float timeout, Map<String, Object> kwargs) {
+                        streamedMessages.set(messages instanceof List ? (List<?>) messages : List.of());
+                        return List.of(AssistantMessageChunk.builder().content("streamed").build()).iterator();
+                    }
+                };
+            }
+        });
+        SystemPromptInjectingModel model = model(provider);
+        model.setInjectionMode(SystemPromptInjectingModel.InjectionMode.USER_MESSAGE_INJECT);
+        model.setPhaseOverride("stream-only-override");
+
+        Iterator<AssistantMessageChunk> chunks = model.stream(List.of(new SystemMessage("system")), List.of(), 0.3f,
+                null, null, null, null, null, null, null);
+
+        assertThat(chunks.next().getContentAsString()).isEqualTo("streamed");
+        assertThat(streamedMessages.get())
+                .anySatisfy(message -> assertThat(message).isInstanceOfSatisfying(UserMessage.class,
+                        user -> assertThat(user.getContentAsString()).contains("stream-only-override")));
     }
     // FIRST_PRINCIPLES mode — one-shot "先扩后收" injection
     /**

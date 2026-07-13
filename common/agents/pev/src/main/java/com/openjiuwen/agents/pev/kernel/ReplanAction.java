@@ -8,7 +8,7 @@ import java.util.Set;
 
 /**
  * What to do next — 3-state sealed dispatch, output of {@link PevKernel#toReplanAction},
- * consumed by the PEV main loop's switch.
+ * consumed by the PEV main loop's explicit dispatcher.
  *
  * <p>Layers (keep distinct — do not collapse into one type):
  * <ul>
@@ -17,8 +17,8 @@ import java.util.Set;
  *       action needs (which nodes, what feedback).</li>
  * </ul>
  *
- * <p>Sealed permits compile-time exhaustiveness: any switch over {@code ReplanAction}
- * that drops a case arm fails to compile.
+ * <p>The sealed hierarchy constrains the supported action variants; the Java 17 dispatcher
+ * handles each permitted variant explicitly and rejects unsupported runtime values.
  *
  * @since 2026-07
  */

@@ -37,8 +37,8 @@ import java.util.Set;
  *       optionally with a "use tools" guardrail if prior round produced zero tool calls.</li>
  *   <li><b>Iteration &gt;= planMaxRounds</b> → {@code BUILD_MODE}: convergent system prompt,
  *       optionally with coverage guardrails if prior verify hints were consumed.</li>
- *   <li><b>Stagnation detected</b> (peek from ctx.getExtra("stagnation_count")) → inject
- *       BREAK_LOOP override.</li>
+ *   <li><b>Stagnation detected</b> (pending model override or an explicit callback-extra signal)
+ *       → preserve/inject the BREAK_LOOP override.</li>
  * </ol>
  *
  * <p>Zero forceFinish — this rail only injects. Decision authority stays with
@@ -172,8 +172,11 @@ public class PreCompletionChecklistRail extends AgentRail {
             if (injectionState.getMode() != InjectionMode.PLAN_MODE) {
                 injectionState.setMode(InjectionMode.PLAN_MODE);
             }
+            if (injectionState.peekPhaseOverride() != null) {
+                return;
+            }
             // If previous iteration was pure text (no tool calls), remind to use tools
-            if (!state.toolNamesCalled.isEmpty() && state.hasPreviousFinalAnswer) {
+            if (state.hasPreviousFinalAnswer) {
                 injectionState.setPhaseOverride("REMINDER: Your current approach is text-only. "
                         + "Use available tools to fetch real data or validate assumptions.");
             }
@@ -181,6 +184,9 @@ public class PreCompletionChecklistRail extends AgentRail {
             // BUILD phase: switch to focused execution
             if (injectionState.getMode() != InjectionMode.BUILD_MODE) {
                 injectionState.setMode(InjectionMode.BUILD_MODE);
+            }
+            if (injectionState.peekPhaseOverride() != null) {
+                return;
             }
             // Low tool diversity hint
             if (state.toolNamesCalled.size() <= 1 && state.callCount > 2) {

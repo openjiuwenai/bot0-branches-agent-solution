@@ -19,9 +19,8 @@ import java.util.Set;
  *       answer content is wrong. Replanning can fix this.</li>
  * </ul>
  *
- * <p>Sealed permits compile-time exhaustiveness: any switch over {@code RootCause}
- * that drops a case arm fails to compile, catching missed branches earlier than a
- * runtime test would.
+ * <p>The sealed hierarchy constrains the supported diagnosis variants; the Java 17
+ * dispatcher handles each permitted variant explicitly and rejects unsupported values.
  *
  * @since 2026-07
  */
