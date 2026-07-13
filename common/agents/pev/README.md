@@ -323,11 +323,11 @@ src/main/java/com/openjiuwen/agents/pev/
 src/test/java/.../pev/e2e/   real LLM e2e 参考（LlmClient/LlmPlanner/ToolBackedExecutor/LlmVerifier/ClaimTools）
 ```
 
-**依赖**：`agent-core-java`（0.1.12-jdk17，`BaseAgent` / `AgentRail` / `AgentCallbackContext`）；Java 17（继承父工程 release，使用 sealed 类型）。
+**依赖**：`agent-core-java` 0.1.13（`BaseAgent` / `AgentRail` / `AgentCallbackContext`）；Java 17。PEV 不依赖 Spring、runtime-ext 或 react-rails。
 
 **构建**：
 ```bash
-mvn -pl common/agent-runtime-ext-java/agent-patterns/pev -am test
+mvn -f common/agents/pom.xml -pl :pev -am test
 ```
 
 **配置**：`PEVAgent.configure(new PEVAgent.PevConfig(maxRetries))` — maxRetries 控 verify 循环上限（默认 2）。

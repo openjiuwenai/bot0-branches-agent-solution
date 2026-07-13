@@ -6,6 +6,16 @@
 
 ## 30 秒上手
 
+本模块是纯 Java SDK，不包含 Spring 或自动配置。所有 rail 和工具都由应用显式注册。
+
+```xml
+<dependency>
+    <groupId>com.openjiuwen</groupId>
+    <artifactId>react-rails</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
 ```java
 ReActAgent agent = new ReActAgent(AgentCard.builder().build());
 agent.setLlm(model);
@@ -14,11 +24,12 @@ agent.setLlm(model);
 agent.registerRail(new CriteriaVerificationRail(
         new RuleBasedCriteriaVerifier(),
         List.of("给出配置建议", "引用风险评估")));
-agent.registerRail(new ReplanRail(2));    // maxReplan=2
+ReplanRail replanRail = new ReplanRail(2); // maxReplan=2
+agent.registerRail(replanRail);
 agent.registerRail(new RootCauseRail());
 
 // 注册 ReplanTool（让 LLM 能表达 replan 意图）
-agent.getAbilityManager().add(new ReplanTool());
+ReplanTool.registerOnto(agent);
 
 Object result = agent.invoke("分析这个投资组合", null);
 // result 是 forcedMap（不是自然 String）——forceFinish gate 在 afterModelCall 真消费
@@ -47,7 +58,7 @@ agent.registerRail(new CriteriaVerificationRail(
 
 ```java
 agent.registerRail(new ReplanRail(2));  // 允许 2 次 replan，第 3 次 escalate
-agent.getAbilityManager().add(new ReplanTool());  // LLM 看到并可调用
+ReplanTool.registerOnto(agent);  // LLM 可见且运行时可派发
 ```
 
 ### RootCauseRail（device-failure degrade）
@@ -104,10 +115,14 @@ src/main/java/com/openjiuwen/agents/reactrails/
 
 ## 依赖
 
-`agent-core-java` 0.1.12-jdk17（ReActAgent / AgentRail / AgentCallbackContext / Tool / ToolCard / AbilityManager）；Java 17（继承父工程 release）。
+`agent-core-java` 0.1.13（ReActAgent / AgentRail / AgentCallbackContext / Tool / ToolCard / AbilityManager）；Java 17。模块不依赖 Spring、runtime-ext 或具体 Agent 实现。
+
+```bash
+mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am test
+```
 
 ## 设计背景
 
 50 物种 CORRECTED GEPA 探索确认：gitcode ReActAgent 缺 external-judge verifier + GEPA-lite + degraded terminal。本模块补 external-judge + degraded terminal（GEPA-lite defer——ReActAgent 无 BetaPlan 落点）。
 
-与 PEV 模块（`agent-patterns/pev/`）的关系：**互补不互斥**。PEV 是 agent-service-app 形态（自带 verify-loop dispatch）；react-rails 是 rail 形态（挂 ReActAgent 的 afterModelCall forceFinish gate）。同一组认知能力，两种宿主形态。
+与 `common/agents/pev` 的关系：两者是独立产物且没有依赖关系。PEV 自带 verify-loop dispatch；react-rails 通过显式注册扩展 ReActAgent。
