@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  agent-rdc — Agent Registry & Discovery Center plane.
+  registry-discovery-center — Agent Registry & Discovery Center plane.
 
   Derived from spring-ai-ascend/agent-bus (Stage 4 registry/discovery runtime,
   ADR-0160). This module retains only the registry/discovery feature set:
@@ -25,9 +25,9 @@
   </parent>
 
   <groupId>com.openjiuwen</groupId>
-  <artifactId>agent-rdc</artifactId>
+  <artifactId>registry-discovery-center</artifactId>
   <version>0.1.0</version>
-  <name>agent-rdc</name>
+  <name>registry-discovery-center</name>
   <description>Agent Registry &amp; Discovery Center — registry SPI + Spring Boot runtime (JDBC repository, Flyway migration, probe scheduler, discovery service, tenant isolation).</description>
 
   <properties>
@@ -122,7 +122,7 @@
     <!--
       Registry API + probe scheduler runtime — @SpringBootApplication
       (AgentBusApplication) + @RestController (MvpRegistryController) +
-      @Scheduled (MvpHealthProbeScheduler). Compile scope so agent-rdc
+      @Scheduled (MvpHealthProbeScheduler). Compile scope so registry-discovery-center
       boots standalone. Confined to registry.runtime.{api,discovery,health}
       by AgentBusRegistryJdbcPurityTest.
     -->
@@ -132,7 +132,7 @@
     </dependency>
     <!--
       Micrometer Counter / Timer APIs used by RegistryObservabilityConfig.
-      Compile scope (was: provided) because agent-rdc boots standalone and
+      Compile scope (was: provided) because registry-discovery-center boots standalone and
       must bundle micrometer-core for the observability facade to work
       without a separate actuator dependency.
     -->
@@ -228,6 +228,12 @@
   </dependencies>
 
   <build>
+    <!--
+      finalName kept as `agent-rdc-${project.version}` for deployment
+      continuity: artifactId renamed to registry-discovery-center, but
+      existing deployment scripts reference agent-rdc-0.1.0.jar.
+    -->
+    <finalName>agent-rdc-${project.version}</finalName>
     <pluginManagement>
       <plugins>
         <plugin>

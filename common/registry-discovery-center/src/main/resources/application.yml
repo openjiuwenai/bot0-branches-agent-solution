@@ -1,4 +1,4 @@
-# agent-rdc Spring Boot 启动配置
+# registry-discovery-center Spring Boot 启动配置
 #
 # 让 AgentRdcApplication.main() 调用 SpringApplication.run() 时能拉起进程：
 #   - spring.datasource.*  → spring-boot-starter-jdbc 自动配置 DataSource
@@ -11,7 +11,7 @@
 #
 # 测试不读本文件：src/test/java/** 用 EmbeddedPostgres.builder().start() + 手工构造 beans。
 #
-# Authority: REQ-2026-002 + ADR-0160 decision 7 (agent-rdc 是 runnable Spring Boot application)
+# Authority: REQ-2026-002 + ADR-0160 decision 7 (registry-discovery-center 是 runnable Spring Boot application)
 
 spring:
   profiles:

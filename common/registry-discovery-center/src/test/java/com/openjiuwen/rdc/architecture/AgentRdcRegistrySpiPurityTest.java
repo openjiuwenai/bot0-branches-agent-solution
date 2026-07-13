@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
  * ({@code com.openjiuwen.rdc.spi.registry..}).
  *
  * <p>Symmetric to {@link AgentRdcSpiPurityTest} (which guards the rest of the
- * agent-rdc SPI surface). The registry SPI is the
+ * registry-discovery-center SPI surface). The registry SPI is the
  * transport-agnostic, persistence-agnostic, broker-agnostic contract surface
  * that every consumer (Orchestrator / Gateway / forwarding layer) depends on.
  * Dragging in a framework here forces every consumer onto that same

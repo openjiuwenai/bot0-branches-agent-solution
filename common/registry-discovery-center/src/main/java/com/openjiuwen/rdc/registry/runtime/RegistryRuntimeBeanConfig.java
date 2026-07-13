@@ -21,8 +21,8 @@ import org.springframework.context.annotation.Configuration;
 import javax.sql.DataSource;
 
 /**
- * Runtime bean wiring for the agent-rdc standalone Spring Boot application
- * (ADR-0160 decision 7 — agent-rdc ships as a runnable application, not a
+ * Runtime bean wiring for the registry-discovery-center standalone Spring Boot application
+ * (ADR-0160 decision 7 — registry-discovery-center ships as a runnable application, not a
  * library jar).
  *
  * <p>Provides the beans that {@code main()} startup needs but that no

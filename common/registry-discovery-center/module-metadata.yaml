@@ -1,10 +1,10 @@
-# Module metadata for agent-rdc.
+# Module metadata for registry-discovery-center.
 #
 # Derived from spring-ai-ascend/agent-bus module-metadata.yaml, trimmed to
-# the registry/discovery feature set retained by agent-rdc. Forwarding /
+# the registry/discovery feature set retained by registry-discovery-center. Forwarding /
 # ingress / s2c / federation / engine substrates are intentionally absent.
 
-module: agent-rdc
+module: registry-discovery-center
 kind: domain             # platform | domain | starter | bom | sample
 version: 0.1.0
 semver_compatibility: experimental
@@ -17,7 +17,7 @@ spi_packages:
 # com.openjiuwen.rdc.registry.runtime.persistence.jdbc by ArchUnit
 # (AgentBusRegistryJdbcPurityTest).
 #
-# spring-boot-starter-web at compile scope — agent-rdc ships its own
+# spring-boot-starter-web at compile scope — registry-discovery-center ships its own
 # @SpringBootApplication (AgentBusApplication); the registry controller,
 # probe scheduler, and observability facade are first-class runtime
 # components. Confined to com.openjiuwen.rdc.registry.runtime.{api,discovery,health}

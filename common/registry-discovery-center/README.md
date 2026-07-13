@@ -1,6 +1,8 @@
-# agent-rdc — Agent Registry & Discovery Center
+# registry-discovery-center — Agent Registry & Discovery Center
 
-agent-rdc 是 Agent 解决方案的 registry/discovery 子平面，从 spring-ai-ascend/agent-bus stage 4 抽取。模块定位为可独立启动的 Spring Boot 应用，提供 agent 注册、发现、健康探活能力，基于 PostgreSQL 持久化 + Row-Level Security 实现多租户隔离。
+registry-discovery-center 是 Agent 解决方案的 registry/discovery 子平面，从 spring-ai-ascend/agent-bus stage 4 抽取。模块定位为可独立启动的 Spring Boot 应用，提供 agent 注册、发现、健康探活能力，基于 PostgreSQL 持久化 + Row-Level Security 实现多租户隔离。
+
+> 模块目录与 Maven artifactId 已从 `agent-rdc` 重命名为 `registry-discovery-center`；Java 包名 `com.openjiuwen.rdc`、DB 名 `agent_rdc`、jar 名 `agent-rdc-0.1.0.jar`（通过 `finalName` 保留）维持不变以保持部署兼容。
 
 架构权威：[ADR-0160](docs/adr/0160-stage4-registry-spi-runtime-promotion.yaml)（stage4 registry SPI/runtime promotion，7 条决策）。
 
@@ -37,17 +39,17 @@ docker run -d --name agent-rdc-pg \
 ### 构建
 
 ```bash
-mvn -pl agent-rdc -am compile
+mvn -pl registry-discovery-center -am compile
 ```
 
 ### 运行
 
 ```bash
 # 方式 1：spring-boot:run
-mvn -pl agent-rdc spring-boot:run
+mvn -pl registry-discovery-center spring-boot:run
 
 # 方式 2：打包后 java -jar
-mvn -pl agent-rdc -am package
+mvn -pl registry-discovery-center -am package
 java -jar target/agent-rdc-0.1.0.jar
 ```
 
@@ -58,7 +60,7 @@ java -jar target/agent-rdc-0.1.0.jar
 ### 测试
 
 ```bash
-mvn -pl agent-rdc test
+mvn -pl registry-discovery-center test
 ```
 
 测试用 Zonky embedded-postgres（真实 PG binary in-process）+ MockWebServer，不依赖外部 PG，不走 Spring Boot 自动配置。

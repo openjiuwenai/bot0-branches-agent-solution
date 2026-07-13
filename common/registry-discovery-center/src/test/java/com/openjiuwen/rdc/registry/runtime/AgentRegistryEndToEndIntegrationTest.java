@@ -38,7 +38,7 @@ import javax.sql.DataSource;
  * revised for REQ-2026-006 (multi-instance list lookup).
  *
  * <p>Boots an in-process PostgreSQL (Zonky embedded-postgres) + the full
- * agent-rdc Flyway migration (V2→V3→V4→V5), then drives the full registry
+ * registry-discovery-center Flyway migration (V2→V3→V4→V5), then drives the full registry
  * lifecycle through the production classes:
  * <ol>
  *   <li><b>register</b> — {@link MvpRegistryController#register} (HTTP path)
