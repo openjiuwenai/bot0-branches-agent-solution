@@ -5,6 +5,7 @@
 package com.openjiuwen.agents.pev.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
@@ -82,6 +83,20 @@ class PEVAgentControlFlowTest {
 
         assertThat(agent.invoke("do A", null)).isEqualTo("A: partial-result");
         assertThat(execCount.get()).isEqualTo(1);
+    }
+
+    @Test
+    void verifierErrorIsNotDegraded() {
+        PevComponents.Planner planner = in -> new PevComponents.Plan("g",
+                List.of(new PevComponents.PlanNode("A", "do A")));
+        PevComponents.Executor executor = nodes -> Map.of("A", new NodeResult.Success("partial-result"));
+        PevComponents.Verifier verifier = (in, r) -> {
+            throw new AssertionError("verifier invariant failed");
+        };
+        PEVAgent agent = new PEVAgent(card(), planner, executor, verifier);
+
+        assertThatThrownBy(() -> agent.invoke("do A", null)).isInstanceOf(AssertionError.class)
+                .hasMessage("verifier invariant failed");
     }
 
     // ==================== PlanOrAnswerError → LocalReplan → 重做后 verify pass ====================

@@ -199,68 +199,65 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     }
 
     private Object prepareMessages(Object messages) {
-        Object effectiveMessages = messages;
         InjectionMode currentMode = injectionState.getMode();
+        Object effectiveMessages = replaceSystemPrompt(messages, currentMode);
+        effectiveMessages = injectPhaseOverride(effectiveMessages, currentMode);
+        effectiveMessages = appendSystemPrompt(effectiveMessages, currentMode);
+        return injectFirstPrinciplesIfNeeded(effectiveMessages, currentMode);
+    }
 
-        // PLAN_MODE / BUILD_MODE: replace SystemMessage content entirely
-        if ((currentMode == InjectionMode.PLAN_MODE || currentMode == InjectionMode.BUILD_MODE)
-                && effectiveMessages instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
-            String replacementPrompt = (currentMode == InjectionMode.PLAN_MODE)
-                    ? PLAN_SYSTEM_PROMPT
-                    : BUILD_SYSTEM_PROMPT;
-            for (int i = 0; i < msgList.size(); i++) {
-                if (msgList.get(i) instanceof SystemMessage) {
-                    msgList.set(i, new SystemMessage(replacementPrompt));
-                    break;
-                }
-            }
-            effectiveMessages = msgList;
+    private static Object replaceSystemPrompt(Object messages, InjectionMode mode) {
+        if (!isPlanOrBuild(mode) || !(messages instanceof List)) {
+            return messages;
         }
-
-        // USER_MESSAGE_INJECT: inject phase-override text as UserMessage
-        if (currentMode == InjectionMode.USER_MESSAGE_INJECT && effectiveMessages instanceof List) {
-            String override = consumePhaseOverride();
-            if (override != null && !override.isEmpty()) {
-                @SuppressWarnings("unchecked")
-                List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
-                msgList.add(new UserMessage("[系统提示] " + override));
-                effectiveMessages = msgList;
+        @SuppressWarnings("unchecked")
+        List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
+        String replacementPrompt = mode == InjectionMode.PLAN_MODE ? PLAN_SYSTEM_PROMPT : BUILD_SYSTEM_PROMPT;
+        for (int i = 0; i < msgList.size(); i++) {
+            if (msgList.get(i) instanceof SystemMessage) {
+                msgList.set(i, new SystemMessage(replacementPrompt));
+                break;
             }
         }
+        return msgList;
+    }
 
-        // PLAN_MODE / BUILD_MODE: also consume phaseOverride if set
-        if ((currentMode == InjectionMode.PLAN_MODE || currentMode == InjectionMode.BUILD_MODE)
-                && effectiveMessages instanceof List) {
-            String override = consumePhaseOverride();
-            if (override != null && !override.isEmpty()) {
-                @SuppressWarnings("unchecked")
-                List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
-                msgList.add(new UserMessage("[系统提示] " + override));
-                effectiveMessages = msgList;
-            }
+    private Object injectPhaseOverride(Object messages, InjectionMode mode) {
+        if (!(mode == InjectionMode.USER_MESSAGE_INJECT || isPlanOrBuild(mode)) || !(messages instanceof List)) {
+            return messages;
         }
-
-        // SYSTEM_PROMPT_APPEND: append to existing SystemMessage
-        if (currentMode == InjectionMode.SYSTEM_PROMPT_APPEND && !systemPromptSuffix.isEmpty()
-                && effectiveMessages instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) effectiveMessages);
-            if (!msgList.isEmpty() && msgList.get(0) instanceof SystemMessage sysMsg) {
-                String augmented = sysMsg.getContentAsString() + LINE_SEPARATOR + LINE_SEPARATOR + systemPromptSuffix;
-                msgList.set(0, new SystemMessage(augmented));
-                effectiveMessages = msgList;
-            }
+        String override = consumePhaseOverride();
+        if (override == null || override.isEmpty()) {
+            return messages;
         }
+        @SuppressWarnings("unchecked")
+        List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
+        msgList.add(new UserMessage("[系统提示] " + override));
+        return msgList;
+    }
 
-        // FIRST_PRINCIPLES: one-shot injection of "先扩后收" strategy prompt
-        if (currentMode == InjectionMode.FIRST_PRINCIPLES && firstPrinciplesDone.compareAndSet(false, true)
-                && effectiveMessages instanceof List) {
-            effectiveMessages = injectFirstPrinciples(effectiveMessages);
+    private Object appendSystemPrompt(Object messages, InjectionMode mode) {
+        if (mode != InjectionMode.SYSTEM_PROMPT_APPEND || systemPromptSuffix.isEmpty() || !(messages instanceof List)) {
+            return messages;
         }
+        @SuppressWarnings("unchecked")
+        List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
+        if (!msgList.isEmpty() && msgList.get(0) instanceof SystemMessage sysMsg) {
+            String augmented = sysMsg.getContentAsString() + LINE_SEPARATOR + LINE_SEPARATOR + systemPromptSuffix;
+            msgList.set(0, new SystemMessage(augmented));
+        }
+        return msgList;
+    }
 
-        return effectiveMessages;
+    private Object injectFirstPrinciplesIfNeeded(Object messages, InjectionMode mode) {
+        if (mode != InjectionMode.FIRST_PRINCIPLES || !firstPrinciplesDone.compareAndSet(false, true)) {
+            return messages;
+        }
+        return messages instanceof List ? injectFirstPrinciples(messages) : messages;
+    }
+
+    private static boolean isPlanOrBuild(InjectionMode mode) {
+        return mode == InjectionMode.PLAN_MODE || mode == InjectionMode.BUILD_MODE;
     }
 
     // ==================================================================

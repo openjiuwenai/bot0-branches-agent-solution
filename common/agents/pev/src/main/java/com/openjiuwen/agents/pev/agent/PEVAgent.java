@@ -22,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 
 /**
  * PEV agent — a general agent-service-app on agent-core-java, running the closed loop
@@ -138,15 +140,31 @@ public class PEVAgent extends BaseAgent {
     }
 
     private PevKernel.VerifyResult verify(String userInput, Map<String, NodeResult> completed) {
+        FutureTask<PevKernel.VerifyResult> verification = new FutureTask<>(() -> verifier.verify(userInput, completed));
+        verification.run();
         try {
-            PevKernel.VerifyResult result = verifier.verify(userInput, completed);
+            PevKernel.VerifyResult result = verification.get();
             if (result == null) {
                 return new PevKernel.VerifyResult(false, Set.of(), "verifier returned null", true);
             }
             return result;
-        } catch (RuntimeException ex) {
-            return new PevKernel.VerifyResult(false, Set.of(), "verifier threw: " + ex.getMessage(), false, true);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Completed verifier invocation was interrupted", ex);
+        } catch (ExecutionException ex) {
+            return handleVerifierFailure(ex.getCause());
         }
+    }
+
+    private static PevKernel.VerifyResult handleVerifierFailure(Throwable failure) {
+        if (failure instanceof RuntimeException runtimeFailure) {
+            return new PevKernel.VerifyResult(false, Set.of(), "verifier threw: " + runtimeFailure.getMessage(), false,
+                    true);
+        }
+        if (failure instanceof Error error) {
+            throw error;
+        }
+        throw new IllegalStateException("Verifier violated its unchecked-exception contract", failure);
     }
 
     private static Set<String> failedToolNodes(Map<String, NodeResult> stepResults) {
