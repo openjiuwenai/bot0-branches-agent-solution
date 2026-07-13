@@ -53,7 +53,7 @@
 **Files:**
 - Commit: all verified fixes and review documentation
 
-- [ ] Push the source branch using a normal fast-forward push.
-- [ ] Reply to the pre-existing review discussion with the implemented fixes and the reason `ModelClientFactory` is not applicable.
-- [ ] Reply to the architecture review discussion with the full-PR feature preservation and verification summary.
-- [ ] Confirm PR 21 head equals local HEAD and report any remaining external-LLM or CI limitation.
+- [x] Push the source branch using a normal fast-forward push.
+- [x] Reply to the pre-existing review discussion with the implemented fixes and the reason `ModelClientFactory` is not applicable.
+- [x] Reply to the architecture review discussion with the full-PR feature preservation and verification summary.
+- [x] Confirm PR 21 head equals local HEAD and report any remaining external-LLM or CI limitation.
