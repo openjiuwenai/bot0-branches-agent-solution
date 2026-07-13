@@ -17,11 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Injection-capable EnforcingModel — extends {@link ToolCallingEnforcingModel} with
- * optional system-prompt augmentation and a static phase override channel.
+ * optional system-prompt augmentation and a model-owned phase override channel.
  *
  * <p>Injection modes (set via {@link #setInjectionMode}):
  * <ul>
@@ -29,7 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li><b>SYSTEM_PROMPT_APPEND</b> — appends {@code systemPromptSuffix} to the
  *       {@link SystemMessage} on every {@code invoke()}.</li>
  *   <li><b>USER_MESSAGE_INJECT</b> — prepends a {@link UserMessage} carrying the
- *       current phase override text (set via static {@link #setPhaseOverride}),
+ *       current phase override text (set via {@link #setPhaseOverride}),
  *       read by {@link #consumePhaseOverride()} on each call.</li>
  *   <li><b>PLAN_MODE</b> — replaces the first {@link SystemMessage} with a divergent
  *       exploration framing (PLAN phase). Also consumes phaseOverride if set.</li>
@@ -37,19 +36,17 @@ import java.util.concurrent.atomic.AtomicReference;
  *       execution framing (BUILD phase). Also consumes phaseOverride if set.</li>
  * </ul>
  *
- * <p>The static phase-override channel allows a {@link com.openjiuwen.core.singleagent.rail.AgentRail}
+ * <p>The model-owned phase-override channel allows a {@link com.openjiuwen.core.singleagent.rail.AgentRail}
  * (e.g. {@link com.openjiuwen.agents.reactrails.verification.StagnationDetectionRail})
  * to communicate phase transitions to the model layer without jar modification:
  * <pre>{@code
  *   // In afterModelCall:
- *   SystemPromptInjectingModel.setPhaseOverride("BREAK_LOOP: your output is repetitive");
+ *   model.injectionState().setPhaseOverride("BREAK_LOOP: your output is repetitive");
  *   // Next invoke() will inject the brake prompt as a UserMessage
  * }</pre>
  *
- * <p>Thread-safe via {@link AtomicReference} — the phase override is stored per-class,
- * so all agents sharing this class see the same override. In a multi-agent scenario
- * each agent should have its own model instance; the static channel is the
- * cross-hook communication primitive.
+ * <p>State is owned by each model instance and isolated per invocation thread. Prompt-aware
+ * rails must receive the target model's {@link #injectionState()} explicitly.
  *
  * @since 2026-07
  */
@@ -59,8 +56,6 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      */
     public static final InjectionMode DEFAULT_MODE = InjectionMode.NONE;
 
-    private static final AtomicReference<String> PHASE_OVERRIDE = new AtomicReference<>(null);
-    private static final AtomicReference<InjectionMode> MODE = new AtomicReference<>(DEFAULT_MODE);
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /**
@@ -91,6 +86,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
             + "If your current path cannot cover all criteria, call __replan__.";
 
     private final AtomicBoolean firstPrinciplesDone = new AtomicBoolean(false);
+    private final PromptInjectionState injectionState = new PromptInjectionState();
 
     private String systemPromptSuffix = "";
 
@@ -105,15 +101,24 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         super(config, requestConfig);
     }
 
-    // ---- Static channel (thread-safe) ----
+    // ---- Model-owned channel ----
+
+    /**
+     * Returns the state channel to share with prompt-aware rails for this model.
+     *
+     * @return model-owned prompt injection state
+     */
+    public PromptInjectionState injectionState() {
+        return injectionState;
+    }
 
     /**
      * Set the phase override for the next invoke.
      *
      * @param text override text to inject on the next invocation
      */
-    public static void setPhaseOverride(String text) {
-        PHASE_OVERRIDE.set(text);
+    public void setPhaseOverride(String text) {
+        injectionState.setPhaseOverride(text);
     }
 
     /**
@@ -121,8 +126,8 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      *
      * @return previous phase override, or null when none is set
      */
-    public static String consumePhaseOverride() {
-        return PHASE_OVERRIDE.getAndSet(null);
+    public String consumePhaseOverride() {
+        return injectionState.consumePhaseOverride();
     }
 
     /**
@@ -130,17 +135,17 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      *
      * @return current phase override, or null when none is set
      */
-    public static String peekPhaseOverride() {
-        return PHASE_OVERRIDE.get();
+    public String peekPhaseOverride() {
+        return injectionState.peekPhaseOverride();
     }
 
     /**
-     * Set global injection mode.
+     * Set the injection mode for this model on the current invocation thread.
      *
      * @param m injection mode to apply globally
      */
-    public static void setInjectionMode(InjectionMode m) {
-        MODE.set(m);
+    public void setInjectionMode(InjectionMode m) {
+        injectionState.setConfiguredMode(m);
     }
 
     /**
@@ -148,16 +153,15 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      *
      * @return current injection mode
      */
-    public static InjectionMode getInjectionMode() {
-        return MODE.get();
+    public InjectionMode getInjectionMode() {
+        return injectionState.getMode();
     }
 
     /**
      * Reset to defaults (NONE, no override).
      */
-    public static void resetToDefaults() {
-        MODE.set(DEFAULT_MODE);
-        PHASE_OVERRIDE.set(null);
+    public void resetToDefaults() {
+        injectionState.reset();
     }
 
     // ---- Instance configuration ----
@@ -178,7 +182,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
     public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float maxTokens, String model,
             Integer n, String stop, BaseOutputParser parser, Float topP, Map<String, Object> kwargs) throws Exception {
         Object effectiveMessages = messages;
-        InjectionMode currentMode = MODE.get();
+        InjectionMode currentMode = injectionState.getMode();
 
         // PLAN_MODE / BUILD_MODE: replace SystemMessage content entirely
         if ((currentMode == InjectionMode.PLAN_MODE || currentMode == InjectionMode.BUILD_MODE)

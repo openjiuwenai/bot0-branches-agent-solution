@@ -22,7 +22,6 @@ import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.foundation.llm.schema.VideoGenerationResponse;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;
@@ -32,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * SystemPromptInjectingModel 单元测试 — 验证注入模式 + 静态通道。
+ * SystemPromptInjectingModel 单元测试 — 验证注入模式 + 模型实例状态通道。
  *
  * <p>注意: 完整功能需要真实 ModelClient（LLM 调用），此测试只验证消息改造逻辑。
  * {@code invoke()} 的真实调用需要 e2e 测试。
@@ -52,69 +51,115 @@ import java.util.concurrent.atomic.AtomicReference;
  * </ul>
  */
 class SystemPromptInjectingModelTest {
-    private SystemPromptInjectingModel model;
-
-    @BeforeEach
-    void setUp() {
-        // Reset to defaults before each test
-        SystemPromptInjectingModel.resetToDefaults();
-    }
-
     @Test
     void noneModeInjectionModeIsNone() {
-        SystemPromptInjectingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.NONE);
+        PromptInjectionState state = new PromptInjectionState();
+        state.setMode(SystemPromptInjectingModel.InjectionMode.NONE);
 
-        assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
+        assertThat(state.getMode()).isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
     }
 
     @Test
     void resetToDefaultsClearsState() {
-        SystemPromptInjectingModel.setPhaseOverride("override");
-        SystemPromptInjectingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.USER_MESSAGE_INJECT);
+        PromptInjectionState state = new PromptInjectionState();
+        state.setPhaseOverride("override");
+        state.setMode(SystemPromptInjectingModel.InjectionMode.USER_MESSAGE_INJECT);
 
-        SystemPromptInjectingModel.resetToDefaults();
+        state.reset();
 
-        assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).isNull();
+        assertThat(state.getMode()).isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
+        assertThat(state.peekPhaseOverride()).isNull();
     }
 
     @Test
     void consumePhaseOverrideReadsAndClears() {
-        SystemPromptInjectingModel.setPhaseOverride("test-value");
+        PromptInjectionState state = new PromptInjectionState();
+        state.setPhaseOverride("test-value");
 
-        String read = SystemPromptInjectingModel.consumePhaseOverride();
+        String read = state.consumePhaseOverride();
         assertThat(read).isEqualTo("test-value");
 
         // Second read should be null (consumed)
-        assertThat(SystemPromptInjectingModel.consumePhaseOverride()).isNull();
+        assertThat(state.consumePhaseOverride()).isNull();
     }
 
     @Test
     void setInjectionModeAndGetRoundtrip() {
-        SystemPromptInjectingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.USER_MESSAGE_INJECT);
-        assertThat(SystemPromptInjectingModel.getInjectionMode())
-                .isEqualTo(SystemPromptInjectingModel.InjectionMode.USER_MESSAGE_INJECT);
+        PromptInjectionState state = new PromptInjectionState();
+        state.setMode(SystemPromptInjectingModel.InjectionMode.USER_MESSAGE_INJECT);
+        assertThat(state.getMode()).isEqualTo(SystemPromptInjectingModel.InjectionMode.USER_MESSAGE_INJECT);
     }
 
     @Test
     void phaseOverrideSetPeekCycle() {
-        SystemPromptInjectingModel.setPhaseOverride("BREAK_LOOP: stop repeating");
+        PromptInjectionState state = new PromptInjectionState();
+        state.setPhaseOverride("BREAK_LOOP: stop repeating");
 
-        String peeked = SystemPromptInjectingModel.peekPhaseOverride();
+        String peeked = state.peekPhaseOverride();
         assertThat(peeked).isEqualTo("BREAK_LOOP: stop repeating");
 
         // Peek doesn't consume
-        assertThat(SystemPromptInjectingModel.peekPhaseOverride()).isNotNull();
+        assertThat(state.peekPhaseOverride()).isNotNull();
     }
 
     @Test
     void successivePhaseOverridesLastWins() {
-        SystemPromptInjectingModel.setPhaseOverride("first");
-        SystemPromptInjectingModel.setPhaseOverride("second");
+        PromptInjectionState state = new PromptInjectionState();
+        state.setPhaseOverride("first");
+        state.setPhaseOverride("second");
 
-        assertThat(SystemPromptInjectingModel.consumePhaseOverride()).isEqualTo("second");
+        assertThat(state.consumePhaseOverride()).isEqualTo("second");
+    }
+
+    @Test
+    void modelInstancesDoNotShareInjectionState() {
+        String firstProvider = "test-isolation-first-" + System.nanoTime();
+        String secondProvider = "test-isolation-second-" + System.nanoTime();
+        registerNoSystemProvider(firstProvider);
+        registerNoSystemProvider(secondProvider);
+        SystemPromptInjectingModel first = model(firstProvider);
+        SystemPromptInjectingModel second = model(secondProvider);
+
+        first.setInjectionMode(SystemPromptInjectingModel.InjectionMode.PLAN_MODE);
+        first.setPhaseOverride("first-model-only");
+
+        assertThat(second.getInjectionMode()).isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
+        assertThat(second.peekPhaseOverride()).isNull();
+    }
+
+    @Test
+    void configuredModeAppliesOnInvocationThreads() throws InterruptedException {
+        String provider = "test-thread-config-" + System.nanoTime();
+        registerNoSystemProvider(provider);
+        SystemPromptInjectingModel model = model(provider);
+        model.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
+        AtomicReference<SystemPromptInjectingModel.InjectionMode> observed = new AtomicReference<>();
+
+        Thread invocationThread = new Thread(() -> observed.set(model.getInjectionMode()));
+        invocationThread.start();
+        invocationThread.join();
+
+        assertThat(observed.get()).as("model configuration must be visible to request threads")
+                .isEqualTo(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
+    }
+
+    @Test
+    void runtimeOverridesAreThreadLocal() throws InterruptedException {
+        PromptInjectionState state = new PromptInjectionState();
+        state.setMode(SystemPromptInjectingModel.InjectionMode.BUILD_MODE);
+        state.setPhaseOverride("current-thread-only");
+        AtomicReference<SystemPromptInjectingModel.InjectionMode> observedMode = new AtomicReference<>();
+        AtomicReference<String> observedOverride = new AtomicReference<>();
+
+        Thread otherInvocation = new Thread(() -> {
+            observedMode.set(state.getMode());
+            observedOverride.set(state.peekPhaseOverride());
+        });
+        otherInvocation.start();
+        otherInvocation.join();
+
+        assertThat(observedMode.get()).isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
+        assertThat(observedOverride.get()).isNull();
     }
 
     @Test
@@ -145,7 +190,7 @@ class SystemPromptInjectingModelTest {
         String provider = "test-fp-" + System.nanoTime();
         FirstPrinciplesCapture capture = registerFirstPrinciplesProvider(provider);
         var enforcingModel = model(provider);
-        SystemPromptInjectingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
+        enforcingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
 
         // Build messages with a SystemMessage to receive the injection
         List<BaseMessage> messages = List.of(new SystemMessage("You are a helpful assistant."),
@@ -194,7 +239,7 @@ class SystemPromptInjectingModelTest {
         String provider = "test-fp-nosys-" + System.nanoTime();
         AtomicReference<List<?>> capturedMessages = registerNoSystemProvider(provider);
         var enforcingModel = model(provider);
-        SystemPromptInjectingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
+        enforcingModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
 
         // Messages with NO SystemMessage — only UserMessage
         List<BaseMessage> messages = List.of(new UserMessage("Analyze the current economic situation."));

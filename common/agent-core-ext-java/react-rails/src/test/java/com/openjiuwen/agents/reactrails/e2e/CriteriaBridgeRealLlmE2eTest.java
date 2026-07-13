@@ -46,6 +46,5 @@ class CriteriaBridgeRealLlmE2eTest {
 
         Object result = agent.invoke("分析当前的经济形势。请简短回答。", null);
         assertThat(result).isNotNull();
-        assertThat(counter.replanCount()).isGreaterThanOrEqualTo(0);
     }
 }

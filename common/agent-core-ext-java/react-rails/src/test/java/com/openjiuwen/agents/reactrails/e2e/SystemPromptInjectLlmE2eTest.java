@@ -31,9 +31,9 @@ class SystemPromptInjectLlmE2eTest {
                 .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash")).temperature(0.3)
                 .maxTokens(500).build();
 
-        // Use FIRST_PRINCIPLES injection mode
-        SystemPromptInjectingModel.setInjectionMode(InjectionMode.FIRST_PRINCIPLES);
         SystemPromptInjectingModel model = new SystemPromptInjectingModel(cliCfg, reqCfg);
+        // Use FIRST_PRINCIPLES injection mode
+        model.setInjectionMode(InjectionMode.FIRST_PRINCIPLES);
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("sysp-e2e").build());
         agent.setLlm(model);
 
@@ -60,8 +60,8 @@ class SystemPromptInjectLlmE2eTest {
                 .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash")).temperature(0.3)
                 .maxTokens(500).build();
 
-        SystemPromptInjectingModel.setInjectionMode(InjectionMode.PLAN_MODE);
         SystemPromptInjectingModel model = new SystemPromptInjectingModel(cliCfg, reqCfg);
+        model.setInjectionMode(InjectionMode.PLAN_MODE);
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("sysp-e2e-plan").build());
         agent.setLlm(model);
 

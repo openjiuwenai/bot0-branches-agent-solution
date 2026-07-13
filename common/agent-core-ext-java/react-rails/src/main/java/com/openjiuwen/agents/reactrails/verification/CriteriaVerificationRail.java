@@ -4,6 +4,7 @@
 
 package com.openjiuwen.agents.reactrails.verification;
 
+import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.agents.reactrails.types.Violation;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -62,7 +63,7 @@ public class CriteriaVerificationRail extends AgentRail {
 
     private final CriteriaVerifier verifier;
     private final List<String> successCriteria;
-    private final List<String> decisionHistory = new ArrayList<>();
+    private final String stateKey = RailInvocationState.newKey(CriteriaVerificationRail.class);
 
     /**
      * Creates a verification rail with external judge criteria.
@@ -81,7 +82,7 @@ public class CriteriaVerificationRail extends AgentRail {
      * @param ctx callback context carrying model-call inputs
      */
     @Override
-    public synchronized void afterModelCall(AgentCallbackContext ctx) {
+    public void afterModelCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
             return;
         }
@@ -92,7 +93,7 @@ public class CriteriaVerificationRail extends AgentRail {
         if (isFinalAnswer(msg)) {
             // Final answer → verify → forceFinish double-direction gate
             String output = contentOf(msg);
-            String historyStr = String.join(" | ", decisionHistory);
+            String historyStr = String.join(" | ", state(ctx).decisionHistory);
             List<Violation> violations = verifier.verify(successCriteria, output, historyStr);
 
             if (violations.isEmpty()) {
@@ -102,7 +103,7 @@ public class CriteriaVerificationRail extends AgentRail {
             }
         } else {
             // Tool-call round → accumulate history
-            accumulateToolCalls(msg);
+            accumulateToolCalls(state(ctx), msg);
         }
     }
 
@@ -110,13 +111,17 @@ public class CriteriaVerificationRail extends AgentRail {
         return msg.getToolCalls() == null || msg.getToolCalls().isEmpty();
     }
 
-    private void accumulateToolCalls(AssistantMessage msg) {
+    private static void accumulateToolCalls(InvocationState state, AssistantMessage msg) {
         if (msg.getToolCalls() == null) {
             return;
         }
         for (ToolCall tc : msg.getToolCalls()) {
-            decisionHistory.add(tc.getName() + "(" + tc.getArguments() + ")");
+            state.decisionHistory.add(tc.getName() + "(" + tc.getArguments() + ")");
         }
+    }
+
+    private InvocationState state(AgentCallbackContext ctx) {
+        return RailInvocationState.get(ctx, stateKey, InvocationState.class, InvocationState::new);
     }
 
     private static String contentOf(AssistantMessage msg) {
@@ -140,5 +145,9 @@ public class CriteriaVerificationRail extends AgentRail {
         result.put(DEGRADED_KEY, true);
         result.put(UNMET_KEY, violations.stream().map(v -> v.criterion() + ": " + v.reason()).toList());
         return result;
+    }
+
+    private static final class InvocationState {
+        private final List<String> decisionHistory = new ArrayList<>();
     }
 }

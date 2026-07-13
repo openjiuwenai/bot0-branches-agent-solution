@@ -4,6 +4,7 @@
 
 package com.openjiuwen.agents.reactrails.replan;
 
+import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
@@ -39,7 +40,7 @@ public class ReplanRail extends AgentRail {
     public static final String MAX_REPLAN_KEY = "max_replan";
 
     private final int maxReplan;
-    private int replanCount = 0;
+    private final String stateKey = RailInvocationState.newKey(ReplanRail.class);
 
     /**
      * 指定最大 replan 次数构造 rail。
@@ -62,8 +63,8 @@ public class ReplanRail extends AgentRail {
      *
      * @return current replan count
      */
-    public synchronized int replanCount() {
-        return replanCount;
+    public int replanCount(AgentCallbackContext ctx) {
+        return state(ctx).replanCount;
     }
 
     /**
@@ -72,9 +73,10 @@ public class ReplanRail extends AgentRail {
      *
      * @return true if replanCount > maxReplan (超限，应降级)
      */
-    public synchronized boolean incrementAndCheckOverLimit() {
-        replanCount++;
-        return replanCount > maxReplan;
+    public boolean incrementAndCheckOverLimit(AgentCallbackContext ctx) {
+        InvocationState state = state(ctx);
+        state.replanCount++;
+        return state.replanCount > maxReplan;
     }
 
     /**
@@ -83,7 +85,7 @@ public class ReplanRail extends AgentRail {
      * @param ctx callback context carrying model-call inputs
      */
     @Override
-    public synchronized void afterModelCall(AgentCallbackContext ctx) {
+    public void afterModelCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
             return;
         }
@@ -96,16 +98,21 @@ public class ReplanRail extends AgentRail {
 
         for (ToolCall tc : msg.getToolCalls()) {
             if (ReplanTool.TOOL_NAME.equals(tc.getName())) {
-                replanCount++;
-                if (replanCount > maxReplan) {
-                    ctx.requestForceFinish(degradedResult());
+                InvocationState state = state(ctx);
+                state.replanCount++;
+                if (state.replanCount > maxReplan) {
+                    ctx.requestForceFinish(degradedResult(state.replanCount));
                 }
                 // Else: allow the replan — agent executes ReplanTool → gets confirmation → tries new strategy
             }
         }
     }
 
-    private Map<String, Object> degradedResult() {
+    private InvocationState state(AgentCallbackContext ctx) {
+        return RailInvocationState.get(ctx, stateKey, InvocationState.class, InvocationState::new);
+    }
+
+    private Map<String, Object> degradedResult(int replanCount) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(REPLAN_EXCEEDED_KEY, true);
         result.put(DEGRADED_KEY, true);
@@ -113,5 +120,9 @@ public class ReplanRail extends AgentRail {
         result.put(MAX_REPLAN_KEY, maxReplan);
         result.put("output", "Replan 次数已达上限 " + maxReplan + "，降级终态");
         return result;
+    }
+
+    private static final class InvocationState {
+        private int replanCount;
     }
 }

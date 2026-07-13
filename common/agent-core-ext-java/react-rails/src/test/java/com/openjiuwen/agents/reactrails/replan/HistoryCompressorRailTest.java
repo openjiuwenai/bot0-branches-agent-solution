@@ -23,6 +23,7 @@ import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -79,7 +80,7 @@ class HistoryCompressorRailTest {
         assertThat(compressed.get(3)).as("index 3 must be the current __replan__ AssistantMessage (preserved)")
                 .isSameAs(replanMsg);
 
-        assertThat(rail.lastBoundary()).as("lastBoundary must be updated to compact.size() - 1 = 3").isEqualTo(3);
+        assertThat(rail.lastBoundary(ctx)).as("lastBoundary must be updated to compact.size() - 1 = 3").isEqualTo(3);
         // mutation-RED: strip setMessages(compact, false) → context unchanged (size 5) → RED
     }
 
@@ -105,7 +106,7 @@ class HistoryCompressorRailTest {
         rail.afterModelCall(ctx);
 
         assertThat(context.getMessages()).as("no __replan__ → context unchanged").hasSize(3);
-        assertThat(rail.lastBoundary()).as("no compression → lastBoundary stays 0").isEqualTo(0);
+        assertThat(rail.lastBoundary(ctx)).as("no compression → lastBoundary stays 0").isEqualTo(0);
         // mutation-RED: remove hasReplan check → compresses unconditionally → RED
     }
 
@@ -125,15 +126,16 @@ class HistoryCompressorRailTest {
 
         ModelCallInputs inputs1 = new ModelCallInputs();
         inputs1.setResponse(replan1);
+        Map<String, Object> invocationExtra = new LinkedHashMap<>();
 
         AgentCallbackContext ctx1 = AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs1)
-                .context(context).build();
+                .context(context).extra(invocationExtra).build();
 
         HistoryCompressorRail rail = new HistoryCompressorRail();
         rail.afterModelCall(ctx1);
 
         // After round 1: [System, User(query), User(summary1), Assistant(__replan__)]
-        assertThat(rail.lastBoundary()).isEqualTo(3);
+        assertThat(rail.lastBoundary(ctx1)).isEqualTo(3);
         assertThat(context.getMessages()).hasSize(4);
         assertThat(context.getMessages().get(2).getContentAsString()).as("round 1 summary must contain step1_tool")
                 .contains("step1_tool");
@@ -154,12 +156,12 @@ class HistoryCompressorRailTest {
         inputs2.setResponse(replan2);
 
         AgentCallbackContext ctx2 = AgentCallbackContext.builder().agent(new Object()).event(null).inputs(inputs2)
-                .context(context).build();
+                .context(context).extra(invocationExtra).build();
 
         rail.afterModelCall(ctx2);
 
         // After round 2: [System, User(query), User(summary1), User(summary2), Assistant(__replan__)]
-        assertThat(rail.lastBoundary()).isEqualTo(4);
+        assertThat(rail.lastBoundary(ctx2)).isEqualTo(4);
         assertThat(context.getMessages()).hasSize(5);
 
         // Round1 summary preserved at index 2
@@ -202,6 +204,44 @@ class HistoryCompressorRailTest {
                 .contains("2 messages compressed");
         // mutation-RED: ignore compressor function → default summary → CUSTOM_SUMMARY not present → RED
     }
+
+    @Test
+    void compressionBoundaryDoesNotCrossInvocationContexts() {
+        HistoryCompressorRail rail = new HistoryCompressorRail();
+
+        List<BaseMessage> firstMessages = new ArrayList<>();
+        firstMessages.add(new SystemMessage("system"));
+        firstMessages.add(new UserMessage("first query"));
+        firstMessages.add(buildAssistantWithToolCall("first_tool", "{}"));
+        firstMessages.add(new UserMessage("first result"));
+        AssistantMessage firstReplan = buildAssistantWithToolCall(ReplanTool.TOOL_NAME, "{}");
+        firstMessages.add(firstReplan);
+        StubModelContext firstContext = new StubModelContext(firstMessages);
+        ModelCallInputs firstInputs = new ModelCallInputs();
+        firstInputs.setResponse(firstReplan);
+        AgentCallbackContext firstInvocation = AgentCallbackContext.builder().agent(new Object()).inputs(firstInputs)
+                .context(firstContext).build();
+        rail.afterModelCall(firstInvocation);
+
+        List<BaseMessage> secondMessages = new ArrayList<>();
+        secondMessages.add(new SystemMessage("system"));
+        secondMessages.add(new UserMessage("second query"));
+        secondMessages.add(buildAssistantWithToolCall("second_tool", "{}"));
+        AssistantMessage secondReplan = buildAssistantWithToolCall(ReplanTool.TOOL_NAME, "{}");
+        secondMessages.add(secondReplan);
+        StubModelContext secondContext = new StubModelContext(secondMessages);
+        ModelCallInputs secondInputs = new ModelCallInputs();
+        secondInputs.setResponse(secondReplan);
+        AgentCallbackContext secondInvocation = AgentCallbackContext.builder().agent(new Object()).inputs(secondInputs)
+                .context(secondContext).build();
+
+        rail.afterModelCall(secondInvocation);
+
+        assertThat(secondContext.getMessages().get(2)).as("a fresh invocation must compress from boundary zero")
+                .isInstanceOf(UserMessage.class);
+        assertThat(secondContext.getMessages().get(2).getContentAsString()).contains("[尝试摘要]").contains("second_tool");
+    }
+
     private static AssistantMessage buildAssistantWithToolCall(String toolName, String args) {
         ToolCall tc = new ToolCall();
         tc.setId("call-" + System.nanoTime());

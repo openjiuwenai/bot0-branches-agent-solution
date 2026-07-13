@@ -16,8 +16,10 @@ import com.openjiuwen.core.singleagent.rail.SteeringQueue;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * CriteriaReplanBridgeRail 承重测试 — mock context 证三出口控制流。
@@ -93,10 +95,11 @@ class CriteriaReplanBridgeRailTest {
         CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
                 List.of("建议", "债券"), replanRail);
 
-        int beforeCount = replanRail.replanCount();
-        rail.afterModelCall(ctxWithFinalAnswer("I don't know", steeringQ));
+        AgentCallbackContext ctx = ctxWithFinalAnswer("I don't know", steeringQ);
+        int beforeCount = replanRail.replanCount(ctx);
+        rail.afterModelCall(ctx);
 
-        assertThat(replanRail.replanCount()).as("verify-fail retry must increment shared replan count")
+        assertThat(replanRail.replanCount(ctx)).as("verify-fail retry must increment shared replan count")
                 .isEqualTo(beforeCount + 1);
     }
     @Test
@@ -105,14 +108,15 @@ class CriteriaReplanBridgeRailTest {
         CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
         CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
                 List.of("建议", "债券"), replanRail);
+        Map<String, Object> invocationExtra = new LinkedHashMap<>();
 
         // First fail: under limit → pushSteering, no forceFinish
-        AgentCallbackContext ctx1 = ctxWithFinalAnswer("I don't know", new CaptureSteeringQueue());
+        AgentCallbackContext ctx1 = ctxWithFinalAnswer("I don't know", new CaptureSteeringQueue(), invocationExtra);
         rail.afterModelCall(ctx1);
         assertThat(ctx1.hasForceFinishRequest()).as("first fail (under limit) must NOT forceFinish").isFalse();
 
         // Second fail: over limit (count=2 > max=1) → forceFinish degraded
-        AgentCallbackContext ctx2 = ctxWithFinalAnswer("I don't know either", steeringQ);
+        AgentCallbackContext ctx2 = ctxWithFinalAnswer("I don't know either", steeringQ, invocationExtra);
         rail.afterModelCall(ctx2);
         assertThat(ctx2.hasForceFinishRequest()).as("over-limit verify fail must fire requestForceFinish(degraded)")
                 .isTrue();
@@ -125,12 +129,13 @@ class CriteriaReplanBridgeRailTest {
         CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
         CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
                 List.of("建议", "债券"), replanRail);
+        Map<String, Object> invocationExtra = new LinkedHashMap<>();
 
         // First fail (under limit)
-        rail.afterModelCall(ctxWithFinalAnswer("I don't know", new CaptureSteeringQueue()));
+        rail.afterModelCall(ctxWithFinalAnswer("I don't know", new CaptureSteeringQueue(), invocationExtra));
 
         // Second fail (over limit)
-        AgentCallbackContext ctx2 = ctxWithFinalAnswer("I don't know either", steeringQ);
+        AgentCallbackContext ctx2 = ctxWithFinalAnswer("I don't know either", steeringQ, invocationExtra);
         rail.afterModelCall(ctx2);
 
         ForceFinishRequestCapture cap = consumeForceFinish(ctx2);
@@ -165,6 +170,36 @@ class CriteriaReplanBridgeRailTest {
         // Then: no terminal decision (neither forceFinish nor pushSteering)
         assertThat(ctx.hasForceFinishRequest()).as("tool-call round must NOT forceFinish").isFalse();
         assertThat(steeringQ.captured).as("tool-call round must NOT push steering").isEmpty();
+    }
+
+    @Test
+    void decisionHistoryDoesNotCrossInvocationContexts() {
+        AtomicReference<String> observedHistory = new AtomicReference<>();
+        CriteriaVerifier verifier = (criteria, output, history) -> {
+            observedHistory.set(history);
+            return List.of();
+        };
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(verifier, List.of("criterion"), new ReplanRail(1));
+
+        rail.afterModelCall(ctxWithToolCall("first_invocation_tool"));
+        rail.afterModelCall(ctxWithFinalAnswer("second invocation answer"));
+
+        assertThat(observedHistory.get()).as("a fresh invocation must not inherit prior bridge history").isEmpty();
+    }
+
+    @Test
+    void verifyRetryBudgetDoesNotCrossInvocationContexts() {
+        ReplanRail replanRail = new ReplanRail(1);
+        CriteriaVerifier alwaysFail = (criteria, output, history) -> List
+                .of(new com.openjiuwen.agents.reactrails.types.Violation("criterion", "missing"));
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(alwaysFail, List.of("criterion"), replanRail);
+
+        rail.afterModelCall(ctxWithFinalAnswer("first failure"));
+        AgentCallbackContext secondInvocation = ctxWithFinalAnswer("second failure");
+        rail.afterModelCall(secondInvocation);
+
+        assertThat(secondInvocation.hasForceFinishRequest())
+                .as("a fresh invocation must start with a fresh criteria retry budget").isFalse();
     }
     /**
      * Capture steering queue spy — records pushSteering calls for mutation-RED assertions.
@@ -209,9 +244,26 @@ class CriteriaReplanBridgeRailTest {
     }
 
     private static AgentCallbackContext ctxWithFinalAnswer(String answer, SteeringQueue steeringQ) {
+        return ctxWithFinalAnswer(answer, steeringQ, new LinkedHashMap<>());
+    }
+
+    private static AgentCallbackContext ctxWithFinalAnswer(String answer, SteeringQueue steeringQ,
+            Map<String, Object> invocationExtra) {
         AssistantMessage msg = new AssistantMessage(answer);
         ModelCallInputs inputs = new ModelCallInputs();
         inputs.setResponse(msg);
-        return AgentCallbackContext.builder().agent(new Object()).inputs(inputs).steeringQueue(steeringQ).build();
+        return AgentCallbackContext.builder().agent(new Object()).inputs(inputs).steeringQueue(steeringQ)
+                .extra(invocationExtra).build();
+    }
+
+    private static AgentCallbackContext ctxWithToolCall(String toolName) {
+        ToolCall toolCall = new ToolCall();
+        toolCall.setName(toolName);
+        toolCall.setArguments("{}");
+        AssistantMessage message = new AssistantMessage();
+        message.setToolCalls(List.of(toolCall));
+        ModelCallInputs inputs = new ModelCallInputs();
+        inputs.setResponse(message);
+        return AgentCallbackContext.builder().agent(new Object()).inputs(inputs).build();
     }
 }

@@ -4,6 +4,7 @@
 
 package com.openjiuwen.agents.reactrails.replan;
 
+import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
@@ -55,14 +56,10 @@ public class HistoryCompressorRail extends AgentRail {
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
     /**
-     * 上次压缩边界索引（初始 0 = 未压缩）。
-     */
-    private int lastBoundary = 0;
-
-    /**
      * 可注入的压缩策略：Phase1 规则提取 → Phase2 LLM 摘要（deferred）。
      */
     private final Function<List<BaseMessage>, String> compressor;
+    private final String stateKey = RailInvocationState.newKey(HistoryCompressorRail.class);
 
     /**
      * 默认构造，使用规则提取压缩器（Phase1 only）。
@@ -85,8 +82,8 @@ public class HistoryCompressorRail extends AgentRail {
      *
      * @return last compressed message boundary
      */
-    public synchronized int lastBoundary() {
-        return lastBoundary;
+    public int lastBoundary(AgentCallbackContext ctx) {
+        return state(ctx).lastBoundary;
     }
 
     /**
@@ -103,7 +100,7 @@ public class HistoryCompressorRail extends AgentRail {
      * @param ctx callback context carrying model-call inputs
      */
     @Override
-    public synchronized void afterModelCall(AgentCallbackContext ctx) {
+    public void afterModelCall(AgentCallbackContext ctx) {
         // 仅处理模型调用后的事件
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
             return;
@@ -130,10 +127,12 @@ public class HistoryCompressorRail extends AgentRail {
             return;
         }
 
+        InvocationState state = state(ctx);
+
         // 2. 定位待压缩段：(lastBoundary, messages.size() - 1)
         //    保留 messages.get(messages.size() - 1) = 当前含 __replan__ 的 AssistantMessage
         //    segStart >= 2 保证 System(0) 和 UserMessage(initial query)(1) 不被压缩
-        int segStart = Math.max(2, lastBoundary);
+        int segStart = Math.max(2, state.lastBoundary);
         int segEnd = messages.size() - 1; // 排除当前 __replan__ 消息
         if (segStart >= segEnd) {
             // 没有可压缩的中间段
@@ -161,7 +160,11 @@ public class HistoryCompressorRail extends AgentRail {
         compact.add(msg); // 当前 __replan__ 消息
 
         ctx.getContext().setMessages(compact, false);
-        lastBoundary = compact.size() - 1;
+        state.lastBoundary = compact.size() - 1;
+    }
+
+    private InvocationState state(AgentCallbackContext ctx) {
+        return RailInvocationState.get(ctx, stateKey, InvocationState.class, InvocationState::new);
     }
 
     /**
@@ -181,5 +184,9 @@ public class HistoryCompressorRail extends AgentRail {
             return "未产生工具调用，对话直接触发 replan。";
         }
         return "尝试了以下工具调用：" + LINE_SEPARATOR + String.join(LINE_SEPARATOR, calls) + LINE_SEPARATOR + "以上尝试未能解决问题。";
+    }
+
+    private static final class InvocationState {
+        private int lastBoundary;
     }
 }

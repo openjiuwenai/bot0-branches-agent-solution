@@ -16,9 +16,12 @@ import com.openjiuwen.core.foundation.llm.schema.AudioGenerationResponse;
 import com.openjiuwen.core.foundation.llm.schema.ImageGenerationResponse;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
+import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 import com.openjiuwen.core.foundation.llm.schema.VideoGenerationResponse;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
+import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
+import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 
 import org.junit.jupiter.api.Test;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * CriteriaVerificationRail 承重测试 — on REAL ReActAgent (not mock).
@@ -75,6 +79,21 @@ class CriteriaVerificationRailTest {
         Object result = agent.invoke("test", null);
         assertThat(result).asString().contains("natural answer");
     }
+
+    @Test
+    void decisionHistoryDoesNotCrossInvocationContexts() {
+        AtomicReference<String> observedHistory = new AtomicReference<>();
+        CriteriaVerifier verifier = (criteria, output, history) -> {
+            observedHistory.set(history);
+            return List.of();
+        };
+        CriteriaVerificationRail rail = new CriteriaVerificationRail(verifier, List.of("criterion"));
+
+        rail.afterModelCall(ctxWithToolCall("first_invocation_tool"));
+        rail.afterModelCall(ctxWithFinalAnswer("second invocation answer"));
+
+        assertThat(observedHistory.get()).as("a fresh invocation must not inherit prior tool history").isEmpty();
+    }
     @SuppressWarnings("unchecked")
     private static Map<?, ?> toMap(Object result) {
         assertThat(result).isInstanceOf(Map.class);
@@ -89,6 +108,25 @@ class CriteriaVerificationRailTest {
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("test").build());
         agent.setLlm(model);
         return agent;
+    }
+
+    private static AgentCallbackContext ctxWithToolCall(String toolName) {
+        ToolCall toolCall = new ToolCall();
+        toolCall.setName(toolName);
+        toolCall.setArguments("{}");
+        AssistantMessage message = new AssistantMessage();
+        message.setToolCalls(List.of(toolCall));
+        return ctxWithResponse(message);
+    }
+
+    private static AgentCallbackContext ctxWithFinalAnswer(String answer) {
+        return ctxWithResponse(new AssistantMessage(answer));
+    }
+
+    private static AgentCallbackContext ctxWithResponse(AssistantMessage message) {
+        ModelCallInputs inputs = new ModelCallInputs();
+        inputs.setResponse(message);
+        return AgentCallbackContext.builder().agent(new Object()).inputs(inputs).build();
     }
     static class TestModelClientFactory implements Model.ModelClientFactory {
         @Override

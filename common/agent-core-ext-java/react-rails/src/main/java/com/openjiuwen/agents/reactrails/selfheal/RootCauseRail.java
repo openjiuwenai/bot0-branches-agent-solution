@@ -4,6 +4,7 @@
 
 package com.openjiuwen.agents.reactrails.selfheal;
 
+import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
@@ -61,16 +62,15 @@ public class RootCauseRail extends AgentRail {
     /** Result key for degrade reason. */
     public static final String REASON_KEY = "reason";
 
-    private boolean hasPendingDegrade = false;
-    private String failedTool = null;
+    private final String stateKey = RailInvocationState.newKey(RootCauseRail.class);
 
     /**
      * Test observation: is there a pending degrade (onToolException marked, afterModelCall not yet fired)?
      *
      * @return true when a tool failure is waiting to be degraded
      */
-    public synchronized boolean hasPendingDegrade() {
-        return hasPendingDegrade;
+    public boolean hasPendingDegrade(AgentCallbackContext context) {
+        return state(context).hasPendingDegrade;
     }
 
     /**
@@ -79,10 +79,11 @@ public class RootCauseRail extends AgentRail {
      * @param context callback context carrying tool-call failure inputs
      */
     @Override
-    public synchronized void onToolException(AgentCallbackContext context) {
+    public void onToolException(AgentCallbackContext context) {
         // Tool failure → device breakdown → mark for degrade (afterModelCall will terminate)
-        failedTool = extractToolName(context);
-        hasPendingDegrade = true;
+        InvocationState state = state(context);
+        state.failedTool = extractToolName(context);
+        state.hasPendingDegrade = true;
     }
 
     /**
@@ -91,11 +92,16 @@ public class RootCauseRail extends AgentRail {
      * @param context callback context used to request forced finish
      */
     @Override
-    public synchronized void afterModelCall(AgentCallbackContext context) {
-        if (hasPendingDegrade) {
-            context.requestForceFinish(degradedMap(failedTool));
-            hasPendingDegrade = false;
+    public void afterModelCall(AgentCallbackContext context) {
+        InvocationState state = state(context);
+        if (state.hasPendingDegrade) {
+            context.requestForceFinish(degradedMap(state.failedTool));
+            state.hasPendingDegrade = false;
         }
+    }
+
+    private InvocationState state(AgentCallbackContext context) {
+        return RailInvocationState.get(context, stateKey, InvocationState.class, InvocationState::new);
     }
 
     private static String extractToolName(AgentCallbackContext context) {
@@ -112,5 +118,10 @@ public class RootCauseRail extends AgentRail {
         result.put(ROOT_CAUSE_KEY, "DeviceFailure");
         result.put(REASON_KEY, "工具失败: " + tool + " — 设备故障，重试无效，降级终态");
         return result;
+    }
+
+    private static final class InvocationState {
+        private boolean hasPendingDegrade;
+        private String failedTool;
     }
 }
