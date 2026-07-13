@@ -1,0 +1,32 @@
+server:
+  port: ${REACT_AGENT_PORT:18110}
+
+spring:
+  application:
+    name: agentscope-react-a2a-demo
+
+agentscope:
+  demo:
+    api-key: ${DEEPSEEK_API_KEY:}
+    base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+    model: ${DEEPSEEK_MODEL:deepseek-chat}
+
+openjiuwen:
+  service:
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "AgentScopeReActAgent"
+      agent-description: "AgentScope ReActAgent with A2A HITL confirmation"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "approved_transfer"
+          name: "Approved Transfer"
+          description: "Execute a transfer after explicit structured approval"
+          tags: ["agentscope", "hitl", "transfer"]
+          examples: ["Transfer 5 CNY to Li Ming"]
