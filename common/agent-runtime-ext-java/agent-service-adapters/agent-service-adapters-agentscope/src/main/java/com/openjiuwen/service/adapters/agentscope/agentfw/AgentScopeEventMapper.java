@@ -23,17 +23,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 final class AgentScopeEventMapper {
-    Optional<QueryChunk> map(AgentEvent event, AgentState state, StreamState streamState) {
+    Optional<QueryChunk> map(AgentEvent event, Supplier<AgentState> stateSupplier, StreamState streamState) {
         if (event instanceof TextBlockDeltaEvent delta) {
             return Optional.of(new QueryChunk(
                 QueryChunk.TYPE_CHUNK,
                 Map.of("type", "answer_delta", "content", delta.getDelta())));
         }
         if (event instanceof RequireUserConfirmEvent confirmation) {
-            validateConfirmationPending(confirmation.getToolCalls(), state);
+            validateConfirmationPending(confirmation.getToolCalls(), stateSupplier.get());
             streamState.confirmationEmitted = true;
             return Optional.of(interrupt(
                 "confirmation",
@@ -43,18 +44,27 @@ final class AgentScopeEventMapper {
         if (event instanceof AgentResultEvent result && result.getResult() != null) {
             GenerateReason reason = result.getResult().getGenerateReason();
             if (reason == GenerateReason.TOOL_SUSPENDED) {
-                return Optional.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, externalFromState(state)));
+                return Optional.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, externalFromState(stateSupplier.get())));
             }
             if (reason == GenerateReason.PERMISSION_ASKING) {
                 if (streamState.confirmationEmitted) {
                     return Optional.empty();
                 }
                 streamState.confirmationEmitted = true;
-                return Optional.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, confirmationFromState(state)));
+                return Optional.of(new QueryChunk(
+                    QueryChunk.TYPE_INTERRUPT,
+                    confirmationFromState(stateSupplier.get())));
             }
             if (isMessagePause(reason) && !streamState.messageEmitted) {
                 streamState.messageEmitted = true;
                 return Optional.of(interrupt("message", pauseMessage(result.getResult()), List.of()));
+            }
+            if (reason == GenerateReason.INTERRUPTED) {
+                throw new CancellationException("AgentScope execution interrupted");
+            }
+            if (reason == GenerateReason.TOOL_CALLS) {
+                throw new IllegalStateException(
+                    "AgentScope returned TOOL_CALLS as a terminal result without a supported pause state");
             }
             return Optional.empty();
         }
@@ -66,7 +76,7 @@ final class AgentScopeEventMapper {
                 streamState.confirmationEmitted = true;
                 return Optional.of(new QueryChunk(
                     QueryChunk.TYPE_INTERRUPT,
-                    confirmationFromState(state)));
+                    confirmationFromState(stateSupplier.get())));
             }
             if (!isMessagePause(stop.getGenerateReason())) {
                 return Optional.empty();
@@ -130,8 +140,9 @@ final class AgentScopeEventMapper {
         List<ToolUseBlock> external = AgentScopeResumeMapper.pendingToolCalls(state).stream()
             .filter(tool -> tool.getState() != ToolCallState.ASKING)
             .toList();
-        if (external.isEmpty()) {
-            throw new IllegalStateException("TOOL_SUSPENDED result has no external pending tool calls");
+        if (external.size() != 1) {
+            throw new IllegalStateException(
+                "TOOL_SUSPENDED result must have exactly one external pending tool call");
         }
         return interaction("tool_result", "The following tool call requires an external result.", external);
     }

@@ -20,6 +20,7 @@ import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.lifecycle.InterruptReason;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.event.AgentStartEvent;
 import io.agentscope.core.event.RequireUserConfirmEvent;
 import io.agentscope.core.event.TextBlockDeltaEvent;
 import io.agentscope.core.message.GenerateReason;
@@ -149,6 +150,21 @@ class AgentScopeAgentHandlerTest {
     }
 
     @Test
+    void streamDoesNotReadAgentStateForUnrelatedEvents() {
+        AgentScopeInvoker invoker = mock(AgentScopeInvoker.class);
+        when(invoker.streamEvents(any(), any())).thenReturn(Flux.just(
+            new AgentStartEvent("conversation", "reply", "agent")));
+        RecordingObserver observer = new RecordingObserver();
+
+        handler(invoker).streamQuery(request("conversation", "hello"), observer);
+
+        verify(invoker, times(0)).getAgentState(any(), any());
+        assertThat(observer.chunks).isEmpty();
+        assertThat(observer.errors).isEmpty();
+        assertThat(observer.completed).isEqualTo(1);
+    }
+
+    @Test
     void queryTimeoutInterruptsAgentScopeSession() {
         AgentScopeInvoker invoker = mock(AgentScopeInvoker.class);
         when(invoker.call(any(), any())).thenReturn(Mono.never());
@@ -159,6 +175,23 @@ class AgentScopeAgentHandlerTest {
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("timed out");
         verify(invoker, atLeastOnce()).interrupt("user", "conversation");
+    }
+
+    @Test
+    void streamTimeoutInterruptsAgentScopeSessionAndReportsOneError() {
+        AgentScopeInvoker invoker = mock(AgentScopeInvoker.class);
+        when(invoker.streamEvents(any(), any())).thenReturn(Flux.never());
+        AgentScopeAgentHandler handler = new AgentScopeAgentHandler(
+            invoker, Duration.ofSeconds(1), Duration.ofMillis(30));
+        RecordingObserver observer = new RecordingObserver();
+
+        handler.streamQuery(request("conversation", "wait"), observer);
+
+        verify(invoker, atLeastOnce()).interrupt("user", "conversation");
+        assertThat(observer.chunks).singleElement().satisfies(chunk ->
+            assertThat(chunk.getType()).isEqualTo(QueryChunk.TYPE_ERROR));
+        assertThat(observer.errors).hasSize(1);
+        assertThat(observer.completed).isZero();
     }
 
     @Test

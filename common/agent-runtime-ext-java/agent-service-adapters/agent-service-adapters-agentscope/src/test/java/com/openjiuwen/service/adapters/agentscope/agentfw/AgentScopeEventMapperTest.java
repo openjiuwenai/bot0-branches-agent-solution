@@ -29,7 +29,7 @@ class AgentScopeEventMapperTest {
     void mapsTextDeltaToAnswerChunk() {
         QueryChunk chunk = new AgentScopeEventMapper().map(
             new TextBlockDeltaEvent("reply", "block", "hello"),
-            stateWith(),
+            AgentScopeEventMapperTest::stateWith,
             new AgentScopeEventMapper.StreamState()).orElseThrow();
 
         assertThat(chunk.getType()).isEqualTo(QueryChunk.TYPE_CHUNK);
@@ -43,16 +43,16 @@ class AgentScopeEventMapperTest {
         AgentScopeEventMapper.StreamState streamState = new AgentScopeEventMapper.StreamState();
 
         QueryChunk chunk = mapper.map(
-            new RequireUserConfirmEvent("reply", List.of(tool)), stateWith(tool), streamState).orElseThrow();
+            new RequireUserConfirmEvent("reply", List.of(tool)), () -> stateWith(tool), streamState).orElseThrow();
 
         assertInteraction(chunk, "confirmation");
         assertThat(mapper.map(
             new RequestStopEvent("permission", GenerateReason.PERMISSION_ASKING),
-            stateWith(tool),
+            () -> stateWith(tool),
             streamState)).isEmpty();
         assertThat(mapper.map(
             new RequestStopEvent("standalone", GenerateReason.MIDDLEWARE_STOP_REQUESTED),
-            stateWith(tool),
+            () -> stateWith(tool),
             new AgentScopeEventMapper.StreamState())).isPresent();
     }
 
@@ -64,7 +64,7 @@ class AgentScopeEventMapperTest {
 
         QueryChunk chunk = mapper.map(
             new RequestStopEvent("permission", GenerateReason.PERMISSION_ASKING),
-            stateWith(tool),
+            () -> stateWith(tool),
             streamState).orElseThrow();
 
         assertInteraction(chunk, "confirmation");
@@ -72,7 +72,7 @@ class AgentScopeEventMapperTest {
         Msg paused = Msg.builder().role(MsgRole.ASSISTANT)
             .generateReason(GenerateReason.PERMISSION_ASKING)
             .build();
-        assertThat(mapper.map(new AgentResultEvent(paused), stateWith(tool), streamState)).isEmpty();
+        assertThat(mapper.map(new AgentResultEvent(paused), () -> stateWith(tool), streamState)).isEmpty();
     }
 
     @Test
@@ -82,7 +82,7 @@ class AgentScopeEventMapperTest {
 
         assertThatThrownBy(() -> new AgentScopeEventMapper().map(
             new RequireUserConfirmEvent("reply", List.of(stale)),
-            stateWith(pending),
+            () -> stateWith(pending),
             new AgentScopeEventMapper.StreamState()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("ASKING");
@@ -96,10 +96,25 @@ class AgentScopeEventMapperTest {
 
         QueryChunk chunk = new AgentScopeEventMapper().map(
             new AgentResultEvent(suspended),
-            stateWith(tool),
+            () -> stateWith(tool),
             new AgentScopeEventMapper.StreamState()).orElseThrow();
 
         assertInteraction(chunk, "tool_result");
+    }
+
+    @Test
+    void rejectsMultipleExternalPendingCallsInStreamingSuspension() {
+        ToolUseBlock first = tool("call-1", "external_search", ToolCallState.PENDING);
+        ToolUseBlock second = tool("call-2", "external_lookup", ToolCallState.PENDING);
+        Msg suspended = Msg.builder().role(MsgRole.ASSISTANT)
+            .generateReason(GenerateReason.TOOL_SUSPENDED).build();
+
+        assertThatThrownBy(() -> new AgentScopeEventMapper().map(
+            new AgentResultEvent(suspended),
+            () -> stateWith(first, second),
+            new AgentScopeEventMapper.StreamState()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("exactly one external pending tool call");
     }
 
     @Test
@@ -111,7 +126,7 @@ class AgentScopeEventMapperTest {
 
         QueryChunk chunk = new AgentScopeEventMapper().map(
             new AgentResultEvent(paused),
-            stateWith(),
+            AgentScopeEventMapperTest::stateWith,
             new AgentScopeEventMapper.StreamState()).orElseThrow();
 
         assertThat(chunk.getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
@@ -133,15 +148,16 @@ class AgentScopeEventMapperTest {
             .build();
 
         assertThat(mapper.map(
-            new RequestStopEvent("Review before acting"), stateWith(), streamState)).isPresent();
-        assertThat(mapper.map(new AgentResultEvent(paused), stateWith(), streamState)).isEmpty();
+            new RequestStopEvent("Review before acting"), AgentScopeEventMapperTest::stateWith, streamState)).isPresent();
+        assertThat(mapper.map(
+            new AgentResultEvent(paused), AgentScopeEventMapperTest::stateWith, streamState)).isEmpty();
     }
 
     @Test
     void doesNotMapAllToolsDeniedStopEventAsAnotherInterrupt() {
         assertThat(new AgentScopeEventMapper().map(
             new RequestStopEvent("all denied", GenerateReason.ALL_TOOLS_DENIED),
-            stateWith(),
+            AgentScopeEventMapperTest::stateWith,
             new AgentScopeEventMapper.StreamState())).isEmpty();
     }
 
@@ -150,7 +166,38 @@ class AgentScopeEventMapperTest {
         Msg result = Msg.builder().role(MsgRole.ASSISTANT).textContent("done").build();
 
         assertThat(new AgentScopeEventMapper().map(
-            new AgentResultEvent(result), stateWith(), new AgentScopeEventMapper.StreamState())).isEmpty();
+            new AgentResultEvent(result),
+            AgentScopeEventMapperTest::stateWith,
+            new AgentScopeEventMapper.StreamState())).isEmpty();
+    }
+
+    @Test
+    void treatsStreamingInterruptedGenerateReasonAsCancellation() {
+        Msg interrupted = Msg.builder()
+            .role(MsgRole.ASSISTANT)
+            .generateReason(GenerateReason.INTERRUPTED)
+            .build();
+
+        assertThatThrownBy(() -> new AgentScopeEventMapper().map(
+            new AgentResultEvent(interrupted),
+            AgentScopeEventMapperTest::stateWith,
+            new AgentScopeEventMapper.StreamState()))
+            .isInstanceOf(CancellationException.class);
+    }
+
+    @Test
+    void rejectsStreamingToolCallsAsUnsupportedTerminalResult() {
+        Msg toolCalls = Msg.builder()
+            .role(MsgRole.ASSISTANT)
+            .generateReason(GenerateReason.TOOL_CALLS)
+            .build();
+
+        assertThatThrownBy(() -> new AgentScopeEventMapper().map(
+            new AgentResultEvent(toolCalls),
+            AgentScopeEventMapperTest::stateWith,
+            new AgentScopeEventMapper.StreamState()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("TOOL_CALLS");
     }
 
     @Test

@@ -13,7 +13,6 @@ import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.RuntimeContext;
-import io.agentscope.core.event.TextBlockDeltaEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.state.AgentState;
 import io.agentscope.harness.agent.HarnessAgent;
@@ -125,10 +124,10 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
                             }
                             return;
                         }
-                        AgentState state = event instanceof TextBlockDeltaEvent
-                            ? null
-                            : invoker.getAgentState(context.getUserId(), context.getSessionId());
-                        eventMapper.map(event, state, streamState).ifPresent(observer::onNext);
+                        eventMapper.map(
+                            event,
+                            () -> invoker.getAgentState(context.getUserId(), context.getSessionId()),
+                            streamState).ifPresent(observer::onNext);
                     },
                     error -> handleStreamError(invocation, observer, error),
                     () -> {
