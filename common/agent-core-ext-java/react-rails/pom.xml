@@ -6,8 +6,8 @@
 
     <parent>
         <groupId>com.openjiuwen</groupId>
-        <artifactId>agent-runtime-ext-java</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <artifactId>agent-core-ext-java</artifactId>
+        <version>0.1.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -25,17 +25,6 @@
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
-            <version>0.1.12-jdk17</version>
-        </dependency>
-        <dependency>
-            <groupId>com.openjiuwen</groupId>
-            <artifactId>pev</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
-            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -61,7 +50,7 @@
                 <artifactId>formatter-maven-plugin</artifactId>
                 <version>${formatter.plugin.version}</version>
                 <configuration>
-                    <configFile>${project.parent.basedir}/../agent-runtime-ext-java/.devtools/eclipse-java-formatter.xml</configFile>
+                    <configFile>${project.parent.basedir}/.devtools/eclipse-java-formatter.xml</configFile>
                     <lineEnding>LF</lineEnding>
                     <encoding>UTF-8</encoding>
                     <directories>
@@ -86,7 +75,7 @@
                 <artifactId>maven-checkstyle-plugin</artifactId>
                 <version>${checkstyle.plugin.version}</version>
                 <configuration>
-                    <configLocation>${project.parent.basedir}/../agent-runtime-ext-java/.devtools/checkstyle.xml</configLocation>
+                    <configLocation>${project.parent.basedir}/.devtools/checkstyle.xml</configLocation>
                     <sourceDirectories>
                         <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
                         <sourceDirectory>${project.basedir}/src/test/java</sourceDirectory>

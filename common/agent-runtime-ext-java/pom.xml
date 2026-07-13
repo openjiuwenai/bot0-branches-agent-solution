@@ -26,8 +26,6 @@
     <modules>
         <module>agent-service-adapters/agent-service-adapters-versatile</module>
         <module>agent-service-adapters/agent-service-adapters-agentcore-ext</module>
-        <module>../agents</module>
-        <module>../agent-core-ext-java</module>
     </modules>
 
     <dependencyManagement>
