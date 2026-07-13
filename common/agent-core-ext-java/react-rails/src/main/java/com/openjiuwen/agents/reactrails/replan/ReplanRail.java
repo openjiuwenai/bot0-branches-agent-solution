@@ -61,6 +61,7 @@ public class ReplanRail extends AgentRail {
     /**
      * Current replan count (test observation).
      *
+     * @param ctx current invocation callback context
      * @return current replan count
      */
     public int replanCount(AgentCallbackContext ctx) {
@@ -71,6 +72,7 @@ public class ReplanRail extends AgentRail {
      * 公开计数方法 — bridge rail 调用同一计数器。递增 replan 并返回是否超限。
      * 让 LLM 发起的 __replan__ 和系统发起的 verify-failure retry 共享总预算。
      *
+     * @param ctx current invocation callback context
      * @return true if replanCount > maxReplan (超限，应降级)
      */
     public boolean incrementAndCheckOverLimit(AgentCallbackContext ctx) {

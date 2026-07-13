@@ -207,8 +207,6 @@ class HistoryCompressorRailTest {
 
     @Test
     void compressionBoundaryDoesNotCrossInvocationContexts() {
-        HistoryCompressorRail rail = new HistoryCompressorRail();
-
         List<BaseMessage> firstMessages = new ArrayList<>();
         firstMessages.add(new SystemMessage("system"));
         firstMessages.add(new UserMessage("first query"));
@@ -221,6 +219,7 @@ class HistoryCompressorRailTest {
         firstInputs.setResponse(firstReplan);
         AgentCallbackContext firstInvocation = AgentCallbackContext.builder().agent(new Object()).inputs(firstInputs)
                 .context(firstContext).build();
+        HistoryCompressorRail rail = new HistoryCompressorRail();
         rail.afterModelCall(firstInvocation);
 
         List<BaseMessage> secondMessages = new ArrayList<>();

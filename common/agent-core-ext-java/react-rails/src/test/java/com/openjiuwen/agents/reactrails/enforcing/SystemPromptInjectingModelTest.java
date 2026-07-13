@@ -28,6 +28,10 @@ import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -129,38 +133,27 @@ class SystemPromptInjectingModelTest {
     }
 
     @Test
-    void configuredModeAppliesOnInvocationThreads() throws InterruptedException {
+    void configuredModeAppliesOnInvocationThreads() throws Exception {
         String provider = "test-thread-config-" + System.nanoTime();
         registerNoSystemProvider(provider);
         SystemPromptInjectingModel model = model(provider);
         model.setInjectionMode(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
-        AtomicReference<SystemPromptInjectingModel.InjectionMode> observed = new AtomicReference<>();
+        SystemPromptInjectingModel.InjectionMode observed = runOnWorker(model::getInjectionMode);
 
-        Thread invocationThread = new Thread(() -> observed.set(model.getInjectionMode()));
-        invocationThread.start();
-        invocationThread.join();
-
-        assertThat(observed.get()).as("model configuration must be visible to request threads")
+        assertThat(observed).as("model configuration must be visible to request threads")
                 .isEqualTo(SystemPromptInjectingModel.InjectionMode.FIRST_PRINCIPLES);
     }
 
     @Test
-    void runtimeOverridesAreThreadLocal() throws InterruptedException {
+    void runtimeOverridesAreThreadLocal() throws Exception {
         PromptInjectionState state = new PromptInjectionState();
         state.setMode(SystemPromptInjectingModel.InjectionMode.BUILD_MODE);
         state.setPhaseOverride("current-thread-only");
-        AtomicReference<SystemPromptInjectingModel.InjectionMode> observedMode = new AtomicReference<>();
-        AtomicReference<String> observedOverride = new AtomicReference<>();
+        WorkerObservation observed = runOnWorker(
+                () -> new WorkerObservation(state.getMode(), state.peekPhaseOverride()));
 
-        Thread otherInvocation = new Thread(() -> {
-            observedMode.set(state.getMode());
-            observedOverride.set(state.peekPhaseOverride());
-        });
-        otherInvocation.start();
-        otherInvocation.join();
-
-        assertThat(observedMode.get()).isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
-        assertThat(observedOverride.get()).isNull();
+        assertThat(observed.mode()).isEqualTo(SystemPromptInjectingModel.InjectionMode.NONE);
+        assertThat(observed.override()).isNull();
     }
 
     @Test
@@ -413,6 +406,19 @@ class SystemPromptInjectingModelTest {
         } else {
             return;
         }
+    }
+
+    private static <T> T runOnWorker(Callable<T> task) throws Exception {
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
+        try {
+            return executor.submit(task).get();
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private record WorkerObservation(SystemPromptInjectingModel.InjectionMode mode, String override) {
     }
 
     private static final class FirstPrinciplesCapture {

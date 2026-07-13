@@ -108,6 +108,7 @@ public class StagnationDetectionRail extends AgentRail {
      * Priority: 50 — medium, between voting critic (100) and bridge rail (0).
      */
     private static final int PRIORITY = 50;
+
     private final PromptInjectionState injectionState;
     private final String stateKey = RailInvocationState.newKey(StagnationDetectionRail.class);
 
@@ -126,6 +127,7 @@ public class StagnationDetectionRail extends AgentRail {
     /**
      * Current consecutive output repeat count.
      *
+     * @param ctx current invocation callback context
      * @return current consecutive output repeat count
      */
     public int getConsecutiveOutputRepeats(AgentCallbackContext ctx) {
@@ -135,6 +137,7 @@ public class StagnationDetectionRail extends AgentRail {
     /**
      * Total stagnation events.
      *
+     * @param ctx current invocation callback context
      * @return total number of stagnation events
      */
     public int getTotalStagnations(AgentCallbackContext ctx) {
@@ -144,6 +147,7 @@ public class StagnationDetectionRail extends AgentRail {
     /**
      * Output history window (copy).
      *
+     * @param ctx current invocation callback context
      * @return copied output history window
      */
     public List<String> getOutputHistory(AgentCallbackContext ctx) {
@@ -153,6 +157,7 @@ public class StagnationDetectionRail extends AgentRail {
     /**
      * Current tool cycle repeat count.
      *
+     * @param ctx current invocation callback context
      * @return current tool cycle repeat count
      */
     public int getToolCycleRepeats(AgentCallbackContext ctx) {
@@ -318,6 +323,7 @@ public class StagnationDetectionRail extends AgentRail {
      * repeats the half before it. Only fires on even-sized histories
      * so the two halves have equal length (odd size → halves differ).
      *
+     * @param state current invocation state
      * @return true when the recent tool signatures form a repeated cycle
      */
     private static boolean detectToolCycle(InvocationState state) {

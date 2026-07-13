@@ -67,6 +67,7 @@ public class RootCauseRail extends AgentRail {
     /**
      * Test observation: is there a pending degrade (onToolException marked, afterModelCall not yet fired)?
      *
+     * @param context current invocation callback context
      * @return true when a tool failure is waiting to be degraded
      */
     public boolean hasPendingDegrade(AgentCallbackContext context) {

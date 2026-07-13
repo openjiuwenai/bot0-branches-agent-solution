@@ -95,6 +95,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     /**
      * Number of observed model-call hooks.
      *
+     * @param ctx current invocation callback context
      * @return total hook call count
      */
     public int getCallCount(AgentCallbackContext ctx) {
@@ -104,6 +105,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     /**
      * Number of distinct tool names called.
      *
+     * @param ctx current invocation callback context
      * @return distinct tool name count
      */
     public int getToolDiversity(AgentCallbackContext ctx) {
@@ -113,6 +115,7 @@ public class PreCompletionChecklistRail extends AgentRail {
     /**
      * Output hash observation window.
      *
+     * @param ctx current invocation callback context
      * @return copied output hash list
      */
     public List<String> getOutputHashes(AgentCallbackContext ctx) {
