@@ -13,7 +13,6 @@ import com.openjiuwen.example.deepresearch.DeepResearchAgentFactory;
 import com.openjiuwen.example.deepresearch.rail.ExecResult;
 import com.openjiuwen.example.deepresearch.rail.SandboxOps;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
-import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClientFactory;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.spec.spi.AgentHandler;
@@ -62,14 +61,12 @@ public class DeepResearchRuntimeApplication {
      *
      * @param properties runtime configuration bound from {@code application.yml}
      * @param registrar optional middleware registrar provider
-     * @param installer remote A2A tool installer
      * @param sandboxFactoryProvider optional sandbox client factory provider
      * @return the configured {@link AgentHandler}
      */
     @Bean
     AgentHandler deepResearchHandler(DeepResearchSpringProperties properties,
                                      ObjectProvider<MiddlewareAdapterRegistrar> registrar,
-                                     RemoteA2aToolInstaller installer,
                                      ObjectProvider<AgentCoreSandboxClientFactory> sandboxFactoryProvider) {
         AgentCoreSandboxClientFactory sandboxFactory = sandboxFactoryProvider.getIfAvailable();
         Supplier<SandboxOps> sandboxOpsSupplier = sandboxFactory != null
@@ -77,8 +74,7 @@ public class DeepResearchRuntimeApplication {
                 : null;
         return new JiuwenCoreAgentExtHandler(
                 DeepResearchAgentFactory.build(properties, sandboxOpsSupplier),
-                registrar.getIfAvailable(),
-                installer);
+                registrar.getIfAvailable());
     }
 
     private static Optional<SandboxOps> resolveSandboxOps(AgentCoreSandboxClientFactory factory) {

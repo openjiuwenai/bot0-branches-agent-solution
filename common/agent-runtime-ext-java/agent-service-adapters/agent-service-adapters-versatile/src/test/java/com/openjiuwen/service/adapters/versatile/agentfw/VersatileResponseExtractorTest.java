@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
 import com.openjiuwen.service.spec.dto.QueryChunk;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -32,6 +33,7 @@ class VersatileResponseExtractorTest {
         assertThat(chunks.get(1).getData()).isNull();
     }
 
+    @Tag("smoke")
     @Test
     void extractsResultNodeAndEmitsAnswerOnEnd() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");

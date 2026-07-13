@@ -8,6 +8,7 @@ import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.interrupt.ToolInterruptException;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @since 2026-06-30
  */
 class RemoteA2aInterruptRailTest {
+    @Tag("smoke")
     @Test
     void exposesToolCardAndInterruptsWithA2aDelegateContext() {
         ToolCall toolCall = ToolCall.builder()
