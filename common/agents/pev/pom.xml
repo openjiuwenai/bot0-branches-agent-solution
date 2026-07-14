@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.openjiuwen</groupId>
+        <artifactId>agents</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>pev</artifactId>
+    <name>pev — PEV agent-service-app (canonical template)</name>
+    <description>PEV (Plan→Execute→Verify→Diagnose→Dispatch) as a canonical agent-service-app on agent-core-java. Self-contained: kernel (sealed types + pure functions) + agent (extends BaseAgent) + rails (Beta cognitive). Not an ext adapter — PEV is itself an agent-service-app, a sibling pattern to EDPA.</description>
+
+    <properties>
+        <formatter.plugin.version>2.24.1</formatter.plugin.version>
+        <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
+        <checkstyle.version>10.21.0</checkstyle.version>
+    </properties>
+
+    <dependencies>
+        <!-- agent-core-java: BaseAgent / AgentRail / Runner. Version is managed by the parent. -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-core-java</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>net.revelc.code.formatter</groupId>
+                <artifactId>formatter-maven-plugin</artifactId>
+                <version>${formatter.plugin.version}</version>
+                <configuration>
+                    <configFile>${project.parent.basedir}/.devtools/eclipse-java-formatter.xml</configFile>
+                    <lineEnding>LF</lineEnding>
+                    <encoding>UTF-8</encoding>
+                    <directories>
+                        <directory>${project.basedir}/src/main/java</directory>
+                        <directory>${project.basedir}/src/test/java</directory>
+                    </directories>
+                    <includes>
+                        <include>**/*.java</include>
+                    </includes>
+                    <excludes>
+                        <exclude>**/target/**</exclude>
+                    </excludes>
+                    <skipCssFormatting>true</skipCssFormatting>
+                    <skipJsonFormatting>true</skipJsonFormatting>
+                    <skipHtmlFormatting>true</skipHtmlFormatting>
+                    <skipXmlFormatting>true</skipXmlFormatting>
+                    <skipJsFormatting>true</skipJsFormatting>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle.plugin.version}</version>
+                <configuration>
+                    <configLocation>${project.parent.basedir}/.devtools/checkstyle.xml</configLocation>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+                        <sourceDirectory>${project.basedir}/src/test/java</sourceDirectory>
+                    </sourceDirectories>
+                    <excludes>**/target/**</excludes>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    <inputEncoding>UTF-8</inputEncoding>
+                    <consoleOutput>true</consoleOutput>
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>warning</violationSeverity>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+</project>
