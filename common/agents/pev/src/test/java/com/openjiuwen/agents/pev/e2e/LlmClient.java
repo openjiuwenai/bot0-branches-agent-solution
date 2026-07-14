@@ -190,13 +190,7 @@ final class LlmClient {
 
     private static ScheduledExecutorService startIdleWatcher(InputStream is, AtomicLong lastChunk,
             AtomicBoolean idleTimedOut) {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread watcher = new Thread(r, "pev-llm-idle-watcher");
-            watcher.setDaemon(true);
-            watcher.setUncaughtExceptionHandler((thread, ex) -> {
-            });
-            return watcher;
-        });
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> {
             if (System.currentTimeMillis() - lastChunk.get() > 30_000L) {
                 idleTimedOut.set(true);
