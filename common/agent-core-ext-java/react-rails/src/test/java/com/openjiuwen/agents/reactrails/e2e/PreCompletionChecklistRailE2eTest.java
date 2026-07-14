@@ -72,7 +72,7 @@ class PreCompletionChecklistRailE2eTest {
                 .verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
                 .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash")).temperature(0.3)
-                .maxTokens(200).build();
+                .maxTokens(4000).build();
 
         SystemPromptInjectingModel model = new SystemPromptInjectingModel(cliCfg, reqCfg);
         model.resetToDefaults();
@@ -118,7 +118,7 @@ class PreCompletionChecklistRailE2eTest {
                 .verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
                 .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash")).temperature(0.3)
-                .maxTokens(200).build();
+                .maxTokens(4000).build();
 
         SystemPromptInjectingModel model = new SystemPromptInjectingModel(cliCfg, reqCfg);
         model.resetToDefaults();

@@ -33,7 +33,7 @@ class CriteriaBridgeRealLlmE2eTest {
                 .verifySsl(false).build();
         var reqCfg = ModelRequestConfig.builder()
                 .modelName(System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-flash")).temperature(0.3)
-                .maxTokens(200).build();
+                .maxTokens(4000).build();
         ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("bridge-e2e").build());
         agent.setLlm(model);

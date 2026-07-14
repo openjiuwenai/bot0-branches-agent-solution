@@ -48,10 +48,24 @@ final class LlmClient {
         if (!envPresent()) {
             throw new IllegalStateException("OPENJIUWEN env not set");
         }
+        // Thinking control — env LLM_THINKING selects the param shape per provider/model
+        // (mirrors pev/e2e/LlmClient so react-rails e2e can run the same cross-model matrix).
+        //   glm-off (default): "thinking":{"type":"disabled"} — structured e2e tasks disable GLM thinking
+        //   thinking-on / thinking-off: "thinking":{"type":"enabled"/"disabled"} (GLM / DeepSeek)
+        //   qwen-on / qwen-off: "enable_thinking":true/false (Qwen3 via OpenRouter)
+        //   none: emit no thinking param (model default)
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
+        String thinkingJson = switch (mode) {
+            case "qwen-off" -> "\"enable_thinking\":false";
+            case "qwen-on" -> "\"enable_thinking\":true";
+            case "thinking-on" -> "\"thinking\":{\"type\":\"enabled\"}";
+            case "thinking-off" -> "\"thinking\":{\"type\":\"disabled\"}";
+            case "none" -> "";
+            default -> "\"thinking\":{\"type\":\"disabled\"}";
+        };
         String body = """
-                {"model":"%s","messages":[{"role":"user","content":%s}],
-                "temperature":0.3,"thinking":{"type":"disabled"}}
-                """.replace(System.lineSeparator(), "").formatted(MODEL, jsonString(userPrompt));
+                {"model":"%s","messages":[{"role":"user","content":%s}],"temperature":0.3%s%s}
+                """.formatted(MODEL, jsonString(userPrompt), thinkingJson.isEmpty() ? "" : ",", thinkingJson);
         HttpRequest req = HttpRequest.newBuilder().uri(URI.create(BASE + PATH)).header("Authorization", "Bearer " + KEY)
                 .header("Content-Type", "application/json").timeout(Duration.ofSeconds(300))
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();

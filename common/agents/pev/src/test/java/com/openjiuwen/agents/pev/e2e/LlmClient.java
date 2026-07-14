@@ -10,6 +10,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Minimal OpenAI-compatible chat-completions client for the real-LLM e2e test.
@@ -45,6 +51,9 @@ final class LlmClient {
     String chat(String userPrompt) {
         if (!envPresent()) {
             throw new IllegalStateException("OPENJIUWEN_API_KEY / BASE_URL not set");
+        }
+        if ("true".equalsIgnoreCase(System.getenv("LLM_STREAM"))) {
+            return chatStreaming(userPrompt);
         }
         // Thinking control — env LLM_THINKING selects the param shape per provider/model:
         //   glm-off (default): GLM-5.2 "thinking":{"type":"disabled"} — GLM-5.2 thinking on complex
@@ -93,6 +102,119 @@ final class LlmClient {
             throw new LlmUnavailableException("LLM call interrupted: " + e.getMessage(), e);
         } catch (RuntimeException e) {
             throw e;
+        }
+    }
+
+    /**
+     * Experimental streaming chat (env LLM_STREAM=true). Borrows openjiuwen-java's idle-timeout
+     * practice (commit 2edcd8f): SSE stream + idle-timeout replaces fixed total timeout.
+     * <ul>
+     *   <li>chunk 持续流 → 无限等（健康慢合法，如 GLM-4.7 reasoning decode）</li>
+     *   <li>chunk 间隔 &gt; 30s → 判卡死，快速 fail（早期预判 0-byte / 网关死）</li>
+     * </ul>
+     * Distinguishes "slow but alive" from "stuck" — the 感知层 fix (framework-llm-timeout-diagnosis).
+     * Absolute cap 600s prevents runaway; idle-timeout handles real stuck detection.
+     */
+    String chatStreaming(String userPrompt) {
+        if (!envPresent()) {
+            throw new IllegalStateException("OPENJIUWEN_API_KEY / BASE_URL not set");
+        }
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
+        String thinkingJson = switch (mode) {
+            case "qwen-off" -> "\"enable_thinking\":false";
+            case "qwen-on" -> "\"enable_thinking\":true";
+            case "thinking-on" -> "\"thinking\":{\"type\":\"enabled\"}";
+            case "thinking-off" -> "\"thinking\":{\"type\":\"disabled\"}";
+            case "none" -> "";
+            default -> "\"thinking\":{\"type\":\"disabled\"}";
+        };
+        String body = "{\"model\":\"" + MODEL + "\",\"messages\":[{\"role\":\"user\",\"content\":"
+                + jsonString(userPrompt) + "}],\"temperature\":0.3,\"stream\":true"
+                + (thinkingJson.isEmpty() ? "" : "," + thinkingJson) + "}";
+        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(BASE + PATH))
+                .header("Authorization", "Bearer " + KEY).header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(600)).POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        long[] lastChunk = { System.currentTimeMillis() };
+        AtomicBoolean idleTimedOut = new AtomicBoolean(false);
+        StringBuilder content = new StringBuilder();
+        StringBuilder reasoning = new StringBuilder();
+        try {
+            HttpResponse<InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+            if (resp.statusCode() != 200) {
+                throw new LlmUnavailableException(
+                        "LLM HTTP " + resp.statusCode() + ": " + safeBody(readAll(resp.body())));
+            }
+            final InputStream is = resp.body();
+            Thread idleWatcher = new Thread(() -> {
+                while (true) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    if (System.currentTimeMillis() - lastChunk[0] > 30_000L) {
+                        idleTimedOut.set(true);
+                        try {
+                            is.close();
+                        } catch (Exception ignored) {
+                            // best-effort unblock the read loop
+                        }
+                        return;
+                    }
+                }
+            });
+            idleWatcher.setDaemon(true);
+            idleWatcher.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lastChunk[0] = System.currentTimeMillis();
+                if (!line.startsWith("data:")) {
+                    continue;
+                }
+                String data = line.substring(5).trim();
+                if ("[DONE]".equals(data)) {
+                    break;
+                }
+                String c = extractJsonStringField(data, "content");
+                if (!c.isEmpty()) {
+                    content.append(c);
+                }
+                String r = extractJsonStringField(data, "reasoning_content");
+                if (!r.isEmpty()) {
+                    reasoning.append(r);
+                }
+            }
+            idleWatcher.interrupt();
+            if (idleTimedOut.get()) {
+                throw new LlmUnavailableException("LLM idle-timeout: 30s 无 chunk（卡死/0-byte 预兆）");
+            }
+            if (content.length() > 0) {
+                return content.toString();
+            }
+            if (reasoning.length() > 0) {
+                return reasoning.toString();
+            }
+            return "";
+        } catch (LlmUnavailableException e) {
+            throw e;
+        } catch (HttpTimeoutException e) {
+            throw new LlmUnavailableException("LLM absolute cap (600s): " + e.getMessage(), e);
+        } catch (IOException e) {
+            if (idleTimedOut.get()) {
+                throw new LlmUnavailableException("LLM idle-timeout: 30s 无 chunk（卡死/0-byte 预兆）");
+            }
+            throw new LlmUnavailableException("LLM I/O error: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            throw new LlmUnavailableException("LLM stream interrupted: " + e.getMessage(), e);
+        }
+    }
+
+    private static String readAll(InputStream is) {
+        try {
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "(unreadable)";
         }
     }
 

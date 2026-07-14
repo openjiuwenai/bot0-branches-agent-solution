@@ -38,7 +38,7 @@ class CriteriaVerificationRailRealLlmE2eTest {
                 .clientProvider("OpenAI").apiKey(System.getenv("OPENJIUWEN_API_KEY"))
                 .apiBase(System.getenv("OPENJIUWEN_BASE_URL")).verifySsl(false).build();
         String effectiveModel = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-pro");
-        var reqCfg = ModelRequestConfig.builder().modelName(effectiveModel).temperature(0.3).maxTokens(200).build();
+        var reqCfg = ModelRequestConfig.builder().modelName(effectiveModel).temperature(0.3).maxTokens(4000).build();
         ToolCallingEnforcingModel model = new ToolCallingEnforcingModel(cliCfg, reqCfg);
 
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("e2e-agent").build());
