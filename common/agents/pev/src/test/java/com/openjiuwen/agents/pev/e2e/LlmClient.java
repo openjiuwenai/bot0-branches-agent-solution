@@ -15,7 +15,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Minimal OpenAI-compatible chat-completions client for the real-LLM e2e test.
@@ -114,27 +118,16 @@ final class LlmClient {
      * </ul>
      * Distinguishes "slow but alive" from "stuck" — the 感知层 fix (framework-llm-timeout-diagnosis).
      * Absolute cap 600s prevents runaway; idle-timeout handles real stuck detection.
+     *
+     * @param userPrompt user prompt to send to the LLM
+     * @return assistant content, or reasoning_content fallback when content is empty
      */
     String chatStreaming(String userPrompt) {
         if (!envPresent()) {
             throw new IllegalStateException("OPENJIUWEN_API_KEY / BASE_URL not set");
         }
-        String mode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
-        String thinkingJson = switch (mode) {
-            case "qwen-off" -> "\"enable_thinking\":false";
-            case "qwen-on" -> "\"enable_thinking\":true";
-            case "thinking-on" -> "\"thinking\":{\"type\":\"enabled\"}";
-            case "thinking-off" -> "\"thinking\":{\"type\":\"disabled\"}";
-            case "none" -> "";
-            default -> "\"thinking\":{\"type\":\"disabled\"}";
-        };
-        String body = "{\"model\":\"" + MODEL + "\",\"messages\":[{\"role\":\"user\",\"content\":"
-                + jsonString(userPrompt) + "}],\"temperature\":0.3,\"stream\":true"
-                + (thinkingJson.isEmpty() ? "" : "," + thinkingJson) + "}";
-        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(BASE + PATH))
-                .header("Authorization", "Bearer " + KEY).header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(600)).POST(HttpRequest.BodyPublishers.ofString(body)).build();
-        long[] lastChunk = { System.currentTimeMillis() };
+        HttpRequest req = buildStreamRequest(userPrompt);
+        AtomicLong lastChunk = new AtomicLong(System.currentTimeMillis());
         AtomicBoolean idleTimedOut = new AtomicBoolean(false);
         StringBuilder content = new StringBuilder();
         StringBuilder reasoning = new StringBuilder();
@@ -144,58 +137,22 @@ final class LlmClient {
                 throw new LlmUnavailableException(
                         "LLM HTTP " + resp.statusCode() + ": " + safeBody(readAll(resp.body())));
             }
-            final InputStream is = resp.body();
-            Thread idleWatcher = new Thread(() -> {
-                while (true) {
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        return;
-                    }
-                    if (System.currentTimeMillis() - lastChunk[0] > 30_000L) {
-                        idleTimedOut.set(true);
-                        try {
-                            is.close();
-                        } catch (Exception ignored) {
-                            // best-effort unblock the read loop
-                        }
-                        return;
-                    }
+            try (InputStream is = resp.body();
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                lastChunk.set(System.currentTimeMillis());
+                ScheduledExecutorService idleWatcher = startIdleWatcher(is, lastChunk, idleTimedOut);
+                try {
+                    readSseChunks(reader, lastChunk, content, reasoning);
+                } finally {
+                    idleWatcher.shutdownNow();
                 }
-            });
-            idleWatcher.setDaemon(true);
-            idleWatcher.start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                lastChunk[0] = System.currentTimeMillis();
-                if (!line.startsWith("data:")) {
-                    continue;
-                }
-                String data = line.substring(5).trim();
-                if ("[DONE]".equals(data)) {
-                    break;
-                }
-                String c = extractJsonStringField(data, "content");
-                if (!c.isEmpty()) {
-                    content.append(c);
-                }
-                String r = extractJsonStringField(data, "reasoning_content");
-                if (!r.isEmpty()) {
-                    reasoning.append(r);
+                if (idleTimedOut.get()) {
+                    throw new LlmUnavailableException("LLM idle-timeout: 30s 无 chunk（卡死/0-byte 预兆）");
                 }
             }
-            idleWatcher.interrupt();
-            if (idleTimedOut.get()) {
-                throw new LlmUnavailableException("LLM idle-timeout: 30s 无 chunk（卡死/0-byte 预兆）");
-            }
-            if (content.length() > 0) {
-                return content.toString();
-            }
-            if (reasoning.length() > 0) {
-                return reasoning.toString();
-            }
-            return "";
+            return content.length() > 0 ? content.toString()
+                    : reasoning.length() > 0 ? reasoning.toString() : "";
         } catch (LlmUnavailableException e) {
             throw e;
         } catch (HttpTimeoutException e) {
@@ -210,10 +167,79 @@ final class LlmClient {
         }
     }
 
+    private HttpRequest buildStreamRequest(String userPrompt) {
+        String thinkingJson = thinkingJsonForMode(System.getenv().getOrDefault("LLM_THINKING", "glm-off"));
+        String body = "{\"model\":\"" + MODEL + "\",\"messages\":[{\"role\":\"user\",\"content\":"
+                + jsonString(userPrompt) + "}],\"temperature\":0.3,\"stream\":true"
+                + (thinkingJson.isEmpty() ? "" : "," + thinkingJson) + "}";
+        return HttpRequest.newBuilder().uri(URI.create(BASE + PATH))
+                .header("Authorization", "Bearer " + KEY).header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(600)).POST(HttpRequest.BodyPublishers.ofString(body)).build();
+    }
+
+    private static String thinkingJsonForMode(String mode) {
+        return switch (mode) {
+            case "qwen-off" -> "\"enable_thinking\":false";
+            case "qwen-on" -> "\"enable_thinking\":true";
+            case "thinking-on" -> "\"thinking\":{\"type\":\"enabled\"}";
+            case "thinking-off" -> "\"thinking\":{\"type\":\"disabled\"}";
+            case "none" -> "";
+            default -> "\"thinking\":{\"type\":\"disabled\"}";
+        };
+    }
+
+    private static ScheduledExecutorService startIdleWatcher(InputStream is, AtomicLong lastChunk,
+            AtomicBoolean idleTimedOut) {
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread watcher = new Thread(r, "pev-llm-idle-watcher");
+            watcher.setDaemon(true);
+            watcher.setUncaughtExceptionHandler((thread, ex) -> {
+            });
+            return watcher;
+        });
+        scheduler.scheduleAtFixedRate(() -> {
+            if (System.currentTimeMillis() - lastChunk.get() > 30_000L) {
+                idleTimedOut.set(true);
+                try {
+                    is.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }, 1L, 1L, TimeUnit.SECONDS);
+        return scheduler;
+    }
+
+    private static void readSseChunks(BufferedReader reader, AtomicLong lastChunk, StringBuilder content,
+            StringBuilder reasoning) throws IOException {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            lastChunk.set(System.currentTimeMillis());
+            if (!line.startsWith("data:")) {
+                continue;
+            }
+            String data = line.substring(5).trim();
+            if ("[DONE]".equals(data)) {
+                break;
+            }
+            appendDelta(data, content, reasoning);
+        }
+    }
+
+    private static void appendDelta(String data, StringBuilder content, StringBuilder reasoning) {
+        String contentDelta = extractJsonStringField(data, "content");
+        if (!contentDelta.isEmpty()) {
+            content.append(contentDelta);
+        }
+        String reasoningDelta = extractJsonStringField(data, "reasoning_content");
+        if (!reasoningDelta.isEmpty()) {
+            reasoning.append(reasoningDelta);
+        }
+    }
+
     private static String readAll(InputStream is) {
         try {
             return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception e) {
+        } catch (IOException e) {
             return "(unreadable)";
         }
     }
