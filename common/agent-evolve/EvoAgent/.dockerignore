@@ -1,0 +1,39 @@
+# ── 排除一切 Dockerfile 不 COPY 的内容，避免上下文膨胀 ──
+# Dockerfile 仅需: pyproject.toml, vendor/, src/, scenarios/, skills/
+
+# Python 运行时/缓存
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# 本地运行产物
+logs/
+workspace/
+bundle/
+*.tar
+*.tar.gz
+server.log*
+
+# 测试/文档/示例（不入镜像）
+tests/
+docs/
+examples/
+
+# 工具/编辑器元数据
+.claude/
+.trae/
+.cursor/
+.git/
+.gitignore
+.gitattributes
+
+# 配置模板（不入镜像，由 deployment 挂载）
+.env
+.env.example
+
+# 部署脚本本身不进镜像
+deployment/

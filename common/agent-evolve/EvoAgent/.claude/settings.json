@@ -1,0 +1,88 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/load_handoff.py\"",
+            "timeout": 10,
+            "statusMessage": "加载 handoff 上下文..."
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'CRITICAL RULES REMINDER: (1) Run make lint before commit. (2) Python: ruff, mypy strict, dataclass(frozen=True). (3) Soft file limit: 500 lines. (4) Git: conventional commits, no dangerous ops. (5) Protected: workspace/, .venv/, __pycache__/. (6) Module deps: types.py and config.py are leaf modules; optimizer_runner.py is the only orchestrator.'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/ensure-feature-branch.sh\"",
+            "statusMessage": "Checking branch policy..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
+            "statusMessage": "Checking protected files..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/check-file-length.sh\"",
+            "statusMessage": "Checking file length..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/ensure-feature-branch.sh\"",
+            "statusMessage": "Checking branch policy..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous-git.sh\"",
+            "statusMessage": "Checking git policy..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/fix-crlf.sh\"",
+            "statusMessage": "Normalizing line endings..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/auto-format.sh\"",
+            "timeout": 15,
+            "statusMessage": "Auto-formatting..."
+          }
+        ]
+      }
+    ]
+  }
+}
