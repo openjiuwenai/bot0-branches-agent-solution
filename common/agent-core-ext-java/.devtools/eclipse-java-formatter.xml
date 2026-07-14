@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<profiles version="21">
+  <!--
+    LOCAL-ONLY Java formatting profile (never committed; under .devtools/).
+    Eclipse JDT formatter profile = same engine the redhat.java VS Code
+    extension uses. Kept LEAN on purpose: only the settings that (a) fix the
+    Huawei white-box G.FMT findings or (b) pin indent/width. Everything else
+    falls back to Eclipse defaults, which is what VS Code already uses.
+  -->
+  <profile kind="CodeFormatterProfile" name="agent-runtime-java-local" version="21">
+    <setting id="org.eclipse.jdt.core.formatter.tabulation.char" value="space"/>
+    <setting id="org.eclipse.jdt.core.formatter.tabulation.size" value="4"/>
+    <setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>
+    <setting id="org.eclipse.jdt.core.formatter.lineSplit" value="120"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_javadoc_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_block_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_line_comments" value="false"/>
+    <setting id="org.eclipse.jdt.core.formatter.comment.format_header" value="false"/>
+    <!-- G.FMT.13: no space inside array-initializer braces  {"a","b"}  not  { "a", "b" } -->
+    <setting id="org.eclipse.jdt.core.formatter.insert_space_after_opening_brace_in_array_initializer" value="do not insert"/>
+    <setting id="org.eclipse.jdt.core.formatter.insert_space_before_closing_brace_in_array_initializer" value="do not insert"/>
+    <!-- G.FMT.12: no blank line before the first class member -->
+    <setting id="org.eclipse.jdt.core.formatter.blank_lines_before_first_class_body_declaration" value="0"/>
+  </profile>
+</profiles>

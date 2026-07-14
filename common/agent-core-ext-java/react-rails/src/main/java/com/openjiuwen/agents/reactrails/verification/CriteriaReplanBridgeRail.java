@@ -1,0 +1,236 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.agents.reactrails.verification;
+
+import com.openjiuwen.agents.reactrails.replan.ReplanRail;
+import com.openjiuwen.agents.reactrails.state.RailInvocationState;
+import com.openjiuwen.agents.reactrails.types.Violation;
+import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
+import com.openjiuwen.core.foundation.llm.schema.ToolCall;
+import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
+import com.openjiuwen.core.singleagent.rail.AgentRail;
+import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Criteria verification bridge rail — instead of immediate degrade on verify
+ * failure, injects steering correction and retries. Only forceFinish(degraded)
+ * after maxRetries exhausted.
+ *
+ * <p>Drop-in replacement for {@link CriteriaVerificationRail}
+ * — same constructor signature + ReplanRail for shared counter.
+ *
+ * <p><b>Mechanism</b> (runtime-verified on agent-core-java 0.1.13):
+ * <ul>
+ *   <li>afterModelCall fires INSIDE railedModelCall (callModel offset 687).</li>
+ *   <li>ctx.pushSteering(String) queues string; consumed NEXT iteration's
+ *       injectPendingSteering (offset 675) → UserMessage → ModelContext.</li>
+ *   <li>requestForceFinish and pushSteering are independent — call both or just one.</li>
+ *   <li>consumeForceFinish(700) fires AFTER full afterModelCall returns.</li>
+ * </ul>
+ *
+ * <p>Three exit paths:
+ * <ul>
+ *   <li><b>verify pass</b> → requestForceFinish(verified=true) — lock correct terminal state.</li>
+ *   <li><b>verify fail + retries remaining</b> → pushSteering(correctionHint),
+ *       no forceFinish. Next loop iteration injects the steering into LLM context for retry.</li>
+ *   <li><b>verify fail + retries exhausted</b> → requestForceFinish(degraded=true, unmet=violations)
+ *       — honest degrade terminal.</li>
+ * </ul>
+ *
+ * @since 2026-07
+ */
+public class CriteriaReplanBridgeRail extends AgentRail {
+    /** Result key for checked output text. */
+    public static final String OUTPUT_KEY = "output";
+
+    /** Result key for criteria verification status. */
+    public static final String VERIFIED_KEY = "criteria_verified";
+
+    /** Result key for criteria verification result. */
+    public static final String RESULT_KEY = "criteria_result";
+
+    /** Result key for degraded terminal state. */
+    public static final String DEGRADED_KEY = "degraded";
+
+    /** Result key for unmet criteria. */
+    public static final String UNMET_KEY = "unmet_criteria";
+
+    /** Result key for criteria retry count. */
+    public static final String RETRY_COUNT_KEY = "criteria_retry_count";
+
+    private static final String LINE_SEPARATOR = System.lineSeparator();
+
+    private final CriteriaVerifier verifier;
+    private final List<String> successCriteria;
+    private final ReplanRail replanRail;
+    private final String stateKey = RailInvocationState.newKey(CriteriaReplanBridgeRail.class);
+
+    /**
+     * Creates a bridge rail backed by a verifier and shared replan budget.
+     *
+     * @param verifier         the external-judge verifier
+     * @param successCriteria  the criteria to check against the final output
+     * @param replanRail       shared replan counter (used for overlap budget)
+     */
+    public CriteriaReplanBridgeRail(CriteriaVerifier verifier, List<String> successCriteria, ReplanRail replanRail) {
+        this.verifier = verifier;
+        this.successCriteria = List.copyOf(successCriteria);
+        this.replanRail = replanRail;
+    }
+
+    /**
+     * 模型回调钩子：终态答案走 verify → 三出口门，工具轮则累积决策历史。
+     *
+     * <p>三出口：
+     * <ol>
+     *   <li>verify pass → forceFinish(verified=true)</li>
+     *   <li>verify fail + under limit → pushSteering(correction), 不 forceFinish</li>
+     *   <li>verify fail + over limit → forceFinish(degraded=true)</li>
+     * </ol>
+     *
+     * @param ctx callback context carrying model-call inputs
+     */
+    @Override
+    public void afterModelCall(AgentCallbackContext ctx) {
+        if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
+            return;
+        }
+        if (!(inputs.getResponse() instanceof AssistantMessage msg)) {
+            return;
+        }
+
+        if (isFinalAnswer(msg)) {
+            // Final answer → verify → triple-exit gate
+            String output = contentOf(msg);
+            String historyStr = String.join(" | ", state(ctx).decisionHistory);
+            List<Violation> violations = verifier.verify(successCriteria, output, historyStr);
+
+            if (violations.isEmpty()) {
+                // Exit 1: Pass → lock verified terminal
+                ctx.requestForceFinish(verifiedResult(output));
+            } else {
+                // Exit 2 & 3: Fail → delegate counting to ReplanRail (shared budget)
+                boolean isOverLimit = replanRail.incrementAndCheckOverLimit(ctx);
+                if (isOverLimit) {
+                    // Exit 3: Retries exhausted → forceFinish degraded
+                    ctx.requestForceFinish(degradedResult(ctx, output, violations));
+                } else {
+                    // Exit 2: Retries remain → push steering hint, continue loop
+                    ctx.pushSteering(buildCorrectionHint(violations));
+                }
+            }
+        } else {
+            // Tool-call round → accumulate history
+            accumulateToolCalls(state(ctx), msg);
+        }
+    }
+
+    /**
+     * IFF 范式：剥离 gradient metadata → 降级到通用纠正提示 → LLM 看不到精确定位的缺失维度 → RED。
+     *
+     * <p>当 violations 携带 gradient metadata（来自 {@code RuleBasedCriteriaVerifier}）时，
+     * 生成维度级精确定位的纠正提示（区分已覆盖/缺失维度）；否则回退到通用提示格式。
+     *
+     * @param violations unmet criteria from the verifier
+     * @return steering hint for the next model iteration
+     */
+    private static String buildCorrectionHint(List<Violation> violations) {
+        boolean hasGradient = violations.stream()
+                .anyMatch(v -> v.metadata() != null && v.metadata().containsKey("isPartial"));
+        if (hasGradient) {
+            return buildGradientHint(violations);
+        }
+        return "您的回答未能满足以下成功标准，请据此修改后重新回答：" + LINE_SEPARATOR + violations.stream()
+                .map(v -> "- " + v.criterion() + ": " + v.reason()).collect(Collectors.joining(LINE_SEPARATOR));
+    }
+
+    /**
+     * 梯度纠正提示 — 利用 Violation.metadata 中的梯度信息生成精确定位的 steering。
+     *
+     * <p>Three formats based on metadata:
+     * <ul>
+     *   <li>isPartial=true → "已覆盖: X, 请补充: Y" (最小化 LLM 重新开始倾向)</li>
+     *   <li>isPartial=false + allDimensions → "需要覆盖的维度: X、Y、Z"</li>
+     *   <li>fallback → 逐条显示 criterion: reason</li>
+     * </ul>
+     *
+     * @param violations unmet criteria with optional gradient metadata
+     * @return gradient-aware steering hint
+     */
+    @SuppressWarnings("unchecked")
+    private static String buildGradientHint(List<Violation> violations) {
+        StringBuilder sb = new StringBuilder("您的回答未能完全满足以下标准：").append(LINE_SEPARATOR);
+        for (Violation v : violations) {
+            Map<String, Object> meta = v.metadata();
+            sb.append("· ").append(v.criterion()).append(LINE_SEPARATOR);
+            if (meta != null && (boolean) meta.getOrDefault("isPartial", false)) {
+                List<String> covered = (List<String>) meta.getOrDefault("covered", List.of());
+                List<String> missing = (List<String>) meta.getOrDefault("missing", List.of());
+                if (!covered.isEmpty()) {
+                    sb.append("  ✅ 已覆盖: ").append(String.join("、", covered)).append(LINE_SEPARATOR);
+                }
+                sb.append("  ❌ 请补充: ").append(String.join("、", missing)).append(LINE_SEPARATOR);
+            } else if (meta != null && meta.containsKey("allDimensions")) {
+                List<String> allDims = (List<String>) meta.get("allDimensions");
+                sb.append("  需要覆盖的维度: ").append(String.join("、", allDims)).append(LINE_SEPARATOR);
+            } else {
+                sb.append("  ").append(v.reason()).append(LINE_SEPARATOR);
+            }
+        }
+        sb.append("如需调整当前分析方法或方向，请调用 __replan__ 工具。");
+        return sb.toString();
+    }
+
+    private static boolean isFinalAnswer(AssistantMessage msg) {
+        return msg.getToolCalls() == null || msg.getToolCalls().isEmpty();
+    }
+
+    private static void accumulateToolCalls(InvocationState state, AssistantMessage msg) {
+        if (msg.getToolCalls() == null) {
+            return;
+        }
+        for (ToolCall tc : msg.getToolCalls()) {
+            state.decisionHistory.add(tc.getName() + "(" + tc.getArguments() + ")");
+        }
+    }
+
+    private InvocationState state(AgentCallbackContext ctx) {
+        return RailInvocationState.get(ctx, stateKey, InvocationState.class, InvocationState::new);
+    }
+
+    private static String contentOf(AssistantMessage msg) {
+        String content = msg.getContentAsString();
+        return content != null ? content : "";
+    }
+
+    private static Map<String, Object> verifiedResult(String output) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(OUTPUT_KEY, output);
+        result.put(VERIFIED_KEY, true);
+        result.put(RESULT_KEY, "PASS");
+        return result;
+    }
+
+    private Map<String, Object> degradedResult(AgentCallbackContext ctx, String output, List<Violation> violations) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(OUTPUT_KEY, output);
+        result.put(VERIFIED_KEY, false);
+        result.put(RESULT_KEY, "FAIL");
+        result.put(DEGRADED_KEY, true);
+        result.put(RETRY_COUNT_KEY, replanRail.replanCount(ctx));
+        result.put(UNMET_KEY, violations.stream().map(v -> v.criterion() + ": " + v.reason()).toList());
+        return result;
+    }
+
+    private static final class InvocationState {
+        private final List<String> decisionHistory = new ArrayList<>();
+    }
+}
