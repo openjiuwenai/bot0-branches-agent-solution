@@ -1,0 +1,21 @@
+server:
+  port: ${GATEWAY_PORT:18095}
+
+versatile-orchestration:
+  gateway:
+    plan-agent-base-url: ${PLAN_AGENT_BASE_URL:http://127.0.0.1:18093}
+    # Downstream wire format: a2a (default, JSON-RPC SendStreamingMessage + INPUT_REQUIRED taskId
+    # resume) or rest (POST /v1/query, conversation-id shadow-task routing, no taskId cache).
+    plan-agent-protocol: ${PLAN_AGENT_PROTOCOL:a2a}
+    forward-header-whitelist:
+      - stream
+      - x-invoke-mode
+      - x-language
+    # Fixed EDPA envelope fields stamped onto every request when rebuilding the full body
+    # from the inbound custom_data payload.
+    role-name: ${EDPA_ROLE_NAME:手机银行}
+    role-id: ${EDPA_ROLE_ID:1}
+    timeout: ${EDPA_TIMEOUT:300}
+    # REST-only caller identity (top-level /v1/query body fields; unused under a2a).
+    user-id: ${EDPA_REST_USER_ID:demo-user}
+    space-id: ${EDPA_REST_SPACE_ID:demo-space}
