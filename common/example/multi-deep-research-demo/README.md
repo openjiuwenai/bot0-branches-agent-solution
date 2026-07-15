@@ -117,10 +117,37 @@ multi-deep-research-demo/
 | URL 可达性验证 | Harness tool | `UrlVerifyRail` → Python urllib，在沙箱执行 | LLM 调 `verify_urls` |
 | 长期记忆读写 | MemoryRail tools | core-java 提供 `write_memory` / `read_memory` / `memory_search` / `memory_get` / `edit_memory` | LLM 显式调用或 rail 自动写 |
 | **确定性落盘** | Rail 生命周期钩子 | `AutoPersistMemoryRail.afterInvoke` | 每次 `result_type=="answer"` 自动写 `memory/answer-*.md` + `reports/answer-*.md` |
-| 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application-redis-checkpointer.yml`） | 同 `conversationId` 请求走同一状态 |
+| 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application-redis-checkpointer.yml`，支持 standalone / cluster） | 同 `conversationId` 请求走同一状态 |
 | 中文字体 | 沙箱代码内置 | `SandboxRail` Python 头部 | Noto Sans CJK SC → Microsoft YaHei → DejaVu Sans 降级 |
 
 `search-agent` 支持 `stub` profile 用本地 fixture 演示，无需 Tavily key；prod profile 需要 `TAVILY_API_KEY`。
+
+### Sub-agent 路由约束（root prompt 硬规则）
+
+Root DeepAgent 面对 A2A remote tool（`search-agent`）时，`system-prompt` 里有两条硬约束，用来避免"父 agent 越权改写用户语义"和"子 agent 在不该问的时候乱搜"两类失败：
+
+**（1）`remoteInput` 必须 byte-for-byte 等于用户原句** —— root 是路由器，不是改写器。以下操作被 prompt 明确列为**禁止**：
+
+- 追加用户没说的限定词（"API"、"官方"、"官网文档"��"SDK"、"文档"）
+- 追加年份 / 季度 / "最新"（用户没说就不加）
+- 追加语言提示或翻译任何片段
+- 把一个用户请求拆成多条关键词子查询，或把两个用户请求合并成一条
+- 删掉礼貌用语 / 招呼语（"你好,"、"请"）
+- 自己解决歧义（比如把 "DeepSeek 定价" 补成 "DeepSeek V3 定价"）—— 应原样透传，交给 sub-agent 触发 `ask_user`
+
+对应源码：`agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/DeepResearchProperties.java` 的 `system-prompt` "HARD CONSTRAINT on remoteInput" 段。
+
+**（2）`search-agent` 在明确歧义模式下必须先 `ask_user`，不许先 `web_search`**：
+
+- 供应商 + 产品家族但缺 SKU（`DeepSeek 官网报价`、`DeepSeek API 定价`、`DeepSeek 模型价格`）
+- 同名多实体（`Claude` 可能指 API tier 或消费端订阅）
+- 时敏词但缺时间限定（`最新价格` 但没写年份/季度）
+
+**关键点**：query 里带 "API"、"官方"、"官网文档"、"2025" 这种限定词**不算解决了歧义**——只有具体的 model / SKU / version 才算。这块规则在 `agent-search/src/main/java/com/openjiuwen/example/deepresearch/search/SearchAgentProperties.java` 的 "Ambiguity rules (HARD)" 段。
+
+除以上明列的三种模式，`search-agent` 一律**优先 `web_search`**，不许自造新歧义。
+
+**（3）`web_search` 工具的注册路径**：`SearchAgentFactory` 用 `Runner.resourceMgr().addTool(webSearchTool, agent.getCard().getId())` 把工具注册到 agent-scoped 资源管理器（而不是全局），随后向 `agent.getAbilityManager().add(toolCard)` 补挂 card。这样多个 agent 各自持有自己的工具实例，jsonrpc getTask 也能正确回显 tool card。
 
 ---
 
@@ -207,13 +234,59 @@ grep -E "Started DeepResearchRuntimeApplication|Discovered remote agent" deep-re
 
 启用 Redis checkpointer：
 
+Runtime 侧的 Redis 中间件（`agent-runtime-java` 提供的 `RuntimeRedisClient` SPI）同时支持 **Redis 单节点（standalone）** 和 **Redis Cluster** 两种部署形态，通过 `REDIS_TYPE` 环境变量切换；两种形态共享同一份 yml/env 骨架，只在 endpoint 描述上有差异：
+
+- **standalone**：`REDIS_TYPE=standalone` + `REDIS_HOST` + `REDIS_PORT`（+ 可选 `REDIS_DB` / `REDIS_PASSWORD`）
+- **cluster**：`REDIS_TYPE=cluster` + `REDIS_NODES=host1:port1,host2:port2,...`（`database` 字段在集群下会被自动忽略并打出 `databaseIgnored=` 警告）
+
+两个 runtime 都激活 `redis-checkpointer` profile 即可共享同一 Redis 后端；库层代码只通过 SPI 访问 Redis，切换 standalone/cluster 不涉及任何 solution 侧代码改动。
+
 ```bash
+# 两个 runtime 共享同一个 Redis 实例；env 一次设置，进程分别激活 profile
+export REDIS_TYPE=${REDIS_TYPE:-standalone}       # standalone | cluster（cluster 需再配 REDIS_NODES）
 export REDIS_HOST=<host>
 export REDIS_PORT=<port>
 export REDIS_PASSWORD=<plaintext-or-blank>
+export CHECKPOINTER_TTL_SECONDS=86400              # 1 天；yml 默认同值
+
+# search-runtime（18091）
+java -jar agent-search-runtime-*.jar \
+  --spring.profiles.active=redis-checkpointer
+
+# deep-research-runtime（18090）
 java -jar agent-deep-research-runtime-0.1.0-SNAPSHOT.jar \
   --spring.profiles.active=redis-checkpointer
 ```
+
+Redis Cluster 部署时把 `REDIS_TYPE` 切成 `cluster`，并用 Spring Boot 的 indexed 语法追加 `nodes[N]` 参数（每个节点一条 `host:port`）：
+
+```bash
+export REDIS_TYPE=cluster
+export REDIS_PASSWORD=              # 集群无密码时留空
+
+java -jar agent-search-runtime-*.jar \
+  --spring.profiles.active=redis-checkpointer \
+  --openjiuwen.service.middleware.redis.default.nodes[0]=<host>:7001 \
+  --openjiuwen.service.middleware.redis.default.nodes[1]=<host>:7002 \
+  --openjiuwen.service.middleware.redis.default.nodes[2]=<host>:7003 \
+  --openjiuwen.service.middleware.redis.default.nodes[3]=<host>:7004 \
+  --openjiuwen.service.middleware.redis.default.nodes[4]=<host>:7005 \
+  --openjiuwen.service.middleware.redis.default.nodes[5]=<host>:7006
+```
+
+`deep-research-runtime` 同理。集群模式下 `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` 无效（`database` 会打出 `databaseIgnored=` 警告并被忽略），nodes 列表才是权威来源；节点数量、host:port 格式由 runtime 侧 `RedisConnectionAssembler` 校验，任一节点缺失或格式非法都会 fail-fast 阻止 Spring Boot 启动。
+
+启动后每个进程的日志里应能 grep 到一行 `RedisDatasourceDiagnostics` 输出，形如：
+
+```
+Runtime Redis datasource selected: redis-ref=default, endpoint-type=standalone,
+  RuntimeRedisClient=JedisPooledRuntimeRedisClient, ttl-seconds=86400,
+  ref=default, type=standalone, host=<host>, port=<port>, database=0,
+  timeoutMs=3000, passwordConfigured=true
+```
+
+`passwordConfigured` 只暴露 `true/false`，不会打印明文口令。
+Cluster 模式下 `database` 会被自动忽略，日志会额外多一行 `databaseIgnored=` 警告。
 
 ### 停止
 
@@ -374,7 +447,43 @@ $reader.ReadToEnd()
 | `openjiuwen.demo.deep-research.workspace-path` | `target/deep-research-workspace` | 记忆和报告落盘根目录 |
 | `openjiuwen.demo.deep-research.system-prompt` | 内置 | 含 A2A 调用规范、memory 工具文档、sandbox 工具契约、迭代预算硬规则 |
 
-`application-redis-checkpointer.yml` 里的 Redis 字段（`openjiuwen.service.middleware.redis.default.*`）通过 `--spring.profiles.active=redis-checkpointer` 激活。
+`application-redis-checkpointer.yml` 里的 Redis 字段（`openjiuwen.service.middleware.redis.default.*`、`openjiuwen.service.middleware.checkpointer.ttl-seconds`）通过 `--spring.profiles.active=redis-checkpointer` 激活。`agent-search-runtime` 有一份镜像 profile，env 变量同名，两个 runtime 共享同一个 Redis 实例（同 host/port/db/password）。
+
+### Redis key 命名与多 runtime 共用同一 Redis 的隔离
+
+启用 Redis checkpointer 后，两类 key 会被写入 Redis：
+
+**（1）A2A 任务 key**（`RedisTaskStore`，任务生命周期）
+
+- 格式：`a2a:task:<taskId>`
+- `taskId` 由 A2A SDK 生成，是全局唯一的 UUID（形如 `c013a48b-d9a8-46d2-8774-d6f2dd861246`）
+- **多 runtime 共用同一 Redis 时不会冲突**：UUID 空间足够大
+
+**（2）Checkpointer session state key**（core-java `Checkpointer.buildKeyWithNamespace`，会话状态）
+
+- 格式：`<sessionId>:<namespace>:<entityId>[:<suffix>...]`
+- `sessionId` = A2A `contextId` = 请求 body 里的 `params.message.contextId`（**由客户端传入的字符串**）
+- `namespace` 由 core-java 定死：`agent` / `workflow` / `workflow-graph`
+- 典型形状：
+  - `<sessionId>:agent:<entityId>:<suffix>`（`AgentStorage`）
+  - `<sessionId>:workflow:<workflowId>:<state|update>_blobs[_dump_type]`（`WorkflowStorage`）
+  - `<sessionId>:workflow-graph:<ns>:{DATA_TYPE|DATA_VALUE}`（`GraphStore`）
+
+**是否会跨 runtime 冲突取决于业务方怎么用 `contextId`**：
+
+| 场景 | 行为 |
+|---|---|
+| 同 `contextId` 的 A2A 父子派单（本 demo：deep-research → search-agent） | 故意让父子共享 sessionId 前缀，实现状态共享；子 agent 由 core-java 追加 `_1_1` 之类后缀落到 entityId 上，不会撞车 |
+| 同一应用的不同会话/不同用户 | 只要各自 `contextId` 不同即不冲突（正常业务方生成的 `contextId` 通常带 UUID 或时间戳） |
+| 两个**不相干应用**恰好用了相同 `contextId`（如都手写 `ctx-test-001`） | 会互相踩，checkpointer 数据互相覆盖 |
+
+**跨 runtime 严格隔离的三种做法**（按代价从低到高）：
+
+1. **约定 `contextId` 前缀**：每个应用带自己的前缀（`app-a:ctx-xxx` / `app-b:ctx-xxx`）。零改动，推荐首选。
+2. **每 runtime 独占 Redis database**（只对 standalone 有效；cluster 下 `database` 被自动忽略，启动日志的 `databaseIgnored=N` 就是这事）。
+3. **每 runtime 独占 Redis 实例**（最彻底，但需要多实例部署）。
+
+本 demo 里 deep-research + search-agent 共用同一 Redis 是**必要设计**（父子共享 sessionId 才能跨进程 recall）；如果以后要跟别的应用共用同一 Redis，做法 1 就够了。
 
 ---
 
