@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Env
+.env
+
+# Claude Code (个人配置)
+CLAUDE.local.md
+
+# Workspace (优化产物)
+workspace/
+
+# Cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+
+# docs/ — 只跟踪 rules/、develop/、api/ 和 ROADMAP.md
+docs/*
+!docs/rules/
+!docs/develop/
+!docs/api/
+!docs/ROADMAP.md
+
+/data/*
+!/data/skills/
+!/data/skills/**
+
+# 构建期预下载的依赖 wheel（build 时生成，勿提交）
+vendor/
+
+# CodeGraph 索引（本地代码图谱产物，勿提交）
+.codegraph/
+
+# 离线交付包（镜像 tar / bundle 解压目录 / 分卷归档，打包产物不入仓）
+deployment/agent-adapter-offline-*/
+deployment/agent-adapter-offline-*.tar.gz
+deployment/agent-adapter-offline-*.zip
+deployment/bundle/
+
+# 合并冲突残留
+*.orig

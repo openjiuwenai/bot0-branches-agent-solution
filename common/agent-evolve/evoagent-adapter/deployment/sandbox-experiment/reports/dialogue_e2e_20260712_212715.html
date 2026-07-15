@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"/>
+<title>对话联调报告：轨迹/代理/Skill热更</title>
+<style>
+body{font-family:"Segoe UI","PingFang SC",sans-serif;margin:24px;background:#f6f8fa}
+.summary{padding:12px 16px;border-radius:8px;display:inline-block;margin:12px 0}
+.summary.pass{background:#dafbe1;color:#116329}.summary.fail{background:#ffebe9;color:#a40e26}
+table{border-collapse:collapse;width:100%;background:#fff}
+th,td{border:1px solid #d0d7de;padding:10px;vertical-align:top;text-align:left}
+th{background:#f0f3f6} pre{white-space:pre-wrap;word-break:break-word;margin:0;font-size:12px}
+tr.pass td:first-child{color:#116329;font-weight:700} tr.fail td:first-child{color:#a40e26;font-weight:700}
+</style></head><body>
+<h1>对话联调报告：轨迹采集 / 调用代理 / Skill 热更</h1>
+<p>UTC 2026-07-12T13:27:15.217050+00:00 · 模型 Qwen/Qwen3.5-9B @ https://api.siliconflow.cn/v1（密钥已脱敏）</p>
+<div class="summary pass">总体：PASS（8/8）</div>
+<table><thead><tr><th>结果</th><th>检查项</th><th>耗时</th><th>详情</th><th>证据</th></tr></thead>
+<tbody><tr class='pass'><td>PASS</td><td>jiuwenbox /health</td><td>79 ms</td><td><pre>HTTP 200 {"status":"ok","version":"0.1.0","runtime":"process","landlock_supported":true,"sandboxes_active":1}</pre></td><td><pre>{
+  "status": 200
+}</pre></td></tr><tr class='pass'><td>PASS</td><td>EDPAgent /health</td><td>39 ms</td><td><pre>HTTP 200 {"status":"healthy","service":"A2A Service"}</pre></td><td><pre>{
+  "status": 200
+}</pre></td></tr><tr class='pass'><td>PASS</td><td>Adapter /health</td><td>38 ms</td><td><pre>HTTP 200 {"status":"ok"}</pre></td><td><pre>{
+  "status": 200
+}</pre></td></tr><tr class='pass'><td>PASS</td><td>准备 Skill 内容 MARKER_A</td><td>190 ms</td><td><pre>seeded=True; marker_in_sandbox=True</pre></td><td><pre>{
+  "sandbox_id": "723842d9-fb8",
+  "marker_a": "BEFORE_9E4ABBA9",
+  "path": "/tmp/skills/product_recommend_skill/SKILL.md"
+}</pre></td></tr><tr class='pass'><td>PASS</td><td>调用代理 · 对话A（应读到 MARKER_A）</td><td>5909 ms</td><td><pre>success=True saw_A=True answer=
+
+【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行
+
+【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件
+
+【任务执行情况】成功读取文件内容
+
+【结果汇总】HOTUPDATE_MARKER 标记行如下：
+
+HOTUPDATE_MARKER=BEFORE_9E4ABBA9
+
+【异常说明】无</pre></td><td><pre>{
+  "conversation_id": "dlg-5175973c8254",
+  "http": 200,
+  "success": true,
+  "error": null,
+  "event_count": 274,
+  "answer": "\n\n【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行\n\n【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件\n\n【任务执行情况】成功读取文件内容\n\n【结果汇总】HOTUPDATE_MARKER 标记行如下：\n\nHOTUPDATE_MARKER=BEFORE_9E4ABBA9\n\n【异常说明】无"
+}</pre></td></tr><tr class='pass'><td>PASS</td><td>Skill 热更 API → 沙箱文件变为 MARKER_B</td><td>106 ms</td><td><pre>update_http=200 success=True disk_has_B=True</pre></td><td><pre>{
+  "update_body": {
+    "success": true,
+    "skill_name": "product_recommend_skill",
+    "_http": 200
+  },
+  "sandbox_preview": "---\nname: product_recommend_skill\ndescription: E2E hotupdate probe skill. Contains HOTUPDATE_MARKER for verification.\n---\n\n# Product Recommend Skill (E2E Probe)\n\nHOTUPDATE_MARKER=AFTER_743DF61C\n\nWhen asked to verify skill content, use read_file on this file and quote the HOTUPDATE_MARKER line exactl"
+}</pre></td></tr><tr class='pass'><td>PASS</td><td>调用代理 · 对话B（应读到 MARKER_B，证明热更生效）</td><td>8014 ms</td><td><pre>success=True saw_B=True saw_old_A=False answer=
+
+【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行
+
+【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件
+
+【任务执行情况】成功读取文件内容
+
+【结果汇总】HOTUPDATE_MARKER=AFTER_743DF61C
+
+【异常说明】无</pre></td><td><pre>{
+  "conversation_id": "dlg-60fa8395c2a6",
+  "http": 200,
+  "success": true,
+  "error": null,
+  "event_count": 257,
+  "answer": "\n\n【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行\n\n【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件\n\n【任务执行情况】成功读取文件内容\n\n【结果汇总】HOTUPDATE_MARKER=AFTER_743DF61C\n\n【异常说明】无",
+  "marker_a": "BEFORE_9E4ABBA9",
+  "marker_b": "AFTER_743DF61C"
+}</pre></td></tr><tr class='pass'><td>PASS</td><td>轨迹采集（对话A+B 均有 traces）</td><td>2140 ms</td><td><pre>A total=5 B total=5</pre></td><td><pre>{
+  "conv_a": "dlg-5175973c8254",
+  "trace_a": 5,
+  "conv_b": "dlg-60fa8395c2a6",
+  "trace_b": 5
+}</pre></td></tr></tbody></table>
+<h2>元数据</h2><pre>{
+  "generated_at_utc": "2026-07-12T13:27:15.217050+00:00",
+  "adapter_url": "http://127.0.0.1:18900",
+  "edp_url": "http://127.0.0.1:18001",
+  "jiuwenbox_url": "http://127.0.0.1:8321",
+  "sandbox_id": "723842d9-fb8",
+  "skill": "product_recommend_skill",
+  "marker_a": "BEFORE_9E4ABBA9",
+  "marker_b": "AFTER_743DF61C",
+  "model_name": "Qwen/Qwen3.5-9B",
+  "model_api_base": "https://api.siliconflow.cn/v1",
+  "checks_passed": 8,
+  "checks_total": 8,
+  "proof": "对话A回答含 MARKER_A；热更后对话B回答含 MARKER_B 且不含 MARKER_A"
+}</pre>
+</body></html>

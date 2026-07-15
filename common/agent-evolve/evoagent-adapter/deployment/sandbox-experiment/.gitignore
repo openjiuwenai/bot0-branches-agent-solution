@@ -1,0 +1,16 @@
+# runtime artifacts from local experiments
+data/
+logs/
+skills-meta/
+.env
+*.log
+
+# keep only curated reports in git; ignore intermediate e2e dumps by default
+reports/e2e_report_*.html
+reports/e2e_report_*.json
+reports/dialogue_e2e_*.html
+reports/dialogue_e2e_*.json
+!reports/sandbox_hotupdate_experiment_report.html
+!reports/dialogue_e2e_20260712_212715.html
+!reports/dialogue_e2e_20260712_212715.json
+

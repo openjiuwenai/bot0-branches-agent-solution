@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>jiuwenbox 运行原理 · 请求响应 · 环境隔离</title>
+<style>
+  :root {
+    --bg: #0c1222;
+    --card: #151d2e;
+    --ink: #e8eef8;
+    --muted: #94a3b8;
+    --line: #2a3548;
+    --accent: #5eead4;
+    --accent-dim: #2dd4bf;
+    --accent-soft: #134e4a;
+    --blue: #38bdf8;
+    --blue-bg: #0c4a6e55;
+    --purple: #a78bfa;
+    --pass: #4ade80;
+    --warn: #fbbf24;
+    --warn-bg: #42200699;
+    --code: #0b1020;
+    --toc-bg: #111827ee;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "IBM Plex Sans", "Source Han Sans SC", "PingFang SC", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1000px 480px at 8% -8%, #0f766e33 0%, transparent 55%),
+      radial-gradient(800px 420px at 100% 0%, #1e3a5f55 0%, transparent 50%),
+      radial-gradient(600px 300px at 50% 100%, #312e8155 0%, transparent 45%),
+      var(--bg);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.hero {
+    border: 1px solid var(--line);
+    background: linear-gradient(145deg, #1a2438 0%, #12261f 100%);
+    border-radius: 18px;
+    padding: 28px 32px;
+    margin-bottom: 18px;
+  }
+  .eyebrow { color: var(--accent); font-weight: 600; letter-spacing: .04em; font-size: 13px; text-transform: uppercase; }
+  h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.25; font-family: "IBM Plex Serif", "Source Han Serif SC", Georgia, serif; color: #f8fafc; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .badge {
+    display: inline-block; margin-top: 14px; margin-right: 8px; padding: 8px 14px; border-radius: 999px;
+    background: #134e4a66; color: var(--accent); font-weight: 600; font-size: 13px;
+    border: 1px solid #2dd4bf55;
+  }
+  nav.toc {
+    background: var(--toc-bg);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+    backdrop-filter: blur(8px);
+  }
+  nav.toc h2 { margin: 0 0 10px; font-size: 15px; border: none; padding: 0; color: var(--accent); }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 28px; }
+  @media (max-width: 700px) { nav.toc ol { columns: 1; } }
+  nav.toc li { margin: 4px 0; break-inside: avoid; font-size: 14px; }
+  nav.toc a { color: #cbd5e1; text-decoration: none; border-bottom: 1px solid transparent; }
+  nav.toc a:hover { color: var(--accent); border-bottom-color: var(--accent-soft); }
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+    scroll-margin-top: 20px;
+  }
+  h2 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-family: "IBM Plex Serif", "Source Han Serif SC", Georgia, serif;
+    border-bottom: 2px solid var(--accent-soft);
+    padding-bottom: 8px;
+    color: #f1f5f9;
+  }
+  h3 { margin: 18px 0 8px; font-size: 16px; color: var(--accent-dim); }
+  p, li { font-size: 15px; color: #dbe4f0; }
+  strong { color: #f8fafc; }
+  .muted { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: #1e293b; color: #e2e8f0; }
+  td { background: #121a2b; color: #cbd5e1; }
+  code, pre {
+    font-family: "IBM Plex Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 12.5px;
+  }
+  code { background: #0f172a; color: #99f6e4; padding: 1px 6px; border-radius: 4px; border: 1px solid #334155; }
+  pre {
+    background: var(--code); color: #e2e8f0; padding: 14px 16px; border-radius: 10px;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    border: 1px solid var(--line);
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 800px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .card-mini {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #0f172a;
+  }
+  .card-mini h4 { margin: 0 0 6px; font-size: 14px; color: #f8fafc; }
+  .callout {
+    background: var(--warn-bg); border-left: 4px solid var(--warn);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14px; color: #fde68a;
+  }
+  .callout.info {
+    background: #0c4a6e66; border-left-color: var(--blue); color: #bae6fd;
+  }
+  footer { margin-top: 24px; color: var(--muted); font-size: 13px; text-align: center; }
+  a.back-top {
+    position: fixed; right: 20px; bottom: 24px; z-index: 20;
+    background: #1e293bcc; color: var(--accent); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 999px; text-decoration: none; font-size: 13px;
+    backdrop-filter: blur(6px);
+  }
+  a.back-top:hover { background: #334155; }
+
+  /* 流程图 */
+  .diagram {
+    background: #0b1628;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 16px;
+    margin: 12px 0 8px;
+    overflow-x: auto;
+  }
+  .diagram-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    min-width: 280px;
+  }
+  .diagram-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+  }
+  .node {
+    background: #152238;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    color: #e2e8f0;
+    font-size: 13px;
+    line-height: 1.45;
+    max-width: 340px;
+  }
+  .node strong { display: block; color: #f8fafc; margin-bottom: 2px; font-size: 13.5px; }
+  .node .sub { color: var(--muted); font-size: 12px; }
+  .node.accent {
+    border-color: #2dd4bf88;
+    background: linear-gradient(160deg, #134e4a55, #152238);
+  }
+  .node.host {
+    border-color: #38bdf888;
+    background: linear-gradient(160deg, var(--blue-bg), #152238);
+  }
+  .node.sandbox {
+    border-color: #a78bfa88;
+    background: linear-gradient(160deg, #4c1d9555, #152238);
+  }
+  .arrow {
+    color: var(--accent);
+    font-size: 18px;
+    line-height: 1.2;
+    padding: 6px 0;
+    font-family: "IBM Plex Mono", Consolas, monospace;
+  }
+  .arrow-label {
+    color: #94a3b8;
+    font-size: 11.5px;
+    text-align: center;
+    margin-top: -2px;
+    margin-bottom: 4px;
+    font-family: "IBM Plex Mono", Consolas, monospace;
+    max-width: 520px;
+  }
+  .branch {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    gap: 10px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  @media (max-width: 800px) { .branch { grid-template-columns: 1fr; } }
+  .branch .node { max-width: none; }
+  .steps { display: flex; flex-direction: column; gap: 0; width: 100%; }
+  .step {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #134e4a; color: var(--accent); border: 1px solid #2dd4bf66;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; margin-top: 8px;
+  }
+  .step-body .node { text-align: left; max-width: none; width: 100%; }
+  .step-connector {
+    grid-column: 1;
+    justify-self: center;
+    width: 2px; height: 14px;
+    background: #2dd4bf66;
+  }
+
+  /* 隔离层叠 */
+  .layer-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 640px;
+    margin: 12px auto;
+  }
+  .layer {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #0f172a;
+  }
+  .layer-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .layer-title { font-weight: 700; color: #f8fafc; font-size: 14px; margin-bottom: 2px; }
+  .layer-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .layer.l1 { border-left: 4px solid #f87171; }
+  .layer.l2 { border-left: 4px solid #fb923c; }
+  .layer.l3 { border-left: 4px solid #fbbf24; }
+  .layer.l4 { border-left: 4px solid #4ade80; }
+  .layer.l5 { border-left: 4px solid var(--blue); }
+  .layer.l6 { border-left: 4px solid var(--purple); }
+
+  /* 时序图 SVG */
+  .seq-diagram { width: 100%; overflow-x: auto; margin: 12px 0; }
+  .seq-diagram svg { min-width: 720px; display: block; margin: 0 auto; }
+  .seq-diagram text { font-family: "IBM Plex Sans", "Source Han Sans SC", sans-serif; }
+  .seq-diagram .actor { fill: #152238; stroke: #334155; }
+  .seq-diagram .actor-label { fill: #f8fafc; font-size: 12px; font-weight: 600; }
+  .seq-diagram .actor-sub { fill: #94a3b8; font-size: 10px; }
+  .seq-diagram .lifeline { stroke: #334155; stroke-dasharray: 4 4; }
+  .seq-diagram .msg { stroke: #2dd4bf; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+  .seq-diagram .msg-label { fill: #99f6e4; font-size: 11px; }
+  .seq-diagram .msg-ret { stroke: #64748b; stroke-width: 1.2; stroke-dasharray: 5 3; fill: none; marker-end: url(#arrowhead-gray); }
+  .seq-diagram .note { fill: #1e293b; stroke: #475569; }
+  .seq-diagram .note-text { fill: #cbd5e1; font-size: 10.5px; }
+
+  /* 生命周期状态机 */
+  .state-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .state {
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: 1px solid;
+  }
+  .state.prov { background: #42200699; color: #fbbf24; border-color: #fbbf2455; }
+  .state.ready { background: #14532d66; color: var(--pass); border-color: #22c55e55; }
+  .state.stop { background: #1e293b; color: #94a3b8; border-color: #475569; }
+  .state.err { background: #450a0a66; color: #f87171; border-color: #ef444455; }
+  .state-arrow { color: var(--muted); font-size: 16px; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .legend span::before {
+    content: "";
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .legend .host::before { background: #38bdf8; }
+  .legend .sandbox::before { background: #a78bfa; }
+  .legend .ipc::before { background: #2dd4bf; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">jiuwenbox · Architecture Guide</div>
+  <h1>jiuwenbox 运行原理<br/>请求响应机制 · 环境隔离架构</h1>
+  <p class="meta">
+    文档版本：2026-07-13　·　代码仓：<code>jiuwenswarm/jiuwenbox</code>　·　
+    关联场景：EDPAgent sandbox + EvoAgentAdapter 沙箱模式
+  </p>
+  <span class="badge">bubblewrap 长驻 daemon</span>
+  <span class="badge">宿主机 UDS IPC</span>
+  <span class="badge">Landlock + seccomp + cgroup</span>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#sec-overview">1. 概述</a></li>
+    <li><a href="#sec-process">2. 进程层次与启动流程</a></li>
+    <li><a href="#sec-ipc-relations">3. 进程间关系详解</a></li>
+    <li><a href="#sec-lifecycle">4. 沙箱生命周期</a></li>
+    <li><a href="#sec-request">5. 如何响应请求</a></li>
+    <li><a href="#sec-exec-flow">6. exec 热路径时序</a></li>
+    <li><a href="#sec-isolation">7. 环境隔离（六层防护）</a></li>
+    <li><a href="#sec-daemon">8. 沙箱内 daemon 设计要点</a></li>
+    <li><a href="#sec-integration">9. 与 EDP / Adapter 集成</a></li>
+    <li><a href="#sec-api">10. HTTP API 速查</a></li>
+    <li><a href="#sec-platform">11. 平台前提与运维</a></li>
+  </ol>
+</nav>
+
+<section id="sec-overview">
+  <h2>1. 概述</h2>
+  <p>
+    <strong>jiuwenbox</strong> 是运行在 Linux 上的<strong>沙箱管理服务</strong>。
+    对外暴露 FastAPI HTTP 管理面（默认 <code>:8321</code>）；每个沙箱实例通过
+    <strong>bubblewrap（bwrap）</strong> 创建独立命名空间与挂载视图，并在沙箱内启动
+    <strong>长期驻留的 sandbox-daemon</strong>。
+  </p>
+  <p>
+    <code>SandboxManager</code>、<code>ProcessRuntime</code> 是 <strong>box-server 进程内的对象</strong>，不是独立 OS 进程。
+    隔离底座 <strong>bwrap（bubblewrap）</strong> 是 Flatpak 维护的轻量沙箱启动器：用 namespace + 挂载 + 降权拼出子环境；
+    jiuwenbox 将 YAML 策略转为 bwrap 参数（<code>supervisor/bwrap.py</code>）。
+  </p>
+  <p>
+    关键设计：<strong>bwrap 的昂贵初始化每个沙箱只做一次</strong>，后续
+    <code>exec</code>、文件读写走 daemon 的 Unix Domain Socket IPC，子进程继承同一套
+    Landlock / seccomp / cgroup 约束，避免「每条命令起一个全新沙箱」。
+  </p>
+  <div class="grid2">
+    <div class="card-mini">
+      <h4>宿主机侧（可信）</h4>
+      <p class="muted"><code>jiuwenbox-server</code>、<code>SandboxManager</code>、<code>ProcessRuntime</code>、控制 socket listener、cgroup/netns 管理。</p>
+    </div>
+    <div class="card-mini">
+      <h4>沙箱侧（不可信载荷）</h4>
+      <p class="muted">bwrap 子树内的 <code>landlock-launcher</code> → <code>sandbox-daemon</code>（PID 1）→ 用户 fork+exec 命令。</p>
+    </div>
+  </div>
+  <div class="legend">
+    <span class="host">宿主机组件</span>
+    <span class="sandbox">沙箱内组件</span>
+    <span class="ipc">IPC / 控制通道</span>
+  </div>
+</section>
+
+<section id="sec-process">
+  <h2>2. 进程层次与启动流程</h2>
+  <h3>2.1 进程树</h3>
+  <div class="diagram" role="img" aria-label="进程层次图">
+    <div class="diagram-col" style="width:100%">
+      <div class="node host"><strong>jiuwenbox-server</strong><span class="sub">FastAPI · :8321 · /api/v1</span></div>
+      <div class="arrow">↓</div>
+      <div class="node host"><strong>SandboxManager</strong><span class="sub">沙箱注册表 · 生命周期 · 自动重启</span></div>
+      <div class="arrow">↓</div>
+      <div class="node host"><strong>ProcessRuntime</strong><span class="sub">create / exec / upload / destroy</span></div>
+      <div class="arrow">↓ spawn</div>
+      <div class="arrow-label">ip netns exec jbx-{id} bwrap ... landlock-launcher.py</div>
+      <div class="node sandbox"><strong>landlock-launcher</strong><span class="sub">预读 daemon 源码 → 应用 Landlock → compile/exec 起 daemon</span></div>
+      <div class="arrow">↓ 同进程，无二次 execve</div>
+      <div class="node sandbox accent"><strong>sandbox-daemon</strong><span class="sub">沙箱 PID 1 · accept 控制 fd · fork+exec 用户命令</span></div>
+      <div class="arrow">↓ fork+exec</div>
+      <div class="node"><strong>用户命令 / 脚本</strong><span class="sub">继承 namespace · Landlock · seccomp · cgroup</span></div>
+    </div>
+  </div>
+
+  <h3>2.2 创建沙箱（create）步骤</h3>
+  <div class="diagram">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body"><div class="node"><strong>合并 SecurityPolicy</strong><span class="sub">YAML 策略 → 文件系统 / 网络 / 进程 / capability 规则</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body"><div class="node host"><strong>网络（isolated 模式）</strong><span class="sub">创建 netns <code>jbx-{id}</code> · veth 配对 · iptables egress/ingress 白名单</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body"><div class="node host"><strong>文件系统 backing</strong><span class="sub">宿主机 <code>~/.jiuwenbox/workspace/{id}</code> → bwrap bind 进沙箱视图</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body"><div class="node host"><strong>控制通道</strong><span class="sub">宿主机 bind <code>control.sock</code> listener · fd 经 <code>pass_fds</code> 传入 bwrap（不在沙箱可见路径）</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body"><div class="node host"><strong>cgroup</strong><span class="sub">写 memory_max / cpu_max / pids_max · 子进程 preexec 加入 cgroup</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body"><div class="node sandbox"><strong>spawn bwrap</strong><span class="sub">unshare user/pid/net/ipc/cgroup/uts · ro-bind / bind / tmpfs · seccomp BPF</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-body"><div class="node accent"><strong>daemon 就绪探测</strong><span class="sub">phase → <code>ready</code>，可接受 exec / 文件 IPC</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sec-ipc-relations">
+  <h2>3. 进程间关系详解</h2>
+
+  <h3>3.1 宿主机全局进程树</h3>
+  <pre>jiuwenbox-server (box-server, 主进程)
+├── [线程] FastAPI 事件循环 + HTTP
+├── [线程池] 阻塞 IPC（exec / read_file 等）
+├── [可选] zombie reaper（SIGCHLD 或定时 poll）
+│
+├── 沙箱 A
+│   ├── bwrap monitor          ← Popen 直接子进程
+│   ├── [短暂] userns helper   ← bwrap 内部，也是 box-server 子进程
+│   └── [isolated] ip netns exec jbx-A → bwrap
+│
+├── 沙箱 B …
+│
+└── exec_background 任务
+    └── 每次任务再起一个 bwrap   ← box-server 直接子进程</pre>
+  <p class="muted">box-server 启动时设 <code>PR_SET_CHILD_SUBREAPER</code>，回收 bwrap monitor、userns helper 等僵尸进程。</p>
+
+  <h3>3.2 父子与 IPC 关系表</h3>
+  <table>
+    <thead><tr><th>关系</th><th>类型</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>box-server → bwrap monitor</td><td>父子（Popen）</td><td><code>pass_fds</code> 传入 control listener、seccomp memfd；<code>preexec</code> 加入 cgroup</td></tr>
+      <tr><td>launcher → daemon</td><td>同进程（PID 1）</td><td>Landlock 后 <code>compile/exec</code>，无二次 execve 读盘</td></tr>
+      <tr><td>daemon → 用户命令</td><td>父子（fork+exec）</td><td><code>start_new_session=True</code>，防 <code>kill(0)</code> 误杀 daemon</td></tr>
+      <tr><td>box-server ↔ daemon</td><td>UDS 客户端/服务端</td><td>非父子；socket 在宿主机，用户代码不可见</td></tr>
+      <tr><td>Adapter/EDP ↔ jiuwenbox</td><td>HTTP 客户端</td><td>独立容器进程，无直接父子</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.3 两类执行路径</h3>
+  <div class="grid2">
+    <div class="card-mini">
+      <h4>路径 A — 同步 exec / 文件 API（热路径）</h4>
+      <pre>HTTP → box-server → 线程池
+  → connect(control.sock)
+  → sandbox-daemon → fork+exec</pre>
+      <p class="muted">不起新 bwrap。upload/download/files 在 daemon 进程内完成。</p>
+    </div>
+    <div class="card-mini">
+      <h4>路径 B — exec_background</h4>
+      <pre>box-server → Popen(新 bwrap + 命令)</pre>
+      <p class="muted">每任务独立 bwrap 树，与 daemon 并行，是 box-server 直接子进程。</p>
+    </div>
+  </div>
+
+  <h3>3.4 进程 + IPC 总览图</h3>
+  <div class="diagram" role="img" aria-label="进程与IPC总览">
+    <div class="diagram-col" style="width:100%;align-items:stretch">
+      <div class="node host" style="max-width:none"><strong>宿主机 · jiuwenbox-server 进程</strong></div>
+      <div class="diagram-row" style="margin-top:10px">
+        <div class="node host" style="max-width:none;flex:1"><strong>HTTP :8321</strong><span class="sub">← Adapter / EDP / 测试</span></div>
+        <div class="node accent" style="max-width:none;flex:1"><strong>ProcessRuntime</strong><span class="sub">Popen bwrap · UDS connect</span></div>
+      </div>
+      <div class="arrow">↓ Popen 父子</div>
+      <div class="node sandbox" style="max-width:none"><strong>bwrap monitor</strong><span class="sub">沙箱 A · 可选 netns jbx-A</span></div>
+      <div class="arrow">↕ UDS（宿主机 control.sock，非父子）</div>
+      <div class="node accent" style="max-width:none"><strong>sandbox-daemon · 沙箱 PID 1</strong></div>
+      <div class="arrow">↓ fork+exec 父子</div>
+      <div class="node" style="max-width:none"><strong>用户命令</strong><span class="sub">继承 namespace · Landlock · seccomp · cgroup</span></div>
+    </div>
+  </div>
+
+  <h3>3.5 stop 时的进程协作</h3>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body"><div class="node"><strong>IPC shutdown</strong><span class="sub">box-server 礼貌请求 daemon 退出</span></div></div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body"><div class="node"><strong>等待 bwrap 进程组</strong><span class="sub">超时则 SIGTERM → SIGKILL</span></div></div>
+    </div>
+    <div class="step-connector"></div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body"><div class="node host"><strong>清理宿主机资源</strong><span class="sub">netns · veth · cgroup · firewall · control 目录</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="sec-lifecycle">
+  <h2>4. 沙箱生命周期</h2>
+  <div class="state-flow">
+    <span class="state prov">provisioning</span>
+    <span class="state-arrow">→</span>
+    <span class="state ready">ready</span>
+    <span class="state-arrow">⇄</span>
+    <span class="state stop">stopped</span>
+    <span class="state-arrow">→</span>
+    <span class="state err">error / deleting</span>
+  </div>
+  <table>
+    <thead><tr><th>阶段</th><th>含义</th><th>可执行操作</th></tr></thead>
+    <tbody>
+      <tr><td><code>provisioning</code></td><td>正在建 netns、cgroup、bind、起 bwrap</td><td>等待就绪</td></tr>
+      <tr><td><code>ready</code></td><td>daemon 已 accept 控制 fd</td><td>exec · upload · download · files · search</td></tr>
+      <tr><td><code>stopped</code></td><td>已 stop，资源可能仍保留</td><td>start / restart</td></tr>
+      <tr><td><code>error</code></td><td>创建或运行失败</td><td>delete / restart</td></tr>
+      <tr><td><code>deleting</code></td><td>销毁中</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    沙箱状态主要在<strong>服务进程内存</strong>中维护；<code>jiuwenbox-server</code> 重启后不会从磁盘「复活」旧沙箱实例。
+    EDPAgent 重启若创建新 sandbox，Adapter 需重新解析 <code>sandbox_id</code>。
+  </div>
+</section>
+
+<section id="sec-request">
+  <h2>5. 如何响应请求</h2>
+  <h3>5.1 双层通道</h3>
+  <div class="diagram">
+    <div class="diagram-col" style="width:100%">
+      <div class="node accent"><strong>外部调用方</strong><span class="sub">EDPAgent · EvoAgentAdapter · CLI · 测试脚本</span></div>
+      <div class="arrow">↓ HTTP</div>
+      <div class="node host"><strong>jiuwenbox-server /api/v1</strong><span class="sub">FastAPI 异步路由</span></div>
+      <div class="arrow">↓ 分支</div>
+      <div class="branch">
+        <div class="node host">
+          <strong>生命周期路由</strong>
+          <span class="sub">POST/GET/DELETE<br/>/sandboxes<br/>start · stop · restart</span>
+        </div>
+        <div class="node accent">
+          <strong>热路径：daemon IPC</strong>
+          <span class="sub">exec · write_file<br/>read_file · list_dir<br/>（线程池，避免阻塞事件循环）</span>
+        </div>
+        <div class="node">
+          <strong>回退路径</strong>
+          <span class="sub">IPC 不可用时<br/>bash+cat / base64<br/>内嵌 python -c</span>
+        </div>
+      </div>
+      <div class="arrow">↓ UDS（宿主机 control.sock）</div>
+      <div class="node sandbox accent"><strong>sandbox-daemon</strong><span class="sub">4 字节长度 + JSON/二进制帧 · fork+exec 或进程内读写</span></div>
+    </div>
+  </div>
+
+  <h3>5.2 Daemon IPC 消息类型</h3>
+  <table>
+    <thead><tr><th>请求</th><th>用途</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>exec</code></td><td>同步执行命令</td><td>daemon fork+exec → 收集 stdout/stderr/exit_code</td></tr>
+      <tr><td><code>write_file</code></td><td>写沙箱内文件</td><td>快路径，受 Landlock 约束</td></tr>
+      <tr><td><code>read_file</code></td><td>读沙箱内文件</td><td>upload/download API 底层可走此路径</td></tr>
+      <tr><td><code>list_dir</code></td><td>列目录</td><td>files API 底层</td></tr>
+      <tr><td><code>shutdown</code></td><td>优雅关闭 daemon</td><td>销毁沙箱时优先使用；失败则外部 SIGKILL</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 并发与恢复</h3>
+  <ul>
+    <li>FastAPI 路由为 <code>async</code>，daemon IPC 在线程池执行。</li>
+    <li><code>exec</code> 有并发信号量限流；文件 IPC 通常不限流。</li>
+    <li>IPC 超时或连接失败时，<code>SandboxManager</code> 可自动 <code>restart_sandbox</code> 并重试一次。</li>
+  </ul>
+</section>
+
+<section id="sec-exec-flow">
+  <h2>6. exec 热路径时序</h2>
+  <p class="muted">以 <code>POST /api/v1/sandboxes/{id}/exec</code> 为例：</p>
+  <div class="seq-diagram" role="img" aria-label="exec 时序图">
+    <svg viewBox="0 0 820 420" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#2dd4bf"/>
+        </marker>
+        <marker id="arrowhead-gray" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+        </marker>
+      </defs>
+      <!-- actors -->
+      <rect class="actor" x="20" y="20" width="110" height="44" rx="8"/>
+      <text class="actor-label" x="75" y="38" text-anchor="middle">调用方</text>
+      <text class="actor-sub" x="75" y="54" text-anchor="middle">Adapter/EDP</text>
+      <line class="lifeline" x1="75" y1="64" x2="75" y2="400"/>
+
+      <rect class="actor" x="170" y="20" width="120" height="44" rx="8"/>
+      <text class="actor-label" x="230" y="38" text-anchor="middle">box-server</text>
+      <text class="actor-sub" x="230" y="54" text-anchor="middle">FastAPI</text>
+      <line class="lifeline" x1="230" y1="64" x2="230" y2="400"/>
+
+      <rect class="actor" x="330" y="20" width="120" height="44" rx="8"/>
+      <text class="actor-label" x="390" y="38" text-anchor="middle">ProcessRuntime</text>
+      <text class="actor-sub" x="390" y="54" text-anchor="middle">线程池 IPC</text>
+      <line class="lifeline" x1="390" y1="64" x2="390" y2="400"/>
+
+      <rect class="actor" x="500" y="20" width="100" height="44" rx="8"/>
+      <text class="actor-label" x="550" y="38" text-anchor="middle">control.sock</text>
+      <text class="actor-sub" x="550" y="54" text-anchor="middle">宿主机 UDS</text>
+      <line class="lifeline" x1="550" y1="64" x2="550" y2="400"/>
+
+      <rect class="actor" x="640" y="20" width="120" height="44" rx="8"/>
+      <text class="actor-label" x="700" y="38" text-anchor="middle">sandbox-daemon</text>
+      <text class="actor-sub" x="700" y="54" text-anchor="middle">沙箱 PID 1</text>
+      <line class="lifeline" x1="700" y1="64" x2="700" y2="400"/>
+
+      <!-- messages -->
+      <line class="msg" x1="75" y1="90" x2="230" y2="90"/>
+      <text class="msg-label" x="152" y="84" text-anchor="middle">POST .../exec {cmd}</text>
+
+      <line class="msg" x1="230" y1="120" x2="390" y2="120"/>
+      <text class="msg-label" x="310" y="114" text-anchor="middle">submit IPC job</text>
+
+      <line class="msg" x1="390" y1="155" x2="550" y2="155"/>
+      <text class="msg-label" x="470" y="149" text-anchor="middle">connect + 帧请求</text>
+
+      <line class="msg" x1="550" y1="185" x2="700" y2="185"/>
+      <text class="msg-label" x="625" y="179" text-anchor="middle">accept · exec 命令</text>
+
+      <rect class="note" x="620" y="200" width="170" height="36" rx="6"/>
+      <text class="note-text" x="630" y="218">fork+exec 用户进程</text>
+      <text class="note-text" x="630" y="232">继承 Landlock/seccomp</text>
+
+      <line class="msg-ret" x1="700" y1="260" x2="550" y2="260"/>
+      <text class="msg-label" x="625" y="254" text-anchor="middle" fill="#94a3b8">stdout/stderr/exit</text>
+
+      <line class="msg-ret" x1="550" y1="295" x2="390" y2="295"/>
+      <line class="msg-ret" x1="390" y1="325" x2="230" y2="325"/>
+      <line class="msg-ret" x1="230" y1="355" x2="75" y2="355"/>
+      <text class="msg-label" x="152" y="349" text-anchor="middle" fill="#94a3b8">ExecResult JSON</text>
+    </svg>
+  </div>
+  <div class="callout info">
+  <strong>文件 API</strong>（<code>upload</code> / <code>download</code> / <code>files</code>）走相同 IPC 栈：
+  HTTP → ProcessRuntime → daemon <code>write_file</code> / <code>read_file</code> / <code>list_dir</code>，
+  而非每次新建 bwrap。
+  </div>
+</section>
+
+<section id="sec-isolation">
+  <h2>7. 环境隔离（六层防护）</h2>
+  <p>隔离由 <code>SecurityPolicy</code>（YAML）驱动，在 <code>supervisor/bwrap.py</code> 转为 bwrap 参数，并与 Landlock / seccomp / cgroup 叠加。</p>
+
+  <div class="layer-stack">
+    <div class="layer l6">
+      <div class="layer-num">Layer 6</div>
+      <div>
+        <div class="layer-title">网络隔离（isolated）</div>
+        <div class="layer-desc">独立 netns + veth；netns 内 iptables 做 egress/ingress 域名/IP/端口白名单（默认 deny）。宿主机 iptables 阻止沙箱访问 jiuwenbox 管理端口。</div>
+      </div>
+    </div>
+    <div class="layer l5">
+      <div class="layer-num">Layer 5</div>
+      <div>
+        <div class="layer-title">Cgroup 资源限额</div>
+        <div class="layer-desc">宿主机写 <code>/sys/fs/cgroup/jiuwenbox/{id}/</code>：memory_max、cpu_max、pids_max。子进程经 preexec 加入 cgroup，沙箱内无法自行放宽。</div>
+      </div>
+    </div>
+    <div class="layer l4">
+      <div class="layer-num">Layer 4</div>
+      <div>
+        <div class="layer-title">Seccomp BPF</div>
+        <div class="layer-desc">按架构生成 BPF，经 bwrap <code>--seccomp</code> 加载。拦截危险 syscall；额外阻止对 PID 1/2、进程组、broadcast 的 kill，防止沙箱代码杀掉 daemon。</div>
+      </div>
+    </div>
+    <div class="layer l3">
+      <div class="layer-num">Layer 3</div>
+      <div>
+        <div class="layer-title">Landlock 路径白名单</div>
+        <div class="layer-desc">launcher 在跑用户代码前 <code>prctl(NO_NEW_PRIVS)</code> + <code>landlock_restrict_self</code>。白名单来自 read_only / read_write / bind_mounts 等。<code>/jiuwenbox</code> 为保留路径，用户策略无法加回。</div>
+      </div>
+    </div>
+    <div class="layer l2">
+      <div class="layer-num">Layer 2</div>
+      <div>
+        <div class="layer-title">Bubblewrap 挂载视图</div>
+        <div class="layer-desc"><code>--ro-bind</code> / <code>--bind</code> / <code>--tmpfs</code> 构造沙箱可见 FS；<code>--proc</code> / <code>--dev</code>；默认 UID/GID = nobody(65534)。</div>
+      </div>
+    </div>
+    <div class="layer l1">
+      <div class="layer-num">Layer 1</div>
+      <div>
+        <div class="layer-title">Linux 命名空间</div>
+        <div class="layer-desc"><code>--unshare-user/pid/net/ipc/cgroup/uts</code>：用户、PID、网络、IPC、cgroup、主机名隔离。<code>--die-with-parent</code> 父进程退出时沙箱一并退出。</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>7.1 Landlock 启动链（为何 /jiuwenbox 可不进白名单）</h3>
+  <div class="diagram">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">①</div>
+        <div class="step-body"><div class="node sandbox"><strong>launcher 启动</strong><span class="sub">bwrap 挂载完成后，从 <code>/jiuwenbox</code> <strong>预读</strong> daemon 源码到内存</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">②</div>
+        <div class="step-body"><div class="node sandbox"><strong>应用 Landlock</strong><span class="sub">锁定路径访问规则；此后无需再从磁盘读 daemon 脚本</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">③</div>
+        <div class="step-body"><div class="node accent"><strong>compile + exec</strong><span class="sub">同 Python 进程变为 daemon（无二次 execve）→ 内核视角 launcher 与 daemon 为同一 PID 1</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">④</div>
+        <div class="step-body"><div class="node"><strong>用户子进程</strong><span class="sub">fork+exec 继承 Landlock + seccomp；<code>close_fds=True</code> 不继承控制 listener fd</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>7.2 网络模式对比</h3>
+  <table>
+    <thead><tr><th>mode</th><th>行为</th></tr></thead>
+    <tbody>
+      <tr><td><code>host</code></td><td>不隔离网络，沙箱与宿主机共享网络栈</td></tr>
+      <tr><td><code>isolated</code></td><td>独立 netns + veth；策略化 egress/ingress；管理面端口对沙箱不可达</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sec-daemon">
+  <h2>8. 沙箱内 daemon 设计要点</h2>
+  <div class="grid2">
+    <div class="card-mini">
+      <h4>控制 socket 在宿主机</h4>
+      <p>box-server 在 spawn bwrap <strong>之前</strong> bind listener，fd 经 <code>pass_fds</code> 传入。沙箱内用户代码看不到、删不掉该 socket 路径。</p>
+    </div>
+    <div class="card-mini">
+      <h4>一次 bwrap，多次 exec</h4>
+      <p>namespace / 挂载 / seccomp / Landlock 在 daemon 启动时固化；每条用户命令仅 fork+exec，成本低。</p>
+    </div>
+    <div class="card-mini">
+      <h4>防杀 daemon</h4>
+      <p>seccomp 阻止 kill PID 1/2；每次用户 exec 独立 session，<code>kill(0)</code> 无法波及 daemon。</p>
+    </div>
+    <div class="card-mini">
+      <h4>标准库-only</h4>
+      <p>daemon 仅用标准库，可用 <code>python3 -S</code> 冷启动，launcher 的 compile/exec 不依赖外部包。</p>
+    </div>
+  </div>
+  <pre>宿主机：bind(control.sock) → pass_fds → bwrap → launcher → daemon accept(fd)
+沙箱内：用户 exec 不继承 listener fd · 共享 daemon 的 UID(nobody) · 继承隔离规则</pre>
+</section>
+
+<section id="sec-integration">
+  <h2>9. 与 EDP / Adapter 集成</h2>
+  <p>在三容器沙箱模式（jiuwenbox + EDPAgent sandbox + EvoAgentAdapter）中，隔离边界是<strong>每个 sandbox_id 一个独立 bwrap 世界</strong>：</p>
+  <div class="diagram" role="img" aria-label="三容器集成图">
+    <div class="diagram-col" style="width:100%">
+      <div class="node accent"><strong>测试方 / EvoAgent</strong></div>
+      <div class="arrow">↓</div>
+      <div class="node host"><strong>EvoAgentAdapter (:18900)</strong><span class="sub">轨迹：读挂载 process_*.log · 代理：转发 EDP · Skill：jiuwenbox upload</span></div>
+      <div class="arrow">↓ 分支</div>
+      <div class="branch">
+        <div class="node">
+          <strong>Pipeline</strong>
+          <span class="sub">轨迹采集<br/>（宿主机日志卷）</span>
+        </div>
+        <div class="node">
+          <strong>AgentClient</strong>
+          <span class="sub">调用代理<br/>→ EDPAgent</span>
+        </div>
+        <div class="node accent">
+          <strong>JiuwenBoxSkillStore</strong>
+          <span class="sub">Skill 热更<br/>→ jiuwenbox File API</span>
+        </div>
+      </div>
+      <div class="arrow">↓ 同一 sandbox_id</div>
+      <div class="node host"><strong>jiuwenbox (:8321)</strong><span class="sub">sandbox {id} · /tmp/skills/.../SKILL.md</span></div>
+      <div class="arrow">↕ SysOperation</div>
+      <div class="node sandbox"><strong>EDPAgent（sandbox）</strong><span class="sub">启动 zip→upload→解压 · 运行时 read_file 只读沙箱 FS</span></div>
+    </div>
+  </div>
+  <div class="callout">
+    <strong>关键约束：</strong>Adapter 与 EDP 必须操作<strong>同一 sandbox_id</strong>。
+    宿主机 skills 挂载变更不会自动进入沙箱；热更须经 jiuwenbox <code>upload</code> 写入
+    <code>/tmp/skills/...</code>。解析方式：<code>from_logs</code>（推荐）/ <code>fixed</code> / <code>list_ready</code>。
+  </div>
+</section>
+
+<section id="sec-api">
+  <h2>10. HTTP API 速查（/api/v1）</h2>
+  <table>
+    <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>POST</td><td><code>/sandboxes</code></td><td>创建沙箱</td></tr>
+      <tr><td>GET</td><td><code>/sandboxes</code></td><td>列出沙箱</td></tr>
+      <tr><td>GET</td><td><code>/sandboxes/{id}</code></td><td>查询状态（phase / policy 等）</td></tr>
+      <tr><td>DELETE</td><td><code>/sandboxes/{id}</code></td><td>删除沙箱</td></tr>
+      <tr><td>POST</td><td><code>/sandboxes/{id}/start|stop|restart</code></td><td>生命周期控制</td></tr>
+      <tr><td>POST</td><td><code>/sandboxes/{id}/exec</code></td><td>同步执行命令（daemon IPC）</td></tr>
+      <tr><td>POST</td><td><code>/sandboxes/{id}/exec_background</code></td><td>后台执行（另起 bwrap 子进程）</td></tr>
+      <tr><td>POST</td><td><code>/sandboxes/{id}/upload</code></td><td>上传文件到沙箱路径</td></tr>
+      <tr><td>GET</td><td><code>/sandboxes/{id}/download</code></td><td>下载沙箱内文件</td></tr>
+      <tr><td>GET</td><td><code>/sandboxes/{id}/files</code></td><td>列目录</td></tr>
+      <tr><td>GET</td><td><code>/sandboxes/{id}/search</code></td><td>glob 搜索</td></tr>
+      <tr><td>GET</td><td><code>/health</code></td><td>健康检查 · landlock_supported · 活跃沙箱数</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">删除文件无专用 API，需通过 <code>exec</code> 执行 <code>rm</code> 等命令。</p>
+</section>
+
+<section id="sec-platform">
+  <h2>11. 平台前提与运维</h2>
+  <div class="grid3">
+    <div class="card-mini">
+      <h4>运行环境</h4>
+      <ul>
+        <li>Linux + <code>bwrap</code></li>
+        <li>Landlock / seccomp / cgroup 按内核能力启用</li>
+        <li>Docker 常需 <code>--privileged</code> 或足够 capability</li>
+      </ul>
+    </div>
+    <div class="card-mini">
+      <h4>健康探测</h4>
+      <p><code>GET /health</code> 返回 <code>landlock_supported: true</code> 表示当前内核支持 Landlock 路径隔离。</p>
+    </div>
+    <div class="card-mini">
+      <h4>运维注意</h4>
+      <ul>
+        <li>EDP 重启换新 sandbox → Adapter 宜重启或清缓存</li>
+        <li><code>from_logs</code> 依赖 <code>LOG_DIR</code> 产出 process_*.log</li>
+        <li>服务重启不恢复内存中的沙箱表</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  jiuwenbox 架构说明 · EvoAgentAdapter 沙箱模式文档 · 可用浏览器直接打开本 HTML 文件
+</footer>
+
+</div>
+<a class="back-top" href="#sec-overview" title="回到顶部">↑ 顶部</a>
+</body>
+</html>
