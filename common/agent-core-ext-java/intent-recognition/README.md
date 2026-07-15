@@ -1,6 +1,6 @@
-# agent-core-ext-java
+# intent-recognition
 
-`agent-core-ext-java` 是基于 `agent-core-java 0.1.13` 的独立 Java 17 意图扩展工程。模块在初始化阶段接收目标对象并编译不可变候选目录，运行时只接收用户请求，通过调用方注入的 `Reranker` 完成全目录评分、目标聚合和失败关闭的接受门判断。
+`intent-recognition` 是 `agent-core-ext-java` 聚合工程中基于 `agent-core-java 0.1.13` 的 Java 17 意图扩展模块。模块在初始化阶段接收目标对象并编译不可变候选目录，运行时只接收用户请求，通过调用方注入的 `Reranker` 完成全目录评分、目标聚合和失败关闭的接受门判断。
 
 首个目标适配器支持 A2A v1.0.1，直接使用官方 A2A Java SDK `1.0.0.Final` 的 `AgentCard`，不定义协议镜像 DTO。
 

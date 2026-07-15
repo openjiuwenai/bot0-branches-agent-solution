@@ -13,10 +13,10 @@
 ### Task 1: Standalone Maven project and API contracts
 
 **Files:**
-- Create: `common/agent-core-ext-java/pom.xml`
-- Create: `common/agent-core-ext-java/README.md`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/api/*.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/api/IntentRecognizerConfigTest.java`
+- Create: `common/agent-core-ext-java/intent-recognition/pom.xml`
+- Create: `common/agent-core-ext-java/intent-recognition/README.md`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/api/*.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/api/IntentRecognizerConfigTest.java`
 
 - [x] Write tests that reject non-finite/non-positive thresholds and limits and verify documented defaults.
 - [x] Run the focused tests and confirm they fail because the project/API does not exist.
@@ -26,9 +26,9 @@
 ### Task 2: Immutable catalog compiler
 
 **Files:**
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/catalog/IntentCatalog.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/catalog/IntentCatalogCompiler.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/catalog/IntentCatalogCompilerTest.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/catalog/IntentCatalog.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/catalog/IntentCatalogCompiler.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/catalog/IntentCatalogCompilerTest.java`
 
 - [x] Write tests for snapshot-before-extraction, duplicate target/candidate rejection, target/candidate limits, immutable collections, order-independent IDs, and deterministic SHA-256 canonical catalog hash.
 - [x] Run the focused tests and confirm RED for missing catalog behavior.
@@ -38,9 +38,9 @@
 ### Task 3: Reranker recognition, aggregation, errors, tracing, and concurrency
 
 **Files:**
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/reranker/RerankerIntentRecognizer.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/trace/*.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/reranker/RerankerIntentRecognizerTest.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/reranker/RerankerIntentRecognizer.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/trace/*.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/reranker/RerankerIntentRecognizerTest.java`
 
 - [x] Write tests for NFC/code-point input checks, empty catalog, stable batching, `chunkId` keys, exact scorer map validation, batch failure discard, max-per-target aggregation, score/margin gates, single-target behavior, listener isolation, and semaphore concurrency.
 - [x] Run the focused tests and confirm RED for missing recognizer behavior.
@@ -50,13 +50,13 @@
 ### Task 4: Official A2A AgentCard snapshot and eligibility adapter
 
 **Files:**
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardSnapshots.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AEligibilityPolicy.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2ASecurityRequirementEvaluator.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AContentTrustEvaluator.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardIntentAdapter.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardIntentAdapterTest.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardSnapshotsTest.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardSnapshots.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AEligibilityPolicy.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2ASecurityRequirementEvaluator.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AContentTrustEvaluator.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardIntentAdapter.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardIntentAdapterTest.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardSnapshotsTest.java`
 
 - [x] Write tests that mutate every nested source collection after initialization and verify the official SDK snapshot is unchanged; reject cyclic/non-JSON extension/header values.
 - [x] Write tests for interface/version, required extension, inherited media modes, security override, content trust, duplicate skill IDs, deterministic target keys/documents, semantic field exclusion, and over-limit filtering.
@@ -67,9 +67,9 @@
 ### Task 5: A2A result encoder
 
 **Files:**
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardResultEncoder.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/api/IntentResultEncoders.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardResultEncoderTest.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardResultEncoder.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/api/IntentResultEncoders.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/adapter/a2a/A2AAgentCardResultEncoderTest.java`
 
 - [x] Write a full-card fixture test covering every `AgentCard` record component and asserting `signatures[].protected` exists while `protectedHeader` does not.
 - [x] Run the focused test and confirm RED.
@@ -79,9 +79,9 @@
 ### Task 6: Agent Tool adapter
 
 **Files:**
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/tool/IntentRecognitionToolConfig.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/tool/IntentRecognitionTool.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/tool/IntentRecognitionToolTest.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/tool/IntentRecognitionToolConfig.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/tool/IntentRecognitionTool.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/tool/IntentRecognitionToolTest.java`
 
 - [x] Write tests for fixed `inputs={utterance}`, ignored optional kwargs, immutable dynamic JSON Schema, globally supplied Tool ID, stable visible name, JsonNode result, streaming parity, and encoding fallback.
 - [x] Run the focused test and confirm RED.
@@ -91,9 +91,9 @@
 ### Task 7: Workflow Component adapter
 
 **Files:**
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/workflow/IntentRecognitionComponent.java`
-- Create: `common/agent-core-ext-java/src/main/java/com/openjiuwen/ext/intent/workflow/IntentRecognitionExecutable.java`
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/workflow/IntentRecognitionComponentTest.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/workflow/IntentRecognitionComponent.java`
+- Create: `common/agent-core-ext-java/intent-recognition/src/main/java/com/openjiuwen/ext/intent/workflow/IntentRecognitionExecutable.java`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/workflow/IntentRecognitionComponentTest.java`
 
 - [x] Write tests for `ComponentComposable` conversion, Map input extraction, field-addressable Map output, malformed input fallback, and exact parity with Tool output.
 - [x] Run the focused test and confirm RED.
@@ -103,8 +103,8 @@
 ### Task 8: Framework integration and completion audit
 
 **Files:**
-- Test: `common/agent-core-ext-java/src/test/java/com/openjiuwen/ext/intent/integration/IntentFrameworkIntegrationTest.java`
-- Modify: `common/agent-core-ext-java/README.md`
+- Test: `common/agent-core-ext-java/intent-recognition/src/test/java/com/openjiuwen/ext/intent/integration/IntentFrameworkIntegrationTest.java`
+- Modify: `common/agent-core-ext-java/intent-recognition/README.md`
 
 - [x] Add integration tests for `Runner.resourceMgr()` registration, two same-name/different-ID tools, DeepAgent config acceptance, Workflow graph mounting, and shared recognizer output parity.
 - [x] Run all tests with `mvn clean verify` under a Java 17 runtime and fix every failure.
