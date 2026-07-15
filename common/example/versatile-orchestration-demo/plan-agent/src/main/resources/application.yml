@@ -1,0 +1,38 @@
+server:
+  port: ${PLAN_AGENT_PORT:18093}
+
+spring:
+  application:
+    # Drives the A2A card "name". a2a.agent-name below is INERT (A2AProperties has no
+    # agentName field); the real driver is spring.application.name.
+    name: plan-agent
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    agent-id: plan-agent
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: plan-agent
+      agent-description: "One-sentence bank-transfer planning agent (ReAct). Decomposes a request and calls versatile-adapter per task."
+      streaming: true
+      default-input-modes: ["text"]
+      default-output-modes: ["text"]
+      remote-agents:
+        - name: versatile-adapter
+          url: ${VERSATILE_ADAPTER_CARD_URL:http://127.0.0.1:18094}
+
+plan-agent:
+  model-provider: ${LLM_PROVIDER:openai}
+  api-key: ${LLM_API_KEY:}
+  api-base: ${LLM_API_BASE:http://localhost:4000/v1}
+  model-name: ${LLM_MODEL:gpt-4o-mini}
+  ssl-verify: ${LLM_SSL_VERIFY:true}
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.openjiuwen.example</groupId>
+    <artifactId>versatile-orchestration-demo</artifactId>
+    <version>0.2.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>versatile-orchestration-demo</name>
+    <description>OpenJiuwen (agent-solution) re-implementation of workflow-calls + edpa gateway</description>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.6</version>
+        <relativePath/>
+    </parent>
+
+    <modules>
+        <module>adapter</module>
+        <module>plan-agent</module>
+        <module>gateway</module>
+        <module>expense-review</module>
+        <module>expense-review-main</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+        <agent-runtime-ext-java.version>0.1.0-SNAPSHOT</agent-runtime-ext-java.version>
+        <agent-core-java.version>0.1.12</agent-core-java.version>
+        <!-- Must match the protoc that generated a2a-java's gencode (a2a-java/pom.xml protobuf-java.version).
+             Without this, agent-core-java's transitive 3.25.5 wins Maven's nearest-wins mediation and the
+             a2a-java gencode <clinit> throws NoClassDefFoundError: RuntimeVersion$RuntimeDomain on delegate. -->
+        <protobuf-java.version>4.33.2</protobuf-java.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-spec</artifactId>
+                <version>${agent-runtime-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-app</artifactId>
+                <version>${agent-runtime-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-adapters-agentcore</artifactId>
+                <version>${agent-runtime-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-adapters-versatile</artifactId>
+                <version>${agent-runtime-ext-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+                <version>${agent-runtime-ext-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-core-java</artifactId>
+                <version>${agent-core-java.version}</version>
+            </dependency>
+            <!-- Force the protobuf runtime that a2a-java's gencode (protoc 4.33.2) requires, overriding
+                 the older 3.25.5 that agent-core-java + grpc-protobuf pull in transitively. -->
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java-util</artifactId>
+                <version>${protobuf-java.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
