@@ -29,7 +29,7 @@
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
         <agent-core-java.version>0.1.13</agent-core-java.version>
-        <agent-core-ext-java.version>0.1.0-SNAPSHOT</agent-core-ext-java.version>
+        <intent-recognition.version>0.1.0</intent-recognition.version>
         <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0-SNAPSHOT</agent-runtime-ext-java.version>
     </properties>

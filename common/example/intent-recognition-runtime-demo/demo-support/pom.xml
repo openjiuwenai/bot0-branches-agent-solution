@@ -16,9 +16,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.openjiuwen.ext</groupId>
-            <artifactId>agent-core-ext-java</artifactId>
-            <version>${agent-core-ext-java.version}</version>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>intent-recognition</artifactId>
+            <version>${intent-recognition.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
