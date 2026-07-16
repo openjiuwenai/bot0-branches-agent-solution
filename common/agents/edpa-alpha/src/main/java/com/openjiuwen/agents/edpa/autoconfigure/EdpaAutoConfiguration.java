@@ -213,7 +213,6 @@ public class EdpaAutoConfiguration {
         try {
             return invocation.get();
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             throw new IllegalStateException("exploring model invoke interrupted", e);
         } catch (ExecutionException e) {
             throw modelInvocationFailure(e.getCause());
