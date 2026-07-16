@@ -65,6 +65,10 @@ class FullEdpaUnifiedMatrixRealLlmE2eTest {
 
     private static final List<String> CRITERIA = List.of("分析", "建议");
 
+    /** Known transient HTTP/timeout exception signatures whose stacktraces mark a matrix row as retryable. */
+    private static final List<String> TRANSIENT_FLAKY_SIGNATURES = List.of("IOException", "header parser",
+            "end-of-input", "HttpTimeout", "TimeoutException", "Connection reset");
+
     private static final String TASK = """
             分析当前的经济形势。请按以下步骤：
             1. 先调用 explore 工具，探索可用的经济分析维度。
@@ -198,8 +202,8 @@ class FullEdpaUnifiedMatrixRealLlmE2eTest {
     private void summarizeMatrix(RunOutcome outcome) {
         List<Map<String, Object>> results = outcome.results();
         LOG.log(Level.INFO, "{0}================ UNIFIED MATRIX SUMMARY ================", System.lineSeparator());
-        String header = String.format(java.util.Locale.ROOT, "%-22s %-9s %-7s %-7s %-8s %-9s %-9s%n", "model", "thinking", "explor", "tools",
-                "convrg", "verified", "status");
+        String header = String.format(java.util.Locale.ROOT, "%-22s %-9s %-7s %-7s %-8s %-9s %-9s%n", "model",
+                "thinking", "explor", "tools", "convrg", "verified", "status");
         LOG.log(Level.INFO, "{0}", header);
         for (Map<String, Object> r : results) {
             LOG.log(Level.INFO, "{0}", formatResultRow(r));
@@ -224,9 +228,9 @@ class FullEdpaUnifiedMatrixRealLlmE2eTest {
      * @return formatted table row string
      */
     private static String formatResultRow(Map<String, Object> r) {
-        return String.format(java.util.Locale.ROOT, "%-22s %-9s %-7s %-7s %-8s %-9s %-9s%n", r.get("model"), r.get("thinking"),
-                r.get("exploreCount"), r.get("toolCalls"), r.get("convergenceTrigger"), r.get("verified"),
-                r.get("status"));
+        return String.format(java.util.Locale.ROOT, "%-22s %-9s %-7s %-7s %-8s %-9s %-9s%n", r.get("model"),
+                r.get("thinking"), r.get("exploreCount"), r.get("toolCalls"), r.get("convergenceTrigger"),
+                r.get("verified"), r.get("status"));
     }
 
     /**
@@ -486,14 +490,6 @@ class FullEdpaUnifiedMatrixRealLlmE2eTest {
         }
         return String.valueOf(result);
     }
-
-    /**
-     * Known transient HTTP/timeout exception signatures whose stacktraces mark a matrix row as retryable.
-     * Extracted from the inline {@code ||} chain to keep {@link #isTransientFlaky(Map)} below the
-     * cyclomatic-complexity gate (G.MET.06). Adding a signature = adding one entry here, no new branch.
-     */
-    private static final List<String> TRANSIENT_FLAKY_SIGNATURES = List.of("IOException", "header parser",
-            "end-of-input", "HttpTimeout", "TimeoutException", "Connection reset");
 
     /**
      * 4-lens BLOCKER fix: classifies a result as transient-flaky ONLY on HTTP-layer exception signatures.

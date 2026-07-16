@@ -34,6 +34,8 @@ import org.springframework.context.annotation.Bean;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -192,20 +194,46 @@ public class EdpaAutoConfiguration {
                 return "";
             }
             List<BaseMessage> messages = Collections.singletonList(new UserMessage(prompt));
-            try {
-                AssistantMessage resp = model.invoke(messages, null, null, null, null, null, null, null, null, null);
-                return resp == null ? "" : resp.getContentAsString();
-            } catch (RuntimeException e) {
-                // Propagate runtime exceptions unchanged so LlmExplorer can map them to an
-                // empty result (honest degradation). Specific subtype, not a blanket Exception.
-                throw e;
-            } catch (Exception e) {
-                // Model.invoke declares throws Exception (checked); a Function cannot
-                // propagate checked exceptions, so the remaining checked failure is wrapped
-                // as an explore failure with the original as cause.
-                throw new IllegalStateException("exploring model invoke failed: " + e.getMessage(), e);
-            }
+            AssistantMessage resp = invokeModel(model, messages);
+            return resp == null ? "" : resp.getContentAsString();
         };
+    }
+
+    /**
+     * Invokes the SDK model synchronously while adapting its broad checked-exception contract.
+     *
+     * @param model model to invoke
+     * @param messages prompt messages
+     * @return the model response
+     */
+    private static AssistantMessage invokeModel(Model model, List<BaseMessage> messages) {
+        FutureTask<AssistantMessage> invocation = new FutureTask<>(
+                () -> model.invoke(messages, null, null, null, null, null, null, null, null, null));
+        invocation.run();
+        try {
+            return invocation.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("exploring model invoke interrupted", e);
+        } catch (ExecutionException e) {
+            throw modelInvocationFailure(e.getCause());
+        }
+    }
+
+    /**
+     * Preserves unchecked model failures and wraps only checked failures for the {@link Function} boundary.
+     *
+     * @param cause model invocation failure
+     * @return wrapper for a checked model failure
+     */
+    private static IllegalStateException modelInvocationFailure(Throwable cause) {
+        if (cause instanceof RuntimeException runtimeFailure) {
+            throw runtimeFailure;
+        }
+        if (cause instanceof Error error) {
+            throw error;
+        }
+        return new IllegalStateException("exploring model invoke failed: " + cause.getMessage(), cause);
     }
 
     /**

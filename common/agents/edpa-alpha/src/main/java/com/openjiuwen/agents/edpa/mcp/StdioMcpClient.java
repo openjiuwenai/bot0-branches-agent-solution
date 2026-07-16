@@ -22,7 +22,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -309,7 +312,7 @@ public class StdioMcpClient implements McpClient {
         BufferedReader stderr = new BufferedReader(
                 new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8));
         ThreadFactory factory = new DaemonThreadFactory("edpa-mcp-stderr-drain");
-        stderrDrain = Executors.newSingleThreadExecutor(factory);
+        stderrDrain = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), factory);
         stderrDrain.submit(() -> drainStderrLoop(stderr));
     }
 
@@ -490,10 +493,10 @@ public class StdioMcpClient implements McpClient {
      * ThreadFactory that produces daemon threads with a given name prefix and
      * a no-op uncaught-exception handler.
      *
-     * <p>This factory is supplied to {@link Executors#newSingleThreadExecutor}
-     * (see {@link #startStderrDrain()}), so all worker threads are owned and
-     * lifecycle-managed by an {@code Executors} thread pool rather than launched
-     * ad-hoc — satisfying the CodeCheck concurrency rule G.CON.12. The base
+     * <p>This factory is supplied to the {@link ThreadPoolExecutor} in
+     * {@link #startStderrDrain()}, so all worker threads are owned and
+     * lifecycle-managed by a thread pool rather than launched ad-hoc — satisfying
+     * the CodeCheck concurrency rule G.CON.12. The base
      * {@link Thread} is obtained from {@link Executors#defaultThreadFactory()}
      * (never constructed ad-hoc with {@code new Thread}) and then configured;
      * the pool owns its full lifecycle.
