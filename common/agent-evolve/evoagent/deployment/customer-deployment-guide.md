@@ -168,8 +168,10 @@ docker ps --filter "name=adapter"          # 期望 (healthy)
 
 ### 5.1 构建镜像（联网机器）
 
+> 路径说明：`agent-store` 仓库内 EvoAgent 位于 `community/EvoAgent`，`agent-solution` 仓库内位于 `common/agent-evolve/evoagent`。`build.sh` 会自动探测，无需手动指定 `EVOAGENT_REL_PATH`。
+
 ```bash
-cd community/EvoAgent/deployment
+cd community/EvoAgent/deployment   # agent-solution 仓库改为 cd common/agent-evolve/evoagent/deployment
 
 # 推荐：PyPI 拉 openjiuwen wheel
 HOME=/home/evolution/build \
