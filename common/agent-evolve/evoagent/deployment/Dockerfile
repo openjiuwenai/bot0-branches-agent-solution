@@ -35,14 +35,17 @@ RUN pip install --no-cache-dir vendor/openjiuwen-*.whl && \
         'httpx>=0.27' \
         'pyyaml>=6.0' \
         'fastapi>=0.115' \
-        'uvicorn[standard]>=0.30' && \
+        'uvicorn[standard]>=0.30' \
+        'python-multipart>=0.0.9' \
+        'openpyxl>=3.1' && \
     rm -rf vendor/ && \
     rm -rf /root/.cache/pip/ && \
     find /app -type d -name "__pycache__" -exec rm -rf {} +
 
 # 复制源码
 COPY src/ ./src/
-COPY scenarios/ ./scenarios/
+# scenarios 实际位于 examples/scenarios/，复制到镜像内 /app/scenarios/
+COPY examples/scenarios/ ./scenarios/
 COPY skills/ ./skills/
 
 EXPOSE 8000

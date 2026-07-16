@@ -1,5 +1,5 @@
 # ── 排除一切 Dockerfile 不 COPY 的内容，避免上下文膨胀 ──
-# Dockerfile 仅需: pyproject.toml, vendor/, src/, scenarios/, skills/
+# Dockerfile 仅需: pyproject.toml, vendor/, src/, examples/scenarios/, skills/
 
 # Python 运行时/缓存
 .venv/
@@ -22,6 +22,8 @@ server.log*
 tests/
 docs/
 examples/
+# 但 scenarios 是运行时必需的（Dockerfile 从 examples/scenarios 复制）
+!examples/scenarios/
 
 # 工具/编辑器元数据
 .claude/
