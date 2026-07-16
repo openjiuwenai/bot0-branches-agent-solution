@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.openjiuwen</groupId>
+        <artifactId>agent-runtime-ext-java</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>edpa-alpha</artifactId>
+    <name>edpa-alpha — Explore Decision Plan Action Agent (fuses PEV kernel + ReAct Rails)</name>
+    <description>EDPA-alpha adds an explicit Explore phase on top of PEV's sealed dispatch kernel and react-rails' steerable rails. Uses ReActAgent as the steerable host (consumeForceFinish + injectPendingSteering), reuses PevKernel.toReplanAction for Decision dispatch, and adds Explorer SPI + ExploreRail for active information gathering before planning.</description>
+
+    <properties>
+        <formatter.plugin.version>2.24.1</formatter.plugin.version>
+        <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
+        <checkstyle.version>10.21.0</checkstyle.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-core-java</artifactId>
+            <version>0.1.13</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>react-rails</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.55.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-trace</artifactId>
+            <version>1.55.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>net.revelc.code.formatter</groupId>
+                <artifactId>formatter-maven-plugin</artifactId>
+                <version>${formatter.plugin.version}</version>
+                <configuration>
+                    <configFile>${project.basedir}/../../agent-runtime-ext-java/.devtools/eclipse-java-formatter.xml</configFile>
+                    <lineEnding>LF</lineEnding>
+                    <encoding>UTF-8</encoding>
+                    <directories>
+                        <directory>${project.basedir}/src/main/java</directory>
+                        <directory>${project.basedir}/src/test/java</directory>
+                    </directories>
+                    <includes>
+                        <include>**/*.java</include>
+                    </includes>
+                    <excludes>
+                        <exclude>**/target/**</exclude>
+                    </excludes>
+                    <skipCssFormatting>true</skipCssFormatting>
+                    <skipJsonFormatting>true</skipJsonFormatting>
+                    <skipHtmlFormatting>true</skipHtmlFormatting>
+                    <skipXmlFormatting>true</skipXmlFormatting>
+                    <skipJsFormatting>true</skipJsFormatting>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle.plugin.version}</version>
+                <configuration>
+                    <configLocation>${project.basedir}/../../agent-runtime-ext-java/.devtools/checkstyle.xml</configLocation>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+                        <sourceDirectory>${project.basedir}/src/test/java</sourceDirectory>
+                    </sourceDirectories>
+                    <excludes>**/target/**</excludes>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    <inputEncoding>UTF-8</inputEncoding>
+                    <consoleOutput>true</consoleOutput>
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>warning</violationSeverity>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+</project>
