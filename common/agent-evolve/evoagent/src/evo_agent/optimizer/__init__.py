@@ -11,10 +11,12 @@ from evo_agent.optimizer.artifact_exporter import DictArtifactExporter
 from evo_agent.optimizer.dict_optimizer import DictSkillDocumentOptimizer
 from evo_agent.optimizer.skill_document import SkillDocumentOptimizer
 from evo_agent.optimizer.skill_document.artifact_exporter import ArtifactExporter
+from evo_agent.optimizer.tf_grpo import TfGrpoOptimizer
 
 __all__ = [
     "ArtifactExporter",
     "DictArtifactExporter",
     "DictSkillDocumentOptimizer",
     "SkillDocumentOptimizer",
+    "TfGrpoOptimizer",
 ]

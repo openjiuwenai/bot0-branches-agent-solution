@@ -1,0 +1,22 @@
+schema_version: "1.0"
+optimizer_class: optimizer.TfGrpoOptimizer
+adapter_url: "http://127.0.0.1:18900"
+skills:
+  - name: audit-business
+    optimize: true
+rollout:
+  max_turns: 15
+  extra_data: {}
+hyperparams:
+  # TF-GRPO
+  group_size: 2
+  cases_per_variant: 4
+  variant_temperature: 0.7
+  max_experiences: 10
+  # Trainer / rollout
+  batch_size: 4
+  num_parallel: 2
+  steps_per_epoch: 1
+  accumulation: 1
+  use_slow_update: false
+  use_meta_skill: false

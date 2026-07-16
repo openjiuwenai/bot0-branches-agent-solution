@@ -371,6 +371,9 @@ def _build_model_client_config(config: EvolveConfig) -> ModelClientConfig:
         api_key=config.llm_api_key,
         api_base=config.llm_base_url,
         verify_ssl=False,
+        # DashScope 直连；SKILL.md 变体生成可能超过默认 60s
+        timeout=300.0,
+        max_retries=2,
     )
 
 

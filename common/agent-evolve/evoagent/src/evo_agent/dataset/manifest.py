@@ -15,7 +15,6 @@ from typing import Any, cast
 
 import yaml
 from openjiuwen.agent_evolving.dataset import Case, CaseLoader
-from openjiuwen.agent_evolving.evaluator.metrics.exact_match import ExactMatchMetric
 
 from evo_agent.evaluator.evaluators.llm import LLMEvaluator
 from evo_agent.evaluator.evaluators.metric import MetricEvaluator
@@ -203,21 +202,19 @@ def _build_llm_evaluator(config: dict[str, Any], runtime: dict[str, Any]) -> LLM
 
 
 def _build_metric_evaluator(config: dict[str, Any]) -> MetricEvaluator:
-    """构建 MetricEvaluator（确定性评估器，不需要 runtime 注入）。"""
-    metric_name = config.get("metric", "exact_match")
+    """构建 MetricEvaluator（确定性评估器，不需要 runtime 注入）。
 
-    if metric_name == "exact_match":
-        metric = ExactMatchMetric(normalize=False)
-    elif metric_name == "normalized_exact_match":
-        metric = ExactMatchMetric(normalize=True)
-    else:
-        raise ValueError(
-            f"Unknown metric: {metric_name!r}. "
-            f"Supported metrics: 'exact_match', 'normalized_exact_match'."
-        )
+    支持 ``extract``：从 answer 文本中抽取配置字段后再 exact_match。
+    与 ``evo_agent.evaluator.factory.create_evaluator`` 行为对齐。
+    """
+    from evo_agent.evaluator.factory import create_evaluator
 
-    aggregate = config.get("aggregate", "mean")
-    return MetricEvaluator(metrics=metric, aggregate=aggregate)
+    payload = dict(config)
+    payload.setdefault("type", "metric")
+    evaluator = create_evaluator(payload)
+    if not isinstance(evaluator, MetricEvaluator):
+        raise TypeError(f"expected MetricEvaluator, got {type(evaluator).__name__}")
+    return evaluator
 
 
 def _build_custom_evaluator(config: dict[str, Any], runtime: dict[str, Any]) -> Any:

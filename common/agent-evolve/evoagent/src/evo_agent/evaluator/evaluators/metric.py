@@ -82,6 +82,22 @@ class MetricEvaluator(_UpstreamMetricEvaluator):  # type: ignore[misc]
         """The configured batch-score key (empty = batch aggregation disabled)."""
         return self._batch_score
 
+    def batch_evaluate(
+        self,
+        cases: Any,
+        predicts: list[dict[str, Any]],
+        num_parallel: int = 1,
+        **kwargs: Any,
+    ) -> list[EvaluatedCase]:
+        """Accept ``enable_attribution`` for API parity with LLMEvaluator (ignored)."""
+        kwargs.pop("enable_attribution", None)
+        if kwargs:
+            raise TypeError(
+                f"MetricEvaluator.batch_evaluate() got unexpected keyword arguments: "
+                f"{sorted(kwargs)!r}"
+            )
+        return super().batch_evaluate(cases, predicts, num_parallel=num_parallel)
+
     def evaluate(self, case: Case, predict: dict[str, Any]) -> EvaluatedCase:
         """Evaluate a single case.
 

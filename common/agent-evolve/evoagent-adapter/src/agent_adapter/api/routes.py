@@ -175,6 +175,7 @@ async def skills_action(request: Request) -> JSONResponse:
             payload: dict = {
                 "success": result.success,
                 "skill_name": result.skill_name,
+                "revision": result.revision,
             }
             if result.message:
                 payload["message"] = result.message
