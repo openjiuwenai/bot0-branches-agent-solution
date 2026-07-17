@@ -33,6 +33,13 @@ class ConsoleProgressCallback(Callbacks):  # type: ignore[misc]
     风格一致，``flush=True`` 保证长任务不缓冲。
     """
 
+    def __init__(self) -> None:
+        # optimizer_runner 汇总报告时读取（与 ProgressCallback 字段对齐）
+        self.candidate_per_epoch_scores: list[float] = []
+        self.val_per_epoch_scores: list[float] = []
+        self.val_per_epoch_case_scores: list[list[float]] = []
+        self.val_score_before: float = 0.0
+
     def on_train_begin(
         self,
         agent: BaseAgent,
@@ -40,6 +47,7 @@ class ConsoleProgressCallback(Callbacks):  # type: ignore[misc]
         eval_info: list[EvaluatedCase],
     ) -> None:
         baseline = _mean_score(eval_info)
+        self.val_score_before = baseline
         n_val = len(eval_info) if eval_info else 0
         print(
             f"训练开始：共 {progress.max_epoch} 轮，{n_val} 个验证 case，基线分数 {baseline:.3f}",
@@ -60,6 +68,11 @@ class ConsoleProgressCallback(Callbacks):  # type: ignore[misc]
         eval_info: list[EvaluatedCase],
     ) -> None:
         val_score = _mean_score(eval_info)
+        self.candidate_per_epoch_scores.append(val_score)
+        self.val_per_epoch_scores.append(float(progress.best_score))
+        self.val_per_epoch_case_scores.append(
+            [float(ec.score) for ec in eval_info if hasattr(ec, "score")]
+        )
         print(
             f"  第 {progress.current_epoch}/{progress.max_epoch} 轮完成："
             f"验证 {val_score:.3f}，最佳 {progress.best_score:.3f}，"
