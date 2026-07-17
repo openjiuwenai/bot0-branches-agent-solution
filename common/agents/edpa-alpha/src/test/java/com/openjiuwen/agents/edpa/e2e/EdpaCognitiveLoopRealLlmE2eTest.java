@@ -54,20 +54,7 @@ class EdpaCognitiveLoopRealLlmE2eTest {
                 key != null && !key.isBlank() && base != null && !base.isBlank() && "true".equalsIgnoreCase(enabled),
                 "cognitive-loop e2e requires OPENJIUWEN_API_KEY/BASE_URL + EDPA_COGNITIVE_E2E_ENABLED=true");
 
-        Map<String, Object> modelMap = new LinkedHashMap<>();
-        modelMap.put("model", model);
-        modelMap.put("model_name", model);
-        modelMap.put("temperature", 0.3);
-        modelMap.put("max_tokens", 4000);
-        // thinking control (from env LLM_THINKING, same modes as pev LlmClient)
-        String mode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
-        switch (mode) {
-            case "qwen-off" -> modelMap.put("enable_thinking", false);
-            case "qwen-on" -> modelMap.put("enable_thinking", true);
-            case "thinking-on" -> modelMap.put("thinking", Map.of("type", "enabled"));
-            case "thinking-off" -> modelMap.put("thinking", Map.of("type", "disabled"));
-            default -> modelMap.put("thinking", Map.of("type", "disabled"));
-        }
+        Map<String, Object> modelMap = buildModelMap(model);
         Map<String, Object> backendMap = new LinkedHashMap<>();
         backendMap.put("provider", "OpenAI");
         backendMap.put("client_provider", "OpenAI");
@@ -82,6 +69,56 @@ class EdpaCognitiveLoopRealLlmE2eTest {
 
         DeepAgent deep = HarnessFactory.createDeepAgent(config);
 
+        RailStateObserver observer = registerCognitiveRails(deep);
+        registerMarketDataTool(deep);
+
+        LOG.log(Level.INFO, "[cognitive-e2e] rails registered, invoking...");
+        Object result = deep.getAgent().invoke("分析当前经济形势。先调用 market_data 工具获取 GDP/CPI 数据，再给出含 GDP/CPI/通胀率的分析建议。", null);
+
+        String out = String.valueOf(result);
+        LOG.log(Level.INFO, "[cognitive-e2e] result={0}",
+                out.substring(0, Math.min(400, out.length())));
+        // 软观察：Criteria verify 是否触发（result 含 verified 痕迹 / replan 痕迹）
+        boolean hasVerify = out.contains("verified") || out.contains("replan") || out.contains("GDP");
+        LOG.log(Level.INFO, "[cognitive-e2e] hasVerifyTrace={0}", hasVerify);
+        // RED baseline 探针：观测 issue-#13 silent-drop（hasSteeringQueue 全程是否 false）
+        printObserverTrace(observer);
+        // wiring proof: 证认知 rail 挂载 DeepAgent + invoke 真 LLM 跑通
+        // rail fire 行为（verify→replan / root-cause degrade / convergence flatline）靠 mock 单测承重，非此 e2e gate
+        org.junit.jupiter.api.Assertions.assertNotNull(result, "DeepAgent invoke must return non-null");
+    }
+
+    /**
+     * Builds the model config map with thinking control from env LLM_THINKING.
+     *
+     * @param model the model name to embed in the map.
+     * @return the populated model config map.
+     */
+    private static Map<String, Object> buildModelMap(String model) {
+        Map<String, Object> modelMap = new LinkedHashMap<>();
+        modelMap.put("model", model);
+        modelMap.put("model_name", model);
+        modelMap.put("temperature", 0.3);
+        modelMap.put("max_tokens", 4000);
+        // thinking control (from env LLM_THINKING, same modes as pev LlmClient)
+        String mode = System.getenv().getOrDefault("LLM_THINKING", "glm-off");
+        switch (mode) {
+            case "qwen-off" -> modelMap.put("enable_thinking", false);
+            case "qwen-on" -> modelMap.put("enable_thinking", true);
+            case "thinking-on" -> modelMap.put("thinking", Map.of("type", "enabled"));
+            case "thinking-off" -> modelMap.put("thinking", Map.of("type", "disabled"));
+            default -> modelMap.put("thinking", Map.of("type", "disabled"));
+        }
+        return modelMap;
+    }
+
+    /**
+     * Registers the 4 cognitive rails plus a diagnostic observer onto the DeepAgent.
+     *
+     * @param deep the DeepAgent whose inner ReActAgent receives the rails.
+     * @return the test-only rail-state observer for later trace inspection.
+     */
+    private static RailStateObserver registerCognitiveRails(DeepAgent deep) {
         // SteeringProvisionRail — issue-#13 fix: provision steering queue on invoke(task,null)
         deep.getAgent().registerRail(new SteeringProvisionRail());
         // 4 cognitive rails onto DeepAgent's inner ReActAgent
@@ -98,30 +135,27 @@ class EdpaCognitiveLoopRealLlmE2eTest {
         // test-only diagnostic observer — issue-#13 silent-drop 探针（不入 prod 路径）
         RailStateObserver observer = new RailStateObserver();
         deep.getAgent().registerRail(observer);
+        return observer;
+    }
 
-        // market_data 工具（让 LLM 有数据工具，不再只 __replan__）
-        registerMarketDataTool(deep);
-
-        LOG.log(Level.INFO, "[cognitive-e2e] rails registered, invoking...");
-        Object result = deep.getAgent().invoke("分析当前经济形势。先调用 market_data 工具获取 GDP/CPI 数据，再给出含 GDP/CPI/通胀率的分析建议。", null);
-
-        String out = String.valueOf(result);
-        LOG.log(Level.INFO, "[cognitive-e2e] result={0}",
-                out.substring(0, Math.min(400, out.length())));
-        // 软观察：Criteria verify 是否触发（result 含 verified 痕迹 / replan 痕迹）
-        boolean hasVerify = out.contains("verified") || out.contains("replan") || out.contains("GDP");
-        LOG.log(Level.INFO, "[cognitive-e2e] hasVerifyTrace={0}", hasVerify);
-        // RED baseline 探针：观测 issue-#13 silent-drop（hasSteeringQueue 全程是否 false）
+    /**
+     * Prints the observer's hint-reached flag and each trace line.
+     *
+     * @param observer the rail-state observer captured during invoke.
+     */
+    private static void printObserverTrace(RailStateObserver observer) {
         LOG.log(Level.INFO, "[cognitive-e2e] observer hintReachedAnyModelCall={0}",
                 observer.isHintReachedAnyModelCall());
         for (String traceLine : observer.getTrace()) {
             LOG.log(Level.INFO, "[cognitive-e2e] {0}", traceLine);
         }
-        // wiring proof: 证认知 rail 挂载 DeepAgent + invoke 真 LLM 跑通
-        // rail fire 行为（verify→replan / root-cause degrade / convergence flatline）靠 mock 单测承重，非此 e2e gate
-        org.junit.jupiter.api.Assertions.assertNotNull(result, "DeepAgent invoke must return non-null");
     }
 
+    /**
+     * Registers a stub market_data tool onto the DeepAgent for the e2e loop.
+     *
+     * @param deep the DeepAgent to receive the market_data tool.
+     */
     private static void registerMarketDataTool(DeepAgent deep) {
         ToolCard card = ToolCard.builder().id("market_data").name("market_data")
                 .description("获取市场/经济数据。参数：indicator（如 GDP/CPI/利率）。")
