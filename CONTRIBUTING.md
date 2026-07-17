@@ -1,6 +1,6 @@
 # Contributing to openJiuwen agent-solution
 
-Thank you for your interest in contributing. This repository provides runtime extension adapters and examples on top of **openJiuwen Agent Runtime Java**. Contributions may target adapter code, example projects, documentation, tests, or integration feedback.
+Thank you for your interest in contributing. This repository provides runtime extension adapters, AgentCore SDK extensions, concrete Agents, and examples. Contributions may target any of these independent projects, documentation, tests, or integration feedback.
 
 ## Before You Start
 
@@ -15,10 +15,12 @@ Thank you for your interest in contributing. This repository provides runtime ex
 1. Install **Java 17+** and **Maven 3.9+**.
 2. Make sure matching dependencies are available:
    - `com.openjiuwen:agent-runtime-java:0.1.0`
-   - `com.openjiuwen:agent-core-java:0.1.12`
+   - `com.openjiuwen:agent-core-java:0.1.13`
 3. Build the extension modules:
 
    ```bash
+   mvn -f common/agent-core-ext-java/pom.xml clean install
+   mvn -f common/agents/pom.xml clean install
    mvn -f common/agent-runtime-ext-java/pom.xml clean install
    ```
 
@@ -36,6 +38,8 @@ Thank you for your interest in contributing. This repository provides runtime ex
 Run tests for the extension modules:
 
 ```bash
+mvn -f common/agent-core-ext-java/pom.xml clean test
+mvn -f common/agents/pom.xml clean test
 mvn -f common/agent-runtime-ext-java/pom.xml clean test
 ```
 
@@ -50,6 +54,8 @@ Some examples may depend on local configuration, remote services, or runtime wir
 ## Code Guidelines
 
 - Keep adapter responsibilities separate from runtime and core responsibilities.
+- Keep `agent-runtime-ext-java`, `agent-core-ext-java`, and `agents` as independent Maven projects.
+- Keep core SDK extensions free of Spring and register SDK behavior explicitly.
 - Do not reimplement HTTP ingress, A2A protocol handling, remote card discovery, communication, or session orchestration in this repository; those belong to `agent-runtime-java`.
 - Keep Agent execution behavior in `agent-core-java` unless the change is specifically about adapter wiring.
 - Match the naming, style, and testing pattern of the module you edit.

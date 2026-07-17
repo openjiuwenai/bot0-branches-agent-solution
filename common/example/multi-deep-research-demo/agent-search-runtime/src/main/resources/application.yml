@@ -1,6 +1,10 @@
 server:
   port: ${SEARCH_AGENT_PORT:18091}
 
+spring:
+  application:
+    name: SearchAgent
+
 openjiuwen:
   service:
     handler: agentcore

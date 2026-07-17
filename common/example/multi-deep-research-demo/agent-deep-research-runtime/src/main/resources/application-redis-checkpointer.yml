@@ -8,14 +8,17 @@
 # Notes:
 # - Default CredentialDecryptor is passthrough, so REDIS_PASSWORD can be plaintext for testing.
 # - Delete this profile once redis is no longer needed; base application.yml keeps in_memory as default.
+# - agent-search-runtime ships a mirror profile with the same env vars, so both runtimes share one Redis instance.
 openjiuwen:
   service:
     middleware:
       checkpointer:
         type: redis
         redis-ref: default
+        ttl-seconds: ${CHECKPOINTER_TTL_SECONDS:86400}
       redis:
         default:
+          type: ${REDIS_TYPE:standalone}
           host: ${REDIS_HOST:127.0.0.1}
           port: ${REDIS_PORT:6379}
           database: ${REDIS_DB:0}

@@ -1,0 +1,33 @@
+# docker-compose v1 格式（兼容 docker-compose 1.6+）
+# 无 version 字段、服务定义在 root 级、无 named volumes、无 healthcheck
+# 环境变量从 config/.env 读入: docker compose --env-file config/.env up -d
+# (start.sh 模式下由脚本自动 source config/.env 后 docker run)
+
+adapter:
+  build:
+    context: ..
+    dockerfile: deployment/Dockerfile
+  ports:
+    - "${ADAPTER_PORT}:8900"
+  # Linux Docker Engine 默认无 host.docker.internal（Docker Desktop 才内置）。
+  # 用 host-gateway 关键字映射到宿主机网关 IP，使容器内可用
+  # http://host.docker.internal:<port> 回调宿主机或其他容器发布到宿主的业务 Agent 端点。
+  # （需 Docker 20.10+，host-gateway 关键字在该版本引入。）
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  environment:
+    ADAPTER_POLL_INTERVAL: ${ADAPTER_POLL_INTERVAL}
+    ADAPTER_START_FROM: ${ADAPTER_START_FROM}
+    ADAPTER_HOST: "0.0.0.0"
+    ADAPTER_PORT: 8900
+    ADAPTER_OUTPUT_RETENTION_DAYS: ${ADAPTER_OUTPUT_RETENTION_DAYS}
+    ADAPTER_OUTPUT_MAX_FILES: ${ADAPTER_OUTPUT_MAX_FILES}
+    ADAPTER_OUTPUT_MAX_FILE_SIZE: ${ADAPTER_OUTPUT_MAX_FILE_SIZE}
+    ADAPTER_LOG_DIR: /data/logs
+    ADAPTER_SKILLS_ROOT: /data/skills
+  volumes:
+    - ${HOST_OUTPUT_DIR}:/app/data
+    - ${HOST_CONFIG_FILE:-/opt/agent-adapter/agent_adapter_config.yaml}:/app/agent_adapter_config.yaml
+    - ${HOST_LOG_ROOT}:/data/logs:ro
+    - ${HOST_SKILLS_ROOT}:/data/skills
+  restart: always
