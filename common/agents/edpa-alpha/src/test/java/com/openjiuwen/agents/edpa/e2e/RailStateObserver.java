@@ -46,8 +46,8 @@ public class RailStateObserver extends AgentRail {
 
     @Override
     public void beforeInvoke(AgentCallbackContext ctx) {
-        record("beforeInvoke hasSteeringQueue=%s hasForceFinishRequest=%s",
-                new Object[]{ctx.hasSteeringQueue(), ctx.hasForceFinishRequest()});
+        record(String.format("beforeInvoke hasSteeringQueue=%s hasForceFinishRequest=%s",
+                ctx.hasSteeringQueue(), ctx.hasForceFinishRequest()));
     }
 
     @Override
@@ -58,12 +58,14 @@ public class RailStateObserver extends AgentRail {
             hintReachedAnyModelCall = true;
         }
         String snapshot = bound ? rePushSnapshot(ctx.getSteeringQueue()) : "(no queue)";
-        record("afterModelCall hasSteeringQueue=%s steeringSnapshot=%s hintThisRound=%s hintReachedAny=%s",
-                new Object[]{bound, snapshot, hintThisRound, hintReachedAnyModelCall});
+        record(String.format("afterModelCall hasSteeringQueue=%s steeringSnapshot=%s hintThisRound=%s hintReachedAny=%s",
+                bound, snapshot, hintThisRound, hintReachedAnyModelCall));
     }
 
     /**
      * Reports whether the convergence hint reached any round's model messages (consumer-closed).
+     *
+     * @return true if the convergence hint appeared in any round's model messages
      */
     public boolean isHintReachedAnyModelCall() {
         return hintReachedAnyModelCall;
@@ -71,6 +73,8 @@ public class RailStateObserver extends AgentRail {
 
     /**
      * Returns the ordered diagnostic lines collected for logging and assertion.
+     *
+     * @return immutable copy of the diagnostic trace lines
      */
     public List<String> getTrace() {
         return List.copyOf(trace);
@@ -98,8 +102,13 @@ public class RailStateObserver extends AgentRail {
         return drained.toString();
     }
 
-    private void record(String pattern, Object[] args) {
-        String line = "[RailStateObserver] " + String.format(pattern, args);
+    /**
+     * Records one pre-formatted diagnostic line to the log and the trace buffer.
+     *
+     * @param message the already-formatted diagnostic message
+     */
+    private void record(String message) {
+        String line = "[RailStateObserver] " + message;
         LOG.log(Level.INFO, "{0}", line);
         trace.add(line);
     }

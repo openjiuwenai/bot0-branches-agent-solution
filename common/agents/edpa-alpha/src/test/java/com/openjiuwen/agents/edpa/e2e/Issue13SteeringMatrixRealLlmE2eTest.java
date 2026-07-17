@@ -61,6 +61,8 @@ class Issue13SteeringMatrixRealLlmE2eTest {
             Map<String, Object> thinkingOn, Map<String, Object> thinkingOff) {
         /**
          * Resolves the API key from the env var named by {@link #keyEnv}.
+         *
+         * @return the resolved API key, or {@code null} if the env var is unset
          */
         String resolveKey() {
             return System.getenv(keyEnv);
@@ -69,6 +71,8 @@ class Issue13SteeringMatrixRealLlmE2eTest {
 
     /**
      * Builds the 4-model config list across bigmodel/deepseek/openrouter endpoints.
+     *
+     * @return the unmodifiable list of model configs for the matrix
      */
     private static List<ModelConfig> configs() {
         Map<String, Object> glmOn = Map.of("thinking", Map.of("type", "enabled"));
@@ -135,7 +139,6 @@ class Issue13SteeringMatrixRealLlmE2eTest {
         } catch (InterruptedException e) {
             r.put("status", "flaky:Interrupted");
             LOG.log(Level.INFO, "[steer-matrix] {0} EX Interrupted", label);
-            Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             r.put("status", "flaky:" + (cause == null ? "Exception" : cause.getClass().getSimpleName()));
@@ -187,6 +190,11 @@ class Issue13SteeringMatrixRealLlmE2eTest {
 
     /**
      * Builds the DeepAgentConfig from a model config + thinking flag.
+     *
+     * @param mc model config under test
+     * @param key resolved API key
+     * @param thinking whether thinking mode is enabled
+     * @return the assembled DeepAgentConfig
      */
     private static DeepAgentConfig buildConfig(ModelConfig mc, String key, boolean thinking) {
         Map<String, Object> modelMap = new LinkedHashMap<>();
@@ -210,6 +218,8 @@ class Issue13SteeringMatrixRealLlmE2eTest {
 
     /**
      * Prints the matrix table plus the issue-#13 GREEN assertion (wiring=true on all completed).
+     *
+     * @param results the per-config result maps collected by the matrix run
      */
     private static void summarize(List<Map<String, Object>> results) {
         LOG.log(Level.INFO, "{0}========== STEERING MATRIX (issue-#13 fix) ==========",
