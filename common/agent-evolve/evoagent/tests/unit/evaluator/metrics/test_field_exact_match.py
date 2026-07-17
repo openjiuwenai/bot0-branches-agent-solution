@@ -8,7 +8,9 @@ from evo_agent.evaluator.evaluators.metric import MetricEvaluator
 from evo_agent.evaluator.factory import create_evaluator
 from evo_agent.evaluator.metrics.extract import (
     AnswerFieldExtractConfig,
+    extract_config_from_evaluator,
     extract_prediction_field,
+    is_extracted_field_missing,
     parse_extract_config,
 )
 from evo_agent.evaluator.metrics.field_exact_match import FieldExtractExactMatchMetric
@@ -154,3 +156,34 @@ class TestFieldExtractExactMatchMetric:
         from openjiuwen.agent_evolving.evaluator.metrics.exact_match import ExactMatchMetric
 
         assert ExactMatchMetric(normalize=False).compute("有责", "有责") == 1.0
+
+
+class TestExtractConfigFromEvaluator:
+    def test_from_field_extract_metric(self) -> None:
+        evaluator = create_evaluator(
+            {
+                "type": "metric",
+                "metric": "exact_match",
+                "extract": {
+                    "strategy": "answer_tag_json_field",
+                    "fields": ["responsibility"],
+                    "prefer_values": ["无责", "有责"],
+                },
+            }
+        )
+        cfg = extract_config_from_evaluator(evaluator)
+        assert cfg is not None
+        assert cfg.fields == ("responsibility",)
+        assert is_extracted_field_missing(_answer("no field"), cfg) is True
+        assert (
+            is_extracted_field_missing(
+                _answer('<answer>{"responsibility": "无责"}</answer>'),
+                cfg,
+            )
+            is False
+        )
+
+    def test_missing_when_no_extract(self) -> None:
+        evaluator = create_evaluator({"type": "metric", "metric": "exact_match"})
+        assert extract_config_from_evaluator(evaluator) is None
+        assert is_extracted_field_missing(_answer(""), None) is False

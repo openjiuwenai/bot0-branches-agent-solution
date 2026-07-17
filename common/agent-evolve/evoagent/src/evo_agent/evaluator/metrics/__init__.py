@@ -22,7 +22,9 @@ from evo_agent.evaluator.metrics.base import BatchMetric, BatchMetricResult, Met
 from evo_agent.evaluator.metrics.batch import BatchMetricAggregator, SetOverlapBatchMetric
 from evo_agent.evaluator.metrics.extract import (
     AnswerFieldExtractConfig,
+    extract_config_from_evaluator,
     extract_prediction_field,
+    is_extracted_field_missing,
     parse_extract_config,
 )
 from evo_agent.evaluator.metrics.field_exact_match import FieldExtractExactMatchMetric
@@ -58,9 +60,11 @@ __all__ = [
     "NumericToleranceMetric",
     "RegexMatchMetric",
     "SetOverlapBatchMetric",
+    "extract_config_from_evaluator",
     "extract_prediction_field",
     "get_batch_metric",
     "get_metric",
+    "is_extracted_field_missing",
     "parse_extract_config",
     "register_batch_metric",
     "register_metric",

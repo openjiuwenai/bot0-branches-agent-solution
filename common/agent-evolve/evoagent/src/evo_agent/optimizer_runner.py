@@ -211,6 +211,8 @@ async def run_optimization(
             num_parallel=resolved.num_parallel,
             trace_max_retries=resolved.trace_max_retries,
             trace_retry_backoff=resolved.trace_retry_backoff,
+            empty_extract_max_attempts=resolved.empty_extract_max_attempts,
+            empty_extract_retry_backoff=resolved.empty_extract_retry_backoff,
             tie_reval_eps=resolved.tie_reval_eps,
             early_stop_score=1.01,  # prevent early stop at perfect 1.0
         )

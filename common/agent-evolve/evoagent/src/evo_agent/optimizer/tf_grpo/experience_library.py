@@ -82,9 +82,9 @@ class ExperienceLibrary:
         if not items:
             return ""
         lines = [
-            "# Learned Experiences",
+            "# 已学习经验",
             "",
-            "Based on previous optimization attempts, apply these insights:",
+            "基于以往优化尝试，请应用以下洞察：",
             "",
         ]
         for i, exp in enumerate(items, 1):

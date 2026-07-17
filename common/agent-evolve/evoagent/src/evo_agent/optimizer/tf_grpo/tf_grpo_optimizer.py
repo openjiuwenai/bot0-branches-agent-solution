@@ -20,6 +20,7 @@ from typing import Any
 from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
 
 from evo_agent.dataset.case import merge_extra_data
+from evo_agent.evaluator.metrics.extract import extract_config_from_evaluator
 from evo_agent.evaluator.trajectory.normalize import normalize_trace_to_trajectory
 from evo_agent.optimizer.dict_optimizer import DictSkillDocumentOptimizer
 from evo_agent.optimizer.llm_resilience import LLMInvokePolicy, invoke_text_with_retry
@@ -41,6 +42,7 @@ from evo_agent.optimizer.tf_grpo.variant_generator import (
     skill_document_incompleteness_reason,
     strip_code_fence,
 )
+from evo_agent.rollout_invoke import invoke_with_empty_extract_retry
 from evo_agent.types import TrajectoryUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -68,10 +70,12 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
         conversation_id_factory: Any = None,
         trace_max_retries: int = 24,
         trace_retry_backoff: float = 5.0,
+        empty_extract_max_attempts: int = 3,
+        empty_extract_retry_backoff: float = 1.0,
         phase_callback: Any | None = None,
         group_size: int = 3,
         cases_per_variant: int | None = None,
-        variant_temperature: float = 0.7,
+        variant_temperature: float = 1.5,
         max_experiences: int = 10,
         rollout_temperature: float | None = None,
         **kwargs: Any,
@@ -88,6 +92,8 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
         self._conversation_id_factory = conversation_id_factory
         self._trace_max_retries = trace_max_retries
         self._trace_retry_backoff = trace_retry_backoff
+        self._empty_extract_max_attempts = max(int(empty_extract_max_attempts), 1)
+        self._empty_extract_retry_backoff = float(empty_extract_retry_backoff)
         self._phase_callback = phase_callback
 
         self._group_size = max(1, int(group_size))
@@ -148,9 +154,20 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             experience_context=experience_context,
             epoch=epoch,
         )
+        axes = (
+            "判定/决策门槛与例外条款（可增删改）",
+            "流程步骤与易错点前置",
+            "输出契约自检与文档结构重组",
+        )
+        axis = axes[(max(variant_index, 1) - 1) % len(axes)]
+        explore_hint = (
+            "经验库为空：请大胆增删改条款做差异化探索；"
+            if not (experience_context or "").strip()
+            else "在吸收经验的前提下仍须与其它变体拉开差异；"
+        )
         prompt += (
-            f"\n**Rollout focus hint:** variant {variant_index}/{self._group_size} "
-            "— emphasize a DIFFERENT concrete improvement than other variants.\n"
+            f"\n**Rollout 侧重点提示：** 变体 {variant_index}/{self._group_size} "
+            f"——{explore_hint}本变体主改进轴优先围绕「{axis}」。\n"
         )
         raw = await invoke_text_with_retry(
             self._llm,
@@ -243,6 +260,7 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             return [], []
 
         sem = asyncio.Semaphore(min(self._num_parallel, len(cases)))
+        extract_cfg = extract_config_from_evaluator(self._evaluator)
 
         async def _rollout_one(case: Case) -> tuple[str, Any, dict | None, str]:
             async with sem:
@@ -251,31 +269,42 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
                 if self._rollout_temperature is not None:
                     extra = {**extra, "temperature": self._rollout_temperature}
 
-                if self._conversation_id_factory:
-                    conversation_id = self._conversation_id_factory.new(
-                        phase="train", case_id=case.case_id
-                    )
-                else:
-                    conversation_id = case.case_id
+                async def _invoke_once(conversation_id: str) -> dict[str, Any]:
+                    try:
+                        result = await self._agent.invoke(
+                            {
+                                **case.inputs,
+                                "conversation_id": conversation_id,
+                                "extra_data": extra,
+                            },
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Training invoke failed for case=%s conversation_id=%s: %s",
+                            case.case_id,
+                            conversation_id,
+                            exc,
+                        )
+                        return {"answer": "", "error": str(exc)}
+                    return result if isinstance(result, dict) else {"answer": str(result)}
 
-                try:
-                    result = await self._agent.invoke(
-                        {
-                            **case.inputs,
-                            "conversation_id": conversation_id,
-                            "extra_data": extra,
-                        },
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Training invoke failed for case=%s conversation_id=%s: %s",
-                        case.case_id,
-                        conversation_id,
-                        exc,
-                    )
-                    result = {"answer": "", "error": str(exc)}
+                def _new_cid() -> str:
+                    if self._conversation_id_factory:
+                        return self._conversation_id_factory.new(
+                            phase="train", case_id=case.case_id
+                        )
+                    return case.case_id
 
-                answer = result if isinstance(result, dict) else {"answer": str(result)}
+                answer, conversation_id = await invoke_with_empty_extract_retry(
+                    invoke_once=_invoke_once,
+                    new_conversation_id=_new_cid,
+                    extract_cfg=extract_cfg,
+                    max_attempts=self._empty_extract_max_attempts,
+                    backoff_secs=self._empty_extract_retry_backoff,
+                    case_id=case.case_id,
+                    phase="train",
+                )
+
                 try:
                     trace_data = await self._get_required_trace(conversation_id)
                 except TrajectoryUnavailableError as exc:

@@ -12,7 +12,7 @@ def test_add_and_prompt_context() -> None:
     lib = ExperienceLibrary(max_experiences=5)
     lib.add("Add concrete usage examples")
     ctx = lib.to_prompt_context()
-    assert "Learned Experiences" in ctx
+    assert "已学习经验" in ctx
     assert "Add concrete usage examples" in ctx
 
 

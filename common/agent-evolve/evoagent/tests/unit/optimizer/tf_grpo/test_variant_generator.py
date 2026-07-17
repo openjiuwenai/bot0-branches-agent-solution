@@ -27,13 +27,29 @@ def test_restore_frontmatter_preserves_yaml() -> None:
 def test_build_variant_prompt_includes_experience() -> None:
     prompt = build_variant_prompt(
         current_best="# Skill\n",
-        experience_context="# Learned Experiences\n\n1. Add examples\n",
+        experience_context="# 已学习经验\n\n1. Add examples\n",
         epoch=2,
     )
     assert "Add examples" in prompt
-    assert "Current Best Version" in prompt
-    assert "COMPLETE SKILL.md" in prompt
-    assert "Never truncate" in prompt
+    assert "当前最优版本" in prompt
+    assert "完整的 SKILL.md" in prompt
+    assert "禁止截断" in prompt
+    assert "第 2 轮" in prompt
+    assert "已学习经验" in prompt
+    assert "自由探索" not in prompt
+
+
+def test_build_variant_prompt_empty_experience_allows_exploration() -> None:
+    prompt = build_variant_prompt(
+        current_best="# Skill\n",
+        experience_context="",
+        epoch=1,
+    )
+    assert "经验库状态" in prompt
+    assert "自由探索" in prompt
+    assert "新增条款" in prompt
+    assert "删除/收紧" in prompt
+    assert "多样性要求" in prompt
 
 
 def test_reject_truncated_skill_with_unclosed_fence() -> None:

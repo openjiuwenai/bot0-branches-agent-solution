@@ -87,6 +87,32 @@ def extract_prediction_field(
     return ""
 
 
+def extract_config_from_evaluator(evaluator: Any) -> AnswerFieldExtractConfig | None:
+    """Pull ``AnswerFieldExtractConfig`` from a metric evaluator, if configured."""
+    metrics = getattr(evaluator, "_metrics", None)
+    if metrics is None:
+        metrics = getattr(evaluator, "metrics", None)
+    if metrics is None:
+        return None
+    if not isinstance(metrics, (list, tuple)):
+        metrics = [metrics]
+    for metric in metrics:
+        cfg = getattr(metric, "_extract", None)
+        if isinstance(cfg, AnswerFieldExtractConfig):
+            return cfg
+    return None
+
+
+def is_extracted_field_missing(
+    prediction: Any,
+    config: AnswerFieldExtractConfig | None,
+) -> bool:
+    """True when extract is configured and the target field value is empty."""
+    if config is None:
+        return False
+    return not bool(extract_prediction_field(prediction, config).strip())
+
+
 def _resolve_source_text(prediction: Any, source: str) -> str:
     """Take the answer string as-is; do not strip tags or parse structure."""
     if isinstance(prediction, dict):

@@ -59,6 +59,8 @@ class ResolvedOptimizationConfig:
     rollout_extra_data: dict[str, Any]
     trace_max_retries: int
     trace_retry_backoff: float
+    empty_extract_max_attempts: int
+    empty_extract_retry_backoff: float
     tie_reval_eps: float
     extra_hyperparams: dict[str, Any]
 
@@ -80,6 +82,8 @@ class ResolvedOptimizationConfig:
             "rollout_extra_data": dict(self.rollout_extra_data),
             "trace_max_retries": self.trace_max_retries,
             "trace_retry_backoff": self.trace_retry_backoff,
+            "empty_extract_max_attempts": self.empty_extract_max_attempts,
+            "empty_extract_retry_backoff": self.empty_extract_retry_backoff,
         }
         deps.update(self.extra_hyperparams)
         return deps
@@ -156,6 +160,8 @@ class OptimizationConfigResolver:
                 "preserve_frontmatter",
                 "trace_max_retries",
                 "trace_retry_backoff",
+                "empty_extract_max_attempts",
+                "empty_extract_retry_backoff",
                 "tie_reval_eps",
             }
             and k not in _RESERVED_DEPENDENCY_KEYS
@@ -231,6 +237,19 @@ class OptimizationConfigResolver:
                 name="trace_retry_backoff",
                 merged_hyperparams=merged_hp,
                 config_value=5.0,
+                minimum=0.0,
+            ),
+            empty_extract_max_attempts=_resolve_int(
+                name="empty_extract_max_attempts",
+                request_value=None,
+                merged_hyperparams=merged_hp,
+                config_value=3,
+                minimum=1,
+            ),
+            empty_extract_retry_backoff=_resolve_float(
+                name="empty_extract_retry_backoff",
+                merged_hyperparams=merged_hp,
+                config_value=1.0,
                 minimum=0.0,
             ),
             tie_reval_eps=_resolve_float(

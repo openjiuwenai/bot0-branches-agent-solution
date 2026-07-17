@@ -47,7 +47,7 @@ def _clip(text: str, max_chars: int) -> str:
     raw = text or ""
     if max_chars <= 0 or len(raw) <= max_chars:
         return raw
-    return raw[: max_chars - 20] + "\n...[truncated]..."
+    return raw[: max_chars - 20] + "\n...[已截断]..."
 
 
 def _prediction_text(answer: Any) -> str:
@@ -108,42 +108,42 @@ def build_rollout_summary_prompt(
     mean_score: float,
     max_skill_chars: int = 20000,
 ) -> str:
-    """Prompt for one-variant summary used later by semantic-advantage extraction."""
+    """为后续组内语义优势抽取生成单变体 rollout 摘要提示词。"""
     skill = _clip(skill_content or "", max_skill_chars)
     case_blocks: list[str] = []
     for brief in case_briefs:
-        reason_line = f"\n- Reason: {brief.reason}" if brief.reason.strip() else ""
+        reason_line = f"\n- 评分说明: {brief.reason}" if brief.reason.strip() else ""
         case_blocks.append(
-            f"**Case {brief.case_id}** (score={brief.score:.4f})\n"
-            f"- Expected: {brief.expected or '(none)'}\n"
-            f"- Prediction/output: {brief.prediction or '(empty)'}{reason_line}"
+            f"**用例 {brief.case_id}**（得分={brief.score:.4f}）\n"
+            f"- 期望: {brief.expected or '（无）'}\n"
+            f"- 预测/输出: {brief.prediction or '（空）'}{reason_line}"
         )
-    cases_text = "\n\n".join(case_blocks) if case_blocks else "(No scored cases.)"
-    return f"""Summarize one skill-document variant's rollout for later group-relative comparison.
+    cases_text = "\n\n".join(case_blocks) if case_blocks else "（无已评分用例。）"
+    return f"""请总结该技能文档变体的一次 rollout，供后续组内相对比较使用。
 
-**Variant id:** {variant_id}
-**Mean score:** {mean_score:.4f} over {len(case_briefs)} case(s)
+**变体 id：** {variant_id}
+**平均分：** {mean_score:.4f}（共 {len(case_briefs)} 条用例）
 
-**Skill variant (SKILL.md):**
+**技能变体（SKILL.md）：**
 {skill}
 
-**Per-case results:**
+**各用例结果：**
 {cases_text}
 
-Write a concise summary (about 8–12 bullets) that a later step can compare across variants.
-The summary MUST include:
-1. Overall outcome: mean score; which cases succeeded vs failed (by case id)
-2. Skill emphasis: concrete rules/sections/examples this SKILL.md stresses (not generic praise)
-3. Error modes: recurring mismatches between expected label and prediction; quote key wrong fields when present
-4. Likely skill gaps that caused failures (specific missing instructions / edge cases / output-contract issues)
-5. Strengths to keep on high-scoring cases (specific guidance that seemed to help)
+请写一份约 8–12 条要点的简洁摘要，便于后续跨变体对比。
+摘要必须包含：
+1. 总体结果：平均分；按 case id 列出成功与失败用例
+2. 技能侧重：本 SKILL.md 强调的具体规则/章节/示例（不要空泛称赞）
+3. 错误模式：期望标签与预测之间的反复偏差；有关键错误字段时请引用
+4. 可能的技能缺口：导致失败的具体缺失说明 / 边界情况 / 输出契约问题
+5. 高分用例上应保留的优势：看似有效的具体指导
 
-Constraints:
-- Do not invent case facts beyond the provided outputs
-- Do not rewrite or dump the full SKILL.md
-- Output summary text only (no preamble)
+约束：
+- 不得编造所给输出之外的 case 事实
+- 不要重写或整篇粘贴 SKILL.md
+- 只输出摘要正文（不要前言）
 
-Rollout summary:
+Rollout 摘要：
 """
 
 
@@ -157,26 +157,26 @@ def build_semantic_advantage_prompt(
     parts = []
     for r in rollouts:
         parts.append(
-            f"**Variant {r.variant_id}** (Score: {r.score:.4f}):\n"
-            f"{r.summary or '(no summary)'}"
+            f"**变体 {r.variant_id}**（得分: {r.score:.4f}）：\n"
+            f"{r.summary or '（无摘要）'}"
         )
     summaries_text = "\n\n".join(parts)
-    return f"""Analyze multiple skill optimization attempts to extract key insights.
+    return f"""请分析多次技能优化尝试，提炼关键洞察。
 
-{existing if existing else "(Experience library is empty.)"}
+{existing if existing else "（经验库为空。）"}
 
-**Current Rollout Group:**
+**当前 Rollout 组：**
 {summaries_text}
 
-Extract 2-3 key insights about what makes a skill variant successful. Focus on:
-- Patterns that correlate with higher scores
-- Common mistakes in lower-scoring variants
-- SPECIFIC missing elements that need to be ADDED
-- Actionable guidance for future optimization
+请提炼 2–3 条关于「何种变体更成功」的关键洞察，重点关注：
+- 与更高分数相关的模式
+- 低分变体中的常见错误
+- 需要**补充**的具体缺失要素
+- 对后续优化可执行的指导
 
-Format as concise bullet points with specific recommendations.
+以简洁要点形式输出，并给出具体建议。
 
-Key Insights:
+关键洞察：
 """
 
 
@@ -187,33 +187,33 @@ def build_library_update_prompt(
     current = "\n".join(
         f"{i + 1}. {e.content}" for i, e in enumerate(experience_library.experiences)
     )
-    return f"""Manage an experience library for skill optimization.
+    return f"""请管理技能优化用的经验库。
 
-**Current Experience Library:**
-{current if current else "(Empty)"}
+**当前经验库：**
+{current if current else "（空）"}
 
-**New Insights:**
+**新洞察：**
 {semantic_advantage}
 
-Decide how to update the library. Focus on ACTIONABLE, SPECIFIC guidance.
+决定如何更新经验库。聚焦**可执行、具体**的指导。
 
-Operations:
-- Add: Add new experience with CONCRETE recommendations
-- Delete: Remove vague or unhelpful experience (0-based index)
-- Modify: Make experience more specific (0-based index)
-- Keep: No changes
+操作类型（operation 字段保持英文）：
+- Add：新增带具体建议的经验
+- Delete：删除空泛或无用的经验（0-based 下标）
+- Modify：把某条经验改得更具体（0-based 下标）
+- Keep：不做变更
 
-Provide operations as a JSON list only:
+仅输出 JSON 列表：
 ```json
 [
-  {{"operation": "Add", "content": "Add concrete usage examples with input/output"}},
-  {{"operation": "Modify", "index": 0, "content": "Document edge cases for invalid inputs"}},
+  {{"operation": "Add", "content": "补充带输入/输出的具体用法示例"}},
+  {{"operation": "Modify", "index": 0, "content": "补充非法输入等边界情况说明"}},
   {{"operation": "Delete", "index": 1}},
   {{"operation": "Keep"}}
 ]
 ```
 
-Operations:
+操作：
 """
 
 
@@ -265,6 +265,5 @@ def parse_library_operations(raw: str) -> list[LibraryOperation]:
 
 def fallback_rollout_summary(variant_id: str, score: float, n_cases: int) -> str:
     return (
-        f"Variant {variant_id} scored {score:.4f} "
-        f"averaged over {n_cases} evaluation case(s)."
+        f"变体 {variant_id} 在 {n_cases} 条评估用例上的平均分为 {score:.4f}。"
     )

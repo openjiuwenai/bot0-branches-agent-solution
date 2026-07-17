@@ -107,5 +107,6 @@ def test_build_rollout_summary_prompt_includes_skill_and_cases() -> None:
     assert "输出契约" in prompt
     assert "case-1" in prompt
     assert "case-2" in prompt
-    assert "Likely skill gaps" in prompt
-    assert "Mean score" in prompt
+    assert "可能的技能缺口" in prompt
+    assert "平均分" in prompt
+    assert "各用例结果" in prompt

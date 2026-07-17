@@ -93,30 +93,52 @@ def build_variant_prompt(
 ) -> str:
     content = current_best
     if len(content) > max_content_chars:
-        content = content[:max_content_chars] + "\n\n[... content truncated ...]"
+        content = content[:max_content_chars] + "\n\n[... 内容已截断 ...]"
 
-    experience_block = experience_context.strip() or "(No prior experiences yet.)"
-    return f"""Optimize this skill's documentation (SKILL.md) by making CONCRETE IMPROVEMENTS.
+    experience_raw = (experience_context or "").strip()
+    experience_empty = not experience_raw
+
+    if experience_empty:
+        experience_block = """**经验库状态：** 空（尚无历史经验）。
+
+**本轮探索策略（经验为空时强制执行）：**
+- 允许**自由探索**：不必保守微调，可对规则/条款做增、删、改、重排。
+- 鼓励与当前版本形成**可辨识差异**（不要只改措辞或同义改写）。
+- 可尝试的改动类型（本变体至少落实一类，最好两类）：
+  1. **新增条款**：补判定门槛、例外、反例、自检步骤、速查表行等
+  2. **删除/收紧**：去掉空泛套话、互相打架的规则、易诱发误判的表述
+  3. **改写关键路径**：调整责任判定优先级、超时与有责的耦合方式、证据门槛
+  4. **结构调整**：合并重复节、把易错点提前、改输出自检清单
+- 探索仍须保持文档可执行：保留输出契约与依赖；不要把文档改成空壳或不可用。"""
+    else:
+        experience_block = f"""**已学习经验（请优先吸收，但仍须产出与其它变体不同的改法）：**
+
+{experience_raw}
+
+**在有经验时：**
+- 落实经验中的可执行建议，同时允许补充、删改冲突条款以消除歧义。
+- 禁止仅做同义改写；每个变体应有独立的主改进轴。"""
+
+    return f"""请对这份技能文档（SKILL.md）生成一个**多样化**的改进变体。
 
 {experience_block}
 
-**Current Best Version:**
+**当前最优版本：**
 {content}
 
-**IMPORTANT INSTRUCTIONS:**
-You must generate an IMPROVED version that ADDS missing elements when useful:
+**多样性要求（所有变体必须遵守）：**
+- 相对当前版本，必须有**实质性**差异（规则内容或判定流程变化），禁止原样复制。
+- 同一轮多个变体应走**不同改进轴**（例如：判定门槛、流程易错点、输出自检/结构）。
+- 允许增、删、改条款；不要只做同义改写或重复堆叠口号式原则。
+- 优先写可执行规则与步骤，少写空泛原则。
 
-1. **Code Examples**: If missing, ADD concrete examples in markdown code blocks
-2. **Documentation Structure**: Ensure Overview, Usage, Examples, Edge Cases where relevant
-3. **Clarity**: Prefer concrete step-by-step instructions over abstract descriptions
-4. **Frontmatter**: If the document starts with YAML frontmatter (--- ... ---), KEEP it unchanged
+**其它要求：**
+1. **Frontmatter**：若文档以 YAML frontmatter（--- ... ---）开头，**保持其内容不变**
+2. 需要时补充清晰示例或边界情况，但不要无谓灌水把全文拉长
+3. 只输出完整的 SKILL.md 正文（不要前言、不要解释）
+4. 不要用 markdown 代码围栏包裹整份文档
+5. 禁止截断：闭合所有代码围栏 / JSON 块 / `<answer>` 标签；若当前版本含「输出契约」「依赖」等章节，必须保留
+6. 轮次提示：第 {epoch} 轮
 
-**Constraints:**
-- Output the COMPLETE SKILL.md document only (no preamble, no explanations)
-- Do not wrap the document in markdown code fences
-- Never truncate: close every code fence / JSON block / <answer> tag; keep sections like 输出契约 and 依赖 if present in the current version
-- Prefer targeted, concrete improvements over rewriting the whole document longer
-- Epoch hint: {epoch} (vary improvements across rollouts; do not copy the current version verbatim)
-
-Optimized SKILL.md:
+优化后的 SKILL.md：
 """
