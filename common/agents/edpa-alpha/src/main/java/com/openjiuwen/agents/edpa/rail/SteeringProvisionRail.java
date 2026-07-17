@@ -41,7 +41,9 @@ import com.openjiuwen.harness.task_loop.LoopQueues;
  * @since 2026-07
  */
 public class SteeringProvisionRail extends AgentRail {
-    /** Construct with priority 1 (orders before all cognitive rails). */
+    /**
+     * Construct with priority 1 (orders before all cognitive rails).
+     */
     public SteeringProvisionRail() {
         setPriority(1);
     }
