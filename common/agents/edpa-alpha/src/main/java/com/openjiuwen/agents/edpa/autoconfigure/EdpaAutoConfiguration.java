@@ -9,6 +9,7 @@ import com.openjiuwen.agents.edpa.explore.ExploreToolRegistrar;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.edpa.explore.LlmExplorer;
 import com.openjiuwen.agents.edpa.rail.ExploreRail;
+import com.openjiuwen.agents.edpa.rail.SteeringProvisionRail;
 import com.openjiuwen.agents.edpa.rail.UserInputCaptureRail;
 import com.openjiuwen.agents.edpa.verification.GroundTruthVerifier;
 import com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail;
@@ -131,6 +132,9 @@ public class EdpaAutoConfiguration {
                 if (!(bean instanceof ReActAgent agent)) {
                     return bean;
                 }
+                // Provision a steering queue FIRST (priority 1) — issue-#13: invoke(taskString,
+                // null) never binds one, so without this every pushSteering silently drops.
+                agent.registerRail(new SteeringProvisionRail());
                 ExploreBudget budget = properties.toExploreBudget();
                 String exploreMode = properties.getExploreMode();
                 boolean useToolMode = !"rail".equalsIgnoreCase(exploreMode);

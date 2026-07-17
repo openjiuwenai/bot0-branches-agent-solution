@@ -4,7 +4,9 @@
 
 package com.openjiuwen.agents.edpa.e2e;
 
+import com.openjiuwen.agents.edpa.rail.SteeringProvisionRail;
 import com.openjiuwen.agents.edpa.verification.GroundTruthVerifier;
+import com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail;
 import com.openjiuwen.agents.reactrails.replan.ReplanRail;
 import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.agents.reactrails.selfheal.RootCauseRail;
@@ -80,6 +82,8 @@ class EdpaCognitiveLoopRealLlmE2eTest {
 
         DeepAgent deep = HarnessFactory.createDeepAgent(config);
 
+        // SteeringProvisionRail — issue-#13 fix: provision steering queue on invoke(task,null)
+        deep.getAgent().registerRail(new SteeringProvisionRail());
         // 4 cognitive rails onto DeepAgent's inner ReActAgent
         ReplanRail sharedCounter = new ReplanRail(3);
         // 硬 criteria: GDP/CPI/通胀率 — LLM 分析难含这些精确词 → verify fail → replan
@@ -88,6 +92,12 @@ class EdpaCognitiveLoopRealLlmE2eTest {
         deep.getAgent().registerRail(sharedCounter);
         deep.getAgent().registerRail(new RootCauseRail());
         ReplanTool.registerOnto(deep.getAgent());
+        // ProactiveConvergenceRail — 认知闭环 D 阶段收敛监控（旗舰 e2e 之前漏挂，补上）
+        deep.getAgent().registerRail(new ProactiveConvergenceRail(
+                new GroundTruthVerifier(), List.of("GDP", "CPI", "通胀率")));
+        // test-only diagnostic observer — issue-#13 silent-drop 探针（不入 prod 路径）
+        RailStateObserver observer = new RailStateObserver();
+        deep.getAgent().registerRail(observer);
 
         // market_data 工具（让 LLM 有数据工具，不再只 __replan__）
         registerMarketDataTool(deep);
@@ -101,6 +111,12 @@ class EdpaCognitiveLoopRealLlmE2eTest {
         // 软观察：Criteria verify 是否触发（result 含 verified 痕迹 / replan 痕迹）
         boolean hasVerify = out.contains("verified") || out.contains("replan") || out.contains("GDP");
         LOG.log(Level.INFO, "[cognitive-e2e] hasVerifyTrace={0}", hasVerify);
+        // RED baseline 探针：观测 issue-#13 silent-drop（hasSteeringQueue 全程是否 false）
+        LOG.log(Level.INFO, "[cognitive-e2e] observer hintReachedAnyModelCall={0}",
+                observer.isHintReachedAnyModelCall());
+        for (String traceLine : observer.getTrace()) {
+            LOG.log(Level.INFO, "[cognitive-e2e] {0}", traceLine);
+        }
         // wiring proof: 证认知 rail 挂载 DeepAgent + invoke 真 LLM 跑通
         // rail fire 行为（verify→replan / root-cause degrade / convergence flatline）靠 mock 单测承重，非此 e2e gate
         org.junit.jupiter.api.Assertions.assertNotNull(result, "DeepAgent invoke must return non-null");
