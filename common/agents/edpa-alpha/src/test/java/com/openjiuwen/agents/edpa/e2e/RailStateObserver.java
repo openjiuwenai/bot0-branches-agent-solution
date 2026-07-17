@@ -58,7 +58,8 @@ public class RailStateObserver extends AgentRail {
             hintReachedAnyModelCall = true;
         }
         String snapshot = bound ? rePushSnapshot(ctx.getSteeringQueue()) : "(no queue)";
-        record(String.format("afterModelCall hasSteeringQueue=%s steeringSnapshot=%s hintThisRound=%s hintReachedAny=%s",
+        record(String.format(
+                "afterModelCall hasSteeringQueue=%s steeringSnapshot=%s hintThisRound=%s hintReachedAny=%s",
                 bound, snapshot, hintThisRound, hintReachedAnyModelCall));
     }
 
