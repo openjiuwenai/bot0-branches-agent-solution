@@ -53,12 +53,14 @@ EvoAgent 是基于 `agent-core`（PyPI 包名 `openjiuwen`）的自进化元 Age
 
 ## 2. 获取代码（Git Clone）
 
-EvoAgent 的代码在 `agent-store` 仓库的 `community/EvoAgent` 子目录下，`build.sh` 会自动处理克隆逻辑，也可以手动克隆。
+EvoAgent 的代码位于仓库的子目录下，`build.sh` 会自动处理克隆与路径探测，也可以手动克隆。
+
+> 路径说明：`agent-store` 仓库内为 `community/EvoAgent`，`agent-solution` 仓库内为 `common/agent-evolve/evoagent`。`build.sh` 未设置 `EVOAGENT_REL_PATH` 时会自动探测，无需手动指定。
 
 ### 2.1 方式 A：手动 clone（推荐用于首次了解项目结构）
 
 ```bash
-# 1) 克隆 agent-store 仓库
+# 1) 克隆仓库（以 agent-store 为例；agent-solution 同理）
 git clone --branch main https://gitcode.com/openJiuwen/agent-store.git ~/EvoAgent/agent-store
 cd ~/EvoAgent/agent-store/community/EvoAgent
 
@@ -138,11 +140,16 @@ EVOAGENT_IMAGE_TAG=evoagent:v1.0.0 ./build.sh /path/to/agent-store
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `EVOAGENT_IMAGE_TAG` | `evoagent:latest` | 构建出的镜像 tag |
-| `EVOAGENT_STORE_REPO` | `https://gitcode.com/openJiuwen/agent-store.git` | agent-store 地址 |
+| `EVOAGENT_STORE_REPO` | `https://gitcode.com/openJiuwen/agent-store.git` | 仓库地址（支持 agent-store / agent-solution） |
 | `EVOAGENT_STORE_BRANCH` | `main` | 切换分支 |
+| `EVOAGENT_STORE_DIR` | `$HOME/EvoAgent/agent-store` | 代码本地存放目录（可覆盖默认路径） |
+| `EVOAGENT_REL_PATH` | _自动探测_ | EvoAgent 在仓库内的相对路径；未设置时按 `community/EvoAgent` → `common/agent-evolve/evoagent` 顺序自动探测 |
+| `EVOAGENT_CORE_REPO` | _由 STORE_REPO 推断_ | agent-core 仓库地址（源码构建模式用，推断失败时需显式指定） |
 | `EVOAGENT_SKIP_PULL` | `0` | `1` 跳过代码拉取 |
 | `EVOAGENT_CORE_VERSION` | `0.1.13` | `--local` 模式下从 PyPI 下载的 openjiuwen 版本 |
 | `PIP_INDEX_URL` | 华为云镜像 | pip 源（内网可替换为私有源） |
+
+> 💡 脚本启动前会校验 `git` / `python3` / `docker` 命令是否存在，缺失即报错退出。启动后会打印仓库地址、本地目录、EvoAgent 相对路径，便于排错。
 
 ### 3.5 验证镜像
 

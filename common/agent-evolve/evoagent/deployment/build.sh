@@ -25,6 +25,8 @@
 #   EVOAGENT_IMAGE_TAG      镜像标签（默认 evoagent:latest）
 #   EVOAGENT_STORE_REPO     agent-store 仓库地址（默认 https://gitcode.com/openJiuwen/agent-store.git）
 #   EVOAGENT_STORE_BRANCH   仓库分支（默认 main）
+#   EVOAGENT_STORE_DIR      agent-store 本地目录（默认 $HOME/EvoAgent/agent-store）
+#   EVOAGENT_REL_PATH       EvoAgent 在仓库内的相对路径（默认 community/EvoAgent）
 #   EVOAGENT_SKIP_PULL      设置为 1 跳过代码拉取（同 --skip-pull）
 #   EVOAGENT_CORE_REPO      agent-core 仓库地址（默认自动从 agent-store 推断）
 #   EVOAGENT_CORE_VERSION   local 模式下 openjiuwen 版本号（默认 0.1.13）
@@ -50,7 +52,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 # ── 参数解析 ──────────────────────────────────────────────────────────
 SKIP_PULL="${EVOAGENT_SKIP_PULL:-0}"
 LOCAL_MODE=0
-AGENT_STORE_DIR="$HOME/EvoAgent/agent-store"
+AGENT_STORE_DIR="${EVOAGENT_STORE_DIR:-$HOME/EvoAgent/agent-store}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -75,17 +77,37 @@ IMAGE_TAG="${EVOAGENT_IMAGE_TAG:-evoagent:latest}"
 STORE_REPO="${EVOAGENT_STORE_REPO:-https://gitcode.com/openJiuwen/agent-store.git}"
 STORE_BRANCH="${EVOAGENT_STORE_BRANCH:-main}"
 
-# EvoAgent 在 agent-store 中的相对路径
-EVOAGENT_REL_PATH="community/EvoAgent"
+# EvoAgent 在仓库内的相对路径（agent-store 用 community/EvoAgent，
+# agent-solution 用 common/agent-evolve/evoagent）—— 可通过环境变量覆盖；
+# 若未指定，克隆/拉取完成后会自动探测
+EVOAGENT_REL_PATH="${EVOAGENT_REL_PATH:-}"
 
-# agent-core 配置（从 agent-store 推断路径）
+# agent-core 配置（从 store 推断路径；若替换不命中则回退到 EVOAGENT_CORE_REPO）
 CORE_REPO="${EVOAGENT_CORE_REPO:-${STORE_REPO/agent-store/agent-core}}"
+if [ "$CORE_REPO" = "$STORE_REPO" ]; then
+    # 字符串替换未命中（仓库名不含 agent-store），保留默认让用户用 env 覆盖
+    CORE_REPO="${EVOAGENT_CORE_REPO:-$STORE_REPO}"
+fi
 AGENT_CORE_DIR="${AGENT_STORE_DIR/agent-store/agent-core}"
+if [ "$AGENT_CORE_DIR" = "$AGENT_STORE_DIR" ]; then
+    AGENT_CORE_DIR="${AGENT_STORE_DIR%/agent-store}/agent-core"
+fi
 
 # local 模式下 openjiuwen 版本号
 CORE_VERSION="${EVOAGENT_CORE_VERSION:-0.1.13}"
 
+# ── 前置依赖检查 ────────────────────────────────────────────────────
+require_cmd() {
+    command -v "$1" >/dev/null 2>&1 || error "缺少依赖命令: $1（请先安装）"
+}
+require_cmd git
+require_cmd python3
+require_cmd docker
+
 # ── 模式提示 ──────────────────────────────────────────────────────────
+info "仓库: $STORE_REPO（分支: $STORE_BRANCH）"
+info "本地目录: $AGENT_STORE_DIR"
+info "EvoAgent 相对路径: $EVOAGENT_REL_PATH"
 if [ "$LOCAL_MODE" -eq 1 ]; then
     info "模式: local（从 PyPI 下载 openjiuwen==${CORE_VERSION}）"
 else
@@ -93,7 +115,7 @@ else
 fi
 
 # ── 1. 同步最新代码（可跳过）───────────────────────────────────────────
-info "=== 步骤 1/4: 同步 agent-store 代码 ==="
+info "=== 步骤 1/5: 同步 agent-store 代码 ==="
 
 if [ "$SKIP_PULL" -eq 1 ]; then
     info "跳过代码拉取（--skip-pull 指定），使用本地代码"
@@ -114,6 +136,21 @@ else
     fi
 fi
 
+# ── 1.1 自动探测 EvoAgent 在仓库内的相对路径 ─────────────────────────
+if [ -z "$EVOAGENT_REL_PATH" ]; then
+    for candidate in "community/EvoAgent" "common/agent-evolve/evoagent"; do
+        if [ -f "$AGENT_STORE_DIR/$candidate/pyproject.toml" ] && \
+           [ -f "$AGENT_STORE_DIR/$candidate/deployment/Dockerfile" ]; then
+            EVOAGENT_REL_PATH="$candidate"
+            break
+        fi
+    done
+    if [ -z "$EVOAGENT_REL_PATH" ]; then
+        error "未自动探测到 EvoAgent 路径，请通过 EVOAGENT_REL_PATH 显式指定（如 community/EvoAgent 或 common/agent-evolve/evoagent）"
+    fi
+    info "自动探测 EvoAgent 相对路径: $EVOAGENT_REL_PATH"
+fi
+
 # ── 2. 获取 openjiuwen wheel ──────────────────────────────────────────
 if [ "$LOCAL_MODE" -eq 1 ]; then
     info "=== 步骤 2/5: 从 PyPI 下载 openjiuwen==${CORE_VERSION} ==="
@@ -132,9 +169,9 @@ if [ "$LOCAL_MODE" -eq 1 ]; then
         "openjiuwen==${CORE_VERSION}" \
     || error "下载 openjiuwen==${CORE_VERSION} 失败，请检查版本号或 pip 源配置"
 
-    WHEEL_FILE=$(find "$CORE_DOWNLOAD_DIR" -name "openjiuwen-*.whl" -type f 2>/dev/null | head -1)
+    WHEEL_FILE=$(find "$CORE_DOWNLOAD_DIR" -name "openjiuwen-*.whl" -type f -print -quit 2>/dev/null)
     if [ -z "$WHEEL_FILE" ]; then
-        WHEEL_FILE=$(find "$CORE_DOWNLOAD_DIR" -name "openjiuwen-*.tar.gz" -type f 2>/dev/null | head -1)
+        WHEEL_FILE=$(find "$CORE_DOWNLOAD_DIR" -name "openjiuwen-*.tar.gz" -type f -print -quit 2>/dev/null)
         if [ -z "$WHEEL_FILE" ]; then
             error "未找到下载的 openjiuwen 包文件"
         fi
@@ -142,9 +179,10 @@ if [ "$LOCAL_MODE" -eq 1 ]; then
         warn "将尝试在本地构建 wheel ..."
 
         BUILD_TMP=$(mktemp -d)
+        trap 'rm -rf "$CORE_DOWNLOAD_DIR" "$BUILD_TMP"' EXIT
         python3 -m pip install --no-cache-dir build
         python3 -m build --wheel --outdir "$BUILD_TMP" "$WHEEL_FILE"
-        WHEEL_FILE=$(find "$BUILD_TMP" -name "openjiuwen-*.whl" -type f 2>/dev/null | head -1)
+        WHEEL_FILE=$(find "$BUILD_TMP" -name "openjiuwen-*.whl" -type f -print -quit 2>/dev/null)
         if [ -z "$WHEEL_FILE" ]; then
             error "从源码包构建 wheel 失败"
         fi
@@ -181,7 +219,7 @@ else
     python3 -m build --wheel --outdir dist/
 
     info "查找生成的 wheel 文件..."
-    WHEEL_FILE=$(find "$AGENT_CORE_DIR/dist" -name "openjiuwen-*.whl" -type f 2>/dev/null | head -1)
+    WHEEL_FILE=$(find "$AGENT_CORE_DIR/dist" -name "openjiuwen-*.whl" -type f -print -quit 2>/dev/null)
 
     if [ -z "$WHEEL_FILE" ]; then
         error "wheel 构建失败，未找到生成的 wheel 文件"
@@ -203,7 +241,7 @@ EVOAGENT_DIR="$AGENT_STORE_DIR/$EVOAGENT_REL_PATH"
 mkdir -p "$EVOAGENT_DIR/vendor"
 
 if [ "$SKIP_PULL" -eq 1 ] && [ "$LOCAL_MODE" -eq 0 ]; then
-    WHEEL_FILE=$(find "$EVOAGENT_DIR/vendor" -name "openjiuwen-*.whl" -type f 2>/dev/null | head -1)
+    WHEEL_FILE=$(find "$EVOAGENT_DIR/vendor" -name "openjiuwen-*.whl" -type f -print -quit 2>/dev/null)
     if [ -z "$WHEEL_FILE" ]; then
         error "未找到 vendor wheel 文件，请先构建 agent-core 或使用 --local 模式"
     fi
