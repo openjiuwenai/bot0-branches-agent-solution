@@ -4,13 +4,13 @@
 
 package com.openjiuwen.agents.edpa.rail;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import com.openjiuwen.core.singleagent.rail.SteeringQueue;
 
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Three-layer IFF bearing for {@link SteeringProvisionRail} — the issue-#13 fix that stops
@@ -43,8 +43,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-07
  */
 class SteeringProvisionRailTest {
-
-    /** Layer 1 (wiring IFF): provision binds a queue on a bare ctx. */
+    /**
+     * Verifies layer-1 wiring that provision binds a queue on a bare ctx.
+     */
     @Test
     void provisionBindsQueueOnBareCtx() {
         AgentCallbackContext ctx = bareCtx();
@@ -55,7 +56,9 @@ class SteeringProvisionRailTest {
         assertThat(ctx.hasSteeringQueue()).isTrue(); // mutation-RED anchor
     }
 
-    /** Idempotency: re-provisioning does not replace an already-bound queue. */
+    /**
+     * Verifies idempotency that re-provisioning does not replace an already-bound queue.
+     */
     @Test
     void provisionIsIdempotentOnAlreadyBoundCtx() {
         AgentCallbackContext ctx = bareCtx();
@@ -68,7 +71,9 @@ class SteeringProvisionRailTest {
         assertThat(ctx.getSteeringQueue()).isSameAs(first); // mutation-RED: delete guard → RED
     }
 
-    /** Layer 2 (dispatch IFF): after provision, pushSteering lands in the drainable queue. */
+    /**
+     * Verifies layer-2 dispatch that after provision, pushSteering lands in the drainable queue.
+     */
     @Test
     void provisionedCtxPushSteeringIsDrainable() {
         AgentCallbackContext ctx = bareCtx();

@@ -46,6 +46,11 @@ public class SteeringProvisionRail extends AgentRail {
         setPriority(1);
     }
 
+    /**
+     * Binds a fresh steering queue when the host invoke path skipped provisioning.
+     *
+     * @param ctx the agent callback context carrying {@code extra} and the steering queue
+     */
     @Override
     public void beforeInvoke(AgentCallbackContext ctx) {
         if (!ctx.hasSteeringQueue()) {

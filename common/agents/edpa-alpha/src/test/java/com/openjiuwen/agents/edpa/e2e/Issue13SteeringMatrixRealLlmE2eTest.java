@@ -25,6 +25,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -57,13 +59,17 @@ class Issue13SteeringMatrixRealLlmE2eTest {
     /** One model config: label, endpoint base, env key var, model id, thinking on/off extras. */
     private record ModelConfig(String label, String base, String keyEnv, String model,
             Map<String, Object> thinkingOn, Map<String, Object> thinkingOff) {
-        /** Resolve the API key from the env var named by {@link #keyEnv}. */
+        /**
+         * Resolves the API key from the env var named by {@link #keyEnv}.
+         */
         String resolveKey() {
             return System.getenv(keyEnv);
         }
     }
 
-    /** Build the 4-model config list across bigmodel/deepseek/openrouter endpoints. */
+    /**
+     * Builds the 4-model config list across bigmodel/deepseek/openrouter endpoints.
+     */
     private static List<ModelConfig> configs() {
         Map<String, Object> glmOn = Map.of("thinking", Map.of("type", "enabled"));
         Map<String, Object> glmOff = Map.of("thinking", Map.of("type", "disabled"));
@@ -105,7 +111,14 @@ class Issue13SteeringMatrixRealLlmE2eTest {
         summarize(results);
     }
 
-    /** Run one (model, thinking) pair: build agent + 6 rails + observer, invoke, record metrics. */
+    /**
+     * Runs one (model, thinking) pair via a FutureTask bridge, recording flaky failures.
+     *
+     * @param mc model config under test
+     * @param key resolved API key
+     * @param thinking whether thinking mode is enabled
+     * @return per-config metrics map
+     */
     private static Map<String, Object> runOne(ModelConfig mc, String key, boolean thinking) {
         String label = mc.label + " | thinking=" + (thinking ? "ON" : "OFF");
         Map<String, Object> r = new LinkedHashMap<>();
@@ -115,40 +128,66 @@ class Issue13SteeringMatrixRealLlmE2eTest {
         r.put("hasSteeringQueue", false);
         r.put("convergenceFired", false);
         r.put("hintReached", false);
+        FutureTask<Object> task = new FutureTask<>(() -> invokeAndRecord(mc, key, thinking, r, label));
+        task.run();
         try {
-            DeepAgent deep = HarnessFactory.createDeepAgent(buildConfig(mc, key, thinking));
-            deep.getAgent().registerRail(new SteeringProvisionRail());
-            ReplanRail shared = new ReplanRail(3);
-            deep.getAgent().registerRail(
-                    new CriteriaReplanBridgeRail(new GroundTruthVerifier(), CRITERIA, shared));
-            deep.getAgent().registerRail(shared);
-            deep.getAgent().registerRail(new RootCauseRail());
-            deep.getAgent().registerRail(new ProactiveConvergenceRail(new GroundTruthVerifier(), CRITERIA));
-            ReplanTool.registerOnto(deep.getAgent());
-            RailStateObserver observer = new RailStateObserver();
-            deep.getAgent().registerRail(observer);
-
-            Object result = deep.getAgent().invoke(TASK, null);
-
-            boolean wiringTrue = observer.getTrace().stream()
-                    .anyMatch(line -> line.contains("afterModelCall hasSteeringQueue=true"));
-            r.put("hasSteeringQueue", wiringTrue);
-            r.put("hintReached", observer.isHintReachedAnyModelCall());
-            r.put("convergenceFired", observer.getTrace().stream()
-                    .anyMatch(line -> line.contains("【主动收敛】")));
-            r.put("status", result == null ? "empty" : "completed");
-            r.put("output", result == null ? "" : String.valueOf(result).substring(0,
-                    Math.min(120, String.valueOf(result).length())));
-            LOG.log(Level.INFO, "[steer-matrix] {0} -> wiring={1} hintReached={2} status={3}",
-                    new Object[]{label, wiringTrue, observer.isHintReachedAnyModelCall(), r.get("status")});
-        } catch (RuntimeException e) {
-            r.put("status", "flaky:" + e.getClass().getSimpleName());
-            LOG.log(Level.INFO, "[steer-matrix] {0} EX {1}", new Object[]{label, e.getClass().getSimpleName()});
+            task.get();
+        } catch (InterruptedException e) {
+            r.put("status", "flaky:Interrupted");
+            LOG.log(Level.INFO, "[steer-matrix] {0} EX Interrupted", label);
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            r.put("status", "flaky:" + (cause == null ? "Exception" : cause.getClass().getSimpleName()));
+            LOG.log(Level.INFO, "[steer-matrix] {0} EX {1}",
+                    new Object[]{label, cause == null ? "Exception" : cause.getClass().getSimpleName()});
         }
         return r;
     }
 
-    /** Build the DeepAgentConfig from a model config + thinking flag. */
+    /**
+     * Builds the agent + 6 rails + observer, invokes, and records metrics into the result map.
+     *
+     * @param mc model config under test
+     * @param key resolved API key
+     * @param thinking whether thinking mode is enabled
+     * @param r result map to populate
+     * @param label human-readable config label for logging
+     * @return the agent invocation result (may be null)
+     */
+    private static Object invokeAndRecord(ModelConfig mc, String key, boolean thinking,
+            Map<String, Object> r, String label) {
+        DeepAgent deep = HarnessFactory.createDeepAgent(buildConfig(mc, key, thinking));
+        deep.getAgent().registerRail(new SteeringProvisionRail());
+        ReplanRail shared = new ReplanRail(3);
+        deep.getAgent().registerRail(
+                new CriteriaReplanBridgeRail(new GroundTruthVerifier(), CRITERIA, shared));
+        deep.getAgent().registerRail(shared);
+        deep.getAgent().registerRail(new RootCauseRail());
+        deep.getAgent().registerRail(new ProactiveConvergenceRail(new GroundTruthVerifier(), CRITERIA));
+        ReplanTool.registerOnto(deep.getAgent());
+        RailStateObserver observer = new RailStateObserver();
+        deep.getAgent().registerRail(observer);
+
+        Object result = deep.getAgent().invoke(TASK, null);
+
+        boolean wiringTrue = observer.getTrace().stream()
+                .anyMatch(line -> line.contains("afterModelCall hasSteeringQueue=true"));
+        r.put("hasSteeringQueue", wiringTrue);
+        r.put("hintReached", observer.isHintReachedAnyModelCall());
+        r.put("convergenceFired", observer.getTrace().stream()
+                .anyMatch(line -> line.contains("【主动收敛】")));
+        r.put("status", result == null ? "empty" : "completed");
+        r.put("output", result == null ? "" : String.valueOf(result).substring(0,
+                Math.min(120, String.valueOf(result).length())));
+        LOG.log(Level.INFO, "[steer-matrix] {0} -> wiring={1} hintReached={2} status={3}",
+                new Object[]{label, wiringTrue, observer.isHintReachedAnyModelCall(), r.get("status")});
+        return result;
+    }
+
+    /**
+     * Builds the DeepAgentConfig from a model config + thinking flag.
+     */
     private static DeepAgentConfig buildConfig(ModelConfig mc, String key, boolean thinking) {
         Map<String, Object> modelMap = new LinkedHashMap<>();
         modelMap.put("model", mc.model);
@@ -169,7 +208,9 @@ class Issue13SteeringMatrixRealLlmE2eTest {
                 .model(modelMap).backend(backendMap).build();
     }
 
-    /** Print the matrix table + the issue-#13 GREEN assertion (wiring=true on all completed). */
+    /**
+     * Prints the matrix table plus the issue-#13 GREEN assertion (wiring=true on all completed).
+     */
     private static void summarize(List<Map<String, Object>> results) {
         LOG.log(Level.INFO, "{0}========== STEERING MATRIX (issue-#13 fix) ==========",
                 System.lineSeparator());

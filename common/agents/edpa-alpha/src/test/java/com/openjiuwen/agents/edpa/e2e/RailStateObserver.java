@@ -37,7 +37,9 @@ public class RailStateObserver extends AgentRail {
     private final List<String> trace = new ArrayList<>();
     private boolean hintReachedAnyModelCall;
 
-    /** Construct with priority 5 (orders before cognitive rails). */
+    /**
+     * Creates a test-only observer registered at priority 5 so it orders before cognitive rails.
+     */
     public RailStateObserver() {
         setPriority(5);
     }
@@ -45,7 +47,7 @@ public class RailStateObserver extends AgentRail {
     @Override
     public void beforeInvoke(AgentCallbackContext ctx) {
         record("beforeInvoke hasSteeringQueue=%s hasForceFinishRequest=%s",
-                ctx.hasSteeringQueue(), ctx.hasForceFinishRequest());
+                new Object[]{ctx.hasSteeringQueue(), ctx.hasForceFinishRequest()});
     }
 
     @Override
@@ -57,15 +59,19 @@ public class RailStateObserver extends AgentRail {
         }
         String snapshot = bound ? rePushSnapshot(ctx.getSteeringQueue()) : "(no queue)";
         record("afterModelCall hasSteeringQueue=%s steeringSnapshot=%s hintThisRound=%s hintReachedAny=%s",
-                bound, snapshot, hintThisRound, hintReachedAnyModelCall);
+                new Object[]{bound, snapshot, hintThisRound, hintReachedAnyModelCall});
     }
 
-    /** Whether the convergence hint appeared in any round's model messages (consumer-closed). */
+    /**
+     * Reports whether the convergence hint reached any round's model messages (consumer-closed).
+     */
     public boolean isHintReachedAnyModelCall() {
         return hintReachedAnyModelCall;
     }
 
-    /** Ordered diagnostic lines (for log + assertion). */
+    /**
+     * Returns the ordered diagnostic lines collected for logging and assertion.
+     */
     public List<String> getTrace() {
         return List.copyOf(trace);
     }
@@ -92,7 +98,7 @@ public class RailStateObserver extends AgentRail {
         return drained.toString();
     }
 
-    private void record(String pattern, Object... args) {
+    private void record(String pattern, Object[] args) {
         String line = "[RailStateObserver] " + String.format(pattern, args);
         LOG.log(Level.INFO, "{0}", line);
         trace.add(line);
