@@ -160,16 +160,7 @@ public class PreCompletionChecklistRail extends AgentRail {
             return;
         }
 
-        // [1] Check stagnation from ctx.getExtra (written by StagnationDetectionRail)
-        Object stagnationRaw = ctx.getExtra().get("stagnation_detected");
-        if (stagnationRaw instanceof Boolean isStagnated && isStagnated) {
-            injectionState.setPhaseOverride("BREAK_STAGNATION: The system detects that your output or "
-                    + "tool-call pattern has become repetitive. Change your approach "
-                    + "entirely — use a different set of tools or reframe the problem.");
-            return;
-        }
-
-        // [2] Phase-based guardrail
+        // Phase-based guardrail
         if (state.callCount < planMaxRounds) {
             // PLAN phase: ensure PLAN_MODE, optionally add tool-usage hint
             if (injectionState.getMode() != InjectionMode.PLAN_MODE) {

@@ -5,6 +5,8 @@
 package com.openjiuwen.agents.reactrails.enforcing;
 
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel.InjectionMode;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 
 import java.util.Objects;
 
@@ -34,6 +36,7 @@ public final class PromptInjectionState {
      */
     public void setMode(InjectionMode mode) {
         invocationState.get().mode = Objects.requireNonNull(mode, "mode");
+        notifyPhaseOverride(mode == null ? null : mode.name(), null);
     }
 
     /**
@@ -52,6 +55,7 @@ public final class PromptInjectionState {
      */
     public void setPhaseOverride(String override) {
         invocationState.get().phaseOverride = override;
+        notifyPhaseOverride("PHASE_OVERRIDE", override);
     }
 
     /**
@@ -73,6 +77,11 @@ public final class PromptInjectionState {
         String override = state.phaseOverride;
         state.phaseOverride = null;
         return override;
+    }
+
+    private void notifyPhaseOverride(String mode, String excerpt) {
+        String ex = excerpt == null ? null : (excerpt.length() <= 80 ? excerpt : excerpt.substring(0, 80));
+        RailTelemetry.current().fire(new RailEvent.PhaseOverrideEvent("PromptInjectionState", mode, ex));
     }
 
     /**
