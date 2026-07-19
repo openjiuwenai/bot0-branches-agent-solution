@@ -203,7 +203,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
                 sb.append("  ").append(v.reason()).append(LINE_SEPARATOR);
             }
         }
-        // TODO(issue #16, Phase1 B): this gradient hint is dead code today — hasGradient is always
+        // Note (issue #16, Phase1 B): this gradient hint is dead code today — hasGradient is always
         // false because no react-rails verifier produces isPartial metadata yet. When a future
         // GradientVerifier activates this branch, gate the __replan__ line on
         // ReplanTool.isReachable(ctx) (thread ctx through buildCorrectionHint/buildGradientHint)

@@ -373,7 +373,9 @@ class SystemPromptInjectingModelTest {
         assertThat(realMessages).as("PLAN_MODE real invoke must reach the client").isNotNull();
         assertThat(realMessages.get(0)).as("first message must remain a SystemMessage after PLAN replacement")
                 .isInstanceOf(SystemMessage.class);
-        String systemContent = ((SystemMessage) realMessages.get(0)).getContentAsString();
+        String systemContent = realMessages.stream().filter(SystemMessage.class::isInstance)
+                .map(SystemMessage.class::cast).findFirst().map(SystemMessage::getContentAsString)
+                .orElse("<no SystemMessage>");
         assertThat(systemContent).as("PLAN_MODE must inject the divergent-exploration framing")
                 .contains("DIVERGENT EXPLORATION");
         assertThat(systemContent).as(
@@ -411,7 +413,9 @@ class SystemPromptInjectingModelTest {
         assertThat(realMessages).as("BUILD_MODE real invoke must reach the client").isNotNull();
         assertThat(realMessages.get(0)).as("first message must remain a SystemMessage after BUILD replacement")
                 .isInstanceOf(SystemMessage.class);
-        String systemContent = ((SystemMessage) realMessages.get(0)).getContentAsString();
+        String systemContent = realMessages.stream().filter(SystemMessage.class::isInstance)
+                .map(SystemMessage.class::cast).findFirst().map(SystemMessage::getContentAsString)
+                .orElse("<no SystemMessage>");
         assertThat(systemContent).as("BUILD_MODE must inject the convergent-execution framing")
                 .contains("CONVERGENT EXECUTION");
         assertThat(systemContent).as(
@@ -452,7 +456,9 @@ class SystemPromptInjectingModelTest {
         List<BaseMessage> messages = List.of(new SystemMessage("base system prompt"), new UserMessage("go"));
         planModel.invoke(messages, List.of(), 0.3f, null, "test-model", null, null, null, null, null);
 
-        String systemContent = ((SystemMessage) ((List<?>) captured.get()).get(0)).getContentAsString();
+        String systemContent = captured.get().stream().filter(SystemMessage.class::isInstance)
+                .map(SystemMessage.class::cast).findFirst().map(SystemMessage::getContentAsString)
+                .orElse("<no SystemMessage>");
         assertThat(systemContent).as("setPlanSystemPrompt override must reach the replaced SystemMessage (true→X)")
                 .contains("CUSTOM_PLAN_PROMPT_xyz_unique_marker");
         assertThat(systemContent).as("override must fully replace the classpath default (not merge)")
@@ -481,7 +487,9 @@ class SystemPromptInjectingModelTest {
         List<BaseMessage> messages = List.of(new SystemMessage("base system prompt"), new UserMessage("go"));
         buildModel.invoke(messages, List.of(), 0.3f, null, "test-model", null, null, null, null, null);
 
-        String systemContent = ((SystemMessage) ((List<?>) captured.get()).get(0)).getContentAsString();
+        String systemContent = captured.get().stream().filter(SystemMessage.class::isInstance)
+                .map(SystemMessage.class::cast).findFirst().map(SystemMessage::getContentAsString)
+                .orElse("<no SystemMessage>");
         assertThat(systemContent).as("setBuildSystemPrompt override must reach the replaced SystemMessage (true→X)")
                 .contains("CUSTOM_BUILD_PROMPT_xyz_unique_marker");
         assertThat(systemContent).as("override must fully replace the classpath default (not merge)")
@@ -508,7 +516,9 @@ class SystemPromptInjectingModelTest {
         List<BaseMessage> messages = List.of(new SystemMessage("base"), new UserMessage("go"));
         buildModel.invoke(messages, List.of(), 0.3f, null, "test-model", null, null, null, null, null);
 
-        String systemContent = ((SystemMessage) ((List<?>) captured.get()).get(0)).getContentAsString();
+        String systemContent = captured.get().stream().filter(SystemMessage.class::isInstance)
+                .map(SystemMessage.class::cast).findFirst().map(SystemMessage::getContentAsString)
+                .orElse("<no SystemMessage>");
         assertThat(systemContent).as("override ${replan_tool} must be substituted with the registry tool name")
                 .contains(ReplanTool.TOOL_NAME)
                 .doesNotContain("${replan_tool}");

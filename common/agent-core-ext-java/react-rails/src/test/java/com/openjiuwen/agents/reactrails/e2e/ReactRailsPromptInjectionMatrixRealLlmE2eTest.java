@@ -392,17 +392,11 @@ class ReactRailsPromptInjectionMatrixRealLlmE2eTest {
      */
     private static boolean containsSystemMessage(List<List<BaseMessage>> captured, String present,
             String absent) {
-        for (List<BaseMessage> msgs : captured) {
-            for (BaseMessage m : msgs) {
-                if (m instanceof SystemMessage sm) {
+        return captured.stream().flatMap(List::stream)
+                .filter(SystemMessage.class::isInstance).map(SystemMessage.class::cast).anyMatch(sm -> {
                     String c = sm.getContentAsString();
-                    if (c != null && c.contains(present) && !c.contains(absent)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+                    return c != null && c.contains(present) && !c.contains(absent);
+                });
     }
 
     /**
