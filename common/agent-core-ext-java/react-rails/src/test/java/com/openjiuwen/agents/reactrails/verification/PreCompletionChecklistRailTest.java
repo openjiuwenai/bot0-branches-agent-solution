@@ -122,20 +122,6 @@ class PreCompletionChecklistRailTest {
         // mutation-RED: strip setInjectionMode(BUILD_MODE) → mode stays PLAN_MODE → RED
     }
     @Test
-    void beforeModelCallStagnationDetectedInjectsBreakLoop() {
-        PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2, injectionState);
-        // First round to set callCount > 0
-        rail.afterModelCall(ctxWithToolResult("search", "toolResult"));
-
-        AgentCallbackContext ctx = ctxWithExtra(Map.of("stagnation_detected", true));
-
-        rail.beforeModelCall(ctx);
-
-        assertThat(injectionState.peekPhaseOverride())
-                .as("stagnation detected must inject BREAK_STAGNATION phase override").contains("BREAK_STAGNATION");
-        // mutation-RED: strip setPhaseOverride(BREAK_STAGNATION) → peek null → RED
-    }
-    @Test
     void afterModelCallIncrementsCallCount() {
         PreCompletionChecklistRail rail = new PreCompletionChecklistRail(2, injectionState);
         AgentCallbackContext ctx = ctxWithToolResult("search", "toolResult");

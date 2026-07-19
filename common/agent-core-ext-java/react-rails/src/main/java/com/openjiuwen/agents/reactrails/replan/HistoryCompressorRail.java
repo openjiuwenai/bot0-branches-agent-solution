@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.reactrails.replan;
 
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
@@ -162,6 +164,8 @@ public class HistoryCompressorRail extends AgentRail {
 
         ctx.getContext().setMessages(compact, false);
         state.lastBoundary = compact.size() - 1;
+        RailTelemetry.current().fire(new RailEvent.ContextCompressedEvent(
+                "HistoryCompressorRail", messages.size(), compact.size()));
     }
 
     private InvocationState state(AgentCallbackContext ctx) {
