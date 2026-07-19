@@ -7,6 +7,7 @@ package com.openjiuwen.agents.reactrails.verification;
 import com.openjiuwen.agents.reactrails.enforcing.PromptInjectionState;
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel;
 import com.openjiuwen.agents.reactrails.enforcing.SystemPromptInjectingModel.InjectionMode;
+import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -184,9 +185,14 @@ public class PreCompletionChecklistRail extends AgentRail {
             }
             // Low tool diversity hint
             if (state.toolNamesCalled.size() <= 1 && state.callCount > 2) {
+                // issue-#16 fail-loud: only mention __replan__ when it is actually registered on
+                // this agent's AbilityManager; otherwise fall back to a tool-agnostic nudge so the
+                // LLM is never guided toward an unregistered tool (silent hallucination).
+                String replanClause = ReplanTool.isReachable(ctx)
+                        ? "try a different tool or call " + ReplanTool.TOOL_NAME + "."
+                        : "try a different tool or approach.";
                 injectionState.setPhaseOverride("COVERAGE: You are using very few tool types. "
-                        + "If the current approach is not making progress, "
-                        + "try a different tool or call __replan__.");
+                        + "If the current approach is not making progress, " + replanClause);
             }
         }
     }

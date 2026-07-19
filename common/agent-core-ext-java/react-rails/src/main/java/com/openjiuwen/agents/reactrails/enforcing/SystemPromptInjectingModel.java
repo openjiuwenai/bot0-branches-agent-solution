@@ -4,6 +4,7 @@
 
 package com.openjiuwen.agents.reactrails.enforcing;
 
+import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.core.foundation.llm.Model;
 import com.openjiuwen.core.foundation.llm.output_parsers.BaseOutputParser;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
@@ -85,7 +86,7 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
             + "Focus on producing a single complete answer that meets " + "all success criteria. "
             + "Incorporate insights from your earlier exploration. "
             + "Ensure every criterion is explicitly addressed. "
-            + "If your current path cannot cover all criteria, call __replan__.";
+            + "If your current path cannot cover all criteria, call " + ReplanTool.TOOL_NAME + ".";
 
     private final AtomicBoolean firstPrinciplesDone = new AtomicBoolean(false);
     private final PromptInjectionState injectionState = new PromptInjectionState();
