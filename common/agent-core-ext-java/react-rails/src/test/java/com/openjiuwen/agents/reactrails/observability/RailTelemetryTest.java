@@ -121,8 +121,9 @@ class RailTelemetryTest {
         // goodCollector still receives it.
         RailTelemetry.setCurrent(RailTelemetry.noop().with(throwingListener).with(goodCollector));
 
+        // queueBound is irrelevant to this fire-isolation proof; true keeps the normal fire path.
         RailEvent event = new RailEvent.SteeringEvent("StagnationDetectionRail", "STAGNATION_OUTPUT",
-                "hint excerpt");
+                "hint excerpt", true);
 
         // G.ERR.02: do NOT naked-catch RuntimeException. Bridge through FutureTask so the
         // concrete IllegalStateException is forced into a value-returning Callable.

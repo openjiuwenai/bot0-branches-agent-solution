@@ -140,7 +140,8 @@ public class CriteriaReplanBridgeRail extends AgentRail {
                     String hint = buildCorrectionHint(violations);
                     ctx.pushSteering(hint);
                     RailTelemetry.current().fire(new RailEvent.SteeringEvent(
-                            RAIL, "CRITERIA", hint.substring(0, Math.min(80, hint.length()))));
+                            RAIL, "CRITERIA", hint.substring(0, Math.min(80, hint.length())),
+                            ctx.hasSteeringQueue()));
                 }
             }
         } else {
