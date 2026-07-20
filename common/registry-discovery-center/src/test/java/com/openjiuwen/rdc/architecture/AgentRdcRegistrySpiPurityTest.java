@@ -34,11 +34,10 @@ import org.junit.jupiter.api.Test;
  * the shipped SPI surface, not test scaffolding.
  *
  * <p>Assertion ID: HA-001-REG.
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class AgentRdcRegistrySpiPurityTest {
-
     /**
      * Production registry SPI classes only
      * ({@code com.openjiuwen.rdc.model} and sub-packages). Test

@@ -47,9 +47,9 @@ import java.util.Optional;
  * one and resolves it via {@code resolveRouteHandle}. Tests cover rich DTO
  * population, empty result (not found / DRAINING / OFFLINE), and tenant
  * isolation.
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class PgMvpDiscoveryServiceImplTest {
     private RegistryObservabilityConfig observability;
     private TestTenantContext tenantContext;

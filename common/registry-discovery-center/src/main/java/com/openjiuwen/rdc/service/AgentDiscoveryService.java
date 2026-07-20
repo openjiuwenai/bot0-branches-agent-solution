@@ -25,9 +25,8 @@ import java.util.List;
  * @since 0.1.0 (2026)
  */
 public interface AgentDiscoveryService {
-
     /**
-     * * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, agentId)}.
+     * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, agentId)}.
      *
      * @param tenantId tenantId
      * @param agentId agentId
@@ -38,7 +37,7 @@ public interface AgentDiscoveryService {
     List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId, String contractVersion);
 
     /**
-     * * Convenience overload without contract version filter.
+     * Convenience overload without contract version filter.
      *
      * @param tenantId tenantId
      * @param agentId agentId
@@ -50,7 +49,7 @@ public interface AgentDiscoveryService {
     }
 
     /**
-     * * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, serviceId)}.
+     * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, serviceId)}.
      *
      * @param tenantId tenantId
      * @param serviceId serviceId
@@ -61,7 +60,7 @@ public interface AgentDiscoveryService {
     List<AgentCardDto> searchByServiceId(String tenantId, String serviceId, String contractVersion);
 
     /**
-     * * List ONLINE/DEGRADED/DRAINING instances declaring {@code capability}.
+     * List ONLINE/DEGRADED/DRAINING instances declaring {@code capability}.
      *
      * @param tenantId tenantId
      * @param capability capability
@@ -72,7 +71,7 @@ public interface AgentDiscoveryService {
     List<AgentCardDto> searchByCapability(String tenantId, String capability, String contractVersion);
 
     /**
-     * * Structured logical Agent Card discovery per Feat-015.
+     * Structured logical Agent Card discovery per Feat-015.
      *
      * @param query query
      * @return result
@@ -80,10 +79,25 @@ public interface AgentDiscoveryService {
      */
     DiscoveryResult discover(DiscoveryQuery query);
 
+    /**
+     * discoverAgentCards.
+     *
+     * @param query query
+     * @return result
+     * @since 0.1.0
+     */
     default AgentCardDiscoveryResult discoverAgentCards(AgentCardDiscoveryQuery query) {
         DiscoveryResult result = discover(query.toDiscoveryQuery());
         return AgentCardDiscoveryResult.from(result);
     }
 
+    /**
+     * resolveRouteHandle.
+     *
+     * @param routeHandle routeHandle
+     * @param tenantId tenantId
+     * @return result
+     * @since 0.1.0
+     */
     RouteResolution resolveRouteHandle(String routeHandle, String tenantId);
 }

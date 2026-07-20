@@ -47,10 +47,10 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 
 /**
- * * Feat-015 §4 / §6 scenario coverage: rolling upgrade, provider recovery, instance recovery.
-  *
+ * Feat-015 §4 / §6 scenario coverage: rolling upgrade, provider recovery, instance recovery.
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class ReconciliationScenarioIntegrationTest {
     private static final class TestProbeException extends RuntimeException {
         TestProbeException(String message) {

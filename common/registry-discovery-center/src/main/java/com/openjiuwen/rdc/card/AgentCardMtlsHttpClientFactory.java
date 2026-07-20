@@ -24,12 +24,14 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
 /**
- * * Builds {@link HttpClient} for Agent Card fetch, optionally with mTLS client credentials.
+ * Builds {@link HttpClient} for Agent Card fetch, optionally with mTLS client credentials.
+ *
+ * @since 0.1.0 (2026)
  */
 final class AgentCardMtlsHttpClientFactory {
     private AgentCardMtlsHttpClientFactory() {
-
     }
+
     static HttpClient create(RdcCardFetchOptions options) {
         Objects.requireNonNull(options, "options");
         HttpClient.Builder builder = HttpClient.newBuilder()

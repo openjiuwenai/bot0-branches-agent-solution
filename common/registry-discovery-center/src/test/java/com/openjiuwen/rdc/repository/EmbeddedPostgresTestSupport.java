@@ -31,6 +31,14 @@ public final class EmbeddedPostgresTestSupport {
     private EmbeddedPostgresTestSupport() {
 
     }
+
+    /**
+     * sharedDataSource.
+     *
+     * @return result
+     * @throws Exception Exception
+     * @since 0.1.0
+     */
     public static synchronized DataSource sharedDataSource() throws Exception {
         if (dataSource == null) {
             postgres = EmbeddedPostgres.builder().start();

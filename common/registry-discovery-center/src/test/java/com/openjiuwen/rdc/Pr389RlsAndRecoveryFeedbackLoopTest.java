@@ -69,9 +69,9 @@ import javax.sql.DataSource;
  *
  * <p>Authority: PR #389 review issues #3 / #4. ADR-0160 decision 4 / 6 +
  * HD3-004 lease/TTL.
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class Pr389RlsAndRecoveryFeedbackLoopTest {
     private static DataSource superuser;
     private static DataSource appRoleSource;
@@ -166,6 +166,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * run on an owner-role connection.
      *
      * @since 0.1.0
+     * @throws Exception Exception
      */
     @Test
     void app_role_scan_with_tenant_still_empty() throws Exception {
@@ -382,7 +383,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     private static final ObjectMapper TEST_MAPPER = new ObjectMapper();
 
     /**
-     * * FEAT-016: {@code service_id} is host-only; {@code instance_id} is host-port.
+     * FEAT-016: {@code service_id} is host-only; {@code instance_id} is host-port.
      */
     private static final String SAMPLE_ENDPOINT = "https://agent.example/agent";
     private static final String SERVICE_ID = ServiceIdCodec.derive(SAMPLE_ENDPOINT);

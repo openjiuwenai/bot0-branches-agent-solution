@@ -23,7 +23,6 @@ package com.openjiuwen.rdc.tenant;
  * @since 0.1.0 (2026)
  */
 public interface TenantContext {
-
     /**
      * Returns the tenant id bound to the current call scope.
      *

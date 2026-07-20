@@ -11,7 +11,6 @@ package com.openjiuwen.rdc.model.deployment;
  * @since 0.1.0 (2026)
  */
 public interface DeploymentDiscoveryProvider {
-
     /**
      * Stable provider identity, e.g. {@code static-dev} or {@code k8s-prod}.
      *

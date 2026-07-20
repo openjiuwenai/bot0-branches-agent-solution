@@ -74,7 +74,6 @@ import java.util.Optional;
  * @since 2026-07-10
  */
 public interface AgentRegistryRepository {
-
     /**
      * Upsert (insert or replace) a registered agent entry. On conflict
      * {@code (tenant_id, agent_id, service_id, instance_id)} the existing row
@@ -434,38 +433,145 @@ public interface AgentRegistryRepository {
     ) {
 
     }
+    /**
+     * reconcileUpsert.
+     *
+     * @param command command
+     * @since 0.1.0
+     */
     void reconcileUpsert(ReconcileUpsertCommand command);
 
+    /**
+     * listInstanceKeysBySource.
+     *
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
     List<InstanceKey> listInstanceKeysBySource(String sourceId);
 
+    /**
+     * markDraining.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
     void markDraining(String tenantId, String agentId, String serviceId);
 
+    /**
+     * markRemoved.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
     void markRemoved(String tenantId, String agentId, String serviceId);
 
+    /**
+     * markSourceStale.
+     *
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
     void markSourceStale(String sourceId);
 
+    /**
+     * markSourceFresh.
+     *
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
     void markSourceFresh(String sourceId);
 
+    /**
+     * listDrainingPastGrace.
+     *
+     * @param cutoff cutoff
+     * @return result
+     * @since 0.1.0
+     */
     List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff);
 
+    /**
+     * listExpiredLeases.
+     *
+     * @param now now
+     * @return result
+     * @since 0.1.0
+     */
     List<InstanceKey> listExpiredLeases(java.time.Instant now);
 
+    /**
+     * getLastProcessedRevision.
+     *
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
     long getLastProcessedRevision(String sourceId);
 
+    /**
+     * updateLastProcessedRevision.
+     *
+     * @param sourceId sourceId
+     * @param revision revision
+     * @since 0.1.0
+     */
     void updateLastProcessedRevision(String sourceId, long revision);
 
+    /**
+     * updateLastProcessedRevision.
+     *
+     * @param sourceId sourceId
+     * @param revision revision
+     * @param snapshotFingerprint snapshotFingerprint
+     * @since 0.1.0
+     */
     void updateLastProcessedRevision(String sourceId, long revision, String snapshotFingerprint);
 
+    /**
+     * getSnapshotFingerprint.
+     *
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
     java.util.Optional<String> getSnapshotFingerprint(String sourceId);
 
+    /**
+     * findCardDigest.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @return result
+     * @since 0.1.0
+     */
     java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId);
 
+    /**
+     * reconcilePending.
+     *
+     * @param command command
+     * @since 0.1.0
+     */
     void reconcilePending(ReconcilePendingCommand command);
 
+    /**
+     * markRefreshDegraded.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
     void markRefreshDegraded(String tenantId, String agentId, String serviceId);
 
     /**
-     * * Resolve endpoint with lifecycle + lease facts for trusted routing (4-field PK).
+     * Resolve endpoint with lifecycle + lease facts for trusted routing (4-field PK).
      *
      * @param tenantId tenantId
      * @param agentId agentId
@@ -586,21 +692,63 @@ public interface AgentRegistryRepository {
     ) {
     }
 
+    /**
+     * upsertLogicalRegistration.
+     *
+     * @param command command
+     * @return result
+     * @since 0.1.0
+     */
     default java.util.UUID upsertLogicalRegistration(UpsertLogicalRegistrationCommand command) {
         return java.util.UUID.randomUUID();
     }
+    /**
+     * upsertSourceRef.
+     *
+     * @param command command
+     * @since 0.1.0
+     */
     default void upsertSourceRef(UpsertSourceRefCommand command) {
     }
 
+    /**
+     * removeSourceRef.
+     *
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param instanceId instanceId
+     * @since 0.1.0
+     */
     default void removeSourceRef(String tenantId, String deploymentServiceId, String instanceId) {
     }
 
+    /**
+     * recomputeRegistrationStatus.
+     *
+     * @param registrationId registrationId
+     * @since 0.1.0
+     */
     default void recomputeRegistrationStatus(java.util.UUID registrationId) {
     }
 
+    /**
+     * markLogicalRegistrationsStaleSource.
+     *
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
     default void markLogicalRegistrationsStaleSource(String sourceId) {
     }
 
+    /**
+     * markLogicalRegistrationStaleCard.
+     *
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param capabilityVersion capabilityVersion
+     * @param cardDigest cardDigest
+     * @since 0.1.0
+     */
     default void markLogicalRegistrationStaleCard(
             String tenantId, String deploymentServiceId, String capabilityVersion, String cardDigest) {
     }
@@ -632,6 +780,13 @@ public interface AgentRegistryRepository {
     default boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {
         return false;
     }
+    /**
+     * queryLogicalByTargetSelector.
+     *
+     * @param filter filter
+     * @return result
+     * @since 0.1.0
+     */
     default List<LogicalRegistrationRow> queryLogicalByTargetSelector(DiscoveryFilter filter) {
         return List.of();
     }

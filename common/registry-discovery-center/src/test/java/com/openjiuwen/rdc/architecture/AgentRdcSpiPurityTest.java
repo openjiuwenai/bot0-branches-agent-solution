@@ -33,11 +33,10 @@ import org.junit.jupiter.api.Test;
  * correctly forbidden.
  *
  * <p>Assertion ID: HA-001.
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class AgentRdcSpiPurityTest {
-
     /**
      * Production SPI classes only ({@code com.openjiuwen.rdc.model} and
      * sub-packages). Test classes are excluded — the rule constrains the shipped

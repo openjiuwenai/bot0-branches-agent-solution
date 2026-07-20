@@ -325,6 +325,11 @@ public class DeploymentDiscoveryProperties {
         }
     }
 
+    /**
+     * StaticInstanceEntry.
+     *
+     * @since 0.1.0
+     */
     public static class StaticInstanceEntry {
         private String tenantId;
         private String serviceId;

@@ -90,6 +90,14 @@ public class MvpHealthProbeScheduler {
     private final long staleBeforeMs;
     private final int scanLimit;
 
+    /**
+     * Production constructor with configured probe timeouts and scan limit.
+     *
+     * @param repository repository
+     * @param observability observability
+     * @param staleBeforeMs staleBeforeMs
+     * @param scanLimit scanLimit
+     */
     @Autowired
     public MvpHealthProbeScheduler(AgentRegistryRepository repository,
                                    RegistryObservabilityConfig observability,
@@ -104,8 +112,13 @@ public class MvpHealthProbeScheduler {
      * request factory with explicit timeouts. Production uses the
      * parameterless constructor above; the defaults there (2s / 2s) match
      * the values asserted by {@code Pr389ProbeSchedulerHardeningFeedbackLoopTest}.
+     *
+     * @param repository repository
+     * @param observability observability
+     * @param staleBeforeMs staleBeforeMs
+     * @param scanLimit scanLimit
+     * @param requestFactory requestFactory
      */
-
     MvpHealthProbeScheduler(AgentRegistryRepository repository,
                             RegistryObservabilityConfig observability,
                             long staleBeforeMs,

@@ -31,6 +31,13 @@ import java.util.Map;
         InstanceRouteController.class
 })
 public class RegistryApiExceptionHandler {
+    /**
+     * Maps {@link RegistryFailureException} to an HTTP status and body.
+     *
+     * @param ex ex
+     * @return result
+     * @since 0.1.0
+     */
     @ExceptionHandler(RegistryFailureException.class)
     public ResponseEntity<Map<String, Object>> handleRegistryFailure(RegistryFailureException ex) {
         RegistryFailure failure = ex.failure();
@@ -38,12 +45,26 @@ public class RegistryApiExceptionHandler {
         return ResponseEntity.status(status).body(registryFailureBody(failure));
     }
 
+    /**
+     * Maps push-registration disabled to HTTP 410 Gone.
+     *
+     * @param ex ex
+     * @return result
+     * @since 0.1.0
+     */
     @ExceptionHandler(PushRegistrationDisabledException.class)
     @ResponseStatus(HttpStatus.GONE)
     public Map<String, String> handlePushDisabled(PushRegistrationDisabledException ex) {
         return Map.of("error", "push_registration_disabled", "message", ex.getMessage());
     }
 
+    /**
+     * Maps illegal arguments to HTTP 400 Bad Request.
+     *
+     * @param ex ex
+     * @return result
+     * @since 0.1.0
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, String> handleBadRequest(IllegalArgumentException ex) {

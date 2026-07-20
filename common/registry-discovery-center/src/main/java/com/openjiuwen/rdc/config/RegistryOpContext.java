@@ -143,7 +143,7 @@ public final class RegistryOpContext {
     }
 
     /**
-     * * Fluent builder for {@link RegistryOpContext}.
+     * Fluent builder for {@link RegistryOpContext}.
      */
     /**
      * Builder.

@@ -1002,7 +1002,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     /**
-     * * Stage 24 RLS wiring — see class javadoc.
+     * Stage 24 RLS wiring — see class javadoc.
      *
      * @param tenantId tenantId
      * @param work work
@@ -1049,6 +1049,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
          * @param rowNum rowNum
          * @return result
          * @since 0.1.0
+         * @throws java.sql.SQLException java.sql.SQLException
          */
         @Override
         public RegistryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
@@ -1099,6 +1100,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
          * @param rowNum rowNum
          * @return result
          * @since 0.1.0
+         * @throws java.sql.SQLException java.sql.SQLException
          */
         @Override
         public DiscoveryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
@@ -1150,6 +1152,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * @param a2aAgentCardJson a2aAgentCardJson
      * @return result
      * @since 0.1.0
+     * @param command command
      */
     @Override
     public java.util.UUID upsertLogicalRegistration(UpsertLogicalRegistrationCommand command) {
@@ -1404,6 +1407,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * @param internalBaseUrl internalBaseUrl
      * @return result
      * @since 0.1.0
+     * @param command command
      */
     @Override
     public boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {
@@ -1582,6 +1586,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
          * @param rowNum rowNum
          * @return result
          * @since 0.1.0
+         * @throws java.sql.SQLException java.sql.SQLException
          */
         @Override
         public LogicalRegistrationRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {

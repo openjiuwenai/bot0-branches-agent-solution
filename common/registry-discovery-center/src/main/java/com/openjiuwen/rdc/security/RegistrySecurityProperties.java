@@ -19,7 +19,6 @@ import java.util.Set;
 @Component
 @ConfigurationProperties(prefix = "rdc.registry.security")
 public class RegistrySecurityProperties {
-
     /**
      * tenantId → allowed callerRef values. Empty map = permissive (only non-blank caller required).
      */

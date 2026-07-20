@@ -58,6 +58,7 @@ public class InstanceRouteController {
      * @param false false
      * @return result
      * @since 0.1.0
+     * @param "contractVersion" "contractVersion"
      */
     @GetMapping("/instances/{tenantId}/{agentId}")
     public List<AgentCardDto> listInstances(
@@ -76,6 +77,7 @@ public class InstanceRouteController {
      * @param false false
      * @return result
      * @since 0.1.0
+     * @param "contractVersion" "contractVersion"
      */
     @GetMapping("/instances/by-service/{tenantId}/{serviceId}")
     public List<AgentCardDto> listInstancesByService(
@@ -94,6 +96,7 @@ public class InstanceRouteController {
      * @param false false
      * @return result
      * @since 0.1.0
+     * @param "contractVersion" "contractVersion"
      */
     @GetMapping("/instances/by-capability/{tenantId}/{capability}")
     public List<AgentCardDto> listInstancesByCapability(

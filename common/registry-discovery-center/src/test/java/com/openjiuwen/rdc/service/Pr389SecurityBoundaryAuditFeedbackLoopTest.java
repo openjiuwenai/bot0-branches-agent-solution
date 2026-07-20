@@ -45,9 +45,9 @@ import org.junit.jupiter.api.Test;
  * paths). ADR-0160 decisions 5 / 6 + HD3-005 / HD3-006. Revised for
  * REQ-2026-006 (RouteHandleCodec.encode takes serviceId; repo port returns
  * List via listByAgentId; findEndpoint takes serviceId).
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     private SimpleMeterRegistry meterRegistry;
     private RegistryObservabilityConfig observability;

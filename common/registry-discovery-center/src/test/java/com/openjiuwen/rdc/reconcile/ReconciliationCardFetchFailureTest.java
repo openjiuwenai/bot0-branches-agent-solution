@@ -28,10 +28,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * * Card fetch failure codes during reconciliation (0713 §5.1.6).
-  *
+ * Card fetch failure codes during reconciliation (0713 §5.1.6).
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class ReconciliationCardFetchFailureTest {
     private MockWebServer runtimeServer;
 

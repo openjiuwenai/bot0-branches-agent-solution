@@ -27,7 +27,6 @@ package com.openjiuwen.rdc.model;
  * @since 0.1.0
  */
 public enum FrameworkType {
-
     /**
      * Jiuwen agent runtime.
      *

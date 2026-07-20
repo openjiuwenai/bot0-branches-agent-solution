@@ -79,7 +79,6 @@ import javax.sql.DataSource;
  */
 @Configuration
 public class RegistryRuntimeBeanConfig {
-
     /**
      * In-process {@link MeterRegistry} for the standalone runtime. Suffices
      * for audit + Counter/Timer emission via {@link RegistryObservabilityConfig};

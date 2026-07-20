@@ -24,10 +24,10 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * * Guards {@code POST /discover} JSON shape for Feat-015 0713 logical candidates.
-  *
+ * Guards {@code POST /discover} JSON shape for Feat-015 0713 logical candidates.
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class DiscoveryCandidateJsonSerializationTest {
     private static final DiscoveryResult SAMPLE_RESULT = new DiscoveryResult(
             DiscoveryOutcome.SUCCESS,

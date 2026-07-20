@@ -279,44 +279,44 @@ public final class ReconciliationService {
     }
 
     private ReconcileAction upsertReconciledObservation(UpsertReconcileArgs args) {
-            DeploymentInstanceObservation obs = args.obs();
-            StaticInstanceRuntimeBinding binding = args.binding();
-            AgentCardFetcher.FetchResult fetched = args.fetched();
-            String cardJson = args.cardJson();
-            RouteTargetDeriver.DerivedRoute route = RouteTargetDeriver.derive(
-            obs.internalBaseUrl(), cardJson, binding.routeKey());
-            String agentName = RouteTargetDeriver.agentNameFromCard(cardJson);
-            String contractVersion = fetched.contractVersion() != null && !fetched.contractVersion().isBlank()
-            ? fetched.contractVersion()
-            : (route.contractVersion() != null ? route.contractVersion() : binding.contractVersion());
-            
-            boolean created = args.priorDigest().isEmpty();
-            repository.reconcileUpsert(new ReconcileUpsertCommand(
-            obs.tenantId(),
-            args.agentId(),
-            args.instancePk(),
-            obs.instanceId(),
-            obs.serviceId(),
-            obs.sourceId(),
-            obs.sourceRevision(),
-            agentName,
-            binding.frameworkType(),
-            binding.routeKey(),
-            contractVersion,
-            fetched.capabilityVersion() != null ? fetched.capabilityVersion() : binding.capabilityVersion(),
-            obs.internalBaseUrl(),
-            binding.maxConcurrency(),
-            binding.weight(),
-            binding.region(),
-            cardJson,
-            args.digest(),
-            route.routeTargetJson(),
-            "ACTIVE",
-            "HEALTHY",
-            "FRESH",
-            "ONLINE"));
-            return created ? ReconcileAction.CREATED : ReconcileAction.UPDATED;
-        }
+        DeploymentInstanceObservation obs = args.obs();
+        StaticInstanceRuntimeBinding binding = args.binding();
+        AgentCardFetcher.FetchResult fetched = args.fetched();
+        String cardJson = args.cardJson();
+        RouteTargetDeriver.DerivedRoute route = RouteTargetDeriver.derive(
+                obs.internalBaseUrl(), cardJson, binding.routeKey());
+        String agentName = RouteTargetDeriver.agentNameFromCard(cardJson);
+        String contractVersion = fetched.contractVersion() != null && !fetched.contractVersion().isBlank()
+                ? fetched.contractVersion()
+                : (route.contractVersion() != null ? route.contractVersion() : binding.contractVersion());
+
+        boolean created = args.priorDigest().isEmpty();
+        repository.reconcileUpsert(new ReconcileUpsertCommand(
+                obs.tenantId(),
+                args.agentId(),
+                args.instancePk(),
+                obs.instanceId(),
+                obs.serviceId(),
+                obs.sourceId(),
+                obs.sourceRevision(),
+                agentName,
+                binding.frameworkType(),
+                binding.routeKey(),
+                contractVersion,
+                fetched.capabilityVersion() != null ? fetched.capabilityVersion() : binding.capabilityVersion(),
+                obs.internalBaseUrl(),
+                binding.maxConcurrency(),
+                binding.weight(),
+                binding.region(),
+                cardJson,
+                args.digest(),
+                route.routeTargetJson(),
+                "ACTIVE",
+                "HEALTHY",
+                "FRESH",
+                "ONLINE"));
+        return created ? ReconcileAction.CREATED : ReconcileAction.UPDATED;
+    }
 
     private record UpsertReconcileArgs(
             DeploymentInstanceObservation obs,

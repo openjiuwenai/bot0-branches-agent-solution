@@ -40,9 +40,9 @@ import javax.sql.DataSource;
  * <p>Tests verify the post-V5 schema state: PK is the triple, partial
  * heartbeat index unchanged, RLS unchanged, CHECK constraints unchanged.
  * Old search_tsv / capability / agent_type artifacts must be gone.
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class AgentRegistryMigrationTest {
     private static DataSource dataSource;
     private static JdbcTemplate jdbc;

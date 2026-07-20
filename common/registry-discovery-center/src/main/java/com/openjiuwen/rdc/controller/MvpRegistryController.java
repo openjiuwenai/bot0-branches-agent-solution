@@ -153,7 +153,7 @@ public class MvpRegistryController {
     }
 
     /**
-     * * Structured Agent Card discovery per Feat-015 0713 {@code DiscoverAgentCards}.
+     * Structured Agent Card discovery per Feat-015 0713 {@code DiscoverAgentCards}.
      *
      * @param request request
      * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER

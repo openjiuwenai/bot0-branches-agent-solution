@@ -50,6 +50,8 @@ import java.util.UUID;
  * but never {@code java.sql} / {@code javax.sql} /
  * {@code org.springframework.jdbc.*} — runtime.pull is NOT a JDBC package
  * (ADR-0160 decision 4 unchanged).
+ *
+ * @since 0.1.0 (2026)
  */
 @Component
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(

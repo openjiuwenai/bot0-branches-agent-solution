@@ -271,11 +271,16 @@ public final class AgentCardValidator {
      * @return result
      * @since 0.1.0
      */
-    public record ValidationResult(boolean valid, String failureCode, String message,
-                                   String capabilityVersion, String contractVersion) {
+    public record ValidationResult(
+            boolean valid,
+            String failureCode,
+            String message,
+            String capabilityVersion,
+            String contractVersion) {
         static ValidationResult valid(String capabilityVersion, String contractVersion) {
             return new ValidationResult(true, null, null, capabilityVersion, contractVersion);
         }
+
         static ValidationResult invalid(String failureCode, String message) {
             return new ValidationResult(false, failureCode, message, null, null);
         }

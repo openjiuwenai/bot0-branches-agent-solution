@@ -79,6 +79,7 @@ public class RegistryObservabilityConfig {
      * @param outcome outcome
      * @param latencyMs latencyMs
      * @since 0.1.0
+     * @param audit audit
      */
     public void observeRegister(RegistryOpAudit audit) {
         audit("register", audit);
@@ -112,6 +113,7 @@ public class RegistryObservabilityConfig {
      * @param outcome outcome
      * @param latencyMs latencyMs
      * @since 0.1.0
+     * @param audit audit
      */
     public void observeProbe(RegistryOpAudit audit) {
         audit("probe", audit);
@@ -128,6 +130,7 @@ public class RegistryObservabilityConfig {
      * @param resultCount resultCount
      * @param latencyMs latencyMs
      * @since 0.1.0
+     * @param audit audit
      */
     public void observeDiscover(RegistryOpAudit audit, int resultCount) {
         AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} "
@@ -149,6 +152,7 @@ public class RegistryObservabilityConfig {
      * @param outcome outcome
      * @param latencyMs latencyMs
      * @since 0.1.0
+     * @param audit audit
      */
     public void observeResolve(RegistryOpAudit audit) {
         audit("resolve", audit);

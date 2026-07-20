@@ -10,12 +10,15 @@ import com.openjiuwen.rdc.model.RegistryEntryInvalidException;
 import java.net.URI;
 
 /**
- * * Validates push {@link AgentRegistryEntry} before persistence (0711 {@code REGISTRY_ENTRY_INVALID}).
- */
+ * Validates push {@link AgentRegistryEntry} before persistence (0711 {@code REGISTRY_ENTRY_INVALID}).
+
+  * @since 0.1.0 (2026)
+  */
 final class RegistryEntryValidator {
     private RegistryEntryValidator() {
 
     }
+
     static void validate(AgentRegistryEntry entry, String traceId) {
         if (entry == null || !entry.hasRegistryKey()) {
             throw new RegistryEntryInvalidException(

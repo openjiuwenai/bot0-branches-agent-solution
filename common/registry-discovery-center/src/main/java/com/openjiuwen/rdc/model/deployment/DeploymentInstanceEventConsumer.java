@@ -12,5 +12,11 @@ package com.openjiuwen.rdc.model.deployment;
  */
 @FunctionalInterface
 public interface DeploymentInstanceEventConsumer {
+    /**
+     * onEvent.
+     *
+     * @param event event
+     * @since 0.1.0
+     */
     void onEvent(DeploymentInstanceEvent event);
 }

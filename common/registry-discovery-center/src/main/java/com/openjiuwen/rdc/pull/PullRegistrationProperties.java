@@ -31,7 +31,6 @@ import java.util.Map;
 @Component
 @ConfigurationProperties(prefix = "rdc.pull-registration")
 public class PullRegistrationProperties {
-
     /**
      * Master switch. Default {@code false} — pull registration is opt-in.
      * When {@code false}, {@link PullRegistrationBootstrap} no-ops on

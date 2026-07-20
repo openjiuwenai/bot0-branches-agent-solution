@@ -33,7 +33,6 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 @Configuration
 @EnableScheduling
 public class RegistrySchedulingConfig implements SchedulingConfigurer {
-
     /**
      * Dedicated {@link ThreadPoolTaskScheduler} for registry probe work.
      * Pool size 2 is enough for the MVP single-tenant sweep; the scheduler

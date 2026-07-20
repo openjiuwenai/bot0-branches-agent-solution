@@ -22,7 +22,6 @@ import java.util.Objects;
  * @since 0.1.0 (2026)
  */
 public final class AgentCardFetcher {
-
     /**
      * DEFAULT_CONNECT_TIMEOUT.
      *

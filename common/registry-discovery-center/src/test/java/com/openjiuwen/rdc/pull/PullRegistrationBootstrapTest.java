@@ -32,9 +32,9 @@ import java.util.Optional;
  *
  * <p>Uses {@link MockWebServer} to serve A2A AgentCard JSON and a recording
  * fake {@link AgentRegistryRepository} to assert upsert calls.
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class PullRegistrationBootstrapTest {
     private static MockWebServer server;
     private static RegistryObservabilityConfig observability;

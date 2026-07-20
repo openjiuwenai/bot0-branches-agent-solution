@@ -32,10 +32,10 @@ import java.util.Set;
 import javax.sql.DataSource;
 
 /**
- * * Integration tests for Feat-015 0713 structured {@code DiscoverAgentCards}.
-  *
+ * Integration tests for Feat-015 0713 structured {@code DiscoverAgentCards}.
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class StructuredDiscoveryIntegrationTest {
     private static DataSource dataSource;
     private static JdbcAgentRegistryRepository repository;

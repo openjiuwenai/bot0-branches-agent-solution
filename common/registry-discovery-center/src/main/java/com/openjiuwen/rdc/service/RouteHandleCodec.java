@@ -69,7 +69,6 @@ import java.util.Base64;
  */
 
 final class RouteHandleCodec {
-
     /**
      * Version-2 prefix marker. FEAT-016 encode always produces this prefix;
      * decode requires it — old v1: / no-prefix handles are rejected.

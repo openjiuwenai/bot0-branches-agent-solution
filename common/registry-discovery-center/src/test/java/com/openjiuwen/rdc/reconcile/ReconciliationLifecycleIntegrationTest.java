@@ -40,10 +40,10 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 /**
- * * Reconciliation lifecycle semantics: PENDING, DEGRADED refresh, digest skip, revision, lease.
-  *
+ * Reconciliation lifecycle semantics: PENDING, DEGRADED refresh, digest skip, revision, lease.
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class ReconciliationLifecycleIntegrationTest {
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;

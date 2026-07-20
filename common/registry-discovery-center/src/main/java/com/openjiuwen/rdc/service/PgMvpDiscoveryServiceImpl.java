@@ -239,7 +239,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     /**
-     * * Resolve with optional caller governance context (0711 {@code ResolveRouteHandle}).
+     * Resolve with optional caller governance context (0711 {@code ResolveRouteHandle}).
      *
      * @param routeHandle routeHandle
      * @param tenantId tenantId
@@ -254,7 +254,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     /**
-     * * Resolve with caller governance context and optional deadline (0711).
+     * Resolve with caller governance context and optional deadline (0711).
      *
      * @param routeHandle routeHandle
      * @param tenantId tenantId

@@ -53,9 +53,9 @@ import java.util.List;
  * REQ-2026-006 (ProbeTarget adds serviceId; repo port listByAgentId +
  * findEndpoint(serviceId) + updateStatus(serviceId) + delete(serviceId)
  * overload).
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
     private static MockWebServer agentServer;
     private static RegistryObservabilityConfig observability;
@@ -108,6 +108,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
      * (e.g. 2s) and both targets are processed.
      *
      * @since 0.1.0
+     * @throws Exception Exception
      */
     @Test
     void hung_endpoint_does_not_block_probe_sweep() throws Exception {

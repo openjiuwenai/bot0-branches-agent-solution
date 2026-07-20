@@ -12,6 +12,14 @@ import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
  * @since 0.1.0 (2026)
  */
 public interface CallerAuthorizationPolicy {
+    /**
+     * authorize.
+     *
+     * @param tenantId tenantId
+     * @param callerRef callerRef
+     * @param traceId traceId
+     * @since 0.1.0
+     */
     void authorize(String tenantId, String callerRef, String traceId);
 
     /**

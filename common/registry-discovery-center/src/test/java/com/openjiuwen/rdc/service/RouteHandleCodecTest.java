@@ -15,9 +15,9 @@ import java.util.Base64;
 /**
  * Round-trip + baseline-breaking rejection tests for {@link RouteHandleCodec}
  * (FEAT-016 v2: 6-field opaque route handle).
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class RouteHandleCodecTest {
     private static final String TENANT = "tenant-A";
     private static final String AGENT = "agent-001";

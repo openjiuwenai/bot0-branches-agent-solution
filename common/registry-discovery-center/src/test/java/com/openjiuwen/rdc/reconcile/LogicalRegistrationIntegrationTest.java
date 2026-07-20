@@ -42,9 +42,9 @@ import javax.sql.DataSource;
 /**
  * Integration tests for logical AgentCardRegistration catalog: multi-instance dedup,
  * last-source removal, and STALE_CARD freshness.
-  *
+ *
  * @since 0.1.0 (2026)
-*/
+ */
 class LogicalRegistrationIntegrationTest {
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;
