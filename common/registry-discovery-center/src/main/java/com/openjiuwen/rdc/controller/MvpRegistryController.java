@@ -72,7 +72,7 @@ import java.util.UUID;
  * REQ-2026-006 (multi-instance) + Feat-015 discover.
  *
  * @since 0.1.0
- */
+  */
 @RestController
 @RequestMapping("/api/registry")
 public class MvpRegistryController {
@@ -102,6 +102,14 @@ public class MvpRegistryController {
 
     @PostMapping("/register")
     @Deprecated
+    /**
+     * register.
+     * @param card card
+     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
+     * @param false false
+     * @return result
+     * @since 0.1.0
+     */
     public ResponseEntity<Void> register(
             @RequestBody AgentRegistryEntry card,
             @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
@@ -304,6 +312,15 @@ public record DiscoverRequest(
     ) {
     }
 
+    /**
+     * ContextRequest.
+     * @param tenantId tenantId
+     * @param callerRef callerRef
+     * @param requestId requestId
+     * @param deadline deadline
+     * @return result
+     * @since 0.1.0
+     */
     public record ContextRequest(
             String tenantId,
             String callerRef,
@@ -312,6 +329,19 @@ public record DiscoverRequest(
     ) {
     }
 
+    /**
+     * ConstraintsRequest.
+     * @param contractVersion contractVersion
+     * @param capabilityVersion capabilityVersion
+     * @param requiredSkillTags requiredSkillTags
+     * @param requiredCapabilities requiredCapabilities
+     * @param requiredInputModes requiredInputModes
+     * @param requiredOutputModes requiredOutputModes
+     * @param requiredSecuritySchemes requiredSecuritySchemes
+     * @param healthRequirement healthRequirement
+     * @return result
+     * @since 0.1.0
+     */
     public record ConstraintsRequest(
             String contractVersion,
             String capabilityVersion,

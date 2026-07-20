@@ -120,7 +120,7 @@ class ReconciliationWatchIntegrationTest {
     }
 
     @Test
-    void watch_registered_reconcile_drains_instance_missing_from_snapshot() throws Exception {
+    void watch_reconcile_drains_missing_instance() throws Exception {
         oldRuntimeServer.enqueue(cardResponse("billing-agent-v1", "1.0.0"));
         newRuntimeServer.enqueue(cardResponse("billing-agent-v2", "2.0.0"));
 

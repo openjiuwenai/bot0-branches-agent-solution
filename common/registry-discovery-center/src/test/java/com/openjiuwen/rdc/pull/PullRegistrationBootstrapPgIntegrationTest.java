@@ -73,7 +73,7 @@ class PullRegistrationBootstrapPgIntegrationTest {
     }
 
     @Test
-    void pull_upserts_entry_with_defaults_when_operator_omits_max_concurrency_and_weight() throws Exception {
+    void pull_upserts_defaults_when_omits_limits() throws Exception {
         String baseUrl = runtimeServer.url("/").toString().replaceAll("/$", "");
         String cardJson = "{\"name\":\"财务助手\",\"description\":\"billing\","
                 + "\"version\":\"1.0.0\",\"capabilities\":{\"streaming\":false,"

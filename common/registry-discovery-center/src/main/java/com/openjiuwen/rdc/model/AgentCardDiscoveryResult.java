@@ -10,8 +10,8 @@ import java.util.List;
  * Structured Agent Card discovery response (Feat-015 0713
  * {@code AgentCardDiscoveryResult}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public record AgentCardDiscoveryResult(
         DiscoveryOutcome outcome,
         List<AgentCardCandidate> candidates,
@@ -22,12 +22,26 @@ public record AgentCardDiscoveryResult(
         candidates = List.copyOf(candidates);
     }
 
+    /**
+     * of.
+     * @param outcome outcome
+     * @param candidates candidates
+     * @param traceId traceId
+     * @return result
+     * @since 0.1.0
+     */
     public static AgentCardDiscoveryResult of(DiscoveryOutcome outcome,
                                               List<AgentCardCandidate> candidates,
                                               String traceId) {
         return new AgentCardDiscoveryResult(outcome, candidates, null, traceId);
     }
 
+    /**
+     * from.
+     * @param result result
+     * @return result
+     * @since 0.1.0
+     */
     public static AgentCardDiscoveryResult from(DiscoveryResult result) {
         List<AgentCardCandidate> mapped = result.candidates().stream()
                 .map(AgentCardCandidate::from)
@@ -36,6 +50,11 @@ public record AgentCardDiscoveryResult(
                 result.outcome(), mapped, result.nextToken(), result.traceId());
     }
 
+    /**
+     * toDiscoveryResult.
+     * @return result
+     * @since 0.1.0
+     */
     public DiscoveryResult toDiscoveryResult() {
         List<DiscoveryCandidate> mapped = candidates.stream()
                 .map(c -> DiscoveryCandidate.builder()

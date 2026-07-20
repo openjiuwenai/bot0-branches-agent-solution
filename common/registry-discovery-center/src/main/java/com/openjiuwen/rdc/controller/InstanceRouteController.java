@@ -33,8 +33,8 @@ import java.util.UUID;
  * <p>Logical Agent Card discovery remains on {@link MvpRegistryController}
  * ({@code POST /api/registry/discover}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 @RestController
 @RequestMapping("/api/registry")
 public class InstanceRouteController {
@@ -52,6 +52,14 @@ public class InstanceRouteController {
     }
 
     @GetMapping("/instances/{tenantId}/{agentId}")
+    /**
+     * listInstances.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param false false
+     * @return result
+     * @since 0.1.0
+     */
     public List<AgentCardDto> listInstances(
             @PathVariable String tenantId,
             @PathVariable String agentId,
@@ -61,6 +69,14 @@ public class InstanceRouteController {
     }
 
     @GetMapping("/instances/by-service/{tenantId}/{serviceId}")
+    /**
+     * listInstancesByService.
+     * @param tenantId tenantId
+     * @param serviceId serviceId
+     * @param false false
+     * @return result
+     * @since 0.1.0
+     */
     public List<AgentCardDto> listInstancesByService(
             @PathVariable String tenantId,
             @PathVariable String serviceId,
@@ -70,6 +86,14 @@ public class InstanceRouteController {
     }
 
     @GetMapping("/instances/by-capability/{tenantId}/{capability}")
+    /**
+     * listInstancesByCapability.
+     * @param tenantId tenantId
+     * @param capability capability
+     * @param false false
+     * @return result
+     * @since 0.1.0
+     */
     public List<AgentCardDto> listInstancesByCapability(
             @PathVariable String tenantId,
             @PathVariable String capability,
@@ -79,6 +103,14 @@ public class InstanceRouteController {
     }
 
     @PostMapping("/route-handle/resolve")
+    /**
+     * resolveRouteHandle.
+     * @param request request
+     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
+     * @param false false
+     * @return result
+     * @since 0.1.0
+     */
     public RouteResolution resolveRouteHandle(
             @RequestBody ResolveRequest request,
             @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
@@ -103,6 +135,11 @@ public class InstanceRouteController {
     }
 
     @DeleteMapping("/deregister/{tenantId}/{agentId}/{serviceId}/{instanceId}")
+    /**
+     * deregisterSingleInstance.
+     * @param pathVars pathVars
+     * @since 0.1.0
+     */
     public void deregisterSingleInstance(@PathVariable Map<String, String> pathVars) {
         String tenantId = pathVars.get("tenantId");
         String agentId = pathVars.get("agentId");
@@ -113,6 +150,14 @@ public class InstanceRouteController {
         repository.delete(tenantId, agentId, serviceId, instanceId);
     }
 
+    /**
+     * ResolveRequest.
+     * @param routeHandle routeHandle
+     * @param tenantId tenantId
+     * @param context context
+     * @return result
+     * @since 0.1.0
+     */
     public record ResolveRequest(
             String routeHandle,
             String tenantId,
@@ -120,6 +165,15 @@ public class InstanceRouteController {
     ) {
     }
 
+    /**
+     * ContextRequest.
+     * @param tenantId tenantId
+     * @param callerRef callerRef
+     * @param requestId requestId
+     * @param deadline deadline
+     * @return result
+     * @since 0.1.0
+     */
     public record ContextRequest(
             String tenantId,
             String callerRef,

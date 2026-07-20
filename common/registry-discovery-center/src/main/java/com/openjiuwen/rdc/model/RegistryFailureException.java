@@ -7,8 +7,8 @@ package com.openjiuwen.rdc.model;
 /**
  * Runtime exception carrying a structured {@link RegistryFailure}.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public class RegistryFailureException extends RuntimeException {
 
     private final RegistryFailure failure;
@@ -18,6 +18,11 @@ public class RegistryFailureException extends RuntimeException {
         this.failure = failure;
     }
 
+    /**
+     * failure.
+     * @return result
+     * @since 0.1.0
+     */
     public RegistryFailure failure() {
         return failure;
     }

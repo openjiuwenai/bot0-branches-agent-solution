@@ -27,8 +27,8 @@ import java.util.Objects;
 /**
  * Optional Agent Card JWS-style signature verification (0711 {@code AGENT_CARD_SIGNATURE_INVALID}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class AgentCardSignatureVerifier {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -41,10 +41,21 @@ public final class AgentCardSignatureVerifier {
         this.trustedKeysByKid = Map.copyOf(trustedKeysByKid);
     }
 
+    /**
+     * disabled.
+     * @return result
+     * @since 0.1.0
+     */
     public static AgentCardSignatureVerifier disabled() {
         return new AgentCardSignatureVerifier(false, Map.of());
     }
 
+    /**
+     * from.
+     * @param options options
+     * @return result
+     * @since 0.1.0
+     */
     public static AgentCardSignatureVerifier from(RdcCardFetchOptions options) {
         Objects.requireNonNull(options, "options");
         if (!options.isVerifySignatures()) {
@@ -57,6 +68,12 @@ public final class AgentCardSignatureVerifier {
         return new AgentCardSignatureVerifier(true, keys);
     }
 
+    /**
+     * verify.
+     * @param cardJson cardJson
+     * @return result
+     * @since 0.1.0
+     */
     public VerificationResult verify(String cardJson) {
         if (!enabled) {
             return VerificationResult.success();
@@ -151,6 +168,13 @@ public final class AgentCardSignatureVerifier {
         return new String(base64UrlDecode(value), StandardCharsets.UTF_8);
     }
 
+    /**
+     * VerificationResult.
+     * @param ok ok
+     * @param message message
+     * @return result
+     * @since 0.1.0
+     */
     public record VerificationResult(boolean ok, String message) {
         static VerificationResult success() {
             return new VerificationResult(true, null);

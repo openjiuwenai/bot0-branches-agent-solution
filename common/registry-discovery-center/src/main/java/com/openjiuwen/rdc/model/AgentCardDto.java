@@ -46,7 +46,7 @@ import java.util.Objects;
  * stays pure Java (ADR-0160 decision 1).
  *
  * @since 0.1.0
- */
+  */
 public final class AgentCardDto {
 
     // ---- ICD routing fields (always populated on match) ----
@@ -80,48 +80,103 @@ public final class AgentCardDto {
         this.frameworkType = b.frameworkType;
     }
 
+    /**
+     * getServiceId.
+     * @return result
+     * @since 0.1.0
+     */
     public String getServiceId() {
         return serviceId;
     }
 
+    /**
+     * getRouteHandle.
+     * @return result
+     * @since 0.1.0
+     */
     public String getRouteHandle() {
         return routeHandle;
     }
 
+    /**
+     * getHealth.
+     * @return result
+     * @since 0.1.0
+     */
     public String getHealth() {
         return health;
     }
 
+    /**
+     * getContractVersion.
+     * @return result
+     * @since 0.1.0
+     */
     public String getContractVersion() {
         return contractVersion;
     }
 
+    /**
+     * getCapabilityVersion.
+     * @return result
+     * @since 0.1.0
+     */
     public String getCapabilityVersion() {
         return capabilityVersion;
     }
 
+    /**
+     * getWeight.
+     * @return result
+     * @since 0.1.0
+     */
     public int getWeight() {
         return weight;
     }
 
+    /**
+     * getRegion.
+     * @return result
+     * @since 0.1.0
+     */
     public String getRegion() {
         return region;
     }
 
+    /**
+     * getMaxConcurrency.
+     * @return result
+     * @since 0.1.0
+     */
     public int getMaxConcurrency() {
         return maxConcurrency;
     }
 
     @Nullable
+    /**
+     * getAgentName.
+     * @return result
+     * @since 0.1.0
+     */
     public String getAgentName() {
         return agentName;
     }
 
     @Nullable
+    /**
+     * getFrameworkType.
+     * @return result
+     * @since 0.1.0
+     */
     public FrameworkType getFrameworkType() {
         return frameworkType;
     }
 
+    /**
+     * builder.
+     * @return result
+     * @since 0.1.0
+     */
     public static Builder builder() {
         return new Builder();
     }
@@ -141,56 +196,121 @@ public final class AgentCardDto {
         private Builder() {
         }
 
+        /**
+         * serviceId.
+         * @param serviceId serviceId
+         * @return result
+         * @since 0.1.0
+         */
         public Builder serviceId(String serviceId) {
             this.serviceId = serviceId;
             return this;
         }
 
+        /**
+         * routeHandle.
+         * @param routeHandle routeHandle
+         * @return result
+         * @since 0.1.0
+         */
         public Builder routeHandle(String routeHandle) {
             this.routeHandle = routeHandle;
             return this;
         }
 
+        /**
+         * health.
+         * @param health health
+         * @return result
+         * @since 0.1.0
+         */
         public Builder health(String health) {
             this.health = health;
             return this;
         }
 
+        /**
+         * contractVersion.
+         * @param contractVersion contractVersion
+         * @return result
+         * @since 0.1.0
+         */
         public Builder contractVersion(String contractVersion) {
             this.contractVersion = contractVersion;
             return this;
         }
 
+        /**
+         * capabilityVersion.
+         * @param capabilityVersion capabilityVersion
+         * @return result
+         * @since 0.1.0
+         */
         public Builder capabilityVersion(String capabilityVersion) {
             this.capabilityVersion = capabilityVersion;
             return this;
         }
 
+        /**
+         * weight.
+         * @param weight weight
+         * @return result
+         * @since 0.1.0
+         */
         public Builder weight(int weight) {
             this.weight = weight;
             return this;
         }
 
+        /**
+         * region.
+         * @param region region
+         * @return result
+         * @since 0.1.0
+         */
         public Builder region(String region) {
             this.region = region;
             return this;
         }
 
+        /**
+         * maxConcurrency.
+         * @param maxConcurrency maxConcurrency
+         * @return result
+         * @since 0.1.0
+         */
         public Builder maxConcurrency(int maxConcurrency) {
             this.maxConcurrency = maxConcurrency;
             return this;
         }
 
+        /**
+         * agentName.
+         * @param agentName agentName
+         * @return result
+         * @since 0.1.0
+         */
         public Builder agentName(String agentName) {
             this.agentName = agentName;
             return this;
         }
 
+        /**
+         * frameworkType.
+         * @param frameworkType frameworkType
+         * @return result
+         * @since 0.1.0
+         */
         public Builder frameworkType(FrameworkType frameworkType) {
             this.frameworkType = frameworkType;
             return this;
         }
 
+        /**
+         * build.
+         * @return result
+         * @since 0.1.0
+         */
         public AgentCardDto build() {
             Objects.requireNonNull(serviceId, "serviceId");
             Objects.requireNonNull(routeHandle, "routeHandle");

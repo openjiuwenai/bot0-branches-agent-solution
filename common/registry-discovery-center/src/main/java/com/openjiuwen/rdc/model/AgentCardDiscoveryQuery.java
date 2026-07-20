@@ -10,8 +10,8 @@ import java.util.Objects;
  * Structured Agent Card discovery request (Feat-015 0713
  * {@code AgentCardDiscoveryQuery}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class AgentCardDiscoveryQuery {
 
     private final RegistryRequestContext context;
@@ -36,42 +36,86 @@ public final class AgentCardDiscoveryQuery {
         this.continuationToken = b.continuationToken;
     }
 
+    /**
+     * builder.
+     * @return result
+     * @since 0.1.0
+     */
     public static Builder builder() {
         return new Builder();
     }
 
+    /**
+     * context.
+     * @return result
+     * @since 0.1.0
+     */
     public RegistryRequestContext context() {
         return context;
     }
 
     @Nullable
+    /**
+     * agentId.
+     * @return result
+     * @since 0.1.0
+     */
     public String agentId() {
         return agentId;
     }
 
     @Nullable
+    /**
+     * serviceId.
+     * @return result
+     * @since 0.1.0
+     */
     public String serviceId() {
         return serviceId;
     }
 
     @Nullable
+    /**
+     * a2aSkillId.
+     * @return result
+     * @since 0.1.0
+     */
     public String a2aSkillId() {
         return a2aSkillId;
     }
 
+    /**
+     * constraints.
+     * @return result
+     * @since 0.1.0
+     */
     public DiscoveryConstraints constraints() {
         return constraints;
     }
 
+    /**
+     * limit.
+     * @return result
+     * @since 0.1.0
+     */
     public int limit() {
         return limit;
     }
 
     @Nullable
+    /**
+     * continuationToken.
+     * @return result
+     * @since 0.1.0
+     */
     public String continuationToken() {
         return continuationToken;
     }
 
+    /**
+     * validate.
+     * @since 0.1.0
+     */
     public void validate() {
         context.validate();
         boolean hasAgent = agentId != null && !agentId.isBlank();
@@ -98,6 +142,12 @@ public final class AgentCardDiscoveryQuery {
                 .build();
     }
 
+    /**
+     * from.
+     * @param query query
+     * @return result
+     * @since 0.1.0
+     */
     public static AgentCardDiscoveryQuery from(DiscoveryQuery query) {
         return builder()
                 .context(query.context())
@@ -119,41 +169,88 @@ public final class AgentCardDiscoveryQuery {
         private int limit = 20;
         private String continuationToken;
 
+        /**
+         * context.
+         * @param context context
+         * @return result
+         * @since 0.1.0
+         */
         public Builder context(RegistryRequestContext context) {
             this.context = context;
             return this;
         }
 
+        /**
+         * agentId.
+         * @param agentId agentId
+         * @return result
+         * @since 0.1.0
+         */
         public Builder agentId(String agentId) {
             this.agentId = agentId;
             return this;
         }
 
+        /**
+         * serviceId.
+         * @param serviceId serviceId
+         * @return result
+         * @since 0.1.0
+         */
         public Builder serviceId(String serviceId) {
             this.serviceId = serviceId;
             return this;
         }
 
+        /**
+         * a2aSkillId.
+         * @param a2aSkillId a2aSkillId
+         * @return result
+         * @since 0.1.0
+         */
         public Builder a2aSkillId(String a2aSkillId) {
             this.a2aSkillId = a2aSkillId;
             return this;
         }
 
+        /**
+         * constraints.
+         * @param constraints constraints
+         * @return result
+         * @since 0.1.0
+         */
         public Builder constraints(DiscoveryConstraints constraints) {
             this.constraints = constraints;
             return this;
         }
 
+        /**
+         * limit.
+         * @param limit limit
+         * @return result
+         * @since 0.1.0
+         */
         public Builder limit(int limit) {
             this.limit = limit;
             return this;
         }
 
+        /**
+         * continuationToken.
+         * @param continuationToken continuationToken
+         * @return result
+         * @since 0.1.0
+         */
         public Builder continuationToken(String continuationToken) {
             this.continuationToken = continuationToken;
             return this;
         }
 
+        /**
+         * build.
+         * @return result
+         * @since 0.1.0
+         */
         public AgentCardDiscoveryQuery build() {
             return new AgentCardDiscoveryQuery(this);
         }

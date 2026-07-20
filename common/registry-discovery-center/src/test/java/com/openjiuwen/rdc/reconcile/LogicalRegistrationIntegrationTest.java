@@ -88,7 +88,7 @@ class LogicalRegistrationIntegrationTest {
     }
 
     @Test
-    void multi_instance_same_card_returns_single_logical_candidate() throws Exception {
+    void multi_instance_same_card_single_candidate() throws Exception {
         enqueueValidCard();
         enqueueValidCard();
         reconciliationService().reconcile(twoInstanceProvider(Readiness.READY, Readiness.READY));
@@ -107,7 +107,7 @@ class LogicalRegistrationIntegrationTest {
     }
 
     @Test
-    void last_source_removal_marks_registration_removed_and_hides_from_discovery() throws Exception {
+    void last_source_removal_marks_removed_hides() throws Exception {
         enqueueValidCard();
         enqueueValidCard();
         ReconciliationService service = reconciliationService();
@@ -126,7 +126,7 @@ class LogicalRegistrationIntegrationTest {
     }
 
     @Test
-    void card_refresh_failure_marks_stale_card_but_keeps_discoverable() throws Exception {
+    void card_refresh_failure_marks_stale_keeps_disc() throws Exception {
         enqueueValidCard();
         ReconciliationService service = reconciliationService();
         StaticDeploymentDiscoveryProvider provider = singleInstanceProvider(Readiness.READY);
@@ -142,7 +142,7 @@ class LogicalRegistrationIntegrationTest {
     }
 
     @Test
-    void card_revalidation_after_refresh_failure_restores_fresh_without_card_change() throws Exception {
+    void card_revalidation_after_refresh_restores() throws Exception {
         enqueueValidCard();
         ReconciliationService service = reconciliationService();
         StaticDeploymentDiscoveryProvider provider = singleInstanceProvider(Readiness.READY);
@@ -165,7 +165,7 @@ class LogicalRegistrationIntegrationTest {
     }
 
     @Test
-    void card_content_change_removes_previous_digest_from_discovery() throws Exception {
+    void card_content_change_removes_prev_digest() throws Exception {
         enqueueValidCard();
         ReconciliationService service = reconciliationService();
         StaticDeploymentDiscoveryProvider provider = singleInstanceProvider(Readiness.READY);

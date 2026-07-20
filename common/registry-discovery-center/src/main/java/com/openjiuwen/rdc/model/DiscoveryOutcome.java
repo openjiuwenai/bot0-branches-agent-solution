@@ -9,8 +9,8 @@ package com.openjiuwen.rdc.model;
  * Zero candidates with one of the {@code NO_*} values is a normal business
  * result — not a {@link RegistryFailure}.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public enum DiscoveryOutcome {
     SUCCESS,
     NO_MATCH,

@@ -11,8 +11,8 @@ import java.util.Objects;
  * Provider observation of a single physical runtime instance (Feat-015 0711
  * {@code DeploymentInstanceObservation}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public record DeploymentInstanceObservation(
         String tenantId,
         String serviceId,
@@ -29,6 +29,11 @@ public record DeploymentInstanceObservation(
         Objects.requireNonNull(observedAt, "observedAt");
     }
 
+    /**
+     * reconcileKey.
+     * @return result
+     * @since 0.1.0
+     */
     public String reconcileKey() {
         return tenantId + ":" + serviceId + ":" + instanceId;
     }

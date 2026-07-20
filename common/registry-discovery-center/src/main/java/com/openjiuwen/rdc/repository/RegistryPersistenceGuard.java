@@ -13,13 +13,20 @@ import java.util.function.Supplier;
 /**
  * Maps persistence failures to structured {@link RegistryUnavailableException}.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class RegistryPersistenceGuard {
 
     private RegistryPersistenceGuard() {
     }
 
+    /**
+     * execute.
+     * @param traceId traceId
+     * @param action action
+     * @return result
+     * @since 0.1.0
+     */
     public static <T> T execute(String traceId, Supplier<T> action) {
         try {
             return action.get();
@@ -28,6 +35,12 @@ public final class RegistryPersistenceGuard {
         }
     }
 
+    /**
+     * run.
+     * @param traceId traceId
+     * @param action action
+     * @since 0.1.0
+     */
     public static void run(String traceId, Runnable action) {
         execute(traceId, () -> {
             action.run();

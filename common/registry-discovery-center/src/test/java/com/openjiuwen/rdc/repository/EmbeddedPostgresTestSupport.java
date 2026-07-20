@@ -19,6 +19,8 @@ import javax.sql.DataSource;
  * Single embedded PostgreSQL per test JVM. Avoids macOS {@code kern.sysv.shmmni}
  * exhaustion when multiple integration test classes start their own instances
  * under JUnit parallel class execution.
+ *
+ * @since 0.1.0 (2026)
  */
 public final class EmbeddedPostgresTestSupport {
 

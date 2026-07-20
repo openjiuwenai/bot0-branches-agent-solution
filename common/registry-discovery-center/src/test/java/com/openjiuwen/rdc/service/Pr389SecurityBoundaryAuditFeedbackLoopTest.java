@@ -75,7 +75,7 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     // ---- #1-A: tenant_isolation_violation must increment op_total ----------------
 
     @Test
-    void tenant_isolation_violation_on_discover_increments_op_total_counter() {
+    void tenant_isolation_on_discover_increments_op() {
         tenantContext.set("tenant-bound");
         assertThatThrownBy(() -> discovery.searchInstancesByAgentId(
                 "tenant-A", "agent-001"))
@@ -91,10 +91,11 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     }
 
     @Test
-    void tenant_isolation_violation_on_resolve_increments_op_total_counter() {
+    void tenant_isolation_on_resolve_increments_op() {
         // Encoded handle for tenant-A; caller passes tenant-B → codec-level
         // tenant mismatch raises TenantIsolationViolationException.
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 

@@ -37,11 +37,16 @@ import org.springframework.context.annotation.Configuration;
  * external-types-coverage).
  *
  * @since 0.1.0
- */
+  */
 @Configuration
 public class OpenApiConfig {
 
     @Bean
+    /**
+     * openAPI.
+     * @return result
+     * @since 0.1.0
+     */
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info()

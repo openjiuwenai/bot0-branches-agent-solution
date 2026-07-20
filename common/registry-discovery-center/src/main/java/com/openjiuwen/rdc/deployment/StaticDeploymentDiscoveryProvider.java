@@ -23,8 +23,8 @@ import java.util.Objects;
 /**
  * Static config-backed {@link DeploymentDiscoveryProvider} with snapshot diff watch.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscoveryProvider {
 
     public static final String SOURCE_ID = "static-config";
@@ -39,11 +39,21 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
     }
 
     @Override
+    /**
+     * sourceId.
+     * @return result
+     * @since 0.1.0
+     */
     public String sourceId() {
         return SOURCE_ID;
     }
 
     @Override
+    /**
+     * listInstances.
+     * @return result
+     * @since 0.1.0
+     */
     public ListDeploymentInstancesResult listInstances() {
         long rev = revision.incrementAndGet();
         Instant now = Instant.now();
@@ -56,6 +66,11 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
     }
 
     @Override
+    /**
+     * watchInstances.
+     * @param consumer consumer
+     * @since 0.1.0
+     */
     public void watchInstances(DeploymentInstanceEventConsumer consumer) {
         this.eventConsumer = Objects.requireNonNull(consumer, "consumer");
     }
@@ -106,6 +121,17 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
                 now);
     }
 
+    /**
+     * StaticInstanceConfig.
+     * @param tenantId tenantId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param baseUrl baseUrl
+     * @param deploymentVersion deploymentVersion
+     * @param readiness readiness
+     * @return result
+     * @since 0.1.0
+     */
     public record StaticInstanceConfig(
             String tenantId,
             String serviceId,

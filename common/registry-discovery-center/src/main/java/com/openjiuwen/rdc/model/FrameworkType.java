@@ -25,7 +25,7 @@ package com.openjiuwen.rdc.model;
  * default, no annotation needed (ADR-0160 decision 3/5).
  *
  * @since 0.1.0
- */
+  */
 public enum FrameworkType {
     /** Jiuwen agent runtime. */
     JIUWEN,

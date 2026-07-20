@@ -12,8 +12,8 @@ package com.openjiuwen.rdc.model;
  * <p>FEAT-016 adds {@code instanceId} (decoded from the v2: 6-field handle).
  * Feat-015 adds {@code capabilityVersion} for Card-level routing metadata.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public record RouteResolution(
         String instanceId,
         String endpointUrl,

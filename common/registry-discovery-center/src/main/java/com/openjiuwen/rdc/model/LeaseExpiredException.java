@@ -7,8 +7,8 @@ package com.openjiuwen.rdc.model;
 /**
  * Route handle points to an entry whose lease has expired (0711 {@code LEASE_EXPIRED}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class LeaseExpiredException extends RegistryFailureException {
 
     public LeaseExpiredException(String traceId) {

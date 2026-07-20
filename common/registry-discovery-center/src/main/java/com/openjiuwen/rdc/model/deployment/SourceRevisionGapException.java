@@ -8,8 +8,8 @@ package com.openjiuwen.rdc.model.deployment;
  * Raised when a provider event stream has a non-recoverable revision gap
  * (Feat-015 0711 {@code SOURCE_REVISION_GAP}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class SourceRevisionGapException extends RuntimeException {
 
     private final String sourceId;
@@ -19,6 +19,11 @@ public final class SourceRevisionGapException extends RuntimeException {
         this.sourceId = sourceId;
     }
 
+    /**
+     * sourceId.
+     * @return result
+     * @since 0.1.0
+     */
     public String sourceId() {
         return sourceId;
     }

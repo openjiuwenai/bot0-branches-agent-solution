@@ -22,7 +22,7 @@ import java.util.Locale;
  * stays ArchUnit-pure.
  *
  * @since 2026-07-10
- */
+  */
 public final class InstanceIdCodec {
     private InstanceIdCodec() {
     }

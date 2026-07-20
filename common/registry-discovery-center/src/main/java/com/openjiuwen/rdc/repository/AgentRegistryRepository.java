@@ -72,7 +72,7 @@ import java.util.Optional;
  * {@code spi.registry} and on the nested record types declared below.
  *
  * @since 2026-07-10
- */
+  */
 public interface AgentRegistryRepository {
     /**
      * Upsert (insert or replace) a registered agent entry. On conflict

@@ -35,8 +35,8 @@ import java.util.Objects;
  * yml provider. Observations without a matching yml binding use
  * {@code rdc.deployment-discovery.binding-defaults}.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 @Component
 @ConditionalOnProperty(prefix = "rdc.deployment-discovery", name = "enabled", havingValue = "true")
 public class ReconciliationScheduler implements ApplicationListener<ApplicationReadyEvent> {
@@ -119,11 +119,20 @@ public class ReconciliationScheduler implements ApplicationListener<ApplicationR
     }
 
     @Override
+    /**
+     * onApplicationEvent.
+     * @param event event
+     * @since 0.1.0
+     */
     public void onApplicationEvent(ApplicationReadyEvent event) {
         runReconciliation("startup");
     }
 
     @Scheduled(fixedDelayString = "${rdc.deployment-discovery.reconcile-interval:60s}")
+    /**
+     * periodicReconciliation.
+     * @since 0.1.0
+     */
     public void periodicReconciliation() {
         runReconciliation("periodic");
     }

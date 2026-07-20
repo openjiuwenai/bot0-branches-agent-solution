@@ -76,7 +76,7 @@ import javax.sql.DataSource;
  * <p>Authority: ADR-0160 decision 7 + REQ-2026-002 VR-2 / VR-7.
  *
  * @since 0.1.0
- */
+  */
 @Configuration
 public class RegistryRuntimeBeanConfig {
 
@@ -147,11 +147,23 @@ public class RegistryRuntimeBeanConfig {
     }
 
     @Bean
+    /**
+     * agentCardFetcher.
+     * @param cardFetchOptions cardFetchOptions
+     * @return result
+     * @since 0.1.0
+     */
     public AgentCardFetcher agentCardFetcher(RdcCardFetchOptions cardFetchOptions) {
         return AgentCardFetcher.fromSecurity(cardFetchOptions);
     }
 
     @Bean
+    /**
+     * callerAuthorizationPolicy.
+     * @param securityProperties securityProperties
+     * @return result
+     * @since 0.1.0
+     */
     public CallerAuthorizationPolicy callerAuthorizationPolicy(RegistrySecurityProperties securityProperties) {
         if (securityProperties.isAllowlistConfigured()) {
             return new CallerAuthorizationPolicy.Allowlist(securityProperties);

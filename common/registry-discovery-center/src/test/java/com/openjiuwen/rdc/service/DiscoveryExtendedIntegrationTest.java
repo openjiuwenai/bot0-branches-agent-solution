@@ -99,7 +99,7 @@ class DiscoveryExtendedIntegrationTest {
     }
 
     @Test
-    void unhealthy_instance_still_discoverable_per_feat016_boundary() {
+    void unhealthy_instance_still_discoverable() {
         registerActive("tenant-x", "agent-x", cardJson(true, "s1", Set.of()));
         new JdbcTemplate(dataSource).update(
                 "UPDATE agent_registry_mvp SET effective_health = 'UNHEALTHY' "
@@ -187,7 +187,7 @@ class DiscoveryExtendedIntegrationTest {
     }
 
     @Test
-    void capability_version_filter_returns_matching_instances_only() {
+    void capability_version_filter_matching_only() {
         registerActiveWithVersion("tenant-x", "multi-agent", "1.0.0");
         registerActiveWithVersion("tenant-x", "multi-agent", "2.0.0");
 
@@ -296,7 +296,8 @@ class DiscoveryExtendedIntegrationTest {
     }
 
     private static String cardJson(boolean streaming, String skillId, Set<String> tags) {
-        String tagsJson = tags.isEmpty() ? "" : tags.stream().map(t -> "\"" + t + "\"").reduce((a, b) -> a + "," + b).orElse("");
+        String tagsJson = tags.isEmpty() ? "" : tags.stream().map(t -> "\"" + t + "\"").reduce((a, b) -> a + "," + b)
+                .orElse("");
         return "{"
                 + "\"name\":\"demo\",\"description\":\"d\",\"version\":\"1.0.0\","
                 + "\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],"

@@ -77,8 +77,8 @@ import java.util.UUID;
  * <p>Authority: ADR-0160 + HD3-004 + Rule R-C.c (Stage 24 RLS wiring) +
  * PR #389 review issue #2 (timeout / trailing-slash / thread isolation).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 @Component
 public class MvpHealthProbeScheduler {
 
@@ -125,6 +125,10 @@ public class MvpHealthProbeScheduler {
     }
 
     @Scheduled(fixedDelayString = "${agent-bus.registry.mvp.probe-interval-ms:5000}")
+    /**
+     * probeOnlineAgents.
+     * @since 0.1.0
+     */
     public void probeOnlineAgents() {
         long staleBefore = System.currentTimeMillis() - staleBeforeMs;
         List<ProbeTarget> targets = repository.scanDueForProbe(staleBefore, scanLimit);

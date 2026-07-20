@@ -17,8 +17,8 @@ import com.openjiuwen.rdc.model.DiscoveryCandidate;
  * auto-configured Jackson 3 {@code JsonMapper} with the same
  * {@link DiscoveryCandidateJacksonMixin} via {@link RegistryJacksonConfig}.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class RegistryObjectMapper {
 
     private RegistryObjectMapper() {

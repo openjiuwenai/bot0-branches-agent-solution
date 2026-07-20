@@ -28,8 +28,8 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
  * Spring Boot application) + PR #389 review issue #2 (probe scheduler thread
  * isolation).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 @Configuration
 @EnableScheduling
 public class RegistrySchedulingConfig implements SchedulingConfigurer {
@@ -53,6 +53,11 @@ public class RegistrySchedulingConfig implements SchedulingConfigurer {
     }
 
     @Override
+    /**
+     * configureTasks.
+     * @param registrar registrar
+     * @since 0.1.0
+     */
     public void configureTasks(ScheduledTaskRegistrar registrar) {
         // Bind the registry probe's @Scheduled methods to the dedicated
         // thread pool above — without this, Spring falls back to the

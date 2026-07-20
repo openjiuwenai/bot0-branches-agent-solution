@@ -12,8 +12,8 @@ package com.openjiuwen.rdc.model;
  * <p>Authority: ADR-0160 + HD3-003. Kept as a distinct type for backward
  * compatibility with existing audit outcome labels.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public class TenantIsolationViolationException extends RegistryFailureException {
 
     private static final long serialVersionUID = 1L;
@@ -35,10 +35,20 @@ public class TenantIsolationViolationException extends RegistryFailureException 
         this.currentTenant = currentTenant;
     }
 
+    /**
+     * requestedTenant.
+     * @return result
+     * @since 0.1.0
+     */
     public String requestedTenant() {
         return requestedTenant;
     }
 
+    /**
+     * currentTenant.
+     * @return result
+     * @since 0.1.0
+     */
     public String currentTenant() {
         return currentTenant;
     }

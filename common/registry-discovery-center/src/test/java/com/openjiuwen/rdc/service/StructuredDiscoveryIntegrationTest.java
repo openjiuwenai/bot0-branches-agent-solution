@@ -107,7 +107,7 @@ class StructuredDiscoveryIntegrationTest {
     }
 
     @Test
-    void discover_skill_tag_mismatch_returns_constraint_unavailable() {
+    void discover_skill_tag_mismatch_unavailable() {
         registerSample("tenant-d", "agent-d", skillJson("refund-skill", Set.of("finance")));
 
         DiscoveryConstraints constraints = DiscoveryConstraints.builder()

@@ -82,7 +82,7 @@ import java.util.Objects;
  * and {@code capability} column were removed in V4 (REQ-2026-004).
  *
  * @since 2026-07-10
- */
+  */
 public final class AgentRegistryEntry {
     private String tenantId;
     private String agentId;
@@ -100,18 +100,38 @@ public final class AgentRegistryEntry {
     private AgentCard a2aAgentCard;
     private java.util.List<String> capabilities;
 
+    /**
+     * getTenantId.
+     * @return result
+     * @since 0.1.0
+     */
     public String getTenantId() {
         return tenantId;
     }
 
+    /**
+     * setTenantId.
+     * @param tenantId tenantId
+     * @since 0.1.0
+     */
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
     }
 
+    /**
+     * getAgentId.
+     * @return result
+     * @since 0.1.0
+     */
     public String getAgentId() {
         return agentId;
     }
 
+    /**
+     * setAgentId.
+     * @param agentId agentId
+     * @since 0.1.0
+     */
     public void setAgentId(String agentId) {
         this.agentId = agentId;
     }
@@ -130,6 +150,11 @@ public final class AgentRegistryEntry {
         return serviceId;
     }
 
+    /**
+     * setServiceId.
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
     public void setServiceId(String serviceId) {
         this.serviceId = serviceId;
     }
@@ -154,82 +179,182 @@ public final class AgentRegistryEntry {
         this.instanceId = instanceId;
     }
 
+    /**
+     * getAgentName.
+     * @return result
+     * @since 0.1.0
+     */
     public String getAgentName() {
         return agentName;
     }
 
+    /**
+     * setAgentName.
+     * @param agentName agentName
+     * @since 0.1.0
+     */
     public void setAgentName(String agentName) {
         this.agentName = agentName;
     }
 
+    /**
+     * getFrameworkType.
+     * @return result
+     * @since 0.1.0
+     */
     public FrameworkType getFrameworkType() {
         return frameworkType;
     }
 
+    /**
+     * setFrameworkType.
+     * @param frameworkType frameworkType
+     * @since 0.1.0
+     */
     public void setFrameworkType(FrameworkType frameworkType) {
         this.frameworkType = frameworkType;
     }
 
+    /**
+     * getRouteKey.
+     * @return result
+     * @since 0.1.0
+     */
     public String getRouteKey() {
         return routeKey;
     }
 
+    /**
+     * setRouteKey.
+     * @param routeKey routeKey
+     * @since 0.1.0
+     */
     public void setRouteKey(String routeKey) {
         this.routeKey = routeKey;
     }
 
+    /**
+     * getContractVersion.
+     * @return result
+     * @since 0.1.0
+     */
     public String getContractVersion() {
         return contractVersion;
     }
 
+    /**
+     * setContractVersion.
+     * @param contractVersion contractVersion
+     * @since 0.1.0
+     */
     public void setContractVersion(String contractVersion) {
         this.contractVersion = contractVersion;
     }
 
+    /**
+     * getCapabilityVersion.
+     * @return result
+     * @since 0.1.0
+     */
     public String getCapabilityVersion() {
         return capabilityVersion;
     }
 
+    /**
+     * setCapabilityVersion.
+     * @param capabilityVersion capabilityVersion
+     * @since 0.1.0
+     */
     public void setCapabilityVersion(String capabilityVersion) {
         this.capabilityVersion = capabilityVersion;
     }
 
+    /**
+     * getEndpointUrl.
+     * @return result
+     * @since 0.1.0
+     */
     public String getEndpointUrl() {
         return endpointUrl;
     }
 
+    /**
+     * setEndpointUrl.
+     * @param endpointUrl endpointUrl
+     * @since 0.1.0
+     */
     public void setEndpointUrl(String endpointUrl) {
         this.endpointUrl = endpointUrl;
     }
 
+    /**
+     * getMaxConcurrency.
+     * @return result
+     * @since 0.1.0
+     */
     public Integer getMaxConcurrency() {
         return maxConcurrency;
     }
 
+    /**
+     * setMaxConcurrency.
+     * @param maxConcurrency maxConcurrency
+     * @since 0.1.0
+     */
     public void setMaxConcurrency(Integer maxConcurrency) {
         this.maxConcurrency = maxConcurrency;
     }
 
+    /**
+     * getWeight.
+     * @return result
+     * @since 0.1.0
+     */
     public Integer getWeight() {
         return weight;
     }
 
+    /**
+     * setWeight.
+     * @param weight weight
+     * @since 0.1.0
+     */
     public void setWeight(Integer weight) {
         this.weight = weight;
     }
 
+    /**
+     * getRegion.
+     * @return result
+     * @since 0.1.0
+     */
     public String getRegion() {
         return region;
     }
 
+    /**
+     * setRegion.
+     * @param region region
+     * @since 0.1.0
+     */
     public void setRegion(String region) {
         this.region = region;
     }
 
+    /**
+     * getA2aAgentCard.
+     * @return result
+     * @since 0.1.0
+     */
     public AgentCard getA2aAgentCard() {
         return a2aAgentCard;
     }
 
+    /**
+     * setA2aAgentCard.
+     * @param a2aAgentCard a2aAgentCard
+     * @since 0.1.0
+     */
     public void setA2aAgentCard(AgentCard a2aAgentCard) {
         this.a2aAgentCard = a2aAgentCard;
     }
@@ -245,6 +370,11 @@ public final class AgentRegistryEntry {
         return capabilities;
     }
 
+    /**
+     * setCapabilities.
+     * @param capabilities capabilities
+     * @since 0.1.0
+     */
     public void setCapabilities(java.util.List<String> capabilities) {
         this.capabilities = capabilities;
     }

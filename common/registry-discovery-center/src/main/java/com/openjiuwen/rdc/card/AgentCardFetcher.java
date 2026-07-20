@@ -19,8 +19,8 @@ import java.util.Objects;
 /**
  * Fetches {@code /.well-known/agent-card.json} with security boundaries (0711 §5.1.3).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class AgentCardFetcher {
 
     public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
@@ -40,6 +40,12 @@ public final class AgentCardFetcher {
                 InternalNetworkPolicy.permissive());
     }
 
+    /**
+     * fromSecurity.
+     * @param options options
+     * @return result
+     * @since 0.1.0
+     */
     public static AgentCardFetcher fromSecurity(RdcCardFetchOptions options) {
         Objects.requireNonNull(options, "options");
         return new AgentCardFetcher(
@@ -69,6 +75,14 @@ public final class AgentCardFetcher {
         this.networkPolicy = networkPolicy != null ? networkPolicy : InternalNetworkPolicy.permissive();
     }
 
+    /**
+     * fetch.
+     * @param baseUrl baseUrl
+     * @param cardPath cardPath
+     * @param headers headers
+     * @return result
+     * @since 0.1.0
+     */
     public FetchResult fetch(URI baseUrl, String cardPath, Map<String, String> headers) {
         Objects.requireNonNull(baseUrl, "baseUrl");
         String scheme = baseUrl.getScheme();
@@ -112,6 +126,14 @@ public final class AgentCardFetcher {
         }
     }
 
+    /**
+     * fetchValidated.
+     * @param baseUrl baseUrl
+     * @param cardPath cardPath
+     * @param headers headers
+     * @return result
+     * @since 0.1.0
+     */
     public FetchResult fetchValidated(URI baseUrl, String cardPath, Map<String, String> headers) {
         FetchResult fetched = fetch(baseUrl, cardPath, headers);
         if (!fetched.success()) {
@@ -130,6 +152,17 @@ public final class AgentCardFetcher {
                 validation.contractVersion());
     }
 
+    /**
+     * FetchResult.
+     * @param success success
+     * @param cardJson cardJson
+     * @param capabilityVersion capabilityVersion
+     * @param contractVersion contractVersion
+     * @param failureCode failureCode
+     * @param message message
+     * @return result
+     * @since 0.1.0
+     */
     public record FetchResult(boolean success, String cardJson, String capabilityVersion,
                               String contractVersion, String failureCode, String message) {
         static FetchResult success(String cardJson) {

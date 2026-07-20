@@ -14,7 +14,7 @@ package com.openjiuwen.rdc.config;
  * by the facade.
  *
  * @since 2026-07-10
- */
+  */
 public final class RegistryOpContext {
     private final String traceId;
     private final String tenantId;

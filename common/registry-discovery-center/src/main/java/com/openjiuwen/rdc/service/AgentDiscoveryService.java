@@ -22,8 +22,8 @@ import java.util.List;
  * <p>Feat-015: structured {@link #discover(DiscoveryQuery)} for logical Agent Card
  * catalog discovery.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public interface AgentDiscoveryService {
 
     /**

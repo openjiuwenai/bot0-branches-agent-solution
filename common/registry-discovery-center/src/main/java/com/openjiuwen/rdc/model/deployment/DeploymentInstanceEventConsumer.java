@@ -8,8 +8,8 @@ package com.openjiuwen.rdc.model.deployment;
  * Consumes incremental deployment instance events from a
  * {@link DeploymentDiscoveryProvider}.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 @FunctionalInterface
 public interface DeploymentInstanceEventConsumer {
 

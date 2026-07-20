@@ -52,7 +52,7 @@ import java.util.concurrent.TimeUnit;
  * (no risk of audit-without-metric or vice versa).
  *
  * @since 0.1.0
- */
+  */
 @Configuration
 public class RegistryObservabilityConfig {
 
@@ -68,6 +68,19 @@ public class RegistryObservabilityConfig {
 
     // ---- audit + metrics per operation ----
 
+    /**
+     * observeRegister.
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param contractVersion contractVersion
+     * @param capabilityVersion capabilityVersion
+     * @param health health
+     * @param routeHandleId routeHandleId
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     */
     public void observeRegister(String traceId, String tenantId, String agentId,
                                 String contractVersion, String capabilityVersion,
                                 String health, String routeHandleId, String outcome, long latencyMs) {
@@ -76,6 +89,15 @@ public class RegistryObservabilityConfig {
         recordMetrics("register", outcome, latencyMs);
     }
 
+    /**
+     * observeDeregister.
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     */
     public void observeDeregister(String traceId, String tenantId, String agentId,
                                   String outcome, long latencyMs) {
         audit("deregister", traceId, tenantId, agentId,
@@ -83,6 +105,16 @@ public class RegistryObservabilityConfig {
         recordMetrics("deregister", outcome, latencyMs);
     }
 
+    /**
+     * observeProbe.
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param health health
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     */
     public void observeProbe(String traceId, String tenantId, String agentId,
                              String health, String outcome, long latencyMs) {
         audit("probe", traceId, tenantId, agentId,
@@ -90,6 +122,16 @@ public class RegistryObservabilityConfig {
         recordMetrics("probe", outcome, latencyMs);
     }
 
+    /**
+     * observeDiscover.
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param outcome outcome
+     * @param resultCount resultCount
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     */
     public void observeDiscover(String traceId, String tenantId, String agentId,
                                 String outcome, int resultCount, long latencyMs) {
         AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} "
@@ -101,6 +143,15 @@ public class RegistryObservabilityConfig {
         recordMetrics("discover", outcome, latencyMs);
     }
 
+    /**
+     * observeResolve.
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param routeHandleId routeHandleId
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     */
     public void observeResolve(String traceId, String tenantId, String routeHandleId,
                                String outcome, long latencyMs) {
         audit("resolve", traceId, tenantId, PLACEHOLDER,
@@ -114,23 +165,54 @@ public class RegistryObservabilityConfig {
         recordGovernance("card_refresh_failed", sourceId, tenantId, instanceId, failureCode);
     }
 
+    /**
+     * observeSourceStale.
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
     public void observeSourceStale(String sourceId) {
         recordGovernance("source_stale", sourceId, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER);
     }
 
+    /**
+     * observeReconciliationConflict.
+     * @param sourceId sourceId
+     * @param revision revision
+     * @since 0.1.0
+     */
     public void observeReconciliationConflict(String sourceId, long revision) {
         recordGovernance("reconciliation_conflict", sourceId, PLACEHOLDER, PLACEHOLDER,
                 String.valueOf(revision));
     }
 
+    /**
+     * observeInstanceDraining.
+     * @param sourceId sourceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @since 0.1.0
+     */
     public void observeInstanceDraining(String sourceId, String tenantId, String agentId) {
         recordGovernance("draining", sourceId, tenantId, agentId, PLACEHOLDER);
     }
 
+    /**
+     * observeLeaseExpired.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @since 0.1.0
+     */
     public void observeLeaseExpired(String tenantId, String agentId) {
         recordGovernance("lease_expired", PLACEHOLDER, tenantId, agentId, PLACEHOLDER);
     }
 
+    /**
+     * observeUnhealthy.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param health health
+     * @since 0.1.0
+     */
     public void observeUnhealthy(String tenantId, String agentId, String health) {
         recordGovernance("unhealthy", PLACEHOLDER, tenantId, agentId, health);
     }

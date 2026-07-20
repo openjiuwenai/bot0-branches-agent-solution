@@ -9,8 +9,8 @@ import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
 /**
  * Tenant-scoped caller authorization per Feat-015 0711 §5.1.6.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public interface CallerAuthorizationPolicy {
 
     void authorize(String tenantId, String callerRef, String traceId);
@@ -18,6 +18,13 @@ public interface CallerAuthorizationPolicy {
     /** Allow-all policy when no allowlist is configured. */
     final class Permissive implements CallerAuthorizationPolicy {
         @Override
+        /**
+         * authorize.
+         * @param tenantId tenantId
+         * @param callerRef callerRef
+         * @param traceId traceId
+         * @since 0.1.0
+         */
         public void authorize(String tenantId, String callerRef, String traceId) {
             if (callerRef == null || callerRef.isBlank()) {
                 throw new CallerNotAuthorizedException(tenantId, "<empty>", traceId);
@@ -35,6 +42,13 @@ public interface CallerAuthorizationPolicy {
         }
 
         @Override
+        /**
+         * authorize.
+         * @param tenantId tenantId
+         * @param callerRef callerRef
+         * @param traceId traceId
+         * @since 0.1.0
+         */
         public void authorize(String tenantId, String callerRef, String traceId) {
             if (callerRef == null || callerRef.isBlank()) {
                 throw new CallerNotAuthorizedException(tenantId, "<empty>", traceId);

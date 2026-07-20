@@ -11,8 +11,8 @@ import java.util.Objects;
  * Unified governance context for discovery and trusted route resolution
  * (Feat-015 0711 scope §3 {@code RegistryRequestContext}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public record RegistryRequestContext(
         String tenantId,
         String callerRef,
@@ -31,6 +31,10 @@ public record RegistryRequestContext(
         }
     }
 
+    /**
+     * validate.
+     * @since 0.1.0
+     */
     public void validate() {
         requireNonBlank(tenantId, "tenantId", traceId);
         requireNonBlank(callerRef, "callerRef", traceId);

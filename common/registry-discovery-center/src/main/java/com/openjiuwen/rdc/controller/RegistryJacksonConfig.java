@@ -15,8 +15,8 @@ import org.springframework.context.annotation.Configuration;
  * Registers {@link DiscoveryCandidateJacksonMixin} on Spring Boot 4's
  * auto-configured Jackson 3 {@code JsonMapper} used for HTTP responses.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 @Configuration
 public class RegistryJacksonConfig {
 

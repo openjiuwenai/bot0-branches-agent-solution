@@ -70,7 +70,7 @@ class PgMvpDiscoveryServiceImplTest {
     // ---- searchInstancesByAgentId: rich DTO populated ---------------------
 
     @Test
-    void search_instances_by_agent_id_returns_rich_dto_with_all_fields_populated() {
+    void search_by_agent_id_returns_rich_dto() {
         List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-A", "agent-001");
 
         assertThat(result).hasSize(1);
@@ -87,19 +87,19 @@ class PgMvpDiscoveryServiceImplTest {
     }
 
     @Test
-    void search_instances_by_agent_id_returns_empty_list_when_not_found() {
+    void search_by_agent_id_empty_when_not_found() {
         List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-A", "agent-999");
         assertThat(result).isEmpty();
     }
 
     @Test
-    void search_instances_by_agent_id_returns_empty_list_for_unknown_tenant() {
+    void search_by_agent_id_empty_unknown_tenant() {
         List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-unknown", "agent-001");
         assertThat(result).isEmpty();
     }
 
     @Test
-    void search_instances_by_agent_id_returns_empty_list_when_status_is_draining() {
+    void search_by_agent_id_empty_when_draining() {
         // FakeRepository returns a DRAINING row for agent-002 — the discovery
         // service's listByAgentId filter (status IN ONLINE,DEGRADED) excludes
         // it, so the result is an empty list.
@@ -135,7 +135,8 @@ class PgMvpDiscoveryServiceImplTest {
 
     @Test
     void resolve_route_handle_returns_endpoint_for_existing_entry() {
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
 
         RouteResolution resolution = discovery.resolveRouteHandle(handle, "tenant-A");
 
@@ -146,8 +147,9 @@ class PgMvpDiscoveryServiceImplTest {
     }
 
     @Test
-    void resolve_route_handle_tenant_mismatch_raises_isolation_violation() {
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+    void resolve_handle_tenant_mismatch_raises() {
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class)
@@ -166,8 +168,9 @@ class PgMvpDiscoveryServiceImplTest {
     }
 
     @Test
-    void resolve_route_handle_nonexistent_entry_raises_entry_not_found() {
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields("tenant-A", "agent-999", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+    void resolve_handle_missing_raises_not_found() {
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields("tenant-A", "agent-999", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-A"))
                 .isInstanceOf(EntryNotFoundException.class)
@@ -179,9 +182,10 @@ class PgMvpDiscoveryServiceImplTest {
     }
 
     @Test
-    void resolve_route_handle_with_bound_mismatched_tenant_raises_isolation_violation() {
+    void resolve_handle_mismatched_tenant_raises() {
         tenantContext.set("tenant-C");
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-A"))
                 .isInstanceOf(TenantIsolationViolationException.class);
@@ -210,7 +214,7 @@ class PgMvpDiscoveryServiceImplTest {
     }
 
     @Test
-    void discover_with_bound_mismatched_tenant_raises_tenant_scope_denied() {
+    void discover_mismatched_tenant_raises_denied() {
         tenantContext.set("tenant-C");
         RegistryRequestContext ctx = new RegistryRequestContext(
                 "tenant-A", "caller", "trace-tenant", "req-1", Instant.now().plusSeconds(30));

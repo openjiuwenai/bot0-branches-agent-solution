@@ -24,8 +24,8 @@ import java.util.Map;
  * {@code MvpRegistryController}, failures such as {@code TENANT_SCOPE_DENIED}
  * otherwise fell through to Spring Boot's default 500 error body.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 @RestControllerAdvice(basePackageClasses = {
         MvpRegistryController.class,
         InstanceRouteController.class

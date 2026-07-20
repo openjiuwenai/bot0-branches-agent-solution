@@ -27,7 +27,7 @@ import java.util.Map;
  * connect 5s, read 10s (OQ-3 H2 resolution).
  *
  * @since 0.1.0
- */
+  */
 @Component
 @ConfigurationProperties(prefix = "rdc.pull-registration")
 public class PullRegistrationProperties {
@@ -46,18 +46,38 @@ public class PullRegistrationProperties {
      */
     private List<RuntimeEntry> runtimes = new ArrayList<>();
 
+    /**
+     * isEnabled.
+     * @return result
+     * @since 0.1.0
+     */
     public boolean isEnabled() {
         return enabled;
     }
 
+    /**
+     * setEnabled.
+     * @param enabled enabled
+     * @since 0.1.0
+     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
 
+    /**
+     * getRuntimes.
+     * @return result
+     * @since 0.1.0
+     */
     public List<RuntimeEntry> getRuntimes() {
         return runtimes;
     }
 
+    /**
+     * setRuntimes.
+     * @param runtimes runtimes
+     * @since 0.1.0
+     */
     public void setRuntimes(List<RuntimeEntry> runtimes) {
         this.runtimes = runtimes;
     }
@@ -120,42 +140,92 @@ public class PullRegistrationProperties {
          */
         private Integer weight;
 
+        /**
+         * getBaseUrl.
+         * @return result
+         * @since 0.1.0
+         */
         public String getBaseUrl() {
             return baseUrl;
         }
 
+        /**
+         * setBaseUrl.
+         * @param baseUrl baseUrl
+         * @since 0.1.0
+         */
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
         }
 
+        /**
+         * getTenantId.
+         * @return result
+         * @since 0.1.0
+         */
         public String getTenantId() {
             return tenantId;
         }
 
+        /**
+         * setTenantId.
+         * @param tenantId tenantId
+         * @since 0.1.0
+         */
         public void setTenantId(String tenantId) {
             this.tenantId = tenantId;
         }
 
+        /**
+         * getAgentId.
+         * @return result
+         * @since 0.1.0
+         */
         public String getAgentId() {
             return agentId;
         }
 
+        /**
+         * setAgentId.
+         * @param agentId agentId
+         * @since 0.1.0
+         */
         public void setAgentId(String agentId) {
             this.agentId = agentId;
         }
 
+        /**
+         * getFrameworkType.
+         * @return result
+         * @since 0.1.0
+         */
         public FrameworkType getFrameworkType() {
             return frameworkType;
         }
 
+        /**
+         * setFrameworkType.
+         * @param frameworkType frameworkType
+         * @since 0.1.0
+         */
         public void setFrameworkType(FrameworkType frameworkType) {
             this.frameworkType = frameworkType;
         }
 
+        /**
+         * getCardPath.
+         * @return result
+         * @since 0.1.0
+         */
         public String getCardPath() {
             return cardPath;
         }
 
+        /**
+         * setCardPath.
+         * @param cardPath cardPath
+         * @since 0.1.0
+         */
         public void setCardPath(String cardPath) {
             this.cardPath = cardPath;
         }
@@ -164,54 +234,119 @@ public class PullRegistrationProperties {
             return headers;
         }
 
+        /**
+         * setHeaders.
+         * @param headers headers
+         * @since 0.1.0
+         */
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers;
         }
 
+        /**
+         * getRouteKey.
+         * @return result
+         * @since 0.1.0
+         */
         public String getRouteKey() {
             return routeKey;
         }
 
+        /**
+         * setRouteKey.
+         * @param routeKey routeKey
+         * @since 0.1.0
+         */
         public void setRouteKey(String routeKey) {
             this.routeKey = routeKey;
         }
 
+        /**
+         * getRegion.
+         * @return result
+         * @since 0.1.0
+         */
         public String getRegion() {
             return region;
         }
 
+        /**
+         * setRegion.
+         * @param region region
+         * @since 0.1.0
+         */
         public void setRegion(String region) {
             this.region = region;
         }
 
+        /**
+         * getContractVersion.
+         * @return result
+         * @since 0.1.0
+         */
         public String getContractVersion() {
             return contractVersion;
         }
 
+        /**
+         * setContractVersion.
+         * @param contractVersion contractVersion
+         * @since 0.1.0
+         */
         public void setContractVersion(String contractVersion) {
             this.contractVersion = contractVersion;
         }
 
+        /**
+         * getCapabilityVersion.
+         * @return result
+         * @since 0.1.0
+         */
         public String getCapabilityVersion() {
             return capabilityVersion;
         }
 
+        /**
+         * setCapabilityVersion.
+         * @param capabilityVersion capabilityVersion
+         * @since 0.1.0
+         */
         public void setCapabilityVersion(String capabilityVersion) {
             this.capabilityVersion = capabilityVersion;
         }
 
+        /**
+         * getMaxConcurrency.
+         * @return result
+         * @since 0.1.0
+         */
         public Integer getMaxConcurrency() {
             return maxConcurrency;
         }
 
+        /**
+         * setMaxConcurrency.
+         * @param maxConcurrency maxConcurrency
+         * @since 0.1.0
+         */
         public void setMaxConcurrency(Integer maxConcurrency) {
             this.maxConcurrency = maxConcurrency;
         }
 
+        /**
+         * getWeight.
+         * @return result
+         * @since 0.1.0
+         */
         public Integer getWeight() {
             return weight;
         }
 
+        /**
+         * setWeight.
+         * @param weight weight
+         * @since 0.1.0
+         */
         public void setWeight(Integer weight) {
             this.weight = weight;
         }

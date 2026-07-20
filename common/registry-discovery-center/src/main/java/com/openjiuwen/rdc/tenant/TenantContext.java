@@ -20,8 +20,8 @@ package com.openjiuwen.rdc.tenant;
  * <p>Pure Java — no Spring / JDBC / Jackson / Consul imports (ADR-0160
  * decision 1).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public interface TenantContext {
 
     /**

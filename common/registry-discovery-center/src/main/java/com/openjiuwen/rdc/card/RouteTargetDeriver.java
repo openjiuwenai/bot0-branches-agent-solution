@@ -14,8 +14,8 @@ import java.net.URI;
 /**
  * Derives internal route target JSON and contract version from provider base URL + Card.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class RouteTargetDeriver {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -23,6 +23,14 @@ public final class RouteTargetDeriver {
     private RouteTargetDeriver() {
     }
 
+    /**
+     * derive.
+     * @param internalBaseUrl internalBaseUrl
+     * @param cardJson cardJson
+     * @param routeKeyFallback routeKeyFallback
+     * @return result
+     * @since 0.1.0
+     */
     public static DerivedRoute derive(String internalBaseUrl, String cardJson, String routeKeyFallback) {
         try {
             JsonNode root = MAPPER.readTree(cardJson);
@@ -54,10 +62,24 @@ public final class RouteTargetDeriver {
         }
     }
 
+    /**
+     * deriveJson.
+     * @param internalBaseUrl internalBaseUrl
+     * @param cardJson cardJson
+     * @param routeKeyFallback routeKeyFallback
+     * @return result
+     * @since 0.1.0
+     */
     public static String deriveJson(String internalBaseUrl, String cardJson, String routeKeyFallback) {
         return derive(internalBaseUrl, cardJson, routeKeyFallback).routeTargetJson();
     }
 
+    /**
+     * agentNameFromCard.
+     * @param cardJson cardJson
+     * @return result
+     * @since 0.1.0
+     */
     public static String agentNameFromCard(String cardJson) {
         try {
             JsonNode root = MAPPER.readTree(cardJson);
@@ -103,6 +125,13 @@ public final class RouteTargetDeriver {
         return child != null && child.isTextual() ? child.asText() : null;
     }
 
+    /**
+     * DerivedRoute.
+     * @param routeTargetJson routeTargetJson
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public record DerivedRoute(String routeTargetJson, String contractVersion) {
     }
 }

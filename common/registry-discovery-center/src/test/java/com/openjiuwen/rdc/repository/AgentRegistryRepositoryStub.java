@@ -11,6 +11,8 @@ import java.util.Optional;
 
 /**
  * No-op stub for tests — override only the methods under test.
+ *
+ * @since 0.1.0 (2026)
  */
 public class AgentRegistryRepositoryStub implements AgentRegistryRepository {
 

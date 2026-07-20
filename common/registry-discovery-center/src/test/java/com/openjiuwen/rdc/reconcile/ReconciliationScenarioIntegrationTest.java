@@ -122,7 +122,7 @@ class ReconciliationScenarioIntegrationTest {
     }
 
     @Test
-    void rolling_upgrade_coexists_then_drains_old_and_filters_by_version() throws Exception {
+    void rolling_upgrade_drains_old_filters_version() throws Exception {
         oldRuntimeServer.enqueue(cardResponse("roll-agent-v1", "1.0.0"));
         newRuntimeServer.enqueue(cardResponse("roll-agent-v2", "2.0.0"));
 
@@ -165,7 +165,7 @@ class ReconciliationScenarioIntegrationTest {
     }
 
     @Test
-    void provider_outage_marks_stale_without_mass_delete_then_recovers() throws Exception {
+    void provider_outage_marks_stale_then_recovers() throws Exception {
         oldRuntimeServer.enqueue(cardResponse("solo-agent", "1.0.0"));
 
         ReconciliationService service = singleInstanceService();

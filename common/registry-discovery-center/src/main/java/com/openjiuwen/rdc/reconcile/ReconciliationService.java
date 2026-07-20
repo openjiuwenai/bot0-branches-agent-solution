@@ -39,8 +39,8 @@ import java.util.Set;
  * Reconciles {@link DeploymentDiscoveryProvider} snapshots with the registry
  * index (Feat-015 0711 §5.1.3–5.1.5).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class ReconciliationService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReconciliationService.class);
@@ -70,6 +70,12 @@ public final class ReconciliationService {
         this.observability = observability;
     }
 
+    /**
+     * reconcile.
+     * @param provider provider
+     * @return result
+     * @since 0.1.0
+     */
     public ReconciliationResult reconcile(DeploymentDiscoveryProvider provider) {
         String sourceId = provider.sourceId();
         try {
@@ -128,6 +134,11 @@ public final class ReconciliationService {
         }
     }
 
+    /**
+     * reconcileEvent.
+     * @param event event
+     * @since 0.1.0
+     */
     public void reconcileEvent(DeploymentInstanceEvent event) {
         DeploymentInstanceObservation obs = event.observation();
         if (obs.sourceRevision() < repository.getLastProcessedRevision(obs.sourceId())) {
@@ -365,6 +376,23 @@ public final class ReconciliationService {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * StaticInstanceRuntimeBinding.
+     * @param tenantId tenantId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param frameworkType frameworkType
+     * @param routeKey routeKey
+     * @param contractVersion contractVersion
+     * @param capabilityVersion capabilityVersion
+     * @param cardPath cardPath
+     * @param headers headers
+     * @param maxConcurrency maxConcurrency
+     * @param weight weight
+     * @param region region
+     * @return result
+     * @since 0.1.0
+     */
     public record StaticInstanceRuntimeBinding(
             String tenantId,
             String serviceId,
@@ -381,6 +409,20 @@ public final class ReconciliationService {
     ) {
     }
 
+    /**
+     * ReconciliationResult.
+     * @param success success
+     * @param sourceId sourceId
+     * @param sourceRevision sourceRevision
+     * @param created created
+     * @param updated updated
+     * @param draining draining
+     * @param failureCode failureCode
+     * @param message message
+     * @param traceId traceId
+     * @return result
+     * @since 0.1.0
+     */
     public record ReconciliationResult(
             boolean success,
             String sourceId,

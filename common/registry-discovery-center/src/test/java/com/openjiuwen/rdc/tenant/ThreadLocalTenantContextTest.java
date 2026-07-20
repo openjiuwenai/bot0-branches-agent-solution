@@ -13,11 +13,11 @@ import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Unit tests for {@link ThreadLocalTenantContext} (HD3-003 tenant isolation,
@@ -136,7 +136,7 @@ class ThreadLocalTenantContextTest {
     }
 
     @Test
-    void nested_bind_for_scope_restores_outer_tenant_even_if_inner_throws() {
+    void nested_bind_restores_outer_if_inner_throws() {
         ThreadLocalTenantContext.bindForScope("tenant-outer", () -> {
             assertThatThrownBy(() ->
                     ThreadLocalTenantContext.bindForScope("tenant-inner", () -> {

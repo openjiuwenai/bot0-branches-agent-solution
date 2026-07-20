@@ -31,7 +31,7 @@ class ReconciliationRevisionConflictTest {
     private static final long REVISION = 42L;
 
     @Test
-    void same_revision_different_snapshot_returns_source_revision_gap() {
+    void same_revision_diff_snapshot_revision_gap() {
         TrackingRepository repository = new TrackingRepository();
         ReconciliationService service = service(repository);
 

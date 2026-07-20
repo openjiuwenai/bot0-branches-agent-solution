@@ -17,10 +17,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.function.Supplier;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import javax.sql.DataSource;
 
@@ -86,7 +86,7 @@ import javax.sql.DataSource;
  * unaffected.
  *
  * @since 0.1.0
- */
+  */
 public final class JdbcAgentRegistryRepository implements AgentRegistryRepository {
 
     private static final String TABLE = "agent_registry_mvp";
@@ -157,6 +157,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     // ===== upsert / delete / scan / update =====
 
     @Override
+    /**
+     * upsert.
+     * @param entry entry
+     * @param a2aAgentCardJson a2aAgentCardJson
+     * @since 0.1.0
+     */
     public void upsert(AgentRegistryEntry entry, String a2aAgentCardJson) {
         Objects.requireNonNull(entry, "entry is required");
         requireNonBlank(entry.getTenantId(), "tenantId");
@@ -190,6 +196,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * delete.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @return result
+     * @since 0.1.0
+     */
     public boolean delete(String tenantId, String agentId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -208,6 +221,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * delete.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @return result
+     * @since 0.1.0
+     */
     public boolean delete(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -225,6 +246,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * delete.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @return result
+     * @since 0.1.0
+     */
     public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -244,6 +274,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * scanDueForProbe.
+     * @param staleBeforeMillis staleBeforeMillis
+     * @param limit limit
+     * @return result
+     * @since 0.1.0
+     */
     public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be > 0");
@@ -271,6 +308,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * updateStatus.
+     * @param update update
+     * @return result
+     * @since 0.1.0
+     */
     public boolean updateStatus(StatusUpdate update) {
         requireNonBlank(update.tenantId(), "tenantId");
         requireNonBlank(update.agentId(), "agentId");
@@ -304,6 +347,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * queryByTargetSelector.
+     * @param filter filter
+     * @return result
+     * @since 0.1.0
+     */
     public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
         Objects.requireNonNull(filter, "filter");
         requireNonBlank(filter.tenantId(), "tenantId");
@@ -338,6 +387,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * reconcileUpsert.
+     * @param command command
+     * @since 0.1.0
+     */
     public void reconcileUpsert(ReconcileUpsertCommand command) {
         Objects.requireNonNull(command, "command");
         requireNonBlank(command.tenantId(), "tenantId");
@@ -414,6 +468,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * listInstanceKeysBySource.
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
     public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         String tenantSql = "SELECT DISTINCT tenant_id FROM " + TABLE + " WHERE source_id = :sourceId";
@@ -435,6 +495,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * markDraining.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
     public void markDraining(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -453,6 +520,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * markRemoved.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
     public void markRemoved(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -470,6 +544,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * markSourceStale.
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
     public void markSourceStale(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("UPDATE " + TABLE + " SET freshness = 'STALE_SOURCE' WHERE source_id = :sourceId",
@@ -478,6 +557,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * markSourceFresh.
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
     public void markSourceFresh(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("UPDATE " + TABLE + " SET freshness = 'FRESH' "
@@ -490,6 +574,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * listExpiredLeases.
+     * @param now now
+     * @return result
+     * @since 0.1.0
+     */
     public List<InstanceKey> listExpiredLeases(java.time.Instant now) {
         Objects.requireNonNull(now, "now");
         String sql = "SELECT tenant_id, agent_id, service_id, instance_id FROM " + TABLE
@@ -504,6 +594,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * getLastProcessedRevision.
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
     public long getLastProcessedRevision(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         List<Long> rows = jdbc.query(
@@ -514,11 +610,23 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * updateLastProcessedRevision.
+     * @param sourceId sourceId
+     * @param revision revision
+     * @since 0.1.0
+     */
     public void updateLastProcessedRevision(String sourceId, long revision) {
         updateLastProcessedRevision(sourceId, revision, null);
     }
 
     @Override
+    /**
+     * getSnapshotFingerprint.
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
     public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         List<String> rows = jdbc.query(
@@ -532,6 +640,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * updateLastProcessedRevision.
+     * @param sourceId sourceId
+     * @param revision revision
+     * @param snapshotFingerprint snapshotFingerprint
+     * @since 0.1.0
+     */
     public void updateLastProcessedRevision(String sourceId, long revision, String snapshotFingerprint) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("INSERT INTO registry_source_state "
@@ -548,6 +663,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * findCardDigest.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @return result
+     * @since 0.1.0
+     */
     public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -567,6 +690,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * reconcilePending.
+     * @param command command
+     * @since 0.1.0
+     */
     public void reconcilePending(ReconcilePendingCommand command) {
         Objects.requireNonNull(command, "command");
         String sql = "INSERT INTO " + TABLE + " ("
@@ -600,6 +728,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * markRefreshDegraded.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
     public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -634,6 +769,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * findForResolve.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @return result
+     * @since 0.1.0
+     */
     public java.util.Optional<ResolveRow> findForResolve(
             String tenantId, String agentId, String serviceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
@@ -664,6 +808,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * listDrainingPastGrace.
+     * @param cutoff cutoff
+     * @return result
+     * @since 0.1.0
+     */
     public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) {
         Objects.requireNonNull(cutoff, "cutoff");
         String sql = "SELECT tenant_id, agent_id, service_id, instance_id FROM " + TABLE
@@ -698,6 +848,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     // ===== discovery (list lookup, FEAT-016) =====
 
     @Override
+    /**
+     * listByAgentId.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -718,6 +876,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * listByServiceId.
+     * @param tenantId tenantId
+     * @param serviceId serviceId
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public List<RegistryRow> listByServiceId(String tenantId, String serviceId, String contractVersion) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(serviceId, "serviceId");
@@ -738,6 +904,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * listByCapability.
+     * @param tenantId tenantId
+     * @param capability capability
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public List<RegistryRow> listByCapability(String tenantId, String capability, String contractVersion) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(capability, "capability");
@@ -758,6 +932,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * findEndpoint.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @return result
+     * @since 0.1.0
+     */
     public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
                                                 String serviceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
@@ -818,6 +1001,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         static final RegistryRowMapper INSTANCE = new RegistryRowMapper();
 
         @Override
+        /**
+         * mapRow.
+         * @param rs rs
+         * @param rowNum rowNum
+         * @return result
+         * @since 0.1.0
+         */
         public RegistryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             String frameworkTypeName = rs.getString("framework_type");
             FrameworkType frameworkType = frameworkTypeName == null
@@ -858,6 +1048,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         static final DiscoveryRowMapper INSTANCE = new DiscoveryRowMapper();
 
         @Override
+        /**
+         * mapRow.
+         * @param rs rs
+         * @param rowNum rowNum
+         * @return result
+         * @since 0.1.0
+         */
         public DiscoveryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             String frameworkTypeName = rs.getString("framework_type");
             FrameworkType frameworkType = frameworkTypeName == null
@@ -896,6 +1093,20 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     // ===== Feat-015 0713 logical AgentCardRegistration ======================
 
     @Override
+    /**
+     * upsertLogicalRegistration.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param deploymentServiceId deploymentServiceId
+     * @param cardDigest cardDigest
+     * @param contractVersion contractVersion
+     * @param capabilityVersion capabilityVersion
+     * @param registrationStatus registrationStatus
+     * @param freshness freshness
+     * @param a2aAgentCardJson a2aAgentCardJson
+     * @return result
+     * @since 0.1.0
+     */
     public java.util.UUID upsertLogicalRegistration(
             String tenantId,
             String agentId,
@@ -951,6 +1162,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * upsertSourceRef.
+     * @param command command
+     * @since 0.1.0
+     */
     public void upsertSourceRef(UpsertSourceRefCommand command) {
         Objects.requireNonNull(command, "command");
         requireNonBlank(command.tenantId(), "tenantId");
@@ -1007,6 +1223,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * removeSourceRef.
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param instanceId instanceId
+     * @since 0.1.0
+     */
     public void removeSourceRef(String tenantId, String deploymentServiceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(deploymentServiceId, "deploymentServiceId");
@@ -1034,6 +1257,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * recomputeRegistrationStatus.
+     * @param registrationId registrationId
+     * @since 0.1.0
+     */
     public void recomputeRegistrationStatus(java.util.UUID registrationId) {
         Objects.requireNonNull(registrationId, "registrationId");
         String sql = "UPDATE " + REGISTRATION_TABLE + " SET registration_status = CASE "
@@ -1049,6 +1277,11 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * markLogicalRegistrationsStaleSource.
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
     public void markLogicalRegistrationsStaleSource(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("UPDATE " + REGISTRATION_TABLE + " SET freshness = 'STALE_SOURCE', updated_at = CURRENT_TIMESTAMP "
@@ -1058,6 +1291,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * markLogicalRegistrationStaleCard.
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param capabilityVersion capabilityVersion
+     * @param cardDigest cardDigest
+     * @since 0.1.0
+     */
     public void markLogicalRegistrationStaleCard(
             String tenantId, String deploymentServiceId, String capabilityVersion, String cardDigest) {
         requireNonBlank(tenantId, "tenantId");
@@ -1078,6 +1319,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * clearLogicalRegistrationStaleCard.
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param cardDigest cardDigest
+     * @since 0.1.0
+     */
     public void clearLogicalRegistrationStaleCard(
             String tenantId, String deploymentServiceId, String cardDigest) {
         requireNonBlank(tenantId, "tenantId");
@@ -1097,6 +1345,18 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * relinkLogicalSourceRef.
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param instanceId instanceId
+     * @param cardDigest cardDigest
+     * @param sourceId sourceId
+     * @param sourceRevision sourceRevision
+     * @param internalBaseUrl internalBaseUrl
+     * @return result
+     * @since 0.1.0
+     */
     public boolean relinkLogicalSourceRef(
             String tenantId,
             String deploymentServiceId,
@@ -1142,6 +1402,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     @Override
+    /**
+     * queryLogicalByTargetSelector.
+     * @param filter filter
+     * @return result
+     * @since 0.1.0
+     */
     public List<LogicalRegistrationRow> queryLogicalByTargetSelector(DiscoveryFilter filter) {
         Objects.requireNonNull(filter, "filter");
         requireNonBlank(filter.tenantId(), "tenantId");
@@ -1264,6 +1530,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         static final LogicalRegistrationRowMapper INSTANCE = new LogicalRegistrationRowMapper();
 
         @Override
+        /**
+         * mapRow.
+         * @param rs rs
+         * @param rowNum rowNum
+         * @return result
+         * @since 0.1.0
+         */
         public LogicalRegistrationRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             java.sql.Timestamp lastValidated = rs.getTimestamp("last_validated_at");
             return new LogicalRegistrationRow(

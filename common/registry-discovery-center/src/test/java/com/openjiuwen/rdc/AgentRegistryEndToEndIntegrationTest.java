@@ -187,7 +187,7 @@ class AgentRegistryEndToEndIntegrationTest {
     }
 
     @Test
-    void register_applies_defaults_when_request_body_omits_max_concurrency_and_weight() throws Exception {
+    void register_applies_defaults_when_body_omits_limits() throws Exception {
         String agentEndpoint = agentServer.url("/").toString().replaceAll("/$", "");
         String tenant = "tenant-defaults";
         String agent = "agent-defaults";

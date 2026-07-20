@@ -158,7 +158,8 @@ class ReconciliationCardFetchFailureTest {
         @Override
         public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
         @Override
-        public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
+        public java.util
+                .Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
             return java.util.Optional.empty();
         }
         @Override

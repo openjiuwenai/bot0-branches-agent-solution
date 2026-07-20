@@ -8,8 +8,8 @@ package com.openjiuwen.rdc.model;
  * Derives stable {@code agent_id} from deployment service identity per
  * Feat-015 0711 scope §5.1.1 ({@code tenantId + serviceId}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class AgentIdCodec {
 
     private AgentIdCodec() {

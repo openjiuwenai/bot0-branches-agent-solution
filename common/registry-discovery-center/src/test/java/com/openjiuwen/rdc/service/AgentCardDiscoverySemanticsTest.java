@@ -57,7 +57,7 @@ class AgentCardDiscoverySemanticsTest {
     }
 
     @Test
-    void registered_row_missing_card_snapshot_raises_registration_invalid() {
+    void registered_missing_card_raises_invalid() {
         repository.rows = List.of(registeredRow(null));
 
         assertThatThrownBy(() -> discover())
@@ -70,7 +70,7 @@ class AgentCardDiscoverySemanticsTest {
     }
 
     @Test
-    void registered_row_malformed_card_json_raises_registration_invalid() {
+    void registered_malformed_card_raises_invalid() {
         repository.rows = List.of(registeredRow("{not-json"));
 
         assertThatThrownBy(() -> discover())
@@ -213,7 +213,8 @@ class AgentCardDiscoverySemanticsTest {
         @Override
         public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
         @Override
-        public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
+        public java.util
+                .Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
             return java.util.Optional.empty();
         }
         @Override

@@ -85,7 +85,7 @@ class ReconciliationIntegrationTest {
     }
 
     @Test
-    void reconcile_persists_instance_and_structured_discovery_finds_it() throws Exception {
+    void reconcile_persists_and_discovery_finds() throws Exception {
         enqueueValidCard();
         ReconciliationService service = reconciliationService();
 
@@ -180,7 +180,8 @@ class ReconciliationIntegrationTest {
                         TENANT, SERVICE_ID, INSTANCE_ID, baseUrl, "1.0.0", readiness)));
     }
 
-    private static com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider emptySnapshotProvider(long revision) {
+    private static com.openjiuwen.rdc.model.deployment
+            .DeploymentDiscoveryProvider emptySnapshotProvider(long revision) {
         return new com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {

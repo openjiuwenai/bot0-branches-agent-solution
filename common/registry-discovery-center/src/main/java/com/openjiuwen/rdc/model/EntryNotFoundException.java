@@ -7,8 +7,8 @@ package com.openjiuwen.rdc.model;
 /**
  * Registry entry or route handle target not found (0711 {@code ENTRY_NOT_FOUND}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class EntryNotFoundException extends RegistryFailureException {
 
     public EntryNotFoundException(String message, String traceId) {

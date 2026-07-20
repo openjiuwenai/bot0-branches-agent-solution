@@ -14,8 +14,8 @@ import java.util.List;
  * Validates standard A2A Agent Card JSON per Feat-015 0711 scope §5.1.2.
  * Runtime-only — uses Jackson, not part of SPI.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class AgentCardValidator {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -24,6 +24,12 @@ public final class AgentCardValidator {
     private AgentCardValidator() {
     }
 
+    /**
+     * validate.
+     * @param cardJson cardJson
+     * @return result
+     * @since 0.1.0
+     */
     public static ValidationResult validate(String cardJson) {
         if (cardJson == null || cardJson.isBlank()) {
             return ValidationResult.invalid("AGENT_CARD_INVALID", "empty card body");
@@ -78,6 +84,13 @@ public final class AgentCardValidator {
         }
     }
 
+    /**
+     * hasCapability.
+     * @param root root
+     * @param capability capability
+     * @return result
+     * @since 0.1.0
+     */
     public static boolean hasCapability(JsonNode root, String capability) {
         JsonNode caps = root.get("capabilities");
         if (caps == null || !caps.isObject()) {
@@ -87,6 +100,14 @@ public final class AgentCardValidator {
         return node != null && node.isBoolean() && node.asBoolean();
     }
 
+    /**
+     * supportsInputMode.
+     * @param root root
+     * @param skill skill
+     * @param mode mode
+     * @return result
+     * @since 0.1.0
+     */
     public static boolean supportsInputMode(JsonNode root, JsonNode skill, String mode) {
         JsonNode modes = skill != null ? skill.get("inputModes") : null;
         if (modes == null || !modes.isArray() || modes.isEmpty()) {
@@ -95,6 +116,14 @@ public final class AgentCardValidator {
         return arrayContainsText(modes, mode);
     }
 
+    /**
+     * supportsOutputMode.
+     * @param root root
+     * @param skill skill
+     * @param mode mode
+     * @return result
+     * @since 0.1.0
+     */
     public static boolean supportsOutputMode(JsonNode root, JsonNode skill, String mode) {
         JsonNode modes = skill != null ? skill.get("outputModes") : null;
         if (modes == null || !modes.isArray() || modes.isEmpty()) {
@@ -103,6 +132,13 @@ public final class AgentCardValidator {
         return arrayContainsText(modes, mode);
     }
 
+    /**
+     * supportsSecurityScheme.
+     * @param root root
+     * @param scheme scheme
+     * @return result
+     * @since 0.1.0
+     */
     public static boolean supportsSecurityScheme(JsonNode root, String scheme) {
         JsonNode schemes = root.get("securitySchemes");
         if (schemes == null || !schemes.isObject()) {
@@ -144,6 +180,13 @@ public final class AgentCardValidator {
         return false;
     }
 
+    /**
+     * skillTagsContain.
+     * @param cardRoot cardRoot
+     * @param requiredTags requiredTags
+     * @return result
+     * @since 0.1.0
+     */
     public static boolean skillTagsContain(JsonNode cardRoot, Iterable<String> requiredTags) {
         JsonNode skills = cardRoot.get("skills");
         if (skills == null || !skills.isArray()) {
@@ -204,6 +247,16 @@ public final class AgentCardValidator {
         return false;
     }
 
+    /**
+     * ValidationResult.
+     * @param valid valid
+     * @param failureCode failureCode
+     * @param message message
+     * @param capabilityVersion capabilityVersion
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public record ValidationResult(boolean valid, String failureCode, String message,
                                    String capabilityVersion, String contractVersion) {
         static ValidationResult valid(String capabilityVersion, String contractVersion) {

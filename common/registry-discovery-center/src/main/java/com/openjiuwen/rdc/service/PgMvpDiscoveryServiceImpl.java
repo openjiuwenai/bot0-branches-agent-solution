@@ -70,7 +70,7 @@ import java.util.UUID;
  * {@code tenant_isolation_violation}).
  *
  * @since 0.1.0
- */
+  */
 @Primary
 @Service
 public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
@@ -97,18 +97,42 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     @Override
+    /**
+     * searchInstancesByAgentId.
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId, String contractVersion) {
         return searchRuntime(DIM_AGENT_ID, agentId, tenantId, contractVersion,
                 () -> repository.listByAgentId(tenantId, agentId, contractVersion));
     }
 
     @Override
+    /**
+     * searchByServiceId.
+     * @param tenantId tenantId
+     * @param serviceId serviceId
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public List<AgentCardDto> searchByServiceId(String tenantId, String serviceId, String contractVersion) {
         return searchRuntime(DIM_SERVICE_ID, serviceId, tenantId, contractVersion,
                 () -> repository.listByServiceId(tenantId, serviceId, contractVersion));
     }
 
     @Override
+    /**
+     * searchByCapability.
+     * @param tenantId tenantId
+     * @param capability capability
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     public List<AgentCardDto> searchByCapability(String tenantId, String capability, String contractVersion) {
         return searchRuntime(DIM_CAPABILITY, capability, tenantId, contractVersion,
                 () -> repository.listByCapability(tenantId, capability, contractVersion));
@@ -143,6 +167,12 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     @Override
+    /**
+     * discover.
+     * @param query query
+     * @return result
+     * @since 0.1.0
+     */
     public DiscoveryResult discover(DiscoveryQuery query) {
         long start = System.nanoTime();
         String outcome = "error";
@@ -190,6 +220,13 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     }
 
     @Override
+    /**
+     * resolveRouteHandle.
+     * @param routeHandle routeHandle
+     * @param tenantId tenantId
+     * @return result
+     * @since 0.1.0
+     */
     public RouteResolution resolveRouteHandle(String routeHandle, String tenantId) {
         return resolveRouteHandle(routeHandle, tenantId, null, null);
     }

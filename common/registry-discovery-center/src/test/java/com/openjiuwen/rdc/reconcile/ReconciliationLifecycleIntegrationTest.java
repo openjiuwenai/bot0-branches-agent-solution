@@ -98,7 +98,7 @@ class ReconciliationLifecycleIntegrationTest {
     }
 
     @Test
-    void first_fetch_failure_writes_pending_and_excludes_from_discovery() {
+    void first_fetch_failure_writes_pending_excludes() {
         runtimeServer.enqueue(new MockResponse().setResponseCode(404));
 
         ReconciliationService service = reconciliationService();

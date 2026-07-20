@@ -13,8 +13,8 @@ import java.util.List;
 /**
  * Restricts Agent Card fetch targets to configured CIDR allowlists (0711 §5.1.3).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class InternalNetworkPolicy {
 
     private final List<CidrBlock> allowedCidrs;
@@ -23,10 +23,21 @@ public final class InternalNetworkPolicy {
         this.allowedCidrs = List.copyOf(allowedCidrs);
     }
 
+    /**
+     * permissive.
+     * @return result
+     * @since 0.1.0
+     */
     public static InternalNetworkPolicy permissive() {
         return new InternalNetworkPolicy(List.of());
     }
 
+    /**
+     * from.
+     * @param options options
+     * @return result
+     * @since 0.1.0
+     */
     public static InternalNetworkPolicy from(RdcCardFetchOptions options) {
         List<CidrBlock> blocks = new ArrayList<>();
         for (String cidr : options.getTargetCidrs()) {
@@ -37,6 +48,12 @@ public final class InternalNetworkPolicy {
         return new InternalNetworkPolicy(blocks);
     }
 
+    /**
+     * isAllowed.
+     * @param baseUrl baseUrl
+     * @return result
+     * @since 0.1.0
+     */
     public boolean isAllowed(URI baseUrl) {
         if (allowedCidrs.isEmpty()) {
             return true;

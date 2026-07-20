@@ -52,7 +52,7 @@ class DiscoveryCandidateJsonSerializationTest {
     }
 
     @Test
-    void registry_jackson2_mapper_serializes_discovery_result_fields() throws Exception {
+    void registry_jackson2_serializes_discovery_result() throws Exception {
         String json = RegistryObjectMapper.createJackson2().writeValueAsString(SAMPLE_RESULT);
 
         assertThat(json).contains("\"agentId\":\"billing-svc\"");
@@ -67,7 +67,7 @@ class DiscoveryCandidateJsonSerializationTest {
     }
 
     @Test
-    void jackson3_json_mapper_with_mixin_serializes_discovery_result_fields() throws Exception {
+    void jackson3_mixin_serializes_discovery_result() throws Exception {
         JsonMapper mapper = JsonMapper.builder()
                 .addMixIn(DiscoveryCandidate.class, DiscoveryCandidateJacksonMixin.class)
                 .build();
@@ -82,7 +82,7 @@ class DiscoveryCandidateJsonSerializationTest {
     }
 
     @Test
-    void bare_jackson2_mapper_serializes_agent_card_candidate_as_empty_object() throws Exception {
+    void bare_jackson2_serializes_candidate_empty() throws Exception {
         AgentCardCandidate candidate = AgentCardCandidate.from(SAMPLE_RESULT.candidates().get(0));
         ObjectMapper bare = new ObjectMapper();
         bare.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
@@ -91,7 +91,7 @@ class DiscoveryCandidateJsonSerializationTest {
     }
 
     @Test
-    void registry_jackson2_mapper_serializes_agent_card_discovery_result_fields() throws Exception {
+    void registry_jackson2_serializes_card_discovery() throws Exception {
         AgentCardDiscoveryResult result = AgentCardDiscoveryResult.from(SAMPLE_RESULT);
         String json = RegistryObjectMapper.createJackson2().writeValueAsString(result);
 
@@ -105,7 +105,7 @@ class DiscoveryCandidateJsonSerializationTest {
     }
 
     @Test
-    void jackson3_json_mapper_with_mixin_serializes_agent_card_discovery_result_fields() throws Exception {
+    void jackson3_mixin_serializes_card_discovery() throws Exception {
         AgentCardDiscoveryResult result = AgentCardDiscoveryResult.from(SAMPLE_RESULT);
         JsonMapper mapper = JsonMapper.builder()
                 .addMixIn(DiscoveryCandidate.class, DiscoveryCandidateJacksonMixin.class)

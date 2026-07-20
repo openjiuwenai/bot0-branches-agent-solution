@@ -109,7 +109,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
      * (e.g. 2s) and both targets are processed.
      */
     @Test
-    void hung_endpoint_does_not_block_probe_sweep_for_other_targets() throws Exception {
+    void hung_endpoint_does_not_block_probe_sweep() throws Exception {
         // First target: delay HEADERS by 30s — simulates a hung endpoint
         // that accepts the connection but never responds. setBodyDelay does
         // NOT work for toBodilessEntity() because OkHttp returns as soon as
@@ -163,7 +163,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
      * which masks the bug at the wire level).
      */
     @Test
-    void compose_probe_url_strips_trailing_slash_before_appending_health_path() {
+    void compose_probe_url_strips_trailing_slash() {
         assertThat(MvpHealthProbeScheduler.composeProbeUrl("https://agent.example/agent"))
                 .isEqualTo("https://agent.example/agent/health");
         assertThat(MvpHealthProbeScheduler.composeProbeUrl("https://agent.example/agent/"))

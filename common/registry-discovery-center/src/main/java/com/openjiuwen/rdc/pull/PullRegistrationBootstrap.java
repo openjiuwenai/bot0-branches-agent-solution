@@ -82,6 +82,11 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
     }
 
     @Override
+    /**
+     * onApplicationEvent.
+     * @param event event
+     * @since 0.1.0
+     */
     public void onApplicationEvent(ApplicationReadyEvent event) {
         runBootstrap();
     }

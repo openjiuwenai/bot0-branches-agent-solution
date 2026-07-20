@@ -58,7 +58,8 @@ class ResolveGovernanceIntegrationTest {
     @Test
     void resolve_active_instance_succeeds() {
         registerRow("ACTIVE", "HEALTHY");
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(TENANT, AGENT, SERVICE, SERVICE, "/v1/query", "1.0.0"));
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields(TENANT, AGENT, SERVICE, SERVICE, "/v1/query", "1.0.0"));
 
         var resolution = discovery.resolveRouteHandle(handle, TENANT, "gateway", "trace-1");
 
@@ -70,7 +71,8 @@ class ResolveGovernanceIntegrationTest {
     @Test
     void resolve_draining_instance_not_found() {
         registerRow("DRAINING", "HEALTHY");
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(TENANT, AGENT, SERVICE, SERVICE, "/v1/query", "1.0.0"));
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields(TENANT, AGENT, SERVICE, SERVICE, "/v1/query", "1.0.0"));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, TENANT, "gateway", "trace-1"))
                 .isInstanceOf(EntryNotFoundException.class);
@@ -84,7 +86,8 @@ class ResolveGovernanceIntegrationTest {
                         + "WHERE tenant_id = ? AND agent_id = ? AND service_id = ?",
                 TENANT, AGENT, SERVICE);
 
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(TENANT, AGENT, SERVICE, SERVICE, "/v1/query", "1.0.0"));
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec
+                .HandleFields(TENANT, AGENT, SERVICE, SERVICE, "/v1/query", "1.0.0"));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, TENANT, "gateway", "trace-1"))
                 .isInstanceOf(LeaseExpiredException.class);

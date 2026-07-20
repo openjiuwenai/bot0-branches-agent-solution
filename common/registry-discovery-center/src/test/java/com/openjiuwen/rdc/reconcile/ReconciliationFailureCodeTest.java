@@ -49,7 +49,7 @@ class ReconciliationFailureCodeTest {
     }
 
     @Test
-    void source_unavailable_marks_logical_registrations_stale_source() {
+    void source_unavailable_marks_regs_stale() {
         StubRepository repository = new StubRepository(0L);
         ReconciliationService service = service(repository);
         service.reconcile(failingProvider());
@@ -110,7 +110,8 @@ class ReconciliationFailureCodeTest {
         @Override
         public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
         @Override
-        public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
+        public java.util
+                .Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
             return java.util.Optional.empty();
         }
         @Override

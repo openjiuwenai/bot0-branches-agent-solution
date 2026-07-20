@@ -178,7 +178,7 @@ class AgentRegistryMigrationTest {
     // ---- RB1-S4: partial index on last_heartbeat WHERE status IN ('ONLINE','DEGRADED') ----
 
     @Test
-    void partial_index_on_last_heartbeat_for_online_and_degraded_rows_exists() {
+    void partial_index_on_last_heartbeat_online() {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes "
                 + "WHERE tablename = 'agent_registry_mvp' AND indexname = ?",

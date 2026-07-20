@@ -8,8 +8,8 @@ package com.openjiuwen.rdc.model.deployment;
  * Deployment fact source port (Feat-015 0711 {@code DeploymentDiscoveryProvider}).
  * Pure Java — no Spring / JDBC imports.
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public interface DeploymentDiscoveryProvider {
 
     /** Stable provider identity, e.g. {@code static-dev} or {@code k8s-prod}. */

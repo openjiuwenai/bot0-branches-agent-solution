@@ -7,8 +7,8 @@ package com.openjiuwen.rdc.model;
 /**
  * Push registry entry validation failed (0711 {@code REGISTRY_ENTRY_INVALID}).
  *
- * @since 0.1.0
- */
+ * @since 0.1.0 (2026)
+  */
 public final class RegistryEntryInvalidException extends RegistryFailureException {
 
     public RegistryEntryInvalidException(String message, String traceId) {

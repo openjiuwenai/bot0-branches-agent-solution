@@ -37,9 +37,14 @@ import org.springframework.boot.SpringApplication;
  * evolution: provided → compile, agent-bus now ships its own runtime).
  *
  * @since 2026-07-10
- */
+  */
 @SpringBootApplication
 public class AgentRdcApplication {
+    /**
+     * main.
+     * @param args args
+     * @since 0.1.0
+     */
     public static void main(String[] args) {
         SpringApplication.run(AgentRdcApplication.class, args);
     }
