@@ -30,7 +30,6 @@ import java.util.Set;
  * 剥哪行 append → 对应 Phase 缺失 → RED。
  */
 class PevTraceTest {
-
     // ==================== content-IFF: DeviceFailure → Diagnose → AcceptPartial 全转移 ====================
     /**
      * DeviceFailure 场景的 trace 必须含确切 5-phase 序列 + Diagnosed payload=RootCause.DeviceFailure
