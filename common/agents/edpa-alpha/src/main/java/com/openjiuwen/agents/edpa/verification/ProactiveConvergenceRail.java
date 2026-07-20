@@ -7,6 +7,9 @@ package com.openjiuwen.agents.edpa.verification;
 import com.openjiuwen.agents.edpa.kernel.EdpaKernel;
 import com.openjiuwen.agents.edpa.kernel.ReplanAction;
 import com.openjiuwen.agents.edpa.kernel.RootCause;
+import com.openjiuwen.agents.reactrails.replan.ReplanTool;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.agents.reactrails.types.Violation;
 import com.openjiuwen.agents.reactrails.verification.CriteriaVerifier;
@@ -161,9 +164,13 @@ public class ProactiveConvergenceRail extends AgentRail {
             // Edge-triggered: fire once on stall entry, not every round.
             s.triggerCount++;
             RootCause cause = new RootCause.PlanOrAnswerError(Set.of());
-            ReplanAction action = EdpaKernel.toReplanAction(cause, buildConvergenceFeedback(coverage), Set.of());
+            ReplanAction action = EdpaKernel.toReplanAction(cause, buildConvergenceFeedback(ctx, coverage), Set.of());
             if (action instanceof ReplanAction.GlobalReplan globalReplan) {
-                ctx.pushSteering(globalReplan.feedback());
+                String feedback = globalReplan.feedback();
+                ctx.pushSteering(feedback);
+                RailTelemetry.current().fire(new RailEvent.SteeringEvent("ProactiveConvergenceRail",
+                        "CONVERGENCE_STALL", feedback.substring(0, Math.min(80, feedback.length())),
+                        ctx.hasSteeringQueue()));
             }
         }
         s.wasStalled = stalledNow;
@@ -196,16 +203,26 @@ public class ProactiveConvergenceRail extends AgentRail {
     /**
      * Build the Chinese-language steering prompt pushed into the trajectory on stall entry.
      *
+     * <p>issue-#16 adaptation (mirrors react-rails PreCompletionChecklistRail COVERAGE Site 3):
+     * the {@code __replan__} reference is single-sourced via {@link ReplanTool#TOOL_NAME} and gated
+     * on {@link ReplanTool#isReachable} — when the agent has NOT registered ReplanTool (e.g. a
+     * toolless consumer that skips EdpaAutoConfiguration), the hint falls back to a tool-agnostic
+     * nudge instead of guiding the LLM toward an unregistered tool (silent dangling reference).
+     *
+     * @param ctx      callback context (carries the agent for the reachability probe)
      * @param coverage current coverage ratio to surface in the feedback text
      * @return the formatted convergence-steering feedback string
      */
-    private String buildConvergenceFeedback(double coverage) {
+    private String buildConvergenceFeedback(AgentCallbackContext ctx, double coverage) {
         String coveragePct = String.format(Locale.ROOT, "%.2f", coverage);
         String thresholdPct = String.format(Locale.ROOT, "%.2f", coverageCritical);
+        String replanClause = ReplanTool.isReachable(ctx)
+                ? "或调用 " + ReplanTool.TOOL_NAME + " 重定向。"
+                : "或调整当前分析方法重定向。";
         return "【主动收敛】轨迹连续 " + stallWindow
                 + " 个工具轮未向成功标准收敛（当前覆盖率 " + coveragePct
                 + "，低于阈值 " + thresholdPct + "）：已调用的工具未带来新的标准相关数据。"
-                + "请调整方向——调用能覆盖缺失维度的工具，或调用 __replan__ 重定向。";
+                + "请调整方向——调用能覆盖缺失维度的工具，" + replanClause;
     }
 
     /**

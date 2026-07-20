@@ -7,6 +7,8 @@ package com.openjiuwen.agents.edpa.rail;
 import com.openjiuwen.agents.edpa.explore.ExplorationResult;
 import com.openjiuwen.agents.edpa.explore.ExploreBudget;
 import com.openjiuwen.agents.edpa.explore.Explorer;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
@@ -171,7 +173,11 @@ public class ExploreRail extends AgentRail {
 
         // [5] Push findings into steering queue → consumed by
         //     injectPendingSteering(offset 675) NEXT iteration
-        ctx.pushSteering(formatFindings(result));
+        String findings = formatFindings(result);
+        ctx.pushSteering(findings);
+        RailTelemetry.current().fire(new RailEvent.SteeringEvent("ExploreRail",
+                "EXPLORE_FINDINGS", findings.substring(0, Math.min(80, findings.length())),
+                ctx.hasSteeringQueue()));
     }
 
     /**
