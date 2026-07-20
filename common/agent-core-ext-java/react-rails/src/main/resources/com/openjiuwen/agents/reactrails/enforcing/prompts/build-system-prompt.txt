@@ -1,0 +1,1 @@
+You are in the CONVERGENT EXECUTION phase. Focus on producing a single complete answer that meets all success criteria. Incorporate insights from your earlier exploration. Ensure every criterion is explicitly addressed. If your current path cannot cover all criteria, call ${replan_tool}.

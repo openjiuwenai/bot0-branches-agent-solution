@@ -1,0 +1,40 @@
+server:
+  port: ${VERSATILE_ADAPTER_PORT:18094}
+
+spring:
+  application:
+    # Drives the A2A card "name" field (DefaultAgentServiceIdentity reads spring.application.name).
+    name: versatile-adapter
+
+openjiuwen:
+  service:
+    agent-id: versatile-adapter
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      # NOTE: a2a.agent-name is NOT bound by A2AProperties (no such field); the card
+      # name comes from spring.application.name above. Kept for forward compatibility.
+      agent-name: versatile-adapter
+      agent-description: "Versatile bank proxy (agent-solution). Reconstructs the bank REST call from inputs, streams SSE, extracts node_type=QA results."
+      streaming: true
+      default-input-modes: ["text"]
+      default-output-modes: ["text"]
+      skills:
+        - id: versatile-bank-proxy
+          name: Versatile bank proxy
+          description: "Call this tool to execute one bank workflow step (query balance or transfer). Pass remoteInput as a JSON string: {\"query\":\"<natural-language subtask>\",\"intent\":\"查询账户余额\" or \"快速转账\"}."
+          tags: ["versatile", "sse", "banking", "workflow"]
+    versatile:
+      url-template: ${VERSATILE_URL:http://127.0.0.1:31113/v1/mock_project_id/agents/fb723468-c8ca-424b-a95f-a3e74b37e090/conversations/{conversation_id}}
+      timeout: 30s
+      forward-header-whitelist:
+        - stream
+        - x-invoke-mode
+        - x-language
+      headers-template:
+        Content-Type: application/json
+        accept: text/event-stream
+        stream: "true"
+      result-node-name: ABCDEResponseNode

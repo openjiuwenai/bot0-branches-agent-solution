@@ -1,0 +1,32 @@
+# ── 排除 Dockerfile 不 COPY 的内容 ──
+# Dockerfile 仅需: pyproject.toml, src/, deployment/config/agent_adapter_config.yaml
+
+**/__pycache__/
+*.pyc
+*.pyo
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+data/
+logs/
+*.tar
+*.tar.gz
+
+tests/
+docs/
+
+.claude/
+.trae/
+.cursor/
+.git/
+.gitignore
+
+.env
+.env.example
+
+# 部署脚本本身不进镜像（config 例外，由 Dockerfile 显式 COPY）
+deployment/*.sh
+deployment/Dockerfile
+deployment/*.md

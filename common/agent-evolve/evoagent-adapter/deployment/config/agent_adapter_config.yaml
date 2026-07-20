@@ -1,0 +1,158 @@
+# Agent Adapter Configuration
+# All values shown are defaults. Override with environment variables (ADAPTER_* prefix).
+#
+# Path resolution rules for log_dir, output_dir, offset_file:
+# - Absolute paths (e.g., "/var/log" on Unix or "C:\\logs" on Windows) are used as-is
+# - Relative paths are resolved relative to the adapter root directory (where pyproject.toml is located)
+# - Environment variable values are NOT resolved, they are used as-is
+
+# ── Log source (fallback for single-agent mode when no agents list) ──
+# 顶层 log_dir 在 docker 部署中由 ADAPTER_LOG_DIR 环境变量覆盖（默认 /data/logs）
+log_dir: "logs"                          # Log directory path (absolute or relative to adapter root)
+log_pattern: "process*.log"             # Active log file glob pattern
+
+# ── Read strategy ──
+poll_interval: 60                         # Poll interval in seconds
+start_from: "tail"                       # First-start read position: tail | head
+
+# ── Extraction rules ──
+match_tags:                              # Tags to extract from log lines
+  - "TAG_HTTP_REQUEST_START"
+  - "TAG_HTTP_REQUEST_END"
+  - "TAG_LLM_CALL_START"
+  - "TAG_LLM_CALL_END"
+  - "TAG_PLANNING_DECISION"
+  - "TAG_TOOL_EXECUTE_START"
+  - "TAG_TOOL_EXECUTE_END"
+  - "TAG_SKILL_EXECUTE_START"
+  - "TAG_SKILL_EXECUTE_END"
+  - "TAG_VERSATILE_START"
+  - "TAG_VERSATILE_END"
+
+# ── Pairing strategy ──
+pair_timeout: 300                        # START→END pair timeout in seconds
+
+# ── Output (fallback for single-agent mode when no agents list) ──
+output_dir: "data/output"                     # Output directory path (absolute or relative to adapter root)
+offset_file: "data/offsets.json"  # Offset state file path (absolute or relative to adapter root)
+
+# ── Skill storage (bind-mount from business agent containers) ──
+# Layout: {skills_root}/{agent_name}/{skill_name}/SKILL.md
+# See docs/skills-storage-design.md
+skills_root: "data/skills"
+
+# ── Output file cleanup ──
+output_retention_days: 30                # delete files older than this many days
+output_max_files: 2000                   # delete oldest when file count exceeds this
+output_max_file_size: "20MB"             # head-truncate when single file exceeds this
+output_trim_target_ratio: 0.7            # after truncation, file size ≈ threshold × ratio
+
+# ── HTTP service ──
+host: "0.0.0.0"                          # HTTP listen address
+port: 8900                               # HTTP listen port
+
+# ── Multi-Agent configuration ──
+# When agents list is present, each agent gets its own Pipeline with independent
+# log reading, offset tracking, and output archiving. Top-level log_dir/output_dir/
+# offset_file are used as fallback only when agents list is empty.
+#
+# When agents list is absent, a single "default" agent is created from top-level
+# fields (backward compatible with v2 config).
+#
+# Per-agent defaults when fields are omitted:
+#   log_pattern  → inherits top-level log_pattern
+#   output_dir   → data/output/{name}
+#   offset_file  → data/offsets/{name}.json
+#   skills_dir   → {skills_root}/{name}
+#   agent_url    → None (log-only, no call proxy)
+#   timeout      → 300
+#
+# ── 多业务 Agent 部署（策略 A：公共父目录 + per-agent 子目录）──
+# 宿主机侧把所有业务 Agent 的日志、skills、managed-doc 分别归到
+# HOST_LOG_ROOT、HOST_SKILLS_ROOT、HOST_AGENTS_ROOT，并挂载到容器
+# /data/logs、/data/skills、/data/agents。
+# 每个 agent 条目用【绝对路径】指向各自子目录：
+#   log_dir    → /data/logs/{name}     （对应宿主 HOST_LOG_ROOT/{name}）
+#   skills_dir → /data/skills/{name}   （对应宿主 HOST_SKILLS_ROOT/{name}）
+# 绝对路径原样使用，不会被解析到 adapter 根下；省略 log_dir/skills_dir 则回退
+# 到顶层（顶层由 ADAPTER_LOG_DIR / ADAPTER_SKILLS_ROOT 覆盖，多 Agent 下不推荐省略）。
+# 新增/删除 Agent 只需在此列表增删条目，并在宿主侧建好对应子目录；agent_url 等
+# 字段后续也可走 CRUD API（PUT /api/v1/config/agents/{name}）热更新写回本文件。
+agents:
+  - name: "edp_agent"
+    log_dir: "/data/logs/edp_agent"           # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
+    skills_dir: "/data/skills/edp_agent"      # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
+    # log_pattern: "process*.log"            # Optional: defaults to top-level log_pattern
+    # output_dir: "data/output/edp_agent"     # Optional: defaults to data/output/{name}
+    # offset_file: "data/offsets/edp_agent.json"  # Optional: defaults to data/offsets/{name}.json
+    agent_url: "http://192.168.1.10:8090"     # 不可用 localhost/127.0.0.1（指向容器自身）。
+                                              # 业务 Agent 若把端口发布到宿主机，可写
+                                              # http://host.docker.internal:8090
+                                              # （需启动脚本/compose 已注入 --add-host host.docker.internal:host-gateway）
+    project_id: "proj_001"                    # URL path segment: /v1/{project_id}/agents/{agent_id}/...
+    agent_id: "edp_agent"                     # URL path segment: /v1/{project_id}/agents/{agent_id}/...
+    timeout: 300                              # Call timeout in seconds
+    # ── Managed-doc（可选，需优化 AgentRule.md 等"焙进单例、改文件不热加载"的文档）──
+    # 详见离线包 README 的 AgentRule managed-doc 章节。apply=restart 时由部署侧提供 restart_cmd + health 探测；
+    # adapter async 执行 restart_cmd + health-watch，重启窗口内不阻塞事件循环。
+    # managed_docs:
+    #   - kind: agent_rule                       # doc 种类（端点 doc_kind）
+    #     path: /data/agents/edp_agent/AgentRule.md   # 宿主侧挂载路径（绝对）
+    #     allow_root: /data/agents/edp_agent     # 可选但建议：path 必须位于其下的挂载根（路径穿越防护）
+    #     max_content_bytes: 262144               # UTF-8 内容上限；超限请求返回 400
+    #     apply: restart                         # file_only（仅写文件）| restart（写文件+重启生效）
+    #     restart_cmd: "docker restart edp_agent"    # apply=restart 必填；容器名须为真实业务 Agent 容器名
+    #     health_url: "http://host.docker.internal:8090/health"
+    #     # Docker 部署还需显式挂 socket：start.sh 设置
+    #     # ADAPTER_ENABLE_DOCKER_RESTART=true；Compose 叠加 managed-doc override。
+    # ── EDPAgent 请求透传（客户现场 body/header/URL 自定义）──
+    # 需要透传 role_id/role_name/custom_data.user_profile 等客户环境绑定字段时配置。
+    # request_template 为稳定 body 底模（深合并到最终请求体；调用方 extra_data 仍合并进
+    # custom_data.inputs）。extra_headers 稳定请求头，值支持 ${ENV_VAR} 从环境变量读取
+    # （如 token）。url_query_params 拼 conversation URL 后的 query 参数。
+    # 示例（按客户现场实际字段填写）：
+    # request_template:
+    #   timeout: 300
+    #   role_id: "1"
+    #   role_name: "示例贷款场景"
+    #   custom_data:
+    #     user_profile:
+    #       enable_extract: true
+    #       enable_retrieve: true
+    # extra_headers:
+    #   X-Invoke-Mode: "debug"
+    #   X-Language: "zh-cn"
+    #   projectname: "null"
+    #   region: "null"
+    #   stream: "true"
+    #   cftk: "${ADAPTER_AGENT_TOKEN}"          # 敏感值走 env，勿入 yaml
+    #   cf2-cftk: "${ADAPTER_AGENT_TOKEN}"
+    # url_query_params:
+    #   type: "controller"
+    #   workspace_id: "191"
+
+  - name: "other_agent"
+    log_dir: "/data/logs/other_agent"
+    skills_dir: "/data/skills/other_agent"
+    agent_url: "http://192.168.1.11:8090"
+    project_id: "proj_002"
+    agent_id: "other_agent"
+    timeout: 300
+
+# ── Managed-doc defaults（可选，仅当任一 agent 配了 managed_docs 且 apply=restart 时生效）──
+# profile 决定 burst（canary 训练，快速失败）vs single（人工单次）两套默认基线；
+# 显式字段覆写优先于 profile 基线；字段语义见下方内联说明。
+# managed_doc_defaults:
+#   profile: burst                # burst | single
+#   task_ttl_seconds: 600         # 完成态任务保留时长（轮询窗口）
+#   shutdown_grace_timeout: 10.0  # 关停时等待 in-flight restart 退出的宽限上限
+#   # 以下均可在此处给所有 restart doc 设默认，单条 doc 仍可覆写：
+#   # restart_cmd: "docker restart edp_agent"
+#   # health_url: "http://localhost:8090/health"
+#   # max_attempts: 2
+#   # backoff_base: 3.0
+#   # backoff_max: 30.0
+#   # health_down_timeout: 15.0
+#   # health_up_timeout: 60.0
+#   # health_up_consecutive: 2
+#   # health_poll_interval: 0.5

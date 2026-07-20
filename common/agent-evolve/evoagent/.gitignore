@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+venv/
+
+# IDE and local agent tooling
+.idea/
+.vscode/
+/.agents/
+/.claude/
+/.codex/
+/.cursor/
+/.trae/
+/.codegraph/
+
+# Env
+.env
+
+#evaluator测试文件
+test/unit/evaluator
+
+# Claude Code (个人配置)
+CLAUDE.local.md
+
+# Workspace (优化产物)
+workspace/
+
+# Cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+
+# agent-store 迁移时明确排除的内部资料
+/docs/adr/
+/docs/develop/
+/docs/handoff/
+/docs/rules/
+/docs/spec/
+/docs/superpowers/
+/docs/ROADMAP.md
+/docs/api/evaluate-client.md
+/docs/api/evaluate.md
+/docs/api/*测试*
+/docs/api/evaluator-*
+/evaluator_golden_dataset.csv
+/simplified_output.json
+
+# 旧仓目录；场景统一放在 examples/scenarios/
+/scenarios/
+/scripts/
+
+# 构建期预下载的依赖 wheel（build 时生成，勿提交）
+vendor/
+
+# 离线交付文件夹（分卷 + merge 脚本，打包产物不入仓）
+deployment/evoagent-offline-*/
+
+# 合并冲突残留
+*.orig

@@ -1,0 +1,113 @@
+{
+  "meta": {
+    "generated_at_utc": "2026-07-12T13:27:15.217050+00:00",
+    "adapter_url": "http://127.0.0.1:18900",
+    "edp_url": "http://127.0.0.1:18001",
+    "jiuwenbox_url": "http://127.0.0.1:8321",
+    "sandbox_id": "723842d9-fb8",
+    "skill": "product_recommend_skill",
+    "marker_a": "BEFORE_9E4ABBA9",
+    "marker_b": "AFTER_743DF61C",
+    "model_name": "Qwen/Qwen3.5-9B",
+    "model_api_base": "https://api.siliconflow.cn/v1",
+    "checks_passed": 8,
+    "checks_total": 8,
+    "proof": "对话A回答含 MARKER_A；热更后对话B回答含 MARKER_B 且不含 MARKER_A"
+  },
+  "results": [
+    {
+      "name": "jiuwenbox /health",
+      "passed": true,
+      "detail": "HTTP 200 {\"status\":\"ok\",\"version\":\"0.1.0\",\"runtime\":\"process\",\"landlock_supported\":true,\"sandboxes_active\":1}",
+      "duration_ms": 79,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "EDPAgent /health",
+      "passed": true,
+      "detail": "HTTP 200 {\"status\":\"healthy\",\"service\":\"A2A Service\"}",
+      "duration_ms": 39,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Adapter /health",
+      "passed": true,
+      "detail": "HTTP 200 {\"status\":\"ok\"}",
+      "duration_ms": 38,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "name": "准备 Skill 内容 MARKER_A",
+      "passed": true,
+      "detail": "seeded=True; marker_in_sandbox=True",
+      "duration_ms": 190,
+      "evidence": {
+        "sandbox_id": "723842d9-fb8",
+        "marker_a": "BEFORE_9E4ABBA9",
+        "path": "/tmp/skills/product_recommend_skill/SKILL.md"
+      }
+    },
+    {
+      "name": "调用代理 · 对话A（应读到 MARKER_A）",
+      "passed": true,
+      "detail": "success=True saw_A=True answer=\n\n【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行\n\n【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件\n\n【任务执行情况】成功读取文件内容\n\n【结果汇总】HOTUPDATE_MARKER 标记行如下：\n\nHOTUPDATE_MARKER=BEFORE_9E4ABBA9\n\n【异常说明】无",
+      "duration_ms": 5909,
+      "evidence": {
+        "conversation_id": "dlg-5175973c8254",
+        "http": 200,
+        "success": true,
+        "error": null,
+        "event_count": 274,
+        "answer": "\n\n【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行\n\n【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件\n\n【任务执行情况】成功读取文件内容\n\n【结果汇总】HOTUPDATE_MARKER 标记行如下：\n\nHOTUPDATE_MARKER=BEFORE_9E4ABBA9\n\n【异常说明】无"
+      }
+    },
+    {
+      "name": "Skill 热更 API → 沙箱文件变为 MARKER_B",
+      "passed": true,
+      "detail": "update_http=200 success=True disk_has_B=True",
+      "duration_ms": 106,
+      "evidence": {
+        "update_body": {
+          "success": true,
+          "skill_name": "product_recommend_skill",
+          "_http": 200
+        },
+        "sandbox_preview": "---\nname: product_recommend_skill\ndescription: E2E hotupdate probe skill. Contains HOTUPDATE_MARKER for verification.\n---\n\n# Product Recommend Skill (E2E Probe)\n\nHOTUPDATE_MARKER=AFTER_743DF61C\n\nWhen asked to verify skill content, use read_file on this file and quote the HOTUPDATE_MARKER line exactl"
+      }
+    },
+    {
+      "name": "调用代理 · 对话B（应读到 MARKER_B，证明热更生效）",
+      "passed": true,
+      "detail": "success=True saw_B=True saw_old_A=False answer=\n\n【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行\n\n【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件\n\n【任务执行情况】成功读取文件内容\n\n【结果汇总】HOTUPDATE_MARKER=AFTER_743DF61C\n\n【异常说明】无",
+      "duration_ms": 8014,
+      "evidence": {
+        "conversation_id": "dlg-60fa8395c2a6",
+        "http": 200,
+        "success": true,
+        "error": null,
+        "event_count": 257,
+        "answer": "\n\n【需求概述】读取产品推荐技能文件并输出 HOTUPDATE_MARKER 标记行\n\n【规划过程】使用 read_file 工具读取 `/tmp/skills/product_recommend_skill/SKILL.md` 文件\n\n【任务执行情况】成功读取文件内容\n\n【结果汇总】HOTUPDATE_MARKER=AFTER_743DF61C\n\n【异常说明】无",
+        "marker_a": "BEFORE_9E4ABBA9",
+        "marker_b": "AFTER_743DF61C"
+      }
+    },
+    {
+      "name": "轨迹采集（对话A+B 均有 traces）",
+      "passed": true,
+      "detail": "A total=5 B total=5",
+      "duration_ms": 2140,
+      "evidence": {
+        "conv_a": "dlg-5175973c8254",
+        "trace_a": 5,
+        "conv_b": "dlg-60fa8395c2a6",
+        "trace_b": 5
+      }
+    }
+  ]
+}
