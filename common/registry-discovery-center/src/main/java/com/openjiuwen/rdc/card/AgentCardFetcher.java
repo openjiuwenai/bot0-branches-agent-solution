@@ -1,6 +1,6 @@
 package com.openjiuwen.rdc.card;
 
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.security.InternalNetworkPolicy;
 
 import java.io.IOException;
@@ -28,19 +28,19 @@ public final class AgentCardFetcher {
     private final InternalNetworkPolicy networkPolicy;
 
     public AgentCardFetcher() {
-        this(AgentCardMtlsHttpClientFactory.create(new AgentCardFetchSecurityProperties()),
+        this(AgentCardMtlsHttpClientFactory.create(RdcCardFetchOptions.defaults()),
                 DEFAULT_READ_TIMEOUT,
                 AgentCardSignatureVerifier.disabled(),
                 InternalNetworkPolicy.permissive());
     }
 
-    public static AgentCardFetcher fromSecurity(AgentCardFetchSecurityProperties properties) {
-        Objects.requireNonNull(properties, "properties");
+    public static AgentCardFetcher fromSecurity(RdcCardFetchOptions options) {
+        Objects.requireNonNull(options, "options");
         return new AgentCardFetcher(
-                AgentCardMtlsHttpClientFactory.create(properties),
-                properties.getReadTimeout(),
-                AgentCardSignatureVerifier.from(properties),
-                InternalNetworkPolicy.from(properties));
+                AgentCardMtlsHttpClientFactory.create(options),
+                options.getResponseDeadline(),
+                AgentCardSignatureVerifier.from(options),
+                InternalNetworkPolicy.from(options));
     }
 
     AgentCardFetcher(HttpClient httpClient, Duration readTimeout) {

@@ -17,7 +17,7 @@ package com.openjiuwen.rdc.config;
 import com.openjiuwen.rdc.card.AgentCardFetcher;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.security.RegistrySecurityProperties;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.controller.RegistryObjectMapper;
@@ -156,8 +156,8 @@ public class RegistryRuntimeBeanConfig {
     }
 
     @Bean
-    public AgentCardFetcher agentCardFetcher(AgentCardFetchSecurityProperties cardFetchSecurity) {
-        return AgentCardFetcher.fromSecurity(cardFetchSecurity);
+    public AgentCardFetcher agentCardFetcher(RdcCardFetchOptions cardFetchOptions) {
+        return AgentCardFetcher.fromSecurity(cardFetchOptions);
     }
 
     @Bean

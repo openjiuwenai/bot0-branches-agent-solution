@@ -3,7 +3,7 @@ package com.openjiuwen.rdc.card;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -28,9 +28,9 @@ class AgentCardSignatureVerifierTest {
 
     @Test
     void enabled_verifier_rejects_missing_signatures() throws Exception {
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.setSignatureVerificationEnabled(true);
-        props.setTrustedSignerKeys(Map.of("test-key", publicKeyPem(testKeyPair())));
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.setVerifySignatures(true);
+        props.setSignerPemsByKid(Map.of("test-key", publicKeyPem(testKeyPair())));
 
         AgentCardSignatureVerifier verifier = AgentCardSignatureVerifier.from(props);
 
@@ -40,9 +40,9 @@ class AgentCardSignatureVerifierTest {
     @Test
     void enabled_verifier_accepts_valid_signature() throws Exception {
         KeyPair keyPair = testKeyPair();
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.setSignatureVerificationEnabled(true);
-        props.setTrustedSignerKeys(Map.of("test-key", publicKeyPem(keyPair)));
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.setVerifySignatures(true);
+        props.setSignerPemsByKid(Map.of("test-key", publicKeyPem(keyPair)));
 
         String signedCard = signedCard(keyPair);
         AgentCardSignatureVerifier verifier = AgentCardSignatureVerifier.from(props);
@@ -53,9 +53,9 @@ class AgentCardSignatureVerifierTest {
     @Test
     void enabled_verifier_rejects_tampered_payload() throws Exception {
         KeyPair keyPair = testKeyPair();
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.setSignatureVerificationEnabled(true);
-        props.setTrustedSignerKeys(Map.of("test-key", publicKeyPem(keyPair)));
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.setVerifySignatures(true);
+        props.setSignerPemsByKid(Map.of("test-key", publicKeyPem(keyPair)));
 
         String signedCard = signedCard(keyPair).replace("demo", "evil");
         AgentCardSignatureVerifier verifier = AgentCardSignatureVerifier.from(props);

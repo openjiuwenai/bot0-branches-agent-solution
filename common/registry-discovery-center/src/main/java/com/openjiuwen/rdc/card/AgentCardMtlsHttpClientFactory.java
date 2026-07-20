@@ -1,6 +1,6 @@
 package com.openjiuwen.rdc.card;
 
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -20,38 +20,37 @@ final class AgentCardMtlsHttpClientFactory {
     private AgentCardMtlsHttpClientFactory() {
     }
 
-    static HttpClient create(AgentCardFetchSecurityProperties properties) {
-        Objects.requireNonNull(properties, "properties");
+    static HttpClient create(RdcCardFetchOptions options) {
+        Objects.requireNonNull(options, "options");
         HttpClient.Builder builder = HttpClient.newBuilder()
-                .connectTimeout(properties.getConnectTimeout())
+                .connectTimeout(options.getDialDeadline())
                 .followRedirects(HttpClient.Redirect.NEVER);
-        if (properties.isMtlsEnabled()) {
-            builder.sslContext(buildSslContext(properties));
+        if (options.isMutualTls()) {
+            builder.sslContext(buildSslContext(options));
         }
         return builder.build();
     }
 
-    private static SSLContext buildSslContext(AgentCardFetchSecurityProperties properties) {
+    private static SSLContext buildSslContext(RdcCardFetchOptions options) {
         try {
-            AgentCardFetchSecurityProperties.ClientTlsMaterial tls = properties.getClientTls();
             SSLContext sslContext = SSLContext.getInstance("TLS");
             KeyManagerFactory kmf = null;
-            if (tls.getIdentityFile() != null && !tls.getIdentityFile().isBlank()) {
-                KeyStore identity = loadKeyStore(
-                        tls.getIdentityFile(),
-                        tls.getIdentityPassword(),
-                        tls.getIdentityType());
+            if (options.getClientPkcs12Location() != null && !options.getClientPkcs12Location().isBlank()) {
+                KeyStore identity = loadStore(
+                        options.getClientPkcs12Location(),
+                        options.getClientPkcs12Secret(),
+                        options.getClientPkcs12Format());
                 kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-                kmf.init(identity, passwordChars(tls.getIdentityPassword()));
+                kmf.init(identity, secretChars(options.getClientPkcs12Secret()));
             }
             TrustManagerFactory tmf = null;
-            if (tls.getTrustAnchorFile() != null && !tls.getTrustAnchorFile().isBlank()) {
-                KeyStore trustAnchors = loadKeyStore(
-                        tls.getTrustAnchorFile(),
-                        tls.getTrustAnchorPassword(),
-                        tls.getTrustAnchorType());
+            if (options.getTrustPkcs12Location() != null && !options.getTrustPkcs12Location().isBlank()) {
+                KeyStore trust = loadStore(
+                        options.getTrustPkcs12Location(),
+                        options.getTrustPkcs12Secret(),
+                        options.getTrustPkcs12Format());
                 tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                tmf.init(trustAnchors);
+                tmf.init(trust);
             }
             sslContext.init(
                     kmf != null ? kmf.getKeyManagers() : null,
@@ -63,16 +62,15 @@ final class AgentCardMtlsHttpClientFactory {
         }
     }
 
-    private static KeyStore loadKeyStore(String path, String password, String type) throws Exception {
-        KeyStore keyStore = KeyStore.getInstance(type != null ? type : "PKCS12");
-        char[] pwd = passwordChars(password);
+    private static KeyStore loadStore(String path, String secret, String format) throws Exception {
+        KeyStore store = KeyStore.getInstance(format != null ? format : "PKCS12");
         try (InputStream in = Files.newInputStream(Path.of(path))) {
-            keyStore.load(in, pwd);
+            store.load(in, secretChars(secret));
         }
-        return keyStore;
+        return store;
     }
 
-    private static char[] passwordChars(String password) {
-        return password != null ? password.toCharArray() : new char[0];
+    private static char[] secretChars(String secret) {
+        return secret != null ? secret.toCharArray() : new char[0];
     }
 }

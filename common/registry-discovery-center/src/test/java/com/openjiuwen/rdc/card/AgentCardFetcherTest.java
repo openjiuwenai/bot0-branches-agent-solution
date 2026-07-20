@@ -1,6 +1,6 @@
 package com.openjiuwen.rdc.card;
 
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -69,8 +69,8 @@ class AgentCardFetcherTest {
 
     @Test
     void fetch_rejects_host_outside_allowed_cidr() {
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.getAllowedCidrs().add("10.0.0.0/8");
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("10.0.0.0/8");
 
         AgentCardFetcher fetcher = AgentCardFetcher.fromSecurity(props);
         String baseUrl = server.url("/").toString().replaceAll("/$", "");
@@ -84,9 +84,9 @@ class AgentCardFetcherTest {
 
     @Test
     void fetch_with_signature_verification_rejects_unsigned_card() {
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.setSignatureVerificationEnabled(true);
-        props.getTrustedSignerKeys().put("test-key", minimalPublicKeyPem());
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.setVerifySignatures(true);
+        props.getSignerPemsByKid().put("test-key", minimalPublicKeyPem());
 
         server.enqueue(new MockResponse()
                 .setBody(validCard())

@@ -15,7 +15,7 @@ import com.openjiuwen.rdc.model.EntryNotFoundException;
 import com.openjiuwen.rdc.model.MalformedRouteHandleException;
 import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.tenant.TenantContext;
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.model.RegistryUnavailableException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;

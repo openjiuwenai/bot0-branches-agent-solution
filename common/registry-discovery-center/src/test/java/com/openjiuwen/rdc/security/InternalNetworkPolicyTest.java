@@ -18,8 +18,8 @@ class InternalNetworkPolicyTest {
 
     @Test
     void loopback_cidr_allows_localhost() {
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.getAllowedCidrs().add("127.0.0.0/8");
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("127.0.0.0/8");
         InternalNetworkPolicy policy = InternalNetworkPolicy.from(props);
 
         assertThat(policy.isAllowed(URI.create("http://127.0.0.1:8080"))).isTrue();
@@ -27,8 +27,8 @@ class InternalNetworkPolicyTest {
 
     @Test
     void private_cidr_rejects_loopback() {
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.getAllowedCidrs().add("10.0.0.0/8");
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("10.0.0.0/8");
         InternalNetworkPolicy policy = InternalNetworkPolicy.from(props);
 
         assertThat(policy.isAllowed(URI.create("http://127.0.0.1:8080"))).isFalse();
@@ -37,8 +37,8 @@ class InternalNetworkPolicyTest {
 
     @Test
     void missing_host_rejected_when_restricted() {
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.getAllowedCidrs().add("10.0.0.0/8");
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("10.0.0.0/8");
         InternalNetworkPolicy policy = InternalNetworkPolicy.from(props);
 
         assertThat(policy.isAllowed(URI.create("http:///path"))).isFalse();
@@ -46,8 +46,8 @@ class InternalNetworkPolicyTest {
 
     @Test
     void invalid_cidr_throws() {
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.getAllowedCidrs().add("not-a-cidr");
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("not-a-cidr");
 
         assertThatThrownBy(() -> InternalNetworkPolicy.from(props))
                 .isInstanceOf(IllegalArgumentException.class)

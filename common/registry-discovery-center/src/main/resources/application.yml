@@ -104,20 +104,19 @@ rdc:
       caller-allowlist: {}
     card-fetch:
       # mTLS + Agent Card signature verification — disabled by default (0711 §5.1.3).
-      mtls-enabled: false
-      signature-verification-enabled: false
-      trusted-signer-keys: {}
+      mutual-tls: false
+      verify-signatures: false
+      signer-pems-by-kid: {}
       # Empty = permissive. Example: 10.0.0.0/8, 172.16.0.0/12
-      allowed-cidrs: []
+      target-cidrs: []
       # Example when enabled:
-      # mtls-enabled: true
-      # client-tls:
-      #   identity-file: /etc/rdc/card-fetch/client.p12
-      #   identity-password: ${CARD_FETCH_KEYSTORE_PASSWORD}
-      #   trust-anchor-file: /etc/rdc/card-fetch/trust.p12
-      #   trust-anchor-password: ${CARD_FETCH_TRUSTSTORE_PASSWORD}
-      # signature-verification-enabled: true
-      # trusted-signer-keys:
+      # mutual-tls: true
+      # client-pkcs12-location: /etc/rdc/card-fetch/client.p12
+      # client-pkcs12-secret: ${CARD_FETCH_CLIENT_PKCS12_SECRET}
+      # trust-pkcs12-location: /etc/rdc/card-fetch/trust.p12
+      # trust-pkcs12-secret: ${CARD_FETCH_TRUST_PKCS12_SECRET}
+      # verify-signatures: true
+      # signer-pems-by-kid:
       #   platform-key-1: |
       #     -----BEGIN PUBLIC KEY-----
       #     ...

@@ -6,7 +6,7 @@ import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.FrameworkType;
 import okhttp3.mockwebserver.MockResponse;
@@ -70,9 +70,9 @@ class ReconciliationCardFetchFailureTest {
                 .addHeader("Content-Type", "application/json"));
 
         KeyPair keyPair = testKeyPair();
-        AgentCardFetchSecurityProperties props = new AgentCardFetchSecurityProperties();
-        props.setSignatureVerificationEnabled(true);
-        props.setTrustedSignerKeys(Map.of("test-key", publicKeyPem(keyPair)));
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.setVerifySignatures(true);
+        props.setSignerPemsByKid(Map.of("test-key", publicKeyPem(keyPair)));
 
         RecordingRepository repository = new RecordingRepository();
         ReconciliationService service = new ReconciliationService(

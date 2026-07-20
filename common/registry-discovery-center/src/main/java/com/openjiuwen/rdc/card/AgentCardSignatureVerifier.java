@@ -3,7 +3,7 @@ package com.openjiuwen.rdc.card;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
@@ -34,13 +34,13 @@ public final class AgentCardSignatureVerifier {
         return new AgentCardSignatureVerifier(false, Map.of());
     }
 
-    public static AgentCardSignatureVerifier from(AgentCardFetchSecurityProperties properties) {
-        Objects.requireNonNull(properties, "properties");
-        if (!properties.isSignatureVerificationEnabled()) {
+    public static AgentCardSignatureVerifier from(RdcCardFetchOptions options) {
+        Objects.requireNonNull(options, "options");
+        if (!options.isVerifySignatures()) {
             return disabled();
         }
         Map<String, PublicKey> keys = new HashMap<>();
-        for (Map.Entry<String, String> entry : properties.getTrustedSignerKeys().entrySet()) {
+        for (Map.Entry<String, String> entry : options.getSignerPemsByKid().entrySet()) {
             keys.put(entry.getKey(), parsePublicKeyPem(entry.getValue()));
         }
         return new AgentCardSignatureVerifier(true, keys);

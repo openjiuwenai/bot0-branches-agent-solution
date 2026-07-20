@@ -21,9 +21,9 @@ public final class InternalNetworkPolicy {
         return new InternalNetworkPolicy(List.of());
     }
 
-    public static InternalNetworkPolicy from(AgentCardFetchSecurityProperties properties) {
+    public static InternalNetworkPolicy from(RdcCardFetchOptions options) {
         List<CidrBlock> blocks = new ArrayList<>();
-        for (String cidr : properties.getAllowedCidrs()) {
+        for (String cidr : options.getTargetCidrs()) {
             if (cidr != null && !cidr.isBlank()) {
                 blocks.add(CidrBlock.parse(cidr.trim()));
             }
