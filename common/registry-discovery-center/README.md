@@ -163,7 +163,9 @@ rdc:
     security:
       caller-allowlist: {}     # 非空则按 tenant → callerRef 白名单校验 discover/resolve
     card-fetch:
-      allowed-cidrs: []        # 非空则限制 Card 抓取目标 IP（与 caller 鉴权无关）
+      mutual-tls: false
+      verify-signatures: false
+      target-cidrs: []         # 非空则限制 Card 抓取目标 IP（与 caller 鉴权无关）
 ```
 
 手工/自动化验收见仓库根目录 `Feat-015-agent-card-registration-and-discovery0713-test-plan.md`。
