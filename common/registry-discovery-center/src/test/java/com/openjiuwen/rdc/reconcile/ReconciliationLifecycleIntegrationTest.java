@@ -43,7 +43,6 @@ import javax.sql.DataSource;
  * Reconciliation lifecycle semantics: PENDING, DEGRADED refresh, digest skip, revision, lease.
  */
 class ReconciliationLifecycleIntegrationTest {
-
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;
     private static JdbcAgentRegistryRepository repository;
@@ -77,13 +76,13 @@ class ReconciliationLifecycleIntegrationTest {
 
     @BeforeEach
     void clean() throws Exception {
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("DELETE FROM agent_card_source_ref");
-        jdbc.execute("DELETE FROM agent_card_registration");
-        jdbc.execute("DELETE FROM agent_registry_mvp");
-        jdbc.execute("DELETE FROM registry_source_state");
-        restartRuntimeServer();
-    }
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            jdbc.execute("DELETE FROM agent_card_source_ref");
+            jdbc.execute("DELETE FROM agent_card_registration");
+            jdbc.execute("DELETE FROM agent_registry_mvp");
+            jdbc.execute("DELETE FROM registry_source_state");
+            restartRuntimeServer();
+        }
 
     private static void restartRuntimeServer() throws Exception {
         if (runtimeServer != null) {
@@ -220,9 +219,8 @@ class ReconciliationLifecycleIntegrationTest {
         return new com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {
-                return StaticDeploymentDiscoveryProvider.SOURCE_ID;
-            }
-
+        return StaticDeploymentDiscoveryProvider.SOURCE_ID;
+    }
             @Override
             public com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult listInstances() {
                 var obs = new com.openjiuwen.rdc.model.deployment.DeploymentInstanceObservation(
@@ -237,7 +235,6 @@ class ReconciliationLifecycleIntegrationTest {
     private static String baseUrl() {
         return runtimeServer.url("/").toString().replaceAll("/$", "");
     }
-
     private static MockResponse validCardResponse() {
         return new MockResponse()
                 .setBody("""

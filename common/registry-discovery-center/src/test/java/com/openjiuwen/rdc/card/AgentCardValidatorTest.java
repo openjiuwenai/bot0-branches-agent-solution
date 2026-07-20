@@ -9,7 +9,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 class AgentCardValidatorTest {
-
     @Test
     void valid_jsonrpc_card_passes() {
         String json = """

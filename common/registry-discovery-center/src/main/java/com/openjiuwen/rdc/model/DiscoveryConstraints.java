@@ -10,9 +10,8 @@ import java.util.Set;
  * Hard constraints for {@link DiscoveryQuery} (Feat-015 0711 scope §5.1.6).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class DiscoveryConstraints {
-
     @Nullable
     private final String contractVersion;
     @Nullable
@@ -39,106 +38,106 @@ public final class DiscoveryConstraints {
     private static Set<String> copyOrEmpty(Set<String> values) {
         return values == null ? Set.of() : Set.copyOf(values);
     }
-
     /**
      * none.
+     *
      * @return result
      * @since 0.1.0
      */
     public static DiscoveryConstraints none() {
         return builder().build();
     }
-
     /**
      * builder.
+     *
      * @return result
      * @since 0.1.0
      */
     public static Builder builder() {
         return new Builder();
     }
-
-    @Nullable
     /**
      * contractVersion.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String contractVersion() {
         return contractVersion;
     }
-
-    @Nullable
     /**
      * capabilityVersion.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String capabilityVersion() {
         return capabilityVersion;
     }
-
     /**
      * requiredSkillTags.
+     *
      * @return result
      * @since 0.1.0
      */
     public Set<String> requiredSkillTags() {
         return requiredSkillTags;
     }
-
     /**
      * requiredCapabilities.
+     *
      * @return result
      * @since 0.1.0
      */
     public Set<String> requiredCapabilities() {
         return requiredCapabilities;
     }
-
     /**
      * requiredInputModes.
+     *
      * @return result
      * @since 0.1.0
      */
     public Set<String> requiredInputModes() {
         return requiredInputModes;
     }
-
     /**
      * requiredOutputModes.
+     *
      * @return result
      * @since 0.1.0
      */
     public Set<String> requiredOutputModes() {
         return requiredOutputModes;
     }
-
     /**
      * requiredSecuritySchemes.
+     *
      * @return result
      * @since 0.1.0
      */
     public Set<String> requiredSecuritySchemes() {
         return requiredSecuritySchemes;
     }
-
     /**
      * healthRequirement.
+     *
      * @return result
      * @since 0.1.0
      */
     public HealthRequirement healthRequirement() {
         return healthRequirement == null ? HealthRequirement.HEALTHY_OR_DEGRADED : healthRequirement;
     }
-
-    @Override
     /**
      * equals.
+     *
      * @param obj obj
      * @return result
      * @since 0.1.0
      */
+    @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
@@ -156,12 +155,13 @@ public final class DiscoveryConstraints {
                 && healthRequirement() == other.healthRequirement();
     }
 
-    @Override
     /**
      * hashCode.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Override
     public int hashCode() {
         return java.util.Objects.hash(
                 contractVersion,
@@ -186,6 +186,7 @@ public final class DiscoveryConstraints {
 
         /**
          * contractVersion.
+         *
          * @param contractVersion contractVersion
          * @return result
          * @since 0.1.0
@@ -197,6 +198,7 @@ public final class DiscoveryConstraints {
 
         /**
          * capabilityVersion.
+         *
          * @param capabilityVersion capabilityVersion
          * @return result
          * @since 0.1.0
@@ -208,6 +210,7 @@ public final class DiscoveryConstraints {
 
         /**
          * requiredSkillTags.
+         *
          * @param requiredSkillTags requiredSkillTags
          * @return result
          * @since 0.1.0
@@ -219,6 +222,7 @@ public final class DiscoveryConstraints {
 
         /**
          * requiredCapabilities.
+         *
          * @param requiredCapabilities requiredCapabilities
          * @return result
          * @since 0.1.0
@@ -230,6 +234,7 @@ public final class DiscoveryConstraints {
 
         /**
          * requiredInputModes.
+         *
          * @param requiredInputModes requiredInputModes
          * @return result
          * @since 0.1.0
@@ -241,6 +246,7 @@ public final class DiscoveryConstraints {
 
         /**
          * requiredOutputModes.
+         *
          * @param requiredOutputModes requiredOutputModes
          * @return result
          * @since 0.1.0
@@ -252,6 +258,7 @@ public final class DiscoveryConstraints {
 
         /**
          * requiredSecuritySchemes.
+         *
          * @param requiredSecuritySchemes requiredSecuritySchemes
          * @return result
          * @since 0.1.0
@@ -263,6 +270,7 @@ public final class DiscoveryConstraints {
 
         /**
          * healthRequirement.
+         *
          * @param healthRequirement healthRequirement
          * @return result
          * @since 0.1.0
@@ -274,6 +282,7 @@ public final class DiscoveryConstraints {
 
         /**
          * build.
+         *
          * @return result
          * @since 0.1.0
          */

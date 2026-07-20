@@ -19,8 +19,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 /**
  * Feedback-loop tests for PR #389 review issue #1: security-boundary failure
  * paths (tenant_isolation_violation + malformed_handle) MUST be audited and
@@ -49,7 +47,6 @@ import java.util.List;
  * List via listByAgentId; findEndpoint takes serviceId).
  */
 class Pr389SecurityBoundaryAuditFeedbackLoopTest {
-
     private SimpleMeterRegistry meterRegistry;
     private RegistryObservabilityConfig observability;
     private TestTenantContext tenantContext;
@@ -71,7 +68,6 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     void tearDown() {
         tenantContext.clear();
     }
-
     // ---- #1-A: tenant_isolation_violation must increment op_total ----------------
 
     @Test
@@ -95,7 +91,14 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
         // Encoded handle for tenant-A; caller passes tenant-B → codec-level
         // tenant mismatch raises TenantIsolationViolationException.
         String handle = RouteHandleCodec.encode(new RouteHandleCodec
-                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+                .HandleFields(
+                        "tenant-A",
+                        "agent-001",
+                        "test-host-8080",
+                        "test-host-8080",
+                        "rk://svc/default",
+                        "1.0.0"
+                ));
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
@@ -134,9 +137,16 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
 
     private static final class TestTenantContext implements TenantContext {
         private String current;
+
         @Override
-        public String current() { return current; }
-        void set(String tenantId) { this.current = tenantId; }
-        void clear() { this.current = null; }
+        public String current() {
+            return current;
+        }
+        void set(String tenantId) {
+            this.current = tenantId;
+        }
+        void clear() {
+            this.current = null;
+        }
     }
 }

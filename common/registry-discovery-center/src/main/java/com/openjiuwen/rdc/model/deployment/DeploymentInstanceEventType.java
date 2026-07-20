@@ -4,10 +4,11 @@
 
 package com.openjiuwen.rdc.model.deployment;
 
-/** Incremental deployment instance event types (Feat-015 0711 scope).
+/**
+ * Incremental deployment instance event types (Feat-015 0711 scope).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public enum DeploymentInstanceEventType {
     ADDED,
     MODIFIED,

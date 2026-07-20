@@ -26,19 +26,20 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Applies Feat-015 0713 structured logical Agent Card discovery filtering and
  * outcome semantics against {@code agent_card_registration}.
  */
-final class StructuredDiscoveryEngine {
 
+final class StructuredDiscoveryEngine {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int OUTCOME_EVAL_LIMIT = 500;
 
     private StructuredDiscoveryEngine() {
+         
     }
-
     static DiscoveryResult discover(AgentRegistryRepository repository, DiscoveryQuery query) {
         query.validate();
         String tenantId = query.context().tenantId();
@@ -96,10 +97,9 @@ final class StructuredDiscoveryEngine {
     private static boolean isRegistered(LogicalRegistrationRow row) {
         return RegistrationStatus.REGISTERED.name().equals(row.registrationStatus());
     }
-
     private static QuerySelector resolveSelector(String tenantId, DiscoveryQuery query) {
-        String agentId = blankToNull(query.agentId());
-        String serviceId = blankToNull(query.serviceId());
+        String agentId = blankToNull(query.agentId()).orElse(null);
+        String serviceId = blankToNull(query.serviceId()).orElse(null);
         String logicalServiceId = null;
         if (serviceId != null) {
             if (agentId != null) {
@@ -112,13 +112,12 @@ final class StructuredDiscoveryEngine {
         return new QuerySelector(agentId, logicalServiceId);
     }
 
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+    private static Optional<String> blankToNull(String value) {
+        return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
     }
-
     private record QuerySelector(String agentId, String logicalServiceId) {
+         
     }
-
     private static List<LogicalRegistrationRow> applyVersion(
             List<LogicalRegistrationRow> rows, DiscoveryConstraints constraints) {
         String contractVersion = constraints.contractVersion();
@@ -138,96 +137,112 @@ final class StructuredDiscoveryEngine {
     private static List<LogicalRegistrationRow> applyExecutionConstraints(
             List<LogicalRegistrationRow> rows, DiscoveryQuery query) {
         DiscoveryConstraints constraints = query.constraints();
-        var tags = constraints.requiredSkillTags();
-        var caps = constraints.requiredCapabilities();
-        var inputModes = constraints.requiredInputModes();
-        var outputModes = constraints.requiredOutputModes();
-        var security = constraints.requiredSecuritySchemes();
-        if (tags.isEmpty() && caps.isEmpty() && inputModes.isEmpty()
-                && outputModes.isEmpty() && security.isEmpty()) {
+        if (hasNoExecutionConstraints(constraints)) {
             return rows;
         }
         List<LogicalRegistrationRow> matched = new ArrayList<>();
         for (LogicalRegistrationRow row : rows) {
-            if (row.a2aAgentCardJson() == null || row.a2aAgentCardJson().isBlank()) {
-                continue;
-            }
-            try {
-                JsonNode root = MAPPER.readTree(row.a2aAgentCardJson());
-                JsonNode skill = findSkill(root, query.a2aSkillId());
-                if (!tags.isEmpty() && !AgentCardValidator.skillTagsContain(root, tags)) {
-                    continue;
-                }
-                if (!caps.isEmpty()) {
-                    boolean ok = true;
-                    for (String cap : caps) {
-                        if (!AgentCardValidator.hasCapability(root, cap)) {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if (!ok) {
-                        continue;
-                    }
-                }
-                if (!inputModes.isEmpty()) {
-                    boolean ok = true;
-                    for (String mode : inputModes) {
-                        if (!AgentCardValidator.supportsInputMode(root, skill, mode)) {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if (!ok) {
-                        continue;
-                    }
-                }
-                if (!outputModes.isEmpty()) {
-                    boolean ok = true;
-                    for (String mode : outputModes) {
-                        if (!AgentCardValidator.supportsOutputMode(root, skill, mode)) {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if (!ok) {
-                        continue;
-                    }
-                }
-                if (!security.isEmpty()) {
-                    boolean ok = true;
-                    for (String scheme : security) {
-                        if (!AgentCardValidator.supportsSecurityScheme(root, scheme)) {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if (!ok) {
-                        continue;
-                    }
-                }
+            if (rowMatchesExecutionConstraints(row, query, constraints)) {
                 matched.add(row);
-            } catch (JsonProcessingException ignored) {
-                // skip malformed card snapshots
             }
         }
         return matched;
     }
 
-    private static JsonNode findSkill(JsonNode root, String skillId) {
+    private static boolean hasNoExecutionConstraints(DiscoveryConstraints constraints) {
+        return constraints.requiredSkillTags().isEmpty()
+                && constraints.requiredCapabilities().isEmpty()
+                && constraints.requiredInputModes().isEmpty()
+                && constraints.requiredOutputModes().isEmpty()
+                && constraints.requiredSecuritySchemes().isEmpty();
+    }
+
+    private static boolean rowMatchesExecutionConstraints(
+            LogicalRegistrationRow row, DiscoveryQuery query, DiscoveryConstraints constraints) {
+        if (row.a2aAgentCardJson() == null || row.a2aAgentCardJson().isBlank()) {
+            return false;
+        }
+        try {
+            JsonNode root = MAPPER.readTree(row.a2aAgentCardJson());
+            JsonNode skill = findSkill(root, query.a2aSkillId()).orElse(null);
+            return matchesSkillTags(root, constraints.requiredSkillTags())
+                    && matchesCapabilities(root, constraints.requiredCapabilities())
+                    && matchesInputModes(root, skill, constraints.requiredInputModes())
+                    && matchesOutputModes(root, skill, constraints.requiredOutputModes())
+                    && matchesSecuritySchemes(root, constraints.requiredSecuritySchemes());
+        } catch (JsonProcessingException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean matchesSkillTags(JsonNode root, java.util.Collection<String> tags) {
+        return tags.isEmpty() || AgentCardValidator.skillTagsContain(root, tags);
+    }
+
+    private static boolean matchesCapabilities(JsonNode root, java.util.Collection<String> caps) {
+        if (caps.isEmpty()) {
+            return true;
+        }
+        for (String cap : caps) {
+            if (!AgentCardValidator.hasCapability(root, cap)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesInputModes(
+            JsonNode root, JsonNode skill, java.util.Collection<String> inputModes) {
+        if (inputModes.isEmpty()) {
+            return true;
+        }
+        for (String mode : inputModes) {
+            if (!AgentCardValidator.supportsInputMode(root, skill, mode)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesOutputModes(
+            JsonNode root, JsonNode skill, java.util.Collection<String> outputModes) {
+        if (outputModes.isEmpty()) {
+            return true;
+        }
+        for (String mode : outputModes) {
+            if (!AgentCardValidator.supportsOutputMode(root, skill, mode)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesSecuritySchemes(JsonNode root, java.util.Collection<String> security) {
+        if (security.isEmpty()) {
+            return true;
+        }
+        for (String scheme : security) {
+            if (!AgentCardValidator.supportsSecurityScheme(root, scheme)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Optional<JsonNode> findSkill(JsonNode root, String skillId) {
         if (skillId == null || skillId.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         JsonNode skills = root.get("skills");
         if (skills == null || !skills.isArray()) {
-            return null;
+            return Optional.empty();
         }
         for (JsonNode skill : skills) {
             if (skillId.equals(skill.path("id").asText(null))) {
-                return skill;
+                return Optional.of(skill);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static List<DiscoveryCandidate> deduplicateLogicalCards(

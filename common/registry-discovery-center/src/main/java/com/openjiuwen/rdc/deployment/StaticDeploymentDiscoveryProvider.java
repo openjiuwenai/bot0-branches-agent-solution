@@ -24,9 +24,13 @@ import java.util.Objects;
  * Static config-backed {@link DeploymentDiscoveryProvider} with snapshot diff watch.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscoveryProvider {
-
+    /**
+     * SOURCE_ID.
+     *
+     * @since 0.1.0
+     */
     public static final String SOURCE_ID = "static-config";
 
     private final List<StaticInstanceConfig> instances;
@@ -37,23 +41,23 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
     public StaticDeploymentDiscoveryProvider(List<StaticInstanceConfig> instances) {
         this.instances = List.copyOf(Objects.requireNonNull(instances, "instances"));
     }
-
-    @Override
     /**
      * sourceId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Override
     public String sourceId() {
         return SOURCE_ID;
     }
-
-    @Override
     /**
      * listInstances.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Override
     public ListDeploymentInstancesResult listInstances() {
         long rev = revision.incrementAndGet();
         Instant now = Instant.now();
@@ -65,16 +69,16 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
         return new ListDeploymentInstancesResult(SOURCE_ID, rev, observations);
     }
 
-    @Override
     /**
      * watchInstances.
+     *
      * @param consumer consumer
      * @since 0.1.0
      */
+    @Override
     public void watchInstances(DeploymentInstanceEventConsumer consumer) {
         this.eventConsumer = Objects.requireNonNull(consumer, "consumer");
     }
-
     private void emitDiff(List<DeploymentInstanceObservation> current, long rev) {
         DeploymentInstanceEventConsumer consumer = this.eventConsumer;
         if (consumer == null) {
@@ -123,6 +127,7 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
 
     /**
      * StaticInstanceConfig.
+     *
      * @param tenantId tenantId
      * @param serviceId serviceId
      * @param instanceId instanceId
@@ -140,5 +145,5 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
             String deploymentVersion,
             Readiness readiness
     ) {
+        }
     }
-}

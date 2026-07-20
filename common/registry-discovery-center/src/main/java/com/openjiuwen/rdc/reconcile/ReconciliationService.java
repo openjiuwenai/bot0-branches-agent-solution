@@ -40,9 +40,8 @@ import java.util.Set;
  * index (Feat-015 0711 §5.1.3–5.1.5).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class ReconciliationService {
-
     private static final Logger LOG = LoggerFactory.getLogger(ReconciliationService.class);
 
     private final AgentRegistryRepository repository;
@@ -57,7 +56,6 @@ public final class ReconciliationService {
                                  List<StaticInstanceRuntimeBinding> bindings) {
         this(repository, cardFetcher, properties, bindings, null);
     }
-
     public ReconciliationService(AgentRegistryRepository repository,
                                  AgentCardFetcher cardFetcher,
                                  DeploymentDiscoveryProperties properties,
@@ -72,6 +70,7 @@ public final class ReconciliationService {
 
     /**
      * reconcile.
+     *
      * @param provider provider
      * @return result
      * @since 0.1.0
@@ -122,20 +121,21 @@ public final class ReconciliationService {
             return ReconciliationResult.failure(
                     sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
         } catch (SourceRevisionGapException ex) {
-            LOG.warn("source revision gap for {}: {}", sourceId, ex.getMessage());
-            markSourceStale(sourceId);
-            return ReconciliationResult.failure(
-                    sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
-        } catch (RuntimeException ex) {
-            LOG.warn("reconciliation source {} unavailable: {}", sourceId, ex.getMessage());
-            markSourceStale(sourceId);
-            return ReconciliationResult.failure(
-                    sourceId, "DEPLOYMENT_SOURCE_UNAVAILABLE", ex.getMessage(), null);
-        }
+                LOG.warn("source revision gap for {}: {}", sourceId, ex.getMessage());
+                markSourceStale(sourceId);
+                return ReconciliationResult.failure(
+                sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
+                } catch (RuntimeException ex) {
+                LOG.warn("reconciliation source {} unavailable: {}", sourceId, ex.getMessage());
+                markSourceStale(sourceId);
+                return ReconciliationResult.failure(
+                sourceId, "DEPLOYMENT_SOURCE_UNAVAILABLE", ex.getMessage(), null);
+            }
     }
 
     /**
      * reconcileEvent.
+     *
      * @param event event
      * @since 0.1.0
      */
@@ -159,7 +159,6 @@ public final class ReconciliationService {
     private int reconcileMissingFromSnapshot(ListDeploymentInstancesResult snapshot) {
         return reconcileMissing(snapshot.sourceId(), seenInstanceIds(snapshot));
     }
-
     private static Set<String> seenInstanceIds(ListDeploymentInstancesResult snapshot) {
         Set<String> seen = new HashSet<>();
         for (DeploymentInstanceObservation obs : snapshot.observations()) {
@@ -169,16 +168,18 @@ public final class ReconciliationService {
     }
 
     private ReconciliationCounters applySnapshot(ListDeploymentInstancesResult snapshot) {
-        String sourceId = snapshot.sourceId();
-        Set<String> seen = seenInstanceIds(snapshot);
-        ReconciliationCounters counters = new ReconciliationCounters();
-        for (DeploymentInstanceObservation obs : snapshot.observations()) {
+            String sourceId = snapshot.sourceId();
+            Set<String> seen = seenInstanceIds(snapshot);
+            ReconciliationCounters counters = new ReconciliationCounters();
+            for (DeploymentInstanceObservation obs : snapshot.observations()) {
             ReconcileAction action = reconcileObservation(obs);
             switch (action) {
-                case CREATED -> counters.created++;
-                case UPDATED -> counters.updated++;
-                case DRAINING -> counters.draining++;
-                default -> { }
+            case CREATED -> counters.created++;
+            case UPDATED -> counters.updated++;
+            case DRAINING -> counters.draining++;
+            case FAILED, UNCHANGED -> {
+            // Not counted in snapshot apply counters.
+            }
             }
         }
         counters.draining += reconcileMissing(sourceId, seen);
@@ -191,9 +192,7 @@ public final class ReconciliationService {
         String instancePk = obs.instanceId();
 
         if (obs.readiness() == Readiness.TERMINATING) {
-            repository.markDraining(obs.tenantId(), agentId, instancePk);
-            emitDraining(obs.sourceId(), obs.tenantId(), agentId);
-            return ReconcileAction.DRAINING;
+            return handleTerminatingObservation(obs, agentId, instancePk);
         }
 
         AgentCardFetcher.FetchResult fetched = cardFetcher.fetchValidated(
@@ -201,51 +200,93 @@ public final class ReconciliationService {
                 binding.cardPath(),
                 binding.headers());
         if (!fetched.success()) {
-            LOG.warn("card fetch failed tenant={} instance={}: {}",
-                    obs.tenantId(), obs.instanceId(), fetched.message());
-            if (observability != null) {
-                observability.observeCardRefreshFailed(
-                        obs.sourceId(), obs.tenantId(), obs.instanceId(), fetched.failureCode());
-            }
-            Optional<String> existing = repository.findCardDigest(obs.tenantId(), agentId, instancePk);
-            if (existing.isEmpty()) {
-                repository.reconcilePending(new ReconcilePendingCommand(
-                        obs.tenantId(), agentId, instancePk, obs.instanceId(),
-                        obs.serviceId(), obs.sourceId(), obs.sourceRevision(),
-                        obs.internalBaseUrl(), binding.frameworkType(), binding.region()));
-                return ReconcileAction.FAILED;
-            }
-            repository.markRefreshDegraded(obs.tenantId(), agentId, instancePk);
-            if (observability != null) {
-                observability.observeUnhealthy(obs.tenantId(), agentId, "DEGRADED");
-            }
-            return ReconcileAction.FAILED;
+            return handleCardFetchFailure(obs, binding, agentId, instancePk, fetched);
         }
 
         String cardJson = fetched.cardJson();
         String digest = CardDigest.sha256(cardJson);
         Optional<String> priorDigest = repository.findCardDigest(obs.tenantId(), agentId, instancePk);
-        if (priorDigest.isPresent() && priorDigest.get().equals(digest)) {
-            // Successful re-validation clears prior card-refresh degradation (Feat-015 §5.1.3).
-            repository.updateStatus(new AgentRegistryRepository.StatusUpdate(
-                    obs.tenantId(), agentId, instancePk, obs.instanceId(), "ONLINE", true));
-            repository.clearLogicalRegistrationStaleCard(obs.tenantId(), obs.serviceId(), digest);
-            // Same-digest path used to skip logical sync entirely; restore missing
-            // source_ref so multi-instance catalogs cannot stay half-linked.
-            boolean linked = repository.relinkLogicalSourceRef(
-                    obs.tenantId(),
-                    obs.serviceId(),
-                    obs.instanceId(),
-                    digest,
-                    obs.sourceId(),
-                    obs.sourceRevision(),
-                    obs.internalBaseUrl());
-            if (linked) {
-                return ReconcileAction.UNCHANGED;
-            }
-            // No logical registration for this digest — fall through to full upsert.
+        Optional<ReconcileAction> unchanged = reconcileSameDigestObservation(
+                obs, agentId, instancePk, digest, priorDigest);
+        if (unchanged.isPresent()) {
+            return unchanged.get();
         }
 
+        return upsertReconciledObservation(obs, binding, agentId, instancePk, fetched, cardJson, digest, priorDigest);
+    }
+
+    private ReconcileAction handleTerminatingObservation(
+            DeploymentInstanceObservation obs, String agentId, String instancePk) {
+        repository.markDraining(obs.tenantId(), agentId, instancePk);
+        emitDraining(obs.sourceId(), obs.tenantId(), agentId);
+        return ReconcileAction.DRAINING;
+    }
+
+    private ReconcileAction handleCardFetchFailure(
+            DeploymentInstanceObservation obs,
+            StaticInstanceRuntimeBinding binding,
+            String agentId,
+            String instancePk,
+            AgentCardFetcher.FetchResult fetched) {
+        LOG.warn("card fetch failed tenant={} instance={}: {}",
+                obs.tenantId(), obs.instanceId(), fetched.message());
+        if (observability != null) {
+            observability.observeCardRefreshFailed(
+                    obs.sourceId(), obs.tenantId(), obs.instanceId(), fetched.failureCode());
+        }
+        Optional<String> existing = repository.findCardDigest(obs.tenantId(), agentId, instancePk);
+        if (existing.isEmpty()) {
+            repository.reconcilePending(new ReconcilePendingCommand(
+                    obs.tenantId(), agentId, instancePk, obs.instanceId(),
+                    obs.serviceId(), obs.sourceId(), obs.sourceRevision(),
+                    obs.internalBaseUrl(), binding.frameworkType(), binding.region()));
+            return ReconcileAction.FAILED;
+        }
+        repository.markRefreshDegraded(obs.tenantId(), agentId, instancePk);
+        if (observability != null) {
+            observability.observeUnhealthy(obs.tenantId(), agentId, "DEGRADED");
+        }
+        return ReconcileAction.FAILED;
+    }
+
+    private Optional<ReconcileAction> reconcileSameDigestObservation(
+            DeploymentInstanceObservation obs,
+            String agentId,
+            String instancePk,
+            String digest,
+            Optional<String> priorDigest) {
+        if (priorDigest.isEmpty() || !priorDigest.get().equals(digest)) {
+            return Optional.empty();
+        }
+        // Successful re-validation clears prior card-refresh degradation (Feat-015 §5.1.3).
+        repository.updateStatus(new AgentRegistryRepository.StatusUpdate(
+                obs.tenantId(), agentId, instancePk, obs.instanceId(), "ONLINE", true));
+        repository.clearLogicalRegistrationStaleCard(obs.tenantId(), obs.serviceId(), digest);
+        // Same-digest path used to skip logical sync entirely; restore missing
+        // source_ref so multi-instance catalogs cannot stay half-linked.
+        boolean linked = repository.relinkLogicalSourceRef(new AgentRegistryRepository.RelinkLogicalSourceRefCommand(
+                obs.tenantId(),
+                obs.serviceId(),
+                obs.instanceId(),
+                digest,
+                obs.sourceId(),
+                obs.sourceRevision(),
+                obs.internalBaseUrl()));
+        if (linked) {
+            return Optional.of(ReconcileAction.UNCHANGED);
+        }
+        return Optional.empty();
+    }
+
+    private ReconcileAction upsertReconciledObservation(
+            DeploymentInstanceObservation obs,
+            StaticInstanceRuntimeBinding binding,
+            String agentId,
+            String instancePk,
+            AgentCardFetcher.FetchResult fetched,
+            String cardJson,
+            String digest,
+            Optional<String> priorDigest) {
         RouteTargetDeriver.DerivedRoute route = RouteTargetDeriver.derive(
                 obs.internalBaseUrl(), cardJson, binding.routeKey());
         String agentName = RouteTargetDeriver.agentNameFromCard(cardJson);
@@ -306,11 +347,11 @@ public final class ReconciliationService {
     }
 
     private void expireLeaseEntries() {
-        Instant now = Instant.now();
-        for (InstanceKey key : repository.listExpiredLeases(now)) {
+            Instant now = Instant.now();
+            for (InstanceKey key : repository.listExpiredLeases(now)) {
             repository.markRemoved(key.tenantId(), key.agentId(), key.serviceId());
             if (observability != null) {
-                observability.observeLeaseExpired(key.tenantId(), key.agentId());
+            observability.observeLeaseExpired(key.tenantId(), key.agentId());
             }
         }
     }
@@ -323,7 +364,7 @@ public final class ReconciliationService {
     }
 
     private void emitDraining(String sourceId, String tenantId, String agentId) {
-        if (observability != null) {
+            if (observability != null) {
             observability.observeInstanceDraining(sourceId, tenantId, agentId);
         }
     }
@@ -375,9 +416,9 @@ public final class ReconciliationService {
     private static String blankToDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
-
     /**
      * StaticInstanceRuntimeBinding.
+     *
      * @param tenantId tenantId
      * @param serviceId serviceId
      * @param instanceId instanceId
@@ -407,10 +448,11 @@ public final class ReconciliationService {
             int weight,
             String region
     ) {
+         
     }
-
     /**
      * ReconciliationResult.
+     *
      * @param success success
      * @param sourceId sourceId
      * @param sourceRevision sourceRevision
@@ -455,11 +497,9 @@ public final class ReconciliationService {
         int created() {
             return created;
         }
-
         int updated() {
             return updated;
         }
-
         int draining() {
             return draining;
         }

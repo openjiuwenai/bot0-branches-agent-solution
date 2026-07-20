@@ -14,14 +14,14 @@ import java.util.function.Supplier;
  * Maps persistence failures to structured {@link RegistryUnavailableException}.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class RegistryPersistenceGuard {
-
     private RegistryPersistenceGuard() {
+         
     }
-
     /**
      * execute.
+     *
      * @param traceId traceId
      * @param action action
      * @return result
@@ -37,6 +37,7 @@ public final class RegistryPersistenceGuard {
 
     /**
      * run.
+     *
      * @param traceId traceId
      * @param action action
      * @since 0.1.0

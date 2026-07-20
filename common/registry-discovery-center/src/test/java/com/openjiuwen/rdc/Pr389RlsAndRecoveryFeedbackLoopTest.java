@@ -23,6 +23,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Optional;
 
 import javax.sql.DataSource;
 
@@ -70,7 +71,6 @@ import javax.sql.DataSource;
  * HD3-004 lease/TTL.
  */
 class Pr389RlsAndRecoveryFeedbackLoopTest {
-
     private static DataSource superuser;
     private static DataSource appRoleSource;
     private static JdbcAgentRegistryRepository appRoleRepo;
@@ -376,15 +376,15 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         // serviceId (the adapter rejects null with IllegalArgumentException).
         ServiceIdCodec.applyTo(card);
         InstanceIdCodec.applyTo(card);
-        repo.upsert(card, serializeA2a(card.getA2aAgentCard()));
+        repo.upsert(card, serializeA2a(card.getA2aAgentCard()).orElse(null));
     }
 
-    private static String serializeA2a(org.a2aproject.sdk.spec.AgentCard card) {
+    private static Optional<String> serializeA2a(org.a2aproject.sdk.spec.AgentCard card) {
         if (card == null) {
-            return null;
+            return Optional.empty();
         }
         try {
-            return TEST_MAPPER.writeValueAsString(card);
+            return Optional.of(TEST_MAPPER.writeValueAsString(card));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalArgumentException(ex);
         }

@@ -36,11 +36,10 @@ import java.util.Objects;
  * {@code rdc.deployment-discovery.binding-defaults}.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 @Component
 @ConditionalOnProperty(prefix = "rdc.deployment-discovery", name = "enabled", havingValue = "true")
 public class ReconciliationScheduler implements ApplicationListener<ApplicationReadyEvent> {
-
     private static final Logger LOG = LoggerFactory.getLogger(ReconciliationScheduler.class);
 
     private final ReconciliationService reconciliationService;
@@ -52,18 +51,17 @@ public class ReconciliationScheduler implements ApplicationListener<ApplicationR
                                    RegistryObservabilityConfig observability,
                                    ObjectProvider<DeploymentDiscoveryProvider> injectedProviders) {
         Objects.requireNonNull(properties, "properties");
+        List<ReconciliationService.StaticInstanceRuntimeBinding> bindings =
+                buildStaticBindings(properties);
+        this.reconciliationService = new ReconciliationService(
+                repository, cardFetcher, properties, bindings, observability);
+        this.providers = registerProviders(injectedProviders, properties, reconciliationService);
+    }
+
+    private static List<ReconciliationService.StaticInstanceRuntimeBinding> buildStaticBindings(
+            DeploymentDiscoveryProperties properties) {
         List<ReconciliationService.StaticInstanceRuntimeBinding> bindings = new ArrayList<>();
-        List<StaticDeploymentDiscoveryProvider.StaticInstanceConfig> providerInstances = new ArrayList<>();
         for (DeploymentDiscoveryProperties.StaticInstanceEntry entry : properties.getInstances()) {
-            Readiness readiness = "TERMINATING".equalsIgnoreCase(entry.getReadiness())
-                    ? Readiness.TERMINATING : Readiness.READY;
-            providerInstances.add(new StaticDeploymentDiscoveryProvider.StaticInstanceConfig(
-                    entry.getTenantId(),
-                    entry.getServiceId(),
-                    entry.getInstanceId(),
-                    entry.getBaseUrl(),
-                    entry.getDeploymentVersion(),
-                    readiness));
             FrameworkType frameworkType = entry.getFrameworkType() != null
                     ? entry.getFrameworkType()
                     : properties.getBindingDefaults().getFrameworkType();
@@ -84,9 +82,13 @@ public class ReconciliationScheduler implements ApplicationListener<ApplicationR
                     entry.getWeight() != null ? entry.getWeight() : 100,
                     entry.getRegion()));
         }
-        this.reconciliationService = new ReconciliationService(
-                repository, cardFetcher, properties, bindings, observability);
+        return bindings;
+    }
 
+    private static List<DeploymentDiscoveryProvider> registerProviders(
+            ObjectProvider<DeploymentDiscoveryProvider> injectedProviders,
+            DeploymentDiscoveryProperties properties,
+            ReconciliationService reconciliationService) {
         List<DeploymentDiscoveryProvider> all = new ArrayList<>();
         for (DeploymentDiscoveryProvider provider : injectedProviders) {
             if (provider instanceof StaticDeploymentDiscoveryProvider) {
@@ -97,6 +99,8 @@ public class ReconciliationScheduler implements ApplicationListener<ApplicationR
             all.add(provider);
             LOG.info("registered deployment discovery provider sourceId={}", provider.sourceId());
         }
+        List<StaticDeploymentDiscoveryProvider.StaticInstanceConfig> providerInstances =
+                buildProviderInstances(properties);
         if (!providerInstances.isEmpty()) {
             StaticDeploymentDiscoveryProvider staticProvider =
                     new StaticDeploymentDiscoveryProvider(providerInstances);
@@ -110,33 +114,49 @@ public class ReconciliationScheduler implements ApplicationListener<ApplicationR
                     + "(add Spring beans of type DeploymentDiscoveryProvider and/or "
                     + "rdc.deployment-discovery.instances)");
         }
-        this.providers = List.copyOf(all);
+        return List.copyOf(all);
+    }
+
+    private static List<StaticDeploymentDiscoveryProvider.StaticInstanceConfig> buildProviderInstances(
+            DeploymentDiscoveryProperties properties) {
+        List<StaticDeploymentDiscoveryProvider.StaticInstanceConfig> providerInstances = new ArrayList<>();
+        for (DeploymentDiscoveryProperties.StaticInstanceEntry entry : properties.getInstances()) {
+            Readiness readiness = "TERMINATING".equalsIgnoreCase(entry.getReadiness())
+                    ? Readiness.TERMINATING : Readiness.READY;
+            providerInstances.add(new StaticDeploymentDiscoveryProvider.StaticInstanceConfig(
+                    entry.getTenantId(),
+                    entry.getServiceId(),
+                    entry.getInstanceId(),
+                    entry.getBaseUrl(),
+                    entry.getDeploymentVersion(),
+                    readiness));
+        }
+        return providerInstances;
     }
 
     /** Visible for tests — order: injected beans first, then optional static-config. */
     List<DeploymentDiscoveryProvider> registeredProviders() {
         return providers;
     }
-
-    @Override
     /**
      * onApplicationEvent.
+     *
      * @param event event
      * @since 0.1.0
      */
+    @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
         runReconciliation("startup");
     }
-
-    @Scheduled(fixedDelayString = "${rdc.deployment-discovery.reconcile-interval:60s}")
     /**
      * periodicReconciliation.
+     *
      * @since 0.1.0
      */
+    @Scheduled(fixedDelayString = "${rdc.deployment-discovery.reconcile-interval:60s}")
     public void periodicReconciliation() {
         runReconciliation("periodic");
     }
-
     private void runReconciliation(String trigger) {
         for (DeploymentDiscoveryProvider provider : providers) {
             ReconciliationService.ReconciliationResult result = reconciliationService.reconcile(provider);

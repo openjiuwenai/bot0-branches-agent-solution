@@ -29,11 +29,10 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
  * isolation).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 @Configuration
 @EnableScheduling
 public class RegistrySchedulingConfig implements SchedulingConfigurer {
-
     /**
      * Dedicated {@link ThreadPoolTaskScheduler} for registry probe work.
      * Pool size 2 is enough for the MVP single-tenant sweep; the scheduler
@@ -52,12 +51,13 @@ public class RegistrySchedulingConfig implements SchedulingConfigurer {
         return scheduler;
     }
 
-    @Override
     /**
      * configureTasks.
+     *
      * @param registrar registrar
      * @since 0.1.0
      */
+    @Override
     public void configureTasks(ScheduledTaskRegistrar registrar) {
         // Bind the registry probe's @Scheduled methods to the dedicated
         // thread pool above — without this, Spring falls back to the

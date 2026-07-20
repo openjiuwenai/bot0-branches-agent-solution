@@ -16,7 +16,6 @@ import com.openjiuwen.rdc.model.RegistryRequestContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.DiscoveryFilter;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
 import com.openjiuwen.rdc.security.RegistrySecurityProperties;
@@ -35,7 +34,6 @@ import java.util.UUID;
  * Feat-015 logical Agent Card discovery semantics without embedded PostgreSQL.
  */
 class AgentCardDiscoverySemanticsTest {
-
     private static final String TRACE = "trace-sem";
     private static final String TENANT = "tenant-sem";
     private static final String AGENT = "agent-sem";
@@ -207,42 +205,63 @@ class AgentCardDiscoverySemanticsTest {
         @Override
         public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String json) { }
         @Override
-        public boolean delete(String tenantId, String agentId) { return false; }
-        @Override
-        public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
-        @Override
-        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
-        @Override
-        public java.util
-                .Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
-            return java.util.Optional.empty();
+        public boolean delete(String tenantId, String agentId) {
+            return false;
         }
         @Override
-        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) { return List.of(); }
+        public boolean delete(String tenantId, String agentId, String serviceId) {
+            return false;
+        }
+        @Override
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+            return List.of();
+        }
+        @Override
+        public java.util.Optional<EndpointEntry> findEndpoint(
+                String tenantId, String agentId,
+                String serviceId, String instanceId) {
+                    return java.util.Optional.empty();
+                }
+        @Override
+        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
+            return List.of();
+        }
         @Override
         public void reconcileUpsert(ReconcileUpsertCommand command) { }
         @Override
-        public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
+        public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
+            return List.of();
+        }
         @Override
         public void markDraining(String tenantId, String agentId, String serviceId) { }
         @Override
         public void markRemoved(String tenantId, String agentId, String serviceId) { }
         @Override
-        public void markSourceStale(String sourceId) { markLogicalRegistrationsStaleSource(sourceId); }
+        public void markSourceStale(String sourceId) {
+            markLogicalRegistrationsStaleSource(sourceId);
+        }
         @Override
         public void markSourceFresh(String sourceId) { }
         @Override
-        public List<InstanceKey> listDrainingPastGrace(Instant cutoff) { return List.of(); }
+        public List<InstanceKey> listDrainingPastGrace(Instant cutoff) {
+            return List.of();
+        }
         @Override
-        public List<InstanceKey> listExpiredLeases(Instant now) { return List.of(); }
+        public List<InstanceKey> listExpiredLeases(Instant now) {
+            return List.of();
+        }
         @Override
-        public long getLastProcessedRevision(String sourceId) { return 0; }
+        public long getLastProcessedRevision(String sourceId) {
+            return 0;
+        }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision) { }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
         @Override
-        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
+        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
+            return java.util.Optional.empty();
+        }
         @Override
         public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
@@ -250,9 +269,9 @@ class AgentCardDiscoverySemanticsTest {
         @Override
         public void reconcilePending(ReconcilePendingCommand command) { }
         @Override
-        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
-    }
-
+        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
+            }
+        }
     private static final class TestTenantContext implements com.openjiuwen.rdc.tenant.TenantContext {
         private String current;
 
@@ -260,7 +279,6 @@ class AgentCardDiscoverySemanticsTest {
         public String current() {
             return current;
         }
-
         void set(String tenantId) {
             this.current = tenantId;
         }

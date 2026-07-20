@@ -67,11 +67,13 @@ import java.util.Base64;
  *
  * @since 2026-07-10
  */
+
 final class RouteHandleCodec {
     /**
      * Version-2 prefix marker. FEAT-016 encode always produces this prefix;
      * decode requires it — old v1: / no-prefix handles are rejected.
      */
+
     static final String V2_PREFIX = "v2:";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -79,7 +81,6 @@ final class RouteHandleCodec {
     private RouteHandleCodec() {
         // utility class — no instances
     }
-
     /**
      * Encode the 6 fields into an opaque handle. Format:
      * {@code "v2:" + base64(JSON{tenantId, agentId, serviceId, instanceId,
@@ -87,8 +88,10 @@ final class RouteHandleCodec {
      *
      * @param fields the 6 route-handle fields (tenantId, agentId, serviceId,
      *               instanceId, routeKey, contractVersion); must not be {@code null}
+     *
      * @return opaque route handle with {@code v2:} prefix; never {@code null}
      */
+
     static String encode(HandleFields fields) {
         requireNonBlank(fields.tenantId(), "tenantId");
         requireNonBlank(fields.agentId(), "agentId");
@@ -124,6 +127,7 @@ final class RouteHandleCodec {
      * @throws IllegalArgumentException if the handle is malformed (no
      *         {@code v2:} prefix, bad base64, bad JSON, missing fields)
      */
+
     static HandleFields decode(String handle) {
         requireNonBlank(handle, "handle");
         String payload = stripPrefix(handle);
@@ -156,10 +160,10 @@ final class RouteHandleCodec {
     }
 
     private static JsonNode parseJson(String base64Payload) {
-        byte[] json;
-        try {
+            byte[] json;
+            try {
             json = Base64.getDecoder().decode(base64Payload);
-        } catch (IllegalArgumentException ex) {
+            } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("route handle is not valid base64", ex);
         }
         try {
@@ -179,7 +183,7 @@ final class RouteHandleCodec {
     }
 
     private static void requireNonBlank(String value, String name) {
-        if (value == null) {
+            if (value == null) {
             throw new IllegalArgumentException(name + " must not be null");
         }
         if (value.isBlank()) {
@@ -193,8 +197,9 @@ final class RouteHandleCodec {
      * the logical service identifier; the {@code instanceId} field lets the
      * forwarding layer resolve a specific instance among N replicas.
      */
+
     record HandleFields(
             String tenantId, String agentId, String serviceId,
             String instanceId, String routeKey, String contractVersion) {
+        }
     }
-}

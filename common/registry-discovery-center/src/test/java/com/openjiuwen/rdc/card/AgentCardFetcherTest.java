@@ -19,7 +19,6 @@ import java.net.URI;
 import java.util.Map;
 
 class AgentCardFetcherTest {
-
     private MockWebServer server;
 
     @BeforeEach
@@ -37,18 +36,18 @@ class AgentCardFetcherTest {
 
     @Test
     void fetch_valid_card_succeeds() {
-        server.enqueue(new MockResponse()
-                .setBody(validCard())
-                .setHeader("Content-Type", "application/json"));
-
-        AgentCardFetcher fetcher = new AgentCardFetcher();
-        String baseUrl = server.url("/").toString().replaceAll("/$", "");
-        AgentCardFetcher.FetchResult result = fetcher.fetchValidated(
-                URI.create(baseUrl), "/.well-known/agent-card.json", Map.of());
-
-        assertThat(result.success()).isTrue();
-        assertThat(result.capabilityVersion()).isEqualTo("1.0.0");
-    }
+            server.enqueue(new MockResponse()
+            .setBody(validCard())
+            .setHeader("Content-Type", "application/json"));
+            
+            AgentCardFetcher fetcher = new AgentCardFetcher();
+            String baseUrl = server.url("/").toString().replaceAll("/$", "");
+            AgentCardFetcher.FetchResult result = fetcher.fetchValidated(
+            URI.create(baseUrl), "/.well-known/agent-card.json", Map.of());
+            
+            assertThat(result.success()).isTrue();
+            assertThat(result.capabilityVersion()).isEqualTo("1.0.0");
+        }
 
     @Test
     void fetch_http_error_returns_failure_code() {

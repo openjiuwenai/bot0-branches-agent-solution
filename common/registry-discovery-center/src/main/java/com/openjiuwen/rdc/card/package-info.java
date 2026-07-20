@@ -18,4 +18,5 @@
  *
  * <p>Authority: Feat-015 §5.1 + ADR-0160.
  */
+
 package com.openjiuwen.rdc.card;

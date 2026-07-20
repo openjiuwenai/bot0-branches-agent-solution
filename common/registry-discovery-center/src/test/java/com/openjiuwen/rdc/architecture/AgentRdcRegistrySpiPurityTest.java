@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
  * <p>Assertion ID: HA-001-REG.
  */
 class AgentRdcRegistrySpiPurityTest {
-
     /**
      * Production registry SPI classes only
      * ({@code com.openjiuwen.rdc.model} and sub-packages). Test

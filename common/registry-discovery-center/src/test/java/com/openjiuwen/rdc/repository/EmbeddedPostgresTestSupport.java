@@ -23,15 +23,14 @@ import javax.sql.DataSource;
  * @since 0.1.0 (2026)
  */
 public final class EmbeddedPostgresTestSupport {
-
     private static EmbeddedPostgres postgres;
     private static DataSource dataSource;
 
     private static ThreadPoolExecutor shutdownExecutor;
 
     private EmbeddedPostgresTestSupport() {
+         
     }
-
     public static synchronized DataSource sharedDataSource() throws Exception {
         if (dataSource == null) {
             postgres = EmbeddedPostgres.builder().start();
@@ -43,6 +42,9 @@ public final class EmbeddedPostgresTestSupport {
                     r -> {
                         Thread hookThread = new Thread(r, "embedded-postgres-shutdown");
                         hookThread.setDaemon(true);
+                        hookThread.setUncaughtExceptionHandler((t, e) -> {
+                            // best-effort JVM shutdown cleanup
+                        });
                         return hookThread;
                     });
             Runtime.getRuntime().addShutdownHook(shutdownExecutor.getThreadFactory().newThread(() -> {
@@ -53,8 +55,8 @@ public final class EmbeddedPostgresTestSupport {
                 } catch (IOException ex) {
                     // best-effort JVM shutdown cleanup
                 } finally {
-                    shutdownExecutor.shutdown();
-                }
+                        shutdownExecutor.shutdown();
+                    }
             }));
         }
         return dataSource;

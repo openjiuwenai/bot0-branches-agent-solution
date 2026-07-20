@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
  * binding from {@code rdc.pull-registration.*} config tree (REQ-2026-004).
  */
 class PullRegistrationPropertiesTest {
-
     @Test
     void defaults_disabled_with_empty_runtimes() {
         PullRegistrationProperties props = new PullRegistrationProperties();

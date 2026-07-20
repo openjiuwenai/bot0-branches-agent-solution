@@ -86,9 +86,8 @@ import javax.sql.DataSource;
  * unaffected.
  *
  * @since 0.1.0
-  */
+ */
 public final class JdbcAgentRegistryRepository implements AgentRegistryRepository {
-
     private static final String TABLE = "agent_registry_mvp";
     private static final String REGISTRATION_TABLE = "agent_card_registration";
     private static final String SOURCE_REF_TABLE = "agent_card_source_ref";
@@ -139,7 +138,6 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     public JdbcAgentRegistryRepository(DataSource dataSource) {
         this(dataSource, new DataSourceTransactionManager(dataSource));
     }
-
     /**
      * Full constructor: accepts an explicit {@link PlatformTransactionManager}
      * so production can supply a pooled / XA-aware manager, and tests can
@@ -154,15 +152,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         this.txTemplate = new TransactionTemplate(txManager);
     }
 
-    // ===== upsert / delete / scan / update =====
-
-    @Override
     /**
      * upsert.
+     *
      * @param entry entry
      * @param a2aAgentCardJson a2aAgentCardJson
      * @since 0.1.0
      */
+    @Override
     public void upsert(AgentRegistryEntry entry, String a2aAgentCardJson) {
         Objects.requireNonNull(entry, "entry is required");
         requireNonBlank(entry.getTenantId(), "tenantId");
@@ -195,14 +192,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * delete.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @return result
      * @since 0.1.0
      */
+    @Override
     public boolean delete(String tenantId, String agentId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -220,15 +218,16 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * delete.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
      * @return result
      * @since 0.1.0
      */
+    @Override
     public boolean delete(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -245,9 +244,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * delete.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
@@ -255,6 +254,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * @return result
      * @since 0.1.0
      */
+    @Override
     public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -273,14 +273,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * scanDueForProbe.
+     *
      * @param staleBeforeMillis staleBeforeMillis
      * @param limit limit
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be > 0");
@@ -307,13 +308,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 rs.getString("endpoint_url")));
     }
 
-    @Override
     /**
      * updateStatus.
+     *
      * @param update update
      * @return result
      * @since 0.1.0
      */
+    @Override
     public boolean updateStatus(StatusUpdate update) {
         requireNonBlank(update.tenantId(), "tenantId");
         requireNonBlank(update.agentId(), "agentId");
@@ -346,13 +348,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * queryByTargetSelector.
+     *
      * @param filter filter
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
         Objects.requireNonNull(filter, "filter");
         requireNonBlank(filter.tenantId(), "tenantId");
@@ -386,18 +389,27 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 jdbc.query(sql.toString(), params, DiscoveryRowMapper.INSTANCE));
     }
 
-    @Override
     /**
      * reconcileUpsert.
+     *
      * @param command command
      * @since 0.1.0
      */
+    @Override
     public void reconcileUpsert(ReconcileUpsertCommand command) {
         Objects.requireNonNull(command, "command");
         requireNonBlank(command.tenantId(), "tenantId");
         requireNonBlank(command.agentId(), "agentId");
         requireNonBlank(command.serviceId(), "serviceId");
-        String sql = "INSERT INTO " + TABLE + " ("
+        withTenant(command.tenantId(), () -> {
+            jdbc.update(reconcileUpsertSql(), reconcileUpsertParams(command));
+            syncLogicalFromReconcileUpsert(command);
+            return null;
+        });
+    }
+
+    private static String reconcileUpsertSql() {
+        return "INSERT INTO " + TABLE + " ("
                 + "tenant_id, agent_id, service_id, instance_id, deployment_service_id, "
                 + "source_id, source_revision, "
                 + "agent_name, framework_type, route_key, contract_version, capability_version, "
@@ -436,44 +448,43 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 + "last_validated_at = CURRENT_TIMESTAMP, "
                 + "draining_since = NULL, "
                 + "last_heartbeat = CURRENT_TIMESTAMP";
-        withTenant(command.tenantId(), () -> {
-            MapSqlParameterSource params = new MapSqlParameterSource()
-                    .addValue("tenantId", command.tenantId())
-                    .addValue("agentId", command.agentId())
-                    .addValue("serviceId", command.serviceId())
-                    .addValue("instanceId", command.instanceId())
-                    .addValue("deploymentServiceId", command.deploymentServiceId())
-                    .addValue("sourceId", command.sourceId())
-                    .addValue("sourceRevision", command.sourceRevision())
-                    .addValue("agentName", command.agentName())
-                    .addValue("frameworkType", command.frameworkType().name())
-                    .addValue("routeKey", command.routeKey())
-                    .addValue("contractVersion", command.contractVersion())
-                    .addValue("capabilityVersion", command.capabilityVersion())
-                    .addValue("endpointUrl", command.endpointUrl())
-                    .addValue("maxConcurrency", command.maxConcurrency())
-                    .addValue("weight", command.weight())
-                    .addValue("region", command.region())
-                    .addValue("a2aAgentCard", command.a2aAgentCardJson())
-                    .addValue("cardDigest", command.cardDigest())
-                    .addValue("routeTarget", command.routeTargetJson())
-                    .addValue("status", command.status())
-                    .addValue("lifecycleStatus", command.lifecycleStatus())
-                    .addValue("effectiveHealth", command.effectiveHealth())
-                    .addValue("freshness", command.freshness());
-            jdbc.update(sql, params);
-            syncLogicalFromReconcileUpsert(command);
-            return null;
-        });
     }
 
-    @Override
+    private static MapSqlParameterSource reconcileUpsertParams(ReconcileUpsertCommand command) {
+        return new MapSqlParameterSource()
+                .addValue("tenantId", command.tenantId())
+                .addValue("agentId", command.agentId())
+                .addValue("serviceId", command.serviceId())
+                .addValue("instanceId", command.instanceId())
+                .addValue("deploymentServiceId", command.deploymentServiceId())
+                .addValue("sourceId", command.sourceId())
+                .addValue("sourceRevision", command.sourceRevision())
+                .addValue("agentName", command.agentName())
+                .addValue("frameworkType", command.frameworkType().name())
+                .addValue("routeKey", command.routeKey())
+                .addValue("contractVersion", command.contractVersion())
+                .addValue("capabilityVersion", command.capabilityVersion())
+                .addValue("endpointUrl", command.endpointUrl())
+                .addValue("maxConcurrency", command.maxConcurrency())
+                .addValue("weight", command.weight())
+                .addValue("region", command.region())
+                .addValue("a2aAgentCard", command.a2aAgentCardJson())
+                .addValue("cardDigest", command.cardDigest())
+                .addValue("routeTarget", command.routeTargetJson())
+                .addValue("status", command.status())
+                .addValue("lifecycleStatus", command.lifecycleStatus())
+                .addValue("effectiveHealth", command.effectiveHealth())
+                .addValue("freshness", command.freshness());
+    }
+
     /**
      * listInstanceKeysBySource.
+     *
      * @param sourceId sourceId
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         String tenantSql = "SELECT DISTINCT tenant_id FROM " + TABLE + " WHERE source_id = :sourceId";
@@ -494,14 +505,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         return keys;
     }
 
-    @Override
     /**
      * markDraining.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
      * @since 0.1.0
      */
+    @Override
     public void markDraining(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -519,14 +531,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * markRemoved.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
      * @since 0.1.0
      */
+    @Override
     public void markRemoved(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -543,12 +556,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * markSourceStale.
+     *
      * @param sourceId sourceId
      * @since 0.1.0
      */
+    @Override
     public void markSourceStale(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("UPDATE " + TABLE + " SET freshness = 'STALE_SOURCE' WHERE source_id = :sourceId",
@@ -556,12 +570,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         markLogicalRegistrationsStaleSource(sourceId);
     }
 
-    @Override
     /**
      * markSourceFresh.
+     *
      * @param sourceId sourceId
      * @since 0.1.0
      */
+    @Override
     public void markSourceFresh(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("UPDATE " + TABLE + " SET freshness = 'FRESH' "
@@ -573,13 +588,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 new MapSqlParameterSource("sourceId", sourceId));
     }
 
-    @Override
     /**
      * listExpiredLeases.
+     *
      * @param now now
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<InstanceKey> listExpiredLeases(java.time.Instant now) {
         Objects.requireNonNull(now, "now");
         String sql = "SELECT tenant_id, agent_id, service_id, instance_id FROM " + TABLE
@@ -593,13 +609,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                         rs.getString("instance_id")));
     }
 
-    @Override
     /**
      * getLastProcessedRevision.
+     *
      * @param sourceId sourceId
      * @return result
      * @since 0.1.0
      */
+    @Override
     public long getLastProcessedRevision(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         List<Long> rows = jdbc.query(
@@ -609,24 +626,25 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         return rows.isEmpty() ? 0L : rows.get(0);
     }
 
-    @Override
     /**
      * updateLastProcessedRevision.
+     *
      * @param sourceId sourceId
      * @param revision revision
      * @since 0.1.0
      */
+    @Override
     public void updateLastProcessedRevision(String sourceId, long revision) {
         updateLastProcessedRevision(sourceId, revision, null);
     }
-
-    @Override
     /**
      * getSnapshotFingerprint.
+     *
      * @param sourceId sourceId
      * @return result
      * @since 0.1.0
      */
+    @Override
     public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         List<String> rows = jdbc.query(
@@ -639,14 +657,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         return java.util.Optional.of(rows.get(0));
     }
 
-    @Override
     /**
      * updateLastProcessedRevision.
+     *
      * @param sourceId sourceId
      * @param revision revision
      * @param snapshotFingerprint snapshotFingerprint
      * @since 0.1.0
      */
+    @Override
     public void updateLastProcessedRevision(String sourceId, long revision, String snapshotFingerprint) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("INSERT INTO registry_source_state "
@@ -662,15 +681,16 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                         .addValue("fingerprint", snapshotFingerprint));
     }
 
-    @Override
     /**
      * findCardDigest.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
      * @return result
      * @since 0.1.0
      */
+    @Override
     public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -689,12 +709,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * reconcilePending.
+     *
      * @param command command
      * @since 0.1.0
      */
+    @Override
     public void reconcilePending(ReconcilePendingCommand command) {
         Objects.requireNonNull(command, "command");
         String sql = "INSERT INTO " + TABLE + " ("
@@ -727,14 +748,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * markRefreshDegraded.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
      * @since 0.1.0
      */
+    @Override
     public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -756,21 +778,21 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("agentId", agentId)
                             .addValue("serviceId", serviceId));
             for (java.util.Map<String, Object> row : rows) {
-                String capabilityVersion = stringColumn(row, "capability_version");
-                String cardDigest = stringColumn(row, "card_digest");
-                if (capabilityVersion != null && cardDigest != null) {
+                Optional<String> capabilityVersion = stringColumn(row, "capability_version");
+                Optional<String> cardDigest = stringColumn(row, "card_digest");
+                if (capabilityVersion.isPresent() && cardDigest.isPresent()) {
                     // Logical catalog keys by deployment service id (= stable agentId per AgentIdCodec).
                     markLogicalRegistrationStaleCard(
-                            tenantId, agentId, capabilityVersion, cardDigest);
+                            tenantId, agentId, capabilityVersion.get(), cardDigest.get());
                 }
             }
             return null;
         });
     }
 
-    @Override
     /**
      * findForResolve.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
@@ -778,6 +800,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * @return result
      * @since 0.1.0
      */
+    @Override
     public java.util.Optional<ResolveRow> findForResolve(
             String tenantId, String agentId, String serviceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
@@ -807,13 +830,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * listDrainingPastGrace.
+     *
      * @param cutoff cutoff
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) {
         Objects.requireNonNull(cutoff, "cutoff");
         String sql = "SELECT tenant_id, agent_id, service_id, instance_id FROM " + TABLE
@@ -845,17 +869,16 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         };
     }
 
-    // ===== discovery (list lookup, FEAT-016) =====
-
-    @Override
     /**
      * listByAgentId.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param contractVersion contractVersion
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(agentId, "agentId");
@@ -875,15 +898,16 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * listByServiceId.
+     *
      * @param tenantId tenantId
      * @param serviceId serviceId
      * @param contractVersion contractVersion
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<RegistryRow> listByServiceId(String tenantId, String serviceId, String contractVersion) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(serviceId, "serviceId");
@@ -903,15 +927,16 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * listByCapability.
+     *
      * @param tenantId tenantId
      * @param capability capability
      * @param contractVersion contractVersion
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<RegistryRow> listByCapability(String tenantId, String capability, String contractVersion) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(capability, "capability");
@@ -931,9 +956,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * findEndpoint.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
@@ -941,6 +966,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * @return result
      * @since 0.1.0
      */
+    @Override
     public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
                                                 String serviceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
@@ -964,8 +990,6 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    // ===== internals =====
-
     /**
      * Stage 24 RLS wiring — see class javadoc.
      */
@@ -977,20 +1001,20 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    private static String stringColumn(java.util.Map<String, Object> row, String column) {
+    private static Optional<String> stringColumn(java.util.Map<String, Object> row, String column) {
         Object value = row.get(column);
         if (value == null) {
-            return null;
+            return Optional.empty();
         }
-        return value instanceof String s ? s : value.toString();
+        return Optional.of(value instanceof String s ? s : value.toString());
     }
 
-    private static java.util.UUID uuidColumn(Object value) throws java.sql.SQLException {
-        if (value == null) {
-            return null;
+    private static Optional<java.util.UUID> uuidColumn(Object value) throws java.sql.SQLException {
+            if (value == null) {
+            return Optional.empty();
         }
         if (value instanceof java.util.UUID uuid) {
-            return uuid;
+            return Optional.of(uuid);
         }
         throw new java.sql.SQLException("expected UUID column value, got " + value.getClass().getName());
     }
@@ -1000,14 +1024,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             implements org.springframework.jdbc.core.RowMapper<RegistryRow> {
         static final RegistryRowMapper INSTANCE = new RegistryRowMapper();
 
-        @Override
         /**
          * mapRow.
+         *
          * @param rs rs
          * @param rowNum rowNum
          * @return result
          * @since 0.1.0
          */
+        @Override
         public RegistryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             String frameworkTypeName = rs.getString("framework_type");
             FrameworkType frameworkType = frameworkTypeName == null
@@ -1047,14 +1072,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             implements org.springframework.jdbc.core.RowMapper<DiscoveryRow> {
         static final DiscoveryRowMapper INSTANCE = new DiscoveryRowMapper();
 
-        @Override
         /**
          * mapRow.
+         *
          * @param rs rs
          * @param rowNum rowNum
          * @return result
          * @since 0.1.0
          */
+        @Override
         public DiscoveryRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             String frameworkTypeName = rs.getString("framework_type");
             FrameworkType frameworkType = frameworkTypeName == null
@@ -1090,11 +1116,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         }
     }
 
-    // ===== Feat-015 0713 logical AgentCardRegistration ======================
-
-    @Override
     /**
      * upsertLogicalRegistration.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param deploymentServiceId deploymentServiceId
@@ -1107,25 +1131,18 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * @return result
      * @since 0.1.0
      */
-    public java.util.UUID upsertLogicalRegistration(
-            String tenantId,
-            String agentId,
-            String deploymentServiceId,
-            String cardDigest,
-            String contractVersion,
-            String capabilityVersion,
-            String registrationStatus,
-            String freshness,
-            String a2aAgentCardJson) {
-        requireNonBlank(tenantId, "tenantId");
-        requireNonBlank(agentId, "agentId");
-        requireNonBlank(deploymentServiceId, "deploymentServiceId");
-        requireNonBlank(cardDigest, "cardDigest");
-        requireNonBlank(contractVersion, "contractVersion");
-        requireNonBlank(capabilityVersion, "capabilityVersion");
-        requireNonBlank(registrationStatus, "registrationStatus");
-        requireNonBlank(freshness, "freshness");
-        return withTenant(tenantId, () -> {
+    @Override
+    public java.util.UUID upsertLogicalRegistration(UpsertLogicalRegistrationCommand command) {
+        Objects.requireNonNull(command, "command");
+        requireNonBlank(command.tenantId(), "tenantId");
+        requireNonBlank(command.agentId(), "agentId");
+        requireNonBlank(command.deploymentServiceId(), "deploymentServiceId");
+        requireNonBlank(command.cardDigest(), "cardDigest");
+        requireNonBlank(command.contractVersion(), "contractVersion");
+        requireNonBlank(command.capabilityVersion(), "capabilityVersion");
+        requireNonBlank(command.registrationStatus(), "registrationStatus");
+        requireNonBlank(command.freshness(), "freshness");
+        return withTenant(command.tenantId(), () -> {
             String sql = "INSERT INTO " + REGISTRATION_TABLE + " ("
                     + "tenant_id, agent_id, service_id, card_digest, contract_version, "
                     + "capability_version, registration_status, freshness, last_validated_at, "
@@ -1146,27 +1163,32 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                     + "revision = " + REGISTRATION_TABLE + ".revision + 1, "
                     + "updated_at = CURRENT_TIMESTAMP "
                     + "RETURNING registration_id";
-            List<java.util.UUID> ids = jdbc.query(sql, new MapSqlParameterSource()
-                            .addValue("tenantId", tenantId)
-                            .addValue("agentId", agentId)
-                            .addValue("serviceId", deploymentServiceId)
-                            .addValue("cardDigest", cardDigest)
-                            .addValue("contractVersion", contractVersion)
-                            .addValue("capabilityVersion", capabilityVersion)
-                            .addValue("registrationStatus", registrationStatus)
-                            .addValue("freshness", freshness)
-                            .addValue("a2aAgentCard", a2aAgentCardJson),
-                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
+            List<java.util.UUID> ids = jdbc.query(sql, logicalRegistrationParams(command),
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")).orElse(null));
             return ids.get(0);
         });
     }
 
-    @Override
+    private static MapSqlParameterSource logicalRegistrationParams(UpsertLogicalRegistrationCommand command) {
+        return new MapSqlParameterSource()
+                .addValue("tenantId", command.tenantId())
+                .addValue("agentId", command.agentId())
+                .addValue("serviceId", command.deploymentServiceId())
+                .addValue("cardDigest", command.cardDigest())
+                .addValue("contractVersion", command.contractVersion())
+                .addValue("capabilityVersion", command.capabilityVersion())
+                .addValue("registrationStatus", command.registrationStatus())
+                .addValue("freshness", command.freshness())
+                .addValue("a2aAgentCard", command.a2aAgentCardJson());
+    }
+
     /**
      * upsertSourceRef.
+     *
      * @param command command
      * @since 0.1.0
      */
+    @Override
     public void upsertSourceRef(UpsertSourceRefCommand command) {
         Objects.requireNonNull(command, "command");
         requireNonBlank(command.tenantId(), "tenantId");
@@ -1187,7 +1209,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("tenantId", command.tenantId())
                             .addValue("serviceId", command.deploymentServiceId())
                             .addValue("instanceId", command.instanceId()),
-                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")).orElse(null));
             java.util.UUID previousRegistrationId = prior.isEmpty() ? null : prior.get(0);
 
             String sql = "INSERT INTO " + SOURCE_REF_TABLE + " ("
@@ -1222,14 +1244,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * removeSourceRef.
+     *
      * @param tenantId tenantId
      * @param deploymentServiceId deploymentServiceId
      * @param instanceId instanceId
      * @since 0.1.0
      */
+    @Override
     public void removeSourceRef(String tenantId, String deploymentServiceId, String instanceId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(deploymentServiceId, "deploymentServiceId");
@@ -1242,7 +1265,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("tenantId", tenantId)
                             .addValue("serviceId", deploymentServiceId)
                             .addValue("instanceId", instanceId),
-                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")).orElse(null));
             jdbc.update("DELETE FROM " + SOURCE_REF_TABLE
                             + " WHERE tenant_id = :tenantId AND service_id = :serviceId AND instance_id = :instanceId",
                     new MapSqlParameterSource()
@@ -1256,12 +1279,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * recomputeRegistrationStatus.
+     *
      * @param registrationId registrationId
      * @since 0.1.0
      */
+    @Override
     public void recomputeRegistrationStatus(java.util.UUID registrationId) {
         Objects.requireNonNull(registrationId, "registrationId");
         String sql = "UPDATE " + REGISTRATION_TABLE + " SET registration_status = CASE "
@@ -1276,12 +1300,13 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         jdbc.update(sql, new MapSqlParameterSource("registrationId", registrationId));
     }
 
-    @Override
     /**
      * markLogicalRegistrationsStaleSource.
+     *
      * @param sourceId sourceId
      * @since 0.1.0
      */
+    @Override
     public void markLogicalRegistrationsStaleSource(String sourceId) {
         requireNonBlank(sourceId, "sourceId");
         jdbc.update("UPDATE " + REGISTRATION_TABLE + " SET freshness = 'STALE_SOURCE', updated_at = CURRENT_TIMESTAMP "
@@ -1290,15 +1315,16 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 new MapSqlParameterSource("sourceId", sourceId));
     }
 
-    @Override
     /**
      * markLogicalRegistrationStaleCard.
+     *
      * @param tenantId tenantId
      * @param deploymentServiceId deploymentServiceId
      * @param capabilityVersion capabilityVersion
      * @param cardDigest cardDigest
      * @since 0.1.0
      */
+    @Override
     public void markLogicalRegistrationStaleCard(
             String tenantId, String deploymentServiceId, String capabilityVersion, String cardDigest) {
         requireNonBlank(tenantId, "tenantId");
@@ -1306,7 +1332,8 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         requireNonBlank(capabilityVersion, "capabilityVersion");
         requireNonBlank(cardDigest, "cardDigest");
         withTenant(tenantId, () -> {
-            jdbc.update("UPDATE " + REGISTRATION_TABLE + " SET freshness = 'STALE_CARD', updated_at = CURRENT_TIMESTAMP "
+            jdbc.update("UPDATE " + REGISTRATION_TABLE
+                    + " SET freshness = 'STALE_CARD', updated_at = CURRENT_TIMESTAMP "
                             + "WHERE tenant_id = :tenantId AND service_id = :serviceId "
                             + "AND capability_version = :capabilityVersion AND card_digest = :cardDigest",
                     new MapSqlParameterSource()
@@ -1318,14 +1345,15 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * clearLogicalRegistrationStaleCard.
+     *
      * @param tenantId tenantId
      * @param deploymentServiceId deploymentServiceId
      * @param cardDigest cardDigest
      * @since 0.1.0
      */
+    @Override
     public void clearLogicalRegistrationStaleCard(
             String tenantId, String deploymentServiceId, String cardDigest) {
         requireNonBlank(tenantId, "tenantId");
@@ -1344,9 +1372,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * relinkLogicalSourceRef.
+     *
      * @param tenantId tenantId
      * @param deploymentServiceId deploymentServiceId
      * @param instanceId instanceId
@@ -1357,42 +1385,37 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * @return result
      * @since 0.1.0
      */
-    public boolean relinkLogicalSourceRef(
-            String tenantId,
-            String deploymentServiceId,
-            String instanceId,
-            String cardDigest,
-            String sourceId,
-            long sourceRevision,
-            String internalBaseUrl) {
-        requireNonBlank(tenantId, "tenantId");
-        requireNonBlank(deploymentServiceId, "deploymentServiceId");
-        requireNonBlank(instanceId, "instanceId");
-        requireNonBlank(cardDigest, "cardDigest");
-        requireNonBlank(sourceId, "sourceId");
-        requireNonBlank(internalBaseUrl, "internalBaseUrl");
-        return withTenant(tenantId, () -> {
+    @Override
+    public boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {
+        Objects.requireNonNull(command, "command");
+        requireNonBlank(command.tenantId(), "tenantId");
+        requireNonBlank(command.deploymentServiceId(), "deploymentServiceId");
+        requireNonBlank(command.instanceId(), "instanceId");
+        requireNonBlank(command.cardDigest(), "cardDigest");
+        requireNonBlank(command.sourceId(), "sourceId");
+        requireNonBlank(command.internalBaseUrl(), "internalBaseUrl");
+        return withTenant(command.tenantId(), () -> {
             List<java.util.UUID> ids = jdbc.query(
                     "SELECT registration_id FROM " + REGISTRATION_TABLE
                             + " WHERE tenant_id = :tenantId AND service_id = :serviceId "
                             + "AND card_digest = :cardDigest "
                             + "ORDER BY updated_at DESC NULLS LAST LIMIT 1",
                     new MapSqlParameterSource()
-                            .addValue("tenantId", tenantId)
-                            .addValue("serviceId", deploymentServiceId)
-                            .addValue("cardDigest", cardDigest),
-                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
+                            .addValue("tenantId", command.tenantId())
+                            .addValue("serviceId", command.deploymentServiceId())
+                            .addValue("cardDigest", command.cardDigest()),
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")).orElse(null));
             if (ids.isEmpty()) {
                 return false;
             }
             java.util.UUID registrationId = ids.get(0);
             upsertSourceRef(new UpsertSourceRefCommand(
-                    tenantId,
-                    deploymentServiceId,
-                    instanceId,
-                    sourceId,
-                    sourceRevision,
-                    internalBaseUrl,
+                    command.tenantId(),
+                    command.deploymentServiceId(),
+                    command.instanceId(),
+                    command.sourceId(),
+                    command.sourceRevision(),
+                    command.internalBaseUrl(),
                     null,
                     "READY",
                     registrationId));
@@ -1401,13 +1424,14 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
-    @Override
     /**
      * queryLogicalByTargetSelector.
+     *
      * @param filter filter
      * @return result
      * @since 0.1.0
      */
+    @Override
     public List<LogicalRegistrationRow> queryLogicalByTargetSelector(DiscoveryFilter filter) {
         Objects.requireNonNull(filter, "filter");
         requireNonBlank(filter.tenantId(), "tenantId");
@@ -1441,7 +1465,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     private void syncLogicalFromReconcileUpsert(ReconcileUpsertCommand command) {
-        java.util.UUID registrationId = upsertLogicalRegistration(
+        java.util.UUID registrationId = upsertLogicalRegistration(new UpsertLogicalRegistrationCommand(
                 command.tenantId(),
                 command.agentId(),
                 command.deploymentServiceId(),
@@ -1450,7 +1474,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 command.capabilityVersion(),
                 "REGISTERED",
                 command.freshness(),
-                command.a2aAgentCardJson());
+                command.a2aAgentCardJson()));
         upsertSourceRef(new UpsertSourceRefCommand(
                 command.tenantId(),
                 command.deploymentServiceId(),
@@ -1466,7 +1490,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
 
     private void syncLogicalFromReconcilePending(ReconcilePendingCommand command) {
         String placeholderDigest = "pending:" + command.instanceId();
-        java.util.UUID registrationId = upsertLogicalRegistration(
+        java.util.UUID registrationId = upsertLogicalRegistration(new UpsertLogicalRegistrationCommand(
                 command.tenantId(),
                 command.agentId(),
                 command.deploymentServiceId(),
@@ -1475,7 +1499,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 "0.0.0",
                 "PENDING",
                 "FRESH",
-                null);
+                null));
         upsertSourceRef(new UpsertSourceRefCommand(
                 command.tenantId(),
                 command.deploymentServiceId(),
@@ -1495,7 +1519,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         }
         String digest = CardDigest.sha256(a2aAgentCardJson);
         String logicalServiceId = entry.getAgentId();
-        upsertLogicalRegistration(
+        upsertLogicalRegistration(new UpsertLogicalRegistrationCommand(
                 entry.getTenantId(),
                 entry.getAgentId(),
                 logicalServiceId,
@@ -1504,7 +1528,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 entry.getCapabilityVersion(),
                 "REGISTERED",
                 "FRESH",
-                a2aAgentCardJson);
+                a2aAgentCardJson));
     }
 
     private void removeLogicalSourceForInstance(String tenantId, String agentId, String instanceId) {
@@ -1516,7 +1540,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                         .addValue("agentId", agentId)
                         .addValue("instanceId", instanceId)));
         for (java.util.Map<String, Object> row : rows) {
-            String deploymentServiceId = stringColumn(row, "deployment_service_id");
+            String deploymentServiceId = stringColumn(row, "deployment_service_id").orElse(null);
             if (deploymentServiceId == null || deploymentServiceId.isBlank()) {
                 deploymentServiceId = agentId;
             }
@@ -1529,18 +1553,19 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
             implements org.springframework.jdbc.core.RowMapper<LogicalRegistrationRow> {
         static final LogicalRegistrationRowMapper INSTANCE = new LogicalRegistrationRowMapper();
 
-        @Override
         /**
          * mapRow.
+         *
          * @param rs rs
          * @param rowNum rowNum
          * @return result
          * @since 0.1.0
          */
+        @Override
         public LogicalRegistrationRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             java.sql.Timestamp lastValidated = rs.getTimestamp("last_validated_at");
             return new LogicalRegistrationRow(
-                    uuidColumn(rs.getObject("registration_id")),
+                    uuidColumn(rs.getObject("registration_id")).orElse(null),
                     rs.getString("tenant_id"),
                     rs.getString("agent_id"),
                     rs.getString("service_id"),

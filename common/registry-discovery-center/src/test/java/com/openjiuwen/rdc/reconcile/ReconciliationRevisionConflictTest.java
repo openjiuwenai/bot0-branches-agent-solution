@@ -13,7 +13,6 @@ import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceObservation;
 import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
 import com.openjiuwen.rdc.model.deployment.Readiness;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -26,7 +25,6 @@ import java.util.List;
 import java.util.Optional;
 
 class ReconciliationRevisionConflictTest {
-
     private static final String SOURCE = "src-conflict";
     private static final long REVISION = 42L;
 
@@ -106,9 +104,8 @@ class ReconciliationRevisionConflictTest {
         return new DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {
-                return SOURCE;
-            }
-
+        return SOURCE;
+    }
             @Override
             public ListDeploymentInstancesResult listInstances() {
                 return new ListDeploymentInstancesResult(SOURCE, REVISION, observations);
@@ -137,31 +134,49 @@ class ReconciliationRevisionConflictTest {
         @Override
         public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String json) { }
         @Override
-        public boolean delete(String tenantId, String agentId) { return false; }
+        public boolean delete(String tenantId, String agentId) {
+            return false;
+        }
         @Override
-        public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
+        public boolean delete(String tenantId, String agentId, String serviceId) {
+            return false;
+        }
         @Override
-        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+            return List.of();
+        }
         @Override
-        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) { return List.of(); }
+        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
+            return List.of();
+        }
         @Override
         public void reconcileUpsert(ReconcileUpsertCommand command) { }
         @Override
-        public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
+        public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
+            return List.of();
+        }
         @Override
         public void markDraining(String tenantId, String agentId, String serviceId) { }
         @Override
         public void markRemoved(String tenantId, String agentId, String serviceId) { }
         @Override
-        public void markSourceStale(String sourceId) { staleMarked.set(true); }
+        public void markSourceStale(String sourceId) {
+            staleMarked.set(true);
+        }
         @Override
         public void markSourceFresh(String sourceId) { }
         @Override
-        public List<InstanceKey> listDrainingPastGrace(Instant cutoff) { return List.of(); }
+        public List<InstanceKey> listDrainingPastGrace(Instant cutoff) {
+            return List.of();
+        }
         @Override
-        public List<InstanceKey> listExpiredLeases(Instant now) { return List.of(); }
+        public List<InstanceKey> listExpiredLeases(Instant now) {
+            return List.of();
+        }
         @Override
-        public long getLastProcessedRevision(String sourceId) { return lastRevision; }
+        public long getLastProcessedRevision(String sourceId) {
+            return lastRevision;
+        }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision) {
             updateLastProcessedRevision(sourceId, revision, null);
@@ -172,7 +187,9 @@ class ReconciliationRevisionConflictTest {
             fingerprint = fp != null ? Optional.of(fp) : Optional.empty();
         }
         @Override
-        public Optional<String> getSnapshotFingerprint(String sourceId) { return fingerprint; }
+        public Optional<String> getSnapshotFingerprint(String sourceId) {
+            return fingerprint;
+        }
         @Override
         public Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return Optional.empty();
@@ -180,6 +197,7 @@ class ReconciliationRevisionConflictTest {
         @Override
         public void reconcilePending(ReconcilePendingCommand command) { }
         @Override
-        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
-    }
+        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
+            }
+        }
 }

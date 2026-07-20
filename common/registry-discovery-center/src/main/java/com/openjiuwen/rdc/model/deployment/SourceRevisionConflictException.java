@@ -9,9 +9,8 @@ package com.openjiuwen.rdc.model.deployment;
  * snapshot content (Feat-015 0711 §5.1.4).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class SourceRevisionConflictException extends RuntimeException {
-
     private final String sourceId;
     private final long sourceRevision;
 
@@ -23,15 +22,16 @@ public final class SourceRevisionConflictException extends RuntimeException {
 
     /**
      * sourceId.
+     *
      * @return result
      * @since 0.1.0
      */
     public String sourceId() {
         return sourceId;
     }
-
     /**
      * sourceRevision.
+     *
      * @return result
      * @since 0.1.0
      */

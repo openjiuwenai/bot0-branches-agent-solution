@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 class StaticDeploymentDiscoveryProviderTest {
-
     @Test
     void watch_emits_added_then_modified_on_subsequent_snapshots() {
         List<DeploymentInstanceEvent> events = new ArrayList<>();

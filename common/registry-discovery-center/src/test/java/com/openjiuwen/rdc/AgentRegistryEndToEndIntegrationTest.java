@@ -62,7 +62,6 @@ import javax.sql.DataSource;
  * window applies only to the health-probe scheduler scan.
  */
 class AgentRegistryEndToEndIntegrationTest {
-
     private static DataSource dataSource;
     private static MockWebServer agentServer;
 
@@ -102,9 +101,9 @@ class AgentRegistryEndToEndIntegrationTest {
 
     @BeforeEach
     void cleanTable() {
-        new org.springframework.jdbc.core.JdbcTemplate(dataSource)
-                .execute("DELETE FROM agent_registry_mvp");
-    }
+            new org.springframework.jdbc.core.JdbcTemplate(dataSource)
+            .execute("DELETE FROM agent_registry_mvp");
+        }
 
     @Test
     void register_search_resolve_probe_degrade_deregister() throws Exception {

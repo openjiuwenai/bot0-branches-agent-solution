@@ -14,26 +14,25 @@ import java.util.List;
  * Restricts Agent Card fetch targets to configured CIDR allowlists (0711 §5.1.3).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class InternalNetworkPolicy {
-
     private final List<CidrBlock> allowedCidrs;
 
     private InternalNetworkPolicy(List<CidrBlock> allowedCidrs) {
         this.allowedCidrs = List.copyOf(allowedCidrs);
     }
-
     /**
      * permissive.
+     *
      * @return result
      * @since 0.1.0
      */
     public static InternalNetworkPolicy permissive() {
         return new InternalNetworkPolicy(List.of());
     }
-
     /**
      * from.
+     *
      * @param options options
      * @return result
      * @since 0.1.0
@@ -50,6 +49,7 @@ public final class InternalNetworkPolicy {
 
     /**
      * isAllowed.
+     *
      * @param baseUrl baseUrl
      * @return result
      * @since 0.1.0

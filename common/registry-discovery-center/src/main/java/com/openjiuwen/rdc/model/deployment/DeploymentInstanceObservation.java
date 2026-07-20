@@ -12,7 +12,7 @@ import java.util.Objects;
  * {@code DeploymentInstanceObservation}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public record DeploymentInstanceObservation(
         String tenantId,
         String serviceId,
@@ -31,6 +31,7 @@ public record DeploymentInstanceObservation(
 
     /**
      * reconcileKey.
+     *
      * @return result
      * @since 0.1.0
      */

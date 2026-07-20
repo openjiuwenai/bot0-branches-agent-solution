@@ -13,9 +13,8 @@ import java.util.Objects;
  * or route references (FEAT-016).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class AgentCardCandidate {
-
     @Nullable
     private final String agentCardJson;
     private final String agentId;
@@ -43,15 +42,16 @@ public final class AgentCardCandidate {
 
     /**
      * builder.
+     *
      * @return result
      * @since 0.1.0
      */
     public static Builder builder() {
         return new Builder();
     }
-
     /**
      * from.
+     *
      * @param candidate candidate
      * @return result
      * @since 0.1.0
@@ -70,90 +70,90 @@ public final class AgentCardCandidate {
                 .build();
     }
 
-    @Nullable
     /**
      * agentCardJson.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String agentCardJson() {
         return agentCardJson;
     }
-
     /**
      * agentId.
+     *
      * @return result
      * @since 0.1.0
      */
     public String agentId() {
         return agentId;
     }
-
     /**
      * serviceId.
+     *
      * @return result
      * @since 0.1.0
      */
     public String serviceId() {
         return serviceId;
     }
-
-    @Nullable
     /**
      * matchedA2aSkillId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String matchedA2aSkillId() {
         return matchedA2aSkillId;
     }
-
     /**
      * contractVersion.
+     *
      * @return result
      * @since 0.1.0
      */
     public String contractVersion() {
         return contractVersion;
     }
-
     /**
      * capabilityVersion.
+     *
      * @return result
      * @since 0.1.0
      */
     public String capabilityVersion() {
         return capabilityVersion;
     }
-
     /**
      * registrationStatus.
+     *
      * @return result
      * @since 0.1.0
      */
     public RegistrationStatus registrationStatus() {
         return registrationStatus;
     }
-
     /**
      * freshness.
+     *
      * @return result
      * @since 0.1.0
      */
     public Freshness freshness() {
         return freshness;
     }
-
-    @Nullable
     /**
      * lastValidatedAt.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public Instant lastValidatedAt() {
         return lastValidatedAt;
     }
-
     public static final class Builder {
         private String agentCardJson;
         private String agentId;
@@ -167,6 +167,7 @@ public final class AgentCardCandidate {
 
         /**
          * agentCardJson.
+         *
          * @param agentCardJson agentCardJson
          * @return result
          * @since 0.1.0
@@ -178,6 +179,7 @@ public final class AgentCardCandidate {
 
         /**
          * agentId.
+         *
          * @param agentId agentId
          * @return result
          * @since 0.1.0
@@ -189,6 +191,7 @@ public final class AgentCardCandidate {
 
         /**
          * serviceId.
+         *
          * @param serviceId serviceId
          * @return result
          * @since 0.1.0
@@ -200,6 +203,7 @@ public final class AgentCardCandidate {
 
         /**
          * matchedA2aSkillId.
+         *
          * @param matchedA2aSkillId matchedA2aSkillId
          * @return result
          * @since 0.1.0
@@ -211,6 +215,7 @@ public final class AgentCardCandidate {
 
         /**
          * contractVersion.
+         *
          * @param contractVersion contractVersion
          * @return result
          * @since 0.1.0
@@ -222,6 +227,7 @@ public final class AgentCardCandidate {
 
         /**
          * capabilityVersion.
+         *
          * @param capabilityVersion capabilityVersion
          * @return result
          * @since 0.1.0
@@ -233,6 +239,7 @@ public final class AgentCardCandidate {
 
         /**
          * registrationStatus.
+         *
          * @param registrationStatus registrationStatus
          * @return result
          * @since 0.1.0
@@ -244,6 +251,7 @@ public final class AgentCardCandidate {
 
         /**
          * freshness.
+         *
          * @param freshness freshness
          * @return result
          * @since 0.1.0
@@ -255,6 +263,7 @@ public final class AgentCardCandidate {
 
         /**
          * lastValidatedAt.
+         *
          * @param lastValidatedAt lastValidatedAt
          * @return result
          * @since 0.1.0
@@ -266,6 +275,7 @@ public final class AgentCardCandidate {
 
         /**
          * build.
+         *
          * @return result
          * @since 0.1.0
          */

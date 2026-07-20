@@ -27,7 +27,6 @@ import java.util.List;
  * Guards {@code POST /discover} JSON shape for Feat-015 0713 logical candidates.
  */
 class DiscoveryCandidateJsonSerializationTest {
-
     private static final DiscoveryResult SAMPLE_RESULT = new DiscoveryResult(
             DiscoveryOutcome.SUCCESS,
             List.of(DiscoveryCandidate.builder()

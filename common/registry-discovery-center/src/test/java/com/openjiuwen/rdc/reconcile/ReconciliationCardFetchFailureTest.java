@@ -11,7 +11,6 @@ import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.FrameworkType;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 
@@ -32,7 +31,6 @@ import java.util.Map;
  * Card fetch failure codes during reconciliation (0713 §5.1.6).
  */
 class ReconciliationCardFetchFailureTest {
-
     private MockWebServer runtimeServer;
 
     @BeforeEach
@@ -50,23 +48,23 @@ class ReconciliationCardFetchFailureTest {
 
     @Test
     void invalid_card_schema_records_pending_not_registered() {
-        runtimeServer.enqueue(new MockResponse()
-                .setBody("{\"name\":\"only-name\"}")
-                .addHeader("Content-Type", "application/json"));
-
-        RecordingRepository repository = new RecordingRepository();
-        ReconciliationService service = new ReconciliationService(
-                repository,
-                new AgentCardFetcher(),
-                new DeploymentDiscoveryProperties(),
-                List.of(binding()));
-
-        var result = service.reconcile(provider());
-
-        assertThat(result.success()).isTrue();
-        assertThat(repository.upserted).isFalse();
-        assertThat(repository.pending).isTrue();
-    }
+            runtimeServer.enqueue(new MockResponse()
+            .setBody("{\"name\":\"only-name\"}")
+            .addHeader("Content-Type", "application/json"));
+            
+            RecordingRepository repository = new RecordingRepository();
+            ReconciliationService service = new ReconciliationService(
+            repository,
+            new AgentCardFetcher(),
+            new DeploymentDiscoveryProperties(),
+            List.of(binding()));
+            
+            var result = service.reconcile(provider());
+            
+            assertThat(result.success()).isTrue();
+            assertThat(repository.upserted).isFalse();
+            assertThat(repository.pending).isTrue();
+        }
 
     @Test
     void signature_invalid_records_pending_not_registered() throws Exception {
@@ -110,7 +108,6 @@ class ReconciliationCardFetchFailureTest {
     private String baseUrl() {
         return runtimeServer.url("/").toString().replaceAll("/$", "");
     }
-
     private static String validUnsignedCard() {
         return "{"
                 + "\"name\":\"billing-agent\","
@@ -143,29 +140,38 @@ class ReconciliationCardFetchFailureTest {
         public void reconcileUpsert(ReconcileUpsertCommand command) {
             upserted = true;
         }
-
         @Override
         public void reconcilePending(ReconcilePendingCommand command) {
             pending = true;
         }
-
         @Override
         public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String json) { }
         @Override
-        public boolean delete(String tenantId, String agentId) { return false; }
-        @Override
-        public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
-        @Override
-        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
-        @Override
-        public java.util
-                .Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
-            return java.util.Optional.empty();
+        public boolean delete(String tenantId, String agentId) {
+            return false;
         }
         @Override
-        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) { return List.of(); }
+        public boolean delete(String tenantId, String agentId, String serviceId) {
+            return false;
+        }
         @Override
-        public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+            return List.of();
+        }
+        @Override
+        public java.util.Optional<EndpointEntry> findEndpoint(
+                String tenantId, String agentId,
+                String serviceId, String instanceId) {
+                    return java.util.Optional.empty();
+                }
+        @Override
+        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
+            return List.of();
+        }
+        @Override
+        public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
+            return List.of();
+        }
         @Override
         public void markDraining(String tenantId, String agentId, String serviceId) { }
         @Override
@@ -175,22 +181,31 @@ class ReconciliationCardFetchFailureTest {
         @Override
         public void markSourceFresh(String sourceId) { }
         @Override
-        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) { return List.of(); }
+        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) {
+            return List.of();
+        }
         @Override
-        public List<InstanceKey> listExpiredLeases(java.time.Instant now) { return List.of(); }
+        public List<InstanceKey> listExpiredLeases(java.time.Instant now) {
+            return List.of();
+        }
         @Override
-        public long getLastProcessedRevision(String sourceId) { return 0; }
+        public long getLastProcessedRevision(String sourceId) {
+            return 0;
+        }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision) { }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
         @Override
-        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
+        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
+            return java.util.Optional.empty();
+        }
         @Override
         public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
         }
         @Override
-        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
-    }
+        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
+            }
+        }
 }

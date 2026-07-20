@@ -7,6 +7,7 @@ package com.openjiuwen.rdc.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.config.RegistryOpAudit;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -72,11 +74,10 @@ import java.util.UUID;
  * REQ-2026-006 (multi-instance) + Feat-015 discover.
  *
  * @since 0.1.0
-  */
+ */
 @RestController
 @RequestMapping("/api/registry")
 public class MvpRegistryController {
-
     private static final String TRACE_PARENT_HEADER = "traceparent";
     private static final String X_TRACE_ID_HEADER = "X-Trace-Id";
 
@@ -100,16 +101,17 @@ public class MvpRegistryController {
                 : new DeploymentDiscoveryProperties();
     }
 
-    @PostMapping("/register")
-    @Deprecated
     /**
      * register.
+     *
      * @param card card
      * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
      * @param false false
      * @return result
      * @since 0.1.0
      */
+    @PostMapping("/register")
+    @Deprecated
     public ResponseEntity<Void> register(
             @RequestBody AgentRegistryEntry card,
             @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
@@ -135,7 +137,7 @@ public class MvpRegistryController {
                 ServiceIdCodec.applyTo(card);
             }
             InstanceIdCodec.applyTo(card);
-            String a2aCardJson = serializeA2aCard(card.getA2aAgentCard());
+            String a2aCardJson = serializeA2aCard(card.getA2aAgentCard()).orElse(null);
             RegistryPersistenceGuard.run(traceId, () -> repository.upsert(card, a2aCardJson));
             outcome = "success";
             return ResponseEntity.ok()
@@ -143,9 +145,10 @@ public class MvpRegistryController {
                     .build();
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeRegister(traceId, card.getTenantId(), card.getAgentId(),
-                    card.getContractVersion(),
-                    card.getCapabilityVersion(), "ONLINE", null, outcome, latencyMs);
+            observability.observeRegister(new RegistryOpAudit(
+                    traceId, card.getTenantId(), card.getAgentId(),
+                    card.getContractVersion(), card.getCapabilityVersion(),
+                    "ONLINE", null, outcome, latencyMs));
             MDC.remove("traceId");
         }
     }
@@ -195,8 +198,10 @@ public class MvpRegistryController {
     @DeleteMapping("/deregister/{tenantId}/{agentId}")
     public ResponseEntity<Void> deregister(@PathVariable String tenantId,
                                            @PathVariable String agentId,
-                                           @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
-                                           @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
+                                           @RequestHeader(value = TRACE_PARENT_HEADER, required = false)
+                                                   String traceparent,
+                                           @RequestHeader(value = X_TRACE_ID_HEADER, required = false)
+                                                   String xTraceId) {
         if (tenantId == null || tenantId.isBlank()
                 || agentId == null || agentId.isBlank()) {
             throw new IllegalArgumentException("tenantId and agentId are required path variables");
@@ -229,8 +234,10 @@ public class MvpRegistryController {
     public ResponseEntity<Void> deregisterSingle(@PathVariable String tenantId,
                                                  @PathVariable String agentId,
                                                  @PathVariable String serviceId,
-                                                 @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
-                                                 @RequestHeader(value = X_TRACE_ID_HEADER, required = false) String xTraceId) {
+                                                 @RequestHeader(value = TRACE_PARENT_HEADER, required = false)
+                                                         String traceparent,
+                                                 @RequestHeader(value = X_TRACE_ID_HEADER, required = false)
+                                                         String xTraceId) {
         if (tenantId == null || tenantId.isBlank()
                 || agentId == null || agentId.isBlank()
                 || serviceId == null || serviceId.isBlank()) {
@@ -252,8 +259,6 @@ public class MvpRegistryController {
         }
     }
 
-    // ===== helpers =====
-
     /**
      * Apply default values to optional selection-hint fields the push caller
      * may have omitted. The {@code agent_registry_mvp} columns
@@ -273,10 +278,10 @@ public class MvpRegistryController {
     }
 
     private static String resolveTraceId(String traceparent, String xTraceId) {
-        if (traceparent != null && !traceparent.isBlank()) {
+            if (traceparent != null && !traceparent.isBlank()) {
             String[] parts = traceparent.trim().split("-");
             if (parts.length >= 3 && !parts[2].isBlank()) {
-                return parts[2];
+            return parts[2];
             }
         }
         if (xTraceId != null && !xTraceId.isBlank()) {
@@ -285,12 +290,12 @@ public class MvpRegistryController {
         return UUID.randomUUID().toString();
     }
 
-    private String serializeA2aCard(org.a2aproject.sdk.spec.AgentCard card) {
-        if (card == null) {
-            return null;
+    private Optional<String> serializeA2aCard(org.a2aproject.sdk.spec.AgentCard card) {
+            if (card == null) {
+            return Optional.empty();
         }
         try {
-            return objectMapper.writeValueAsString(card);
+            return Optional.of(objectMapper.writeValueAsString(card));
         } catch (JsonProcessingException ex) {
             throw new IllegalArgumentException("Failed to serialize a2aAgentCard to JSON", ex);
         }
@@ -298,10 +303,17 @@ public class MvpRegistryController {
 
     /**
      * Shared context fields for discover request bodies.
- *
- * @since 0.1.0
- */
-public record DiscoverRequest(
+     *
+     * @param context context
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param a2aSkillId a2aSkillId
+     * @param constraints constraints
+     * @param limit limit
+     * @param continuationToken continuationToken
+     * @since 0.1.0
+     */
+    public record DiscoverRequest(
             ContextRequest context,
             String agentId,
             String serviceId,
@@ -314,6 +326,7 @@ public record DiscoverRequest(
 
     /**
      * ContextRequest.
+     *
      * @param tenantId tenantId
      * @param callerRef callerRef
      * @param requestId requestId
@@ -331,6 +344,7 @@ public record DiscoverRequest(
 
     /**
      * ConstraintsRequest.
+     *
      * @param contractVersion contractVersion
      * @param capabilityVersion capabilityVersion
      * @param requiredSkillTags requiredSkillTags
@@ -356,8 +370,8 @@ public record DiscoverRequest(
 
     private static DiscoveryConstraints buildConstraints(ConstraintsRequest constraints) {
         if (constraints == null) {
-            return DiscoveryConstraints.none();
-        }
+    return DiscoveryConstraints.none();
+}
         return DiscoveryConstraints.builder()
                 .contractVersion(constraints.contractVersion())
                 .capabilityVersion(constraints.capabilityVersion())

@@ -21,7 +21,6 @@ import java.util.Base64;
 import java.util.Map;
 
 class AgentCardSignatureVerifierTest {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Test

@@ -20,7 +20,6 @@ import com.openjiuwen.rdc.model.RegistryUnavailableException;
 import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 import com.openjiuwen.rdc.tenant.TenantContext;
 
@@ -50,7 +49,6 @@ import java.util.Optional;
  * isolation.
  */
 class PgMvpDiscoveryServiceImplTest {
-
     private RegistryObservabilityConfig observability;
     private TestTenantContext tenantContext;
     private PgMvpDiscoveryServiceImpl discovery;
@@ -66,7 +64,6 @@ class PgMvpDiscoveryServiceImplTest {
     void tearDown() {
         tenantContext.clear();
     }
-
     // ---- searchInstancesByAgentId: rich DTO populated ---------------------
 
     @Test
@@ -136,7 +133,14 @@ class PgMvpDiscoveryServiceImplTest {
     @Test
     void resolve_route_handle_returns_endpoint_for_existing_entry() {
         String handle = RouteHandleCodec.encode(new RouteHandleCodec
-                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+                .HandleFields(
+                        "tenant-A",
+                        "agent-001",
+                        "test-host-8080",
+                        "test-host-8080",
+                        "rk://svc/default",
+                        "1.0.0"
+                ));
 
         RouteResolution resolution = discovery.resolveRouteHandle(handle, "tenant-A");
 
@@ -149,7 +153,14 @@ class PgMvpDiscoveryServiceImplTest {
     @Test
     void resolve_handle_tenant_mismatch_raises() {
         String handle = RouteHandleCodec.encode(new RouteHandleCodec
-                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+                .HandleFields(
+                        "tenant-A",
+                        "agent-001",
+                        "test-host-8080",
+                        "test-host-8080",
+                        "rk://svc/default",
+                        "1.0.0"
+                ));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class)
@@ -162,15 +173,22 @@ class PgMvpDiscoveryServiceImplTest {
                 .isInstanceOf(MalformedRouteHandleException.class)
                 .satisfies(ex -> {
                     if (ex instanceof MalformedRouteHandleException m) {
-                        assertThat(m.failure().failureCode()).isEqualTo("MALFORMED_ROUTE_HANDLE");
-                    }
+        assertThat(m.failure().failureCode()).isEqualTo("MALFORMED_ROUTE_HANDLE");
+    }
                 });
     }
 
     @Test
     void resolve_handle_missing_raises_not_found() {
         String handle = RouteHandleCodec.encode(new RouteHandleCodec
-                .HandleFields("tenant-A", "agent-999", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+                .HandleFields(
+                        "tenant-A",
+                        "agent-999",
+                        "test-host-8080",
+                        "test-host-8080",
+                        "rk://svc/default",
+                        "1.0.0"
+                ));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-A"))
                 .isInstanceOf(EntryNotFoundException.class)
@@ -185,7 +203,14 @@ class PgMvpDiscoveryServiceImplTest {
     void resolve_handle_mismatched_tenant_raises() {
         tenantContext.set("tenant-C");
         String handle = RouteHandleCodec.encode(new RouteHandleCodec
-                .HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
+                .HandleFields(
+                        "tenant-A",
+                        "agent-001",
+                        "test-host-8080",
+                        "test-host-8080",
+                        "rk://svc/default",
+                        "1.0.0"
+                ));
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-A"))
                 .isInstanceOf(TenantIsolationViolationException.class);
@@ -260,17 +285,14 @@ class PgMvpDiscoveryServiceImplTest {
         public boolean delete(String tenantId, String agentId) {
             return false;
         }
-
         @Override
         public boolean delete(String tenantId, String agentId, String serviceId) {
             return false;
         }
-
         @Override
         public java.util.List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return java.util.List.of();
         }
-
         @Override
         public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
             if (!"tenant-A".equals(tenantId)) {
@@ -288,7 +310,9 @@ class PgMvpDiscoveryServiceImplTest {
         }
 
         @Override
-        public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
+        public Optional<EndpointEntry> findEndpoint(
+                String tenantId, String agentId,
+                String serviceId, String instanceId) {
             if ("tenant-A".equals(tenantId) && "agent-001".equals(agentId)
                     && "test-host-8080".equals(serviceId)) {
                 return Optional.of(new EndpointEntry(
@@ -301,7 +325,6 @@ class PgMvpDiscoveryServiceImplTest {
         public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
             return List.of();
         }
-
         @Override
         public void reconcileUpsert(ReconcileUpsertCommand command) {
         }
@@ -310,7 +333,6 @@ class PgMvpDiscoveryServiceImplTest {
         public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
             return List.of();
         }
-
         @Override
         public void markDraining(String tenantId, String agentId, String serviceId) {
         }
@@ -331,17 +353,14 @@ class PgMvpDiscoveryServiceImplTest {
         public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) {
             return List.of();
         }
-
         @Override
         public List<InstanceKey> listExpiredLeases(java.time.Instant now) {
             return List.of();
         }
-
         @Override
         public long getLastProcessedRevision(String sourceId) {
             return 0;
         }
-
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision) {
         }
@@ -354,20 +373,18 @@ class PgMvpDiscoveryServiceImplTest {
         public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
             return java.util.Optional.empty();
         }
-
         @Override
         public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
         }
-
         @Override
         public void reconcilePending(ReconcilePendingCommand command) {
         }
 
         @Override
         public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
+             
         }
-
         @Override
         public java.util.Optional<ResolveRow> findForResolve(
                 String tenantId, String agentId, String serviceId, String instanceId) {
@@ -398,24 +415,30 @@ class PgMvpDiscoveryServiceImplTest {
         public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
             throw new DataAccessResourceFailureException("database unavailable");
         }
-
         @Override
         public List<LogicalRegistrationRow> queryLogicalByTargetSelector(DiscoveryFilter filter) {
             throw new DataAccessResourceFailureException("database unavailable");
         }
-
         @Override
         public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String a2aAgentCardJson) { }
         @Override
-        public boolean delete(String tenantId, String agentId) { return false; }
+        public boolean delete(String tenantId, String agentId) {
+            return false;
+        }
         @Override
-        public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
+        public boolean delete(String tenantId, String agentId, String serviceId) {
+            return false;
+        }
         @Override
-        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+            return List.of();
+        }
         @Override
         public void reconcileUpsert(ReconcileUpsertCommand command) { }
         @Override
-        public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
+        public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
+            return List.of();
+        }
         @Override
         public void markDraining(String tenantId, String agentId, String serviceId) { }
         @Override
@@ -425,17 +448,25 @@ class PgMvpDiscoveryServiceImplTest {
         @Override
         public void markSourceFresh(String sourceId) { }
         @Override
-        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) { return List.of(); }
+        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) {
+            return List.of();
+        }
         @Override
-        public List<InstanceKey> listExpiredLeases(java.time.Instant now) { return List.of(); }
+        public List<InstanceKey> listExpiredLeases(java.time.Instant now) {
+            return List.of();
+        }
         @Override
-        public long getLastProcessedRevision(String sourceId) { return 0; }
+        public long getLastProcessedRevision(String sourceId) {
+            return 0;
+        }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision) { }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
         @Override
-        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
+        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
+            return java.util.Optional.empty();
+        }
         @Override
         public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
@@ -443,9 +474,9 @@ class PgMvpDiscoveryServiceImplTest {
         @Override
         public void reconcilePending(ReconcilePendingCommand command) { }
         @Override
-        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
-    }
-
+        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
+            }
+        }
     private static final class TestTenantContext implements TenantContext {
         private String current;
 
@@ -453,11 +484,9 @@ class PgMvpDiscoveryServiceImplTest {
         public String current() {
             return current;
         }
-
         void set(String tenantId) {
             this.current = tenantId;
         }
-
         void clear() {
             this.current = null;
         }

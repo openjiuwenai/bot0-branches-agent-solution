@@ -37,7 +37,6 @@ import java.util.Set;
 import javax.sql.DataSource;
 
 class DiscoveryExtendedIntegrationTest {
-
     private static final AtomicInteger NEXT_PORT = new AtomicInteger(18000);
 
     private static DataSource dataSource;
@@ -302,7 +301,8 @@ class DiscoveryExtendedIntegrationTest {
                 + "\"name\":\"demo\",\"description\":\"d\",\"version\":\"1.0.0\","
                 + "\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],"
                 + "\"capabilities\":{\"streaming\":" + streaming + "},"
-                + "\"skills\":[{\"id\":\"" + skillId + "\",\"name\":\"n\",\"description\":\"d\",\"tags\":[" + tagsJson + "]}],"
+                + "\"skills\":[{\"id\":\"" + skillId + "\",\"name\":\"n\","
++ "\"description\":\"d\",\"tags\":[" + tagsJson + "]}],"
                 + "\"supportedInterfaces\":[{\"protocol\":\"jsonrpc\",\"url\":\"/a2a\"}]"
                 + "}";
     }

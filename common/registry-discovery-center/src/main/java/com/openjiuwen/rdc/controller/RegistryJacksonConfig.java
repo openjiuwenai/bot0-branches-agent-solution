@@ -16,10 +16,9 @@ import org.springframework.context.annotation.Configuration;
  * auto-configured Jackson 3 {@code JsonMapper} used for HTTP responses.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 @Configuration
 public class RegistryJacksonConfig {
-
     @Bean
     JsonMapperBuilderCustomizer discoveryCandidateJsonMixin() {
         return builder -> builder

@@ -9,9 +9,8 @@ package com.openjiuwen.rdc.model.deployment;
  * Pure Java — no Spring / JDBC imports.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public interface DeploymentDiscoveryProvider {
-
     /** Stable provider identity, e.g. {@code static-dev} or {@code k8s-prod}. */
     String sourceId();
 
@@ -19,6 +18,7 @@ public interface DeploymentDiscoveryProvider {
      * Authoritative full snapshot for reconciliation after startup, revision gap,
      * or periodic refresh.
      */
+
     ListDeploymentInstancesResult listInstances();
 
     /**
@@ -27,6 +27,7 @@ public interface DeploymentDiscoveryProvider {
      * cannot be recovered, implementations should signal via thrown
      * {@link SourceRevisionGapException}.
      */
+
     default void watchInstances(DeploymentInstanceEventConsumer consumer) {
         // optional for MVP static provider
     }

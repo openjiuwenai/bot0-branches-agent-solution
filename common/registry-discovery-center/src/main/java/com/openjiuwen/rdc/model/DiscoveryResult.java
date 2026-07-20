@@ -11,7 +11,7 @@ import java.util.Objects;
  * Structured discovery response (Feat-015 0711 scope §3 {@code DiscoveryResult}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public record DiscoveryResult(
         DiscoveryOutcome outcome,
         List<DiscoveryCandidate> candidates,
@@ -27,6 +27,7 @@ public record DiscoveryResult(
 
     /**
      * of.
+     *
      * @param outcome outcome
      * @param candidates candidates
      * @param traceId traceId

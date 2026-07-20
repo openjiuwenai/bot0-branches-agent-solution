@@ -9,17 +9,18 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** SHA-256 digest of Agent Card JSON for change detection.
+/**
+ * SHA-256 digest of Agent Card JSON for change detection.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class CardDigest {
-
     private CardDigest() {
     }
 
     /**
      * sha256.
+     *
      * @param cardJson cardJson
      * @return result
      * @since 0.1.0

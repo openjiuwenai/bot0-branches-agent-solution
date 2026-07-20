@@ -12,11 +12,11 @@ import java.net.URI;
 /**
  * Validates push {@link AgentRegistryEntry} before persistence (0711 {@code REGISTRY_ENTRY_INVALID}).
  */
+
 final class RegistryEntryValidator {
-
     private RegistryEntryValidator() {
+         
     }
-
     static void validate(AgentRegistryEntry entry, String traceId) {
         if (entry == null || !entry.hasRegistryKey()) {
             throw new RegistryEntryInvalidException(
@@ -41,7 +41,7 @@ final class RegistryEntryValidator {
     }
 
     private static void requireEndpoint(String endpointUrl, String traceId) {
-        if (endpointUrl == null || endpointUrl.isBlank()) {
+            if (endpointUrl == null || endpointUrl.isBlank()) {
             throw new RegistryEntryInvalidException("endpointUrl is required", traceId);
         }
         try {
@@ -53,7 +53,7 @@ final class RegistryEntryValidator {
                         "endpointUrl must use http or https scheme", traceId);
             }
         } catch (IllegalArgumentException ex) {
-            throw new RegistryEntryInvalidException("endpointUrl is not a valid URI", traceId);
-        }
+                throw new RegistryEntryInvalidException("endpointUrl is not a valid URI", traceId);
+            }
     }
 }

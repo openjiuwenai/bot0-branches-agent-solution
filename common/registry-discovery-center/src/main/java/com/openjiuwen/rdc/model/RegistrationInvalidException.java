@@ -9,9 +9,8 @@ package com.openjiuwen.rdc.model;
  * {@code REGISTRATION_INVALID}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class RegistrationInvalidException extends RegistryFailureException {
-
     public RegistrationInvalidException(String message, String traceId) {
         super(RegistryFailure.of(
                 "REGISTRATION_INVALID",

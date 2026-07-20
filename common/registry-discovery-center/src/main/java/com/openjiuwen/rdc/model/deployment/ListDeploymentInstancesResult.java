@@ -7,10 +7,11 @@ package com.openjiuwen.rdc.model.deployment;
 import java.util.List;
 import java.util.Objects;
 
-/** Full deployment instance snapshot from a provider (Feat-015 0711 scope).
+/**
+ * Full deployment instance snapshot from a provider (Feat-015 0711 scope).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public record ListDeploymentInstancesResult(
         String sourceId,
         long sourceRevision,

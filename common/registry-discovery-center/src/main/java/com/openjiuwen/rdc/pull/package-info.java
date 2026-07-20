@@ -34,4 +34,5 @@
  * {@code AgentRdcRegistryJdbcPurityTest} JDBC-confinement + Jackson-license
  * rules.
  */
+
 package com.openjiuwen.rdc.pull;

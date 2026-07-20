@@ -13,9 +13,8 @@ package com.openjiuwen.rdc.model;
  * compatibility with existing audit outcome labels.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public class TenantIsolationViolationException extends RegistryFailureException {
-
     private static final long serialVersionUID = 1L;
 
     private final String requestedTenant;
@@ -24,7 +23,6 @@ public class TenantIsolationViolationException extends RegistryFailureException 
     public TenantIsolationViolationException(String requestedTenant, String currentTenant) {
         this(requestedTenant, currentTenant, null);
     }
-
     public TenantIsolationViolationException(String requestedTenant, String currentTenant, String traceId) {
         super(RegistryFailure.of(
                 "TENANT_SCOPE_DENIED",
@@ -37,15 +35,16 @@ public class TenantIsolationViolationException extends RegistryFailureException 
 
     /**
      * requestedTenant.
+     *
      * @return result
      * @since 0.1.0
      */
     public String requestedTenant() {
         return requestedTenant;
     }
-
     /**
      * currentTenant.
+     *
      * @return result
      * @since 0.1.0
      */

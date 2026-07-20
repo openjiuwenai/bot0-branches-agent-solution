@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Feedback-loop tests for PR #389 review issue #2 — the probe scheduler
@@ -56,7 +55,6 @@ import java.util.Optional;
  * overload).
  */
 class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
-
     private static MockWebServer agentServer;
     private static RegistryObservabilityConfig observability;
     private static AtomicInteger scanCallCount;
@@ -91,7 +89,6 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
     void resetCounters() {
         scanCallCount.set(0);
     }
-
     // ---- timeout: hung endpoint must not block the sweep ------------------
 
     /**

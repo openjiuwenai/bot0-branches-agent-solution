@@ -15,8 +15,8 @@ import java.time.Instant;
  * accessors on {@link com.openjiuwen.rdc.model.DiscoveryCandidate} and
  * {@link com.openjiuwen.rdc.model.AgentCardCandidate}).
  */
-abstract class DiscoveryCandidateJacksonMixin {
 
+abstract class DiscoveryCandidateJacksonMixin {
     @JsonProperty
     abstract String agentCardJson();
 

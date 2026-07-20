@@ -35,7 +35,6 @@ import javax.sql.DataSource;
  * Ensures missing instances are drained even when watch events bump revision first.
  */
 class ReconciliationWatchIntegrationTest {
-
     private static DataSource dataSource;
     private static MockWebServer oldRuntimeServer;
     private static MockWebServer newRuntimeServer;
@@ -70,11 +69,11 @@ class ReconciliationWatchIntegrationTest {
 
     @BeforeEach
     void clean() throws Exception {
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("DELETE FROM agent_registry_mvp");
-        jdbc.execute("DELETE FROM registry_source_state");
-        restartServers();
-    }
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            jdbc.execute("DELETE FROM agent_registry_mvp");
+            jdbc.execute("DELETE FROM registry_source_state");
+            restartServers();
+        }
 
     private static void restartServers() throws Exception {
         for (MockWebServer server : List.of(oldRuntimeServer, newRuntimeServer)) {

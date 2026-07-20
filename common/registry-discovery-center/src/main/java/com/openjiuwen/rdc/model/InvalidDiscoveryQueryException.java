@@ -9,13 +9,11 @@ package com.openjiuwen.rdc.model;
  * {@code INVALID_QUERY}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class InvalidDiscoveryQueryException extends RegistryFailureException {
-
     public InvalidDiscoveryQueryException(String failureCode, String message) {
         this(failureCode, message, null);
     }
-
     public InvalidDiscoveryQueryException(String failureCode, String message, String traceId) {
         super(RegistryFailure.of(
                 failureCode,
@@ -26,6 +24,7 @@ public final class InvalidDiscoveryQueryException extends RegistryFailureExcepti
 
     /**
      * failureCode.
+     *
      * @return result
      * @since 0.1.0
      */

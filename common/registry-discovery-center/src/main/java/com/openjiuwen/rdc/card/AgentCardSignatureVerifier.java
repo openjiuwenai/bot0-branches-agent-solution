@@ -23,14 +23,14 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Optional Agent Card JWS-style signature verification (0711 {@code AGENT_CARD_SIGNATURE_INVALID}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class AgentCardSignatureVerifier {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final boolean enabled;
@@ -43,15 +43,16 @@ public final class AgentCardSignatureVerifier {
 
     /**
      * disabled.
+     *
      * @return result
      * @since 0.1.0
      */
     public static AgentCardSignatureVerifier disabled() {
         return new AgentCardSignatureVerifier(false, Map.of());
     }
-
     /**
      * from.
+     *
      * @param options options
      * @return result
      * @since 0.1.0
@@ -70,6 +71,7 @@ public final class AgentCardSignatureVerifier {
 
     /**
      * verify.
+     *
      * @param cardJson cardJson
      * @return result
      * @since 0.1.0
@@ -105,25 +107,25 @@ public final class AgentCardSignatureVerifier {
 
     private boolean verifyOne(JsonNode signatureNode, byte[] payloadBytes)
             throws JsonProcessingException, InvalidKeyException, NoSuchAlgorithmException, SignatureException {
-        String protectedHeader = textOrNull(signatureNode, "protectedHeader");
-        String signatureValue = textOrNull(signatureNode, "signature");
-        if (protectedHeader == null || signatureValue == null) {
+        Optional<String> protectedHeader = textOrNull(signatureNode, "protectedHeader");
+        Optional<String> signatureValue = textOrNull(signatureNode, "signature");
+        if (protectedHeader.isEmpty() || signatureValue.isEmpty()) {
             return false;
         }
-        JsonNode header = MAPPER.readTree(base64UrlDecodeToString(protectedHeader));
-        String alg = textOrNull(header, "alg");
-        String kid = textOrNull(header, "kid");
-        if (alg == null || kid == null) {
+        JsonNode header = MAPPER.readTree(base64UrlDecodeToString(protectedHeader.get()));
+        Optional<String> alg = textOrNull(header, "alg");
+        Optional<String> kid = textOrNull(header, "kid");
+        if (alg.isEmpty() || kid.isEmpty()) {
             return false;
         }
-        PublicKey publicKey = trustedKeysByKid.get(kid);
+        PublicKey publicKey = trustedKeysByKid.get(kid.get());
         if (publicKey == null) {
             return false;
         }
-        Signature verifier = Signature.getInstance(mapAlgorithm(alg));
+        Signature verifier = Signature.getInstance(mapAlgorithm(alg.get()));
         verifier.initVerify(publicKey);
         verifier.update(payloadBytes);
-        return verifier.verify(base64UrlDecode(signatureValue));
+        return verifier.verify(base64UrlDecode(signatureValue.get()));
     }
 
     private static String unsignedPayload(JsonNode root) throws JsonProcessingException {
@@ -155,21 +157,20 @@ public final class AgentCardSignatureVerifier {
         }
     }
 
-    private static String textOrNull(JsonNode node, String field) {
+    private static Optional<String> textOrNull(JsonNode node, String field) {
         JsonNode child = node.get(field);
-        return child != null && child.isTextual() ? child.asText() : null;
+        return child != null && child.isTextual() ? Optional.of(child.asText()) : Optional.empty();
     }
 
     private static byte[] base64UrlDecode(String value) {
         return Base64.getUrlDecoder().decode(value);
     }
-
     private static String base64UrlDecodeToString(String value) {
         return new String(base64UrlDecode(value), StandardCharsets.UTF_8);
     }
-
     /**
      * VerificationResult.
+     *
      * @param ok ok
      * @param message message
      * @return result
@@ -179,7 +180,6 @@ public final class AgentCardSignatureVerifier {
         static VerificationResult success() {
             return new VerificationResult(true, null);
         }
-
         static VerificationResult invalid(String message) {
             return new VerificationResult(false, message);
         }

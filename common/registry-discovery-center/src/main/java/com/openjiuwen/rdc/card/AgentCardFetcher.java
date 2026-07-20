@@ -20,11 +20,25 @@ import java.util.Objects;
  * Fetches {@code /.well-known/agent-card.json} with security boundaries (0711 §5.1.3).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class AgentCardFetcher {
-
+    /**
+     * DEFAULT_CONNECT_TIMEOUT.
+     *
+     * @since 0.1.0
+     */
     public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    /**
+     * DEFAULT_READ_TIMEOUT.
+     *
+     * @since 0.1.0
+     */
     public static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(10);
+    /**
+     * DEFAULT_CARD_PATH.
+     *
+     * @since 0.1.0
+     */
     public static final String DEFAULT_CARD_PATH = "/.well-known/agent-card.json";
     private static final int MAX_RESPONSE_BYTES = 256 * 1024;
 
@@ -42,6 +56,7 @@ public final class AgentCardFetcher {
 
     /**
      * fromSecurity.
+     *
      * @param options options
      * @return result
      * @since 0.1.0
@@ -77,6 +92,7 @@ public final class AgentCardFetcher {
 
     /**
      * fetch.
+     *
      * @param baseUrl baseUrl
      * @param cardPath cardPath
      * @param headers headers
@@ -120,14 +136,15 @@ public final class AgentCardFetcher {
             }
             return FetchResult.success(body);
         } catch (InterruptedException ex) {
-            return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
-        } catch (IOException ex) {
-            return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
-        }
+                return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
+                } catch (IOException ex) {
+                return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
+            }
     }
 
     /**
      * fetchValidated.
+     *
      * @param baseUrl baseUrl
      * @param cardPath cardPath
      * @param headers headers
@@ -154,6 +171,7 @@ public final class AgentCardFetcher {
 
     /**
      * FetchResult.
+     *
      * @param success success
      * @param cardJson cardJson
      * @param capabilityVersion capabilityVersion
@@ -168,11 +186,9 @@ public final class AgentCardFetcher {
         static FetchResult success(String cardJson) {
             return new FetchResult(true, cardJson, null, null, null, null);
         }
-
         static FetchResult success(String cardJson, String capabilityVersion, String contractVersion) {
             return new FetchResult(true, cardJson, capabilityVersion, contractVersion, null, null);
         }
-
         static FetchResult failure(String failureCode, String message) {
             return new FetchResult(false, null, null, null, failureCode, message);
         }

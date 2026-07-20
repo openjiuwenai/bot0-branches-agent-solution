@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 
 class RegistryRequestDeadlineTest {
-
     @Test
     void future_deadline_passes() {
         assertThatCode(() -> RegistryRequestDeadline.enforce(
@@ -28,8 +27,8 @@ class RegistryRequestDeadlineTest {
                 .isInstanceOf(DeadlineExceededException.class)
                 .satisfies(ex -> {
                     if (ex instanceof DeadlineExceededException deadline) {
-                        assertThat(deadline.failure().failureCode()).isEqualTo("DEADLINE_EXCEEDED");
-                    }
+        assertThat(deadline.failure().failureCode()).isEqualTo("DEADLINE_EXCEEDED");
+    }
                 });
     }
 }

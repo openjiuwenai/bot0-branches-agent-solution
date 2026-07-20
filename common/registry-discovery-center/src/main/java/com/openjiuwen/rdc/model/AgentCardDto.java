@@ -46,9 +46,8 @@ import java.util.Objects;
  * stays pure Java (ADR-0160 decision 1).
  *
  * @since 0.1.0
-  */
+ */
 public final class AgentCardDto {
-
     // ---- ICD routing fields (always populated on match) ----
 
     private final String serviceId;
@@ -82,105 +81,105 @@ public final class AgentCardDto {
 
     /**
      * getServiceId.
+     *
      * @return result
      * @since 0.1.0
      */
     public String getServiceId() {
         return serviceId;
     }
-
     /**
      * getRouteHandle.
+     *
      * @return result
      * @since 0.1.0
      */
     public String getRouteHandle() {
         return routeHandle;
     }
-
     /**
      * getHealth.
+     *
      * @return result
      * @since 0.1.0
      */
     public String getHealth() {
         return health;
     }
-
     /**
      * getContractVersion.
+     *
      * @return result
      * @since 0.1.0
      */
     public String getContractVersion() {
         return contractVersion;
     }
-
     /**
      * getCapabilityVersion.
+     *
      * @return result
      * @since 0.1.0
      */
     public String getCapabilityVersion() {
         return capabilityVersion;
     }
-
     /**
      * getWeight.
+     *
      * @return result
      * @since 0.1.0
      */
     public int getWeight() {
         return weight;
     }
-
     /**
      * getRegion.
+     *
      * @return result
      * @since 0.1.0
      */
     public String getRegion() {
         return region;
     }
-
     /**
      * getMaxConcurrency.
+     *
      * @return result
      * @since 0.1.0
      */
     public int getMaxConcurrency() {
         return maxConcurrency;
     }
-
-    @Nullable
     /**
      * getAgentName.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String getAgentName() {
         return agentName;
     }
-
-    @Nullable
     /**
      * getFrameworkType.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public FrameworkType getFrameworkType() {
         return frameworkType;
     }
-
     /**
      * builder.
+     *
      * @return result
      * @since 0.1.0
      */
     public static Builder builder() {
         return new Builder();
     }
-
     public static final class Builder {
         private String serviceId;
         private String routeHandle;
@@ -194,10 +193,11 @@ public final class AgentCardDto {
         private FrameworkType frameworkType;
 
         private Builder() {
+             
         }
-
         /**
          * serviceId.
+         *
          * @param serviceId serviceId
          * @return result
          * @since 0.1.0
@@ -209,6 +209,7 @@ public final class AgentCardDto {
 
         /**
          * routeHandle.
+         *
          * @param routeHandle routeHandle
          * @return result
          * @since 0.1.0
@@ -220,6 +221,7 @@ public final class AgentCardDto {
 
         /**
          * health.
+         *
          * @param health health
          * @return result
          * @since 0.1.0
@@ -231,6 +233,7 @@ public final class AgentCardDto {
 
         /**
          * contractVersion.
+         *
          * @param contractVersion contractVersion
          * @return result
          * @since 0.1.0
@@ -242,6 +245,7 @@ public final class AgentCardDto {
 
         /**
          * capabilityVersion.
+         *
          * @param capabilityVersion capabilityVersion
          * @return result
          * @since 0.1.0
@@ -253,6 +257,7 @@ public final class AgentCardDto {
 
         /**
          * weight.
+         *
          * @param weight weight
          * @return result
          * @since 0.1.0
@@ -264,6 +269,7 @@ public final class AgentCardDto {
 
         /**
          * region.
+         *
          * @param region region
          * @return result
          * @since 0.1.0
@@ -275,6 +281,7 @@ public final class AgentCardDto {
 
         /**
          * maxConcurrency.
+         *
          * @param maxConcurrency maxConcurrency
          * @return result
          * @since 0.1.0
@@ -286,6 +293,7 @@ public final class AgentCardDto {
 
         /**
          * agentName.
+         *
          * @param agentName agentName
          * @return result
          * @since 0.1.0
@@ -297,6 +305,7 @@ public final class AgentCardDto {
 
         /**
          * frameworkType.
+         *
          * @param frameworkType frameworkType
          * @return result
          * @since 0.1.0
@@ -308,6 +317,7 @@ public final class AgentCardDto {
 
         /**
          * build.
+         *
          * @return result
          * @since 0.1.0
          */

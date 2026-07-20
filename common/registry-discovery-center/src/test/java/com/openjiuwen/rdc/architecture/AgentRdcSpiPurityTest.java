@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
-import com.tngtech.archunit.lang.ArchRule;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +35,6 @@ import org.junit.jupiter.api.Test;
  * <p>Assertion ID: HA-001.
  */
 class AgentRdcSpiPurityTest {
-
     /**
      * Production SPI classes only ({@code com.openjiuwen.rdc.model} and
      * sub-packages). Test classes are excluded — the rule constrains the shipped

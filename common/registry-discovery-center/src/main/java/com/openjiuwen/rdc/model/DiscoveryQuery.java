@@ -10,9 +10,8 @@ import java.util.Objects;
  * Structured discovery request (Feat-015 0711 scope §3 {@code DiscoveryQuery}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class DiscoveryQuery {
-
     private final RegistryRequestContext context;
     @Nullable
     private final String agentId;
@@ -37,15 +36,16 @@ public final class DiscoveryQuery {
 
     /**
      * builder.
+     *
      * @return result
      * @since 0.1.0
      */
     public static Builder builder() {
         return new Builder();
     }
-
     /**
      * validate.
+     *
      * @since 0.1.0
      */
     public void validate() {
@@ -63,75 +63,74 @@ public final class DiscoveryQuery {
 
     /**
      * context.
+     *
      * @return result
      * @since 0.1.0
      */
     public RegistryRequestContext context() {
         return context;
     }
-
-    @Nullable
     /**
      * agentId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String agentId() {
         return agentId;
     }
-
-    @Nullable
     /**
      * serviceId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String serviceId() {
         return serviceId;
     }
-
-    @Nullable
     /**
      * a2aSkillId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String a2aSkillId() {
         return a2aSkillId;
     }
-
     /**
      * constraints.
+     *
      * @return result
      * @since 0.1.0
      */
     public DiscoveryConstraints constraints() {
         return constraints;
     }
-
     /**
      * limit.
+     *
      * @return result
      * @since 0.1.0
      */
     public int limit() {
         return limit;
     }
-
-    @Nullable
     /**
      * continuationToken.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String continuationToken() {
         return continuationToken;
     }
-
     private static boolean isBlank(@Nullable String value) {
         return value == null || value.isBlank();
     }
-
     public static final class Builder {
         private RegistryRequestContext context;
         private String agentId;
@@ -143,6 +142,7 @@ public final class DiscoveryQuery {
 
         /**
          * context.
+         *
          * @param context context
          * @return result
          * @since 0.1.0
@@ -154,6 +154,7 @@ public final class DiscoveryQuery {
 
         /**
          * agentId.
+         *
          * @param agentId agentId
          * @return result
          * @since 0.1.0
@@ -165,6 +166,7 @@ public final class DiscoveryQuery {
 
         /**
          * serviceId.
+         *
          * @param serviceId serviceId
          * @return result
          * @since 0.1.0
@@ -176,6 +178,7 @@ public final class DiscoveryQuery {
 
         /**
          * a2aSkillId.
+         *
          * @param a2aSkillId a2aSkillId
          * @return result
          * @since 0.1.0
@@ -187,6 +190,7 @@ public final class DiscoveryQuery {
 
         /**
          * constraints.
+         *
          * @param constraints constraints
          * @return result
          * @since 0.1.0
@@ -198,6 +202,7 @@ public final class DiscoveryQuery {
 
         /**
          * limit.
+         *
          * @param limit limit
          * @return result
          * @since 0.1.0
@@ -209,6 +214,7 @@ public final class DiscoveryQuery {
 
         /**
          * continuationToken.
+         *
          * @param continuationToken continuationToken
          * @return result
          * @since 0.1.0
@@ -220,6 +226,7 @@ public final class DiscoveryQuery {
 
         /**
          * build.
+         *
          * @return result
          * @since 0.1.0
          */

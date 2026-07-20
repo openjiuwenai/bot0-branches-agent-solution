@@ -21,9 +21,8 @@ package com.openjiuwen.rdc.tenant;
  * decision 1).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public interface TenantContext {
-
     /**
      * @return the tenant id bound to the current call scope, or {@code null}
      *         when no caller has bound the context. HTTP-entry call sites
@@ -34,5 +33,6 @@ public interface TenantContext {
      *         tenant against the explicit parameter only when bound (ADR-0160
          *   decision 6).
      */
+
     String current();
 }

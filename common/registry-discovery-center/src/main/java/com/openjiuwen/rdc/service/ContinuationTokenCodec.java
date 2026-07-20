@@ -14,8 +14,8 @@ import java.util.Base64;
 /**
  * Opaque pagination token bound to tenant + caller + query fingerprint (0711 §5.1.6).
  */
-final class ContinuationTokenCodec {
 
+final class ContinuationTokenCodec {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ContinuationTokenCodec() {
@@ -35,10 +35,10 @@ final class ContinuationTokenCodec {
             }
             return payload.offset();
         } catch (IllegalArgumentException ex) {
-            throw ex;
-        } catch (JsonProcessingException ex) {
-            throw new IllegalArgumentException("malformed continuation token", ex);
-        }
+                throw ex;
+                } catch (JsonProcessingException ex) {
+                throw new IllegalArgumentException("malformed continuation token", ex);
+            }
     }
 
     static String encode(DiscoveryQuery query, int nextOffset) {
@@ -65,5 +65,5 @@ final class ContinuationTokenCodec {
     }
 
     private record TokenPayload(String tenantId, String callerRef, String queryFingerprint, int offset) {
+        }
     }
-}

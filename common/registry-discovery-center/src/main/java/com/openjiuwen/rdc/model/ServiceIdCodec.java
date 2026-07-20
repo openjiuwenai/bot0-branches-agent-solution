@@ -24,7 +24,7 @@ import java.util.Locale;
  * stays ArchUnit-pure.
  *
  * @since 2026-07-10
-  */
+ */
 public final class ServiceIdCodec {
     private ServiceIdCodec() {
     }
@@ -38,8 +38,10 @@ public final class ServiceIdCodec {
      *
      * @param endpointUrl the runtime endpoint URL (e.g.
      *                    {@code http://10.0.0.1:8080}, {@code https://host})
+     *
      * @return the derived {@code service_id} (e.g. {@code 10.0.0.1},
      *         {@code host.example.com})
+     *
      * @throws IllegalArgumentException if {@code endpointUrl} is blank or has
      *         no parseable host
      */
@@ -69,6 +71,7 @@ public final class ServiceIdCodec {
      * @param entry the registry entry whose {@code endpointUrl} is the
      *              derivation source and whose {@code serviceId} will be
      *              overwritten
+     *
      * @throws IllegalArgumentException if {@code entry.endpointUrl} is blank
      *         or malformed
      */

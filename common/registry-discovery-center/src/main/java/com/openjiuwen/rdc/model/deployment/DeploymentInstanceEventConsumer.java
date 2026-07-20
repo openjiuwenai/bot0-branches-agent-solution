@@ -9,9 +9,8 @@ package com.openjiuwen.rdc.model.deployment;
  * {@link DeploymentDiscoveryProvider}.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 @FunctionalInterface
 public interface DeploymentInstanceEventConsumer {
-
     void onEvent(DeploymentInstanceEvent event);
 }

@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 
 class ContinuationTokenCodecTest {
-
     @Test
     void encode_decode_round_trip() {
         DiscoveryQuery query = sampleQuery("tenant-a", "caller-a", "agent-1");

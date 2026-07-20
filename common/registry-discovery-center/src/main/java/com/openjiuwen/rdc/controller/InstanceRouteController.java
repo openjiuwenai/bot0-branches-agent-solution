@@ -34,11 +34,10 @@ import java.util.UUID;
  * ({@code POST /api/registry/discover}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 @RestController
 @RequestMapping("/api/registry")
 public class InstanceRouteController {
-
     private static final String TRACE_PARENT_HEADER = "traceparent";
     private static final String X_TRACE_ID_HEADER = "X-Trace-Id";
 
@@ -51,15 +50,16 @@ public class InstanceRouteController {
         this.repository = repository;
     }
 
-    @GetMapping("/instances/{tenantId}/{agentId}")
     /**
      * listInstances.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param false false
      * @return result
      * @since 0.1.0
      */
+    @GetMapping("/instances/{tenantId}/{agentId}")
     public List<AgentCardDto> listInstances(
             @PathVariable String tenantId,
             @PathVariable String agentId,
@@ -68,15 +68,16 @@ public class InstanceRouteController {
         return discovery.searchInstancesByAgentId(tenantId, agentId, contractVersion);
     }
 
-    @GetMapping("/instances/by-service/{tenantId}/{serviceId}")
     /**
      * listInstancesByService.
+     *
      * @param tenantId tenantId
      * @param serviceId serviceId
      * @param false false
      * @return result
      * @since 0.1.0
      */
+    @GetMapping("/instances/by-service/{tenantId}/{serviceId}")
     public List<AgentCardDto> listInstancesByService(
             @PathVariable String tenantId,
             @PathVariable String serviceId,
@@ -85,15 +86,16 @@ public class InstanceRouteController {
         return discovery.searchByServiceId(tenantId, serviceId, contractVersion);
     }
 
-    @GetMapping("/instances/by-capability/{tenantId}/{capability}")
     /**
      * listInstancesByCapability.
+     *
      * @param tenantId tenantId
      * @param capability capability
      * @param false false
      * @return result
      * @since 0.1.0
      */
+    @GetMapping("/instances/by-capability/{tenantId}/{capability}")
     public List<AgentCardDto> listInstancesByCapability(
             @PathVariable String tenantId,
             @PathVariable String capability,
@@ -102,15 +104,16 @@ public class InstanceRouteController {
         return discovery.searchByCapability(tenantId, capability, contractVersion);
     }
 
-    @PostMapping("/route-handle/resolve")
     /**
      * resolveRouteHandle.
+     *
      * @param request request
      * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
      * @param false false
      * @return result
      * @since 0.1.0
      */
+    @PostMapping("/route-handle/resolve")
     public RouteResolution resolveRouteHandle(
             @RequestBody ResolveRequest request,
             @RequestHeader(value = TRACE_PARENT_HEADER, required = false) String traceparent,
@@ -134,12 +137,13 @@ public class InstanceRouteController {
         return discovery.resolveRouteHandle(request.routeHandle(), request.tenantId());
     }
 
-    @DeleteMapping("/deregister/{tenantId}/{agentId}/{serviceId}/{instanceId}")
     /**
      * deregisterSingleInstance.
+     *
      * @param pathVars pathVars
      * @since 0.1.0
      */
+    @DeleteMapping("/deregister/{tenantId}/{agentId}/{serviceId}/{instanceId}")
     public void deregisterSingleInstance(@PathVariable Map<String, String> pathVars) {
         String tenantId = pathVars.get("tenantId");
         String agentId = pathVars.get("agentId");
@@ -152,6 +156,7 @@ public class InstanceRouteController {
 
     /**
      * ResolveRequest.
+     *
      * @param routeHandle routeHandle
      * @param tenantId tenantId
      * @param context context
@@ -167,6 +172,7 @@ public class InstanceRouteController {
 
     /**
      * ContextRequest.
+     *
      * @param tenantId tenantId
      * @param callerRef callerRef
      * @param requestId requestId
@@ -180,8 +186,8 @@ public class InstanceRouteController {
             String requestId,
             Instant deadline
     ) {
+         
     }
-
     private static String resolveTraceId(String traceparent, String xTraceId) {
         if (traceparent != null && !traceparent.isBlank()) {
             String[] parts = traceparent.trim().split("-");
@@ -196,10 +202,10 @@ public class InstanceRouteController {
     }
 
     private static void requireNonBlank(String message, String... values) {
-        for (String value : values) {
+            for (String value : values) {
             if (value == null || value.isBlank()) {
-                throw new IllegalArgumentException(message);
-            }
+            throw new IllegalArgumentException(message);
+        }
         }
     }
 }

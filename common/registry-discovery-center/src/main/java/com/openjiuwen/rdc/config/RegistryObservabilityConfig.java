@@ -52,10 +52,9 @@ import java.util.concurrent.TimeUnit;
  * (no risk of audit-without-metric or vice versa).
  *
  * @since 0.1.0
-  */
+ */
 @Configuration
 public class RegistryObservabilityConfig {
-
     private static final Logger AUDIT = LoggerFactory.getLogger("registry.audit");
 
     private static final String PLACEHOLDER = "-";
@@ -65,11 +64,11 @@ public class RegistryObservabilityConfig {
     public RegistryObservabilityConfig(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
     }
-
     // ---- audit + metrics per operation ----
 
     /**
      * observeRegister.
+     *
      * @param traceId traceId
      * @param tenantId tenantId
      * @param agentId agentId
@@ -81,16 +80,14 @@ public class RegistryObservabilityConfig {
      * @param latencyMs latencyMs
      * @since 0.1.0
      */
-    public void observeRegister(String traceId, String tenantId, String agentId,
-                                String contractVersion, String capabilityVersion,
-                                String health, String routeHandleId, String outcome, long latencyMs) {
-        audit("register", traceId, tenantId, agentId,
-                contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
-        recordMetrics("register", outcome, latencyMs);
+    public void observeRegister(RegistryOpAudit audit) {
+        audit("register", audit);
+        recordMetrics("register", audit.outcome(), audit.latencyMs());
     }
 
     /**
      * observeDeregister.
+     *
      * @param traceId traceId
      * @param tenantId tenantId
      * @param agentId agentId
@@ -100,13 +97,14 @@ public class RegistryObservabilityConfig {
      */
     public void observeDeregister(String traceId, String tenantId, String agentId,
                                   String outcome, long latencyMs) {
-        audit("deregister", traceId, tenantId, agentId,
-                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs);
+        audit("deregister", new RegistryOpAudit(
+                traceId, tenantId, agentId, null, null, null, null, outcome, latencyMs));
         recordMetrics("deregister", outcome, latencyMs);
     }
 
     /**
      * observeProbe.
+     *
      * @param traceId traceId
      * @param tenantId tenantId
      * @param agentId agentId
@@ -115,15 +113,14 @@ public class RegistryObservabilityConfig {
      * @param latencyMs latencyMs
      * @since 0.1.0
      */
-    public void observeProbe(String traceId, String tenantId, String agentId,
-                             String health, String outcome, long latencyMs) {
-        audit("probe", traceId, tenantId, agentId,
-                PLACEHOLDER, PLACEHOLDER, health, PLACEHOLDER, outcome, latencyMs);
-        recordMetrics("probe", outcome, latencyMs);
+    public void observeProbe(RegistryOpAudit audit) {
+        audit("probe", audit);
+        recordMetrics("probe", audit.outcome(), audit.latencyMs());
     }
 
     /**
      * observeDiscover.
+     *
      * @param traceId traceId
      * @param tenantId tenantId
      * @param agentId agentId
@@ -132,19 +129,20 @@ public class RegistryObservabilityConfig {
      * @param latencyMs latencyMs
      * @since 0.1.0
      */
-    public void observeDiscover(String traceId, String tenantId, String agentId,
-                                String outcome, int resultCount, long latencyMs) {
+    public void observeDiscover(RegistryOpAudit audit, int resultCount) {
         AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={} resultCount={}",
-                traceId, tenantId, agentId == null ? PLACEHOLDER : agentId,
-                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
+                audit.traceId(), audit.tenantId(),
+                audit.agentId() == null ? PLACEHOLDER : audit.agentId(),
+                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, audit.outcome(), audit.latencyMs(),
                 resultCount < 0 ? PLACEHOLDER : String.valueOf(resultCount));
-        recordMetrics("discover", outcome, latencyMs);
+        recordMetrics("discover", audit.outcome(), audit.latencyMs());
     }
 
     /**
      * observeResolve.
+     *
      * @param traceId traceId
      * @param tenantId tenantId
      * @param routeHandleId routeHandleId
@@ -152,11 +150,9 @@ public class RegistryObservabilityConfig {
      * @param latencyMs latencyMs
      * @since 0.1.0
      */
-    public void observeResolve(String traceId, String tenantId, String routeHandleId,
-                               String outcome, long latencyMs) {
-        audit("resolve", traceId, tenantId, PLACEHOLDER,
-                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, routeHandleId, outcome, latencyMs);
-        recordMetrics("resolve", outcome, latencyMs);
+    public void observeResolve(RegistryOpAudit audit) {
+        audit("resolve", audit);
+        recordMetrics("resolve", audit.outcome(), audit.latencyMs());
     }
 
     /** Governance events per 0711 §5.1.8 SHOULD (independent of query failures). */
@@ -164,18 +160,18 @@ public class RegistryObservabilityConfig {
                                          String failureCode) {
         recordGovernance("card_refresh_failed", sourceId, tenantId, instanceId, failureCode);
     }
-
     /**
      * observeSourceStale.
+     *
      * @param sourceId sourceId
      * @since 0.1.0
      */
     public void observeSourceStale(String sourceId) {
         recordGovernance("source_stale", sourceId, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER);
     }
-
     /**
      * observeReconciliationConflict.
+     *
      * @param sourceId sourceId
      * @param revision revision
      * @since 0.1.0
@@ -187,6 +183,7 @@ public class RegistryObservabilityConfig {
 
     /**
      * observeInstanceDraining.
+     *
      * @param sourceId sourceId
      * @param tenantId tenantId
      * @param agentId agentId
@@ -195,9 +192,9 @@ public class RegistryObservabilityConfig {
     public void observeInstanceDraining(String sourceId, String tenantId, String agentId) {
         recordGovernance("draining", sourceId, tenantId, agentId, PLACEHOLDER);
     }
-
     /**
      * observeLeaseExpired.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @since 0.1.0
@@ -205,9 +202,9 @@ public class RegistryObservabilityConfig {
     public void observeLeaseExpired(String tenantId, String agentId) {
         recordGovernance("lease_expired", PLACEHOLDER, tenantId, agentId, PLACEHOLDER);
     }
-
     /**
      * observeUnhealthy.
+     *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param health health
@@ -216,17 +213,26 @@ public class RegistryObservabilityConfig {
     public void observeUnhealthy(String tenantId, String agentId, String health) {
         recordGovernance("unhealthy", PLACEHOLDER, tenantId, agentId, health);
     }
-
     // ---- internals ----
 
-    private void audit(String op, String traceId, String tenantId, String agentId,
-                       String contractVersion, String capabilityVersion,
-                       String health, String routeHandleId, String outcome, long latencyMs) {
+    private void audit(String op, RegistryOpAudit audit) {
         AUDIT.info("registryOp={} traceId={} tenantId={} agentId={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={}",
-                op, traceId, tenantId, agentId,
-                contractVersion, capabilityVersion, health, routeHandleId, outcome, latencyMs);
+                op,
+                audit.traceId(),
+                audit.tenantId(),
+                nullToPlaceholder(audit.agentId()),
+                nullToPlaceholder(audit.contractVersion()),
+                nullToPlaceholder(audit.capabilityVersion()),
+                nullToPlaceholder(audit.health()),
+                nullToPlaceholder(audit.routeHandleId()),
+                audit.outcome(),
+                audit.latencyMs());
+    }
+
+    private static String nullToPlaceholder(String value) {
+        return value == null ? PLACEHOLDER : value;
     }
 
     private void recordMetrics(String op, String outcome, long latencyMs) {

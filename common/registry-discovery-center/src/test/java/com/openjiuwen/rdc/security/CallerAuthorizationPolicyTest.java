@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 class CallerAuthorizationPolicyTest {
-
     @Test
     void permissive_rejects_blank_caller() {
         CallerAuthorizationPolicy policy = new CallerAuthorizationPolicy.Permissive();

@@ -31,4 +31,5 @@
  *
  * <p>Authority: ADR-0160 + FEAT-016 §3.1.
  */
+
 package com.openjiuwen.rdc.config;

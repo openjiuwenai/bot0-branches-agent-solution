@@ -14,9 +14,8 @@ import java.util.Objects;
  * references (those belong to FEAT-016).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class DiscoveryCandidate {
-
     @Nullable
     private final String agentCardJson;
     private final String agentId;
@@ -44,97 +43,97 @@ public final class DiscoveryCandidate {
 
     /**
      * builder.
+     *
      * @return result
      * @since 0.1.0
      */
     public static Builder builder() {
         return new Builder();
     }
-
-    @Nullable
     /**
      * agentCardJson.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String agentCardJson() {
         return agentCardJson;
     }
-
     /**
      * agentId.
+     *
      * @return result
      * @since 0.1.0
      */
     public String agentId() {
         return agentId;
     }
-
     /**
      * serviceId.
+     *
      * @return result
      * @since 0.1.0
      */
     public String serviceId() {
         return serviceId;
     }
-
-    @Nullable
     /**
      * matchedA2aSkillId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String matchedA2aSkillId() {
         return matchedA2aSkillId;
     }
-
     /**
      * contractVersion.
+     *
      * @return result
      * @since 0.1.0
      */
     public String contractVersion() {
         return contractVersion;
     }
-
     /**
      * capabilityVersion.
+     *
      * @return result
      * @since 0.1.0
      */
     public String capabilityVersion() {
         return capabilityVersion;
     }
-
     /**
      * registrationStatus.
+     *
      * @return result
      * @since 0.1.0
      */
     public RegistrationStatus registrationStatus() {
         return registrationStatus;
     }
-
     /**
      * freshness.
+     *
      * @return result
      * @since 0.1.0
      */
     public Freshness freshness() {
         return freshness;
     }
-
-    @Nullable
     /**
      * lastValidatedAt.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public Instant lastValidatedAt() {
         return lastValidatedAt;
     }
-
     public static final class Builder {
         private String agentCardJson;
         private String agentId;
@@ -148,6 +147,7 @@ public final class DiscoveryCandidate {
 
         /**
          * agentCardJson.
+         *
          * @param agentCardJson agentCardJson
          * @return result
          * @since 0.1.0
@@ -159,6 +159,7 @@ public final class DiscoveryCandidate {
 
         /**
          * agentId.
+         *
          * @param agentId agentId
          * @return result
          * @since 0.1.0
@@ -170,6 +171,7 @@ public final class DiscoveryCandidate {
 
         /**
          * serviceId.
+         *
          * @param serviceId serviceId
          * @return result
          * @since 0.1.0
@@ -181,6 +183,7 @@ public final class DiscoveryCandidate {
 
         /**
          * matchedA2aSkillId.
+         *
          * @param matchedA2aSkillId matchedA2aSkillId
          * @return result
          * @since 0.1.0
@@ -192,6 +195,7 @@ public final class DiscoveryCandidate {
 
         /**
          * contractVersion.
+         *
          * @param contractVersion contractVersion
          * @return result
          * @since 0.1.0
@@ -203,6 +207,7 @@ public final class DiscoveryCandidate {
 
         /**
          * capabilityVersion.
+         *
          * @param capabilityVersion capabilityVersion
          * @return result
          * @since 0.1.0
@@ -214,6 +219,7 @@ public final class DiscoveryCandidate {
 
         /**
          * registrationStatus.
+         *
          * @param registrationStatus registrationStatus
          * @return result
          * @since 0.1.0
@@ -225,6 +231,7 @@ public final class DiscoveryCandidate {
 
         /**
          * freshness.
+         *
          * @param freshness freshness
          * @return result
          * @since 0.1.0
@@ -236,6 +243,7 @@ public final class DiscoveryCandidate {
 
         /**
          * lastValidatedAt.
+         *
          * @param lastValidatedAt lastValidatedAt
          * @return result
          * @since 0.1.0
@@ -247,6 +255,7 @@ public final class DiscoveryCandidate {
 
         /**
          * build.
+         *
          * @return result
          * @since 0.1.0
          */

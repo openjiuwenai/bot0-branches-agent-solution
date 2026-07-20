@@ -42,7 +42,6 @@ import javax.sql.DataSource;
  * Old search_tsv / capability / agent_type artifacts must be gone.
  */
 class AgentRegistryMigrationTest {
-
     private static DataSource dataSource;
     private static JdbcTemplate jdbc;
 
@@ -61,13 +60,13 @@ class AgentRegistryMigrationTest {
 
     @Test
     void v2_through_v11_migrations_applied_cleanly() {
-        List<String> applied = jdbc.queryForList(
-                "SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank",
-                String.class);
-        assertThat(applied)
-                .as("V2–V11 migrations must all apply cleanly")
-                .contains("2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
-    }
+            List<String> applied = jdbc.queryForList(
+            "SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank",
+            String.class);
+            assertThat(applied)
+            .as("V2–V11 migrations must all apply cleanly")
+            .contains("2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
+        }
 
     @Test
     void agent_registry_mvp_has_four_field_primary_key() {

@@ -9,9 +9,8 @@ package com.openjiuwen.rdc.controller;
  * deployment-discovery reconciliation is the active registration path.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public class PushRegistrationDisabledException extends RuntimeException {
-
     public PushRegistrationDisabledException(String message) {
         super(message);
     }

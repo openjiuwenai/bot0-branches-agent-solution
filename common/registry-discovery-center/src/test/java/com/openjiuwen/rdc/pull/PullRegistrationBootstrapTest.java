@@ -34,7 +34,6 @@ import java.util.Optional;
  * fake {@link AgentRegistryRepository} to assert upsert calls.
  */
 class PullRegistrationBootstrapTest {
-
     private static MockWebServer server;
     private static RegistryObservabilityConfig observability;
     private static ObjectMapper objectMapper;
@@ -56,9 +55,8 @@ class PullRegistrationBootstrapTest {
 
     @BeforeEach
     void resetServer() {
-        server.getRequestCount();
-    }
-
+            server.getRequestCount();
+        }
     @Test
     void disabled_properties_no_op_on_ready_event() {
         PullRegistrationProperties props = new PullRegistrationProperties();
@@ -159,32 +157,28 @@ class PullRegistrationBootstrapTest {
         public void upsert(AgentRegistryEntry entry, String a2aAgentCardJson) {
             upserts.add(new UpsertCall(entry, a2aAgentCardJson));
         }
-
         @Override
         public boolean delete(String tenantId, String agentId) {
             return false;
         }
-
         @Override
         public boolean delete(String tenantId, String agentId, String serviceId) {
             return false;
         }
-
         @Override
         public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return List.of();
         }
-
         @Override
-        public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
+        public Optional<EndpointEntry> findEndpoint(
+                String tenantId, String agentId,
+                String serviceId, String instanceId) {
             return Optional.empty();
         }
-
         @Override
         public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
             return List.of();
         }
-
         @Override
         public void reconcileUpsert(ReconcileUpsertCommand command) {
         }
@@ -193,7 +187,6 @@ class PullRegistrationBootstrapTest {
         public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
             return List.of();
         }
-
         @Override
         public void markDraining(String tenantId, String agentId, String serviceId) {
         }
@@ -214,17 +207,14 @@ class PullRegistrationBootstrapTest {
         public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) {
             return List.of();
         }
-
         @Override
         public List<InstanceKey> listExpiredLeases(java.time.Instant now) {
             return List.of();
         }
-
         @Override
         public long getLastProcessedRevision(String sourceId) {
             return 0;
         }
-
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision) {
         }
@@ -237,19 +227,16 @@ class PullRegistrationBootstrapTest {
         public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
             return java.util.Optional.empty();
         }
-
         @Override
         public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
         }
-
         @Override
         public void reconcilePending(ReconcilePendingCommand command) {
         }
 
         @Override
         public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
+            }
         }
-
-    }
 }

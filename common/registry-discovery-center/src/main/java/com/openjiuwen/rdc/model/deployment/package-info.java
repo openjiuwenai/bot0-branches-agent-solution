@@ -16,4 +16,5 @@
  *
  * <p>Authority: Feat-015 DeploymentDiscoveryProvider contract.
  */
+
 package com.openjiuwen.rdc.model.deployment;

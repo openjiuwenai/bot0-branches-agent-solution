@@ -7,6 +7,7 @@ package com.openjiuwen.rdc.pull;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.config.RegistryOpAudit;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
@@ -57,7 +58,6 @@ import java.util.UUID;
         havingValue = "true"
 )
 public class PullRegistrationBootstrap implements ApplicationListener<ApplicationReadyEvent> {
-
     private static final Logger LOG = LoggerFactory.getLogger(PullRegistrationBootstrap.class);
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
@@ -81,20 +81,21 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
                 .build();
     }
 
-    @Override
     /**
      * onApplicationEvent.
+     *
      * @param event event
      * @since 0.1.0
      */
+    @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
         runBootstrap();
     }
-
     /**
      * Package-private entry point for tests — avoids constructing a real
      * {@link ApplicationReadyEvent} (whose source must be non-null).
      */
+
     void runBootstrap() {
         if (!properties.isEnabled() || properties.getRuntimes().isEmpty()) {
             return;
@@ -144,9 +145,10 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
             throw new IllegalStateException("pull-bootstrap failed: " + ex.getMessage(), ex);
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeRegister(traceId, runtime.getTenantId(), runtime.getAgentId(),
-                    runtime.getContractVersion(),
-                    runtime.getCapabilityVersion(), "ONLINE", null, outcome, latencyMs);
+            observability.observeRegister(new RegistryOpAudit(
+                    traceId, runtime.getTenantId(), runtime.getAgentId(),
+                    runtime.getContractVersion(), runtime.getCapabilityVersion(),
+                    "ONLINE", null, outcome, latencyMs));
         }
     }
 
@@ -162,25 +164,25 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
 
     private static AgentRegistryEntry buildEntry(PullRegistrationProperties.RuntimeEntry runtime,
                                                   String agentName) {
-        AgentRegistryEntry entry = new AgentRegistryEntry();
-        entry.setTenantId(runtime.getTenantId());
-        entry.setAgentId(runtime.getAgentId());
-        entry.setAgentName(agentName);
-        entry.setFrameworkType(runtime.getFrameworkType());
-        entry.setRouteKey(runtime.getRouteKey());
-        entry.setContractVersion(runtime.getContractVersion());
-        entry.setCapabilityVersion(runtime.getCapabilityVersion());
-        entry.setEndpointUrl(runtime.getBaseUrl());
-        entry.setRegion(runtime.getRegion());
-        entry.setMaxConcurrency(runtime.getMaxConcurrency() != null
-                ? runtime.getMaxConcurrency()
-                : PullRegistrationProperties.DEFAULT_MAX_CONCURRENCY);
-        entry.setWeight(runtime.getWeight() != null
-                ? runtime.getWeight()
-                : PullRegistrationProperties.DEFAULT_WEIGHT);
-        ServiceIdCodec.applyTo(entry);
-        entry.setCapabilities(java.util.List.of());
-        InstanceIdCodec.applyTo(entry);
-        return entry;
-    }
+            AgentRegistryEntry entry = new AgentRegistryEntry();
+            entry.setTenantId(runtime.getTenantId());
+            entry.setAgentId(runtime.getAgentId());
+            entry.setAgentName(agentName);
+            entry.setFrameworkType(runtime.getFrameworkType());
+            entry.setRouteKey(runtime.getRouteKey());
+            entry.setContractVersion(runtime.getContractVersion());
+            entry.setCapabilityVersion(runtime.getCapabilityVersion());
+            entry.setEndpointUrl(runtime.getBaseUrl());
+            entry.setRegion(runtime.getRegion());
+            entry.setMaxConcurrency(runtime.getMaxConcurrency() != null
+            ? runtime.getMaxConcurrency()
+            : PullRegistrationProperties.DEFAULT_MAX_CONCURRENCY);
+            entry.setWeight(runtime.getWeight() != null
+            ? runtime.getWeight()
+            : PullRegistrationProperties.DEFAULT_WEIGHT);
+            ServiceIdCodec.applyTo(entry);
+            entry.setCapabilities(java.util.List.of());
+            InstanceIdCodec.applyTo(entry);
+            return entry;
+        }
 }

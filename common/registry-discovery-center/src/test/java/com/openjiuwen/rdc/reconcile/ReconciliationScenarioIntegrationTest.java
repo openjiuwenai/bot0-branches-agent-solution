@@ -50,7 +50,6 @@ import javax.sql.DataSource;
  * Feat-015 §4 / §6 scenario coverage: rolling upgrade, provider recovery, instance recovery.
  */
 class ReconciliationScenarioIntegrationTest {
-
     private static final class TestProbeException extends RuntimeException {
         TestProbeException(String message) {
             super(message);
@@ -97,13 +96,13 @@ class ReconciliationScenarioIntegrationTest {
 
     @BeforeEach
     void clean() throws Exception {
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("DELETE FROM agent_card_source_ref");
-        jdbc.execute("DELETE FROM agent_card_registration");
-        jdbc.execute("DELETE FROM agent_registry_mvp");
-        jdbc.execute("DELETE FROM registry_source_state");
-        restartServers();
-    }
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            jdbc.execute("DELETE FROM agent_card_source_ref");
+            jdbc.execute("DELETE FROM agent_card_registration");
+            jdbc.execute("DELETE FROM agent_registry_mvp");
+            jdbc.execute("DELETE FROM registry_source_state");
+            restartServers();
+        }
 
     private static void restartServers() throws Exception {
         for (MockWebServer server : List.of(oldRuntimeServer, newRuntimeServer)) {
@@ -280,9 +279,8 @@ class ReconciliationScenarioIntegrationTest {
         return new DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {
-                return StaticDeploymentDiscoveryProvider.SOURCE_ID;
-            }
-
+        return StaticDeploymentDiscoveryProvider.SOURCE_ID;
+    }
             @Override
             public ListDeploymentInstancesResult listInstances() {
                 Instant now = Instant.now();
@@ -308,9 +306,8 @@ class ReconciliationScenarioIntegrationTest {
         return new DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {
-                return StaticDeploymentDiscoveryProvider.SOURCE_ID;
-            }
-
+        return StaticDeploymentDiscoveryProvider.SOURCE_ID;
+    }
             @Override
             public ListDeploymentInstancesResult listInstances() {
                 throw new TestProbeException("provider unreachable");

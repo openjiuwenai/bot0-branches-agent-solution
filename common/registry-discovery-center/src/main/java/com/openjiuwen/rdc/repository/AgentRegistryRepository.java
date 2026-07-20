@@ -72,7 +72,7 @@ import java.util.Optional;
  * {@code spi.registry} and on the nested record types declared below.
  *
  * @since 2026-07-10
-  */
+ */
 public interface AgentRegistryRepository {
     /**
      * Upsert (insert or replace) a registered agent entry. On conflict
@@ -99,6 +99,7 @@ public interface AgentRegistryRepository {
      *                        {@code ServiceIdCodec.applyTo(entry)} +
      *                        {@code InstanceIdCodec.applyTo(entry)} before
      *                        invoking upsert.
+     *
      * @param a2aAgentCardJson pre-serialized JSON of
      *                        {@link AgentRegistryEntry#getA2aAgentCard()};
      *                        {@code null} when the entry carries no A2A card.
@@ -107,6 +108,7 @@ public interface AgentRegistryRepository {
      *                        bootstrap) so this port stays Jackson-free
      *                        (ADR-0160 decision 3/5).
      */
+
     void upsert(AgentRegistryEntry entry, String a2aAgentCardJson);
 
     /**
@@ -121,6 +123,7 @@ public interface AgentRegistryRepository {
      * @return {@code true} if at least one row was deleted, {@code false}
      *         if no entry existed for {@code (tenantId, agentId)}
      */
+
     boolean delete(String tenantId, String agentId);
 
     /**
@@ -135,6 +138,7 @@ public interface AgentRegistryRepository {
      * @return {@code true} if at least one row was deleted, {@code false}
      *         if no entry existed for the triple
      */
+
     boolean delete(String tenantId, String agentId, String serviceId);
 
     /**
@@ -150,6 +154,7 @@ public interface AgentRegistryRepository {
      * @return {@code true} if a row was deleted, {@code false} if no entry
      *         existed for the 4-field PK
      */
+
     boolean delete(String tenantId, String agentId, String serviceId, String instanceId);
 
     /**
@@ -166,9 +171,11 @@ public interface AgentRegistryRepository {
      *
      * @param staleBeforeMillis epoch-millis cutoff; rows whose
      *                          {@code last_heartbeat} is older are returned
+     *
      * @param limit             max number of rows to return
      * @return immutable list of {@link ProbeTarget}; empty list on no match
      */
+
     List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit);
 
     /**
@@ -185,6 +192,7 @@ public interface AgentRegistryRepository {
      * @param update the status-update request (PK + new status + heartbeat flag)
      * @return {@code true} if a row was updated
      */
+
     boolean updateStatus(StatusUpdate update);
 
     /**
@@ -192,6 +200,7 @@ public interface AgentRegistryRepository {
      * Carries the 4-field registry PK plus the new lifecycle status and the
      * heartbeat-refresh flag.
      */
+
     record StatusUpdate(
             String tenantId,
             String agentId,
@@ -199,8 +208,8 @@ public interface AgentRegistryRepository {
             String instanceId,
             String newStatus,
             boolean shouldRefreshHeartbeat) {
+         
     }
-
     /**
      * List all ONLINE/DEGRADED/DRAINING instances for the given
      * {@code (tenantId, agentId)} pair. FEAT-016: DRAINING is now included
@@ -218,10 +227,12 @@ public interface AgentRegistryRepository {
      * @param contractVersion nullable contract version filter; {@code null}
      *                        = no filter; non-null = SQL
      *                        {@code AND contract_version = :contractVersion}
+     *
      * @return immutable list of {@link RegistryRow}, one per matching
      *         instance; empty list if no ONLINE/DEGRADED/DRAINING entry
      *         matches (never {@code null})
      */
+
     List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion);
 
     /**
@@ -239,6 +250,7 @@ public interface AgentRegistryRepository {
      * @param contractVersion nullable contract version filter
      * @return immutable list of {@link RegistryRow}; empty list on no match
      */
+
     List<RegistryRow> listByServiceId(String tenantId, String serviceId, String contractVersion);
 
     /**
@@ -256,6 +268,7 @@ public interface AgentRegistryRepository {
      * @param contractVersion nullable contract version filter
      * @return immutable list of {@link RegistryRow}; empty list on no match
      */
+
     List<RegistryRow> listByCapability(String tenantId, String capability, String contractVersion);
 
     /**
@@ -283,6 +296,7 @@ public interface AgentRegistryRepository {
      * @return {@link EndpointEntry} when a row matches; {@code Optional#empty()}
      *         when no row matches
      */
+
     Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
                                          String serviceId, String instanceId);
 
@@ -293,6 +307,7 @@ public interface AgentRegistryRepository {
      * server-derived host-port) and {@code capabilities} (last field,
      * {@code List<String>} from the VARCHAR(64)[] column).
      */
+
     record RegistryRow(
             String serviceId,
             String instanceId,
@@ -316,6 +331,7 @@ public interface AgentRegistryRepository {
      * persistence port so the discovery service can map between them without
      * exposing JDBC types at the SPI boundary.
      */
+
     record EndpointEntry(String endpointUrl, String routeKey, String contractVersion) {
     }
 
@@ -326,11 +342,12 @@ public interface AgentRegistryRepository {
      * FEAT-016 adds {@code instanceId} so the scheduler can target a specific
      * concrete instance.
      */
+
     record ProbeTarget(
             String tenantId, String agentId, String serviceId,
             String instanceId, String endpointUrl) {
+         
     }
-
     // ---- Feat-015 structured discovery + reconciliation -------------------
 
     /**
@@ -338,6 +355,7 @@ public interface AgentRegistryRepository {
      * Does not apply lifecycle, lease, version, tag, or health filters — the
      * discovery service applies those to compute {@code DiscoveryOutcome}.
      */
+
     List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter);
 
     record DiscoveryFilter(
@@ -369,8 +387,8 @@ public interface AgentRegistryRepository {
             java.time.Instant leaseExpiresAt,
             String a2aAgentCardJson
     ) {
+         
     }
-
     void reconcileUpsert(ReconcileUpsertCommand command);
 
     List<InstanceKey> listInstanceKeysBySource(String sourceId);
@@ -404,6 +422,7 @@ public interface AgentRegistryRepository {
     /**
      * Resolve endpoint with lifecycle + lease facts for trusted routing (4-field PK).
      */
+
     java.util.Optional<ResolveRow> findForResolve(
             String tenantId, String agentId, String serviceId, String instanceId);
 
@@ -492,7 +511,7 @@ public interface AgentRegistryRepository {
     ) {
     }
 
-    default java.util.UUID upsertLogicalRegistration(
+    record UpsertLogicalRegistrationCommand(
             String tenantId,
             String agentId,
             String deploymentServiceId,
@@ -501,10 +520,24 @@ public interface AgentRegistryRepository {
             String capabilityVersion,
             String registrationStatus,
             String freshness,
-            String a2aAgentCardJson) {
-        return java.util.UUID.randomUUID();
+            String a2aAgentCardJson
+    ) {
     }
 
+    record RelinkLogicalSourceRefCommand(
+            String tenantId,
+            String deploymentServiceId,
+            String instanceId,
+            String cardDigest,
+            String sourceId,
+            long sourceRevision,
+            String internalBaseUrl
+    ) {
+    }
+
+    default java.util.UUID upsertLogicalRegistration(UpsertLogicalRegistrationCommand command) {
+        return java.util.UUID.randomUUID();
+    }
     default void upsertSourceRef(UpsertSourceRefCommand command) {
     }
 
@@ -525,6 +558,7 @@ public interface AgentRegistryRepository {
      * Clears {@code STALE_CARD} on logical registration after a successful re-validation
      * when Card digest is unchanged (Feat-015 §5.1.3 last-valid snapshot recovery).
      */
+
     default void clearLogicalRegistrationStaleCard(
             String tenantId, String deploymentServiceId, String cardDigest) {
     }
@@ -534,17 +568,10 @@ public interface AgentRegistryRepository {
      * after a successful same-digest re-validation. Returns {@code false} when no
      * matching registration exists (caller should fall through to full upsert).
      */
-    default boolean relinkLogicalSourceRef(
-            String tenantId,
-            String deploymentServiceId,
-            String instanceId,
-            String cardDigest,
-            String sourceId,
-            long sourceRevision,
-            String internalBaseUrl) {
+
+    default boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {
         return false;
     }
-
     default List<LogicalRegistrationRow> queryLogicalByTargetSelector(DiscoveryFilter filter) {
         return List.of();
     }

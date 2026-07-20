@@ -14,11 +14,11 @@ import java.util.stream.Collectors;
 /**
  * Deterministic fingerprint of a provider snapshot for revision conflict detection.
  */
+
 final class SnapshotFingerprint {
-
     private SnapshotFingerprint() {
+         
     }
-
     static String compute(ListDeploymentInstancesResult snapshot) {
         String canonical = snapshot.observations().stream()
                 .sorted(Comparator

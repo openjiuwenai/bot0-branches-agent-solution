@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 
 class InternalNetworkPolicyTest {
-
     @Test
     void permissive_allows_any_host() {
         InternalNetworkPolicy policy = InternalNetworkPolicy.permissive();

@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 
 class RouteTargetDeriverTest {
-
     private static final String BASE = "http://runtime.internal:8090";
 
     @Test

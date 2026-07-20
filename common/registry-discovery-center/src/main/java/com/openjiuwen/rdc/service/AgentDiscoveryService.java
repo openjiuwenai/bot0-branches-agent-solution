@@ -23,34 +23,37 @@ import java.util.List;
  * catalog discovery.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public interface AgentDiscoveryService {
-
     /**
      * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, agentId)}.
      */
+
     List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId, String contractVersion);
 
     /**
      * Convenience overload without contract version filter.
      */
+
     default List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId) {
         return searchInstancesByAgentId(tenantId, agentId, null);
     }
-
     /**
      * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, serviceId)}.
      */
+
     List<AgentCardDto> searchByServiceId(String tenantId, String serviceId, String contractVersion);
 
     /**
      * List ONLINE/DEGRADED/DRAINING instances declaring {@code capability}.
      */
+
     List<AgentCardDto> searchByCapability(String tenantId, String capability, String contractVersion);
 
     /**
      * Structured logical Agent Card discovery per Feat-015.
      */
+
     DiscoveryResult discover(DiscoveryQuery query);
 
     default AgentCardDiscoveryResult discoverAgentCards(AgentCardDiscoveryQuery query) {

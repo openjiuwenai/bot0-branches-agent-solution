@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 class RegistryPersistenceGuardTest {
-
     @Test
     void data_access_exception_maps_to_registry_unavailable() {
         assertThatThrownBy(() -> RegistryPersistenceGuard.execute("trace-1", () -> {

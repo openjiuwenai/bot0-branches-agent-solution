@@ -54,7 +54,6 @@ import java.util.concurrent.TimeUnit;
  * </ul>
  */
 class ThreadLocalTenantContextTest {
-
     private final ThreadLocalTenantContext context = new ThreadLocalTenantContext();
 
     @AfterEach
@@ -186,6 +185,9 @@ class ThreadLocalTenantContextTest {
                 r -> {
                     Thread worker = new Thread(r);
                     worker.setDaemon(true);
+                    worker.setUncaughtExceptionHandler((t, e) -> {
+                        // best-effort test worker cleanup
+                    });
                     return worker;
                 });
         CountDownLatch bound = new CountDownLatch(1);
@@ -225,7 +227,6 @@ class ThreadLocalTenantContextTest {
     void current_returns_null_when_no_tenant_bound() {
         assertThat(context.current()).isNull();
     }
-
     @Test
     void current_implements_tenant_context_interface() {
         assertThat(context instanceof TenantContext).isTrue();

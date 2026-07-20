@@ -35,7 +35,6 @@ import javax.sql.DataSource;
  * Integration tests for Feat-015 0713 structured {@code DiscoverAgentCards}.
  */
 class StructuredDiscoveryIntegrationTest {
-
     private static DataSource dataSource;
     private static JdbcAgentRegistryRepository repository;
     private static PgMvpDiscoveryServiceImpl discovery;
@@ -160,14 +159,12 @@ class StructuredDiscoveryIntegrationTest {
 
     private static com.openjiuwen.rdc.model.DiscoveryResult discover(String tenantId, String agentId, String serviceId,
                                             String skillId, DiscoveryConstraints constraints) {
-        return discoverAgentCards(tenantId, agentId, serviceId, skillId, constraints).toDiscoveryResult();
-    }
-
+            return discoverAgentCards(tenantId, agentId, serviceId, skillId, constraints).toDiscoveryResult();
+        }
     private static DiscoveryResult discoverWithConstraints(String tenantId, String agentId,
                                                            DiscoveryConstraints constraints) {
         return discover(tenantId, agentId, null, null, constraints);
     }
-
     private static void registerSample(String tenant, String agent, String a2aJson) {
         AgentRegistryEntry entry = new AgentRegistryEntry();
         entry.setTenantId(tenant);

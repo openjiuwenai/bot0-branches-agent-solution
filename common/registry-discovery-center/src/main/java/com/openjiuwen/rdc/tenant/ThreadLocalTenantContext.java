@@ -28,9 +28,8 @@ import java.util.Objects;
  * this class without touching the {@link TenantContext} port or any caller.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class ThreadLocalTenantContext implements TenantContext {
-
     private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
 
     /**
@@ -70,6 +69,7 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * package-private so external callers cannot bypass the
      * {@code bindForScope} lifecycle.
      */
+
     static void set(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId must not be null or blank");
@@ -81,10 +81,10 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * Clear the current thread's tenant. Called by {@link #bindForScope}'s
      * finally block; package-private for the same reason as {@link #set}.
      */
+
     static void clear() {
         CURRENT.remove();
     }
-
     private static void restore(String prior) {
         if (prior == null) {
             CURRENT.remove();
@@ -93,12 +93,13 @@ public final class ThreadLocalTenantContext implements TenantContext {
         }
     }
 
-    @Override
     /**
      * current.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Override
     public String current() {
         return CURRENT.get();
     }

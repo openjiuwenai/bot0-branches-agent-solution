@@ -25,13 +25,12 @@ import java.util.Map;
  * otherwise fell through to Spring Boot's default 500 error body.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 @RestControllerAdvice(basePackageClasses = {
         MvpRegistryController.class,
         InstanceRouteController.class
 })
 public class RegistryApiExceptionHandler {
-
     @ExceptionHandler(RegistryFailureException.class)
     public ResponseEntity<Map<String, Object>> handleRegistryFailure(RegistryFailureException ex) {
         RegistryFailure failure = ex.failure();

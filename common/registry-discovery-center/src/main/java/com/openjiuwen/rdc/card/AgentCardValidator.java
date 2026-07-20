@@ -9,15 +9,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Validates standard A2A Agent Card JSON per Feat-015 0711 scope §5.1.2.
  * Runtime-only — uses Jackson, not part of SPI.
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class AgentCardValidator {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int MAX_RESPONSE_BYTES = 256 * 1024;
 
@@ -26,6 +26,7 @@ public final class AgentCardValidator {
 
     /**
      * validate.
+     *
      * @param cardJson cardJson
      * @return result
      * @since 0.1.0
@@ -70,9 +71,9 @@ public final class AgentCardValidator {
                 return ValidationResult.invalid(
                         "AGENT_CARD_INVALID", "no platform-supported JSON-RPC interface");
             }
-            String contractVersion = textOrNull(selectedInterface, "protocolVersion");
+            String contractVersion = textOrNull(selectedInterface, "protocolVersion").orElse(null);
             if (contractVersion == null || contractVersion.isBlank()) {
-                contractVersion = textOrNull(selectedInterface, "version");
+                contractVersion = textOrNull(selectedInterface, "version").orElse(null);
             }
             return ValidationResult.valid(
                     root.path("version").asText(null),
@@ -86,6 +87,7 @@ public final class AgentCardValidator {
 
     /**
      * hasCapability.
+     *
      * @param root root
      * @param capability capability
      * @return result
@@ -102,6 +104,7 @@ public final class AgentCardValidator {
 
     /**
      * supportsInputMode.
+     *
      * @param root root
      * @param skill skill
      * @param mode mode
@@ -118,6 +121,7 @@ public final class AgentCardValidator {
 
     /**
      * supportsOutputMode.
+     *
      * @param root root
      * @param skill skill
      * @param mode mode
@@ -134,6 +138,7 @@ public final class AgentCardValidator {
 
     /**
      * supportsSecurityScheme.
+     *
      * @param root root
      * @param scheme scheme
      * @return result
@@ -148,22 +153,22 @@ public final class AgentCardValidator {
     }
 
     private static void validateCapabilities(JsonNode root) {
-        JsonNode caps = root.get("capabilities");
-        if (caps == null || !caps.isObject()) {
+            JsonNode caps = root.get("capabilities");
+            if (caps == null || !caps.isObject()) {
             throw new IllegalArgumentException("capabilities must be an object");
         }
     }
 
     private static ValidationResult validateSkill(JsonNode skill) {
-        try {
+            try {
             requireText(skill, "id");
             requireText(skill, "name");
             requireText(skill, "description");
             if (!skill.has("tags") || !skill.get("tags").isArray()) {
-                return ValidationResult.invalid("AGENT_CARD_INVALID", "skill tags must be an array");
+            return ValidationResult.invalid("AGENT_CARD_INVALID", "skill tags must be an array");
             }
             return ValidationResult.valid(null, null);
-        } catch (IllegalArgumentException ex) {
+            } catch (IllegalArgumentException ex) {
             return ValidationResult.invalid("AGENT_CARD_INVALID", ex.getMessage());
         }
     }
@@ -182,6 +187,7 @@ public final class AgentCardValidator {
 
     /**
      * skillTagsContain.
+     *
      * @param cardRoot cardRoot
      * @param requiredTags requiredTags
      * @return result
@@ -202,12 +208,19 @@ public final class AgentCardValidator {
 
     private static boolean cardHasTag(JsonNode skills, String tag) {
         for (JsonNode skill : skills) {
-            JsonNode tags = skill.get("tags");
-            if (tags != null && tags.isArray()) {
-                for (JsonNode t : tags) {
-                    if (tag.equals(t.asText())) {
-                        return true;
-                    }
+            if (skillHasTag(skill, tag)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean skillHasTag(JsonNode skill, String tag) {
+        JsonNode tags = skill.get("tags");
+        if (tags != null && tags.isArray()) {
+            for (JsonNode t : tags) {
+                if (tag.equals(t.asText())) {
+                    return true;
                 }
             }
         }
@@ -222,25 +235,25 @@ public final class AgentCardValidator {
     }
 
     private static void requireNonEmptyArray(JsonNode root, String field) {
-        JsonNode node = root.get(field);
-        if (node == null || !node.isArray() || node.isEmpty()) {
+            JsonNode node = root.get(field);
+            if (node == null || !node.isArray() || node.isEmpty()) {
             throw new IllegalArgumentException(field + " must be a non-empty array");
         }
     }
 
-    private static String textOrNull(JsonNode node, String field) {
-        JsonNode child = node.get(field);
-        return child != null && child.isTextual() ? child.asText() : null;
-    }
+    private static Optional<String> textOrNull(JsonNode node, String field) {
+            JsonNode child = node.get(field);
+            return child != null && child.isTextual() ? Optional.of(child.asText()) : Optional.empty();
+        }
 
     private static boolean isJsonRpcInterface(JsonNode iface) {
         return isJsonRpcNode(iface);
     }
-
     static boolean isJsonRpcNode(JsonNode iface) {
         for (String field : List.of("protocolBinding", "transport", "protocol", "binding")) {
-            String value = textOrNull(iface, field);
-            if (value != null && value.toLowerCase(java.util.Locale.ROOT).contains("jsonrpc")) {
+            Optional<String> value = textOrNull(iface, field);
+            if (value.isPresent()
+                    && value.get().toLowerCase(java.util.Locale.ROOT).contains("jsonrpc")) {
                 return true;
             }
         }
@@ -249,6 +262,7 @@ public final class AgentCardValidator {
 
     /**
      * ValidationResult.
+     *
      * @param valid valid
      * @param failureCode failureCode
      * @param message message
@@ -262,7 +276,6 @@ public final class AgentCardValidator {
         static ValidationResult valid(String capabilityVersion, String contractVersion) {
             return new ValidationResult(true, null, null, capabilityVersion, contractVersion);
         }
-
         static ValidationResult invalid(String failureCode, String message) {
             return new ValidationResult(false, failureCode, message, null, null);
         }

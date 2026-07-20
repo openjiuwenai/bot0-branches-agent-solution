@@ -11,9 +11,8 @@ import java.util.Objects;
  * {@code AgentCardDiscoveryQuery}).
  *
  * @since 0.1.0 (2026)
-  */
+ */
 public final class AgentCardDiscoveryQuery {
-
     private final RegistryRequestContext context;
     @Nullable
     private final String agentId;
@@ -38,82 +37,83 @@ public final class AgentCardDiscoveryQuery {
 
     /**
      * builder.
+     *
      * @return result
      * @since 0.1.0
      */
     public static Builder builder() {
         return new Builder();
     }
-
     /**
      * context.
+     *
      * @return result
      * @since 0.1.0
      */
     public RegistryRequestContext context() {
         return context;
     }
-
-    @Nullable
     /**
      * agentId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String agentId() {
         return agentId;
     }
-
-    @Nullable
     /**
      * serviceId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String serviceId() {
         return serviceId;
     }
-
-    @Nullable
     /**
      * a2aSkillId.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String a2aSkillId() {
         return a2aSkillId;
     }
-
     /**
      * constraints.
+     *
      * @return result
      * @since 0.1.0
      */
     public DiscoveryConstraints constraints() {
         return constraints;
     }
-
     /**
      * limit.
+     *
      * @return result
      * @since 0.1.0
      */
     public int limit() {
         return limit;
     }
-
-    @Nullable
     /**
      * continuationToken.
+     *
      * @return result
      * @since 0.1.0
      */
+    @Nullable
     public String continuationToken() {
         return continuationToken;
     }
-
     /**
      * validate.
+     *
      * @since 0.1.0
      */
     public void validate() {
@@ -144,6 +144,7 @@ public final class AgentCardDiscoveryQuery {
 
     /**
      * from.
+     *
      * @param query query
      * @return result
      * @since 0.1.0
@@ -171,6 +172,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * context.
+         *
          * @param context context
          * @return result
          * @since 0.1.0
@@ -182,6 +184,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * agentId.
+         *
          * @param agentId agentId
          * @return result
          * @since 0.1.0
@@ -193,6 +196,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * serviceId.
+         *
          * @param serviceId serviceId
          * @return result
          * @since 0.1.0
@@ -204,6 +208,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * a2aSkillId.
+         *
          * @param a2aSkillId a2aSkillId
          * @return result
          * @since 0.1.0
@@ -215,6 +220,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * constraints.
+         *
          * @param constraints constraints
          * @return result
          * @since 0.1.0
@@ -226,6 +232,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * limit.
+         *
          * @param limit limit
          * @return result
          * @since 0.1.0
@@ -237,6 +244,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * continuationToken.
+         *
          * @param continuationToken continuationToken
          * @return result
          * @since 0.1.0
@@ -248,6 +256,7 @@ public final class AgentCardDiscoveryQuery {
 
         /**
          * build.
+         *
          * @return result
          * @since 0.1.0
          */

@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 class ReconciliationFailureCodeTest {
-
     private static final class TestProbeException extends RuntimeException {
         TestProbeException(String message) {
             super(message);
@@ -69,9 +68,8 @@ class ReconciliationFailureCodeTest {
         return new DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {
-                return "src-gap";
-            }
-
+        return "src-gap";
+    }
             @Override
             public ListDeploymentInstancesResult listInstances() {
                 throw new SourceRevisionGapException("src-gap", "revision jumped backwards");
@@ -83,9 +81,8 @@ class ReconciliationFailureCodeTest {
         return new DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {
-                return "src-down";
-            }
-
+        return "src-down";
+    }
             @Override
             public ListDeploymentInstancesResult listInstances() {
                 throw new TestProbeException("connection refused");
@@ -104,26 +101,39 @@ class ReconciliationFailureCodeTest {
         @Override
         public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String json) { }
         @Override
-        public boolean delete(String tenantId, String agentId) { return false; }
-        @Override
-        public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
-        @Override
-        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
-        @Override
-        public java.util
-                .Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
-            return java.util.Optional.empty();
+        public boolean delete(String tenantId, String agentId) {
+            return false;
         }
         @Override
-        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) { return List.of(); }
+        public boolean delete(String tenantId, String agentId, String serviceId) {
+            return false;
+        }
+        @Override
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+            return List.of();
+        }
+        @Override
+        public java.util.Optional<EndpointEntry> findEndpoint(
+                String tenantId, String agentId,
+                String serviceId, String instanceId) {
+                    return java.util.Optional.empty();
+                }
+        @Override
+        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
+            return List.of();
+        }
         @Override
         public void reconcileUpsert(ReconcileUpsertCommand command) { }
         @Override
-        public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
+        public List<InstanceKey> listInstanceKeysBySource(String sourceId) {
+            return List.of();
+        }
         @Override
         public void markDraining(String tenantId, String agentId, String serviceId) { }
         @Override
-        public void markRemoved(String tenantId, String agentId, String serviceId) { }
+        public void markRemoved(String tenantId, String agentId, String serviceId) {
+             
+        }
         @Override
         public void markSourceStale(String sourceId) {
             logicalStaleMarked = true;
@@ -132,17 +142,25 @@ class ReconciliationFailureCodeTest {
         @Override
         public void markSourceFresh(String sourceId) { }
         @Override
-        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) { return List.of(); }
+        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) {
+            return List.of();
+        }
         @Override
-        public List<InstanceKey> listExpiredLeases(java.time.Instant now) { return List.of(); }
+        public List<InstanceKey> listExpiredLeases(java.time.Instant now) {
+            return List.of();
+        }
         @Override
-        public long getLastProcessedRevision(String sourceId) { return lastRevision; }
+        public long getLastProcessedRevision(String sourceId) {
+            return lastRevision;
+        }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision) { }
         @Override
         public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
         @Override
-        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
+        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) {
+            return java.util.Optional.empty();
+        }
         @Override
         public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
@@ -150,6 +168,7 @@ class ReconciliationFailureCodeTest {
         @Override
         public void reconcilePending(ReconcilePendingCommand command) { }
         @Override
-        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
-    }
+        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
+            }
+        }
 }

@@ -44,7 +44,6 @@ import javax.sql.DataSource;
  * last-source removal, and STALE_CARD freshness.
  */
 class LogicalRegistrationIntegrationTest {
-
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;
     private static JdbcAgentRegistryRepository repository;
@@ -80,12 +79,12 @@ class LogicalRegistrationIntegrationTest {
 
     @BeforeEach
     void cleanTables() {
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("DELETE FROM agent_card_source_ref");
-        jdbc.execute("DELETE FROM agent_card_registration");
-        jdbc.execute("DELETE FROM agent_registry_mvp");
-        jdbc.execute("DELETE FROM registry_source_state");
-    }
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            jdbc.execute("DELETE FROM agent_card_source_ref");
+            jdbc.execute("DELETE FROM agent_card_registration");
+            jdbc.execute("DELETE FROM agent_registry_mvp");
+            jdbc.execute("DELETE FROM registry_source_state");
+        }
 
     @Test
     void multi_instance_same_card_single_candidate() throws Exception {
@@ -254,7 +253,6 @@ class LogicalRegistrationIntegrationTest {
     private static StaticDeploymentDiscoveryProvider singleInstanceProvider(Readiness readiness) {
         return new StaticDeploymentDiscoveryProvider(List.of(config(INSTANCE_A, readiness)));
     }
-
     private static StaticDeploymentDiscoveryProvider.StaticInstanceConfig config(
             String instanceId, Readiness readiness) {
         return new StaticDeploymentDiscoveryProvider.StaticInstanceConfig(
@@ -265,9 +263,8 @@ class LogicalRegistrationIntegrationTest {
         return new com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider() {
             @Override
             public String sourceId() {
-                return StaticDeploymentDiscoveryProvider.SOURCE_ID;
-            }
-
+        return StaticDeploymentDiscoveryProvider.SOURCE_ID;
+    }
             @Override
             public com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult listInstances() {
                 return new com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult(
@@ -279,7 +276,6 @@ class LogicalRegistrationIntegrationTest {
     private static void enqueueValidCard() {
         enqueueCardJson(validCardJson());
     }
-
     private static void enqueueCardJson(String body) {
         runtimeServer.enqueue(new MockResponse()
                 .setBody(body)
@@ -289,7 +285,6 @@ class LogicalRegistrationIntegrationTest {
     private static String validCardJson() {
         return validCardJsonWithDescription("orders");
     }
-
     private static String validCardJsonWithDescription(String description) {
         return "{"
                 + "\"name\":\"order-agent\","
@@ -298,7 +293,8 @@ class LogicalRegistrationIntegrationTest {
                 + "\"defaultInputModes\":[\"text\"],"
                 + "\"defaultOutputModes\":[\"text\"],"
                 + "\"capabilities\":{\"streaming\":true},"
-                + "\"skills\":[{\"id\":\"place-order\",\"name\":\"place\",\"description\":\"d\",\"tags\":[\"commerce\"]}],"
+                + "\"skills\":[{\"id\":\"place-order\",\"name\":\"place\","
++ "\"description\":\"d\",\"tags\":[\"commerce\"]}],"
                 + "\"supportedInterfaces\":[{\"protocol\":\"jsonrpc\",\"url\":\"/a2a\",\"version\":\"1.0.0\"}]"
                 + "}";
     }

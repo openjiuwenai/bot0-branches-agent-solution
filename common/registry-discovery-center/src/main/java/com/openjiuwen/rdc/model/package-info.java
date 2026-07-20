@@ -25,4 +25,5 @@
  *
  * <p>Authority: ADR-0160 + FEAT-016 §2.3.2 / Feat-015 DiscoveryQuery contract.
  */
+
 package com.openjiuwen.rdc.model;

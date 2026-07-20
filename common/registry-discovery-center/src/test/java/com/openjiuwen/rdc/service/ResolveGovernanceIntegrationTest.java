@@ -26,7 +26,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import javax.sql.DataSource;
 
 class ResolveGovernanceIntegrationTest {
-
     private static DataSource dataSource;
     private static JdbcAgentRegistryRepository repository;
     private static PgMvpDiscoveryServiceImpl discovery;
@@ -54,7 +53,6 @@ class ResolveGovernanceIntegrationTest {
     void clean() {
         new JdbcTemplate(dataSource).execute("DELETE FROM agent_registry_mvp");
     }
-
     @Test
     void resolve_active_instance_succeeds() {
         registerRow("ACTIVE", "HEALTHY");

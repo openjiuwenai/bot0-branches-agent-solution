@@ -17,7 +17,6 @@ import java.util.Base64;
  * (FEAT-016 v2: 6-field opaque route handle).
  */
 class RouteHandleCodecTest {
-
     private static final String TENANT = "tenant-A";
     private static final String AGENT = "agent-001";
     private static final String SERVICE_ID = "test-host";
@@ -46,7 +45,6 @@ class RouteHandleCodecTest {
     void encode_always_produces_v2_prefix() {
         assertThat(RouteHandleCodec.encode(fields())).startsWith(RouteHandleCodec.V2_PREFIX);
     }
-
     @Test
     void decode_rejects_old_v1_prefix_format() {
         String json = "{\"tenantId\":\"t\",\"agentId\":\"a\",\"serviceId\":\"s\","

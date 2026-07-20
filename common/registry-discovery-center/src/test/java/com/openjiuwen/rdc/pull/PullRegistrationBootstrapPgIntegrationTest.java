@@ -40,7 +40,6 @@ import javax.sql.DataSource;
  * {@code agent_registry_mvp} rejected the insert.
  */
 class PullRegistrationBootstrapPgIntegrationTest {
-
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;
 
@@ -69,9 +68,8 @@ class PullRegistrationBootstrapPgIntegrationTest {
 
     @BeforeEach
     void cleanTable() {
-        new JdbcTemplate(dataSource).execute("DELETE FROM agent_registry_mvp");
-    }
-
+            new JdbcTemplate(dataSource).execute("DELETE FROM agent_registry_mvp");
+        }
     @Test
     void pull_upserts_defaults_when_omits_limits() throws Exception {
         String baseUrl = runtimeServer.url("/").toString().replaceAll("/$", "");

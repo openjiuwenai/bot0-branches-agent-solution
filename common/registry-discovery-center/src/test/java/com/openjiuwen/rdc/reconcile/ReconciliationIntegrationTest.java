@@ -42,7 +42,6 @@ import javax.sql.DataSource;
  * Integration tests for Feat-015 P1 provider reconciliation against real PG.
  */
 class ReconciliationIntegrationTest {
-
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;
     private static JdbcAgentRegistryRepository repository;
@@ -77,12 +76,12 @@ class ReconciliationIntegrationTest {
 
     @BeforeEach
     void cleanTable() {
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("DELETE FROM agent_card_source_ref");
-        jdbc.execute("DELETE FROM agent_card_registration");
-        jdbc.execute("DELETE FROM agent_registry_mvp");
-        jdbc.execute("DELETE FROM registry_source_state");
-    }
+            JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+            jdbc.execute("DELETE FROM agent_card_source_ref");
+            jdbc.execute("DELETE FROM agent_card_registration");
+            jdbc.execute("DELETE FROM agent_registry_mvp");
+            jdbc.execute("DELETE FROM registry_source_state");
+        }
 
     @Test
     void reconcile_persists_and_discovery_finds() throws Exception {
@@ -187,7 +186,6 @@ class ReconciliationIntegrationTest {
             public String sourceId() {
                 return StaticDeploymentDiscoveryProvider.SOURCE_ID;
             }
-
             @Override
             public com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult listInstances() {
                 return new com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult(
@@ -199,7 +197,6 @@ class ReconciliationIntegrationTest {
     private static String baseUrl() {
         return runtimeServer.url("/").toString().replaceAll("/$", "");
     }
-
     private static void enqueueValidCard() {
         runtimeServer.enqueue(new MockResponse()
                 .setBody(validCardJson())
