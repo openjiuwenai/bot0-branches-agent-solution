@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.openjiuwen</groupId>
+    <artifactId>agent-bus</artifactId>
+    <version>0.1.0</version>
+    <packaging>pom</packaging>
+
+    <name>agent-bus</name>
+    <description>Event-bus (forwarding) modules — two-hop governance relay + producer/consumer SDK</description>
+
+    <properties>
+        <agent-bus.java.release>17</agent-bus.java.release>
+        <!-- 保留参数名(等价 javac -parameters):EventBusRelayConfiguration 的
+             forwardRelayProducer/responseRelayProducer 按 bean 名(relayProducer)
+             做参数名注入,否则与 defaultProducer 冲突(NoUniqueBeanDefinition)。
+             spring-boot-starter-parent 默认开;本仓 plain parent 显式声明。 -->
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+        <!-- 4.0.5 (not 4.0.6): build host HTTPS proxy proxy.huawei.com is down and
+             4.0.6 starters aren't cached; the 4.0.5 stack is cached (source repo
+             built on 4.0.5) and the code was authored against it. Bump to 4.0.6
+             once the proxy is restored. -->
+        <spring-boot.version>4.0.5</spring-boot.version>
+        <flyway.version>11.19.1</flyway.version>
+        <a2a-sdk.version>1.0.0.CR1</a2a-sdk.version>
+        <rocketmq-client.version>5.1.4</rocketmq-client.version>
+        <mockwebserver.version>4.12.0</mockwebserver.version>
+        <embedded-postgres.version>2.0.7</embedded-postgres.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    </properties>
+
+    <modules>
+        <module>agent-bus-spi</module>
+        <module>agent-bus-testkit</module>
+        <module>agent-bus-sdk</module>
+        <module>agent-bus-relay</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-bus-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-bus-testkit</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-bus-sdk</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.a2aproject.sdk</groupId>
+                <artifactId>a2a-java-sdk-client-transport-jsonrpc</artifactId>
+                <version>${a2a-sdk.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.a2aproject.sdk</groupId>
+                <artifactId>a2a-java-sdk-http-client</artifactId>
+                <version>${a2a-sdk.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-client</artifactId>
+                <version>${rocketmq-client.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>io.github.aliyunmq</groupId>
+                        <artifactId>rocketmq-rocksdb</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>io.grpc</groupId>
+                        <artifactId>grpc-netty-shaded</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.squareup.okhttp3</groupId>
+                        <artifactId>okhttp-jvm</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.squareup.okhttp3</groupId>
+                        <artifactId>okhttp</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.squareup.okio</groupId>
+                        <artifactId>okio</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.squareup.okio</groupId>
+                        <artifactId>okio-jvm</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>mockwebserver</artifactId>
+                <version>${mockwebserver.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.zonky.test</groupId>
+                <artifactId>embedded-postgres</artifactId>
+                <version>${embedded-postgres.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.5.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.14.1</version>
+                    <configuration>
+                        <release>${agent-bus.java.release}</release>
+                        <!-- 保留参数名:EventBusRelayConfiguration 的 forwardRelayProducer/responseRelayProducer
+                             按 bean 名(relayProducer)做参数名注入,无 -parameters 则与 defaultProducer 冲突。
+                             spring-boot-starter-parent 默认开启;本仓用 plain parent 故显式声明。 -->
+                        <parameters>true</parameters>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                    <configuration>
+                        <forkCount>1</forkCount>
+                        <reuseForks>true</reuseForks>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.4</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
