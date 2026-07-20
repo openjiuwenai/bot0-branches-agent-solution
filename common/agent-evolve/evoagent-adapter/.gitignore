@@ -38,8 +38,6 @@ docs/*
 !docs/ROADMAP.md
 
 /data/*
-!/data/skills/
-!/data/skills/**
 
 # 构建期预下载的依赖 wheel（build 时生成，勿提交）
 vendor/

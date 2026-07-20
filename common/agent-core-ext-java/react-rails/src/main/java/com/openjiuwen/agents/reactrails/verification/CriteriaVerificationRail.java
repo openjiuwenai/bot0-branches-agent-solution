@@ -4,6 +4,9 @@
 
 package com.openjiuwen.agents.reactrails.verification;
 
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.agents.reactrails.types.Violation;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
@@ -60,6 +63,9 @@ public class CriteriaVerificationRail extends AgentRail {
     /** Result key for unmet criteria. */
     public static final String UNMET_KEY = "unmet_criteria";
 
+    /** Rail name for telemetry emission. */
+    private static final String RAIL = "CriteriaVerificationRail";
+
     private final CriteriaVerifier verifier;
     private final List<String> successCriteria;
     private final String stateKey = RailInvocationState.newKey(CriteriaVerificationRail.class);
@@ -94,6 +100,10 @@ public class CriteriaVerificationRail extends AgentRail {
             String output = contentOf(msg);
             String historyStr = String.join(" | ", state(ctx).decisionHistory);
             List<Violation> violations = verifier.verify(successCriteria, output, historyStr);
+
+            RailTelemetry.current().fire(new RailEvent.VerifyEvent(
+                    RAIL, violations.isEmpty(), violations.size(),
+                    violations.stream().map(Violation::reason).toList()));
 
             if (violations.isEmpty()) {
                 ctx.requestForceFinish(verifiedResult(output));
@@ -130,6 +140,7 @@ public class CriteriaVerificationRail extends AgentRail {
 
     private static Map<String, Object> verifiedResult(String output) {
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put(ObservingRail.SOURCE_RAIL_KEY, RAIL);
         result.put(OUTPUT_KEY, output);
         result.put(VERIFIED_KEY, true);
         result.put(RESULT_KEY, "PASS");
@@ -138,6 +149,7 @@ public class CriteriaVerificationRail extends AgentRail {
 
     private static Map<String, Object> degradedResult(String output, List<Violation> violations) {
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put(ObservingRail.SOURCE_RAIL_KEY, RAIL);
         result.put(OUTPUT_KEY, output);
         result.put(VERIFIED_KEY, false);
         result.put(RESULT_KEY, "FAIL");

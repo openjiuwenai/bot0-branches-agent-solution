@@ -4,6 +4,9 @@
 
 package com.openjiuwen.agents.reactrails.replan;
 
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -78,6 +81,8 @@ public class ReplanRail extends AgentRail {
     public boolean incrementAndCheckOverLimit(AgentCallbackContext ctx) {
         InvocationState state = state(ctx);
         state.replanCount++;
+        RailTelemetry.current().fire(new RailEvent.ReplanCountEvent(
+                "ReplanRail", state.replanCount, "VERIFY_RETRY", maxReplan));
         return state.replanCount > maxReplan;
     }
 
@@ -103,9 +108,15 @@ public class ReplanRail extends AgentRail {
                 InvocationState state = state(ctx);
                 state.replanCount++;
                 if (state.replanCount > maxReplan) {
-                    ctx.requestForceFinish(degradedResult(state.replanCount));
+                    Map<String, Object> degraded = degradedResult(state.replanCount);
+                    ctx.requestForceFinish(degraded);
+                    // ForceFinishEvent 由 ObservingRail 自动 fire（peek source_rail="ReplanRail"）
+                } else {
+                    RailTelemetry.current().fire(new RailEvent.ReplanCountEvent(
+                            "ReplanRail", state.replanCount, "LLM", maxReplan));
                 }
-                // Else: allow the replan — agent executes ReplanTool → gets confirmation → tries new strategy
+                // Else(non-over-limit): allow the replan — agent executes ReplanTool
+                // → gets confirmation → tries new strategy
             }
         }
     }
@@ -116,6 +127,7 @@ public class ReplanRail extends AgentRail {
 
     private Map<String, Object> degradedResult(int replanCount) {
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put(ObservingRail.SOURCE_RAIL_KEY, "ReplanRail");
         result.put(REPLAN_EXCEEDED_KEY, true);
         result.put(DEGRADED_KEY, true);
         result.put(REPLAN_COUNT_KEY, replanCount);

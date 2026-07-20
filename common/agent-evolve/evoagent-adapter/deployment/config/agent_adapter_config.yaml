@@ -9,7 +9,7 @@
 # ── Log source (fallback for single-agent mode when no agents list) ──
 # 顶层 log_dir 在 docker 部署中由 ADAPTER_LOG_DIR 环境变量覆盖（默认 /data/logs）
 log_dir: "logs"                          # Log directory path (absolute or relative to adapter root)
-log_pattern: "process_*.log"             # Active log file glob pattern
+log_pattern: "process*.log"             # Active log file glob pattern
 
 # ── Read strategy ──
 poll_interval: 60                         # Poll interval in seconds
@@ -81,7 +81,7 @@ agents:
   - name: "edp_agent"
     log_dir: "/data/logs/edp_agent"           # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
     skills_dir: "/data/skills/edp_agent"      # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
-    # log_pattern: "process_*.log"            # Optional: defaults to top-level log_pattern
+    # log_pattern: "process*.log"            # Optional: defaults to top-level log_pattern
     # output_dir: "data/output/edp_agent"     # Optional: defaults to data/output/{name}
     # offset_file: "data/offsets/edp_agent.json"  # Optional: defaults to data/offsets/{name}.json
     agent_url: "http://192.168.1.10:8090"     # 不可用 localhost/127.0.0.1（指向容器自身）。
