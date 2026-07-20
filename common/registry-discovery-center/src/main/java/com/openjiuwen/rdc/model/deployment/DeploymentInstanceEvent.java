@@ -10,6 +10,9 @@ import java.util.Objects;
  * Incremental deployment instance event (Feat-015 0711 scope).
  *
  * @since 0.1.0 (2026)
+ * @param type type
+ * @param observation observation
+ * @return result
  */
 public record DeploymentInstanceEvent(
         DeploymentInstanceEventType type,

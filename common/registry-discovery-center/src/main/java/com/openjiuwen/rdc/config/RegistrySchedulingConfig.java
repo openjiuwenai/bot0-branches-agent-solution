@@ -33,6 +33,7 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 @Configuration
 @EnableScheduling
 public class RegistrySchedulingConfig implements SchedulingConfigurer {
+
     /**
      * Dedicated {@link ThreadPoolTaskScheduler} for registry probe work.
      * Pool size 2 is enough for the MVP single-tenant sweep; the scheduler
@@ -41,6 +42,9 @@ public class RegistrySchedulingConfig implements SchedulingConfigurer {
      * fixed-delay window. Hung probes are bounded by the
      * {@code MvpHealthProbeScheduler}'s RestClient read timeout (default 2s)
      * — they cannot pin a thread indefinitely.
+     *
+     * @return result
+     * @since 0.1.0
      */
     @Bean(destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler registryProbeTaskScheduler() {

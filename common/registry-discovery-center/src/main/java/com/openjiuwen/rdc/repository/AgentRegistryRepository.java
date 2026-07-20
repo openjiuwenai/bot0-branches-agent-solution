@@ -74,6 +74,7 @@ import java.util.Optional;
  * @since 2026-07-10
  */
 public interface AgentRegistryRepository {
+
     /**
      * Upsert (insert or replace) a registered agent entry. On conflict
      * {@code (tenant_id, agent_id, service_id, instance_id)} the existing row
@@ -199,6 +200,15 @@ public interface AgentRegistryRepository {
      * Immutable status-update request for {@link #updateStatus(StatusUpdate)}.
      * Carries the 4-field registry PK plus the new lifecycle status and the
      * heartbeat-refresh flag.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param newStatus newStatus
+     * @param shouldRefreshHeartbeat shouldRefreshHeartbeat
+     * @return result
+     * @since 0.1.0
      */
 
     record StatusUpdate(
@@ -208,8 +218,9 @@ public interface AgentRegistryRepository {
             String instanceId,
             String newStatus,
             boolean shouldRefreshHeartbeat) {
-         
+
     }
+
     /**
      * List all ONLINE/DEGRADED/DRAINING instances for the given
      * {@code (tenantId, agentId)} pair. FEAT-016: DRAINING is now included
@@ -306,6 +317,22 @@ public interface AgentRegistryRepository {
      * the encoded route handle. FEAT-016 adds {@code instanceId} (2nd field,
      * server-derived host-port) and {@code capabilities} (last field,
      * {@code List<String>} from the VARCHAR(64)[] column).
+     *
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param agentId agentId
+     * @param agentName agentName
+     * @param frameworkType frameworkType
+     * @param routeKey routeKey
+     * @param contractVersion contractVersion
+     * @param capabilityVersion capabilityVersion
+     * @param weight weight
+     * @param region region
+     * @param maxConcurrency maxConcurrency
+     * @param status status
+     * @param capabilities capabilities
+     * @return result
+     * @since 0.1.0
      */
 
     record RegistryRow(
@@ -330,6 +357,12 @@ public interface AgentRegistryRepository {
      * needs to deliver. Mirrors {@code RouteResolution} but lives inside the
      * persistence port so the discovery service can map between them without
      * exposing JDBC types at the SPI boundary.
+     *
+     * @param endpointUrl endpointUrl
+     * @param routeKey routeKey
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
      */
 
     record EndpointEntry(String endpointUrl, String routeKey, String contractVersion) {
@@ -341,12 +374,20 @@ public interface AgentRegistryRepository {
      * then call {@link #updateStatus} with the right instance scope.
      * FEAT-016 adds {@code instanceId} so the scheduler can target a specific
      * concrete instance.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param endpointUrl endpointUrl
+     * @return result
+     * @since 0.1.0
      */
 
     record ProbeTarget(
             String tenantId, String agentId, String serviceId,
             String instanceId, String endpointUrl) {
-         
+
     }
     // ---- Feat-015 structured discovery + reconciliation -------------------
 
@@ -354,6 +395,10 @@ public interface AgentRegistryRepository {
      * List registry rows matching the target selector for structured discovery.
      * Does not apply lifecycle, lease, version, tag, or health filters — the
      * discovery service applies those to compute {@code DiscoveryOutcome}.
+     *
+     * @param filter filter
+     * @return result
+     * @since 0.1.0
      */
 
     List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter);
@@ -387,7 +432,7 @@ public interface AgentRegistryRepository {
             java.time.Instant leaseExpiresAt,
             String a2aAgentCardJson
     ) {
-         
+
     }
     void reconcileUpsert(ReconcileUpsertCommand command);
 
@@ -420,9 +465,15 @@ public interface AgentRegistryRepository {
     void markRefreshDegraded(String tenantId, String agentId, String serviceId);
 
     /**
-     * Resolve endpoint with lifecycle + lease facts for trusted routing (4-field PK).
+     * * Resolve endpoint with lifecycle + lease facts for trusted routing (4-field PK).
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @return result
+     * @since 0.1.0
      */
-
     java.util.Optional<ResolveRow> findForResolve(
             String tenantId, String agentId, String serviceId, String instanceId);
 
@@ -557,6 +608,11 @@ public interface AgentRegistryRepository {
     /**
      * Clears {@code STALE_CARD} on logical registration after a successful re-validation
      * when Card digest is unchanged (Feat-015 §5.1.3 last-valid snapshot recovery).
+     *
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param cardDigest cardDigest
+     * @since 0.1.0
      */
 
     default void clearLogicalRegistrationStaleCard(
@@ -567,6 +623,10 @@ public interface AgentRegistryRepository {
      * Re-link an instance source_ref to the logical registration for {@code cardDigest}
      * after a successful same-digest re-validation. Returns {@code false} when no
      * matching registration exists (caller should fall through to full upsert).
+     *
+     * @param command command
+     * @return result
+     * @since 0.1.0
      */
 
     default boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {

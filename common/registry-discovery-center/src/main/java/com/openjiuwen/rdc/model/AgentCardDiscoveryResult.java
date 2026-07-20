@@ -11,6 +11,11 @@ import java.util.List;
  * {@code AgentCardDiscoveryResult}).
  *
  * @since 0.1.0 (2026)
+ * @param outcome outcome
+ * @param candidates candidates
+ * @param nextToken nextToken
+ * @param traceId traceId
+ * @return result
  */
 public record AgentCardDiscoveryResult(
         DiscoveryOutcome outcome,
@@ -36,6 +41,7 @@ public record AgentCardDiscoveryResult(
                                               String traceId) {
         return new AgentCardDiscoveryResult(outcome, candidates, null, traceId);
     }
+
     /**
      * from.
      *

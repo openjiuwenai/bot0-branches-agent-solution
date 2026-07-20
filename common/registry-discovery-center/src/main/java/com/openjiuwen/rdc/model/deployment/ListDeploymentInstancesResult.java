@@ -11,6 +11,10 @@ import java.util.Objects;
  * Full deployment instance snapshot from a provider (Feat-015 0711 scope).
  *
  * @since 0.1.0 (2026)
+ * @param sourceId sourceId
+ * @param sourceRevision sourceRevision
+ * @param observations observations
+ * @return result
  */
 public record ListDeploymentInstancesResult(
         String sourceId,

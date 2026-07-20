@@ -36,6 +36,11 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 
+/**
+ * DiscoveryExtendedIntegrationTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class DiscoveryExtendedIntegrationTest {
     private static final AtomicInteger NEXT_PORT = new AtomicInteger(18000);
 

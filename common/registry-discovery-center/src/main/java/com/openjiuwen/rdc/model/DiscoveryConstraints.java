@@ -38,6 +38,7 @@ public final class DiscoveryConstraints {
     private static Set<String> copyOrEmpty(Set<String> values) {
         return values == null ? Set.of() : Set.copyOf(values);
     }
+
     /**
      * none.
      *
@@ -47,6 +48,7 @@ public final class DiscoveryConstraints {
     public static DiscoveryConstraints none() {
         return builder().build();
     }
+
     /**
      * builder.
      *
@@ -56,6 +58,7 @@ public final class DiscoveryConstraints {
     public static Builder builder() {
         return new Builder();
     }
+
     /**
      * contractVersion.
      *
@@ -66,6 +69,7 @@ public final class DiscoveryConstraints {
     public String contractVersion() {
         return contractVersion;
     }
+
     /**
      * capabilityVersion.
      *
@@ -76,6 +80,7 @@ public final class DiscoveryConstraints {
     public String capabilityVersion() {
         return capabilityVersion;
     }
+
     /**
      * requiredSkillTags.
      *
@@ -85,6 +90,7 @@ public final class DiscoveryConstraints {
     public Set<String> requiredSkillTags() {
         return requiredSkillTags;
     }
+
     /**
      * requiredCapabilities.
      *
@@ -94,6 +100,7 @@ public final class DiscoveryConstraints {
     public Set<String> requiredCapabilities() {
         return requiredCapabilities;
     }
+
     /**
      * requiredInputModes.
      *
@@ -103,6 +110,7 @@ public final class DiscoveryConstraints {
     public Set<String> requiredInputModes() {
         return requiredInputModes;
     }
+
     /**
      * requiredOutputModes.
      *
@@ -112,6 +120,7 @@ public final class DiscoveryConstraints {
     public Set<String> requiredOutputModes() {
         return requiredOutputModes;
     }
+
     /**
      * requiredSecuritySchemes.
      *
@@ -121,6 +130,7 @@ public final class DiscoveryConstraints {
     public Set<String> requiredSecuritySchemes() {
         return requiredSecuritySchemes;
     }
+
     /**
      * healthRequirement.
      *
@@ -130,6 +140,7 @@ public final class DiscoveryConstraints {
     public HealthRequirement healthRequirement() {
         return healthRequirement == null ? HealthRequirement.HEALTHY_OR_DEGRADED : healthRequirement;
     }
+
     /**
      * equals.
      *
@@ -174,6 +185,11 @@ public final class DiscoveryConstraints {
                 healthRequirement());
     }
 
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private String contractVersion;
         private String capabilityVersion;

@@ -13,7 +13,6 @@ import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.DiscoveryConstraints;
-import com.openjiuwen.rdc.model.DiscoveryQuery;
 import com.openjiuwen.rdc.model.HealthRequirement;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
@@ -154,7 +153,13 @@ public class MvpRegistryController {
     }
 
     /**
-     * Structured Agent Card discovery per Feat-015 0713 {@code DiscoverAgentCards}.
+     * * Structured Agent Card discovery per Feat-015 0713 {@code DiscoverAgentCards}.
+     *
+     * @param request request
+     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
+     * @param false false
+     * @return result
+     * @since 0.1.0
      */
     @PostMapping("/discover")
     public AgentCardDiscoveryResult discover(@RequestBody DiscoverRequest request,
@@ -194,6 +199,13 @@ public class MvpRegistryController {
      * pair. REQ-2026-006 semantic generalization: previously deleted a single
      * row; now deletes every instance matching the pair. Single-instance
      * callers are backward compatible — they get all instances removed.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
+     * @param false false
+     * @return result
+     * @since 0.1.0
      */
     @DeleteMapping("/deregister/{tenantId}/{agentId}")
     public ResponseEntity<Void> deregister(@PathVariable String tenantId,
@@ -229,6 +241,14 @@ public class MvpRegistryController {
      * {@code serviceId} is in the path — HD3-006 allows it because
      * {@code serviceId} is the server-derived instance id, not the physical
      * endpoint.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
+     * @param false false
+     * @return result
+     * @since 0.1.0
      */
     @DeleteMapping("/deregister/{tenantId}/{agentId}/{serviceId}")
     public ResponseEntity<Void> deregisterSingle(@PathVariable String tenantId,
@@ -267,6 +287,9 @@ public class MvpRegistryController {
      * binds these columns explicitly (so the DB-level DEFAULT does not apply
      * when the entry carries null). Push callers therefore rely on this
      * boundary to materialise the README-documented defaults (10 / 100).
+     *
+     * @param card card
+     * @since 0.1.0
      */
     private static void applyDefaults(AgentRegistryEntry card) {
         if (card.getMaxConcurrency() == null) {
@@ -279,9 +302,9 @@ public class MvpRegistryController {
 
     private static String resolveTraceId(String traceparent, String xTraceId) {
             if (traceparent != null && !traceparent.isBlank()) {
-            String[] parts = traceparent.trim().split("-");
-            if (parts.length >= 3 && !parts[2].isBlank()) {
-            return parts[2];
+                String[] parts = traceparent.trim().split("-");
+                if (parts.length >= 3 && !parts[2].isBlank()) {
+                return parts[2];
             }
         }
         if (xTraceId != null && !xTraceId.isBlank()) {
@@ -292,13 +315,13 @@ public class MvpRegistryController {
 
     private Optional<String> serializeA2aCard(org.a2aproject.sdk.spec.AgentCard card) {
             if (card == null) {
-            return Optional.empty();
-        }
+                return Optional.empty();
+            }
         try {
-            return Optional.of(objectMapper.writeValueAsString(card));
-        } catch (JsonProcessingException ex) {
-            throw new IllegalArgumentException("Failed to serialize a2aAgentCard to JSON", ex);
-        }
+                return Optional.of(objectMapper.writeValueAsString(card));
+                } catch (JsonProcessingException ex) {
+                throw new IllegalArgumentException("Failed to serialize a2aAgentCard to JSON", ex);
+            }
     }
 
     /**

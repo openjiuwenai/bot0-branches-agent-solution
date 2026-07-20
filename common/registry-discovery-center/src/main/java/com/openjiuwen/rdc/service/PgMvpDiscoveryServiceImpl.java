@@ -237,15 +237,32 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     public RouteResolution resolveRouteHandle(String routeHandle, String tenantId) {
         return resolveRouteHandle(routeHandle, tenantId, null, null);
     }
+
     /**
-     * Resolve with optional caller governance context (0711 {@code ResolveRouteHandle}).
+     * * Resolve with optional caller governance context (0711 {@code ResolveRouteHandle}).
+     *
+     * @param routeHandle routeHandle
+     * @param tenantId tenantId
+     * @param callerRef callerRef
+     * @param traceId traceId
+     * @return result
+     * @since 0.1.0
      */
     public RouteResolution resolveRouteHandle(String routeHandle, String tenantId,
                                               String callerRef, String traceId) {
         return resolveRouteHandle(routeHandle, tenantId, callerRef, traceId, null);
     }
+
     /**
-     * Resolve with caller governance context and optional deadline (0711).
+     * * Resolve with caller governance context and optional deadline (0711).
+     *
+     * @param routeHandle routeHandle
+     * @param tenantId tenantId
+     * @param callerRef callerRef
+     * @param traceId traceId
+     * @param deadline deadline
+     * @return result
+     * @since 0.1.0
      */
     public RouteResolution resolveRouteHandle(String routeHandle, String tenantId,
                                               String callerRef, String traceId,
@@ -267,37 +284,37 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
             outcome = "success";
             return resolution;
         } catch (TenantIsolationViolationException ex) {
-            if ("error".equals(outcome)) {
+                if ("error".equals(outcome)) {
                 outcome = "tenant_isolation_violation";
             }
             throw ex;
         } catch (MalformedRouteHandleException ex) {
                 if ("error".equals(outcome)) {
-                outcome = "malformed_handle";
-            }
+                    outcome = "malformed_handle";
+                }
             throw ex;
         } catch (EntryNotFoundException ex) {
-                if ("error".equals(outcome)) {
-                outcome = "entry_not_found";
-            }
+                    if ("error".equals(outcome)) {
+                    outcome = "entry_not_found";
+                }
             throw ex;
         } catch (LeaseExpiredException ex) {
-                if ("error".equals(outcome)) {
-                outcome = "lease_expired";
-            }
+                    if ("error".equals(outcome)) {
+                    outcome = "lease_expired";
+                }
             throw ex;
         } catch (DeadlineExceededException ex) {
-                outcome = "deadline_exceeded";
-                throw ex;
-                } catch (RegistryUnavailableException ex) {
-                outcome = "registry_unavailable";
-                throw ex;
-                } finally {
-                long latencyMs = (System.nanoTime() - start) / 1_000_000;
-                observability.observeResolve(new RegistryOpAudit(
-                effectiveTraceId, tenantId, null, null, null, null, routeHandle, outcome, latencyMs));
-                MDC.remove("traceId");
-            }
+                    outcome = "deadline_exceeded";
+                    throw ex;
+                    } catch (RegistryUnavailableException ex) {
+                    outcome = "registry_unavailable";
+                    throw ex;
+                    } finally {
+                    long latencyMs = (System.nanoTime() - start) / 1_000_000;
+                    observability.observeResolve(new RegistryOpAudit(
+                    effectiveTraceId, tenantId, null, null, null, null, routeHandle, outcome, latencyMs));
+                    MDC.remove("traceId");
+                }
     }
 
     private RouteHandleCodec.HandleFields decodeRouteHandle(
@@ -339,17 +356,17 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
 
     private RouteResolution lookupLegacyEndpoint(
             String tenantId, RouteHandleCodec.HandleFields decoded, String effectiveTraceId) {
-        Optional<EndpointEntry> endpoint = RegistryPersistenceGuard.execute(
-                effectiveTraceId,
-                () -> repository.findEndpoint(
-                        tenantId, decoded.agentId(), decoded.serviceId(), decoded.instanceId()));
-        if (endpoint.isEmpty()) {
+            Optional<EndpointEntry> endpoint = RegistryPersistenceGuard.execute(
+            effectiveTraceId,
+            () -> repository.findEndpoint(
+            tenantId, decoded.agentId(), decoded.serviceId(), decoded.instanceId()));
+            if (endpoint.isEmpty()) {
             throw new EntryNotFoundException(
-                    "entry not found: tenant=" + tenantId
-                            + ", agentId=" + decoded.agentId()
-                            + ", serviceId=" + decoded.serviceId()
-                            + ", instanceId=" + decoded.instanceId(),
-                    effectiveTraceId);
+            "entry not found: tenant=" + tenantId
+            + ", agentId=" + decoded.agentId()
+            + ", serviceId=" + decoded.serviceId()
+            + ", instanceId=" + decoded.instanceId(),
+            effectiveTraceId);
         }
         EndpointEntry ep = endpoint.get();
         return new RouteResolution(
@@ -362,6 +379,10 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
      * {@code bindForScope}), mismatch raises {@link TenantIsolationViolationException}.
      * When unbound (HTTP entry passes {@code tenantId} explicitly), the check
      * is skipped — the explicit parameter is the source of truth.
+     *
+     * @param tenantId tenantId
+     * @param traceId traceId
+     * @since 0.1.0
      */
     private void verifyTenant(String tenantId, String traceId) {
         String bound = tenantContext.current();
@@ -375,6 +396,11 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
      * REQ-2026-006: encode includes {@code serviceId} (v1: 5-field); DTO
      * includes {@code maxConcurrency} (9th field) for caller-side weighted
      * load balancing.
+     *
+     * @param tenantId tenantId
+     * @param row row
+     * @return result
+     * @since 0.1.0
      */
     private AgentCardDto toDto(String tenantId, RegistryRow row) {
         String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(

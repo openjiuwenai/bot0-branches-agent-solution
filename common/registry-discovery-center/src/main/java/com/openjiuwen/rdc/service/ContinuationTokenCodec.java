@@ -12,9 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 /**
- * Opaque pagination token bound to tenant + caller + query fingerprint (0711 §5.1.6).
+ * * Opaque pagination token bound to tenant + caller + query fingerprint (0711 §5.1.6).
  */
-
 final class ContinuationTokenCodec {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

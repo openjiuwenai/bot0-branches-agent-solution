@@ -15,6 +15,11 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * StaticDeploymentDiscoveryProviderTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class StaticDeploymentDiscoveryProviderTest {
     @Test
     void watch_emits_added_then_modified_on_subsequent_snapshots() {

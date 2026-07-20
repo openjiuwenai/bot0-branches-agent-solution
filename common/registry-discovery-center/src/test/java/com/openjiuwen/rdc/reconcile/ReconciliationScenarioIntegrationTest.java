@@ -47,8 +47,10 @@ import java.util.stream.Collectors;
 import javax.sql.DataSource;
 
 /**
- * Feat-015 §4 / §6 scenario coverage: rolling upgrade, provider recovery, instance recovery.
- */
+ * * Feat-015 §4 / §6 scenario coverage: rolling upgrade, provider recovery, instance recovery.
+  *
+ * @since 0.1.0 (2026)
+*/
 class ReconciliationScenarioIntegrationTest {
     private static final class TestProbeException extends RuntimeException {
         TestProbeException(String message) {
@@ -353,10 +355,10 @@ class ReconciliationScenarioIntegrationTest {
     }
 
     private String readLifecycle(String instanceId) {
-        return new JdbcTemplate(dataSource).queryForObject(
-                "SELECT lifecycle_status FROM agent_registry_mvp WHERE tenant_id = ? AND instance_id = ?",
-                String.class, TENANT, instanceId);
-    }
+            return new JdbcTemplate(dataSource).queryForObject(
+            "SELECT lifecycle_status FROM agent_registry_mvp WHERE tenant_id = ? AND instance_id = ?",
+            String.class, TENANT, instanceId);
+        }
 
     private String readEffectiveHealth(String instanceId) {
         return new JdbcTemplate(dataSource).queryForObject(

@@ -49,6 +49,7 @@ public final class AgentCardCandidate {
     public static Builder builder() {
         return new Builder();
     }
+
     /**
      * from.
      *
@@ -80,6 +81,7 @@ public final class AgentCardCandidate {
     public String agentCardJson() {
         return agentCardJson;
     }
+
     /**
      * agentId.
      *
@@ -89,6 +91,7 @@ public final class AgentCardCandidate {
     public String agentId() {
         return agentId;
     }
+
     /**
      * serviceId.
      *
@@ -98,6 +101,7 @@ public final class AgentCardCandidate {
     public String serviceId() {
         return serviceId;
     }
+
     /**
      * matchedA2aSkillId.
      *
@@ -108,6 +112,7 @@ public final class AgentCardCandidate {
     public String matchedA2aSkillId() {
         return matchedA2aSkillId;
     }
+
     /**
      * contractVersion.
      *
@@ -117,6 +122,7 @@ public final class AgentCardCandidate {
     public String contractVersion() {
         return contractVersion;
     }
+
     /**
      * capabilityVersion.
      *
@@ -126,6 +132,7 @@ public final class AgentCardCandidate {
     public String capabilityVersion() {
         return capabilityVersion;
     }
+
     /**
      * registrationStatus.
      *
@@ -135,6 +142,7 @@ public final class AgentCardCandidate {
     public RegistrationStatus registrationStatus() {
         return registrationStatus;
     }
+
     /**
      * freshness.
      *
@@ -144,6 +152,7 @@ public final class AgentCardCandidate {
     public Freshness freshness() {
         return freshness;
     }
+
     /**
      * lastValidatedAt.
      *
@@ -154,6 +163,12 @@ public final class AgentCardCandidate {
     public Instant lastValidatedAt() {
         return lastValidatedAt;
     }
+
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private String agentCardJson;
         private String agentId;

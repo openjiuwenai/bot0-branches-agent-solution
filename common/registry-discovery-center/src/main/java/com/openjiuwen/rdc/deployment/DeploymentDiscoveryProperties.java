@@ -29,6 +29,9 @@ public class DeploymentDiscoveryProperties {
     /**
      * Runtime binding defaults when a provider observation has no matching
      * {@code instances[]} entry (dynamic / non-yml fact sources).
+     *
+     * @return result
+     * @since 0.1.0
      */
     private BindingDefaults bindingDefaults = new BindingDefaults();
     private List<StaticInstanceEntry> instances = new ArrayList<>();
@@ -42,6 +45,7 @@ public class DeploymentDiscoveryProperties {
     public boolean isEnabled() {
         return enabled;
     }
+
     /**
      * setEnabled.
      *
@@ -51,6 +55,7 @@ public class DeploymentDiscoveryProperties {
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
+
     /**
      * getReconcileInterval.
      *
@@ -60,6 +65,7 @@ public class DeploymentDiscoveryProperties {
     public Duration getReconcileInterval() {
         return reconcileInterval;
     }
+
     /**
      * setReconcileInterval.
      *
@@ -69,6 +75,7 @@ public class DeploymentDiscoveryProperties {
     public void setReconcileInterval(Duration reconcileInterval) {
         this.reconcileInterval = reconcileInterval;
     }
+
     /**
      * getDrainingGracePeriod.
      *
@@ -78,6 +85,7 @@ public class DeploymentDiscoveryProperties {
     public Duration getDrainingGracePeriod() {
         return drainingGracePeriod;
     }
+
     /**
      * setDrainingGracePeriod.
      *
@@ -87,6 +95,7 @@ public class DeploymentDiscoveryProperties {
     public void setDrainingGracePeriod(Duration drainingGracePeriod) {
         this.drainingGracePeriod = drainingGracePeriod;
     }
+
     /**
      * getBindingDefaults.
      *
@@ -96,6 +105,7 @@ public class DeploymentDiscoveryProperties {
     public BindingDefaults getBindingDefaults() {
         return bindingDefaults;
     }
+
     /**
      * setBindingDefaults.
      *
@@ -105,6 +115,7 @@ public class DeploymentDiscoveryProperties {
     public void setBindingDefaults(BindingDefaults bindingDefaults) {
         this.bindingDefaults = bindingDefaults != null ? bindingDefaults : new BindingDefaults();
     }
+
     /**
      * getInstances.
      *
@@ -114,6 +125,7 @@ public class DeploymentDiscoveryProperties {
     public List<StaticInstanceEntry> getInstances() {
         return instances;
     }
+
     /**
      * setInstances.
      *
@@ -123,6 +135,7 @@ public class DeploymentDiscoveryProperties {
     public void setInstances(List<StaticInstanceEntry> instances) {
         this.instances = instances;
     }
+
     /**
      * Defaults applied when reconcile sees an instance that is not listed under
      * {@code rdc.deployment-discovery.instances}.
@@ -147,6 +160,7 @@ public class DeploymentDiscoveryProperties {
         public FrameworkType getFrameworkType() {
             return frameworkType;
         }
+
         /**
          * setFrameworkType.
          *
@@ -156,6 +170,7 @@ public class DeploymentDiscoveryProperties {
         public void setFrameworkType(FrameworkType frameworkType) {
             this.frameworkType = frameworkType;
         }
+
         /**
          * getRouteKey.
          *
@@ -165,6 +180,7 @@ public class DeploymentDiscoveryProperties {
         public String getRouteKey() {
             return routeKey;
         }
+
         /**
          * setRouteKey.
          *
@@ -174,6 +190,7 @@ public class DeploymentDiscoveryProperties {
         public void setRouteKey(String routeKey) {
             this.routeKey = routeKey;
         }
+
         /**
          * getContractVersion.
          *
@@ -183,6 +200,7 @@ public class DeploymentDiscoveryProperties {
         public String getContractVersion() {
             return contractVersion;
         }
+
         /**
          * setContractVersion.
          *
@@ -192,6 +210,7 @@ public class DeploymentDiscoveryProperties {
         public void setContractVersion(String contractVersion) {
             this.contractVersion = contractVersion;
         }
+
         /**
          * getCapabilityVersion.
          *
@@ -201,6 +220,7 @@ public class DeploymentDiscoveryProperties {
         public String getCapabilityVersion() {
             return capabilityVersion;
         }
+
         /**
          * setCapabilityVersion.
          *
@@ -210,6 +230,7 @@ public class DeploymentDiscoveryProperties {
         public void setCapabilityVersion(String capabilityVersion) {
             this.capabilityVersion = capabilityVersion;
         }
+
         /**
          * getCardPath.
          *
@@ -219,6 +240,7 @@ public class DeploymentDiscoveryProperties {
         public String getCardPath() {
             return cardPath;
         }
+
         /**
          * setCardPath.
          *
@@ -241,6 +263,7 @@ public class DeploymentDiscoveryProperties {
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : Map.of();
         }
+
         /**
          * getMaxConcurrency.
          *
@@ -250,6 +273,7 @@ public class DeploymentDiscoveryProperties {
         public int getMaxConcurrency() {
             return maxConcurrency;
         }
+
         /**
          * setMaxConcurrency.
          *
@@ -259,6 +283,7 @@ public class DeploymentDiscoveryProperties {
         public void setMaxConcurrency(int maxConcurrency) {
             this.maxConcurrency = maxConcurrency;
         }
+
         /**
          * getWeight.
          *
@@ -268,6 +293,7 @@ public class DeploymentDiscoveryProperties {
         public int getWeight() {
             return weight;
         }
+
         /**
          * setWeight.
          *
@@ -277,6 +303,7 @@ public class DeploymentDiscoveryProperties {
         public void setWeight(int weight) {
             this.weight = weight;
         }
+
         /**
          * getRegion.
          *
@@ -286,6 +313,7 @@ public class DeploymentDiscoveryProperties {
         public String getRegion() {
             return region;
         }
+
         /**
          * setRegion.
          *
@@ -323,6 +351,7 @@ public class DeploymentDiscoveryProperties {
         public String getTenantId() {
             return tenantId;
         }
+
         /**
          * setTenantId.
          *
@@ -332,6 +361,7 @@ public class DeploymentDiscoveryProperties {
         public void setTenantId(String tenantId) {
             this.tenantId = tenantId;
         }
+
         /**
          * getServiceId.
          *
@@ -341,6 +371,7 @@ public class DeploymentDiscoveryProperties {
         public String getServiceId() {
             return serviceId;
         }
+
         /**
          * setServiceId.
          *
@@ -350,6 +381,7 @@ public class DeploymentDiscoveryProperties {
         public void setServiceId(String serviceId) {
             this.serviceId = serviceId;
         }
+
         /**
          * getInstanceId.
          *
@@ -359,6 +391,7 @@ public class DeploymentDiscoveryProperties {
         public String getInstanceId() {
             return instanceId;
         }
+
         /**
          * setInstanceId.
          *
@@ -368,6 +401,7 @@ public class DeploymentDiscoveryProperties {
         public void setInstanceId(String instanceId) {
             this.instanceId = instanceId;
         }
+
         /**
          * getBaseUrl.
          *
@@ -377,6 +411,7 @@ public class DeploymentDiscoveryProperties {
         public String getBaseUrl() {
             return baseUrl;
         }
+
         /**
          * setBaseUrl.
          *
@@ -386,6 +421,7 @@ public class DeploymentDiscoveryProperties {
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
         }
+
         /**
          * getDeploymentVersion.
          *
@@ -395,6 +431,7 @@ public class DeploymentDiscoveryProperties {
         public String getDeploymentVersion() {
             return deploymentVersion;
         }
+
         /**
          * setDeploymentVersion.
          *
@@ -404,6 +441,7 @@ public class DeploymentDiscoveryProperties {
         public void setDeploymentVersion(String deploymentVersion) {
             this.deploymentVersion = deploymentVersion;
         }
+
         /**
          * getReadiness.
          *
@@ -413,6 +451,7 @@ public class DeploymentDiscoveryProperties {
         public String getReadiness() {
             return readiness;
         }
+
         /**
          * setReadiness.
          *
@@ -422,6 +461,7 @@ public class DeploymentDiscoveryProperties {
         public void setReadiness(String readiness) {
             this.readiness = readiness;
         }
+
         /**
          * getFrameworkType.
          *
@@ -431,6 +471,7 @@ public class DeploymentDiscoveryProperties {
         public FrameworkType getFrameworkType() {
             return frameworkType;
         }
+
         /**
          * setFrameworkType.
          *
@@ -440,6 +481,7 @@ public class DeploymentDiscoveryProperties {
         public void setFrameworkType(FrameworkType frameworkType) {
             this.frameworkType = frameworkType;
         }
+
         /**
          * getRouteKey.
          *
@@ -449,6 +491,7 @@ public class DeploymentDiscoveryProperties {
         public String getRouteKey() {
             return routeKey;
         }
+
         /**
          * setRouteKey.
          *
@@ -458,6 +501,7 @@ public class DeploymentDiscoveryProperties {
         public void setRouteKey(String routeKey) {
             this.routeKey = routeKey;
         }
+
         /**
          * getContractVersion.
          *
@@ -467,6 +511,7 @@ public class DeploymentDiscoveryProperties {
         public String getContractVersion() {
             return contractVersion;
         }
+
         /**
          * setContractVersion.
          *
@@ -476,6 +521,7 @@ public class DeploymentDiscoveryProperties {
         public void setContractVersion(String contractVersion) {
             this.contractVersion = contractVersion;
         }
+
         /**
          * getCapabilityVersion.
          *
@@ -485,6 +531,7 @@ public class DeploymentDiscoveryProperties {
         public String getCapabilityVersion() {
             return capabilityVersion;
         }
+
         /**
          * setCapabilityVersion.
          *
@@ -494,6 +541,7 @@ public class DeploymentDiscoveryProperties {
         public void setCapabilityVersion(String capabilityVersion) {
             this.capabilityVersion = capabilityVersion;
         }
+
         /**
          * getCardPath.
          *
@@ -503,6 +551,7 @@ public class DeploymentDiscoveryProperties {
         public String getCardPath() {
             return cardPath;
         }
+
         /**
          * setCardPath.
          *
@@ -525,6 +574,7 @@ public class DeploymentDiscoveryProperties {
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers;
         }
+
         /**
          * getMaxConcurrency.
          *
@@ -534,6 +584,7 @@ public class DeploymentDiscoveryProperties {
         public Integer getMaxConcurrency() {
             return maxConcurrency;
         }
+
         /**
          * setMaxConcurrency.
          *
@@ -543,6 +594,7 @@ public class DeploymentDiscoveryProperties {
         public void setMaxConcurrency(Integer maxConcurrency) {
             this.maxConcurrency = maxConcurrency;
         }
+
         /**
          * getWeight.
          *
@@ -552,6 +604,7 @@ public class DeploymentDiscoveryProperties {
         public Integer getWeight() {
             return weight;
         }
+
         /**
          * setWeight.
          *
@@ -561,6 +614,7 @@ public class DeploymentDiscoveryProperties {
         public void setWeight(Integer weight) {
             this.weight = weight;
         }
+
         /**
          * getRegion.
          *
@@ -570,6 +624,7 @@ public class DeploymentDiscoveryProperties {
         public String getRegion() {
             return region;
         }
+
         /**
          * setRegion.
          *

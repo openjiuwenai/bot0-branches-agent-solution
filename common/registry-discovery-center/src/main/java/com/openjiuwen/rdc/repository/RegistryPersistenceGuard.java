@@ -17,8 +17,9 @@ import java.util.function.Supplier;
  */
 public final class RegistryPersistenceGuard {
     private RegistryPersistenceGuard() {
-         
+
     }
+
     /**
      * execute.
      *

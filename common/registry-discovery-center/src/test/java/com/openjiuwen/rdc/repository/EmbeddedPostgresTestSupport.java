@@ -29,7 +29,7 @@ public final class EmbeddedPostgresTestSupport {
     private static ThreadPoolExecutor shutdownExecutor;
 
     private EmbeddedPostgresTestSupport() {
-         
+
     }
     public static synchronized DataSource sharedDataSource() throws Exception {
         if (dataSource == null) {

@@ -21,8 +21,9 @@ public final class RouteTargetDeriver {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private RouteTargetDeriver() {
-         
+
     }
+
     /**
      * derive.
      *
@@ -73,6 +74,7 @@ public final class RouteTargetDeriver {
     public static String deriveJson(String internalBaseUrl, String cardJson, String routeKeyFallback) {
         return derive(internalBaseUrl, cardJson, routeKeyFallback).routeTargetJson();
     }
+
     /**
      * agentNameFromCard.
      *

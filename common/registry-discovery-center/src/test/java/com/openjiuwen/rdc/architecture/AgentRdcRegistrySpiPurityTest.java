@@ -34,12 +34,18 @@ import org.junit.jupiter.api.Test;
  * the shipped SPI surface, not test scaffolding.
  *
  * <p>Assertion ID: HA-001-REG.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class AgentRdcRegistrySpiPurityTest {
+
     /**
      * Production registry SPI classes only
      * ({@code com.openjiuwen.rdc.model} and sub-packages). Test
      * classes are excluded — the rule constrains the shipped contract surface.
+     *
+     * @return result
+     * @since 0.1.0
      */
     private static final JavaClasses REGISTRY_SPI = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -52,7 +58,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("org.springframework..")
                 .because("registry SPI must stay pure Java; Spring belongs in runtime bindings, "
-                       + "never in the transport-agnostic contract surface (ADR-0160 decision 1).")
+                    + "never in the transport-agnostic contract surface (ADR-0160 decision 1).")
                 .check(REGISTRY_SPI);
     }
 
@@ -61,7 +67,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("reactor..")
                 .because("registry SPI must stay pure Java; java.util.concurrent.Flow is the "
-                       + "allowed reactive-streams abstraction, not Project Reactor.")
+                    + "allowed reactive-streams abstraction, not Project Reactor.")
                 .check(REGISTRY_SPI);
     }
 
@@ -70,7 +76,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
                 .because("registry SPI must stay pure Java; metrics instrumentation belongs in "
-                       + "runtime (RegistryObservabilityConfig), not in the contract surface.")
+                    + "runtime (RegistryObservabilityConfig), not in the contract surface.")
                 .check(REGISTRY_SPI);
     }
 
@@ -79,7 +85,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("io.opentelemetry..")
                 .because("registry SPI must stay pure Java; tracing SDK belongs in runtime, "
-                       + "not in the contract surface.")
+                    + "not in the contract surface.")
                 .check(REGISTRY_SPI);
     }
 
@@ -90,7 +96,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("java.sql..")
                 .because("registry SPI must stay persistence-agnostic; JDBC lives in the "
-                       + "runtime.persistence.jdbc adapter only (ADR-0160 decision 1/4).")
+                    + "runtime.persistence.jdbc adapter only (ADR-0160 decision 1/4).")
                 .check(REGISTRY_SPI);
     }
 
@@ -99,7 +105,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("javax.sql..")
                 .because("registry SPI must stay persistence-agnostic; javax.sql (DataSource) "
-                       + "lives in the runtime.persistence.jdbc adapter only.")
+                    + "lives in the runtime.persistence.jdbc adapter only.")
                 .check(REGISTRY_SPI);
     }
 
@@ -108,8 +114,8 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
                 .because("registry SPI must stay transport-agnostic; serialisation belongs in "
-                       + "the wire binding layer (RouteHandleCodec in runtime.discovery), not "
-                       + "in the envelope contract.")
+                    + "the wire binding layer (RouteHandleCodec in runtime.discovery), not "
+                    + "in the envelope contract.")
                 .check(REGISTRY_SPI);
     }
 
@@ -118,7 +124,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("com.ecwid.consul..")
                 .because("registry SPI must stay MVP-pure; Consul is a phase-2 candidate, "
-                       + "never a Stage 4 SPI dependency (ADR-0160 decision 1/2).")
+                    + "never a Stage 4 SPI dependency (ADR-0160 decision 1/2).")
                 .check(REGISTRY_SPI);
     }
 
@@ -127,7 +133,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.cloud.consul..")
                 .because("registry SPI must stay MVP-pure; Spring Cloud Consul is a phase-2 "
-                       + "candidate, never a Stage 4 SPI dependency.")
+                    + "candidate, never a Stage 4 SPI dependency.")
                 .check(REGISTRY_SPI);
     }
 
@@ -140,7 +146,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("jakarta.servlet..")
                 .because("registry SPI must stay transport-agnostic; the Servlet API belongs "
-                       + "in an HTTP wire binding, never in the contract surface (MI-001).")
+                    + "in an HTTP wire binding, never in the contract surface (MI-001).")
                 .check(REGISTRY_SPI);
     }
 
@@ -149,7 +155,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("javax.servlet..")
                 .because("registry SPI must stay transport-agnostic; the legacy Servlet API "
-                       + "belongs in an HTTP wire binding, never in the contract surface.")
+                    + "belongs in an HTTP wire binding, never in the contract surface.")
                 .check(REGISTRY_SPI);
     }
 
@@ -158,7 +164,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("jakarta.ws.rs..")
                 .because("registry SPI must stay transport-agnostic; JAX-RS belongs in a REST "
-                       + "wire binding, never in the contract surface (MI-001).")
+                    + "wire binding, never in the contract surface (MI-001).")
                 .check(REGISTRY_SPI);
     }
 
@@ -167,7 +173,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("javax.ws.rs..")
                 .because("registry SPI must stay transport-agnostic; the legacy JAX-RS API "
-                       + "belongs in a REST wire binding, never in the contract surface.")
+                    + "belongs in a REST wire binding, never in the contract surface.")
                 .check(REGISTRY_SPI);
     }
 
@@ -176,8 +182,8 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.web..")
                 .because("registry SPI must stay transport-agnostic; Spring Web (RestClient / "
-                       + "@RestController) belongs in runtime.{api,discovery,health}, never in "
-                       + "the contract surface (ADR-0160 decision 7).")
+                    + "@RestController) belongs in runtime.{api,discovery,health}, never in "
+                    + "the contract surface (ADR-0160 decision 7).")
                 .check(REGISTRY_SPI);
     }
 
@@ -186,7 +192,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("org.apache.http..")
                 .because("registry SPI must stay transport-agnostic; Apache HttpClient belongs "
-                       + "in an HTTP wire binding, never in the contract surface (MI-001).")
+                    + "in an HTTP wire binding, never in the contract surface (MI-001).")
                 .check(REGISTRY_SPI);
     }
 
@@ -195,7 +201,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("okhttp3..")
                 .because("registry SPI must stay transport-agnostic; OkHttp belongs in an HTTP "
-                       + "wire binding, never in the contract surface (MI-001).")
+                    + "wire binding, never in the contract surface (MI-001).")
                 .check(REGISTRY_SPI);
     }
 
@@ -204,7 +210,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("io.netty..")
                 .because("registry SPI must stay transport-agnostic; Netty is a network runtime, "
-                       + "never a contract-surface dependency (MI-001).")
+                    + "never a contract-surface dependency (MI-001).")
                 .check(REGISTRY_SPI);
     }
 
@@ -213,7 +219,7 @@ class AgentRdcRegistrySpiPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.model..")
                 .should().dependOnClassesThat().resideInAPackage("io.vertx..")
                 .because("registry SPI must stay transport-agnostic; Vert.x is a network/reactive "
-                       + "runtime, never a contract-surface dependency (MI-001).")
+                    + "runtime, never a contract-surface dependency (MI-001).")
                 .check(REGISTRY_SPI);
     }
 
@@ -223,6 +229,8 @@ class AgentRdcRegistrySpiPurityTest {
      * Guards against an accidental empty import (e.g. a typo'd package path)
      * silently passing every {@code noClasses} rule above — an empty
      * {@link JavaClasses} set vacuously satisfies "no classes depend on X".
+     *
+     * @since 0.1.0
      */
     @Test
     void spi_registry_production_import_is_non_empty() {

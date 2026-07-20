@@ -177,9 +177,8 @@ public final class ReconciliationService {
             case CREATED -> counters.created++;
             case UPDATED -> counters.updated++;
             case DRAINING -> counters.draining++;
-            case FAILED, UNCHANGED -> {
-            // Not counted in snapshot apply counters.
-            }
+            case FAILED, UNCHANGED -> LOG.trace(
+            "reconcile action {} not counted in apply counters", action);
             }
         }
         counters.draining += reconcileMissing(sourceId, seen);
@@ -212,15 +211,16 @@ public final class ReconciliationService {
             return unchanged.get();
         }
 
-        return upsertReconciledObservation(obs, binding, agentId, instancePk, fetched, cardJson, digest, priorDigest);
+        return upsertReconciledObservation(new UpsertReconcileArgs(
+                obs, binding, agentId, instancePk, fetched, cardJson, digest, priorDigest));
     }
 
     private ReconcileAction handleTerminatingObservation(
             DeploymentInstanceObservation obs, String agentId, String instancePk) {
-        repository.markDraining(obs.tenantId(), agentId, instancePk);
-        emitDraining(obs.sourceId(), obs.tenantId(), agentId);
-        return ReconcileAction.DRAINING;
-    }
+            repository.markDraining(obs.tenantId(), agentId, instancePk);
+            emitDraining(obs.sourceId(), obs.tenantId(), agentId);
+            return ReconcileAction.DRAINING;
+        }
 
     private ReconcileAction handleCardFetchFailure(
             DeploymentInstanceObservation obs,
@@ -278,7 +278,47 @@ public final class ReconciliationService {
         return Optional.empty();
     }
 
-    private ReconcileAction upsertReconciledObservation(
+    private ReconcileAction upsertReconciledObservation(UpsertReconcileArgs args) {
+            DeploymentInstanceObservation obs = args.obs();
+            StaticInstanceRuntimeBinding binding = args.binding();
+            AgentCardFetcher.FetchResult fetched = args.fetched();
+            String cardJson = args.cardJson();
+            RouteTargetDeriver.DerivedRoute route = RouteTargetDeriver.derive(
+            obs.internalBaseUrl(), cardJson, binding.routeKey());
+            String agentName = RouteTargetDeriver.agentNameFromCard(cardJson);
+            String contractVersion = fetched.contractVersion() != null && !fetched.contractVersion().isBlank()
+            ? fetched.contractVersion()
+            : (route.contractVersion() != null ? route.contractVersion() : binding.contractVersion());
+            
+            boolean created = args.priorDigest().isEmpty();
+            repository.reconcileUpsert(new ReconcileUpsertCommand(
+            obs.tenantId(),
+            args.agentId(),
+            args.instancePk(),
+            obs.instanceId(),
+            obs.serviceId(),
+            obs.sourceId(),
+            obs.sourceRevision(),
+            agentName,
+            binding.frameworkType(),
+            binding.routeKey(),
+            contractVersion,
+            fetched.capabilityVersion() != null ? fetched.capabilityVersion() : binding.capabilityVersion(),
+            obs.internalBaseUrl(),
+            binding.maxConcurrency(),
+            binding.weight(),
+            binding.region(),
+            cardJson,
+            args.digest(),
+            route.routeTargetJson(),
+            "ACTIVE",
+            "HEALTHY",
+            "FRESH",
+            "ONLINE"));
+            return created ? ReconcileAction.CREATED : ReconcileAction.UPDATED;
+        }
+
+    private record UpsertReconcileArgs(
             DeploymentInstanceObservation obs,
             StaticInstanceRuntimeBinding binding,
             String agentId,
@@ -287,39 +327,6 @@ public final class ReconciliationService {
             String cardJson,
             String digest,
             Optional<String> priorDigest) {
-        RouteTargetDeriver.DerivedRoute route = RouteTargetDeriver.derive(
-                obs.internalBaseUrl(), cardJson, binding.routeKey());
-        String agentName = RouteTargetDeriver.agentNameFromCard(cardJson);
-        String contractVersion = fetched.contractVersion() != null && !fetched.contractVersion().isBlank()
-                ? fetched.contractVersion()
-                : (route.contractVersion() != null ? route.contractVersion() : binding.contractVersion());
-
-        boolean created = priorDigest.isEmpty();
-        repository.reconcileUpsert(new ReconcileUpsertCommand(
-                obs.tenantId(),
-                agentId,
-                instancePk,
-                obs.instanceId(),
-                obs.serviceId(),
-                obs.sourceId(),
-                obs.sourceRevision(),
-                agentName,
-                binding.frameworkType(),
-                binding.routeKey(),
-                contractVersion,
-                fetched.capabilityVersion() != null ? fetched.capabilityVersion() : binding.capabilityVersion(),
-                obs.internalBaseUrl(),
-                binding.maxConcurrency(),
-                binding.weight(),
-                binding.region(),
-                cardJson,
-                digest,
-                route.routeTargetJson(),
-                "ACTIVE",
-                "HEALTHY",
-                "FRESH",
-                "ONLINE"));
-        return created ? ReconcileAction.CREATED : ReconcileAction.UPDATED;
     }
 
     private int reconcileMissing(String sourceId, Set<String> seenInstanceIds) {
@@ -365,14 +372,18 @@ public final class ReconciliationService {
 
     private void emitDraining(String sourceId, String tenantId, String agentId) {
             if (observability != null) {
-            observability.observeInstanceDraining(sourceId, tenantId, agentId);
-        }
+                observability.observeInstanceDraining(sourceId, tenantId, agentId);
+            }
     }
 
     /**
      * Prefer an explicit {@code instances[]} binding; otherwise apply
      * {@link DeploymentDiscoveryProperties#getBindingDefaults()} so dynamic
      * providers can reconcile without a yml entry per pod.
+     *
+     * @param obs obs
+     * @return result
+     * @since 0.1.0
      */
     private StaticInstanceRuntimeBinding bindingFor(DeploymentInstanceObservation obs) {
         return bindings.stream()
@@ -416,6 +427,7 @@ public final class ReconciliationService {
     private static String blankToDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
+
     /**
      * StaticInstanceRuntimeBinding.
      *
@@ -448,8 +460,9 @@ public final class ReconciliationService {
             int weight,
             String region
     ) {
-         
+
     }
+
     /**
      * ReconciliationResult.
      *

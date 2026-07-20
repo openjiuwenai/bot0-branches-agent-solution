@@ -8,6 +8,11 @@ package com.openjiuwen.rdc.model;
  * Unified failure structure per Feat-015 0711 {@code RegistryFailure}.
  *
  * @since 0.1.0 (2026)
+ * @param failureCode failureCode
+ * @param message message
+ * @param retryable retryable
+ * @param traceId traceId
+ * @return result
  */
 public record RegistryFailure(
         String failureCode,
@@ -15,6 +20,7 @@ public record RegistryFailure(
         boolean retryable,
         String traceId
 ) {
+
     /**
      * of.
      *

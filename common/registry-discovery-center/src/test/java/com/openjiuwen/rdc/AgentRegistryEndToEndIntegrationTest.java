@@ -60,7 +60,9 @@ import javax.sql.DataSource;
  * <p>REQ-2026-006: discovery collapses from single-value Optional lookup to
  * list lookup. The 15s visibility window at discovery layer is gone; visibility
  * window applies only to the health-probe scheduler scan.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class AgentRegistryEndToEndIntegrationTest {
     private static DataSource dataSource;
     private static MockWebServer agentServer;

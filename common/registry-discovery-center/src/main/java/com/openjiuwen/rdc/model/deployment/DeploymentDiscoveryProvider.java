@@ -11,12 +11,21 @@ package com.openjiuwen.rdc.model.deployment;
  * @since 0.1.0 (2026)
  */
 public interface DeploymentDiscoveryProvider {
-    /** Stable provider identity, e.g. {@code static-dev} or {@code k8s-prod}. */
+
+    /**
+     * Stable provider identity, e.g. {@code static-dev} or {@code k8s-prod}.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     String sourceId();
 
     /**
      * Authoritative full snapshot for reconciliation after startup, revision gap,
      * or periodic refresh.
+     *
+     * @return result
+     * @since 0.1.0
      */
 
     ListDeploymentInstancesResult listInstances();
@@ -26,6 +35,9 @@ public interface DeploymentDiscoveryProvider {
      * should push {@link DeploymentInstanceEvent}s. When revision continuity
      * cannot be recovered, implementations should signal via thrown
      * {@link SourceRevisionGapException}.
+     *
+     * @param consumer consumer
+     * @since 0.1.0
      */
 
     default void watchInstances(DeploymentInstanceEventConsumer consumer) {

@@ -24,6 +24,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * ReconciliationRevisionConflictTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class ReconciliationRevisionConflictTest {
     private static final String SOURCE = "src-conflict";
     private static final long REVISION = 42L;

@@ -43,6 +43,7 @@ public final class DiscoveryQuery {
     public static Builder builder() {
         return new Builder();
     }
+
     /**
      * validate.
      *
@@ -70,6 +71,7 @@ public final class DiscoveryQuery {
     public RegistryRequestContext context() {
         return context;
     }
+
     /**
      * agentId.
      *
@@ -80,6 +82,7 @@ public final class DiscoveryQuery {
     public String agentId() {
         return agentId;
     }
+
     /**
      * serviceId.
      *
@@ -90,6 +93,7 @@ public final class DiscoveryQuery {
     public String serviceId() {
         return serviceId;
     }
+
     /**
      * a2aSkillId.
      *
@@ -100,6 +104,7 @@ public final class DiscoveryQuery {
     public String a2aSkillId() {
         return a2aSkillId;
     }
+
     /**
      * constraints.
      *
@@ -109,6 +114,7 @@ public final class DiscoveryQuery {
     public DiscoveryConstraints constraints() {
         return constraints;
     }
+
     /**
      * limit.
      *
@@ -118,6 +124,7 @@ public final class DiscoveryQuery {
     public int limit() {
         return limit;
     }
+
     /**
      * continuationToken.
      *
@@ -131,6 +138,12 @@ public final class DiscoveryQuery {
     private static boolean isBlank(@Nullable String value) {
         return value == null || value.isBlank();
     }
+
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private RegistryRequestContext context;
         private String agentId;

@@ -49,7 +49,6 @@ import java.util.Objects;
  */
 public final class AgentCardDto {
     // ---- ICD routing fields (always populated on match) ----
-
     private final String serviceId;
     private final String routeHandle;
     private final String health;
@@ -88,6 +87,7 @@ public final class AgentCardDto {
     public String getServiceId() {
         return serviceId;
     }
+
     /**
      * getRouteHandle.
      *
@@ -97,6 +97,7 @@ public final class AgentCardDto {
     public String getRouteHandle() {
         return routeHandle;
     }
+
     /**
      * getHealth.
      *
@@ -106,6 +107,7 @@ public final class AgentCardDto {
     public String getHealth() {
         return health;
     }
+
     /**
      * getContractVersion.
      *
@@ -115,6 +117,7 @@ public final class AgentCardDto {
     public String getContractVersion() {
         return contractVersion;
     }
+
     /**
      * getCapabilityVersion.
      *
@@ -124,6 +127,7 @@ public final class AgentCardDto {
     public String getCapabilityVersion() {
         return capabilityVersion;
     }
+
     /**
      * getWeight.
      *
@@ -133,6 +137,7 @@ public final class AgentCardDto {
     public int getWeight() {
         return weight;
     }
+
     /**
      * getRegion.
      *
@@ -142,6 +147,7 @@ public final class AgentCardDto {
     public String getRegion() {
         return region;
     }
+
     /**
      * getMaxConcurrency.
      *
@@ -151,6 +157,7 @@ public final class AgentCardDto {
     public int getMaxConcurrency() {
         return maxConcurrency;
     }
+
     /**
      * getAgentName.
      *
@@ -161,6 +168,7 @@ public final class AgentCardDto {
     public String getAgentName() {
         return agentName;
     }
+
     /**
      * getFrameworkType.
      *
@@ -171,6 +179,7 @@ public final class AgentCardDto {
     public FrameworkType getFrameworkType() {
         return frameworkType;
     }
+
     /**
      * builder.
      *
@@ -180,6 +189,12 @@ public final class AgentCardDto {
     public static Builder builder() {
         return new Builder();
     }
+
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private String serviceId;
         private String routeHandle;
@@ -193,8 +208,9 @@ public final class AgentCardDto {
         private FrameworkType frameworkType;
 
         private Builder() {
-             
+
         }
+
         /**
          * serviceId.
          *

@@ -12,6 +12,11 @@ import com.openjiuwen.rdc.model.RegistryEntryInvalidException;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * RegistryEntryValidatorTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class RegistryEntryValidatorTest {
     @Test
     void missing_endpoint_raises_registry_entry_invalid() {

@@ -38,7 +38,7 @@ final class StructuredDiscoveryEngine {
     private static final int OUTCOME_EVAL_LIMIT = 500;
 
     private StructuredDiscoveryEngine() {
-         
+
     }
     static DiscoveryResult discover(AgentRegistryRepository repository, DiscoveryQuery query) {
         query.validate();
@@ -95,8 +95,8 @@ final class StructuredDiscoveryEngine {
     }
 
     private static boolean isRegistered(LogicalRegistrationRow row) {
-        return RegistrationStatus.REGISTERED.name().equals(row.registrationStatus());
-    }
+            return RegistrationStatus.REGISTERED.name().equals(row.registrationStatus());
+        }
     private static QuerySelector resolveSelector(String tenantId, DiscoveryQuery query) {
         String agentId = blankToNull(query.agentId()).orElse(null);
         String serviceId = blankToNull(query.serviceId()).orElse(null);
@@ -116,7 +116,7 @@ final class StructuredDiscoveryEngine {
         return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
     }
     private record QuerySelector(String agentId, String logicalServiceId) {
-         
+
     }
     private static List<LogicalRegistrationRow> applyVersion(
             List<LogicalRegistrationRow> rows, DiscoveryConstraints constraints) {
@@ -258,23 +258,27 @@ final class StructuredDiscoveryEngine {
     private static DiscoveryCandidate toCandidate(LogicalRegistrationRow row,
                                                   String requestedSkillId,
                                                   String traceId) {
-        validateRegistrationIntegrity(row, traceId);
-        return DiscoveryCandidate.builder()
-                .agentCardJson(row.a2aAgentCardJson())
-                .agentId(row.agentId())
-                .serviceId(row.serviceId())
-                .matchedA2aSkillId(requestedSkillId)
-                .contractVersion(row.contractVersion())
-                .capabilityVersion(row.capabilityVersion())
-                .registrationStatus(RegistrationStatus.valueOf(row.registrationStatus()))
-                .freshness(Freshness.valueOf(row.freshness()))
-                .lastValidatedAt(row.lastValidatedAt())
-                .build();
-    }
+            validateRegistrationIntegrity(row, traceId);
+            return DiscoveryCandidate.builder()
+            .agentCardJson(row.a2aAgentCardJson())
+            .agentId(row.agentId())
+            .serviceId(row.serviceId())
+            .matchedA2aSkillId(requestedSkillId)
+            .contractVersion(row.contractVersion())
+            .capabilityVersion(row.capabilityVersion())
+            .registrationStatus(RegistrationStatus.valueOf(row.registrationStatus()))
+            .freshness(Freshness.valueOf(row.freshness()))
+            .lastValidatedAt(row.lastValidatedAt())
+            .build();
+        }
 
     /**
      * REGISTERED rows exposed to callers must carry a parseable card snapshot and
      * valid metadata enums (0713 {@code REGISTRATION_INVALID}).
+     *
+     * @param row row
+     * @param traceId traceId
+     * @since 0.1.0
      */
     private static void validateRegistrationIntegrity(LogicalRegistrationRow row, String traceId) {
         try {

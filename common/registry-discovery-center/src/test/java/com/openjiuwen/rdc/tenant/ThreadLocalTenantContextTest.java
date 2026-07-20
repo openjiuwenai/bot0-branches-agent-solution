@@ -52,7 +52,9 @@ import java.util.concurrent.TimeUnit;
  *   <li><b>RB-TC6</b> — {@link TenantContext#current()} returns null when
  *       no tenant is bound (unbound scope).</li>
  * </ul>
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class ThreadLocalTenantContextTest {
     private final ThreadLocalTenantContext context = new ThreadLocalTenantContext();
 

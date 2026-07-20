@@ -186,7 +186,7 @@ public class InstanceRouteController {
             String requestId,
             Instant deadline
     ) {
-         
+
     }
     private static String resolveTraceId(String traceparent, String xTraceId) {
         if (traceparent != null && !traceparent.isBlank()) {
@@ -203,9 +203,9 @@ public class InstanceRouteController {
 
     private static void requireNonBlank(String message, String... values) {
             for (String value : values) {
-            if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(message);
-        }
+                if (value == null || value.isBlank()) {
+                throw new IllegalArgumentException(message);
+            }
         }
     }
 }

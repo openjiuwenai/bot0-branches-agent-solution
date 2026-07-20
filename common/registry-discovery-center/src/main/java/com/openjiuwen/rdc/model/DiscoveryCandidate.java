@@ -50,6 +50,7 @@ public final class DiscoveryCandidate {
     public static Builder builder() {
         return new Builder();
     }
+
     /**
      * agentCardJson.
      *
@@ -60,6 +61,7 @@ public final class DiscoveryCandidate {
     public String agentCardJson() {
         return agentCardJson;
     }
+
     /**
      * agentId.
      *
@@ -69,6 +71,7 @@ public final class DiscoveryCandidate {
     public String agentId() {
         return agentId;
     }
+
     /**
      * serviceId.
      *
@@ -78,6 +81,7 @@ public final class DiscoveryCandidate {
     public String serviceId() {
         return serviceId;
     }
+
     /**
      * matchedA2aSkillId.
      *
@@ -88,6 +92,7 @@ public final class DiscoveryCandidate {
     public String matchedA2aSkillId() {
         return matchedA2aSkillId;
     }
+
     /**
      * contractVersion.
      *
@@ -97,6 +102,7 @@ public final class DiscoveryCandidate {
     public String contractVersion() {
         return contractVersion;
     }
+
     /**
      * capabilityVersion.
      *
@@ -106,6 +112,7 @@ public final class DiscoveryCandidate {
     public String capabilityVersion() {
         return capabilityVersion;
     }
+
     /**
      * registrationStatus.
      *
@@ -115,6 +122,7 @@ public final class DiscoveryCandidate {
     public RegistrationStatus registrationStatus() {
         return registrationStatus;
     }
+
     /**
      * freshness.
      *
@@ -124,6 +132,7 @@ public final class DiscoveryCandidate {
     public Freshness freshness() {
         return freshness;
     }
+
     /**
      * lastValidatedAt.
      *
@@ -134,6 +143,12 @@ public final class DiscoveryCandidate {
     public Instant lastValidatedAt() {
         return lastValidatedAt;
     }
+
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private String agentCardJson;
         private String agentId;

@@ -134,16 +134,26 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
      * Backwards-compatible constructor: derives a per-DataSource
      * {@link DataSourceTransactionManager} so every method runs inside a
      * short transaction that sets {@code app.tenant_id} (Stage 24 RLS wiring).
+     *
+     * @param dataSource dataSource
+     * @return result
+     * @since 0.1.0
      */
     public JdbcAgentRegistryRepository(DataSource dataSource) {
         this(dataSource, new DataSourceTransactionManager(dataSource));
     }
+
     /**
      * Full constructor: accepts an explicit {@link PlatformTransactionManager}
      * so production can supply a pooled / XA-aware manager, and tests can
      * inject a controlled one. The manager must bind connections from the
      * same {@link DataSource} so the transactional connection is the one
      * {@code app.tenant_id} is set on.
+     *
+     * @param dataSource dataSource
+     * @param txManager txManager
+     * @return result
+     * @since 0.1.0
      */
     public JdbcAgentRegistryRepository(DataSource dataSource, PlatformTransactionManager txManager) {
         Objects.requireNonNull(dataSource, "dataSource is required");
@@ -637,6 +647,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     public void updateLastProcessedRevision(String sourceId, long revision) {
         updateLastProcessedRevision(sourceId, revision, null);
     }
+
     /**
      * getSnapshotFingerprint.
      *
@@ -991,7 +1002,12 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     /**
-     * Stage 24 RLS wiring — see class javadoc.
+     * * Stage 24 RLS wiring — see class javadoc.
+     *
+     * @param tenantId tenantId
+     * @param work work
+     * @return result
+     * @since 0.1.0
      */
     private <T> T withTenant(String tenantId, Supplier<T> work) {
         return txTemplate.execute(status -> {
@@ -1011,15 +1027,17 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
 
     private static Optional<java.util.UUID> uuidColumn(Object value) throws java.sql.SQLException {
             if (value == null) {
-            return Optional.empty();
-        }
+                return Optional.empty();
+            }
         if (value instanceof java.util.UUID uuid) {
             return Optional.of(uuid);
         }
         throw new java.sql.SQLException("expected UUID column value, got " + value.getClass().getName());
     }
 
-    /** Row mapper for {@link RegistryRow} — single instance, stateless. */
+    /**
+     * Row mapper for {@link RegistryRow} — single instance, stateless.
+     */
     private static final class RegistryRowMapper
             implements org.springframework.jdbc.core.RowMapper<RegistryRow> {
         static final RegistryRowMapper INSTANCE = new RegistryRowMapper();
@@ -1067,7 +1085,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         }
     }
 
-    /** Row mapper for {@link DiscoveryRow}. */
+    /**
+     * Row mapper for {@link DiscoveryRow}.
+     */
     private static final class DiscoveryRowMapper
             implements org.springframework.jdbc.core.RowMapper<DiscoveryRow> {
         static final DiscoveryRowMapper INSTANCE = new DiscoveryRowMapper();
@@ -1465,28 +1485,28 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     private void syncLogicalFromReconcileUpsert(ReconcileUpsertCommand command) {
-        java.util.UUID registrationId = upsertLogicalRegistration(new UpsertLogicalRegistrationCommand(
-                command.tenantId(),
-                command.agentId(),
-                command.deploymentServiceId(),
-                command.cardDigest(),
-                command.contractVersion(),
-                command.capabilityVersion(),
-                "REGISTERED",
-                command.freshness(),
-                command.a2aAgentCardJson()));
-        upsertSourceRef(new UpsertSourceRefCommand(
-                command.tenantId(),
-                command.deploymentServiceId(),
-                command.instanceId(),
-                command.sourceId(),
-                command.sourceRevision(),
-                command.endpointUrl(),
-                null,
-                "READY",
-                registrationId));
-        recomputeRegistrationStatus(registrationId);
-    }
+            java.util.UUID registrationId = upsertLogicalRegistration(new UpsertLogicalRegistrationCommand(
+            command.tenantId(),
+            command.agentId(),
+            command.deploymentServiceId(),
+            command.cardDigest(),
+            command.contractVersion(),
+            command.capabilityVersion(),
+            "REGISTERED",
+            command.freshness(),
+            command.a2aAgentCardJson()));
+            upsertSourceRef(new UpsertSourceRefCommand(
+            command.tenantId(),
+            command.deploymentServiceId(),
+            command.instanceId(),
+            command.sourceId(),
+            command.sourceRevision(),
+            command.endpointUrl(),
+            null,
+            "READY",
+            registrationId));
+            recomputeRegistrationStatus(registrationId);
+        }
 
     private void syncLogicalFromReconcilePending(ReconcilePendingCommand command) {
         String placeholderDigest = "pending:" + command.instanceId();
@@ -1548,7 +1568,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         }
     }
 
-    /** Row mapper for {@link LogicalRegistrationRow}. */
+    /**
+     * Row mapper for {@link LogicalRegistrationRow}.
+     */
     private static final class LogicalRegistrationRowMapper
             implements org.springframework.jdbc.core.RowMapper<LogicalRegistrationRow> {
         static final LogicalRegistrationRowMapper INSTANCE = new LogicalRegistrationRowMapper();

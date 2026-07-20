@@ -91,9 +91,12 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
     public void onApplicationEvent(ApplicationReadyEvent event) {
         runBootstrap();
     }
+
     /**
      * Package-private entry point for tests — avoids constructing a real
      * {@link ApplicationReadyEvent} (whose source must be non-null).
+     *
+     * @since 0.1.0
      */
 
     void runBootstrap() {

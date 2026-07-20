@@ -12,6 +12,11 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 
+/**
+ * RegistryRequestDeadlineTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class RegistryRequestDeadlineTest {
     @Test
     void future_deadline_passes() {

@@ -50,6 +50,7 @@ public final class AgentCardSignatureVerifier {
     public static AgentCardSignatureVerifier disabled() {
         return new AgentCardSignatureVerifier(false, Map.of());
     }
+
     /**
      * from.
      *
@@ -129,10 +130,10 @@ public final class AgentCardSignatureVerifier {
     }
 
     private static String unsignedPayload(JsonNode root) throws JsonProcessingException {
-        ObjectNode copy = root.deepCopy();
-        copy.remove("signatures");
-        return MAPPER.writeValueAsString(copy);
-    }
+            ObjectNode copy = root.deepCopy();
+            copy.remove("signatures");
+            return MAPPER.writeValueAsString(copy);
+        }
 
     private static String mapAlgorithm(String alg) {
         return switch (alg) {
@@ -168,6 +169,7 @@ public final class AgentCardSignatureVerifier {
     private static String base64UrlDecodeToString(String value) {
         return new String(base64UrlDecode(value), StandardCharsets.UTF_8);
     }
+
     /**
      * VerificationResult.
      *

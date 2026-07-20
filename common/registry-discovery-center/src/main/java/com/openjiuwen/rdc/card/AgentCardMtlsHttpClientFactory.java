@@ -24,12 +24,11 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
 /**
- * Builds {@link HttpClient} for Agent Card fetch, optionally with mTLS client credentials.
+ * * Builds {@link HttpClient} for Agent Card fetch, optionally with mTLS client credentials.
  */
-
 final class AgentCardMtlsHttpClientFactory {
     private AgentCardMtlsHttpClientFactory() {
-         
+
     }
     static HttpClient create(RdcCardFetchOptions options) {
         Objects.requireNonNull(options, "options");
@@ -47,21 +46,21 @@ final class AgentCardMtlsHttpClientFactory {
             SSLContext sslContext = SSLContext.getInstance("TLS");
             KeyManagerFactory kmf = null;
             if (options.getClientPkcs12Location() != null && !options.getClientPkcs12Location().isBlank()) {
-            KeyStore identity = loadStore(
-            options.getClientPkcs12Location(),
-            options.getClientPkcs12Secret(),
-            options.getClientPkcs12Format());
-            kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(identity, secretChars(options.getClientPkcs12Secret()));
+                KeyStore identity = loadStore(
+                options.getClientPkcs12Location(),
+                options.getClientPkcs12Secret(),
+                options.getClientPkcs12Format());
+                kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                kmf.init(identity, secretChars(options.getClientPkcs12Secret()));
             }
             TrustManagerFactory tmf = null;
             if (options.getTrustPkcs12Location() != null && !options.getTrustPkcs12Location().isBlank()) {
-            KeyStore trust = loadStore(
-            options.getTrustPkcs12Location(),
-            options.getTrustPkcs12Secret(),
-            options.getTrustPkcs12Format());
-            tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(trust);
+                KeyStore trust = loadStore(
+                options.getTrustPkcs12Location(),
+                options.getTrustPkcs12Secret(),
+                options.getTrustPkcs12Format());
+                tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                tmf.init(trust);
             }
             sslContext.init(
             kmf != null ? kmf.getKeyManagers() : null,

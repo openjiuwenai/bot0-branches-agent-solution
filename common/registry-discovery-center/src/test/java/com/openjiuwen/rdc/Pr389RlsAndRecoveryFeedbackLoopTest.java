@@ -69,7 +69,9 @@ import javax.sql.DataSource;
  *
  * <p>Authority: PR #389 review issues #3 / #4. ADR-0160 decision 4 / 6 +
  * HD3-004 lease/TTL.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class Pr389RlsAndRecoveryFeedbackLoopTest {
     private static DataSource superuser;
     private static DataSource appRoleSource;
@@ -108,6 +110,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     /**
      * Owner-role scan sees the row. This is the baseline — it's what the
      * existing IT (which uses owner throughout) implicitly relies on.
+     *
+     * @since 0.1.0
      */
     @Test
     void owner_role_scan_sees_stale_online_row() {
@@ -130,6 +134,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * MUST be refactored to per-tenant {@code withTenant} scans). It PASSES
      * on the unfixed code because the trap is real — its job is to make the
      * assumption explicit and tested, not to verify a fix.
+     *
+     * @since 0.1.0
      */
     @Test
     void app_role_scan_no_tenant_returns_empty() {
@@ -158,6 +164,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * uses. This proves the trap is not solved by "just set
      * app.tenant_id somewhere"; the scan itself must be tenant-scoped or
      * run on an owner-role connection.
+     *
+     * @since 0.1.0
      */
     @Test
     void app_role_scan_with_tenant_still_empty() throws Exception {
@@ -208,6 +216,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * {@code tenant_id='tenant-A' AND agent_id='agent-X' AND service_id=...},
      * which matches 0 rows (tenant-B's row has tenant_id='tenant-B'). The
      * tenant-B row's status is untouched.
+     *
+     * @since 0.1.0
      */
     @Test
     void app_role_update_for_tenant_a_does_not_touch_tenant_b_row() {
@@ -234,6 +244,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * PR #389 review test gap: cross-tenant DELETE under restricted role.
      * The adapter sets app.tenant_id=A, then DELETE WHERE tenant_id=A AND
      * agent_id=X — matches 0 rows for a tenant-B entry.
+     *
+     * @since 0.1.0
      */
     @Test
     void app_role_delete_for_tenant_a_does_not_remove_tenant_b_row() {
@@ -259,6 +271,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * test documents that contract: an app_role caller passing tenantId=A
      * inserts a tenant-A row (never tenant-B), regardless of any
      * app.tenant_id setting.
+     *
+     * @since 0.1.0
      */
     @Test
     void app_role_upsert_inserts_only_into_callers_tenant() {
@@ -285,6 +299,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * <p>The fix uses a CASE expression in the ON CONFLICT UPDATE:
      * {@code status = CASE WHEN agent_registry_mvp.status = 'DRAINING'
      * THEN 'DRAINING' ELSE 'ONLINE' END}.
+     *
+     * @since 0.1.0
      */
     @Test
     void upsert_preserves_draining_status_across_re_registration() {
@@ -306,6 +322,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      * Control for {@link #upsert_preserves_draining_status_across_re_registration}:
      * re-registering an agent in any non-DRAINING state (ONLINE / DEGRADED /
      * OFFLINE) resets it to ONLINE — the agent-restart semantic.
+     *
+     * @since 0.1.0
      */
     @Test
     void upsert_resets_degraded_to_online_on_re_registration() {
@@ -330,6 +348,8 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
      *
      * <p>RED on the unfixed code (scan returns empty for a DEGRADED row);
      * GREEN once the status filter is widened.
+     *
+     * @since 0.1.0
      */
     @Test
     void degraded_row_repicked_restored_online() {
@@ -362,7 +382,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     private static final ObjectMapper TEST_MAPPER = new ObjectMapper();
 
     /**
-     * FEAT-016: {@code service_id} is host-only; {@code instance_id} is host-port.
+     * * FEAT-016: {@code service_id} is host-only; {@code instance_id} is host-port.
      */
     private static final String SAMPLE_ENDPOINT = "https://agent.example/agent";
     private static final String SERVICE_ID = ServiceIdCodec.derive(SAMPLE_ENDPOINT);

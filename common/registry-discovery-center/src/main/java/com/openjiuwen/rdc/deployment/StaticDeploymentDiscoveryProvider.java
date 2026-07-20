@@ -26,6 +26,7 @@ import java.util.Objects;
  * @since 0.1.0 (2026)
  */
 public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscoveryProvider {
+
     /**
      * SOURCE_ID.
      *
@@ -41,6 +42,7 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
     public StaticDeploymentDiscoveryProvider(List<StaticInstanceConfig> instances) {
         this.instances = List.copyOf(Objects.requireNonNull(instances, "instances"));
     }
+
     /**
      * sourceId.
      *
@@ -51,6 +53,7 @@ public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscov
     public String sourceId() {
         return SOURCE_ID;
     }
+
     /**
      * listInstances.
      *

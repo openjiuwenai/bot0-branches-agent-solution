@@ -20,6 +20,11 @@ import java.security.Signature;
 import java.util.Base64;
 import java.util.Map;
 
+/**
+ * AgentCardSignatureVerifierTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class AgentCardSignatureVerifierTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

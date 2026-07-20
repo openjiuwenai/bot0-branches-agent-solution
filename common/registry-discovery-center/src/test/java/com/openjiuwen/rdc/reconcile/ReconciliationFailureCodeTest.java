@@ -18,6 +18,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+/**
+ * ReconciliationFailureCodeTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class ReconciliationFailureCodeTest {
     private static final class TestProbeException extends RuntimeException {
         TestProbeException(String message) {
@@ -132,7 +137,7 @@ class ReconciliationFailureCodeTest {
         public void markDraining(String tenantId, String agentId, String serviceId) { }
         @Override
         public void markRemoved(String tenantId, String agentId, String serviceId) {
-             
+
         }
         @Override
         public void markSourceStale(String sourceId) {

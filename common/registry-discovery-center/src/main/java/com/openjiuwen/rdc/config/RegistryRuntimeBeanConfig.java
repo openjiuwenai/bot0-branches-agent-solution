@@ -79,6 +79,7 @@ import javax.sql.DataSource;
  */
 @Configuration
 public class RegistryRuntimeBeanConfig {
+
     /**
      * In-process {@link MeterRegistry} for the standalone runtime. Suffices
      * for audit + Counter/Timer emission via {@link RegistryObservabilityConfig};
@@ -90,6 +91,7 @@ public class RegistryRuntimeBeanConfig {
     public MeterRegistry meterRegistry() {
         return new SimpleMeterRegistry();
     }
+
     /**
      * Flyway migrator for the {@code agent_registry_mvp} schema. Spring Boot 4
      * dropped Flyway auto-configuration, so we build the {@link Flyway}
@@ -130,6 +132,7 @@ public class RegistryRuntimeBeanConfig {
     public AgentRegistryRepository agentRegistryRepository(DataSource dataSource, Flyway flyway) {
         return new JdbcAgentRegistryRepository(dataSource);
     }
+
     /**
      * Jackson 2 {@link ObjectMapper} for {@code MvpRegistryController}'s A2A
      * AgentCard serialisation. Spring Boot 4 auto-configures Jackson 3
@@ -142,6 +145,7 @@ public class RegistryRuntimeBeanConfig {
     public ObjectMapper objectMapper() {
         return RegistryObjectMapper.createJackson2();
     }
+
     /**
      * agentCardFetcher.
      *
@@ -153,6 +157,7 @@ public class RegistryRuntimeBeanConfig {
     public AgentCardFetcher agentCardFetcher(RdcCardFetchOptions cardFetchOptions) {
         return AgentCardFetcher.fromSecurity(cardFetchOptions);
     }
+
     /**
      * callerAuthorizationPolicy.
      *

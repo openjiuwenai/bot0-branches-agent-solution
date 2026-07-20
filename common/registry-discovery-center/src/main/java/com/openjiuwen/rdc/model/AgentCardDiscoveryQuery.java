@@ -44,6 +44,7 @@ public final class AgentCardDiscoveryQuery {
     public static Builder builder() {
         return new Builder();
     }
+
     /**
      * context.
      *
@@ -53,6 +54,7 @@ public final class AgentCardDiscoveryQuery {
     public RegistryRequestContext context() {
         return context;
     }
+
     /**
      * agentId.
      *
@@ -63,6 +65,7 @@ public final class AgentCardDiscoveryQuery {
     public String agentId() {
         return agentId;
     }
+
     /**
      * serviceId.
      *
@@ -73,6 +76,7 @@ public final class AgentCardDiscoveryQuery {
     public String serviceId() {
         return serviceId;
     }
+
     /**
      * a2aSkillId.
      *
@@ -83,6 +87,7 @@ public final class AgentCardDiscoveryQuery {
     public String a2aSkillId() {
         return a2aSkillId;
     }
+
     /**
      * constraints.
      *
@@ -92,6 +97,7 @@ public final class AgentCardDiscoveryQuery {
     public DiscoveryConstraints constraints() {
         return constraints;
     }
+
     /**
      * limit.
      *
@@ -101,6 +107,7 @@ public final class AgentCardDiscoveryQuery {
     public int limit() {
         return limit;
     }
+
     /**
      * continuationToken.
      *
@@ -111,6 +118,7 @@ public final class AgentCardDiscoveryQuery {
     public String continuationToken() {
         return continuationToken;
     }
+
     /**
      * validate.
      *
@@ -129,7 +137,12 @@ public final class AgentCardDiscoveryQuery {
         }
     }
 
-    /** Bridge to legacy {@link DiscoveryQuery} for internal callers. */
+    /**
+     * Bridge to legacy {@link DiscoveryQuery} for internal callers.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public DiscoveryQuery toDiscoveryQuery() {
         return DiscoveryQuery.builder()
                 .context(context)
@@ -161,6 +174,11 @@ public final class AgentCardDiscoveryQuery {
                 .build();
     }
 
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private RegistryRequestContext context;
         private String agentId;

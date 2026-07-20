@@ -8,6 +8,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * AgentCardValidatorTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class AgentCardValidatorTest {
     @Test
     void valid_jsonrpc_card_passes() {

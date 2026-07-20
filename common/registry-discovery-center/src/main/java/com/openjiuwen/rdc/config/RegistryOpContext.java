@@ -46,6 +46,7 @@ public final class RegistryOpContext {
     public String getTraceId() {
         return traceId;
     }
+
     /**
      * Returns the tenant id.
      *
@@ -54,6 +55,7 @@ public final class RegistryOpContext {
     public String getTenantId() {
         return tenantId;
     }
+
     /**
      * Returns the agent id.
      *
@@ -62,6 +64,7 @@ public final class RegistryOpContext {
     public String getAgentId() {
         return agentId;
     }
+
     /**
      * Returns the contract version.
      *
@@ -70,6 +73,7 @@ public final class RegistryOpContext {
     public String getContractVersion() {
         return contractVersion;
     }
+
     /**
      * Returns the capability version.
      *
@@ -78,6 +82,7 @@ public final class RegistryOpContext {
     public String getCapabilityVersion() {
         return capabilityVersion;
     }
+
     /**
      * Returns the health tag.
      *
@@ -86,6 +91,7 @@ public final class RegistryOpContext {
     public String getHealth() {
         return health;
     }
+
     /**
      * Returns the route handle id.
      *
@@ -94,6 +100,7 @@ public final class RegistryOpContext {
     public String getRouteHandleId() {
         return routeHandleId;
     }
+
     /**
      * Returns the discover query dimension (agentId / serviceId / capability).
      *
@@ -102,6 +109,7 @@ public final class RegistryOpContext {
     public String getQueryDimension() {
         return queryDimension;
     }
+
     /**
      * Returns the discover query value.
      *
@@ -110,6 +118,7 @@ public final class RegistryOpContext {
     public String getQueryValue() {
         return queryValue;
     }
+
     /**
      * Returns a builder seeded with the given traceId/tenantId/agentId.
      *
@@ -121,6 +130,7 @@ public final class RegistryOpContext {
     public static Builder of(String traceId, String tenantId, String agentId) {
         return new Builder(traceId, tenantId, agentId);
     }
+
     /**
      * Returns a builder seeded with the given traceId/tenantId (no agentId).
      *
@@ -131,8 +141,14 @@ public final class RegistryOpContext {
     public static Builder of(String traceId, String tenantId) {
         return new Builder(traceId, tenantId, null);
     }
+
     /**
-     * Fluent builder for {@link RegistryOpContext}.
+     * * Fluent builder for {@link RegistryOpContext}.
+     */
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
      */
     public static final class Builder {
         private final String traceId;

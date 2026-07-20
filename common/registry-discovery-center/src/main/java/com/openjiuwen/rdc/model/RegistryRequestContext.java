@@ -12,6 +12,12 @@ import java.util.Objects;
  * (Feat-015 0711 scope §3 {@code RegistryRequestContext}).
  *
  * @since 0.1.0 (2026)
+ * @param tenantId tenantId
+ * @param callerRef callerRef
+ * @param traceId traceId
+ * @param requestId requestId
+ * @param deadline deadline
+ * @return result
  */
 public record RegistryRequestContext(
         String tenantId,

@@ -40,6 +40,7 @@ import org.springframework.boot.SpringApplication;
  */
 @SpringBootApplication
 public class AgentRdcApplication {
+
     /**
      * main.
      *

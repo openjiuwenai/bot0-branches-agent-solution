@@ -149,6 +149,10 @@ public class MvpHealthProbeScheduler {
      * normalisation directly without going through a live HTTP call (HTTP
      * clients silently canonicalise {@code //x} → {@code /x}, masking the
      * bug at the wire level).
+     *
+     * @param endpointUrl endpointUrl
+     * @return result
+     * @since 0.1.0
      */
 
     static String composeProbeUrl(String endpointUrl) {

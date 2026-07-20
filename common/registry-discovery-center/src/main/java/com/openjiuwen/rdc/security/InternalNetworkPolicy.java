@@ -21,6 +21,7 @@ public final class InternalNetworkPolicy {
     private InternalNetworkPolicy(List<CidrBlock> allowedCidrs) {
         this.allowedCidrs = List.copyOf(allowedCidrs);
     }
+
     /**
      * permissive.
      *
@@ -30,6 +31,7 @@ public final class InternalNetworkPolicy {
     public static InternalNetworkPolicy permissive() {
         return new InternalNetworkPolicy(List.of());
     }
+
     /**
      * from.
      *

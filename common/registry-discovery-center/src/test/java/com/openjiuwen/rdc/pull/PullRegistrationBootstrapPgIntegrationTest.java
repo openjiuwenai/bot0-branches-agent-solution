@@ -38,7 +38,9 @@ import javax.sql.DataSource;
  * {@code buildEntry()} omitted {@code maxConcurrency}/{@code weight}, the
  * upsert SQL bound those columns as null, and the NOT NULL constraint on
  * {@code agent_registry_mvp} rejected the insert.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class PullRegistrationBootstrapPgIntegrationTest {
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;

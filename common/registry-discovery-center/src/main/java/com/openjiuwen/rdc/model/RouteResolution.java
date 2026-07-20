@@ -13,6 +13,12 @@ package com.openjiuwen.rdc.model;
  * Feat-015 adds {@code capabilityVersion} for Card-level routing metadata.
  *
  * @since 0.1.0 (2026)
+ * @param instanceId instanceId
+ * @param endpointUrl endpointUrl
+ * @param routeKey routeKey
+ * @param contractVersion contractVersion
+ * @param capabilityVersion capabilityVersion
+ * @return result
  */
 public record RouteResolution(
         String instanceId,

@@ -39,8 +39,10 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 /**
- * Integration tests for Feat-015 P1 provider reconciliation against real PG.
- */
+ * * Integration tests for Feat-015 P1 provider reconciliation against real PG.
+  *
+ * @since 0.1.0 (2026)
+*/
 class ReconciliationIntegrationTest {
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;

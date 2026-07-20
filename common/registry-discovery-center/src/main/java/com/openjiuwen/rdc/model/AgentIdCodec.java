@@ -17,6 +17,11 @@ public final class AgentIdCodec {
     /**
      * Within a tenant, the deployment {@code serviceId} is the stable Agent
      * Service identity. Card {@code name} is display-only.
+     *
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @return result
+     * @since 0.1.0
      */
     public static String derive(String tenantId, String deploymentServiceId) {
         if (tenantId == null || tenantId.isBlank()) {

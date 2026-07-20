@@ -27,12 +27,33 @@ package com.openjiuwen.rdc.model;
  * @since 0.1.0
  */
 public enum FrameworkType {
-    /** Jiuwen agent runtime. */
+
+    /**
+     * Jiuwen agent runtime.
+     *
+     * @param endpoint endpoint
+     * @return result
+     * @since 0.1.0
+     */
     JIUWEN,
-    /** AgentScope runtime. */
+    /**
+     * AgentScope runtime.
+     *
+     * @param endpoint endpoint
+     * @return result
+     * @since 0.1.0
+     */
     AGENTSCOPE,
-    /** Versatile runtime. */
+    /**
+     * Versatile runtime.
+     *
+     * @param endpoint endpoint
+     * @return result
+     * @since 0.1.0
+     */
     VERSATILE,
-    /** Generic proxy service (no agent runtime behind the endpoint). */
+    /**
+     * Generic proxy service (no agent runtime behind the endpoint).
+     */
     PROXY_SERVICE
 }

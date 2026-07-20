@@ -40,7 +40,9 @@ import javax.sql.DataSource;
  * <p>Tests verify the post-V5 schema state: PK is the triple, partial
  * heartbeat index unchanged, RLS unchanged, CHECK constraints unchanged.
  * Old search_tsv / capability / agent_type artifacts must be gone.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class AgentRegistryMigrationTest {
     private static DataSource dataSource;
     private static JdbcTemplate jdbc;
@@ -224,16 +226,16 @@ class AgentRegistryMigrationTest {
 
     @Test
     void check_constraint_rejects_negative_weight() {
-        try {
+            try {
             jdbc.update("INSERT INTO agent_registry_mvp ("
-                    + "tenant_id, agent_id, service_id, agent_name, framework_type, "
-                    + "route_key, contract_version, capability_version, "
-                    + "endpoint_url, weight) "
-                    + "VALUES ('tenant-neg', 'agent-neg', 'svc-neg', 'name', 'JIUWEN', "
-                    + "'rk', '1.0', '1.0', 'http://x', -1)");
+            + "tenant_id, agent_id, service_id, agent_name, framework_type, "
+            + "route_key, contract_version, capability_version, "
+            + "endpoint_url, weight) "
+            + "VALUES ('tenant-neg', 'agent-neg', 'svc-neg', 'name', 'JIUWEN', "
+            + "'rk', '1.0', '1.0', 'http://x', -1)");
             org.assertj.core.api.Assertions.fail(
-                    "CHECK constraint should have rejected weight=-1");
-        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            "CHECK constraint should have rejected weight=-1");
+            } catch (org.springframework.dao.DataIntegrityViolationException ex) {
             assertThat(ex.getMessage()).containsAnyOf("ck_agent_registry_mvp_weight", "violates");
         }
     }

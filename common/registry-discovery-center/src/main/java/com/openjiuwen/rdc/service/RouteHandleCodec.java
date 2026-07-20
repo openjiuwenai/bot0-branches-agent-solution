@@ -69,6 +69,7 @@ import java.util.Base64;
  */
 
 final class RouteHandleCodec {
+
     /**
      * Version-2 prefix marker. FEAT-016 encode always produces this prefix;
      * decode requires it — old v1: / no-prefix handles are rejected.
@@ -81,6 +82,7 @@ final class RouteHandleCodec {
     private RouteHandleCodec() {
         // utility class — no instances
     }
+
     /**
      * Encode the 6 fields into an opaque handle. Format:
      * {@code "v2:" + base64(JSON{tenantId, agentId, serviceId, instanceId,
@@ -184,8 +186,8 @@ final class RouteHandleCodec {
 
     private static void requireNonBlank(String value, String name) {
             if (value == null) {
-            throw new IllegalArgumentException(name + " must not be null");
-        }
+                throw new IllegalArgumentException(name + " must not be null");
+            }
         if (value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");
         }
@@ -196,6 +198,15 @@ final class RouteHandleCodec {
      * decoded view returned by {@link #decode}. The {@code serviceId} field is
      * the logical service identifier; the {@code instanceId} field lets the
      * forwarding layer resolve a specific instance among N replicas.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param routeKey routeKey
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
      */
 
     record HandleFields(

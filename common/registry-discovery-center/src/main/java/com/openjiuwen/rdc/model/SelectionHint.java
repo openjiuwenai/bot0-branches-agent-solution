@@ -8,6 +8,9 @@ package com.openjiuwen.rdc.model;
  * Optional load-balancing hint for callers (Feat-015 0711 {@code selectionHint}).
  *
  * @since 0.1.0 (2026)
+ * @param weight weight
+ * @param region region
+ * @return result
  */
 public record SelectionHint(
         int weight,

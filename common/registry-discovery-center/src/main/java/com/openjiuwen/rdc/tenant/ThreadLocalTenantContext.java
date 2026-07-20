@@ -53,6 +53,11 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * {@code work}, then clear the binding regardless of outcome, returning
      * the supplier's result. Use this for background scheduling paths that
      * need to return a value.
+     *
+     * @param tenantId tenantId
+     * @param work work
+     * @return result
+     * @since 0.1.0
      */
     public static <T> T bindForScope(String tenantId, java.util.function.Supplier<T> work) {
         String prior = CURRENT.get();
@@ -68,6 +73,9 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * Set the current thread's tenant. Called by {@link #bindForScope};
      * package-private so external callers cannot bypass the
      * {@code bindForScope} lifecycle.
+     *
+     * @param tenantId tenantId
+     * @since 0.1.0
      */
 
     static void set(String tenantId) {
@@ -80,6 +88,8 @@ public final class ThreadLocalTenantContext implements TenantContext {
     /**
      * Clear the current thread's tenant. Called by {@link #bindForScope}'s
      * finally block; package-private for the same reason as {@link #set}.
+     *
+     * @since 0.1.0
      */
 
     static void clear() {

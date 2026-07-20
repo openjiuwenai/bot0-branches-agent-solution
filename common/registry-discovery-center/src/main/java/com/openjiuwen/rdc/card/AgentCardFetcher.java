@@ -22,18 +22,21 @@ import java.util.Objects;
  * @since 0.1.0 (2026)
  */
 public final class AgentCardFetcher {
+
     /**
      * DEFAULT_CONNECT_TIMEOUT.
      *
      * @since 0.1.0
      */
     public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
     /**
      * DEFAULT_READ_TIMEOUT.
      *
      * @since 0.1.0
      */
     public static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(10);
+
     /**
      * DEFAULT_CARD_PATH.
      *

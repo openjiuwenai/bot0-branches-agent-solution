@@ -25,6 +25,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
+/**
+ * ResolveGovernanceIntegrationTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class ResolveGovernanceIntegrationTest {
     private static DataSource dataSource;
     private static JdbcAgentRegistryRepository repository;

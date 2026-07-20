@@ -47,7 +47,9 @@ import java.util.Optional;
  * one and resolves it via {@code resolveRouteHandle}. Tests cover rich DTO
  * population, empty result (not found / DRAINING / OFFLINE), and tenant
  * isolation.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class PgMvpDiscoveryServiceImplTest {
     private RegistryObservabilityConfig observability;
     private TestTenantContext tenantContext;
@@ -323,8 +325,8 @@ class PgMvpDiscoveryServiceImplTest {
 
         @Override
         public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
-            return List.of();
-        }
+                return List.of();
+            }
         @Override
         public void reconcileUpsert(ReconcileUpsertCommand command) {
         }
@@ -383,7 +385,7 @@ class PgMvpDiscoveryServiceImplTest {
 
         @Override
         public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
-             
+
         }
         @Override
         public java.util.Optional<ResolveRow> findForResolve(

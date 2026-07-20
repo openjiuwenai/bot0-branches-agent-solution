@@ -119,25 +119,31 @@ public class ReconciliationScheduler implements ApplicationListener<ApplicationR
 
     private static List<StaticDeploymentDiscoveryProvider.StaticInstanceConfig> buildProviderInstances(
             DeploymentDiscoveryProperties properties) {
-        List<StaticDeploymentDiscoveryProvider.StaticInstanceConfig> providerInstances = new ArrayList<>();
-        for (DeploymentDiscoveryProperties.StaticInstanceEntry entry : properties.getInstances()) {
+            List<StaticDeploymentDiscoveryProvider.StaticInstanceConfig> providerInstances = new ArrayList<>();
+            for (DeploymentDiscoveryProperties.StaticInstanceEntry entry : properties.getInstances()) {
             Readiness readiness = "TERMINATING".equalsIgnoreCase(entry.getReadiness())
-                    ? Readiness.TERMINATING : Readiness.READY;
+            ? Readiness.TERMINATING : Readiness.READY;
             providerInstances.add(new StaticDeploymentDiscoveryProvider.StaticInstanceConfig(
-                    entry.getTenantId(),
-                    entry.getServiceId(),
-                    entry.getInstanceId(),
-                    entry.getBaseUrl(),
-                    entry.getDeploymentVersion(),
-                    readiness));
+            entry.getTenantId(),
+            entry.getServiceId(),
+            entry.getInstanceId(),
+            entry.getBaseUrl(),
+            entry.getDeploymentVersion(),
+            readiness));
         }
         return providerInstances;
     }
 
-    /** Visible for tests — order: injected beans first, then optional static-config. */
+    /**
+     * Visible for tests — order: injected beans first, then optional static-config.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     List<DeploymentDiscoveryProvider> registeredProviders() {
         return providers;
     }
+
     /**
      * onApplicationEvent.
      *
@@ -148,6 +154,7 @@ public class ReconciliationScheduler implements ApplicationListener<ApplicationR
     public void onApplicationEvent(ApplicationReadyEvent event) {
         runReconciliation("startup");
     }
+
     /**
      * periodicReconciliation.
      *

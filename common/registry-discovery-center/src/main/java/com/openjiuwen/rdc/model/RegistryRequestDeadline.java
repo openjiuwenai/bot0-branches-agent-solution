@@ -14,8 +14,9 @@ import java.util.Objects;
  */
 public final class RegistryRequestDeadline {
     private RegistryRequestDeadline() {
-         
+
     }
+
     /**
      * enforce.
      *

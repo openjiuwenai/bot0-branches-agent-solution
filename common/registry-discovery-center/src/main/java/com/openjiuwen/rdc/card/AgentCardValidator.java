@@ -155,22 +155,22 @@ public final class AgentCardValidator {
     private static void validateCapabilities(JsonNode root) {
             JsonNode caps = root.get("capabilities");
             if (caps == null || !caps.isObject()) {
-            throw new IllegalArgumentException("capabilities must be an object");
-        }
+                throw new IllegalArgumentException("capabilities must be an object");
+            }
     }
 
     private static ValidationResult validateSkill(JsonNode skill) {
-            try {
-            requireText(skill, "id");
-            requireText(skill, "name");
-            requireText(skill, "description");
-            if (!skill.has("tags") || !skill.get("tags").isArray()) {
-            return ValidationResult.invalid("AGENT_CARD_INVALID", "skill tags must be an array");
+                try {
+                requireText(skill, "id");
+                requireText(skill, "name");
+                requireText(skill, "description");
+                if (!skill.has("tags") || !skill.get("tags").isArray()) {
+                return ValidationResult.invalid("AGENT_CARD_INVALID", "skill tags must be an array");
             }
             return ValidationResult.valid(null, null);
             } catch (IllegalArgumentException ex) {
-            return ValidationResult.invalid("AGENT_CARD_INVALID", ex.getMessage());
-        }
+                return ValidationResult.invalid("AGENT_CARD_INVALID", ex.getMessage());
+            }
     }
 
     private static boolean arrayContainsText(JsonNode array, String value) {
@@ -237,14 +237,14 @@ public final class AgentCardValidator {
     private static void requireNonEmptyArray(JsonNode root, String field) {
             JsonNode node = root.get(field);
             if (node == null || !node.isArray() || node.isEmpty()) {
-            throw new IllegalArgumentException(field + " must be a non-empty array");
-        }
+                throw new IllegalArgumentException(field + " must be a non-empty array");
+            }
     }
 
     private static Optional<String> textOrNull(JsonNode node, String field) {
-            JsonNode child = node.get(field);
-            return child != null && child.isTextual() ? Optional.of(child.asText()) : Optional.empty();
-        }
+                JsonNode child = node.get(field);
+                return child != null && child.isTextual() ? Optional.of(child.asText()) : Optional.empty();
+            }
 
     private static boolean isJsonRpcInterface(JsonNode iface) {
         return isJsonRpcNode(iface);

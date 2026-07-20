@@ -22,7 +22,9 @@ import org.junit.jupiter.api.Test;
  * reconcile / security / health / tenant / pull / config}.
  *
  * <p>Assertion ID: HA-002-REG.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class AgentRdcRegistryJdbcPurityTest {
     private static final JavaClasses REGISTRY_RUNTIME = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

@@ -109,6 +109,7 @@ public final class AgentRegistryEntry {
     public String getTenantId() {
         return tenantId;
     }
+
     /**
      * setTenantId.
      *
@@ -118,6 +119,7 @@ public final class AgentRegistryEntry {
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
     }
+
     /**
      * getAgentId.
      *
@@ -127,6 +129,7 @@ public final class AgentRegistryEntry {
     public String getAgentId() {
         return agentId;
     }
+
     /**
      * setAgentId.
      *
@@ -136,6 +139,7 @@ public final class AgentRegistryEntry {
     public void setAgentId(String agentId) {
         this.agentId = agentId;
     }
+
     /**
      * Logical service identifier. Default-derived from {@code endpointUrl}
      * via {@link ServiceIdCodec#derive(String)} (host only) by the runtime
@@ -149,6 +153,7 @@ public final class AgentRegistryEntry {
     public String getServiceId() {
         return serviceId;
     }
+
     /**
      * setServiceId.
      *
@@ -158,6 +163,7 @@ public final class AgentRegistryEntry {
     public void setServiceId(String serviceId) {
         this.serviceId = serviceId;
     }
+
     /**
      * Server-derived from {@code endpointUrl} via
      * {@link InstanceIdCodec#derive(String)}; populated by
@@ -176,6 +182,7 @@ public final class AgentRegistryEntry {
     void setInstanceId(String instanceId) {
         this.instanceId = instanceId;
     }
+
     /**
      * getAgentName.
      *
@@ -185,6 +192,7 @@ public final class AgentRegistryEntry {
     public String getAgentName() {
         return agentName;
     }
+
     /**
      * setAgentName.
      *
@@ -194,6 +202,7 @@ public final class AgentRegistryEntry {
     public void setAgentName(String agentName) {
         this.agentName = agentName;
     }
+
     /**
      * getFrameworkType.
      *
@@ -203,6 +212,7 @@ public final class AgentRegistryEntry {
     public FrameworkType getFrameworkType() {
         return frameworkType;
     }
+
     /**
      * setFrameworkType.
      *
@@ -212,6 +222,7 @@ public final class AgentRegistryEntry {
     public void setFrameworkType(FrameworkType frameworkType) {
         this.frameworkType = frameworkType;
     }
+
     /**
      * getRouteKey.
      *
@@ -221,6 +232,7 @@ public final class AgentRegistryEntry {
     public String getRouteKey() {
         return routeKey;
     }
+
     /**
      * setRouteKey.
      *
@@ -230,6 +242,7 @@ public final class AgentRegistryEntry {
     public void setRouteKey(String routeKey) {
         this.routeKey = routeKey;
     }
+
     /**
      * getContractVersion.
      *
@@ -239,6 +252,7 @@ public final class AgentRegistryEntry {
     public String getContractVersion() {
         return contractVersion;
     }
+
     /**
      * setContractVersion.
      *
@@ -248,6 +262,7 @@ public final class AgentRegistryEntry {
     public void setContractVersion(String contractVersion) {
         this.contractVersion = contractVersion;
     }
+
     /**
      * getCapabilityVersion.
      *
@@ -257,6 +272,7 @@ public final class AgentRegistryEntry {
     public String getCapabilityVersion() {
         return capabilityVersion;
     }
+
     /**
      * setCapabilityVersion.
      *
@@ -266,6 +282,7 @@ public final class AgentRegistryEntry {
     public void setCapabilityVersion(String capabilityVersion) {
         this.capabilityVersion = capabilityVersion;
     }
+
     /**
      * getEndpointUrl.
      *
@@ -275,6 +292,7 @@ public final class AgentRegistryEntry {
     public String getEndpointUrl() {
         return endpointUrl;
     }
+
     /**
      * setEndpointUrl.
      *
@@ -284,6 +302,7 @@ public final class AgentRegistryEntry {
     public void setEndpointUrl(String endpointUrl) {
         this.endpointUrl = endpointUrl;
     }
+
     /**
      * getMaxConcurrency.
      *
@@ -293,6 +312,7 @@ public final class AgentRegistryEntry {
     public Integer getMaxConcurrency() {
         return maxConcurrency;
     }
+
     /**
      * setMaxConcurrency.
      *
@@ -302,6 +322,7 @@ public final class AgentRegistryEntry {
     public void setMaxConcurrency(Integer maxConcurrency) {
         this.maxConcurrency = maxConcurrency;
     }
+
     /**
      * getWeight.
      *
@@ -311,6 +332,7 @@ public final class AgentRegistryEntry {
     public Integer getWeight() {
         return weight;
     }
+
     /**
      * setWeight.
      *
@@ -320,6 +342,7 @@ public final class AgentRegistryEntry {
     public void setWeight(Integer weight) {
         this.weight = weight;
     }
+
     /**
      * getRegion.
      *
@@ -329,6 +352,7 @@ public final class AgentRegistryEntry {
     public String getRegion() {
         return region;
     }
+
     /**
      * setRegion.
      *
@@ -338,6 +362,7 @@ public final class AgentRegistryEntry {
     public void setRegion(String region) {
         this.region = region;
     }
+
     /**
      * getA2aAgentCard.
      *
@@ -347,6 +372,7 @@ public final class AgentRegistryEntry {
     public AgentCard getA2aAgentCard() {
         return a2aAgentCard;
     }
+
     /**
      * setA2aAgentCard.
      *
@@ -356,6 +382,7 @@ public final class AgentRegistryEntry {
     public void setA2aAgentCard(AgentCard a2aAgentCard) {
         this.a2aAgentCard = a2aAgentCard;
     }
+
     /**
      * FEAT-016 阶段一：rebuilds the capability field removed in REQ-2026-004 as a multi-value
      * List&lt;String&gt; (caller-optional). Backs the VARCHAR(64)[] DB column. Null when
@@ -366,6 +393,7 @@ public final class AgentRegistryEntry {
     public java.util.List<String> getCapabilities() {
         return capabilities;
     }
+
     /**
      * setCapabilities.
      *
@@ -375,6 +403,7 @@ public final class AgentRegistryEntry {
     public void setCapabilities(java.util.List<String> capabilities) {
         this.capabilities = capabilities;
     }
+
     /**
      * Convenience for tests / internal callers that want to assert the
      * registry-key pair is present before persisting. The registry PK is

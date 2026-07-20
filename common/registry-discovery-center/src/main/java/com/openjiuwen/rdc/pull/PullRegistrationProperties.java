@@ -31,6 +31,7 @@ import java.util.Map;
 @Component
 @ConfigurationProperties(prefix = "rdc.pull-registration")
 public class PullRegistrationProperties {
+
     /**
      * Master switch. Default {@code false} — pull registration is opt-in.
      * When {@code false}, {@link PullRegistrationBootstrap} no-ops on
@@ -54,6 +55,7 @@ public class PullRegistrationProperties {
     public boolean isEnabled() {
         return enabled;
     }
+
     /**
      * setEnabled.
      *
@@ -63,6 +65,7 @@ public class PullRegistrationProperties {
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
+
     /**
      * getRuntimes.
      *
@@ -72,6 +75,7 @@ public class PullRegistrationProperties {
     public List<RuntimeEntry> getRuntimes() {
         return runtimes;
     }
+
     /**
      * setRuntimes.
      *
@@ -81,6 +85,7 @@ public class PullRegistrationProperties {
     public void setRuntimes(List<RuntimeEntry> runtimes) {
         this.runtimes = runtimes;
     }
+
     /**
      * One runtime target for pull-based registration.
      *
@@ -90,10 +95,15 @@ public class PullRegistrationProperties {
      * {@code contractVersion}, {@code capabilityVersion}.
      */
     public static class RuntimeEntry {
-        /** Runtime origin URL, e.g. {@code http://localhost:8090}. Also used as endpointUrl. */
+
+        /**
+         * Runtime origin URL, e.g. {@code http://localhost:8090}. Also used as endpointUrl.
+         */
         private String baseUrl;
 
-        /** Tenant the pulled entry belongs to. */
+        /**
+         * Tenant the pulled entry belongs to.
+         */
         private String tenantId;
 
         /**
@@ -102,25 +112,39 @@ public class PullRegistrationProperties {
          */
         private String agentId;
 
-        /** Framework type pinned by the operator (cannot be derived from A2A card). */
+        /**
+         * Framework type pinned by the operator (cannot be derived from A2A card).
+         */
         private FrameworkType frameworkType;
 
-        /** Path to the A2A AgentCard on the runtime. Default {@code /.well-known/agent-card.json}. */
+        /**
+         * Path to the A2A AgentCard on the runtime. Default {@code /.well-known/agent-card.json}.
+         */
         private String cardPath = "/.well-known/agent-card.json";
 
-        /** HTTP headers to attach to the GET (e.g. {@code Authorization: Bearer ...}). */
+        /**
+         * HTTP headers to attach to the GET (e.g. {@code Authorization: Bearer ...}).
+         */
         private Map<String, String> headers;
 
-        /** Route key for the runtime's query endpoint. Default {@code /v1/query}. */
+        /**
+         * Route key for the runtime's query endpoint. Default {@code /v1/query}.
+         */
         private String routeKey = "/v1/query";
 
-        /** Optional region hint. */
+        /**
+         * Optional region hint.
+         */
         private String region;
 
-        /** Registry contract version. Default {@code v1}. */
+        /**
+         * Registry contract version. Default {@code v1}.
+         */
         private String contractVersion = "v1";
 
-        /** Agent capability version. Default {@code v1}. */
+        /**
+         * Agent capability version. Default {@code v1}.
+         */
         private String capabilityVersion = "v1";
 
         /**
@@ -147,6 +171,7 @@ public class PullRegistrationProperties {
         public String getBaseUrl() {
             return baseUrl;
         }
+
         /**
          * setBaseUrl.
          *
@@ -156,6 +181,7 @@ public class PullRegistrationProperties {
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
         }
+
         /**
          * getTenantId.
          *
@@ -165,6 +191,7 @@ public class PullRegistrationProperties {
         public String getTenantId() {
             return tenantId;
         }
+
         /**
          * setTenantId.
          *
@@ -174,6 +201,7 @@ public class PullRegistrationProperties {
         public void setTenantId(String tenantId) {
             this.tenantId = tenantId;
         }
+
         /**
          * getAgentId.
          *
@@ -183,6 +211,7 @@ public class PullRegistrationProperties {
         public String getAgentId() {
             return agentId;
         }
+
         /**
          * setAgentId.
          *
@@ -192,6 +221,7 @@ public class PullRegistrationProperties {
         public void setAgentId(String agentId) {
             this.agentId = agentId;
         }
+
         /**
          * getFrameworkType.
          *
@@ -201,6 +231,7 @@ public class PullRegistrationProperties {
         public FrameworkType getFrameworkType() {
             return frameworkType;
         }
+
         /**
          * setFrameworkType.
          *
@@ -210,6 +241,7 @@ public class PullRegistrationProperties {
         public void setFrameworkType(FrameworkType frameworkType) {
             this.frameworkType = frameworkType;
         }
+
         /**
          * getCardPath.
          *
@@ -219,6 +251,7 @@ public class PullRegistrationProperties {
         public String getCardPath() {
             return cardPath;
         }
+
         /**
          * setCardPath.
          *
@@ -241,6 +274,7 @@ public class PullRegistrationProperties {
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers;
         }
+
         /**
          * getRouteKey.
          *
@@ -250,6 +284,7 @@ public class PullRegistrationProperties {
         public String getRouteKey() {
             return routeKey;
         }
+
         /**
          * setRouteKey.
          *
@@ -259,6 +294,7 @@ public class PullRegistrationProperties {
         public void setRouteKey(String routeKey) {
             this.routeKey = routeKey;
         }
+
         /**
          * getRegion.
          *
@@ -268,6 +304,7 @@ public class PullRegistrationProperties {
         public String getRegion() {
             return region;
         }
+
         /**
          * setRegion.
          *
@@ -277,6 +314,7 @@ public class PullRegistrationProperties {
         public void setRegion(String region) {
             this.region = region;
         }
+
         /**
          * getContractVersion.
          *
@@ -286,6 +324,7 @@ public class PullRegistrationProperties {
         public String getContractVersion() {
             return contractVersion;
         }
+
         /**
          * setContractVersion.
          *
@@ -295,6 +334,7 @@ public class PullRegistrationProperties {
         public void setContractVersion(String contractVersion) {
             this.contractVersion = contractVersion;
         }
+
         /**
          * getCapabilityVersion.
          *
@@ -304,6 +344,7 @@ public class PullRegistrationProperties {
         public String getCapabilityVersion() {
             return capabilityVersion;
         }
+
         /**
          * setCapabilityVersion.
          *
@@ -313,6 +354,7 @@ public class PullRegistrationProperties {
         public void setCapabilityVersion(String capabilityVersion) {
             this.capabilityVersion = capabilityVersion;
         }
+
         /**
          * getMaxConcurrency.
          *
@@ -322,6 +364,7 @@ public class PullRegistrationProperties {
         public Integer getMaxConcurrency() {
             return maxConcurrency;
         }
+
         /**
          * setMaxConcurrency.
          *
@@ -331,6 +374,7 @@ public class PullRegistrationProperties {
         public void setMaxConcurrency(Integer maxConcurrency) {
             this.maxConcurrency = maxConcurrency;
         }
+
         /**
          * getWeight.
          *
@@ -340,6 +384,7 @@ public class PullRegistrationProperties {
         public Integer getWeight() {
             return weight;
         }
+
         /**
          * setWeight.
          *

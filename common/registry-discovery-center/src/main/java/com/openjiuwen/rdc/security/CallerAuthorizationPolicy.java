@@ -14,8 +14,11 @@ import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
 public interface CallerAuthorizationPolicy {
     void authorize(String tenantId, String callerRef, String traceId);
 
-    /** Allow-all policy when no allowlist is configured. */
+    /**
+     * Allow-all policy when no allowlist is configured.
+     */
     final class Permissive implements CallerAuthorizationPolicy {
+
         /**
          * authorize.
          *
@@ -32,13 +35,16 @@ public interface CallerAuthorizationPolicy {
         }
     }
 
-    /** Deny callers not listed under the tenant in {@link RegistrySecurityProperties}. */
+    /**
+     * Deny callers not listed under the tenant in {@link RegistrySecurityProperties}.
+     */
     final class Allowlist implements CallerAuthorizationPolicy {
         private final RegistrySecurityProperties properties;
 
         public Allowlist(RegistrySecurityProperties properties) {
             this.properties = properties;
         }
+
         /**
          * authorize.
          *

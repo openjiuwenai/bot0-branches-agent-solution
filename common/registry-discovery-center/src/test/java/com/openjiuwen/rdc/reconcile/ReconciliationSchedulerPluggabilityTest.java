@@ -34,7 +34,9 @@ import java.util.stream.Stream;
 /**
  * Unit coverage for pluggable {@link DeploymentDiscoveryProvider} wiring in
  * {@link ReconciliationScheduler} (injected beans + optional static yml provider).
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class ReconciliationSchedulerPluggabilityTest {
     @Test
     void registers_injected_provider_and_subscribes_watch() {

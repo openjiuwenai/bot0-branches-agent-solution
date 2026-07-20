@@ -29,6 +29,7 @@ public final class SourceRevisionConflictException extends RuntimeException {
     public String sourceId() {
         return sourceId;
     }
+
     /**
      * sourceRevision.
      *

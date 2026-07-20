@@ -25,35 +25,59 @@ import java.util.List;
  * @since 0.1.0 (2026)
  */
 public interface AgentDiscoveryService {
-    /**
-     * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, agentId)}.
-     */
 
+    /**
+     * * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, agentId)}.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId, String contractVersion);
 
     /**
-     * Convenience overload without contract version filter.
+     * * Convenience overload without contract version filter.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @return result
+     * @since 0.1.0
      */
-
     default List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId) {
         return searchInstancesByAgentId(tenantId, agentId, null);
     }
-    /**
-     * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, serviceId)}.
-     */
 
+    /**
+     * * List ONLINE/DEGRADED/DRAINING instances for {@code (tenantId, serviceId)}.
+     *
+     * @param tenantId tenantId
+     * @param serviceId serviceId
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
+     */
     List<AgentCardDto> searchByServiceId(String tenantId, String serviceId, String contractVersion);
 
     /**
-     * List ONLINE/DEGRADED/DRAINING instances declaring {@code capability}.
+     * * List ONLINE/DEGRADED/DRAINING instances declaring {@code capability}.
+     *
+     * @param tenantId tenantId
+     * @param capability capability
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
      */
-
     List<AgentCardDto> searchByCapability(String tenantId, String capability, String contractVersion);
 
     /**
-     * Structured logical Agent Card discovery per Feat-015.
+     * * Structured logical Agent Card discovery per Feat-015.
+     *
+     * @param query query
+     * @return result
+     * @since 0.1.0
      */
-
     DiscoveryResult discover(DiscoveryQuery query);
 
     default AgentCardDiscoveryResult discoverAgentCards(AgentCardDiscoveryQuery query) {

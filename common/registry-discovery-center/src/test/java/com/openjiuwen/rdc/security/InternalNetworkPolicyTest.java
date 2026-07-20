@@ -11,6 +11,11 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 
+/**
+ * InternalNetworkPolicyTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class InternalNetworkPolicyTest {
     @Test
     void permissive_allows_any_host() {

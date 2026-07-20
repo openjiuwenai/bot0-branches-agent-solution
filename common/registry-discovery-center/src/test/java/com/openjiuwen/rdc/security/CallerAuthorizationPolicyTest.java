@@ -13,6 +13,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
+/**
+ * CallerAuthorizationPolicyTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class CallerAuthorizationPolicyTest {
     @Test
     void permissive_rejects_blank_caller() {

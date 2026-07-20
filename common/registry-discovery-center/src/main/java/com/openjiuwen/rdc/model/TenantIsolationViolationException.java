@@ -42,6 +42,7 @@ public class TenantIsolationViolationException extends RegistryFailureException 
     public String requestedTenant() {
         return requestedTenant;
     }
+
     /**
      * currentTenant.
      *

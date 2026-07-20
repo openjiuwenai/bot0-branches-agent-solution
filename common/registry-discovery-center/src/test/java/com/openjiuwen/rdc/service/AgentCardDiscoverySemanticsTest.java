@@ -31,8 +31,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Feat-015 logical Agent Card discovery semantics without embedded PostgreSQL.
- */
+ * * Feat-015 logical Agent Card discovery semantics without embedded PostgreSQL.
+  *
+ * @since 0.1.0 (2026)
+*/
 class AgentCardDiscoverySemanticsTest {
     private static final String TRACE = "trace-sem";
     private static final String TENANT = "tenant-sem";

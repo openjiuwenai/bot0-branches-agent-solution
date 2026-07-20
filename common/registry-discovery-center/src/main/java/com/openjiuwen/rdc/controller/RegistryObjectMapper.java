@@ -21,8 +21,9 @@ import com.openjiuwen.rdc.model.DiscoveryCandidate;
  */
 public final class RegistryObjectMapper {
     private RegistryObjectMapper() {
-         
+
     }
+
     /**
      * Jackson 2 mapper with {@link DiscoveryCandidate} mixin and JSR-310 support.
      *

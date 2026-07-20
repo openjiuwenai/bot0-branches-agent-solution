@@ -28,8 +28,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Card fetch failure codes during reconciliation (0713 §5.1.6).
- */
+ * * Card fetch failure codes during reconciliation (0713 §5.1.6).
+  *
+ * @since 0.1.0 (2026)
+*/
 class ReconciliationCardFetchFailureTest {
     private MockWebServer runtimeServer;
 
@@ -51,16 +53,16 @@ class ReconciliationCardFetchFailureTest {
             runtimeServer.enqueue(new MockResponse()
             .setBody("{\"name\":\"only-name\"}")
             .addHeader("Content-Type", "application/json"));
-            
+
             RecordingRepository repository = new RecordingRepository();
             ReconciliationService service = new ReconciliationService(
             repository,
             new AgentCardFetcher(),
             new DeploymentDiscoveryProperties(),
             List.of(binding()));
-            
+
             var result = service.reconcile(provider());
-            
+
             assertThat(result.success()).isTrue();
             assertThat(repository.upserted).isFalse();
             assertThat(repository.pending).isTrue();

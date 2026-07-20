@@ -12,6 +12,16 @@ import java.util.Objects;
  * {@code DeploymentInstanceObservation}).
  *
  * @since 0.1.0 (2026)
+ * @param tenantId tenantId
+ * @param serviceId serviceId
+ * @param instanceId instanceId
+ * @param internalBaseUrl internalBaseUrl
+ * @param deploymentVersion deploymentVersion
+ * @param readiness readiness
+ * @param sourceId sourceId
+ * @param sourceRevision sourceRevision
+ * @param observedAt observedAt
+ * @return result
  */
 public record DeploymentInstanceObservation(
         String tenantId,

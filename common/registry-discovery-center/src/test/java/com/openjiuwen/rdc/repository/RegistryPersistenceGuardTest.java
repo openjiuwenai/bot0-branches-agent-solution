@@ -12,6 +12,11 @@ import com.openjiuwen.rdc.model.RegistryUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
+/**
+ * RegistryPersistenceGuardTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class RegistryPersistenceGuardTest {
     @Test
     void data_access_exception_maps_to_registry_unavailable() {

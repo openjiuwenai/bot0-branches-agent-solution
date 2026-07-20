@@ -155,11 +155,20 @@ public class RegistryObservabilityConfig {
         recordMetrics("resolve", audit.outcome(), audit.latencyMs());
     }
 
-    /** Governance events per 0711 §5.1.8 SHOULD (independent of query failures). */
+    /**
+     * Governance events per 0711 §5.1.8 SHOULD (independent of query failures).
+     *
+     * @param sourceId sourceId
+     * @param tenantId tenantId
+     * @param instanceId instanceId
+     * @param failureCode failureCode
+     * @since 0.1.0
+     */
     public void observeCardRefreshFailed(String sourceId, String tenantId, String instanceId,
                                          String failureCode) {
         recordGovernance("card_refresh_failed", sourceId, tenantId, instanceId, failureCode);
     }
+
     /**
      * observeSourceStale.
      *
@@ -169,6 +178,7 @@ public class RegistryObservabilityConfig {
     public void observeSourceStale(String sourceId) {
         recordGovernance("source_stale", sourceId, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER);
     }
+
     /**
      * observeReconciliationConflict.
      *
@@ -192,6 +202,7 @@ public class RegistryObservabilityConfig {
     public void observeInstanceDraining(String sourceId, String tenantId, String agentId) {
         recordGovernance("draining", sourceId, tenantId, agentId, PLACEHOLDER);
     }
+
     /**
      * observeLeaseExpired.
      *
@@ -202,6 +213,7 @@ public class RegistryObservabilityConfig {
     public void observeLeaseExpired(String tenantId, String agentId) {
         recordGovernance("lease_expired", PLACEHOLDER, tenantId, agentId, PLACEHOLDER);
     }
+
     /**
      * observeUnhealthy.
      *

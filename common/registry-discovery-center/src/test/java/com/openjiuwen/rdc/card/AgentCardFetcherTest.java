@@ -18,6 +18,11 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.util.Map;
 
+/**
+ * AgentCardFetcherTest coverage.
+ *
+ * @since 0.1.0 (2026)
+ */
 class AgentCardFetcherTest {
     private MockWebServer server;
 
@@ -39,12 +44,12 @@ class AgentCardFetcherTest {
             server.enqueue(new MockResponse()
             .setBody(validCard())
             .setHeader("Content-Type", "application/json"));
-            
+
             AgentCardFetcher fetcher = new AgentCardFetcher();
             String baseUrl = server.url("/").toString().replaceAll("/$", "");
             AgentCardFetcher.FetchResult result = fetcher.fetchValidated(
             URI.create(baseUrl), "/.well-known/agent-card.json", Map.of());
-            
+
             assertThat(result.success()).isTrue();
             assertThat(result.capabilityVersion()).isEqualTo("1.0.0");
         }

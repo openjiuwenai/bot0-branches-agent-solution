@@ -33,7 +33,9 @@ import javax.sql.DataSource;
 /**
  * Mirrors {@link ReconciliationScheduler}: provider registers watch before reconcile.
  * Ensures missing instances are drained even when watch events bump revision first.
- */
+  *
+ * @since 0.1.0 (2026)
+*/
 class ReconciliationWatchIntegrationTest {
     private static DataSource dataSource;
     private static MockWebServer oldRuntimeServer;
