@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 
 from openjiuwen.agent_evolving.trainer.progress import Callbacks
 
+from evo_agent.stdio_utf8 import ensure_utf8_stdio
+
 if TYPE_CHECKING:
     from openjiuwen.agent_evolving.dataset import EvaluatedCase
     from openjiuwen.agent_evolving.trainer.progress import Progress
@@ -34,6 +36,7 @@ class ConsoleProgressCallback(Callbacks):  # type: ignore[misc]
     """
 
     def __init__(self) -> None:
+        ensure_utf8_stdio()
         # optimizer_runner 汇总报告时读取（与 ProgressCallback 字段对齐）
         self.candidate_per_epoch_scores: list[float] = []
         self.val_per_epoch_scores: list[float] = []

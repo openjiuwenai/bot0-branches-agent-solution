@@ -34,7 +34,11 @@ from evo_agent.callbacks import ConsoleProgressCallback
 from evo_agent.config import EvolveConfig
 from evo_agent.optimizer_runner import run_optimization
 from evo_agent.scenario.registry import ScenarioRegistry
+from evo_agent.stdio_utf8 import ensure_utf8_stdio
 from evo_agent.types import OptimizeRequest
+
+# 尽早切 UTF-8，避免 Windows GBK 控制台把中文进度打成乱码
+ensure_utf8_stdio()
 
 
 class ResolveParamsError(Exception):
