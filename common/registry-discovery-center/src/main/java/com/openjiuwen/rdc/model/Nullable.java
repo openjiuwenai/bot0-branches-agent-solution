@@ -1,7 +1,3 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc.model;
 
 import java.lang.annotation.Documented;

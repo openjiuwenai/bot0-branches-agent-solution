@@ -1,7 +1,3 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc.tenant;
 
 /**
@@ -19,13 +15,10 @@ package com.openjiuwen.rdc.tenant;
  *
  * <p>Pure Java — no Spring / JDBC / Jackson / Consul imports (ADR-0160
  * decision 1).
- *
- * @since 2026-07-10
  */
 public interface TenantContext {
+
     /**
-     * Returns the tenant id bound to the current call scope.
-     *
      * @return the tenant id bound to the current call scope, or {@code null}
      *         when no caller has bound the context. HTTP-entry call sites
      *         pass {@code tenantId} explicitly and leave the context unbound;
@@ -33,7 +26,7 @@ public interface TenantContext {
      *         {@code ThreadLocalTenantContext.bindForScope} for the duration
      *         of a unit of work. Discovery callers cross-check the bound
      *         tenant against the explicit parameter only when bound (ADR-0160
-     *         decision 6).
+         *   decision 6).
      */
     String current();
 }

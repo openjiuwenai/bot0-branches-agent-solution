@@ -1,7 +1,3 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc.config;
 
 import org.springframework.context.annotation.Bean;
@@ -27,12 +23,11 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
  * <p>Authority: ADR-0160 + PR #389 review issue #6 (agent-bus is a runnable
  * Spring Boot application) + PR #389 review issue #2 (probe scheduler thread
  * isolation).
- *
- * @since 2026-07-10
  */
 @Configuration
 @EnableScheduling
 public class RegistrySchedulingConfig implements SchedulingConfigurer {
+
     /**
      * Dedicated {@link ThreadPoolTaskScheduler} for registry probe work.
      * Pool size 2 is enough for the MVP single-tenant sweep; the scheduler
@@ -41,8 +36,6 @@ public class RegistrySchedulingConfig implements SchedulingConfigurer {
      * fixed-delay window. Hung probes are bounded by the
      * {@code MvpHealthProbeScheduler}'s RestClient read timeout (default 2s)
      * — they cannot pin a thread indefinitely.
-     *
-     * @return the dedicated probe scheduler (never {@code null})
      */
     @Bean(destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler registryProbeTaskScheduler() {

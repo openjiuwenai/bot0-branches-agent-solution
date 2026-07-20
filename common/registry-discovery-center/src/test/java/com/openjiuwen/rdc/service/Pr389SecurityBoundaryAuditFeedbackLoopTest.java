@@ -1,26 +1,22 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc.service;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.MalformedRouteHandleException;
 import com.openjiuwen.rdc.tenant.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
-
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Feedback-loop tests for PR #389 review issue #1: security-boundary failure
@@ -46,15 +42,10 @@ import java.util.Optional;
  *
  * <p>Authority: PR #389 review issue #1 (audit / monitor on security failure
  * paths). ADR-0160 decisions 5 / 6 + HD3-005 / HD3-006. Revised for
- * FEAT-016 (RouteHandleCodec.encode takes instanceId; repo port returns
- * List via listByAgentId + listByServiceId + listByCapability; findEndpoint
- * takes instanceId; observeDiscover takes queryDimension/queryValue).
- *
- * @since 2026-07-10
+ * REQ-2026-006 (RouteHandleCodec.encode takes serviceId; repo port returns
+ * List via listByAgentId; findEndpoint takes serviceId).
  */
 class Pr389SecurityBoundaryAuditFeedbackLoopTest {
-    private static final String SERVICE_ID = "wealth-svc";
-    private static final String INSTANCE_ID = "test-host-8080";
 
     private SimpleMeterRegistry meterRegistry;
     private RegistryObservabilityConfig observability;
@@ -67,66 +58,10 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
         observability = new RegistryObservabilityConfig(meterRegistry);
         tenantContext = new TestTenantContext();
         discovery = new PgMvpDiscoveryServiceImpl(
-                buildNoopRepository(),
+                new AgentRegistryRepositoryStub() {},
                 tenantContext,
-                observability);
-    }
-
-    private AgentRegistryRepository buildNoopRepository() {
-        return new AgentRegistryRepository() {
-            @Override
-            public void upsert(AgentRegistryEntry card, String a2aAgentCardJson) {
-            }
-
-            @Override
-            public boolean delete(String tenantId, String agentId) {
-                return false;
-            }
-
-            @Override
-            public boolean delete(String tenantId, String agentId, String serviceId) {
-                return false;
-            }
-
-            @Override
-            public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
-                return false;
-            }
-
-            @Override
-            public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
-                return List.of();
-            }
-
-            @Override
-            public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
-                return false;
-            }
-
-            @Override
-            public List<RegistryRow> listByAgentId(String tenantId, String agentId,
-                                                   String contractVersion) {
-                return List.of();
-            }
-
-            @Override
-            public List<RegistryRow> listByServiceId(String tenantId, String serviceId,
-                                                     String contractVersion) {
-                return List.of();
-            }
-
-            @Override
-            public List<RegistryRow> listByCapability(String tenantId, String capability,
-                                                      String contractVersion) {
-                return List.of();
-            }
-
-            @Override
-            public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
-                                                        String serviceId, String instanceId) {
-                return Optional.empty();
-            }
-        };
+                observability,
+                null);
     }
 
     @AfterEach
@@ -137,10 +72,10 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     // ---- #1-A: tenant_isolation_violation must increment op_total ----------------
 
     @Test
-    void tenant_isolation_violation_on_discover_increments_op_total() {
+    void tenant_isolation_violation_on_discover_increments_op_total_counter() {
         tenantContext.set("tenant-bound");
         assertThatThrownBy(() -> discovery.searchInstancesByAgentId(
-                "tenant-A", "agent-001", null))
+                "tenant-A", "agent-001"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
         assertThat(counter("discover", "tenant_isolation_violation"))
@@ -153,10 +88,10 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     }
 
     @Test
-    void tenant_isolation_violation_on_resolve_increments_op_total() {
-        // FEAT-016: v2: 6-field encode (adds instanceId).
-        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(
-                "tenant-A", "agent-001", SERVICE_ID, INSTANCE_ID, "rk://svc/default", "1.0.0"));
+    void tenant_isolation_violation_on_resolve_increments_op_total_counter() {
+        // Encoded handle for tenant-A; caller passes tenant-B → codec-level
+        // tenant mismatch raises TenantIsolationViolationException.
+        String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields("tenant-A", "agent-001", "test-host-8080", "test-host-8080", "rk://svc/default", "1.0.0"));
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
                 .isInstanceOf(TenantIsolationViolationException.class);
 
@@ -174,7 +109,7 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
     void malformed_handle_on_resolve_increments_op_total_counter() {
         assertThatThrownBy(() -> discovery.resolveRouteHandle(
                 "!!!not-base64!!!", "tenant-A"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(MalformedRouteHandleException.class);
 
         assertThat(counter("resolve", "malformed_handle"))
                 .as("PR #389 #1: malformed_handle on resolve MUST increment "
@@ -195,18 +130,8 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
 
     private static final class TestTenantContext implements TenantContext {
         private String current;
-
-        @Override
-        public String current() {
-            return current;
-        }
-
-        void set(String tenantId) {
-            this.current = tenantId;
-        }
-
-        void clear() {
-            this.current = null;
-        }
+        @Override public String current() { return current; }
+        void set(String tenantId) { this.current = tenantId; }
+        void clear() { this.current = null; }
     }
 }

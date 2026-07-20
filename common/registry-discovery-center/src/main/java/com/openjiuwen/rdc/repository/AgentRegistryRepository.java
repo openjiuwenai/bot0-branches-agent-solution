@@ -330,4 +330,222 @@ public interface AgentRegistryRepository {
             String tenantId, String agentId, String serviceId,
             String instanceId, String endpointUrl) {
     }
+
+    // ---- Feat-015 structured discovery + reconciliation -------------------
+
+    /**
+     * List registry rows matching the target selector for structured discovery.
+     * Does not apply lifecycle, lease, version, tag, or health filters — the
+     * discovery service applies those to compute {@code DiscoveryOutcome}.
+     */
+    List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter);
+
+    record DiscoveryFilter(
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String a2aSkillId,
+            int limit
+    ) {
+    }
+
+    record DiscoveryRow(
+            String serviceId,
+            String agentId,
+            String deploymentServiceId,
+            String agentName,
+            FrameworkType frameworkType,
+            String routeKey,
+            String contractVersion,
+            String capabilityVersion,
+            String cardDigest,
+            int weight,
+            String region,
+            int maxConcurrency,
+            String lifecycleStatus,
+            String effectiveHealth,
+            String freshness,
+            java.time.Instant lastValidatedAt,
+            java.time.Instant leaseExpiresAt,
+            String a2aAgentCardJson
+    ) {
+    }
+
+    void reconcileUpsert(ReconcileUpsertCommand command);
+
+    List<InstanceKey> listInstanceKeysBySource(String sourceId);
+
+    void markDraining(String tenantId, String agentId, String serviceId);
+
+    void markRemoved(String tenantId, String agentId, String serviceId);
+
+    void markSourceStale(String sourceId);
+
+    void markSourceFresh(String sourceId);
+
+    List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff);
+
+    List<InstanceKey> listExpiredLeases(java.time.Instant now);
+
+    long getLastProcessedRevision(String sourceId);
+
+    void updateLastProcessedRevision(String sourceId, long revision);
+
+    void updateLastProcessedRevision(String sourceId, long revision, String snapshotFingerprint);
+
+    java.util.Optional<String> getSnapshotFingerprint(String sourceId);
+
+    java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId);
+
+    void reconcilePending(ReconcilePendingCommand command);
+
+    void markRefreshDegraded(String tenantId, String agentId, String serviceId);
+
+    /**
+     * Resolve endpoint with lifecycle + lease facts for trusted routing (4-field PK).
+     */
+    java.util.Optional<ResolveRow> findForResolve(
+            String tenantId, String agentId, String serviceId, String instanceId);
+
+    record ResolveRow(
+            String endpointUrl,
+            String routeKey,
+            String contractVersion,
+            String capabilityVersion,
+            String lifecycleStatus,
+            java.time.Instant leaseExpiresAt
+    ) {
+    }
+
+    record ReconcilePendingCommand(
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String instanceId,
+            String deploymentServiceId,
+            String sourceId,
+            long sourceRevision,
+            String endpointUrl,
+            FrameworkType frameworkType,
+            String region
+    ) {
+    }
+
+    record InstanceKey(String tenantId, String agentId, String serviceId, String instanceId) {
+    }
+
+    record ReconcileUpsertCommand(
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String instanceId,
+            String deploymentServiceId,
+            String sourceId,
+            long sourceRevision,
+            String agentName,
+            FrameworkType frameworkType,
+            String routeKey,
+            String contractVersion,
+            String capabilityVersion,
+            String endpointUrl,
+            int maxConcurrency,
+            int weight,
+            String region,
+            String a2aAgentCardJson,
+            String cardDigest,
+            String routeTargetJson,
+            String lifecycleStatus,
+            String effectiveHealth,
+            String freshness,
+            String status
+    ) {
+    }
+
+    // ---- Feat-015 logical AgentCardRegistration catalog --------------------
+
+    record LogicalRegistrationRow(
+            java.util.UUID registrationId,
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String cardDigest,
+            String contractVersion,
+            String capabilityVersion,
+            String registrationStatus,
+            String freshness,
+            java.time.Instant lastValidatedAt,
+            long revision,
+            String a2aAgentCardJson
+    ) {
+    }
+
+    record UpsertSourceRefCommand(
+            String tenantId,
+            String deploymentServiceId,
+            String instanceId,
+            String sourceId,
+            long sourceRevision,
+            String internalBaseUrl,
+            String deploymentVersion,
+            String readiness,
+            java.util.UUID registrationId
+    ) {
+    }
+
+    default java.util.UUID upsertLogicalRegistration(
+            String tenantId,
+            String agentId,
+            String deploymentServiceId,
+            String cardDigest,
+            String contractVersion,
+            String capabilityVersion,
+            String registrationStatus,
+            String freshness,
+            String a2aAgentCardJson) {
+        return java.util.UUID.randomUUID();
+    }
+
+    default void upsertSourceRef(UpsertSourceRefCommand command) {
+    }
+
+    default void removeSourceRef(String tenantId, String deploymentServiceId, String instanceId) {
+    }
+
+    default void recomputeRegistrationStatus(java.util.UUID registrationId) {
+    }
+
+    default void markLogicalRegistrationsStaleSource(String sourceId) {
+    }
+
+    default void markLogicalRegistrationStaleCard(
+            String tenantId, String deploymentServiceId, String capabilityVersion, String cardDigest) {
+    }
+
+    /**
+     * Clears {@code STALE_CARD} on logical registration after a successful re-validation
+     * when Card digest is unchanged (Feat-015 §5.1.3 last-valid snapshot recovery).
+     */
+    default void clearLogicalRegistrationStaleCard(
+            String tenantId, String deploymentServiceId, String cardDigest) {
+    }
+
+    /**
+     * Re-link an instance source_ref to the logical registration for {@code cardDigest}
+     * after a successful same-digest re-validation. Returns {@code false} when no
+     * matching registration exists (caller should fall through to full upsert).
+     */
+    default boolean relinkLogicalSourceRef(
+            String tenantId,
+            String deploymentServiceId,
+            String instanceId,
+            String cardDigest,
+            String sourceId,
+            long sourceRevision,
+            String internalBaseUrl) {
+        return false;
+    }
+
+    default List<LogicalRegistrationRow> queryLogicalByTargetSelector(DiscoveryFilter filter) {
+        return List.of();
+    }
 }

@@ -1,11 +1,26 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ * Copyright (C) 2026 Huawei Technologies Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package com.openjiuwen.rdc.config;
 
+import com.openjiuwen.rdc.card.AgentCardFetcher;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
+import com.openjiuwen.rdc.security.AgentCardFetchSecurityProperties;
+import com.openjiuwen.rdc.security.RegistrySecurityProperties;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
+import com.openjiuwen.rdc.controller.RegistryObjectMapper;
 import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 import com.openjiuwen.rdc.tenant.TenantContext;
 
@@ -21,8 +36,8 @@ import org.springframework.context.annotation.Configuration;
 import javax.sql.DataSource;
 
 /**
- * Runtime bean wiring for the registry-discovery-center standalone Spring Boot application
- * (ADR-0160 decision 7 — registry-discovery-center ships as a runnable application, not a
+ * Runtime bean wiring for the agent-rdc standalone Spring Boot application
+ * (ADR-0160 decision 7 — agent-rdc ships as a runnable application, not a
  * library jar).
  *
  * <p>Provides the beans that {@code main()} startup needs but that no
@@ -70,11 +85,10 @@ import javax.sql.DataSource;
  * them.
  *
  * <p>Authority: ADR-0160 decision 7 + REQ-2026-002 VR-2 / VR-7.
- *
- * @since 2026-07-10
  */
 @Configuration
 public class RegistryRuntimeBeanConfig {
+
     /**
      * In-process {@link MeterRegistry} for the standalone runtime. Suffices
      * for audit + Counter/Timer emission via {@link RegistryObservabilityConfig};
@@ -138,7 +152,20 @@ public class RegistryRuntimeBeanConfig {
      */
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        return RegistryObjectMapper.createJackson2();
+    }
+
+    @Bean
+    public AgentCardFetcher agentCardFetcher(AgentCardFetchSecurityProperties cardFetchSecurity) {
+        return AgentCardFetcher.fromSecurity(cardFetchSecurity);
+    }
+
+    @Bean
+    public CallerAuthorizationPolicy callerAuthorizationPolicy(RegistrySecurityProperties securityProperties) {
+        if (securityProperties.isAllowlistConfigured()) {
+            return new CallerAuthorizationPolicy.Allowlist(securityProperties);
+        }
+        return new CallerAuthorizationPolicy.Permissive();
     }
 
     /**

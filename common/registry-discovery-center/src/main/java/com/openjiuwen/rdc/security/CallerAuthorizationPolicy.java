@@ -1,0 +1,45 @@
+package com.openjiuwen.rdc.security;
+
+import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
+
+/**
+ * Tenant-scoped caller authorization per Feat-015 0711 §5.1.6.
+ */
+public interface CallerAuthorizationPolicy {
+
+    void authorize(String tenantId, String callerRef, String traceId);
+
+    /** Allow-all policy when no allowlist is configured. */
+    final class Permissive implements CallerAuthorizationPolicy {
+        @Override
+        public void authorize(String tenantId, String callerRef, String traceId) {
+            if (callerRef == null || callerRef.isBlank()) {
+                throw new CallerNotAuthorizedException(tenantId, "<empty>", traceId);
+            }
+        }
+    }
+
+    /** Deny callers not listed under the tenant in {@link RegistrySecurityProperties}. */
+    final class Allowlist implements CallerAuthorizationPolicy {
+
+        private final RegistrySecurityProperties properties;
+
+        public Allowlist(RegistrySecurityProperties properties) {
+            this.properties = properties;
+        }
+
+        @Override
+        public void authorize(String tenantId, String callerRef, String traceId) {
+            if (callerRef == null || callerRef.isBlank()) {
+                throw new CallerNotAuthorizedException(tenantId, "<empty>", traceId);
+            }
+            var allowed = properties.getCallerAllowlist().get(tenantId);
+            if (allowed == null || allowed.isEmpty()) {
+                return;
+            }
+            if (!allowed.contains(callerRef)) {
+                throw new CallerNotAuthorizedException(tenantId, callerRef, traceId);
+            }
+        }
+    }
+}

@@ -1,48 +1,54 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc.service;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.config.RegistryOpContext;
+import com.openjiuwen.rdc.repository.RegistryPersistenceGuard;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.EndpointEntry;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.RegistryRow;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.ResolveRow;
+import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
 import com.openjiuwen.rdc.model.AgentCardDto;
+import com.openjiuwen.rdc.service.AgentDiscoveryService;
+import com.openjiuwen.rdc.model.DeadlineExceededException;
+import com.openjiuwen.rdc.model.DiscoveryQuery;
+import com.openjiuwen.rdc.model.DiscoveryResult;
+import com.openjiuwen.rdc.model.EntryNotFoundException;
+import com.openjiuwen.rdc.model.LeaseExpiredException;
+import com.openjiuwen.rdc.model.LifecycleStatus;
+import com.openjiuwen.rdc.model.MalformedRouteHandleException;
+import com.openjiuwen.rdc.model.RegistryRequestDeadline;
+import com.openjiuwen.rdc.model.RegistryUnavailableException;
 import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.tenant.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
-
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 
 /**
  * MVP phase-1 implementation of {@link AgentDiscoveryService} — single
  * PostgreSQL lookup (ADR-0160 decisions 2 / 4 / 5 / 6, revised by
- * REQ-2026-004, REQ-2026-006, then FEAT-016).
+ * REQ-2026-004, then REQ-2026-006).
  *
  * <p>Thin orchestrator: delegates persistence to {@link AgentRegistryRepository}
  * (port, ADR-0160 decision 4) and route-handle encoding to {@link RouteHandleCodec}
  * (internal to this package, ADR-0160 decision 5). No JDBC imports — the
  * {@code req-2026-003-jdbc-confined-to-persistence} gate enforces that.
  *
- * <p>FEAT-016: discovery now exposes three query dimensions —
- * {@link #searchInstancesByAgentId(String, String, String)},
- * {@link #searchByServiceId(String, String, String)}, and
- * {@link #searchByCapability(String, String, String)} — each accepting a
- * nullable {@code contractVersion} filter. DRAINING instances are now
- * included in results (was excluded in REQ-2026-006). The v2: 6-field route
- * handle carries {@code instanceId}; {@link #resolveRouteHandle} passes the
- * 4-field PK {@code (tenantId, agentId, serviceId, instanceId)} to
- * {@link AgentRegistryRepository#findEndpoint(String, String, String, String)}.
+ * <p>REQ-2026-006: discovery evolves from single-value point lookup to
+ * <em>list</em> lookup — {@link #searchInstancesByAgentId(String, String)}
+ * returns all ONLINE/DEGRADED instances for a given {@code agentId}, each
+ * with its own opaque {@code routeHandle} (encoding {@code serviceId}). The
+ * caller selects an instance and resolves it via
+ * {@link #resolveRouteHandle(String, String)}, which now passes the triple
+ * {@code (tenantId, agentId, serviceId)} to
+ * {@link AgentRegistryRepository#findEndpoint(String, String, String)}.
  *
  * <p>Tenant isolation (ADR-0160 decision 6, ESC-2 design pivot): HTTP-entry
  * callers pass {@code tenantId} explicitly — no {@code TenantFilter} populates
@@ -58,12 +64,11 @@ import java.util.UUID;
  * {@code entry_not_found}); tenant mismatch →
  * {@link TenantIsolationViolationException} (HTTP 400
  * {@code tenant_isolation_violation}).
- *
- * @since 2026-07-10
  */
 @Primary
 @Service
 public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
+
     private static final String DIM_AGENT_ID = "agentId";
     private static final String DIM_SERVICE_ID = "serviceId";
     private static final String DIM_CAPABILITY = "capability";
@@ -71,150 +76,187 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     private final AgentRegistryRepository repository;
     private final TenantContext tenantContext;
     private final RegistryObservabilityConfig observability;
+    private final CallerAuthorizationPolicy callerAuthorizationPolicy;
 
     public PgMvpDiscoveryServiceImpl(AgentRegistryRepository repository,
                                      TenantContext tenantContext,
-                                     RegistryObservabilityConfig observability) {
+                                     RegistryObservabilityConfig observability,
+                                     CallerAuthorizationPolicy callerAuthorizationPolicy) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.tenantContext = Objects.requireNonNull(tenantContext, "tenantContext");
         this.observability = Objects.requireNonNull(observability, "observability");
+        this.callerAuthorizationPolicy = callerAuthorizationPolicy != null
+                ? callerAuthorizationPolicy
+                : new CallerAuthorizationPolicy.Permissive();
     }
 
     @Override
     public List<AgentCardDto> searchInstancesByAgentId(String tenantId, String agentId, String contractVersion) {
-        String traceId = UUID.randomUUID().toString();
-        MDC.put("traceId", traceId);
-        long start = System.nanoTime();
-        String outcome = "error";
-        int resultCount = 0;
-        try {
-            verifyTenant(tenantId);
-            List<RegistryRow> rows = repository.listByAgentId(tenantId, agentId, contractVersion);
-            resultCount = rows.size();
-            if (rows.isEmpty()) {
-                outcome = "not_found";
-                return List.of();
-            }
-            outcome = "success";
-            return rows.stream()
-                    .map(row -> toDto(tenantId, row))
-                    .toList();
-        } catch (TenantIsolationViolationException ex) {
-            outcome = "tenant_isolation_violation";
-            throw ex;
-        } finally {
-            long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            RegistryOpContext ctx = RegistryOpContext.of(traceId, tenantId)
-                    .query(DIM_AGENT_ID, agentId)
-                    .build();
-            observability.observeDiscover(ctx, outcome, resultCount, latencyMs);
-            MDC.remove("traceId");
-        }
+        return searchRuntime(DIM_AGENT_ID, agentId, tenantId, contractVersion,
+                () -> repository.listByAgentId(tenantId, agentId, contractVersion));
     }
 
     @Override
     public List<AgentCardDto> searchByServiceId(String tenantId, String serviceId, String contractVersion) {
+        return searchRuntime(DIM_SERVICE_ID, serviceId, tenantId, contractVersion,
+                () -> repository.listByServiceId(tenantId, serviceId, contractVersion));
+    }
+
+    @Override
+    public List<AgentCardDto> searchByCapability(String tenantId, String capability, String contractVersion) {
+        return searchRuntime(DIM_CAPABILITY, capability, tenantId, contractVersion,
+                () -> repository.listByCapability(tenantId, capability, contractVersion));
+    }
+
+    private List<AgentCardDto> searchRuntime(
+            String dimension, String value, String tenantId, String contractVersion,
+            java.util.function.Supplier<List<RegistryRow>> query) {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "error";
+        String outcome = "success";
         int resultCount = 0;
         try {
-            verifyTenant(tenantId);
-            List<RegistryRow> rows = repository.listByServiceId(tenantId, serviceId, contractVersion);
+            verifyTenant(tenantId, traceId);
+            List<RegistryRow> rows = RegistryPersistenceGuard.execute(traceId, query);
             resultCount = rows.size();
             if (rows.isEmpty()) {
                 outcome = "not_found";
                 return List.of();
             }
-            outcome = "success";
-            return rows.stream()
-                    .map(row -> toDto(tenantId, row))
-                    .toList();
+            return rows.stream().map(row -> toDto(tenantId, row)).toList();
         } catch (TenantIsolationViolationException ex) {
             outcome = "tenant_isolation_violation";
             throw ex;
+        } catch (RuntimeException ex) {
+            outcome = "error";
+            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            RegistryOpContext ctx = RegistryOpContext.of(traceId, tenantId)
-                    .query(DIM_SERVICE_ID, serviceId)
-                    .build();
-            observability.observeDiscover(ctx, outcome, resultCount, latencyMs);
+            observability.observeDiscover(traceId, tenantId, value, outcome, resultCount, latencyMs);
             MDC.remove("traceId");
         }
     }
 
     @Override
-    public List<AgentCardDto> searchByCapability(String tenantId, String capability, String contractVersion) {
-        String traceId = UUID.randomUUID().toString();
-        MDC.put("traceId", traceId);
+    public DiscoveryResult discover(DiscoveryQuery query) {
         long start = System.nanoTime();
-        String outcome = "error";
-        int resultCount = 0;
+        String outcome = "success";
+        String traceId = query.context().traceId();
         try {
-            verifyTenant(tenantId);
-            List<RegistryRow> rows = repository.listByCapability(tenantId, capability, contractVersion);
-            resultCount = rows.size();
-            if (rows.isEmpty()) {
-                outcome = "not_found";
-                return List.of();
-            }
-            outcome = "success";
-            return rows.stream()
-                    .map(row -> toDto(tenantId, row))
-                    .toList();
-        } catch (TenantIsolationViolationException ex) {
-            outcome = "tenant_isolation_violation";
+            query.context().validate();
+            RegistryRequestDeadline.enforce(query.context().deadline(), traceId);
+            verifyTenant(query.context().tenantId(), traceId);
+            callerAuthorizationPolicy.authorize(
+                    query.context().tenantId(),
+                    query.context().callerRef(),
+                    traceId);
+            DiscoveryResult result = RegistryPersistenceGuard.execute(
+                    traceId, () -> StructuredDiscoveryEngine.discover(repository, query));
+            outcome = result.outcome().name();
+            return result;
+        } catch (RuntimeException ex) {
+            outcome = outcomeForFailure(ex);
             throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            RegistryOpContext ctx = RegistryOpContext.of(traceId, tenantId)
-                    .query(DIM_CAPABILITY, capability)
-                    .build();
-            observability.observeDiscover(ctx, outcome, resultCount, latencyMs);
-            MDC.remove("traceId");
+            observability.observeDiscover(
+                    traceId,
+                    query.context().tenantId(),
+                    query.agentId() != null ? query.agentId() : query.serviceId(),
+                    outcome,
+                    0,
+                    latencyMs);
         }
     }
 
     @Override
     public RouteResolution resolveRouteHandle(String routeHandle, String tenantId) {
-        String traceId = UUID.randomUUID().toString();
-        MDC.put("traceId", traceId);
+        return resolveRouteHandle(routeHandle, tenantId, null, null);
+    }
+
+    /**
+     * Resolve with optional caller governance context (0711 {@code ResolveRouteHandle}).
+     */
+    public RouteResolution resolveRouteHandle(String routeHandle, String tenantId,
+                                              String callerRef, String traceId) {
+        return resolveRouteHandle(routeHandle, tenantId, callerRef, traceId, null);
+    }
+
+    /**
+     * Resolve with caller governance context and optional deadline (0711).
+     */
+    public RouteResolution resolveRouteHandle(String routeHandle, String tenantId,
+                                              String callerRef, String traceId,
+                                              Instant deadline) {
+        String effectiveTraceId = traceId != null && !traceId.isBlank() ? traceId : UUID.randomUUID().toString();
+        MDC.put("traceId", effectiveTraceId);
         long start = System.nanoTime();
-        String outcome = "error";
+        String outcome = "success";
         try {
+            if (deadline != null) {
+                RegistryRequestDeadline.enforce(deadline, effectiveTraceId);
+            }
+            if (callerRef != null && !callerRef.isBlank()) {
+                callerAuthorizationPolicy.authorize(tenantId, callerRef, effectiveTraceId);
+            }
             RouteHandleCodec.HandleFields decoded;
             try {
                 decoded = RouteHandleCodec.decode(routeHandle);
             } catch (IllegalArgumentException ex) {
                 outcome = "malformed_handle";
-                throw ex;
+                throw new MalformedRouteHandleException(ex.getMessage(), effectiveTraceId);
             }
             if (!decoded.tenantId().equals(tenantId)) {
                 outcome = "tenant_isolation_violation";
-                throw new TenantIsolationViolationException(decoded.tenantId(), tenantId);
+                throw new TenantIsolationViolationException(decoded.tenantId(), tenantId, effectiveTraceId);
             }
-            verifyTenant(tenantId);
-            // FEAT-016: pass the 4-field PK (tenantId, agentId, serviceId,
-            // instanceId) decoded from the v2: 6-field handle.
-            Optional<EndpointEntry> endpoint = repository.findEndpoint(
-                    tenantId, decoded.agentId(), decoded.serviceId(), decoded.instanceId());
-            if (endpoint.isEmpty()) {
+            verifyTenant(tenantId, effectiveTraceId);
+            Optional<ResolveRow> resolved = RegistryPersistenceGuard.execute(
+                    effectiveTraceId,
+                    () -> repository.findForResolve(
+                            tenantId, decoded.agentId(), decoded.serviceId(), decoded.instanceId()));
+            if (resolved.isEmpty()) {
+                Optional<EndpointEntry> endpoint = RegistryPersistenceGuard.execute(
+                        effectiveTraceId,
+                        () -> repository.findEndpoint(
+                                tenantId, decoded.agentId(), decoded.serviceId(), decoded.instanceId()));
+                if (endpoint.isEmpty()) {
+                    outcome = "entry_not_found";
+                    throw new EntryNotFoundException(
+                            "entry not found: tenant=" + tenantId
+                                    + ", agentId=" + decoded.agentId()
+                                    + ", serviceId=" + decoded.serviceId()
+                                    + ", instanceId=" + decoded.instanceId(),
+                            effectiveTraceId);
+                }
+                EndpointEntry ep = endpoint.get();
+                return new RouteResolution(
+                        decoded.instanceId(), ep.endpointUrl(), ep.routeKey(), ep.contractVersion(), null);
+            }
+            ResolveRow row = resolved.get();
+            if (!LifecycleStatus.ACTIVE.name().equals(row.lifecycleStatus())) {
                 outcome = "entry_not_found";
-                throw new NoSuchElementException("entry_not_found: tenant=" + tenantId
-                        + ", agentId=" + decoded.agentId()
-                        + ", serviceId=" + decoded.serviceId()
-                        + ", instanceId=" + decoded.instanceId());
+                throw new EntryNotFoundException(
+                        "entry not found: lifecycle=" + row.lifecycleStatus(),
+                        effectiveTraceId);
             }
-            EndpointEntry ep = endpoint.get();
-            outcome = "success";
-            return new RouteResolution(decoded.instanceId(), ep.endpointUrl(),
-                    ep.routeKey(), ep.contractVersion());
+            Instant now = Instant.now();
+            if (row.leaseExpiresAt() != null && !row.leaseExpiresAt().isAfter(now)) {
+                outcome = "lease_expired";
+                throw new LeaseExpiredException(effectiveTraceId);
+            }
+            return new RouteResolution(
+                    decoded.instanceId(), row.endpointUrl(), row.routeKey(),
+                    row.contractVersion(), row.capabilityVersion());
+        } catch (RuntimeException ex) {
+            if ("success".equals(outcome)) {
+                outcome = outcomeForFailure(ex);
+            }
+            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            observability.observeResolve(
-                    RegistryOpContext.of(traceId, tenantId).routeHandleId(routeHandle).build(),
-                    outcome, latencyMs);
+            observability.observeResolve(effectiveTraceId, tenantId, routeHandle, outcome, latencyMs);
             MDC.remove("traceId");
         }
     }
@@ -225,28 +267,41 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
      * {@code bindForScope}), mismatch raises {@link TenantIsolationViolationException}.
      * When unbound (HTTP entry passes {@code tenantId} explicitly), the check
      * is skipped — the explicit parameter is the source of truth.
-     *
-     * @param tenantId the tenant ID passed explicitly by the caller (HTTP entry) —
-     *                 the source of truth against which any thread-bound tenant is checked
-     * @throws TenantIsolationViolationException if a tenant is bound to the current
-     *                                          thread and does not match {@code tenantId}
      */
-    private void verifyTenant(String tenantId) {
+    private void verifyTenant(String tenantId, String traceId) {
         String bound = tenantContext.current();
         if (bound != null && !bound.equals(tenantId)) {
-            throw new TenantIsolationViolationException(tenantId, bound);
+            throw new TenantIsolationViolationException(tenantId, bound, traceId);
         }
+    }
+
+    private static String outcomeForFailure(RuntimeException ex) {
+        if (ex instanceof TenantIsolationViolationException) {
+            return "tenant_isolation_violation";
+        }
+        if (ex instanceof MalformedRouteHandleException) {
+            return "malformed_handle";
+        }
+        if (ex instanceof EntryNotFoundException) {
+            return "entry_not_found";
+        }
+        if (ex instanceof LeaseExpiredException) {
+            return "lease_expired";
+        }
+        if (ex instanceof DeadlineExceededException) {
+            return "deadline_exceeded";
+        }
+        if (ex instanceof RegistryUnavailableException) {
+            return "registry_unavailable";
+        }
+        return "error";
     }
 
     /**
      * Rich DTO — all routing fields + business definition fields populated.
-     * FEAT-016: encode includes {@code instanceId} (v2: 6-field); DTO
-     * includes {@code serviceId} (logical service identifier, visible in the
-     * agent/client projection layer per L2 §2.3.2).
-     *
-     * @param tenantId the tenant ID owning the row (encoded into the route handle)
-     * @param row      the persistence row to project
-     * @return a fully-populated {@link AgentCardDto} with a fresh route handle
+     * REQ-2026-006: encode includes {@code serviceId} (v1: 5-field); DTO
+     * includes {@code maxConcurrency} (9th field) for caller-side weighted
+     * load balancing.
      */
     private AgentCardDto toDto(String tenantId, RegistryRow row) {
         String handle = RouteHandleCodec.encode(new RouteHandleCodec.HandleFields(

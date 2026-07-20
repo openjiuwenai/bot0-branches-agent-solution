@@ -1,22 +1,16 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc.pull;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.openjiuwen.rdc.model.FrameworkType;
-
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link PullRegistrationProperties} — default values +
  * binding from {@code rdc.pull-registration.*} config tree (REQ-2026-004).
- *
- * @since 2026-07-10
  */
 class PullRegistrationPropertiesTest {
+
     @Test
     void defaults_disabled_with_empty_runtimes() {
         PullRegistrationProperties props = new PullRegistrationProperties();

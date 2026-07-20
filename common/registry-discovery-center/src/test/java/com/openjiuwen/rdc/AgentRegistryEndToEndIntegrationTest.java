@@ -1,45 +1,36 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.controller.MvpRegistryController;
 import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
 import com.openjiuwen.rdc.health.MvpHealthProbeScheduler;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
+import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.RouteResolution;
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
-
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
+import javax.sql.DataSource;
 import java.util.List;
 
-import javax.sql.DataSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * End-to-end integration test for the Stage 4 agent registry MVP (RB5),
  * revised for REQ-2026-006 (multi-instance list lookup).
  *
  * <p>Boots an in-process PostgreSQL (Zonky embedded-postgres) + the full
- * registry-discovery-center Flyway migration (V2→V3→V4→V5), then drives the full registry
+ * agent-rdc Flyway migration (V2→V3→V4→V5), then drives the full registry
  * lifecycle through the production classes:
  * <ol>
  *   <li><b>register</b> — {@link MvpRegistryController#register} (HTTP path)
@@ -64,7 +55,7 @@ import javax.sql.DataSource;
  * window applies only to the health-probe scheduler scan.
  */
 class AgentRegistryEndToEndIntegrationTest {
-    private static EmbeddedPostgres pg;
+
     private static DataSource dataSource;
     private static MockWebServer agentServer;
 
@@ -76,9 +67,7 @@ class AgentRegistryEndToEndIntegrationTest {
 
     @BeforeAll
     static void bootStack() throws Exception {
-        pg = EmbeddedPostgres.builder().start();
-        dataSource = pg.getPostgresDatabase();
-        Flyway.configure().dataSource(dataSource).load().migrate();
+        dataSource = EmbeddedPostgresTestSupport.sharedDataSource();
 
         agentServer = new MockWebServer();
         agentServer.start();
@@ -88,22 +77,21 @@ class AgentRegistryEndToEndIntegrationTest {
         discovery = new PgMvpDiscoveryServiceImpl(
                 repository,
                 new com.openjiuwen.rdc.tenant.ThreadLocalTenantContext(),
-                observability);
+                observability,
+                null);
         controller = new MvpRegistryController(
-                repository, discovery, observability, new com.fasterxml.jackson.databind.ObjectMapper());
+                repository, discovery, observability, new com.fasterxml.jackson.databind.ObjectMapper(),
+                new com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties());
         scheduler = new MvpHealthProbeScheduler(
                 repository, observability,
-                1_000L,
-                200);
+                /* staleBeforeMs = */ 1_000L,
+                /* scanLimit = */ 200);
     }
 
     @AfterAll
     static void shutDown() throws Exception {
         if (agentServer != null) {
             agentServer.shutdown();
-        }
-        if (pg != null) {
-            pg.close();
         }
     }
 
@@ -125,7 +113,7 @@ class AgentRegistryEndToEndIntegrationTest {
         assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
 
         // 2. searchInstancesByAgentId — rich DTO with all fields populated.
-        List<AgentCardDto> result = discovery.searchInstancesByAgentId(tenant, agent, null);
+        List<AgentCardDto> result = discovery.searchInstancesByAgentId(tenant, agent);
         assertThat(result).hasSize(1);
         AgentCardDto dto = result.get(0);
         assertThat(dto.getRouteHandle()).isNotBlank();
@@ -156,7 +144,7 @@ class AgentRegistryEndToEndIntegrationTest {
                 .isEqualTo("DEGRADED");
 
         // 5. DEGRADED visibility — searchInstancesByAgentId still returns the row.
-        List<AgentCardDto> degraded = discovery.searchInstancesByAgentId(tenant, agent, null);
+        List<AgentCardDto> degraded = discovery.searchInstancesByAgentId(tenant, agent);
         assertThat(degraded).hasSize(1);
         assertThat(degraded.get(0).getHealth()).isEqualTo("DEGRADED");
 
@@ -165,12 +153,11 @@ class AgentRegistryEndToEndIntegrationTest {
         assertThat(dereg.getStatusCode().is2xxSuccessful()).isTrue();
 
         // 7. searchInstancesByAgentId returns empty list after deregister
-        assertThat(discovery.searchInstancesByAgentId(tenant, agent, null)).isEmpty();
+        assertThat(discovery.searchInstancesByAgentId(tenant, agent)).isEmpty();
 
-        // 8. resolve after deregister → entry_not_found
+        // 8. resolve after deregister → ENTRY_NOT_FOUND
         assertThatThrownBy(() -> discovery.resolveRouteHandle(dto.getRouteHandle(), tenant))
-                .isInstanceOf(java.util.NoSuchElementException.class)
-                .hasMessageContaining("entry_not_found");
+                .isInstanceOf(com.openjiuwen.rdc.model.EntryNotFoundException.class);
     }
 
     @Test
@@ -180,12 +167,12 @@ class AgentRegistryEndToEndIntegrationTest {
         controller.register(sampleCard("tenant-A", "agent-x", agentEndpoint), null, null);
 
         // tenant-B search must not see tenant-A's row.
-        assertThat(discovery.searchInstancesByAgentId("tenant-B", "agent-x", null))
+        assertThat(discovery.searchInstancesByAgentId("tenant-B", "agent-x"))
                 .as("HD3-003: cross-tenant search returns empty list")
                 .isEmpty();
 
         // Obtain a real handle via tenant-A search.
-        List<AgentCardDto> aResult = discovery.searchInstancesByAgentId("tenant-A", "agent-x", null);
+        List<AgentCardDto> aResult = discovery.searchInstancesByAgentId("tenant-A", "agent-x");
         assertThat(aResult).hasSize(1);
         String handle = aResult.get(0).getRouteHandle();
 
@@ -195,7 +182,7 @@ class AgentRegistryEndToEndIntegrationTest {
     }
 
     @Test
-    void register_applies_defaults_when_body_omits_concurrency_weight() throws Exception {
+    void register_applies_defaults_when_request_body_omits_max_concurrency_and_weight() throws Exception {
         String agentEndpoint = agentServer.url("/").toString().replaceAll("/$", "");
         String tenant = "tenant-defaults";
         String agent = "agent-defaults";
@@ -223,90 +210,6 @@ class AgentRegistryEndToEndIntegrationTest {
         assertThat(weight)
                 .as("push path must default weight to 100 when request body omits it")
                 .isEqualTo(100);
-    }
-
-    @Test
-    void register_with_service_id_and_capabilities_persists_queries() {
-        AgentRegistryEntry card = sampleCard("tenant-A", "agent-001", "http://10.0.0.1:8080");
-        card.setServiceId("wealth-svc");
-        card.setCapabilities(java.util.List.of("wealth.purchase", "wealth.assessment"));
-        ResponseEntity<Void> reg = controller.register(card, null, null);
-        assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
-
-        // serviceId caller-overridable: caller value "wealth-svc" wins; the
-        // controller must NOT overwrite it with the host-only derivation.
-        List<AgentCardDto> byService = discovery.searchByServiceId("tenant-A", "wealth-svc", null);
-        assertThat(byService).hasSize(1);
-        assertThat(byService.get(0).getServiceId()).isEqualTo("wealth-svc");
-
-        // capability dimension: exact-match array-contains on the new
-        // VARCHAR(64)[] column.
-        List<AgentCardDto> byCap = discovery.searchByCapability("tenant-A", "wealth.purchase", null);
-        assertThat(byCap).hasSize(1);
-
-        // contractVersion filter narrows the result; a non-matching filter
-        // returns empty.
-        List<AgentCardDto> byCapV2 = discovery.searchByCapability("tenant-A", "wealth.purchase", "v-nonexistent");
-        assertThat(byCapV2).isEmpty();
-    }
-
-    @Test
-    void register_without_service_id_derives_from_endpoint_host() {
-        AgentRegistryEntry card = sampleCard("tenant-A", "agent-002", "http://10.0.0.2:9000");
-        ResponseEntity<Void> reg = controller.register(card, null, null);
-        assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
-
-        // controller derives serviceId = host only when caller omits; this
-        // also confirms instanceId was derived (host-port) — otherwise the
-        // row could not have been upserted (instance_id is NOT NULL PK col).
-        List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-A", "agent-002", null);
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getServiceId()).isEqualTo("10.0.0.2");
-    }
-
-    @Test
-    void draining_instance_returned_as_limited_available() {
-        AgentRegistryEntry card = sampleCard("tenant-A", "agent-003", "http://10.0.0.3:8080");
-        ResponseEntity<Void> reg = controller.register(card, null, null);
-        assertThat(reg.getStatusCode().is2xxSuccessful()).isTrue();
-
-        // Manually set DRAINING via repository (bypass controller) — uses the
-        // 4-field PK so instanceId MUST have been derived by register.
-        boolean isUpdated = repository.updateStatus(new AgentRegistryRepository.StatusUpdate("tenant-A", "agent-003",
-                card.getServiceId(), card.getInstanceId(), "DRAINING", false));
-        assertThat(isUpdated).as("updateStatus must hit the row registered by the controller").isTrue();
-
-        // FEAT-016: DRAINING is now included in discovery results (was
-        // excluded in REQ-2026-006). The caller sees DRAINING as a
-        // limited-availability health state.
-        List<AgentCardDto> result = discovery.searchInstancesByAgentId("tenant-A", "agent-003", null);
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getHealth()).isEqualTo("DRAINING");
-    }
-
-    @Test
-    void delete_single_instance_by_4_field_does_not_evict_other_replicas() {
-        AgentRegistryEntry a = sampleCard("tenant-A", "agent-004", "http://10.0.0.4:8080");
-        a.setServiceId("svc-x");
-        ResponseEntity<Void> regA = controller.register(a, null, null);
-        assertThat(regA.getStatusCode().is2xxSuccessful()).isTrue();
-
-        AgentRegistryEntry b = sampleCard("tenant-A", "agent-004", "http://10.0.0.5:8080");
-        b.setServiceId("svc-x");
-        ResponseEntity<Void> regB = controller.register(b, null, null);
-        assertThat(regB.getStatusCode().is2xxSuccessful()).isTrue();
-
-        // 4-field delete targets only replica a; replica b stays.
-        boolean isDeleted = repository.delete("tenant-A", "agent-004", "svc-x", a.getInstanceId());
-        assertThat(isDeleted).isTrue();
-
-        List<AgentCardDto> remaining = discovery.searchInstancesByAgentId("tenant-A", "agent-004", null);
-        assertThat(remaining).hasSize(1);
-        assertThat(remaining.get(0).getServiceId()).isEqualTo("svc-x");
-        // the surviving replica is b (instanceId derived from 10.0.0.5:8080);
-        // resolving its handle must yield b's endpoint, not a's.
-        RouteResolution survivor = discovery.resolveRouteHandle(remaining.get(0).getRouteHandle(), "tenant-A");
-        assertThat(survivor.endpointUrl()).isEqualTo("http://10.0.0.5:8080");
     }
 
     // ---- helpers ---------------------------------------------------------

@@ -1,11 +1,6 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
- */
-
 package com.openjiuwen.rdc.pull;
 
 import com.openjiuwen.rdc.model.FrameworkType;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -25,45 +20,17 @@ import java.util.Map;
  * <p>HTTP client timeouts are code-defaulted (not exposed as config keys)
  * to prevent operator misconfiguration that could block bootstrap:
  * connect 5s, read 10s (OQ-3 H2 resolution).
- *
- * @since 2026-07-10
  */
 @Component
 @ConfigurationProperties(prefix = "rdc.pull-registration")
 public class PullRegistrationProperties {
-    /**
-     * HTTP connect timeout for the pull GET. Code-defaulted (OQ-3 H2).
-     * Not exposed as a config key to prevent operator misconfiguration.
-     */
-    public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-
-    /**
-     * HTTP read timeout for the pull GET. Code-defaulted (OQ-3 H2).
-     * Not exposed as a config key to prevent operator misconfiguration.
-     */
-    public static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
-
-    /**
-     * Default {@code maxConcurrency} applied by
-     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
-     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.max_concurrency}
-     * and the push-path convention documented in the README.
-     */
-    public static final int DEFAULT_MAX_CONCURRENCY = 10;
-
-    /**
-     * Default {@code weight} applied by
-     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
-     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.weight}.
-     */
-    public static final int DEFAULT_WEIGHT = 100;
 
     /**
      * Master switch. Default {@code false} — pull registration is opt-in.
      * When {@code false}, {@link PullRegistrationBootstrap} no-ops on
      * {@code ApplicationReadyEvent}.
      */
-    private boolean isEnabled = false;
+    private boolean enabled = false;
 
     /**
      * Runtime list. Each entry produces one {@code upsert} call on
@@ -73,11 +40,11 @@ public class PullRegistrationProperties {
     private List<RuntimeEntry> runtimes = new ArrayList<>();
 
     public boolean isEnabled() {
-        return isEnabled;
+        return enabled;
     }
 
-    public void setEnabled(boolean isEnabled) {
-        this.isEnabled = isEnabled;
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
     public List<RuntimeEntry> getRuntimes() {
@@ -94,11 +61,10 @@ public class PullRegistrationProperties {
      * <p>Required fields: {@code baseUrl}, {@code tenantId}, {@code agentId},
      * {@code frameworkType}. Optional fields: {@code cardPath},
      * {@code headers}, {@code routeKey}, {@code region},
-     * {@code contractVersion}, {@code capabilityVersion},
-     * {@code serviceId} (FEAT-016 — default: derived from {@code baseUrl} host),
-     * {@code capabilities} (FEAT-016 — default: empty).
+     * {@code contractVersion}, {@code capabilityVersion}.
      */
     public static class RuntimeEntry {
+
         /** Runtime origin URL, e.g. {@code http://localhost:8090}. Also used as endpointUrl. */
         private String baseUrl;
 
@@ -146,23 +112,6 @@ public class PullRegistrationProperties {
          * ({@link PullRegistrationProperties#DEFAULT_WEIGHT}).
          */
         private Integer weight;
-
-        /**
-         * Optional logical service identifier (FEAT-016). Default: derived
-         * from {@code baseUrl} host by {@link ServiceIdCodec#derive(String)}.
-         * When the operator pins one, it overrides the derived value so
-         * multiple agents / instances can share the same {@code serviceId}
-         * as a logical service group.
-         */
-        private String serviceId;
-
-        /**
-         * Optional capability list (FEAT-016). Default: empty. Backed by the
-         * {@code capabilities VARCHAR(64)[]} column on
-         * {@code agent_registry_mvp} (V6 migration). Lets the pull path
-         * populate the same column the push register endpoint populates.
-         */
-        private List<String> capabilities;
 
         public String getBaseUrl() {
             return baseUrl;
@@ -259,21 +208,32 @@ public class PullRegistrationProperties {
         public void setWeight(Integer weight) {
             this.weight = weight;
         }
-
-        public String getServiceId() {
-            return serviceId;
-        }
-
-        public void setServiceId(String serviceId) {
-            this.serviceId = serviceId;
-        }
-
-        public List<String> getCapabilities() {
-            return capabilities;
-        }
-
-        public void setCapabilities(List<String> capabilities) {
-            this.capabilities = capabilities;
-        }
     }
+
+    /**
+     * HTTP connect timeout for the pull GET. Code-defaulted (OQ-3 H2).
+     * Not exposed as a config key to prevent operator misconfiguration.
+     */
+    public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+    /**
+     * HTTP read timeout for the pull GET. Code-defaulted (OQ-3 H2).
+     * Not exposed as a config key to prevent operator misconfiguration.
+     */
+    public static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
+    /**
+     * Default {@code maxConcurrency} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.max_concurrency}
+     * and the push-path convention documented in the README.
+     */
+    public static final int DEFAULT_MAX_CONCURRENCY = 10;
+
+    /**
+     * Default {@code weight} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.weight}.
+     */
+    public static final int DEFAULT_WEIGHT = 100;
 }

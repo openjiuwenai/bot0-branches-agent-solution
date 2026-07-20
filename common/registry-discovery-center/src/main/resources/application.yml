@@ -1,4 +1,4 @@
-# registry-discovery-center Spring Boot 启动配置
+# agent-rdc Spring Boot 启动配置
 #
 # 让 AgentRdcApplication.main() 调用 SpringApplication.run() 时能拉起进程：
 #   - spring.datasource.*  → spring-boot-starter-jdbc 自动配置 DataSource
@@ -11,7 +11,7 @@
 #
 # 测试不读本文件：src/test/java/** 用 EmbeddedPostgres.builder().start() + 手工构造 beans。
 #
-# Authority: REQ-2026-002 + ADR-0160 decision 7 (registry-discovery-center 是 runnable Spring Boot application)
+# Authority: REQ-2026-002 + ADR-0160 decision 7 (agent-rdc 是 runnable Spring Boot application)
 
 spring:
   profiles:
@@ -37,18 +37,110 @@ rdc:
   pull-registration:
     enabled: false
     runtimes: []
+      # Legacy path — superseded by deployment-discovery when enabled.
       # Example (copy + edit per environment):
       # - base-url: http://localhost:8090
       #   tenant-id: tenant-A
-      #   agent-id: demo-runtime-8090      # required — A2A AgentCard has no agentId field, operator pins it
-      #   framework-type: JIUWEN            # required — JIUWEN | AGENTSCOPE | VERSATILE | PROXY_SERVICE
+      #   agent-id: demo-runtime-8090
+      #   framework-type: JIUWEN
       #   card-path: /.well-known/agent-card.json
       #   route-key: /v1/query
       #   region: cn-east-1
-      #   max-concurrency: 10               # optional, default 10 (NOT NULL column — default applied when omitted)
-      #   weight: 100                       # optional, default 100
+      #   max-concurrency: 10
+      #   weight: 100
       #   headers:
       #     Authorization: Bearer ${RUNTIME_TOKEN:placeholder}
+
+  # Feat-015 P1 — provider snapshot + active card fetch + reconciliation.
+  # When enabled: ReconciliationScheduler runs on startup + periodic interval;
+  # POST /api/registry/register (push) returns 410 Gone.
+  # Extra DeploymentDiscoveryProvider Spring beans are also reconciled (pluggable).
+  # Observations without a matching instances[] row use binding-defaults.
+  deployment-discovery:
+    enabled: true
+    reconcile-interval: 30s
+    draining-grace-period: 30s
+    binding-defaults:
+      framework-type: JIUWEN
+      route-key: /v1/query
+      contract-version: "1.0.0"
+      capability-version: "1.0.0"
+      card-path: /.well-known/agent-card.json
+      max-concurrency: 10
+      weight: 100
+    instances:
+      - tenant-id: tenant-A
+        service-id: billing-svc
+        instance-id: billing-svc-pod-0
+        base-url: http://localhost:8090
+        deployment-version: "1.0.0"
+        readiness: READY
+        framework-type: JIUWEN
+        route-key: /v1/query
+        contract-version: "1.0.0"
+        capability-version: "1.0.0"
+        card-path: /.well-known/agent-card.json
+        region: cn-east-1
+        max-concurrency: 10
+        weight: 100
+      - tenant-id: tenant-A
+        service-id: billing-svc
+        instance-id: billing-svc-pod-1
+        base-url: http://localhost:8091
+        deployment-version: "1.0.0"
+        readiness: READY
+        framework-type: JIUWEN
+        route-key: /v1/query
+        contract-version: "1.0.0"
+        capability-version: "2.0.0"
+        card-path: /.well-known/agent-card.json
+        region: cn-east-1
+        max-concurrency: 10
+        weight: 100
+  registry:
+    security:
+      # Optional tenant-scoped caller allowlist for discover/resolve (0711 callerRef).
+      # Empty = permissive (non-blank callerRef required only).
+      caller-allowlist: {}
+    card-fetch:
+      # mTLS + Agent Card signature verification — disabled by default (0711 §5.1.3).
+      mtls-enabled: false
+      signature-verification-enabled: false
+      trusted-signer-keys: {}
+      # Empty = permissive. Example: 10.0.0.0/8, 172.16.0.0/12
+      allowed-cidrs: []
+      # Example when enabled:
+      # mtls-enabled: true
+      # key-store-path: /etc/rdc/card-fetch/client.p12
+      # key-store-password: ${CARD_FETCH_KEYSTORE_PASSWORD}
+      # trust-store-path: /etc/rdc/card-fetch/trust.p12
+      # trust-store-password: ${CARD_FETCH_TRUSTSTORE_PASSWORD}
+      # signature-verification-enabled: true
+      # trusted-signer-keys:
+      #   platform-key-1: |
+      #     -----BEGIN PUBLIC KEY-----
+      #     ...
+      #     -----END PUBLIC KEY-----
+      # Example:
+      # caller-allowlist:
+      #   tenant-A:
+      #     - gateway
+      #     - event-bus
+      # Example static provider entry (dev / MVP):
+      # - tenant-id: tenant-A
+      #   service-id: billing-svc          # stable Agent Service identity → agentId
+      #   instance-id: billing-svc-pod-0   # PK service_id dimension
+      #   base-url: http://localhost:8090
+      #   deployment-version: "1.0.0"
+      #   readiness: READY                 # READY | TERMINATING
+      #   framework-type: JIUWEN
+      #   route-key: /v1/query
+      #   contract-version: "1.0.0"
+      #   capability-version: "1.0.0"
+      #   card-path: /.well-known/agent-card.json
+      #   region: cn-east-1
+      #   max-concurrency: 10
+      #   weight: 100
 
 ---
 # dev profile 段

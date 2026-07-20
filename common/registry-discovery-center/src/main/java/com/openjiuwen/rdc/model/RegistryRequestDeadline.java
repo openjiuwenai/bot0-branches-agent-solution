@@ -1,0 +1,20 @@
+package com.openjiuwen.rdc.model;
+
+import java.time.Instant;
+import java.util.Objects;
+
+/**
+ * Enforces {@link RegistryRequestContext#deadline()} per Feat-015 0711 §5.1.8.
+ */
+public final class RegistryRequestDeadline {
+
+    private RegistryRequestDeadline() {
+    }
+
+    public static void enforce(Instant deadline, String traceId) {
+        Objects.requireNonNull(deadline, "deadline");
+        if (Instant.now().isAfter(deadline)) {
+            throw new DeadlineExceededException(traceId);
+        }
+    }
+}
