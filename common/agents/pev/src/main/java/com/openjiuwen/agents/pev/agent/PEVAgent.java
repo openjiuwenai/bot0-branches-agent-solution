@@ -8,6 +8,8 @@ import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
 import com.openjiuwen.agents.pev.kernel.ReplanAction;
 import com.openjiuwen.agents.pev.kernel.RootCause;
+import com.openjiuwen.agents.pev.observability.PevTrace;
+import com.openjiuwen.agents.pev.observability.PevTraceSink;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.core.singleagent.BaseAgent;
@@ -24,6 +26,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
 
 /**
  * PEV agent — a general agent-service-app on agent-core-java, running the closed loop
@@ -62,14 +66,32 @@ public class PEVAgent extends BaseAgent {
     private final PevComponents.Planner planner;
     private final PevComponents.Executor executor;
     private final PevComponents.Verifier verifier;
+    private final PevTraceSink sink;
     private PevConfig config;
 
     public PEVAgent(AgentCard card, PevComponents.Planner planner, PevComponents.Executor executor,
             PevComponents.Verifier verifier) {
+        this(card, planner, executor, verifier, PevTraceSink.noop());
+    }
+
+    /**
+     * Constructs a PEVAgent with an explicit trace sink (host-logger / OTel / test collector).
+     * Default sink is {@link PevTraceSink#noop()} (explicit opt-in — avoids the silent-install
+     * footgun a mandatory-install entry point would create).
+     *
+     * @param card agent card
+     * @param planner plan stage
+     * @param executor execute stage
+     * @param verifier verify stage
+     * @param sink trace sink (null → noop)
+     */
+    public PEVAgent(AgentCard card, PevComponents.Planner planner, PevComponents.Executor executor,
+            PevComponents.Verifier verifier, PevTraceSink sink) {
         super(card);
         this.planner = planner;
         this.executor = executor;
         this.verifier = verifier;
+        this.sink = sink == null ? PevTraceSink.noop() : sink;
         this.config = PevConfig.defaults();
     }
 
@@ -95,14 +117,19 @@ public class PEVAgent extends BaseAgent {
         PevComponents.Plan plan = planner.plan(userInput);
         fire(AgentCallbackEvent.AFTER_MODEL_CALL, session, plan);
 
-        // Execute + Verify-Diagnose-Dispatch loop
+        // Execute + Verify-Diagnose-Dispatch loop, observed as a deterministic phase trace.
         Map<String, NodeResult> completed = new LinkedHashMap<>();
         boolean[] terminal = {false};
-        boolean[] verifyPassed = {false};
-        runVerifyLoop(userInput, plan, new VerifyLoopState(completed, terminal, verifyPassed, 0, session));
+        List<PevTrace.Phase> phases = new ArrayList<>();
+        phases.add(new PevTrace.Planned(plan));
+        PevTrace.TerminalReason[] terminalReason = {null};
+        runVerifyLoop(userInput, plan,
+                new VerifyLoopState(completed, terminal, phases, terminalReason, 0, session));
 
         String output = assembleOutput(completed);
-        fire(AgentCallbackEvent.AFTER_INVOKE, session, output);
+        PevTrace trace = new PevTrace(List.copyOf(phases), terminalReason[0],
+                (int) phases.stream().filter(p -> p instanceof PevTrace.Verified).count());
+        emitTrace(trace, session, output);
         return output;
     }
 
@@ -118,17 +145,21 @@ public class PEVAgent extends BaseAgent {
         }
 
         Map<String, NodeResult> stepResults = executeStep(plan, state);
+        state.phases.add(new PevTrace.Executed(stepResults));
         Set<String> failedToolNodes = failedToolNodes(stepResults);
         PevKernel.VerifyResult vr = verify(userInput, state.completed);
+        state.phases.add(new PevTrace.Verified(vr));
 
         if (vr.isPassed() && !vr.hasParseFailure()) {
-            state.verifyPassed[0] = true;
+            state.terminalReason[0] = PevTrace.TerminalReason.PASSED;
             state.terminal[0] = true;
             return;
         }
 
         RootCause cause = PevKernel.diagnoseRootCause(vr, failedToolNodes, state.completed);
+        state.phases.add(new PevTrace.Diagnosed(cause));
         ReplanAction action = PevKernel.toReplanAction(cause, vr.feedback(), vr.failedNodes());
+        state.phases.add(new PevTrace.Dispatched(action));
         dispatchReplanAction(userInput, plan, state, action);
     }
 
@@ -178,10 +209,12 @@ public class PEVAgent extends BaseAgent {
     private void dispatchReplanAction(String userInput, PevComponents.Plan plan, VerifyLoopState state,
             ReplanAction action) {
         if (state.retryCount >= config.maxRetries && !(action instanceof ReplanAction.AcceptPartial)) {
+            state.terminalReason[0] = PevTrace.TerminalReason.MAX_RETRIES_EXCEEDED;
             state.terminal[0] = true;
             return;
         }
         if (action instanceof ReplanAction.AcceptPartial) {
+            state.terminalReason[0] = PevTrace.TerminalReason.ACCEPT_PARTIAL;
             state.terminal[0] = true;
             return;
         }
@@ -210,6 +243,15 @@ public class PEVAgent extends BaseAgent {
         }
         if (!redo.isEmpty()) {
             runVerifyLoop(userInput, new PevComponents.Plan(plan.goal() + " (局部重做)", redo), state.nextRetry());
+        } else {
+            // Degenerate path (pre-existing edge case, now honestly observable): the verifier
+            // reported failed nodes not present in the plan (verifier/executor contract mismatch),
+            // so LocalReplan has nothing to redo and the loop falls through without a clean
+            // PASSED/ACCEPT_PARTIAL/MAX_RETRIES terminal. Mark INCONCLUSIVE so the trace truthfully
+            // reports the unterminated state instead of null (violating the PevTrace contract).
+            // Pure observability — does not change invoke's output (terminal[0] is not re-checked
+            // after runVerifyLoop returns).
+            state.terminalReason[0] = PevTrace.TerminalReason.INCONCLUSIVE;
         }
     }
 
@@ -220,6 +262,31 @@ public class PEVAgent extends BaseAgent {
             b.extra(Map.of("payload", payload));
         }
         fireCallbackEvent(event, b.build());
+    }
+
+    /**
+     * Emit the terminal trace: fan to the sink (FutureTask-isolated so a throwing sink cannot kill
+     * the invoke control loop — mirrors react-rails {@code RailTelemetry.invokeIsolated}; also
+     * dodges the broad-catch rule), then fire AFTER_INVOKE with the trace as an additive typed
+     * {@code "trace"} key alongside {@code "payload"} (rails reading only {@code "payload"} are
+     * unaffected; the typed key is the seam for future trace-consuming rails).
+     *
+     * @param trace the completed invoke trace
+     * @param session invoke session
+     * @param output assembled output (the existing "payload" value, unchanged)
+     */
+    private void emitTrace(PevTrace trace, Session session, String output) {
+        FutureTask<Void> sinkTask = new FutureTask<>(() -> sink.onTrace(trace), null);
+        sinkTask.run();
+        try {
+            sinkTask.get();
+        } catch (InterruptedException | ExecutionException ignored) {
+            // sink threw or was interrupted — isolated, never reaches the bearing control flow
+        }
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(this)
+                .event(AgentCallbackEvent.AFTER_INVOKE).session(session)
+                .extra(Map.of("payload", output, "trace", trace)).build();
+        fireCallbackEvent(AgentCallbackEvent.AFTER_INVOKE, ctx);
     }
 
     private static String assembleOutput(Map<String, NodeResult> results) {
@@ -278,21 +345,24 @@ public class PEVAgent extends BaseAgent {
     private static final class VerifyLoopState {
         private final Map<String, NodeResult> completed;
         private final boolean[] terminal;
-        private final boolean[] verifyPassed;
+        private final List<PevTrace.Phase> phases;
+        private final PevTrace.TerminalReason[] terminalReason;
         private final int retryCount;
         private final Session session;
 
-        private VerifyLoopState(Map<String, NodeResult> completed, boolean[] terminal, boolean[] verifyPassed,
-                int retryCount, Session session) {
+        private VerifyLoopState(Map<String, NodeResult> completed, boolean[] terminal,
+                List<PevTrace.Phase> phases, PevTrace.TerminalReason[] terminalReason, int retryCount,
+                Session session) {
             this.completed = completed;
             this.terminal = terminal;
-            this.verifyPassed = verifyPassed;
+            this.phases = phases;
+            this.terminalReason = terminalReason;
             this.retryCount = retryCount;
             this.session = session;
         }
 
         private VerifyLoopState nextRetry() {
-            return new VerifyLoopState(completed, terminal, verifyPassed, retryCount + 1, session);
+            return new VerifyLoopState(completed, terminal, phases, terminalReason, retryCount + 1, session);
         }
     }
 }
