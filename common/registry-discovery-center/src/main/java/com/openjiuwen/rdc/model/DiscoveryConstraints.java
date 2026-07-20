@@ -13,14 +13,17 @@ import java.util.Set;
  */
 public final class DiscoveryConstraints {
 
-    @Nullable private final String contractVersion;
-    @Nullable private final String capabilityVersion;
+    @Nullable
+    private final String contractVersion;
+    @Nullable
+    private final String capabilityVersion;
     private final Set<String> requiredSkillTags;
     private final Set<String> requiredCapabilities;
     private final Set<String> requiredInputModes;
     private final Set<String> requiredOutputModes;
     private final Set<String> requiredSecuritySchemes;
-    @Nullable private final HealthRequirement healthRequirement;
+    @Nullable
+    private final HealthRequirement healthRequirement;
 
     private DiscoveryConstraints(Builder b) {
         this.contractVersion = b.contractVersion;

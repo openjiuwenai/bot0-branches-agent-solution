@@ -9,6 +9,9 @@ import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import org.flywaydb.core.Flyway;
 
 import java.io.IOException;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
 
@@ -22,6 +25,8 @@ public final class EmbeddedPostgresTestSupport {
     private static EmbeddedPostgres postgres;
     private static DataSource dataSource;
 
+    private static ThreadPoolExecutor shutdownExecutor;
+
     private EmbeddedPostgresTestSupport() {
     }
 
@@ -30,15 +35,25 @@ public final class EmbeddedPostgresTestSupport {
             postgres = EmbeddedPostgres.builder().start();
             dataSource = postgres.getPostgresDatabase();
             Flyway.configure().dataSource(dataSource).load().migrate();
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            shutdownExecutor = new ThreadPoolExecutor(
+                    1, 1, 0L, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<>(),
+                    r -> {
+                        Thread hookThread = new Thread(r, "embedded-postgres-shutdown");
+                        hookThread.setDaemon(true);
+                        return hookThread;
+                    });
+            Runtime.getRuntime().addShutdownHook(shutdownExecutor.getThreadFactory().newThread(() -> {
                 try {
                     if (postgres != null) {
                         postgres.close();
                     }
-                } catch (IOException | RuntimeException | Error ignored) {
+                } catch (IOException ex) {
                     // best-effort JVM shutdown cleanup
+                } finally {
+                    shutdownExecutor.shutdown();
                 }
-            }, "embedded-postgres-shutdown"));
+            }));
         }
         return dataSource;
     }

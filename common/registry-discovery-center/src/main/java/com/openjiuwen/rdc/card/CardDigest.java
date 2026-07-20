@@ -20,7 +20,7 @@ public final class CardDigest {
 
     public static String sha256(String cardJson) {
         if (cardJson == null) {
-            return null;
+            return "";
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

@@ -17,6 +17,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.util.List;
 import java.util.UUID;
@@ -168,7 +169,7 @@ public class MvpHealthProbeScheduler {
                         target.instanceId(), "ONLINE", true));
                 outcome = "success";
                 health = "ONLINE";
-            } catch (RuntimeException ex) {
+            } catch (RestClientException ex) {
                 repository.updateStatus(new AgentRegistryRepository.StatusUpdate(
                         target.tenantId(), target.agentId(), target.serviceId(),
                         target.instanceId(), "DEGRADED", false));

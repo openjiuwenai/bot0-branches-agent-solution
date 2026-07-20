@@ -14,12 +14,16 @@ import java.util.Objects;
 public final class DiscoveryQuery {
 
     private final RegistryRequestContext context;
-    @Nullable private final String agentId;
-    @Nullable private final String serviceId;
-    @Nullable private final String a2aSkillId;
+    @Nullable
+    private final String agentId;
+    @Nullable
+    private final String serviceId;
+    @Nullable
+    private final String a2aSkillId;
     private final DiscoveryConstraints constraints;
     private final int limit;
-    @Nullable private final String continuationToken;
+    @Nullable
+    private final String continuationToken;
 
     private DiscoveryQuery(Builder b) {
         this.context = Objects.requireNonNull(b.context, "context");

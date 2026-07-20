@@ -23,7 +23,6 @@ import com.openjiuwen.rdc.repository.AgentRegistryRepository.ResolveRow;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.RegistryPersistenceGuard;
 import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
-import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import com.openjiuwen.rdc.tenant.TenantContext;
 
 import org.slf4j.MDC;
@@ -121,7 +120,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         String traceId = UUID.randomUUID().toString();
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         int resultCount = 0;
         try {
             verifyTenant(tenantId, traceId);
@@ -131,12 +130,10 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 outcome = "not_found";
                 return List.of();
             }
+            outcome = "success";
             return rows.stream().map(row -> toDto(tenantId, row)).toList();
         } catch (TenantIsolationViolationException ex) {
             outcome = "tenant_isolation_violation";
-            throw ex;
-        } catch (RuntimeException ex) {
-            outcome = "error";
             throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
@@ -148,7 +145,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
     @Override
     public DiscoveryResult discover(DiscoveryQuery query) {
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         String traceId = query.context().traceId();
         try {
             query.context().validate();
@@ -162,8 +159,23 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                     traceId, () -> StructuredDiscoveryEngine.discover(repository, query));
             outcome = result.outcome().name();
             return result;
-        } catch (RuntimeException ex) {
-            outcome = outcomeForFailure(ex);
+        } catch (TenantIsolationViolationException ex) {
+            outcome = "tenant_isolation_violation";
+            throw ex;
+        } catch (MalformedRouteHandleException ex) {
+            outcome = "malformed_handle";
+            throw ex;
+        } catch (EntryNotFoundException ex) {
+            outcome = "entry_not_found";
+            throw ex;
+        } catch (LeaseExpiredException ex) {
+            outcome = "lease_expired";
+            throw ex;
+        } catch (DeadlineExceededException ex) {
+            outcome = "deadline_exceeded";
+            throw ex;
+        } catch (RegistryUnavailableException ex) {
+            outcome = "registry_unavailable";
             throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
@@ -199,7 +211,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         String effectiveTraceId = traceId != null && !traceId.isBlank() ? traceId : UUID.randomUUID().toString();
         MDC.put("traceId", effectiveTraceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
             if (deadline != null) {
                 RegistryRequestDeadline.enforce(deadline, effectiveTraceId);
@@ -238,6 +250,7 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                             effectiveTraceId);
                 }
                 EndpointEntry ep = endpoint.get();
+                outcome = "success";
                 return new RouteResolution(
                         decoded.instanceId(), ep.endpointUrl(), ep.routeKey(), ep.contractVersion(), null);
             }
@@ -253,13 +266,35 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
                 outcome = "lease_expired";
                 throw new LeaseExpiredException(effectiveTraceId);
             }
+            outcome = "success";
             return new RouteResolution(
                     decoded.instanceId(), row.endpointUrl(), row.routeKey(),
                     row.contractVersion(), row.capabilityVersion());
-        } catch (RuntimeException ex) {
-            if ("success".equals(outcome)) {
-                outcome = outcomeForFailure(ex);
+        } catch (TenantIsolationViolationException ex) {
+            if ("error".equals(outcome)) {
+                outcome = "tenant_isolation_violation";
             }
+            throw ex;
+        } catch (MalformedRouteHandleException ex) {
+            if ("error".equals(outcome)) {
+                outcome = "malformed_handle";
+            }
+            throw ex;
+        } catch (EntryNotFoundException ex) {
+            if ("error".equals(outcome)) {
+                outcome = "entry_not_found";
+            }
+            throw ex;
+        } catch (LeaseExpiredException ex) {
+            if ("error".equals(outcome)) {
+                outcome = "lease_expired";
+            }
+            throw ex;
+        } catch (DeadlineExceededException ex) {
+            outcome = "deadline_exceeded";
+            throw ex;
+        } catch (RegistryUnavailableException ex) {
+            outcome = "registry_unavailable";
             throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
@@ -280,28 +315,6 @@ public class PgMvpDiscoveryServiceImpl implements AgentDiscoveryService {
         if (bound != null && !bound.equals(tenantId)) {
             throw new TenantIsolationViolationException(tenantId, bound, traceId);
         }
-    }
-
-    private static String outcomeForFailure(RuntimeException ex) {
-        if (ex instanceof TenantIsolationViolationException) {
-            return "tenant_isolation_violation";
-        }
-        if (ex instanceof MalformedRouteHandleException) {
-            return "malformed_handle";
-        }
-        if (ex instanceof EntryNotFoundException) {
-            return "entry_not_found";
-        }
-        if (ex instanceof LeaseExpiredException) {
-            return "lease_expired";
-        }
-        if (ex instanceof DeadlineExceededException) {
-            return "deadline_exceeded";
-        }
-        if (ex instanceof RegistryUnavailableException) {
-            return "registry_unavailable";
-        }
-        return "error";
     }
 
     /**

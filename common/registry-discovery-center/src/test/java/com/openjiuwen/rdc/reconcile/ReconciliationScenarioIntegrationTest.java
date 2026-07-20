@@ -43,12 +43,19 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import javax.sql.DataSource;
 
 /**
  * Feat-015 §4 / §6 scenario coverage: rolling upgrade, provider recovery, instance recovery.
  */
 class ReconciliationScenarioIntegrationTest {
+
+    private static final class TestProbeException extends RuntimeException {
+        TestProbeException(String message) {
+            super(message);
+        }
+    }
 
     private static DataSource dataSource;
     private static MockWebServer oldRuntimeServer;
@@ -306,7 +313,7 @@ class ReconciliationScenarioIntegrationTest {
 
             @Override
             public ListDeploymentInstancesResult listInstances() {
-                throw new RuntimeException("provider unreachable");
+                throw new TestProbeException("provider unreachable");
             }
         };
     }

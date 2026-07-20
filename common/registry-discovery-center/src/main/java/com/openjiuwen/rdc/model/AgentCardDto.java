@@ -62,8 +62,10 @@ public final class AgentCardDto {
 
     // ---- Business definition fields (populated by searchInstancesByAgentId) ----
 
-    @Nullable private final String agentName;
-    @Nullable private final FrameworkType frameworkType;
+    @Nullable
+    private final String agentName;
+    @Nullable
+    private final FrameworkType frameworkType;
 
     private AgentCardDto(Builder b) {
         this.serviceId = b.serviceId;

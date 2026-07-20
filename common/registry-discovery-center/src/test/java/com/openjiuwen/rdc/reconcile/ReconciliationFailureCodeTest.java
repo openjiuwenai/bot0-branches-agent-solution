@@ -20,6 +20,12 @@ import java.util.List;
 
 class ReconciliationFailureCodeTest {
 
+    private static final class TestProbeException extends RuntimeException {
+        TestProbeException(String message) {
+            super(message);
+        }
+    }
+
     @Test
     void revision_gap_maps_to_source_revision_gap_failure_code() {
         ReconciliationService service = service(new StubRepository(5L));
@@ -82,7 +88,7 @@ class ReconciliationFailureCodeTest {
 
             @Override
             public ListDeploymentInstancesResult listInstances() {
-                throw new RuntimeException("connection refused");
+                throw new TestProbeException("connection refused");
             }
         };
     }
@@ -95,33 +101,54 @@ class ReconciliationFailureCodeTest {
             this.lastRevision = lastRevision;
         }
 
-        @Override public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String json) { }
-        @Override public boolean delete(String tenantId, String agentId) { return false; }
-        @Override public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
-        @Override public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
-        @Override public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
+        @Override
+        public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String json) { }
+        @Override
+        public boolean delete(String tenantId, String agentId) { return false; }
+        @Override
+        public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
+        @Override
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
+        @Override
+        public java.util.Optional<EndpointEntry> findEndpoint(String tenantId, String agentId, String serviceId, String instanceId) {
             return java.util.Optional.empty();
         }
-        @Override public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) { return List.of(); }
-        @Override public void reconcileUpsert(ReconcileUpsertCommand command) { }
-        @Override public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
-        @Override public void markDraining(String tenantId, String agentId, String serviceId) { }
-        @Override public void markRemoved(String tenantId, String agentId, String serviceId) { }
-        @Override public void markSourceStale(String sourceId) {
+        @Override
+        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) { return List.of(); }
+        @Override
+        public void reconcileUpsert(ReconcileUpsertCommand command) { }
+        @Override
+        public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
+        @Override
+        public void markDraining(String tenantId, String agentId, String serviceId) { }
+        @Override
+        public void markRemoved(String tenantId, String agentId, String serviceId) { }
+        @Override
+        public void markSourceStale(String sourceId) {
             logicalStaleMarked = true;
             markLogicalRegistrationsStaleSource(sourceId);
         }
-        @Override public void markSourceFresh(String sourceId) { }
-        @Override public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) { return List.of(); }
-        @Override public List<InstanceKey> listExpiredLeases(java.time.Instant now) { return List.of(); }
-        @Override public long getLastProcessedRevision(String sourceId) { return lastRevision; }
-        @Override public void updateLastProcessedRevision(String sourceId, long revision) { }
-        @Override public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
-        @Override public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
-        @Override public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
+        @Override
+        public void markSourceFresh(String sourceId) { }
+        @Override
+        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) { return List.of(); }
+        @Override
+        public List<InstanceKey> listExpiredLeases(java.time.Instant now) { return List.of(); }
+        @Override
+        public long getLastProcessedRevision(String sourceId) { return lastRevision; }
+        @Override
+        public void updateLastProcessedRevision(String sourceId, long revision) { }
+        @Override
+        public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
+        @Override
+        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
+        @Override
+        public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
         }
-        @Override public void reconcilePending(ReconcilePendingCommand command) { }
-        @Override public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
+        @Override
+        public void reconcilePending(ReconcilePendingCommand command) { }
+        @Override
+        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
     }
 }

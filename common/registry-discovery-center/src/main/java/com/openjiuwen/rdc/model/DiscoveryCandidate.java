@@ -17,15 +17,18 @@ import java.util.Objects;
  */
 public final class DiscoveryCandidate {
 
-    @Nullable private final String agentCardJson;
+    @Nullable
+    private final String agentCardJson;
     private final String agentId;
     private final String serviceId;
-    @Nullable private final String matchedA2aSkillId;
+    @Nullable
+    private final String matchedA2aSkillId;
     private final String contractVersion;
     private final String capabilityVersion;
     private final RegistrationStatus registrationStatus;
     private final Freshness freshness;
-    @Nullable private final Instant lastValidatedAt;
+    @Nullable
+    private final Instant lastValidatedAt;
 
     private DiscoveryCandidate(Builder b) {
         this.agentCardJson = b.agentCardJson;

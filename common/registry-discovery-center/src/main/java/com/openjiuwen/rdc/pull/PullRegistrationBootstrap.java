@@ -20,6 +20,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
 import java.util.Map;
@@ -99,7 +100,7 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
             MDC.put("traceId", traceId);
             try {
                 pullOne(runtime, traceId);
-            } catch (RuntimeException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 LOG.warn("pull-bootstrap runtime {} failed: {}", runtime.getBaseUrl(), ex.getMessage(), ex);
             } finally {
                 MDC.remove("traceId");
@@ -109,7 +110,7 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
 
     private void pullOne(PullRegistrationProperties.RuntimeEntry runtime, String traceId) {
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
             requireRequired(runtime);
             String cardUrl = runtime.getBaseUrl() + runtime.getCardPath();
@@ -133,11 +134,8 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
             repository.upsert(entry, cardJson);
             LOG.info("pull-bootstrap registered tenant={} agent={} baseUrl={}",
                     entry.getTenantId(), entry.getAgentId(), entry.getEndpointUrl());
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
+            outcome = "success";
         } catch (JsonProcessingException ex) {
-            outcome = "error";
             throw new IllegalStateException("pull-bootstrap failed: " + ex.getMessage(), ex);
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;

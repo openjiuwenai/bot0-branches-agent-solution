@@ -17,10 +17,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.util.Arrays;
-import java.util.function.Supplier;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
+
 import javax.sql.DataSource;
 
 /**
@@ -795,7 +796,10 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
 
     private static String stringColumn(java.util.Map<String, Object> row, String column) {
         Object value = row.get(column);
-        return value instanceof String s ? s : null;
+        if (value == null) {
+            return null;
+        }
+        return value instanceof String s ? s : value.toString();
     }
 
     private static java.util.UUID uuidColumn(Object value) throws java.sql.SQLException {

@@ -22,7 +22,6 @@ import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
-import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.tenant.TenantContext;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -268,7 +267,8 @@ class PgMvpDiscoveryServiceImplTest {
             return java.util.List.of();
         }
 
-        @Override public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
+        @Override
+        public List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion) {
             if (!"tenant-A".equals(tenantId)) {
                 return List.of();
             }
@@ -400,27 +400,46 @@ class PgMvpDiscoveryServiceImplTest {
             throw new DataAccessResourceFailureException("database unavailable");
         }
 
-        @Override public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String a2aAgentCardJson) { }
-        @Override public boolean delete(String tenantId, String agentId) { return false; }
-        @Override public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
-        @Override public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
-        @Override public void reconcileUpsert(ReconcileUpsertCommand command) { }
-        @Override public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
-        @Override public void markDraining(String tenantId, String agentId, String serviceId) { }
-        @Override public void markRemoved(String tenantId, String agentId, String serviceId) { }
-        @Override public void markSourceStale(String sourceId) { }
-        @Override public void markSourceFresh(String sourceId) { }
-        @Override public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) { return List.of(); }
-        @Override public List<InstanceKey> listExpiredLeases(java.time.Instant now) { return List.of(); }
-        @Override public long getLastProcessedRevision(String sourceId) { return 0; }
-        @Override public void updateLastProcessedRevision(String sourceId, long revision) { }
-        @Override public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
-        @Override public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
-        @Override public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
+        @Override
+        public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String a2aAgentCardJson) { }
+        @Override
+        public boolean delete(String tenantId, String agentId) { return false; }
+        @Override
+        public boolean delete(String tenantId, String agentId, String serviceId) { return false; }
+        @Override
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) { return List.of(); }
+        @Override
+        public void reconcileUpsert(ReconcileUpsertCommand command) { }
+        @Override
+        public List<InstanceKey> listInstanceKeysBySource(String sourceId) { return List.of(); }
+        @Override
+        public void markDraining(String tenantId, String agentId, String serviceId) { }
+        @Override
+        public void markRemoved(String tenantId, String agentId, String serviceId) { }
+        @Override
+        public void markSourceStale(String sourceId) { }
+        @Override
+        public void markSourceFresh(String sourceId) { }
+        @Override
+        public List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff) { return List.of(); }
+        @Override
+        public List<InstanceKey> listExpiredLeases(java.time.Instant now) { return List.of(); }
+        @Override
+        public long getLastProcessedRevision(String sourceId) { return 0; }
+        @Override
+        public void updateLastProcessedRevision(String sourceId, long revision) { }
+        @Override
+        public void updateLastProcessedRevision(String sourceId, long revision, String fingerprint) { }
+        @Override
+        public java.util.Optional<String> getSnapshotFingerprint(String sourceId) { return java.util.Optional.empty(); }
+        @Override
+        public java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId) {
             return java.util.Optional.empty();
         }
-        @Override public void reconcilePending(ReconcilePendingCommand command) { }
-        @Override public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
+        @Override
+        public void reconcilePending(ReconcilePendingCommand command) { }
+        @Override
+        public void markRefreshDegraded(String tenantId, String agentId, String serviceId) { }
     }
 
     private static final class TestTenantContext implements TenantContext {

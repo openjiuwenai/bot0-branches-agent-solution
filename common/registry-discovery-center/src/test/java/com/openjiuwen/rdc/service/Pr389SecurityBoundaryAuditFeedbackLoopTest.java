@@ -8,10 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.MalformedRouteHandleException;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 import com.openjiuwen.rdc.tenant.TenantContext;
 
@@ -22,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Feedback-loop tests for PR #389 review issue #1: security-boundary failure
@@ -136,7 +133,8 @@ class Pr389SecurityBoundaryAuditFeedbackLoopTest {
 
     private static final class TestTenantContext implements TenantContext {
         private String current;
-        @Override public String current() { return current; }
+        @Override
+        public String current() { return current; }
         void set(String tenantId) { this.current = tenantId; }
         void clear() { this.current = null; }
     }

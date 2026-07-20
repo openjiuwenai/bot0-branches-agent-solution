@@ -9,6 +9,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 /**
  * Round-trip + baseline-breaking rejection tests for {@link RouteHandleCodec}
  * (FEAT-016 v2: 6-field opaque route handle).
@@ -48,7 +51,7 @@ class RouteHandleCodecTest {
     void decode_rejects_old_v1_prefix_format() {
         String json = "{\"tenantId\":\"t\",\"agentId\":\"a\",\"serviceId\":\"s\","
                 + "\"routeKey\":\"rk\",\"contractVersion\":\"c\"}";
-        String handle = "v1:" + java.util.Base64.getEncoder().encodeToString(json.getBytes());
+        String handle = "v1:" + Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
         assertThatThrownBy(() -> RouteHandleCodec.decode(handle))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("v2:");
@@ -59,7 +62,7 @@ class RouteHandleCodecTest {
         String json = "{\"tenantId\":\"t\",\"agentId\":\"a\",\"serviceId\":\"s\","
                 + "\"routeKey\":\"rk\",\"contractVersion\":\"c\"}";
         String handle = RouteHandleCodec.V2_PREFIX
-                + java.util.Base64.getEncoder().encodeToString(json.getBytes());
+                + Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
         assertThatThrownBy(() -> RouteHandleCodec.decode(handle))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("instanceId");

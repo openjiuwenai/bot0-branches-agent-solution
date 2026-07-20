@@ -33,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Set;
+
 import javax.sql.DataSource;
 
 class DiscoveryExtendedIntegrationTest {

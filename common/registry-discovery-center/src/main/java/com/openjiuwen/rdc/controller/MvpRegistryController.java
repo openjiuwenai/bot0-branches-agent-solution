@@ -13,7 +13,6 @@ import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.DiscoveryConstraints;
 import com.openjiuwen.rdc.model.DiscoveryQuery;
-import com.openjiuwen.rdc.model.DiscoveryResult;
 import com.openjiuwen.rdc.model.HealthRequirement;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
@@ -120,7 +119,7 @@ public class MvpRegistryController {
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
             RegistryEntryValidator.validate(card, traceId);
             applyDefaults(card);
@@ -130,12 +129,10 @@ public class MvpRegistryController {
             InstanceIdCodec.applyTo(card);
             String a2aCardJson = serializeA2aCard(card.getA2aAgentCard());
             RegistryPersistenceGuard.run(traceId, () -> repository.upsert(card, a2aCardJson));
+            outcome = "success";
             return ResponseEntity.ok()
                     .header("Deprecation", "true")
                     .build();
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             observability.observeRegister(traceId, card.getTenantId(), card.getAgentId(),
@@ -199,15 +196,12 @@ public class MvpRegistryController {
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
             boolean deleted = RegistryPersistenceGuard.execute(
                     traceId, () -> repository.delete(tenantId, agentId));
             outcome = deleted ? "success" : "not_found";
             return ResponseEntity.noContent().build();
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             observability.observeDeregister(traceId, tenantId, agentId, outcome, latencyMs);
@@ -237,15 +231,12 @@ public class MvpRegistryController {
         String traceId = resolveTraceId(traceparent, xTraceId);
         MDC.put("traceId", traceId);
         long start = System.nanoTime();
-        String outcome = "success";
+        String outcome = "error";
         try {
             boolean deleted = RegistryPersistenceGuard.execute(
                     traceId, () -> repository.delete(tenantId, agentId, serviceId));
             outcome = deleted ? "success" : "not_found";
             return ResponseEntity.noContent().build();
-        } catch (RuntimeException ex) {
-            outcome = "error";
-            throw ex;
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             observability.observeDeregister(traceId, tenantId, agentId, outcome, latencyMs);

@@ -4,8 +4,6 @@
 
 package com.openjiuwen.rdc.model;
 
-import java.util.Objects;
-
 /** Optional load-balancing hint for callers (Feat-015 0711 {@code selectionHint}).
  *
  * @since 0.1.0

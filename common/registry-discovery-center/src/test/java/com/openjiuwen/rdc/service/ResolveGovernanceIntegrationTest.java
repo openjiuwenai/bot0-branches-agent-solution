@@ -23,7 +23,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.util.Set;
 import javax.sql.DataSource;
 
 class ResolveGovernanceIntegrationTest {

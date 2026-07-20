@@ -106,11 +106,8 @@ public final class AgentCardFetcher {
             }
             return FetchResult.success(body);
         } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
             return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
         } catch (IOException ex) {
-            return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
-        } catch (RuntimeException ex) {
             return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
         }
     }

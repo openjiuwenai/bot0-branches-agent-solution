@@ -186,14 +186,17 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
             this.targets = targets;
         }
 
-        @Override public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
+        @Override
+        public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return targets;
         }
-        @Override public boolean updateStatus(StatusUpdate update) {
+        @Override
+        public boolean updateStatus(StatusUpdate update) {
             updateStatusCalls.incrementAndGet();
             return true;
         }
-        @Override public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
+        @Override
+        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
             return List.of();
         }
     }
