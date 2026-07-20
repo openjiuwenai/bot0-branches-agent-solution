@@ -71,7 +71,7 @@
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| `name` | `string` | ✅ | — | 场景名称（映射到 `scenarios/<name>/`） |
+| `name` | `string` | ✅ | — | 场景名称（映射到 `examples/scenarios/<name>/`） |
 | `scenario` | `string` | ✅ | — | 业务场景标签（仅元数据，用于平台分类） |
 | `hyperparams` | `object` | ❌ | `{}` | 优化超参数（`num_epochs`、`batch_size` 会被提取为 typed 字段） |
 | `train_split` | `float` | ❌ | `0.8` | 训练集比例（需满足 `train_split + val_split == 1.0`） |
@@ -898,6 +898,5 @@ data: {"type": "completed", "job_id": "job_20260615_143022_abc123"}
 
 详见：
 
-- **ADR-0005**: `docs/adr/0005-platform-template-driven-api.md` — 平台模板驱动 API 架构决策
-- **API 规则**: `docs/rules/api.md` — API 层约定和双模式说明
+- **Adapter 契约**: `docs/api/adapter-api-contract.md` — EvoAgent 与 Adapter 的通信约定
 - **Adapter 契约**: `docs/api/adapter-api-contract.md` — Adapter sidecar API 定义

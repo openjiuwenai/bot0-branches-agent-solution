@@ -68,8 +68,9 @@ port: 8900                               # HTTP listen port
 #   timeout      → 300
 #
 # ── 多业务 Agent 部署（策略 A：公共父目录 + per-agent 子目录）──
-# 宿主机侧把所有业务 Agent 的日志归到同一父目录 HOST_LOG_ROOT、skills 归到
-# HOST_SKILLS_ROOT，分别只挂 2 个卷到容器 /data/logs 与 /data/skills。
+# 宿主机侧把所有业务 Agent 的日志、skills、managed-doc 分别归到
+# HOST_LOG_ROOT、HOST_SKILLS_ROOT、HOST_AGENTS_ROOT，并挂载到容器
+# /data/logs、/data/skills、/data/agents。
 # 每个 agent 条目用【绝对路径】指向各自子目录：
 #   log_dir    → /data/logs/{name}     （对应宿主 HOST_LOG_ROOT/{name}）
 #   skills_dir → /data/skills/{name}   （对应宿主 HOST_SKILLS_ROOT/{name}）
@@ -92,15 +93,18 @@ agents:
     agent_id: "edp_agent"                     # URL path segment: /v1/{project_id}/agents/{agent_id}/...
     timeout: 300                              # Call timeout in seconds
     # ── Managed-doc（可选，需优化 AgentRule.md 等"焙进单例、改文件不热加载"的文档）──
-    # 详见 docs/managed-doc-deploy.md。apply=restart 时由部署侧提供 restart_cmd + health 探测；
+    # 详见离线包 README 的 AgentRule managed-doc 章节。apply=restart 时由部署侧提供 restart_cmd + health 探测；
     # adapter async 执行 restart_cmd + health-watch，重启窗口内不阻塞事件循环。
     # managed_docs:
     #   - kind: agent_rule                       # doc 种类（端点 doc_kind）
     #     path: /data/agents/edp_agent/AgentRule.md   # 宿主侧挂载路径（绝对）
     #     allow_root: /data/agents/edp_agent     # 可选但建议：path 必须位于其下的挂载根（路径穿越防护）
+    #     max_content_bytes: 262144               # UTF-8 内容上限；超限请求返回 400
     #     apply: restart                         # file_only（仅写文件）| restart（写文件+重启生效）
-    #     restart_cmd: "docker restart edp_agent"    # apply=restart 必填，任意 shell 命令
-    #     # health_url 默认派生自 agent_url + /health；可显式覆写（如走单独健康端口）。
+    #     restart_cmd: "docker restart edp_agent"    # apply=restart 必填；容器名须为真实业务 Agent 容器名
+    #     health_url: "http://host.docker.internal:8090/health"
+    #     # Docker 部署还需显式挂 socket：start.sh 设置
+    #     # ADAPTER_ENABLE_DOCKER_RESTART=true；Compose 叠加 managed-doc override。
     # ── EDPAgent 请求透传（客户现场 body/header/URL 自定义）──
     # 需要透传 role_id/role_name/custom_data.user_profile 等客户环境绑定字段时配置。
     # request_template 为稳定 body 底模（深合并到最终请求体；调用方 extra_data 仍合并进
@@ -137,7 +141,7 @@ agents:
 
 # ── Managed-doc defaults（可选，仅当任一 agent 配了 managed_docs 且 apply=restart 时生效）──
 # profile 决定 burst（canary 训练，快速失败）vs single（人工单次）两套默认基线；
-# 显式字段覆写优先于 profile 基线。详见 docs/managed-doc-deploy.md 与 spec §8.4。
+# 显式字段覆写优先于 profile 基线；字段语义见下方内联说明。
 # managed_doc_defaults:
 #   profile: burst                # burst | single
 #   task_ttl_seconds: 600         # 完成态任务保留时长（轮询窗口）

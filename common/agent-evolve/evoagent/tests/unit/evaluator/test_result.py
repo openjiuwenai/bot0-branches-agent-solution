@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
 from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
 
 from evo_agent.evaluator.domain.result import EvaluationResult
@@ -42,15 +40,32 @@ class TestEvaluatedStatus:
 
     def test_evaluated_reason_with_pass_and_attribution(self) -> None:
         """非 filtered 的 reason 仍可提取 is_pass / attributed_skill。"""
-        reason = json.dumps(
-            {"reason": "ok", "is_pass": False, "attributed_skill": "my_skill"}
-        )
+        reason = json.dumps({"reason": "ok", "is_pass": False, "attributed_skill": "my_skill"})
         evaluated = _evaluated(reason=reason)
         result = EvaluationResult.from_evaluated_case(evaluated)
         assert result.status == "evaluated"
         assert result.is_pass is False
         assert result.attributed_skill == "my_skill"
         assert result.filter_matches == []
+
+    def test_repair_provenance_is_exposed_to_domain_callers(self) -> None:
+        """修复来源不能只藏在上游 EvaluatedCase.reason 字符串里。"""
+        operation = {"op": "insert_comma", "offset": 13, "next_key": "reason"}
+        evaluated = _evaluated(
+            reason=json.dumps(
+                {
+                    "repaired": True,
+                    "parse_mode": "deterministic_comma_repair",
+                    "repair_operations": [operation],
+                }
+            )
+        )
+
+        result = EvaluationResult.from_evaluated_case(evaluated)
+
+        assert result.repaired is True
+        assert result.parse_mode == "deterministic_comma_repair"
+        assert result.repair_operations == [operation]
 
     def test_none_per_metric_preserved(self) -> None:
         evaluated = _evaluated(per_metric=None)
@@ -120,12 +135,20 @@ class TestFilteredStatus:
 
     def test_filtered_with_multiple_matches(self) -> None:
         matches = [
-            {"filter_type": "tool_failure", "rule_id": "error", "message_index": 1, "evidence": "err"},
-            {"filter_type": "user_feedback", "rule_id": "explicit_rejection", "message_index": 4, "evidence": "不对"},
+            {
+                "filter_type": "tool_failure",
+                "rule_id": "error",
+                "message_index": 1,
+                "evidence": "err",
+            },
+            {
+                "filter_type": "user_feedback",
+                "rule_id": "explicit_rejection",
+                "message_index": 4,
+                "evidence": "不对",
+            },
         ]
-        reason = json.dumps(
-            {"status": "filtered", "is_pass": False, "filter_matches": matches}
-        )
+        reason = json.dumps({"status": "filtered", "is_pass": False, "filter_matches": matches})
         evaluated = _evaluated(reason=reason)
         result = EvaluationResult.from_evaluated_case(evaluated)
         assert result.status == "filtered"

@@ -47,6 +47,7 @@ def _icbc_config() -> EvolveConfig:
         icbc_token="icbc-jwt",
         icbc_user_id="icbc-user",
         icbc_endpoint="http://mock-icbc/mlpmodelservice/aigc/chat/completions",
+        icbc_context_window_tokens=32768,
         optimizer_model="icbc-deepseek",
     )
 

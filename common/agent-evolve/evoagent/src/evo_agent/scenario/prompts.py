@@ -1,7 +1,7 @@
 """Prompt 加载 — 两级查找机制。
 
 查找顺序：
-1. ``scenarios/<scenario_name>/prompts/<name>.md`` — 场景特定覆盖
+1. ``examples/scenarios/<scenario_name>/prompts/<name>.md`` — 场景特定覆盖
 2. agent-core ``templates/<name>.md`` — 通用 fallback
 """
 
@@ -24,9 +24,9 @@ def load_prompt(
     name:
         Prompt 文件名（不含 ``.md`` 后缀），如 ``analyst_error``。
     scenario_name:
-        场景名，用于定位 ``scenarios/<name>/prompts/`` 目录。
+        场景名，用于定位 ``examples/scenarios/<name>/prompts/`` 目录。
     scenarios_dir:
-        场景根目录。默认为项目根下的 ``scenarios/``。
+        场景根目录。默认为项目根下的 ``examples/scenarios/``。
 
     Returns
     -------

@@ -1017,9 +1017,9 @@ async def test_rollout_uses_unique_conversation_id(edp_cls: type) -> None:
     call_args = agent.invoke.call_args[0][0]
     conv_id = call_args["conversation_id"]
     assert conv_id != "c1"
-    # 格式为 "{run_id}:train:{n}:{case_id}"
-    assert conv_id.startswith("run1:train:")
-    assert conv_id.endswith(":c1")
+    # 格式为 "{run_id}_train_{n}_{case_id}"
+    assert conv_id.startswith("run1_train_")
+    assert conv_id.endswith("_c1")
 
 
 @pytest.mark.asyncio
@@ -2169,6 +2169,76 @@ async def test_rollout_phase2_uses_batch_evaluate_with_num_parallel() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rollout_records_trace_unavailable_in_detailed_training_batch() -> None:
+    """缺失 trace 不进入 reflect，但必须以稳定 case identity 写入训练 outcome。"""
+    from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
+
+    from evo_agent.evaluator.batch_result import (
+        EvaluationBatchResult,
+        EvaluationOutcome,
+    )
+
+    optimizer = _build_optimizer_with_phase_cb(lambda _event, _data: None)
+    cases = [
+        Case(case_id="c1", inputs={"query": "missing"}, label={"expected": "x"}),
+        Case(case_id="c2", inputs={"query": "ok"}, label={"expected": "y"}),
+    ]
+
+    def detailed_evaluate(
+        eval_cases: list[Case], predicts: list[dict[str, Any]], **kwargs: Any
+    ) -> EvaluationBatchResult:
+        assert [case.case_id for case in eval_cases] == ["c2"]
+        assert predicts == [{"answer": "mock"}]
+        assert kwargs["enable_attribution"] is True
+        evaluated = EvaluatedCase(case=eval_cases[0], answer=predicts[0], score=0.8)
+        return EvaluationBatchResult(
+            (
+                EvaluationOutcome(
+                    0,
+                    "c2",
+                    eval_cases[0],
+                    eval_cases[0].inputs["trajectory"],
+                    evaluated,
+                    None,
+                ),
+            )
+        )
+
+    optimizer._evaluator = MagicMock()
+    optimizer._evaluator.batch_evaluate_detailed = detailed_evaluate
+    optimizer._evaluator.batch_evaluate = MagicMock(
+        side_effect=AssertionError("legacy evaluator path used")
+    )
+    optimizer._adapter_client = AsyncMock()
+    optimizer._adapter_client.get_traces = AsyncMock(
+        side_effect=[
+            {"messages": []},
+            {"messages": [{"role": "user", "content": "hi"}]},
+        ]
+    )
+    optimizer._agent = AsyncMock()
+    optimizer._agent.invoke = AsyncMock(return_value={"answer": "mock"})
+    optimizer._conversation_id_factory = None
+    optimizer._trace_max_retries = 1
+    optimizer._trace_retry_backoff = 0.0
+    optimizer._rollout_extra_data = {}
+    optimizer._artifact_epoch = 1
+    optimizer._num_parallel = 2
+
+    evaluated, trajectories = await optimizer._rollout(cases)
+
+    assert [item.case.case_id for item in evaluated] == ["c2"]
+    assert [item["case_id"] for item in trajectories] == ["c2"]
+    assert [outcome.case_id for outcome in optimizer._last_training_batch.outcomes] == [
+        "c1",
+        "c2",
+    ]
+    infrastructure_failure = optimizer._last_training_batch.outcomes[0].failure
+    assert infrastructure_failure is not None
+    assert infrastructure_failure.category == "trace_unavailable"
+
+
+@pytest.mark.asyncio
 async def test_attribute_pushes_attribute_event() -> None:
     """_attribute pushes attribute phase event."""
     from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
@@ -2381,3 +2451,99 @@ async def test_select_override_pushes_select_event() -> None:
 
     phases = [d.get("phase") for _, d in events if _ == "log"]
     assert "select" in phases
+
+
+# ── managed-doc analyst prompt（spec F10）──
+
+
+@pytest.fixture
+def real_edp_cls() -> Any:
+    """动态加载真实 examples/scenarios/edp_agent/optimizer.py 的 EDPAgentOptimizer 类。
+
+    edp_cls fixture 加载的是 _OPTIMIZER_CODE 副本，无法覆盖对真实 optimizer 文件
+    的改动；F10 直接验证真实 _build_analyst_prompt 实现。
+    """
+    import importlib.util
+
+    path = Path("examples/scenarios/edp_agent/optimizer.py").resolve()
+    spec = importlib.util.spec_from_file_location("_real_edp_opt", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_real_edp_opt"] = mod
+    spec.loader.exec_module(mod)
+    yield mod.EDPAgentOptimizer
+    sys.modules.pop("_real_edp_opt", None)
+
+
+def _make_prompt_optimizer(
+    cls: type,
+    *,
+    operators: dict[str, Any],
+) -> Any:
+    """构造只够跑 _build_analyst_prompt 的 optimizer 实例（__new__ + 注入）。"""
+    opt = cls.__new__(cls)
+    opt._SCENARIO_NAME = "edp_agent"
+    opt._operators = operators
+    opt._scheduler = MagicMock()
+    opt._scheduler.max_lr = 5
+    return opt
+
+
+def test_analyst_prompt_includes_agent_rule_semantics_when_managed_doc_target(
+    real_edp_cls: type,
+) -> None:
+    """managed-doc 模式 analyst prompt 含 agent-rule 语义段。"""
+    with patch.object(sys.modules[real_edp_cls.__module__], "load_prompt", return_value="SYSTEM"):
+        opt = _make_prompt_optimizer(
+            real_edp_cls,
+            operators={"managed_doc:agent_rule": MagicMock()},
+        )
+        prompt = opt._build_analyst_prompt(
+            "reflect",
+            "# rule content",
+            "trajectories text",
+            "",
+            "",
+        )
+    assert "Target type: agent runtime rule document" in prompt
+    assert "Scope: applies globally to every conversation" in prompt
+    assert (
+        "Constraints: preserve identity, safety, tool-policy and mandatory business rules" in prompt
+    )
+    # 标题切换
+    assert "## Current Agent Rule Document" in prompt
+    assert "## Current Skill" not in prompt
+    # 内容仍注入
+    assert "# rule content" in prompt
+
+
+def test_analyst_prompt_title_changes_to_current_agent_rule_document(
+    real_edp_cls: type,
+) -> None:
+    """managed-doc 模式标题改为 Current Agent Rule Document。"""
+    with patch.object(sys.modules[real_edp_cls.__module__], "load_prompt", return_value="SYSTEM"):
+        opt = _make_prompt_optimizer(
+            real_edp_cls,
+            operators={"managed_doc:agent_rule": MagicMock()},
+        )
+        prompt = opt._build_analyst_prompt("reflect", "x", "t", "", "")
+    assert "## Current Agent Rule Document\nx" in prompt
+
+
+def test_analyst_prompt_unchanged_for_skill_target(real_edp_cls: type) -> None:
+    """Skill 模式 prompt 不变：标题 Current Skill，无 agent-rule 语义段。"""
+    with patch.object(sys.modules[real_edp_cls.__module__], "load_prompt", return_value="SYSTEM"):
+        opt = _make_prompt_optimizer(
+            real_edp_cls,
+            operators={"product_recommend_skill": MagicMock()},
+        )
+        prompt = opt._build_analyst_prompt(
+            "reflect",
+            "# skill content",
+            "trajectories text",
+            "",
+            "",
+        )
+    assert "## Current Skill\n# skill content" in prompt
+    assert "## Current Agent Rule Document" not in prompt
+    assert "Target type: agent runtime rule document" not in prompt

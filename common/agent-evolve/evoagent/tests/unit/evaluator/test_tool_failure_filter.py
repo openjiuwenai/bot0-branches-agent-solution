@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
-from evo_agent.evaluator.domain.models import StandardTrajectory, TrajectoryMessage
+from evo_agent.evaluator.domain.models import StandardTrajectory
 from evo_agent.evaluator.filters.tool_failure import (
     ToolFailureFilter,
     _parse_structured,

@@ -17,6 +17,7 @@ from agent_adapter.managed_doc.validation import InvalidDocContentError
 from agent_adapter.schemas import (
     AgentCallRequest,
     ManagedDocActionRequest,
+    ManagedDocListResponse,
     SkillActionRequest,
 )
 from agent_adapter.skill_store import (
@@ -256,6 +257,25 @@ async def managed_docs_action(request: Request) -> JSONResponse:
             action=action,
         )
         return _contract_error("INTERNAL_ERROR", "Failed to process managed-doc request", 500)
+
+
+@router.get(
+    "/api/v1/agents/{agent_name}/managed-docs",
+    response_model=ManagedDocListResponse,
+)
+async def list_managed_docs(agent_name: str, request: Request) -> JSONResponse:
+    """List the Agent's registered managed-document optimization capabilities."""
+    service = getattr(request.app.state, "managed_doc_service", None)
+    if service is None:
+        return _contract_error("INTERNAL_ERROR", "Managed-doc service is not initialized", 500)
+    try:
+        result = ManagedDocListResponse.model_validate(service.list_documents(agent_name))
+        return JSONResponse(content=result.model_dump())
+    except AgentNotFoundError as exc:
+        return _contract_error("AGENT_NOT_FOUND", str(exc), 404)
+    except Exception:
+        logger.exception("managed_doc_listing_error", agent_name=agent_name)
+        return _contract_error("INTERNAL_ERROR", "Failed to list managed-docs", 500)
 
 
 @router.get("/api/v1/managed-docs/tasks/{task_id}")

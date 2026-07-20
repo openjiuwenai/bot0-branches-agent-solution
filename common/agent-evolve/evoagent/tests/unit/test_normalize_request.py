@@ -68,6 +68,18 @@ def test_normalize_basic_mapping() -> None:
     assert result.skills == ["skill_a"]
 
 
+def test_tool_request_does_not_enter_managed_doc_branch() -> None:
+    req = _make_api_request()
+    req.optimizer_type = "tool"
+    req.managed_doc_kind = "agent_rule"
+
+    result = _normalize(req, _make_config())
+
+    assert result.optimizer_type == "tool"
+    assert result.skills == ["skill_a"]
+    assert result.managed_doc_kind is None
+
+
 def test_normalize_task_name() -> None:
     """task_name 直接映射。"""
     req = _make_api_request(task_name="my-task-001")

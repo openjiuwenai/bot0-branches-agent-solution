@@ -49,6 +49,9 @@ class ManagedDocConfig(BaseModel):
     kind: str
     path: str
     apply: Literal["file_only", "restart"] = "file_only"
+    # 最大内容尺寸（UTF-8 字节数，spec G1/C8）。默认 256 KiB；允许 per-doc 覆写。
+    # validation.validate 按编码后字节数校验，超限/编码失败 → 400 INVALID_ACTION 不落盘。
+    max_content_bytes: int = Field(default=262_144, ge=0)
     # Host-side mount root the configured ``path`` must resolve under (spec D3).
     # When set, DocStorage enforces real path-traversal protection; when None,
     # storage falls back to ``path``'s parent dir (only catches ``..`` escape).

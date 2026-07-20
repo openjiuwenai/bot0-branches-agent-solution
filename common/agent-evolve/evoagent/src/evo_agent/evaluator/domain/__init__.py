@@ -2,8 +2,6 @@
 
 from evo_agent.evaluator.domain.models import (
     EvaluationInput,
-    EvaluationStep,
-    EvaluationTrajectory,
     LLMEvaluationOutput,
     StandardTrajectory,
     TrajectoryMessage,
@@ -18,8 +16,6 @@ __all__ = [
     "EvaluationInput",
     "EvaluationResult",
     "EvaluationScores",
-    "EvaluationStep",
-    "EvaluationTrajectory",
     "FilterMatch",
     "LLMEvaluationOutput",
     "StandardTrajectory",

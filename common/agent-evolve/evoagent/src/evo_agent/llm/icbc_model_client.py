@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 import httpx
 from openjiuwen.core.foundation.llm.model_clients.base_model_client import BaseModelClient
@@ -44,6 +45,46 @@ class ICBCTokenExpiredError(Exception):
 class ICBCRequestError(Exception):
     """ICBC 端点返回失败（HTTP 错误、流内 error、空响应等，且非 token 过期）。"""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retryable = retryable
+
+
+class ICBCStreamIntegrityError(ICBCRequestError):
+    """A declared SSE data chunk was malformed; partial text is unusable."""
+
+    category = "transport_incomplete"
+
+    def __init__(self, *, chunk_index: int, raw_payload: str) -> None:
+        super().__init__(f"ICBC SSE data chunk {chunk_index} is malformed", retryable=True)
+        self.chunk_index = chunk_index
+        self.raw_payload = raw_payload
+
+
+@dataclass(frozen=True)
+class ICBCProtocolProfile:
+    """Declarative contract for one verified ICBC deployment protocol."""
+
+    context_window_tokens: int = 32768
+    output_reserve_tokens: int = 2048
+    chars_per_token: float = 2.0
+    stream_value: str | bool = "true"
+    done_sentinel: str = "[DONE]"
+    max_output_tokens_field: str | None = None
+    content_paths: tuple[str, ...] = ("choices.0.delta.content",)
+    finish_reason_paths: tuple[str, ...] = ("choices.0.finish_reason",)
+    usage_path: str | None = None
+    supports_usage: bool = False
+    supports_finish_reason: bool = False
+    completion_signal: Literal["done", "eof", "either"] = "done"
+
 
 class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
     """ICBC 内网大模型 client — 通过 registry 注册名 ``llm_ICBC``。
@@ -55,6 +96,22 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
     __client_name__ = "ICBC"
     __client_type__ = "llm"
 
+    def __init__(
+        self,
+        model_config: Any,
+        model_client_config: Any,
+        *,
+        profile: ICBCProtocolProfile | None = None,
+    ) -> None:
+        super().__init__(model_config, model_client_config)
+        self._profile = profile or ICBCProtocolProfile(
+            context_window_tokens=getattr(model_client_config, "context_window_tokens", 32768),
+            output_reserve_tokens=getattr(model_client_config, "output_reserve_tokens", 2048),
+            chars_per_token=getattr(model_client_config, "chars_per_token", 2.0),
+            completion_signal=getattr(model_client_config, "completion_signal", "done"),
+            max_output_tokens_field=getattr(model_client_config, "max_output_tokens_field", None),
+        )
+
     async def invoke(
         self,
         messages: str | list[BaseMessage] | list[dict[str, Any]],
@@ -63,7 +120,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         temperature: float | None = None,  # noqa: ARG002 — 严格按 curl，不传
         top_p: float | None = None,  # noqa: ARG002
         model: str | None = None,  # noqa: ARG002 — ICBC 不消费 model_name
-        max_tokens: int | None = None,  # noqa: ARG002
+        max_tokens: int | None = None,
         stop: str | None = None,  # noqa: ARG002
         output_parser: Any | None = None,  # noqa: ARG002
         timeout: float | None = None,
@@ -71,14 +128,48 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
     ) -> AssistantMessage:
         """消费整个 SSE 流，累加 ``delta.content`` 装入 AssistantMessage。"""
         parts: list[str] = []
-        async for chunk in self._iter_sse(messages=messages, timeout=timeout):
-            content = self._extract_content(chunk)
+        finish_reason: str | None = None
+        usage: dict[str, Any] | None = None
+        stream_metadata: dict[str, Any] = {}
+        async for chunk in self._iter_sse(
+            messages=messages, timeout=timeout, max_output_tokens=max_tokens
+        ):
+            if "__evo_stream_metadata__" in chunk:
+                stream_metadata = dict(chunk["__evo_stream_metadata__"])
+                continue
+            content = self._extract_content(chunk, self._profile.content_paths)
             if content:
                 parts.append(content)
+            finish_reason = (
+                self._extract_finish_reason(
+                    chunk,
+                    self._profile.finish_reason_paths,
+                    enabled=self._profile.supports_finish_reason,
+                )
+                or finish_reason
+            )
+            raw_usage = (
+                _value_at_path(chunk, self._profile.usage_path)
+                if self._profile.supports_usage and self._profile.usage_path
+                else None
+            )
+            if isinstance(raw_usage, dict):
+                usage = raw_usage
         answer = "".join(parts)
         if not answer:
             raise ICBCRequestError("ICBC 流式响应为空：未收到任何 content")
-        return AssistantMessage(content=answer)
+        usage_metadata = None
+        if usage is not None:
+            usage_metadata = {
+                "input_tokens": usage.get("prompt_tokens", usage.get("input_tokens", 0)),
+                "output_tokens": usage.get("completion_tokens", usage.get("output_tokens", 0)),
+            }
+        return AssistantMessage(
+            content=answer,
+            finish_reason=finish_reason or "",
+            usage_metadata=usage_metadata,
+            metadata={"provider": "ICBC", **stream_metadata},
+        )
 
     async def stream(
         self,
@@ -88,15 +179,19 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         temperature: float | None = None,  # noqa: ARG002
         top_p: float | None = None,  # noqa: ARG002
         model: str | None = None,  # noqa: ARG002
-        max_tokens: int | None = None,  # noqa: ARG002
+        max_tokens: int | None = None,
         stop: str | None = None,  # noqa: ARG002
         output_parser: Any | None = None,  # noqa: ARG002
         timeout: float | None = None,
         **kwargs: Any,  # noqa: ARG002
     ) -> AsyncIterator[AssistantMessageChunk]:
         """逐 chunk yield ``delta.content`` 装入 AssistantMessageChunk。"""
-        async for chunk in self._iter_sse(messages=messages, timeout=timeout):
-            content = self._extract_content(chunk)
+        async for chunk in self._iter_sse(
+            messages=messages, timeout=timeout, max_output_tokens=max_tokens
+        ):
+            if "__evo_stream_metadata__" in chunk:
+                continue
+            content = self._extract_content(chunk, self._profile.content_paths)
             if content:
                 yield AssistantMessageChunk(content=content)
 
@@ -159,6 +254,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         *,
         messages: str | list[BaseMessage] | list[dict[str, Any]],
         timeout: float | None,
+        max_output_tokens: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """发流式 POST，逐个 yield 解析后的 chunk dict。
 
@@ -170,7 +266,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         - 半截/坏 JSON 行 → 跳过不崩。
         """
         headers = self._build_headers()
-        body = self._build_body(messages)
+        body = self._build_body(messages, max_output_tokens=max_output_tokens)
         read_to = timeout if timeout is not None else self.model_client_config.timeout
         timeout_conf = httpx.Timeout(connect=10.0, read=read_to, write=10.0, pool=10.0)
         async with httpx.AsyncClient(timeout=timeout_conf) as http:
@@ -182,23 +278,49 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
                     msg = f"HTTP {resp.status_code}: {raw}"
                     if self._is_token_expired(msg):
                         raise ICBCTokenExpiredError(msg)
-                    raise ICBCRequestError(msg)
+                    raise ICBCRequestError(
+                        msg,
+                        status_code=resp.status_code,
+                        retryable=resp.status_code == 429 or resp.status_code >= 500,
+                    )
+                chunk_index = 0
+                done_received = False
                 async for line in resp.aiter_lines():
                     stripped = line.strip()
                     if not stripped.startswith("data:"):
                         continue
+                    chunk_index += 1
                     payload = stripped[len("data:") :].strip()
-                    if payload == "[DONE]":
+                    if payload == self._profile.done_sentinel:
+                        done_received = True
                         break
                     chunk = self._parse_chunk(payload)
                     if chunk is None:
-                        continue
+                        raise ICBCStreamIntegrityError(
+                            chunk_index=chunk_index,
+                            raw_payload=json.dumps(payload, ensure_ascii=False),
+                        )
                     if "error" in chunk:
                         emsg = str(chunk["error"])
                         if self._is_token_expired(emsg):
                             raise ICBCTokenExpiredError(emsg)
                         raise ICBCRequestError(emsg)
                     yield chunk
+                if not done_received and self._profile.completion_signal == "done":
+                    raise ICBCStreamIntegrityError(
+                        chunk_index=chunk_index + 1,
+                        raw_payload=json.dumps("<EOF>", ensure_ascii=False),
+                    )
+                yield {
+                    "__evo_stream_metadata__": {
+                        "done_received": done_received,
+                        "completion_signal": "done" if done_received else "eof",
+                        "chunk_count": chunk_index - int(done_received),
+                        "invalid_chunk_count": 0,
+                        "transport_complete": done_received
+                        or self._profile.completion_signal in {"eof", "either"},
+                    }
+                }
 
     @staticmethod
     def _parse_chunk(payload: str) -> dict[str, Any] | None:
@@ -210,19 +332,31 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         return data if isinstance(data, dict) else None
 
     @staticmethod
-    def _extract_content(chunk: dict[str, Any]) -> str:
-        """从 chunk dict 取 ``choices[0].delta.content``，类型安全。"""
-        choices = chunk.get("choices")
-        if not isinstance(choices, list) or not choices:
-            return ""
-        first = choices[0]
-        if not isinstance(first, dict):
-            return ""
-        delta = first.get("delta")
-        if not isinstance(delta, dict):
-            return ""
-        content = delta.get("content")
-        return content if isinstance(content, str) else ""
+    def _extract_content(
+        chunk: dict[str, Any],
+        paths: tuple[str, ...] = ("choices.0.delta.content",),
+    ) -> str:
+        """Read content only from the selected deployment Profile paths."""
+        for path in paths:
+            value = _value_at_path(chunk, path)
+            if isinstance(value, str):
+                return value
+        return ""
+
+    @staticmethod
+    def _extract_finish_reason(
+        chunk: dict[str, Any],
+        paths: tuple[str, ...] = ("choices.0.finish_reason",),
+        *,
+        enabled: bool = True,
+    ) -> str | None:
+        if not enabled:
+            return None
+        for path in paths:
+            value = _value_at_path(chunk, path)
+            if isinstance(value, str):
+                return value
+        return None
 
     def _build_headers(self) -> dict[str, str]:
         """ICBC 鉴权 header：``token`` + ``userId``（非 Authorization Bearer）。"""
@@ -233,13 +367,19 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         }
 
     def _build_body(
-        self, messages: str | list[BaseMessage] | list[dict[str, Any]]
+        self,
+        messages: str | list[BaseMessage] | list[dict[str, Any]],
+        *,
+        max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
         """请求体：``messages`` 数组 + ``stream:"true"``（字符串，按 curl 原样）。"""
-        return {
+        body: dict[str, Any] = {
             "messages": self._messages_to_openai_format(messages),
-            "stream": "true",
+            "stream": self._profile.stream_value,
         }
+        if self._profile.max_output_tokens_field and max_output_tokens is not None:
+            body[self._profile.max_output_tokens_field] = max_output_tokens
+        return body
 
     def _messages_to_openai_format(
         self, messages: str | list[BaseMessage] | list[dict[str, Any]]
@@ -297,3 +437,21 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         return any(
             k in low for k in ("token expired", "unauthorized", "401", "re-login", "relogin")
         )
+
+
+def _value_at_path(value: Any, path: str) -> Any:
+    """Resolve one declarative dotted dict/list path without guessing alternatives."""
+    current = value
+    for part in path.split("."):
+        if isinstance(current, dict):
+            if part not in current:
+                return None
+            current = current[part]
+        elif isinstance(current, list) and part.isdigit():
+            index = int(part)
+            if index >= len(current):
+                return None
+            current = current[index]
+        else:
+            return None
+    return current

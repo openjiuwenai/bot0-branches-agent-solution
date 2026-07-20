@@ -126,6 +126,10 @@ export ADAPTER_MATCH_TAGS='["TAG_LLM_CALL_START","TAG_LLM_CALL_END"]'
 | `host` | str | `0.0.0.0`                                    | HTTP 监听地址 |
 | `port` | int | `8900`                                       | HTTP 监听端口 |
 
+每个 `agents[]` 条目可配置 `managed_docs[]`。其中 `kind`、`path` 为必填项，
+`apply` 默认为 `file_only`；`apply: restart` 时还需提供 `restart_cmd` 与健康检查配置。
+`max_content_bytes` 默认 `262144`，按 UTF-8 编码后的字节数限制单次文档内容，超限请求返回 400。
+
 **路径解析规则：**
 
 - `log_dir`、`output_dir`、`offset_file` 支持绝对路径或相对路径
@@ -251,6 +255,17 @@ INFO:     Uvicorn running on http://0.0.0.0:8900
   "uptime_seconds": 3600.5
 }
 ```
+
+### Managed-doc API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/managed-docs` | 读取、更新或恢复已注册文档 |
+| `GET` | `/api/v1/managed-docs/tasks/{task_id}` | 轮询异步 apply/restart 任务 |
+| `GET` | `/api/v1/agents/{agent_name}/managed-docs` | 列出 Agent 已注册文档及内容上限、apply 能力 |
+
+文档列表接口用于 EvoAgent 在提交优化前发现 `doc_kind`、当前 revision、
+`max_content_bytes` 和预计最大任务时长；未知 Agent 返回 404。
 
 ## 开发与测试
 

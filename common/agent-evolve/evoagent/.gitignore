@@ -9,9 +9,15 @@ build/
 .venv/
 venv/
 
-# IDE
+# IDE and local agent tooling
 .idea/
 .vscode/
+/.agents/
+/.claude/
+/.codex/
+/.cursor/
+/.trae/
+/.codegraph/
 
 # Env
 .env
@@ -33,21 +39,30 @@ workspace/
 # OS
 .DS_Store
 
-# docs/ — 只跟踪 rules/、develop/、api/ 和 ROADMAP.md
-docs/*
-!docs/rules/
-!docs/develop/
-!docs/api/
-!docs/ROADMAP.md
+# agent-store 迁移时明确排除的内部资料
+/docs/adr/
+/docs/develop/
+/docs/handoff/
+/docs/rules/
+/docs/spec/
+/docs/superpowers/
+/docs/ROADMAP.md
+/docs/api/evaluate-client.md
+/docs/api/evaluate.md
+/docs/api/*测试*
+/docs/api/evaluator-*
+/evaluator_golden_dataset.csv
+/simplified_output.json
+
+# 旧仓目录；场景统一放在 examples/scenarios/
+/scenarios/
+/scripts/
 
 # 构建期预下载的依赖 wheel（build 时生成，勿提交）
 vendor/
 
 # 离线交付文件夹（分卷 + merge 脚本，打包产物不入仓）
 deployment/evoagent-offline-*/
-
-# CodeGraph 索引（本地代码图谱产物，勿提交）
-.codegraph/
 
 # 合并冲突残留
 *.orig

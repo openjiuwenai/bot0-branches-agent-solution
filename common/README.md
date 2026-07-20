@@ -1,6 +1,6 @@
 # common 目录说明
 
-`common` 存放三个相互独立的扩展工程和配套示例。三个工程分别构建，不存在 Maven parent 或 reactor 聚合关系。
+`common` 存放相互独立的扩展工程、Agent 自进化模块和配套示例。各工程分别构建；Java 工程之间不存在统一的 Maven reactor 聚合关系。
 
 ## 目录结构
 
@@ -14,6 +14,9 @@ common
 |       `-- agent-service-adapters-versatile
 |-- agents
 |   `-- pev
+|-- agent-evolve
+|   |-- evoagent
+|   `-- evoagent-adapter
 `-- example
     |-- agentcore-ext-deepagent-remote-a2a-demo
     |-- agentcore-ext-remote-a2a-tool-demo
@@ -25,6 +28,8 @@ common
 - `agent-runtime-ext-java`：运行时扩展模块的 Maven 父工程。
 - `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，当前包含 `react-rails`。
 - `agents`：具体 Agent 实现工程，当前包含 PEV Agent。
+- `agent-evolve/evoagent`：Skill/managed-doc 自进化服务，Python 3.12 + uv 独立工程。
+- `agent-evolve/evoagent-adapter`：日志、Skill 与 managed-doc sidecar，Python 3.12 + uv 独立工程。
 - `agent-service-adapters-agentcore-ext`：AgentCore adapter 的增强模块，复用 runtime 的远端 A2A card 注册发现结果，在 AgentCore handler 执行链路前补充远端工具注入。
 - `agent-service-adapters-versatile`：Versatile adapter，把查询请求适配到远端 HTTP/SSE 工作流服务。
 
@@ -65,6 +70,13 @@ mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
 ```
 
 `common` 和 example 都不跳过测试。
+
+Agent 自进化模块分别验证：
+
+```bash
+cd common/agent-evolve/evoagent && uv sync --all-extras && uv run pytest tests/
+cd common/agent-evolve/evoagent-adapter && uv sync && uv run pytest tests/
+```
 
 ### 非正式Release版本
 

@@ -104,7 +104,7 @@ def test_log_event_type_constant() -> None:
 
 
 def test_pipeline_phase_values() -> None:
-    """PipelinePhase 包含所有 14 个阶段。"""
+    """PipelinePhase 包含训练、取消和回滚阶段。"""
     from evo_agent.api.events import PipelinePhase
 
     assert PipelinePhase.ROLLOUT == "rollout"
@@ -121,7 +121,12 @@ def test_pipeline_phase_values() -> None:
     assert PipelinePhase.TRAIN_END == "train_end"
     assert PipelinePhase.SKILL_SYNC == "skill_sync"
     assert PipelinePhase.ROLLOUT_DONE == "rollout_done"
-    assert len(PipelinePhase) == 14
+    assert PipelinePhase.CANCEL_REQUESTED == "cancel_requested"
+    assert PipelinePhase.CANCEL_WAITING_INFLIGHT == "cancel_waiting_inflight"
+    assert PipelinePhase.ROLLBACK_STARTED == "rollback_started"
+    assert PipelinePhase.ROLLBACK_COMPLETED == "rollback_completed"
+    assert PipelinePhase.ROLLBACK_FAILED == "rollback_failed"
+    assert len(PipelinePhase) == 19
 
 
 def test_sse_event_accepts_log_event() -> None:

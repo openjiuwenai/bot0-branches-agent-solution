@@ -75,7 +75,10 @@ class _FakeLLMEvaluator:
         from openjiuwen.agent_evolving.dataset import EvaluatedCase
 
         result = self._result()
-        evaluated = EvaluatedCase(case=case, answer={"evaluation_source": "conversation_trajectory"})
+        evaluated = EvaluatedCase(
+            case=case,
+            answer={"evaluation_source": "conversation_trajectory"},
+        )
         evaluated.score = result.score
         evaluated.per_metric = result.per_metric
         evaluated.reason = ""
@@ -108,9 +111,7 @@ class TestSuccessResponse:
         assert data["is_pass"] is True
         assert data["attributed_skill"] == ""
 
-    async def test_filtered_result_with_matches(
-        self, client: AsyncClient, tmp_path: Path
-    ) -> None:
+    async def test_filtered_result_with_matches(self, client: AsyncClient, tmp_path: Path) -> None:
         """轨迹含失败 tool 消息 → ToolFailureFilter 命中 → status=filtered。"""
         traj_path = _trajectory_json(
             tmp_path,
@@ -222,9 +223,7 @@ class TestValidationError:
 
 
 class TestEvaluationFailure:
-    async def test_evaluation_error_returns_500(
-        self, client: AsyncClient, tmp_path: Path
-    ) -> None:
+    async def test_evaluation_error_returns_500(self, client: AsyncClient, tmp_path: Path) -> None:
         body = _request_body(_trajectory_json(tmp_path))
         with _patch_llm(EvaluationError("LLM down")):
             resp = await client.post("/evaluate", json=body)

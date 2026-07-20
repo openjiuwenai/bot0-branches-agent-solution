@@ -2,7 +2,7 @@
 
 场景文件夹结构::
 
-    scenarios/<name>/
+    examples/scenarios/<name>/
     ├── scenario.yaml       # optimizer_class + hyperparams
     ├── optimizer.py        # SkillDocumentOptimizer 子类
     ├── prompts/            # 可选 prompt 覆盖
@@ -122,7 +122,7 @@ class ScenarioRegistry:
         Parameters
         ----------
         scenario_name:
-            场景名称，对应 ``scenarios/<name>/scenario.yaml``。
+            场景名称，对应 ``examples/scenarios/<name>/scenario.yaml``。
 
         Raises
         ------

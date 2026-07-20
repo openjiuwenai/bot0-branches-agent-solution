@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from evo_agent.llm.invocation import (
+    LLMInvocation,
+    LLMInvocationContext,
+    LLMProviderCapabilities,
+)
 from evo_agent.optimizer.llm_resilience import (
     LLMInvokePolicy,
     invoke_text_with_retry,
@@ -62,6 +67,16 @@ def test_build_analyst_prompt_slim_omits_step_buffer_and_meta() -> None:
 # ── retry 机制使用 retry_prompt ──
 
 
+def _invocation(provider: MagicMock) -> LLMInvocation:
+    return LLMInvocation(
+        provider,
+        capabilities=LLMProviderCapabilities(32768, False, True, True, True, "either"),
+        parallelism=1,
+        safety_margin_tokens=512,
+        chars_per_token=2.0,
+    )
+
+
 @pytest.mark.asyncio
 async def test_invoke_uses_retry_prompt_on_timeout() -> None:
     """首次 attempt 超时后，retry 使用精简 retry_prompt。"""
@@ -71,19 +86,20 @@ async def test_invoke_uses_retry_prompt_on_timeout() -> None:
 
     call_args: list[str] = []
 
-    async def _invoke(**kwargs: object) -> MagicMock:
-        messages = kwargs["messages"]  # type: ignore[index]
-        call_args.append(messages[0]["content"])  # type: ignore[index]
+    async def _invoke(messages: list[object], **kwargs: object) -> MagicMock:
+        del kwargs
+        call_args.append(str(getattr(messages[0], "content")))
         if len(call_args) == 1:
             raise TimeoutError("simulated timeout")
         return MagicMock(content='{"edits":[]}')
 
     llm.invoke = _invoke
+    invocation = _invocation(llm)
     policy = LLMInvokePolicy(
         attempt_timeout_secs=90, total_budget_secs=300, max_attempts=2, backoff_base_secs=0
     )
     raw = await invoke_text_with_retry(
-        llm, "model", full_prompt, policy=policy, retry_prompt=slim_prompt
+        invocation, "model", full_prompt, policy=policy, retry_prompt=slim_prompt
     )
     assert raw == '{"edits":[]}'
     assert len(call_args) == 2
@@ -92,24 +108,61 @@ async def test_invoke_uses_retry_prompt_on_timeout() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invoke_without_retry_prompt_raises_on_timeout() -> None:
-    """未提供 retry_prompt 时，超时直接抛错（不重试）—— 印证 B4 需传入 retry_prompt。"""
+async def test_invoke_without_retry_prompt_retries_same_budgeted_prompt() -> None:
+    """没有压缩 prompt 时仍按统一 policy 重试，但不绕过 total budget。"""
     llm = MagicMock()
     full_prompt = "x" * 5000
     call_count = 0
 
-    async def _invoke(**kwargs: object) -> MagicMock:
+    async def _invoke(messages: list[object], **kwargs: object) -> MagicMock:
+        del messages, kwargs
         nonlocal call_count
         call_count += 1
         raise TimeoutError("timeout")
 
     llm.invoke = _invoke
+    invocation = _invocation(llm)
     policy = LLMInvokePolicy(
         attempt_timeout_secs=90, total_budget_secs=300, max_attempts=2, backoff_base_secs=0
     )
     with pytest.raises(Exception):  # noqa: PT011 — build_error 抛业务异常
-        await invoke_text_with_retry(llm, "model", full_prompt, policy=policy)
-    assert call_count == 1  # 未重试
+        await invoke_text_with_retry(invocation, "model", full_prompt, policy=policy)
+    assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_optimizer_helper_forwards_structured_output_contract() -> None:
+    """Optimizer helper forwards validator, classifier, schema and invocation context."""
+    llm = MagicMock()
+    llm.invoke = AsyncMock(
+        side_effect=[
+            MagicMock(content='{"edits":'),
+            MagicMock(content='{"edits": []}'),
+        ]
+    )
+    invocation = _invocation(llm)
+    policy = LLMInvokePolicy(
+        attempt_timeout_secs=90,
+        total_budget_secs=300,
+        max_attempts=2,
+        backoff_base_secs=0,
+    )
+    classifications: list[str] = []
+
+    raw = await invoke_text_with_retry(
+        invocation,
+        "model",
+        "full",
+        policy=policy,
+        retry_prompt="return edits JSON",
+        result_validator=lambda text: text == '{"edits": []}',
+        result_error_classifier=lambda text: classifications.append(text) or "syntax",
+        output_schema_name="merge_final",
+        context=LLMInvocationContext(run_id="run-1", operator_id="op-1"),
+    )
+
+    assert raw == '{"edits": []}'
+    assert classifications == ['{"edits":']
 
 
 @pytest.mark.asyncio
@@ -128,13 +181,18 @@ async def test_select_passes_slim_retry_prompt_without_meta() -> None:
     edits = [Edit(op="replace", content=f"c{i}", target="SKILL.md") for i in range(3)]
     captured: dict[str, str] = {}
 
-    async def _fake_invoke(llm: object, model: object, prompt: str, **kw: object) -> str:
+    async def _fake_invoke(llm: object, model: object, prompt: str, **kw: object) -> object:
         captured["prompt"] = prompt
         captured["retry_prompt"] = str(kw.get("retry_prompt") or "")
-        return '{"selected_indices": [0]}'
+        return MagicMock(
+            text='{"selected_indices": [0]}',
+            invocation_id="inv-test",
+            metadata={},
+            finish_reason=None,
+        )
 
     with patch(
-        "evo_agent.optimizer.skill_document.skill_document_optimizer.invoke_text_with_retry",
+        "evo_agent.optimizer.skill_document.skill_document_optimizer.invoke_with_retry",
         _fake_invoke,
     ):
         selected = await opt._select(edits=edits, budget=1, skill_content="SKILL CONTENT")  # type: ignore[attr-defined]

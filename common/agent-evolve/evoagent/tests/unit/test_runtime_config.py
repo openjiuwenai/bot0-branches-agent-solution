@@ -138,6 +138,88 @@ optimizer_class: optimizer.SimpleOpt
     assert resolved.adapter_url == "http://config-adapter:9090"
 
 
+def test_reliability_and_llm_budget_are_typed_runtime_contracts(
+    tmp_path: Path, scenarios_dir: Path
+) -> None:
+    resolved = _resolver(tmp_path, scenarios_dir).resolve(
+        OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="agent",
+            hyperparams={
+                "validation_max_case_attempts": 3,
+                "validation_min_success_ratio": 0.9,
+                "validation_require_same_case_set": False,
+            },
+        )
+    )
+
+    assert resolved.validation_max_case_attempts == 3
+    assert resolved.validation_min_success_ratio == 0.9
+    assert resolved.validation_require_same_case_set is False
+    assert resolved.llm_context_window_tokens == 32768
+    assert resolved.llm_output_reserve_tokens == 2048
+    assert resolved.llm_safety_margin_tokens == 512
+    assert resolved.llm_chars_per_token == 2.0
+
+
+def test_llm_budget_uses_request_then_scenario_then_environment(tmp_path: Path) -> None:
+    """LLM 预算字段遵循统一三层优先级，且不会泄漏到 extra_hyperparams。"""
+    scenarios = tmp_path / "scenarios"
+    scenario_dir = scenarios / "llm_budget"
+    scenario_dir.mkdir(parents=True)
+    (scenario_dir / "scenario.yaml").write_text(
+        """\
+schema_version: "1.0"
+optimizer_class: optimizer.SimpleOpt
+hyperparams:
+  llm_context_window_tokens: 65536
+  llm_output_reserve_tokens: 4096
+  llm_safety_margin_tokens: 256
+  llm_chars_per_token: 1.5
+  llm_stage_output_reserve_tokens:
+    evaluator: 1600
+""",
+        encoding="utf-8",
+    )
+    resolver = OptimizationConfigResolver(
+        _config(tmp_path),
+        registry=ScenarioRegistry(scenarios_dir=scenarios),
+    )
+
+    scenario_resolved = resolver.resolve(OptimizeRequest(scenario="llm_budget", agent_name="agent"))
+    request_resolved = resolver.resolve(
+        OptimizeRequest(
+            scenario="llm_budget",
+            agent_name="agent",
+            hyperparams={
+                "llm_context_window_tokens": 131072,
+                "llm_output_reserve_tokens": 8192,
+                "llm_safety_margin_tokens": 1024,
+                "llm_chars_per_token": 3.0,
+                "llm_stage_output_reserve_tokens": {"reflect": 5000},
+            },
+        )
+    )
+
+    assert scenario_resolved.llm_context_window_tokens == 65536
+    assert scenario_resolved.llm_stage_output_reserve_tokens == {"evaluator": 1600}
+    assert request_resolved.llm_context_window_tokens == 131072
+    assert request_resolved.llm_output_reserve_tokens == 8192
+    assert request_resolved.llm_safety_margin_tokens == 1024
+    assert request_resolved.llm_chars_per_token == 3.0
+    assert request_resolved.llm_stage_output_reserve_tokens == {"reflect": 5000}
+    assert (
+        not {
+            "llm_context_window_tokens",
+            "llm_output_reserve_tokens",
+            "llm_safety_margin_tokens",
+            "llm_chars_per_token",
+            "llm_stage_output_reserve_tokens",
+        }
+        & request_resolved.extra_hyperparams.keys()
+    )
+
+
 def test_invalid_explicit_value_fails_at_resolve(tmp_path: Path, scenarios_dir: Path) -> None:
     request = OptimizeRequest(
         scenario="edp_agent",
@@ -146,6 +228,48 @@ def test_invalid_explicit_value_fails_at_resolve(tmp_path: Path, scenarios_dir: 
     )
 
     with pytest.raises(ValueError, match="num_parallel"):
+        _resolver(tmp_path, scenarios_dir).resolve(request)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("llm_context_window_tokens", 0),
+        ("llm_output_reserve_tokens", 0),
+        ("llm_safety_margin_tokens", -1),
+        ("llm_chars_per_token", 0),
+        ("llm_stage_output_reserve_tokens", {"evaluator": 0}),
+    ],
+)
+def test_invalid_llm_budget_boundary_fails_at_resolve(
+    tmp_path: Path,
+    scenarios_dir: Path,
+    name: str,
+    value: object,
+) -> None:
+    request = OptimizeRequest(
+        scenario="edp_agent",
+        agent_name="agent",
+        hyperparams={name: value},
+    )
+
+    with pytest.raises(ValueError, match=name):
+        _resolver(tmp_path, scenarios_dir).resolve(request)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_llm_budget_fails_at_resolve(
+    tmp_path: Path,
+    scenarios_dir: Path,
+    value: float,
+) -> None:
+    request = OptimizeRequest(
+        scenario="edp_agent",
+        agent_name="agent",
+        hyperparams={"llm_chars_per_token": value},
+    )
+
+    with pytest.raises(ValueError, match="llm_chars_per_token"):
         _resolver(tmp_path, scenarios_dir).resolve(request)
 
 
@@ -213,3 +337,68 @@ def test_optimizer_runtime_dependencies_contains_preserve_frontmatter(
     deps = resolved.optimizer_runtime_dependencies()
     assert "preserve_frontmatter" in deps
     assert deps["preserve_frontmatter"] is True
+
+
+# ── managed-doc: F2 透传 managed_doc_kind ──
+
+
+def test_resolve_passes_managed_doc_kind(tmp_path: Path, scenarios_dir: Path) -> None:
+    """managed_doc_kind 经 resolve 抵达 ResolvedOptimizationConfig（runner builder 直接消费）。"""
+    resolved = _resolver(tmp_path, scenarios_dir).resolve(
+        OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="agent",
+            managed_doc_kind="agent_rule",
+        )
+    )
+    assert resolved.managed_doc_kind == "agent_rule"
+
+
+def test_resolve_passes_managed_doc_expected_revision(tmp_path: Path, scenarios_dir: Path) -> None:
+    resolved = _resolver(tmp_path, scenarios_dir).resolve(
+        OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="agent",
+            managed_doc_kind="agent_rule",
+            managed_doc_expected_revision="rev-studio-baseline",
+        )
+    )
+
+    assert resolved.managed_doc_expected_revision == "rev-studio-baseline"
+
+
+def test_resolve_managed_doc_kind_default_none(tmp_path: Path, scenarios_dir: Path) -> None:
+    """不传 managed_doc_kind 时 resolved.managed_doc_kind 为 None（Skill 路径）。"""
+    resolved = _resolver(tmp_path, scenarios_dir).resolve(
+        OptimizeRequest(scenario="edp_agent", agent_name="agent", skills=["skill_a"])
+    )
+    assert resolved.managed_doc_kind is None
+
+
+def test_resolve_strips_managed_doc_kind(tmp_path: Path, scenarios_dir: Path) -> None:
+    """resolve 透传时 managed_doc_kind 已由 OptimizeRequest 构造时 strip。"""
+    resolved = _resolver(tmp_path, scenarios_dir).resolve(
+        OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="agent",
+            managed_doc_kind="  agent_rule  ",
+        )
+    )
+    assert resolved.managed_doc_kind == "agent_rule"
+
+
+def test_optimizer_runtime_dependencies_excludes_managed_doc_kind(
+    tmp_path: Path, scenarios_dir: Path
+) -> None:
+    """managed_doc_kind 不属于 SkillDocumentOptimizer 构造参数，
+    不进入 optimizer_runtime_dependencies()——operator 在 optimizer dependencies
+    构造前已创建，该字段供 runner builder 分支用。"""
+    resolved = _resolver(tmp_path, scenarios_dir).resolve(
+        OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="agent",
+            managed_doc_kind="agent_rule",
+        )
+    )
+    deps = resolved.optimizer_runtime_dependencies()
+    assert "managed_doc_kind" not in deps
