@@ -21,9 +21,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * the runtime consumer assembles.
  *
  * <p>Component scan covers {@code com.openjiuwen.rdc..} so
- * {@link com.openjiuwen.rdc.registry.runtime.RegistrySchedulingConfig}
+ * {@link com.openjiuwen.rdc.config.RegistrySchedulingConfig}
  * (which anchors {@code @EnableScheduling} for the probe scheduler) and
- * {@link com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig}
+ * {@link com.openjiuwen.rdc.config.RegistryObservabilityConfig}
  * are picked up automatically. The {@code @RestController} /
  * {@code @Scheduled} / {@code @Service} / {@code @Configuration} annotations
  * are visible at compile time because {@code spring-boot-starter-web} is at

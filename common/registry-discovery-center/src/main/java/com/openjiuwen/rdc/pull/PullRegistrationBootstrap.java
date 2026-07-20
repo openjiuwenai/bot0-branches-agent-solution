@@ -4,8 +4,8 @@
 
 package com.openjiuwen.rdc.pull;
 
-import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.config.RegistryOpContext;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.FrameworkType;

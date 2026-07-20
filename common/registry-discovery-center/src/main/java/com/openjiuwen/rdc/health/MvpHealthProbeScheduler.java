@@ -4,8 +4,8 @@
 
 package com.openjiuwen.rdc.health;
 
-import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.config.RegistryOpContext;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.ProbeTarget;
 import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
@@ -57,7 +57,7 @@ import java.util.UUID;
  *       {@code https://host/} does not produce {@code https://host//health}.</li>
  *   <li><b>Thread isolation</b> — probe execution runs on a dedicated
  *       {@code TaskScheduler} thread pool sized for the probe workload
- *       (configured in {@link com.openjiuwen.rdc.registry.runtime.RegistrySchedulingConfig}),
+ *       (configured in {@link com.openjiuwen.rdc.config.RegistrySchedulingConfig}),
  *       so a hung probe cannot stall the default {@code @Scheduled}
  *       single-thread executor that other Spring beans rely on.</li>
  * </ul>

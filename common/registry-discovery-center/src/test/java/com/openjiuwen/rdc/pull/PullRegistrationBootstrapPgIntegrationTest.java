@@ -6,7 +6,7 @@ package com.openjiuwen.rdc.pull;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.model.FrameworkType;
 

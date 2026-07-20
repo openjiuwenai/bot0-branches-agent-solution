@@ -16,6 +16,7 @@ import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.RouteResolution;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
