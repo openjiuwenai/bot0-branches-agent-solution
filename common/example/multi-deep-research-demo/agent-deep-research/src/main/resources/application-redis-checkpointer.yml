@@ -2,14 +2,13 @@
 #
 # Usage on server (fat jar):
 #   REDIS_HOST=<host> REDIS_PORT=<port> REDIS_PASSWORD=<plaintext-or-blank> \
-#     java -jar agent-search-runtime-*.jar \
+#     java -jar agent-deep-research-*.jar \
 #       --spring.profiles.active=redis-checkpointer
 #
 # Notes:
-# - Mirrors agent-deep-research-runtime's profile on purpose: same env vars so both runtimes
-#   share ONE Redis instance under the same host/port/db/password.
 # - Default CredentialDecryptor is passthrough, so REDIS_PASSWORD can be plaintext for testing.
 # - Delete this profile once redis is no longer needed; base application.yml keeps in_memory as default.
+# - agent-search ships a mirror profile with the same env vars, so both runtimes share one Redis instance.
 openjiuwen:
   service:
     middleware:
