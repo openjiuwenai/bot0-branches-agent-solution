@@ -219,7 +219,7 @@ class AgentRdcRegistryJdbcPurityTest {
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.pull..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.config..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.controller..")
-                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.pull..")
+                .and().resideOutsideOfPackage("com.openjiuwen.rdc.pull..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")
                 .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
                 .because("Jackson is licensed only inside service (RouteHandleCodec opaque "
