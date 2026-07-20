@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -60,7 +59,7 @@ final class AgentScopeEventMapper {
                 return Optional.of(interrupt("message", pauseMessage(result.getResult()), List.of()));
             }
             if (reason == GenerateReason.INTERRUPTED) {
-                throw new CancellationException("AgentScope execution interrupted");
+                throw new IllegalStateException("Unsupported AgentScope generate reason: INTERRUPTED");
             }
             if (reason == GenerateReason.TOOL_CALLS) {
                 throw new IllegalStateException(
@@ -111,7 +110,8 @@ final class AgentScopeEventMapper {
                         ? text
                         : "Agent execution paused",
                     List.of()));
-            case INTERRUPTED -> throw new CancellationException("AgentScope execution interrupted");
+            case INTERRUPTED -> throw new IllegalStateException(
+                "Unsupported AgentScope generate reason: INTERRUPTED");
             case MODEL_STOP, STRUCTURED_OUTPUT, MAX_ITERATIONS, ALL_TOOLS_DENIED -> {
                 // Normal terminal results.
             }
@@ -168,7 +168,6 @@ final class AgentScopeEventMapper {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("type", "tool_call");
             item.put("name", tool.getName());
-            item.put("arguments", tool.getInput());
             items.add(item);
         }
         Map<String, Object> payload = new LinkedHashMap<>();

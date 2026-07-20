@@ -222,11 +222,7 @@ $response1 | ConvertTo-Json -Depth 100
                 "items": [
                   {
                     "type": "tool_call",
-                    "name": "execute_transfer",
-                    "arguments": {
-                      "recipient": "Li Ming",
-                      "amount": 5
-                    }
+                    "name": "execute_transfer"
                   }
                 ]
               },
@@ -250,7 +246,7 @@ $response1 | ConvertTo-Json -Depth 100
 - `interaction.index` 是 `0`，外层结构与九问 Core interaction 协议一致。
 - `interaction.payload.kind` 是 `confirmation`。
 - `interaction.payload.items[0].name` 是 `execute_transfer`。
-- `interaction.payload.items[0]` 只展示待确认工具的名称和参数，不暴露 AgentScope 内部 tool-call ID。
+- `interaction.payload.items[0]` 只展示待确认工具的名称，不输出工具参数，也不暴露 AgentScope 内部 tool-call ID。
 - 返回内容中没有 AgentScope Java 类名或序列化对象。
 
 在 PowerShell 中提取第二轮所需字段：

@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CancellationException;
 
 class AgentScopeEventMapperTest {
     @Test
@@ -172,7 +171,7 @@ class AgentScopeEventMapperTest {
     }
 
     @Test
-    void treatsStreamingInterruptedGenerateReasonAsCancellation() {
+    void rejectsStreamingInterruptedGenerateReasonAsUnsupported() {
         Msg interrupted = Msg.builder()
             .role(MsgRole.ASSISTANT)
             .generateReason(GenerateReason.INTERRUPTED)
@@ -182,7 +181,8 @@ class AgentScopeEventMapperTest {
             new AgentResultEvent(interrupted),
             AgentScopeEventMapperTest::stateWith,
             new AgentScopeEventMapper.StreamState()))
-            .isInstanceOf(CancellationException.class);
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("INTERRUPTED");
     }
 
     @Test
@@ -217,11 +217,11 @@ class AgentScopeEventMapperTest {
         Map<String, Object> interaction = (Map<String, Object>) mapped.get("_interrupt");
         assertThat(interaction.get("payload")).isEqualTo(Map.of(
             "kind", "confirmation",
-            "items", List.of(Map.of("type", "tool_call", "name", "transfer", "arguments", Map.of("amount", 5)))));
+            "items", List.of(Map.of("type", "tool_call", "name", "transfer"))));
     }
 
     @Test
-    void treatsInterruptedGenerateReasonAsCancellation() {
+    void rejectsInterruptedGenerateReasonAsUnsupported() {
         Msg interrupted = Msg.builder()
             .role(MsgRole.ASSISTANT)
             .textContent("cancelled")
@@ -229,7 +229,8 @@ class AgentScopeEventMapperTest {
             .build();
 
         assertThatThrownBy(() -> new AgentScopeEventMapper().mapResult(interrupted, stateWith()))
-            .isInstanceOf(CancellationException.class);
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("INTERRUPTED");
     }
 
     @Test
@@ -262,8 +263,8 @@ class AgentScopeEventMapperTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
         assertThat(items).singleElement().satisfies(item -> assertThat(item)
-            .containsKeys("name", "arguments")
-            .doesNotContainKey("id"));
+            .containsKeys("type", "name")
+            .doesNotContainKeys("id", "arguments"));
     }
 
     private static ToolUseBlock tool(String id, String name, ToolCallState state) {
