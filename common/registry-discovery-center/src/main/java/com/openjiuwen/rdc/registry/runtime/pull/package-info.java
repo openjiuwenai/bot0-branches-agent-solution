@@ -13,7 +13,7 @@
  * {@link com.openjiuwen.rdc.model.AgentRegistryEntry} from the card
  * + the operator-pinned {@link com.openjiuwen.rdc.model.FrameworkType}
  * + tenantId / routeKey / region from config, and upserts it via
- * {@link com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository}.
+ * {@link com.openjiuwen.rdc.repository.AgentRegistryRepository}.
  * Single runtime failure is logged + skipped; startup never blocks.
  *
  * <p>Bootstrap-only — no re-pull, no scheduled refresh. The

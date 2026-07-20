@@ -7,7 +7,7 @@ package com.openjiuwen.rdc.registry.runtime.health;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;

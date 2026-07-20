@@ -9,7 +9,7 @@
  * <p>{@link com.openjiuwen.rdc.registry.runtime.health.MvpHealthProbeScheduler}
  * runs a {@code @Scheduled} sweep every 5 seconds (configurable via
  * {@code agent-bus.registry.mvp.probe-interval-ms}), calling
- * {@link com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository#scanDueForProbe}
+ * {@link com.openjiuwen.rdc.repository.AgentRegistryRepository#scanDueForProbe}
  * to find {@code ONLINE} entries whose {@code last_heartbeat} is stale,
  * HTTP-probing each target's {@code /health} endpoint via
  * Spring {@code RestClient}. 2xx → reaffirm {@code ONLINE} + refresh

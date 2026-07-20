@@ -4,8 +4,8 @@
 
 package com.openjiuwen.rdc.registry.runtime;
 
-import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
-import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.tenant.ThreadLocalTenantContext;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
 

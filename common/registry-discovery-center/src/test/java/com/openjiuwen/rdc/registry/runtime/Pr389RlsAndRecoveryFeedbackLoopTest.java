@@ -7,8 +7,8 @@ package com.openjiuwen.rdc.registry.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
-import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.ServiceIdCodec;

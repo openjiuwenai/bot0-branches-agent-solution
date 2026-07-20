@@ -6,7 +6,7 @@ package com.openjiuwen.rdc.registry.runtime.api;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
-import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
@@ -504,7 +504,7 @@ public class MvpRegistryController {
      * Apply default values to optional selection-hint fields the push caller
      * may have omitted. The {@code agent_registry_mvp} columns
      * {@code max_concurrency} and {@code weight} are NOT NULL, and
-     * {@link com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository#upsert}
+     * {@link com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository#upsert}
      * binds these columns explicitly (so the DB-level DEFAULT does not apply
      * when the entry carries null). Push callers therefore rely on this
      * boundary to materialise the README-documented defaults (10 / 100).

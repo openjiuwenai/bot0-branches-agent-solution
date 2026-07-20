@@ -21,7 +21,7 @@
  * (ADR-0160 decision 7, ESC-2(b) option B); the runtime consumer
  * (agent-runtime) ships starter-web. JDBC is forbidden in this subpackage —
  * the controller calls
- * {@link com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository}
+ * {@link com.openjiuwen.rdc.repository.AgentRegistryRepository}
  * (port in {@code runtime.persistence.jdbc}) only.
  *
  * <p>Authority: ADR-0160 decisions 4 / 6 / 7 + HD3-001 / 002 / 003.

@@ -6,7 +6,7 @@ package com.openjiuwen.rdc.registry.runtime.pull;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
-import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
