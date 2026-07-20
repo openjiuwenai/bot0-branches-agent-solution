@@ -4,7 +4,6 @@
 
 package com.openjiuwen.rdc.tenant;
 
-
 import java.util.Objects;
 
 /**
