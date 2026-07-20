@@ -210,6 +210,18 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      * is applied to the override so custom BUILD prompts keep the issue-#16 single-source
      * invariant (no literal tool name embedded in prompt text). Pass {@code null} to clear.
      *
+     * <p><b>Toolless consumer usage</b>: agents that do NOT register {@link ReplanTool}
+     * (e.g. a pure-LLM judge sub-agent with no tools attached) should override the default BUILD
+     * prompt to remove the {@code call __replan__} suggestion — otherwise the LLM is instructed to
+     * call a tool the agent cannot dispatch, a silent dangling reference (issue #16 Site 2).
+     * Example:
+     * <pre>{@code
+     *   model.setBuildSystemPrompt(
+     *       "You are in the CONVERGENT EXECUTION phase. Focus on producing a "
+     *       + "single complete answer that meets all success criteria. This "
+     *       + "agent has no tools — do NOT reference any tool calls.");
+     * }</pre>
+     *
      * @param prompt custom BUILD prompt, or null to use the classpath default
      */
     public void setBuildSystemPrompt(String prompt) {
