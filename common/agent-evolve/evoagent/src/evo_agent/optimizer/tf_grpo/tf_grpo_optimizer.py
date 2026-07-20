@@ -77,6 +77,7 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
         cases_per_variant: int | None = None,
         variant_temperature: float = 1.5,
         max_experiences: int = 10,
+        validate_variant_completeness: bool = False,
         rollout_temperature: float | None = None,
         **kwargs: Any,
     ) -> None:
@@ -103,6 +104,7 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             else int(getattr(self, "_batch_size", 8) or 8)
         )
         self._variant_temperature = float(variant_temperature)
+        self._validate_variant_completeness = bool(validate_variant_completeness)
         self._rollout_temperature = rollout_temperature
         self._experience_libs: dict[str, ExperienceLibrary] = {
             op_id: ExperienceLibrary(domain="markdown", max_experiences=max_experiences)
@@ -169,6 +171,16 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             f"\n**Rollout 侧重点提示：** 变体 {variant_index}/{self._group_size} "
             f"——{explore_hint}本变体主改进轴优先围绕「{axis}」。\n"
         )
+        usable = None
+        if self._validate_variant_completeness:
+
+            def _usable(text: str, *, _baseline: str = current_best) -> bool:
+                return is_complete_skill_document(
+                    strip_code_fence(text),
+                    baseline=_baseline,
+                )
+
+            usable = _usable
         raw = await invoke_text_with_retry(
             self._llm,
             self._model,
@@ -176,19 +188,19 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             policy=self._llm_policy,
             temperature=self._variant_temperature,
             max_tokens=self._VARIANT_MAX_TOKENS,
-            is_result_usable=lambda text: is_complete_skill_document(
-                strip_code_fence(text),
-                baseline=current_best,
-            ),
+            is_result_usable=usable,
         )
         variant = restore_frontmatter(
             current_best,
             raw,
             preserve=bool(getattr(self, "_preserve_frontmatter", True)),
         )
-        reason = skill_document_incompleteness_reason(variant, baseline=current_best)
-        if reason is not None:
-            raise ValueError(f"incomplete SKILL.md variant: {reason}")
+        if self._validate_variant_completeness:
+            reason = skill_document_incompleteness_reason(
+                variant, baseline=current_best
+            )
+            if reason is not None:
+                raise ValueError(f"incomplete SKILL.md variant: {reason}")
         return variant
 
     async def _extract_and_update_experiences(
@@ -449,16 +461,17 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
                 logger.info("[tf_grpo] skip empty/identical variant id=%s", variant_id)
                 continue
 
-            incomplete = skill_document_incompleteness_reason(
-                variant, baseline=current_best
-            )
-            if incomplete is not None:
-                logger.warning(
-                    "[tf_grpo] reject incomplete variant id=%s reason=%s",
-                    variant_id,
-                    incomplete,
+            if self._validate_variant_completeness:
+                incomplete = skill_document_incompleteness_reason(
+                    variant, baseline=current_best
                 )
-                continue
+                if incomplete is not None:
+                    logger.warning(
+                        "[tf_grpo] reject incomplete variant id=%s reason=%s",
+                        variant_id,
+                        incomplete,
+                    )
+                    continue
 
             self._sync_skill_to_operator_by_id(operator_id, variant)
             score, n_scored, evaluated = await self._score_variant_on_cases(cases)

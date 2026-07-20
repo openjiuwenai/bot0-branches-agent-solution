@@ -10,7 +10,6 @@ _FENCE_RE = re.compile(
 )
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n?", re.DOTALL)
 _ABRUPT_LINE_RE = re.compile(r"""(?:":\s*|,\s*|[\{\[\(]|:\s*)$""")
-_SECTION_MARKERS = ("输出契约", "<answer>", "## 依赖")
 
 
 def skill_document_incompleteness_reason(
@@ -18,7 +17,12 @@ def skill_document_incompleteness_reason(
     *,
     baseline: str | None = None,
 ) -> str | None:
-    """Return a short reason when SKILL.md looks truncated; otherwise None."""
+    """Return a short reason when text looks truncated; otherwise None.
+
+    Generic truncation heuristics only (empty / unclosed fence / abrupt ending /
+    too short vs baseline). Scenario-specific section markers are intentionally
+    not checked here.
+    """
     raw = (text or "").strip()
     if not raw:
         return "empty"
@@ -26,9 +30,6 @@ def skill_document_incompleteness_reason(
     fence_count = sum(1 for line in raw.splitlines() if line.strip().startswith("```"))
     if fence_count % 2 != 0:
         return "unclosed_code_fence"
-
-    if raw.count("<answer>") != raw.count("</answer>"):
-        return "unclosed_answer_tag"
 
     last = next((line.rstrip() for line in reversed(raw.splitlines()) if line.strip()), "")
     if last and _ABRUPT_LINE_RE.search(last):
@@ -38,9 +39,6 @@ def skill_document_incompleteness_reason(
         base = baseline.strip()
         if len(base) >= 500 and len(raw) < int(0.4 * len(base)):
             return "too_short_vs_baseline"
-        for marker in _SECTION_MARKERS:
-            if marker in base and marker not in raw:
-                return f"missing_section:{marker}"
     return None
 
 

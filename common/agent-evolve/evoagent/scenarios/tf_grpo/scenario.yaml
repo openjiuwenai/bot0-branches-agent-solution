@@ -13,6 +13,8 @@ hyperparams:
   cases_per_variant: 8
   variant_temperature: 1.5
   max_experiences: 20
+  # Generic truncation heuristics only; off by default
+  validate_variant_completeness: false
   # Trainer / rollout
   num_epochs: 3
   batch_size: 4

@@ -60,21 +60,34 @@ def test_reject_truncated_skill_with_unclosed_fence() -> None:
     assert not is_complete_skill_document(truncated)
 
 
-def test_reject_missing_output_contract_vs_baseline() -> None:
+def test_reject_abrupt_line_ending() -> None:
+    truncated = '# Skill\n\n{"a": 1,'
+    assert skill_document_incompleteness_reason(truncated) == "abrupt_line_ending"
+
+
+def test_reject_too_short_vs_baseline() -> None:
+    baseline = "# " + ("x" * 600)
+    incomplete = "# short rewrite\n"
+    assert (
+        skill_document_incompleteness_reason(incomplete, baseline=baseline)
+        == "too_short_vs_baseline"
+    )
+
+
+def test_accept_without_scenario_specific_sections() -> None:
+    """Scenario markers (输出契约 / <answer> / ## 依赖) are not required."""
     baseline = (
         "# A\n\n## 输出契约\n\n<body>\n\n```\n<answer>\n{}\n</answer>\n```\n\n## 依赖\n\n- x\n"
     )
-    incomplete = "# A\n\nOnly overview rewritten.\n"
-    assert (
-        skill_document_incompleteness_reason(incomplete, baseline=baseline)
-        == "missing_section:输出契约"
-    )
+    rewritten = "# A\n\nOnly overview rewritten, still a full markdown doc.\n"
+    assert skill_document_incompleteness_reason(rewritten, baseline=baseline) is None
+    assert is_complete_skill_document(rewritten, baseline=baseline)
 
 
 def test_accept_complete_skill_document() -> None:
     complete = (
-        "---\nname: demo\n---\n\n# Skill\n\n## 输出契约\n\n"
+        "---\nname: demo\n---\n\n# Skill\n\n## Section\n\n"
         '```json\n{"a": 1}\n```\n\n'
-        "```\n<answer>\n{}\n</answer>\n```\n\n## 依赖\n\n- script\n"
+        "Body continues with enough content.\n"
     )
     assert is_complete_skill_document(complete, baseline=complete)
