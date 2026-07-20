@@ -111,10 +111,11 @@ rdc:
       allowed-cidrs: []
       # Example when enabled:
       # mtls-enabled: true
-      # key-store-path: /etc/rdc/card-fetch/client.p12
-      # key-store-password: ${CARD_FETCH_KEYSTORE_PASSWORD}
-      # trust-store-path: /etc/rdc/card-fetch/trust.p12
-      # trust-store-password: ${CARD_FETCH_TRUSTSTORE_PASSWORD}
+      # client-tls:
+      #   identity-file: /etc/rdc/card-fetch/client.p12
+      #   identity-password: ${CARD_FETCH_KEYSTORE_PASSWORD}
+      #   trust-anchor-file: /etc/rdc/card-fetch/trust.p12
+      #   trust-anchor-password: ${CARD_FETCH_TRUSTSTORE_PASSWORD}
       # signature-verification-enabled: true
       # trusted-signer-keys:
       #   platform-key-1: |

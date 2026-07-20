@@ -1,6 +1,7 @@
 package com.openjiuwen.rdc.security;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -10,19 +11,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Agent Card fetch security controls (0711 §5.1.3 — mTLS + optional signature verification).
+ * Spring Boot binding for Agent Card fetch hardening (Feat-015 / 0711 §5.1.3).
+ *
+ * <p>Covers optional mTLS material, HTTP deadlines, JWS signer trust, and CIDR
+ * allowlists — not a generic Jersey/REST client configuration.
  */
 @Component
 @ConfigurationProperties(prefix = "rdc.registry.card-fetch")
 public class AgentCardFetchSecurityProperties {
 
     private boolean mtlsEnabled;
-    private String keyStorePath;
-    private String keyStorePassword;
-    private String keyStoreType = "PKCS12";
-    private String trustStorePath;
-    private String trustStorePassword;
-    private String trustStoreType = "PKCS12";
+
+    @NestedConfigurationProperty
+    private final ClientTlsMaterial clientTls = new ClientTlsMaterial();
+
     private Duration connectTimeout = Duration.ofSeconds(5);
     private Duration readTimeout = Duration.ofSeconds(10);
     private boolean signatureVerificationEnabled;
@@ -39,52 +41,8 @@ public class AgentCardFetchSecurityProperties {
         this.mtlsEnabled = mtlsEnabled;
     }
 
-    public String getKeyStorePath() {
-        return keyStorePath;
-    }
-
-    public void setKeyStorePath(String keyStorePath) {
-        this.keyStorePath = keyStorePath;
-    }
-
-    public String getKeyStorePassword() {
-        return keyStorePassword;
-    }
-
-    public void setKeyStorePassword(String keyStorePassword) {
-        this.keyStorePassword = keyStorePassword;
-    }
-
-    public String getKeyStoreType() {
-        return keyStoreType;
-    }
-
-    public void setKeyStoreType(String keyStoreType) {
-        this.keyStoreType = keyStoreType != null ? keyStoreType : "PKCS12";
-    }
-
-    public String getTrustStorePath() {
-        return trustStorePath;
-    }
-
-    public void setTrustStorePath(String trustStorePath) {
-        this.trustStorePath = trustStorePath;
-    }
-
-    public String getTrustStorePassword() {
-        return trustStorePassword;
-    }
-
-    public void setTrustStorePassword(String trustStorePassword) {
-        this.trustStorePassword = trustStorePassword;
-    }
-
-    public String getTrustStoreType() {
-        return trustStoreType;
-    }
-
-    public void setTrustStoreType(String trustStoreType) {
-        this.trustStoreType = trustStoreType != null ? trustStoreType : "PKCS12";
+    public ClientTlsMaterial getClientTls() {
+        return clientTls;
     }
 
     public Duration getConnectTimeout() {
@@ -125,5 +83,68 @@ public class AgentCardFetchSecurityProperties {
 
     public void setAllowedCidrs(List<String> allowedCidrs) {
         this.allowedCidrs = allowedCidrs != null ? allowedCidrs : new ArrayList<>();
+    }
+
+    /**
+     * PKCS#12 (or JKS) locations used only when {@link #isMtlsEnabled()} is true.
+     *
+     * <p>YAML under {@code rdc.registry.card-fetch.client-tls.*}.
+     */
+    public static final class ClientTlsMaterial {
+
+        private String identityFile;
+        private String identityPassword;
+        private String identityType = "PKCS12";
+        private String trustAnchorFile;
+        private String trustAnchorPassword;
+        private String trustAnchorType = "PKCS12";
+
+        public String getIdentityFile() {
+            return identityFile;
+        }
+
+        public void setIdentityFile(String identityFile) {
+            this.identityFile = identityFile;
+        }
+
+        public String getIdentityPassword() {
+            return identityPassword;
+        }
+
+        public void setIdentityPassword(String identityPassword) {
+            this.identityPassword = identityPassword;
+        }
+
+        public String getIdentityType() {
+            return identityType;
+        }
+
+        public void setIdentityType(String identityType) {
+            this.identityType = identityType != null ? identityType : "PKCS12";
+        }
+
+        public String getTrustAnchorFile() {
+            return trustAnchorFile;
+        }
+
+        public void setTrustAnchorFile(String trustAnchorFile) {
+            this.trustAnchorFile = trustAnchorFile;
+        }
+
+        public String getTrustAnchorPassword() {
+            return trustAnchorPassword;
+        }
+
+        public void setTrustAnchorPassword(String trustAnchorPassword) {
+            this.trustAnchorPassword = trustAnchorPassword;
+        }
+
+        public String getTrustAnchorType() {
+            return trustAnchorType;
+        }
+
+        public void setTrustAnchorType(String trustAnchorType) {
+            this.trustAnchorType = trustAnchorType != null ? trustAnchorType : "PKCS12";
+        }
     }
 }

@@ -33,25 +33,25 @@ final class AgentCardMtlsHttpClientFactory {
 
     private static SSLContext buildSslContext(AgentCardFetchSecurityProperties properties) {
         try {
+            AgentCardFetchSecurityProperties.ClientTlsMaterial tls = properties.getClientTls();
             SSLContext sslContext = SSLContext.getInstance("TLS");
             KeyManagerFactory kmf = null;
-            if (properties.getKeyStorePath() != null && !properties.getKeyStorePath().isBlank()) {
-                KeyStore keyStore = loadKeyStore(
-                        properties.getKeyStorePath(),
-                        properties.getKeyStorePassword(),
-                        properties.getKeyStoreType());
+            if (tls.getIdentityFile() != null && !tls.getIdentityFile().isBlank()) {
+                KeyStore identity = loadKeyStore(
+                        tls.getIdentityFile(),
+                        tls.getIdentityPassword(),
+                        tls.getIdentityType());
                 kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-                char[] password = passwordChars(properties.getKeyStorePassword());
-                kmf.init(keyStore, password);
+                kmf.init(identity, passwordChars(tls.getIdentityPassword()));
             }
             TrustManagerFactory tmf = null;
-            if (properties.getTrustStorePath() != null && !properties.getTrustStorePath().isBlank()) {
-                KeyStore trustStore = loadKeyStore(
-                        properties.getTrustStorePath(),
-                        properties.getTrustStorePassword(),
-                        properties.getTrustStoreType());
+            if (tls.getTrustAnchorFile() != null && !tls.getTrustAnchorFile().isBlank()) {
+                KeyStore trustAnchors = loadKeyStore(
+                        tls.getTrustAnchorFile(),
+                        tls.getTrustAnchorPassword(),
+                        tls.getTrustAnchorType());
                 tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                tmf.init(trustStore);
+                tmf.init(trustAnchors);
             }
             sslContext.init(
                     kmf != null ? kmf.getKeyManagers() : null,
