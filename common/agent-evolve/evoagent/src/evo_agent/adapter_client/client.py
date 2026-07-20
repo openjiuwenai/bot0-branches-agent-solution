@@ -289,13 +289,18 @@ class AdapterClient:
     def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
         """统一响应处理：成功返回 JSON body，失败抛出 AdapterError。
 
-        错误格式遵循 FastAPI 标准：``{"detail": "..."}``
+        错误格式优先读契约 ``{"error":{"code","message"}}``，
+        并兼容旧版 FastAPI ``{"detail": "..."}``。
         """
         if response.status_code >= 400:
             try:
                 body = response.json()
-                message = body.get("detail", response.text)
-            except (ValueError, KeyError):
+                err = body.get("error")
+                if isinstance(err, dict) and err.get("message"):
+                    message = str(err["message"])
+                else:
+                    message = body.get("detail", response.text)
+            except (ValueError, KeyError, TypeError):
                 message = response.text
             raise AdapterError(message, status_code=response.status_code)
 

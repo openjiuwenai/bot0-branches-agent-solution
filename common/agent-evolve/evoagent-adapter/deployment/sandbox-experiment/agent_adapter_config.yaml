@@ -16,5 +16,5 @@ agents:
     timeout: 300
     skill_backend: jiuwenbox
     jiuwenbox_url: http://jiuwenbox:8321
-    sandbox_id_resolve: from_logs
+    sandbox_id_resolve: list_ready
     remote_skills_dir: /tmp/skills

@@ -100,6 +100,7 @@ class SkillContentResponse(BaseModel):
 class SkillUpdateResponse(BaseModel):
     success: bool
     skill_name: str
+    revision: str
     message: str | None = None
 
 

@@ -9,12 +9,13 @@ import pytest
 
 from agent_adapter.jiuwenbox_client import JiuwenBoxClientError
 from agent_adapter.jiuwenbox_skill_store import JiuwenBoxSkillStore
-from agent_adapter.skill_store import SkillNotFoundError
+from agent_adapter.skill_store import SandboxUnavailableError, SkillNotFoundError
 
 
 @pytest.fixture
 def jb_store(tmp_path: Path) -> tuple[JiuwenBoxSkillStore, MagicMock]:
     client = MagicMock()
+    client.list_sandboxes.return_value = [{"id": "sbx-demo01", "phase": "ready"}]
     store = JiuwenBoxSkillStore(
         agent_names={"edp_agent"},
         client=client,
@@ -137,10 +138,13 @@ def test_missing_skill_404_does_not_reresolve(
 ) -> None:
     store, client = jb_store
     client.download_file.side_effect = JiuwenBoxClientError("no file", status_code=404)
-    # fixed mode: no retry path; still SkillNotFound
+    # fixed mode: no stale-retry path; availability check may list sandboxes once
     with pytest.raises(SkillNotFoundError):
         store.read_skill("edp_agent", "missing")
-    client.list_sandboxes.assert_not_called()
+    assert client.download_file.call_count == 1
+    # One list for availability (sandbox still ready) — must NOT re-download
+    assert client.list_sandboxes.call_count == 1
+    assert client.download_file.call_count == 1
 
 
 def test_missing_skill_on_ready_sandbox_no_retry(tmp_path: Path) -> None:
@@ -156,6 +160,38 @@ def test_missing_skill_on_ready_sandbox_no_retry(tmp_path: Path) -> None:
     )
     with pytest.raises(SkillNotFoundError):
         store.read_skill("edp_agent", "missing")
-    # resolve once + stale-check once; no second download attempt
-    assert client.list_sandboxes.call_count == 2
+    # resolve once + stale-check once + availability check; no second download
+    assert client.list_sandboxes.call_count == 3
     assert client.download_file.call_count == 1
+
+
+def test_deleted_sandbox_raises_unavailable_not_skill_not_found(tmp_path: Path) -> None:
+    """R43: dead sandbox must not be reported as SKILL_NOT_FOUND."""
+    client = MagicMock()
+    # Cached id is dead; list has no ready sandboxes (stale check + resolve).
+    client.list_sandboxes.return_value = []
+    client.download_file.side_effect = JiuwenBoxClientError("gone", status_code=404)
+    store = JiuwenBoxSkillStore(
+        agent_names={"edp_agent"},
+        client=client,
+        remote_skills_dir="/tmp/skills",
+        local_meta_root=tmp_path / "meta",
+        sandbox_id_resolve="list_ready",
+    )
+    store._cached_sandbox_ids["edp_agent"] = "dead-sbx"
+    with pytest.raises(SandboxUnavailableError):
+        store.read_skill("edp_agent", "product_recommend_skill")
+
+
+def test_no_ready_sandbox_on_resolve_raises_unavailable(tmp_path: Path) -> None:
+    client = MagicMock()
+    client.list_sandboxes.return_value = []
+    store = JiuwenBoxSkillStore(
+        agent_names={"edp_agent"},
+        client=client,
+        remote_skills_dir="/tmp/skills",
+        local_meta_root=tmp_path / "meta",
+        sandbox_id_resolve="list_ready",
+    )
+    with pytest.raises(SandboxUnavailableError):
+        store.list_skills("edp_agent")
