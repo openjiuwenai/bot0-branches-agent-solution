@@ -32,7 +32,6 @@ import java.util.Set;
 class PevTraceTest {
 
     // ==================== content-IFF: DeviceFailure → Diagnose → AcceptPartial 全转移 ====================
-
     /**
      * DeviceFailure 场景的 trace 必须含确切 5-phase 序列 + Diagnosed payload=RootCause.DeviceFailure
      * nodes={A} + Dispatched payload=ReplanAction.AcceptPartial + terminalReason=ACCEPT_PARTIAL。
@@ -64,8 +63,8 @@ class PevTraceTest {
         assertThat(trace.verifyIterations()).isEqualTo(1);
 
         List<PevTrace.Phase> phases = trace.phases();
-        assertThat(phases).as("DeviceFailure scenario must produce 5 phases: Planned→Executed→Verified→Diagnosed→Dispatched")
-                .hasSize(5);
+        assertThat(phases).as("DeviceFailure scenario must produce 5 phases: "
+                + "Planned→Executed→Verified→Diagnosed→Dispatched").hasSize(5);
         assertThat(phases.get(0)).isInstanceOf(PevTrace.Planned.class);
         assertThat(phases.get(1)).isInstanceOf(PevTrace.Executed.class);
 
@@ -77,16 +76,16 @@ class PevTraceTest {
         // mutation-RED: strip phases.add(new Verified(vr)) → phases.get(2) is Diagnosed not Verified → RED
 
         // Diagnosed — dark transfer #2 nailed: RootCause classification observable.
-        assertThat(phases.get(3)).isInstanceOfSatisfying(PevTrace.Diagnosed.class, d -> {
-            assertThat(d.cause()).as("root cause must be DeviceFailure").isInstanceOf(RootCause.DeviceFailure.class);
-            assertThat(((RootCause.DeviceFailure) d.cause()).nodes()).containsExactly("A");
-        });
+        assertThat(phases.get(3)).isInstanceOfSatisfying(PevTrace.Diagnosed.class, d -> assertThat(d.cause())
+                .as("root cause must be DeviceFailure with nodes={A}")
+                .isInstanceOfSatisfying(RootCause.DeviceFailure.class,
+                        df -> assertThat(df.nodes()).containsExactly("A")));
         // mutation-RED: strip phases.add(new Diagnosed(cause)) → phases.get(3) is Dispatched not Diagnosed → RED
 
         // Dispatched — dark transfer #3 nailed (single most important control-flow fact).
-        assertThat(phases.get(4)).isInstanceOfSatisfying(PevTrace.Dispatched.class, d -> {
-            assertThat(d.action()).as("dispatch must choose AcceptPartial (no retry)").isInstanceOf(ReplanAction.AcceptPartial.class);
-        });
+        assertThat(phases.get(4)).isInstanceOfSatisfying(PevTrace.Dispatched.class, d -> assertThat(d.action())
+                .as("dispatch must choose AcceptPartial (no retry)")
+                .isInstanceOf(ReplanAction.AcceptPartial.class));
         // mutation-RED: strip phases.add(new Dispatched(action)) → phases has size 4 → hasSize(5) RED
     }
 
@@ -210,7 +209,8 @@ class PevTraceTest {
         assertThat(traces).hasSize(1);
         PevTrace trace = traces.get(0);
         assertThat(trace.terminalReason())
-                .as("maxRetries=2 exhausted (LocalReplan retries) → MAX_RETRIES_EXCEEDED terminal").isEqualTo(PevTrace.TerminalReason.MAX_RETRIES_EXCEEDED);
+                .as("maxRetries=2 exhausted (LocalReplan retries) → MAX_RETRIES_EXCEEDED terminal")
+                .isEqualTo(PevTrace.TerminalReason.MAX_RETRIES_EXCEEDED);
         assertThat(trace.verifyIterations()).as("maxRetries=2 → at most 3 verify calls (initial + 2 retries)")
                 .isLessThanOrEqualTo(3);
         // mutation-RED: strip terminalReason=MAX_RETRIES_EXCEEDED in dispatchReplanAction → null → RED
