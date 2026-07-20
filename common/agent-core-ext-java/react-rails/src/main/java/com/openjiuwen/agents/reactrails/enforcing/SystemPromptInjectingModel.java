@@ -4,6 +4,7 @@
 
 package com.openjiuwen.agents.reactrails.enforcing;
 
+import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.core.foundation.llm.Model;
 import com.openjiuwen.core.foundation.llm.output_parsers.BaseOutputParser;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
@@ -14,6 +15,9 @@ import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
 import com.openjiuwen.core.foundation.llm.schema.SystemMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -60,35 +64,43 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
 
     private static final String LINE_SEPARATOR = System.lineSeparator();
 
-    /**
-     * The "先扩后收" (widen then converge) first-principles strategy prompt
-     * injected once into the SystemMessage on the first real {@link #invoke}
-     * when {@link InjectionMode#FIRST_PRINCIPLES} is active.
-     */
-    private static final String FIRST_PRINCIPLES_PROMPT = "【第一性原理】您在解决问题时应遵循「先扩后收」的认知策略：" + LINE_SEPARATOR
-            + "1. 【先扩】首先广泛探索可能的解决方案空间，从多个角度审视问题，提出发散性的思路和方法" + LINE_SEPARATOR + "2. 【后收】然后系统性地评估和对比各方案，收敛到最佳执行路径，深入实施"
-            + LINE_SEPARATOR + LINE_SEPARATOR + "请在整个推理过程中有意识地应用这一策略，主动标记当前位置（扩/收阶段），确保不急于收敛也不过度发散。";
+    // ---- System-prompt templates (issue-#15/#16 Phase2b-C1: externalized to classpath resources) ----
+    // The 3 phase prompts live as UTF-8 text resources under prompts/ so they can be edited without
+    // recompilation and overridden per-instance via setPlanSystemPrompt / setBuildSystemPrompt /
+    // setFirstPrinciplesPrompt (config-consumer-reachability 双向, 铁律⑰). The BUILD prompt references
+    // the replan tool via a ${replan_tool} placeholder substituted at load time with ReplanTool.TOOL_NAME,
+    // preserving the issue-#16 single-source invariant — the prompt never holds a literal tool name; the
+    // registry constant remains the only truth.
+    /** Classpath directory holding the externalized system-prompt templates. */
+    private static final String PROMPT_RESOURCE_DIR = "com/openjiuwen/agents/reactrails/enforcing/prompts/";
 
-    /**
-     * PLAN phase system prompt (divergent/exploratory framing).
-     */
-    private static final String PLAN_SYSTEM_PROMPT = "You are in the DIVERGENT EXPLORATION phase. "
-            + "Analyze the problem from at least 3 different angles. "
-            + "Each angle should have concrete reasoning, evidence, and " + "data — not just bullet titles. "
-            + "Use available tools to gather real information. "
-            + "Do NOT converge on a single answer yet — explore first.";
+    /** Resource name for the PLAN (divergent exploration) system prompt. */
+    private static final String PLAN_PROMPT_RESOURCE = "plan-system-prompt.txt";
 
-    /**
-     * BUILD phase system prompt (convergent/execution framing).
-     */
-    private static final String BUILD_SYSTEM_PROMPT = "You are in the CONVERGENT EXECUTION phase. "
-            + "Focus on producing a single complete answer that meets " + "all success criteria. "
-            + "Incorporate insights from your earlier exploration. "
-            + "Ensure every criterion is explicitly addressed. "
-            + "If your current path cannot cover all criteria, call __replan__.";
+    /** Resource name for the BUILD (convergent execution) system prompt. */
+    private static final String BUILD_PROMPT_RESOURCE = "build-system-prompt.txt";
+
+    /** Resource name for the one-shot first-principles strategy prompt. */
+    private static final String FIRST_PRINCIPLES_PROMPT_RESOURCE = "first-principles-prompt.txt";
+
+    /** Placeholder substituted with {@link ReplanTool#TOOL_NAME} at load time (single-source, issue #16). */
+    private static final String REPLAN_TOOL_PLACEHOLDER = "${replan_tool}";
 
     private final AtomicBoolean firstPrinciplesDone = new AtomicBoolean(false);
     private final PromptInjectionState injectionState = new PromptInjectionState();
+
+    /** Loaded PLAN prompt (classpath); replaced by {@link #planSystemPromptOverride} when set. */
+    private final String planSystemPrompt = loadPrompt(PLAN_PROMPT_RESOURCE);
+
+    /** Loaded BUILD prompt (classpath, {@code ${replan_tool}} substituted); replaced when set. */
+    private final String buildSystemPrompt = substituteReplanTool(loadPrompt(BUILD_PROMPT_RESOURCE));
+
+    /** Loaded first-principles prompt (classpath); replaced when set. */
+    private final String firstPrinciplesPrompt = loadPrompt(FIRST_PRINCIPLES_PROMPT_RESOURCE);
+
+    private volatile String planSystemPromptOverride;
+    private volatile String buildSystemPromptOverride;
+    private volatile String firstPrinciplesPromptOverride;
 
     private String systemPromptSuffix = "";
 
@@ -178,6 +190,100 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         this.systemPromptSuffix = suffix != null ? suffix : "";
     }
 
+    // ---- Phase-prompt configuration (issue-#15/#16 Phase2b-C1) ----
+
+    /**
+     * Override the PLAN-phase system prompt (replaces the classpath default loaded from
+     * {@code prompts/plan-system-prompt.txt}). Pass {@code null} to clear the override and
+     * fall back to the classpath default.
+     *
+     * @param prompt custom PLAN prompt, or null to use the classpath default
+     */
+    public void setPlanSystemPrompt(String prompt) {
+        this.planSystemPromptOverride = prompt;
+    }
+
+    /**
+     * Override the BUILD-phase system prompt (replaces the classpath default loaded from
+     * {@code prompts/build-system-prompt.txt}, which already has {@code ${replan_tool}}
+     * substituted). The same {@code ${replan_tool}} → {@link ReplanTool#TOOL_NAME} substitution
+     * is applied to the override so custom BUILD prompts keep the issue-#16 single-source
+     * invariant (no literal tool name embedded in prompt text). Pass {@code null} to clear.
+     *
+     * @param prompt custom BUILD prompt, or null to use the classpath default
+     */
+    public void setBuildSystemPrompt(String prompt) {
+        this.buildSystemPromptOverride = prompt == null ? null : substituteReplanTool(prompt);
+    }
+
+    /**
+     * Override the one-shot first-principles strategy prompt (replaces the classpath default
+     * loaded from {@code prompts/first-principles-prompt.txt}). Pass {@code null} to clear.
+     *
+     * @param prompt custom first-principles prompt, or null to use the classpath default
+     */
+    public void setFirstPrinciplesPrompt(String prompt) {
+        this.firstPrinciplesPromptOverride = prompt;
+    }
+
+    /**
+     * Effective PLAN prompt: per-instance override if set, else the classpath default.
+     *
+     * @return PLAN-phase system prompt actually used on the next PLAN_MODE invoke
+     */
+    private String effectivePlanPrompt() {
+        return planSystemPromptOverride != null ? planSystemPromptOverride : planSystemPrompt;
+    }
+
+    /**
+     * Effective BUILD prompt: per-instance override if set, else the classpath default.
+     *
+     * @return BUILD-phase system prompt actually used on the next BUILD_MODE invoke
+     */
+    private String effectiveBuildPrompt() {
+        return buildSystemPromptOverride != null ? buildSystemPromptOverride : buildSystemPrompt;
+    }
+
+    /**
+     * Effective first-principles prompt: per-instance override if set, else the classpath default.
+     *
+     * @return first-principles prompt actually used on the next FIRST_PRINCIPLES invoke
+     */
+    private String effectiveFirstPrinciplesPrompt() {
+        return firstPrinciplesPromptOverride != null ? firstPrinciplesPromptOverride : firstPrinciplesPrompt;
+    }
+
+    /**
+     * Load a prompt template from the classpath (UTF-8). Fail-loud with a fix hint if the
+     * resource is missing — never silently fall back to an empty prompt.
+     *
+     * @param resourceName file name under {@link #PROMPT_RESOURCE_DIR}
+     * @return prompt template content
+     */
+    private static String loadPrompt(String resourceName) {
+        String path = PROMPT_RESOURCE_DIR + resourceName;
+        try (InputStream in = SystemPromptInjectingModel.class.getClassLoader().getResourceAsStream(path)) {
+            if (in == null) {
+                throw new IllegalStateException("react-rails: system-prompt resource not found on classpath: "
+                        + path + " (expected at src/main/resources/" + path + ")");
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("react-rails: failed to load system-prompt resource: " + path, e);
+        }
+    }
+
+    /**
+     * Substitute the {@code ${replan_tool}} placeholder with {@link ReplanTool#TOOL_NAME} —
+     * keeps the BUILD prompt single-source with the tool registry (issue #16).
+     *
+     * @param prompt raw prompt possibly containing {@link #REPLAN_TOOL_PLACEHOLDER}
+     * @return prompt with the placeholder resolved
+     */
+    private static String substituteReplanTool(String prompt) {
+        return prompt.replace(REPLAN_TOOL_PLACEHOLDER, ReplanTool.TOOL_NAME);
+    }
+
     // ---- Invoke override ----
 
     @Override
@@ -206,13 +312,13 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         return injectFirstPrinciplesIfNeeded(effectiveMessages, currentMode);
     }
 
-    private static Object replaceSystemPrompt(Object messages, InjectionMode mode) {
+    private Object replaceSystemPrompt(Object messages, InjectionMode mode) {
         if (!isPlanOrBuild(mode) || !(messages instanceof List)) {
             return messages;
         }
         @SuppressWarnings("unchecked")
         List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
-        String replacementPrompt = mode == InjectionMode.PLAN_MODE ? PLAN_SYSTEM_PROMPT : BUILD_SYSTEM_PROMPT;
+        String replacementPrompt = mode == InjectionMode.PLAN_MODE ? effectivePlanPrompt() : effectiveBuildPrompt();
         for (int i = 0; i < msgList.size(); i++) {
             if (msgList.get(i) instanceof SystemMessage) {
                 msgList.set(i, new SystemMessage(replacementPrompt));
@@ -276,22 +382,23 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
      * @param messages the original messages object (must be {@code List<BaseMessage>})
      * @return a new or modified list with the first-principles prompt injected
      */
-    private static Object injectFirstPrinciples(Object messages) {
+    private Object injectFirstPrinciples(Object messages) {
         @SuppressWarnings("unchecked")
         List<BaseMessage> msgList = new ArrayList<>((List<BaseMessage>) messages);
+        String firstPrinciples = effectiveFirstPrinciplesPrompt();
         boolean hasInjected = false;
         for (int i = 0; i < msgList.size(); i++) {
             if (!hasInjected && msgList.get(i) instanceof SystemMessage sys) {
                 String original = sys.getContentAsString();
                 String enhanced = (original != null ? original + LINE_SEPARATOR + LINE_SEPARATOR : "")
-                        + FIRST_PRINCIPLES_PROMPT;
+                        + firstPrinciples;
                 msgList.set(i, new SystemMessage(enhanced));
                 hasInjected = true;
             }
         }
         if (!hasInjected) {
             // No existing SystemMessage — insert at the beginning
-            msgList.add(0, new SystemMessage(FIRST_PRINCIPLES_PROMPT));
+            msgList.add(0, new SystemMessage(firstPrinciples));
         }
         return msgList;
     }

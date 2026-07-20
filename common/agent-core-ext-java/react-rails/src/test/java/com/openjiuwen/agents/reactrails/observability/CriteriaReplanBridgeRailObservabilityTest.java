@@ -144,7 +144,11 @@ class CriteriaReplanBridgeRailObservabilityTest {
             assertThat(steer.source()).as("SteeringEvent.source must be CRITERIA on verify-retry")
                     .isEqualTo("CRITERIA");
             assertThat(steer.hintExcerpt()).as("SteeringEvent.hintExcerpt must be non-empty").isNotEmpty();
+            assertThat(steer.queueBound())
+                    .as("queueBound must mirror ctx.hasSteeringQueue() (queue provisioned here)")
+                    .isTrue();
         }
+        // mutation-RED: pass a constant instead of ctx.hasSteeringQueue() at fire → bare-ctx test RED
         // mutation-RED: strip fire(SteeringEvent) → STEERING 0 → RED
         // mutation-RED: strip the steeringQ.pushSteering (control flow) → sanity asserts RED
         //   (control-flow bearing still covered by CriteriaReplanBridgeRailTest)
@@ -152,6 +156,46 @@ class CriteriaReplanBridgeRailObservabilityTest {
         // IFF cross-check: exactly one ForceFinish event overall on Exit-2 = NONE.
         assertThat(collector.ofType(RailEventType.FORCE_FINISH))
                 .as("Exit-2 (under-limit) must NOT emit any ForceFinishEvent").isEmpty();
+    }
+
+    @Test
+    void verifyFailOnBareCtxEmitsSteeringEventWithQueueBoundFalse() {
+        // issue-#13 scenario + !63 fire-precision fix: when the host never provisioned a steering
+        // queue, pushSteering hits agent-core's null-guard and silently returns. The fire still
+        // happens (it follows pushSteering unconditionally), so without queueBound an observer
+        // would wrongly believe the hint was enqueued. queueBound must mirror
+        // ctx.hasSteeringQueue()=false so observers can tell the hint was DROPPED — the whole
+        // point of the fire-precision fix and the direct answer to "fire proves want, not enqueue".
+        ReplanRail replanRail = new ReplanRail(3);
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(new RuleBasedCriteriaVerifier(),
+                List.of("建议", "债券"), replanRail);
+        // Bare ctx: no .steeringQueue(...) on the builder → hasSteeringQueue()=false (issue-#13 baseline).
+        AssistantMessage msg = new AssistantMessage("I don't know");
+        ModelCallInputs inputs = new ModelCallInputs();
+        inputs.setResponse(msg);
+        AgentCallbackContext ctx = AgentCallbackContext.builder().agent(new Object()).inputs(inputs)
+                .extra(new LinkedHashMap<>()).build();
+
+        rail.afterModelCall(ctx);
+        new ObservingRail().afterModelCall(ctx);
+
+        // sanity: bare ctx → hasSteeringQueue() false (the silent-drop precondition).
+        assertThat(ctx.hasSteeringQueue())
+                .as("sanity: bare ctx has no provisioned steering queue").isFalse();
+
+        // The fire still fires (it follows pushSteering unconditionally) — but now it must
+        // honestly report queueBound=false so observers know the hint was dropped, not enqueued.
+        List<RailEvent> steeringEvents = collector.ofType(RailEventType.STEERING);
+        assertThat(steeringEvents).as("fire still happens after silent-drop pushSteering").hasSize(1);
+        if (steeringEvents.get(0) instanceof RailEvent.SteeringEvent steer) {
+            assertThat(steer.queueBound())
+                    .as("queueBound=false must signal the hint was dropped (queue not provisioned, issue #13)")
+                    .isFalse();
+        }
+        // mutation-RED: hardcode queueBound=true at fire (pass a constant, ignore
+        //   ctx.hasSteeringQueue()) → this isFalse() RED. This is THE mutation the field exists
+        //   to catch — paired with the provisioned-queue test above (queueBound=true) which catches
+        //   the symmetric hardcode=false mutation. Two-direction coverage of the IFF.
     }
 
     @Test

@@ -68,11 +68,28 @@ public sealed interface RailEvent {
     /**
      * Correction hint pushed via {@code pushSteering} for retry.
      *
+     * <p><b>queueBound semantics (honest boundary)</b>: {@code queueBound} captures the value of
+     * {@code AgentCallbackContext.hasSteeringQueue()} at fire time — whether the ctx's steering
+     * queue field is non-null. It is the exact complement of agent-core's {@code pushSteering}
+     * null-guard: {@code queueBound=true} means {@code pushSteering} did NOT silently return
+     * (issue #13 silent drop) and DID invoke {@code SteeringQueue.pushSteering};
+     * {@code queueBound=false} means the host never provisioned a queue, so the hint was dropped.
+     *
+     * <p><b>Not equivalent to "hint enqueued"</b>: {@code SteeringQueue} is an interface; a host
+     * implementation other than the default {@code LoopQueues} (e.g. one with dedup / capacity /
+     * conditional filtering) could drop inside {@code pushSteering} even when
+     * {@code queueBound=true}. That is a host-implementation contract beyond react-rails'
+     * observation. Under the default {@code LoopQueues} (unbounded {@code ArrayDeque.add}),
+     * {@code queueBound=true} is equivalent to enqueued.
+     *
      * @param railName emitting rail
      * @param source what triggered the steer (CRITERIA / STAGNATION_OUTPUT / STAGNATION_TOOLCYCLE)
      * @param hintExcerpt truncated hint text (bearing excerpt, not full text)
+     * @param queueBound fire-time {@code ctx.hasSteeringQueue()}: true=queue bound (pushSteering
+     *     does not silently return), false=host did not provision a queue (silent drop, issue #13)
      */
-    record SteeringEvent(String railName, String source, String hintExcerpt) implements RailEvent {
+    record SteeringEvent(String railName, String source, String hintExcerpt, boolean queueBound)
+            implements RailEvent {
         @Override
         public RailEventType type() {
             return RailEventType.STEERING;
@@ -83,6 +100,7 @@ public sealed interface RailEvent {
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("source", source);
             d.put("hintExcerpt", hintExcerpt);
+            d.put("queueBound", queueBound);
             return d;
         }
     }

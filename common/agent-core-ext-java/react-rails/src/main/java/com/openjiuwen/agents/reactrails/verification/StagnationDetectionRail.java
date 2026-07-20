@@ -253,7 +253,8 @@ public class StagnationDetectionRail extends AgentRail {
 
             ctx.pushSteering(brake);
             RailTelemetry.current().fire(new RailEvent.SteeringEvent("StagnationDetectionRail",
-                    "STAGNATION_OUTPUT", brake.substring(0, Math.min(80, brake.length()))));
+                    "STAGNATION_OUTPUT", brake.substring(0, Math.min(80, brake.length())),
+                    ctx.hasSteeringQueue()));
             injectionState.setPhaseOverride(
                     "BREAK_STAGNATION: You are producing repetitive output." + " Change your approach entirely.");
 
@@ -297,7 +298,8 @@ public class StagnationDetectionRail extends AgentRail {
 
             ctx.pushSteering(brake);
             RailTelemetry.current().fire(new RailEvent.SteeringEvent("StagnationDetectionRail",
-                    "STAGNATION_TOOLCYCLE", brake.substring(0, Math.min(80, brake.length()))));
+                    "STAGNATION_TOOLCYCLE", brake.substring(0, Math.min(80, brake.length())),
+                    ctx.hasSteeringQueue()));
             injectionState.setPhaseOverride("BREAK_LOOP: You are repeating the same tool-call sequence."
                     + " This loop is ineffective. Change strategy now.");
 

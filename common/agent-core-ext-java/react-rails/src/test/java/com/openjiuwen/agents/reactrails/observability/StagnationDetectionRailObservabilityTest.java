@@ -93,7 +93,11 @@ class StagnationDetectionRailObservabilityTest {
                     .isEqualTo("STAGNATION_OUTPUT");
             assertThat(steer.railName()).isEqualTo("StagnationDetectionRail");
             assertThat(steer.hintExcerpt()).as("SteeringEvent.hintExcerpt must be non-empty").isNotEmpty();
+            assertThat(steer.queueBound())
+                    .as("queueBound must mirror ctx.hasSteeringQueue() (queue provisioned here)")
+                    .isTrue();
         }
+        // mutation-RED: pass a constant instead of ctx.hasSteeringQueue() at fire → bare-ctx test RED
         // mutation-RED: strip the fire(SteeringEvent STAGNATION_OUTPUT) call → STEERING 0 → RED
         // mutation-RED: if fire carried STAGNATION_TOOLCYCLE instead of STAGNATION_OUTPUT → isEqualTo RED
         //   (catches wrong-branch copy from the tool-cycle path)
