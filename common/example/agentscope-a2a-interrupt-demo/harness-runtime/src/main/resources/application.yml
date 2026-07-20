@@ -5,6 +5,10 @@ spring:
   application:
     name: agentscope-harness-a2a-demo
 
+logging:
+  level:
+    io.agentscope.extensions.model.openai.OpenAIClient: DEBUG
+
 agentscope:
   demo:
     api-key: ${DEEPSEEK_API_KEY:}
