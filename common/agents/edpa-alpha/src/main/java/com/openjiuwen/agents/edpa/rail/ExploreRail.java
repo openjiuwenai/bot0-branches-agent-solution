@@ -214,6 +214,7 @@ public class ExploreRail extends AgentRail {
      * (final-answer rounds terminate the loop and would waste steering).
      *
      * @param msg assistant message from the current round
+     * @param s   per-invocation state (carries the explore-round counter)
      * @return true if this round should run the Explorer
      */
     private boolean isExplorableRound(AssistantMessage msg, InvocationState s) {
@@ -271,6 +272,7 @@ public class ExploreRail extends AgentRail {
      * prepend a SystemMessage — when absent, messages[0] is the UserMessage.
      *
      * @param ctx callback context carrying the ModelContext
+     * @param s   per-invocation state (carries the user-input cache)
      * @return the initial user query text, or an empty string when not
      *         resolvable (never null)
      */
@@ -304,6 +306,7 @@ public class ExploreRail extends AgentRail {
      * Caches the content of the first non-empty {@link UserMessage} found.
      *
      * @param messages the message list to scan (non-null, non-empty)
+     * @param s       per-invocation state (stores the cached user input)
      */
     private void cacheFirstUserMessage(List<BaseMessage> messages, InvocationState s) {
         for (BaseMessage msg : messages) {

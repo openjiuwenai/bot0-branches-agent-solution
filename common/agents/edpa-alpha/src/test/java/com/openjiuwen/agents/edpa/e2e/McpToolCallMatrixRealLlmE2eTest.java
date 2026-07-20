@@ -4,8 +4,6 @@
 
 package com.openjiuwen.agents.edpa.e2e;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.openjiuwen.agents.edpa.mcp.McpClient;
 import com.openjiuwen.agents.edpa.mcp.McpTool;
 import com.openjiuwen.agents.edpa.mcp.McpToolRegistrar;
@@ -27,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -153,11 +152,12 @@ class McpToolCallMatrixRealLlmE2eTest {
         }
         ReplanTool.registerOnto(agent);
 
-        CountingMcpClient mcpClient = startMcp(agent);
-        if (mcpClient == null) {
+        Optional<CountingMcpClient> mcpOpt = startMcp(agent);
+        if (mcpOpt.isEmpty()) {
             r.put("status", "mcp-unavailable");
             return r;
         }
+        CountingMcpClient mcpClient = mcpOpt.get();
         try {
             LOG.log(Level.INFO, "[mcp-matrix] {0} starting...", label);
             Object result = agent.invoke(TASK, null);
@@ -182,7 +182,7 @@ class McpToolCallMatrixRealLlmE2eTest {
         return r;
     }
 
-    private static CountingMcpClient startMcp(ReActAgent agent) {
+    private static Optional<CountingMcpClient> startMcp(ReActAgent agent) {
         StdioMcpClient rawClient = new StdioMcpClient(List.of("python3", "-m", "sec_edgar_mcp.server"),
                 Map.of("SEC_EDGAR_USER_AGENT",
                         System.getenv().getOrDefault("SEC_EDGAR_USER_AGENT",
@@ -194,17 +194,17 @@ class McpToolCallMatrixRealLlmE2eTest {
             if (tools.isEmpty()) {
                 rawClient.close();
                 LOG.log(Level.WARNING, "[mcp-matrix] MCP server connected but exposed 0 tools");
-                return null;
+                return Optional.empty();
             }
-            return mcpClient;
+            return Optional.of(mcpClient);
         } catch (IOException e) {
             rawClient.close();
             LOG.log(Level.WARNING, "[mcp-matrix] MCP server unavailable: " + e.getMessage());
-            return null;
+            return Optional.empty();
         } catch (Exception e) {
             rawClient.close();
             LOG.log(Level.WARNING, "[mcp-matrix] MCP registration failed: " + e.getMessage());
-            return null;
+            return Optional.empty();
         }
     }
 

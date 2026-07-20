@@ -125,11 +125,13 @@ class ExploreRailTest {
         AgentCallbackContext ctx = ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq);
 
         rail.afterModelCall(ctx);
-        assertThat(rail.getExploreRound(ctx)).as("first tool-call round must increment exploreRound to 1").isEqualTo(1);
+        assertThat(rail.getExploreRound(ctx))
+                .as("first tool-call round must increment exploreRound to 1").isEqualTo(1);
 
         setResponse(ctx, assistantWithToolCall("t2", "{}"));
         rail.afterModelCall(ctx);
-        assertThat(rail.getExploreRound(ctx)).as("second tool-call round must increment exploreRound to 2").isEqualTo(2);
+        assertThat(rail.getExploreRound(ctx))
+                .as("second tool-call round must increment exploreRound to 2").isEqualTo(2);
         // mutation-RED: strip exploreRound++ → stays 0 → window never exhausts → RED
     }
 
@@ -170,7 +172,8 @@ class ExploreRailTest {
         rail.afterModelCall(ctx);
         setResponse(ctx, assistantWithToolCall("t2", "{}"));
         rail.afterModelCall(ctx);
-        assertThat(rail.getExploreRound(ctx)).as("precondition: window should be exhausted after 2 explores").isEqualTo(2);
+        assertThat(rail.getExploreRound(ctx))
+                .as("precondition: window should be exhausted after 2 explores").isEqualTo(2);
         assertThat(explorer.callCount.get()).isEqualTo(2);
 
         // Third tool-call round → window exhausted, no further explore
@@ -387,7 +390,9 @@ class ExploreRailTest {
      * @param response the new assistant message response
      */
     private static void setResponse(AgentCallbackContext ctx, AssistantMessage response) {
-        ((ModelCallInputs) ctx.getInputs()).setResponse(response);
+        if (ctx.getInputs() instanceof ModelCallInputs inputs) {
+            inputs.setResponse(response);
+        }
     }
 
     /**
