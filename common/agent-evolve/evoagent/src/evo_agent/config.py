@@ -49,7 +49,7 @@ class EvolveConfig(BaseSettings):
     llm_safety_margin_tokens: int = 512
     llm_chars_per_token: float = 2.0
     llm_stage_output_reserve_tokens: dict[str, int] = Field(
-        default_factory=lambda: {"evaluator": 1200, "reflect": 3000}
+        default_factory=lambda: {"evaluator": 1200, "reflect": 4096}
     )
 
     # ── 远程通信（AdapterClient 使用） ──
