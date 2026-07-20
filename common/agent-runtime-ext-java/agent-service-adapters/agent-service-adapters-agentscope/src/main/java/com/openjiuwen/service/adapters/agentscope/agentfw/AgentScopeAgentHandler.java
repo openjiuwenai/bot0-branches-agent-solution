@@ -175,19 +175,26 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
 
     private void handleStreamComplete(ActiveInvocation invocation, QueryStreamObserver observer,
         AgentScopeEventMapper.StreamState streamState) {
-        if (!invocation.finish() || observer.isCancelled()) {
+        if (!invocation.beginFinish()) {
             return;
         }
-        if (!streamState.hasTerminalEvent()) {
-            IllegalStateException error = new IllegalStateException(
-                "AgentScope stream completed without a terminal event");
-            observer.onNext(new QueryChunk(
-                QueryChunk.TYPE_ERROR,
-                Map.of("message", "AgentScope stream completed without a terminal event")));
-            observer.onError(error);
-            return;
+        try {
+            if (observer.isCancelled()) {
+                return;
+            }
+            if (!streamState.hasTerminalEvent()) {
+                IllegalStateException error = new IllegalStateException(
+                    "AgentScope stream completed without a terminal event");
+                observer.onNext(new QueryChunk(
+                    QueryChunk.TYPE_ERROR,
+                    Map.of("message", "AgentScope stream completed without a terminal event")));
+                observer.onError(error);
+                return;
+            }
+            observer.onComplete();
+        } finally {
+            invocation.completeFinish();
         }
-        observer.onComplete();
     }
 
     private static void awaitStream(ActiveInvocation invocation, QueryStreamObserver observer) {
@@ -233,12 +240,19 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
 
     private static void finishStreamError(ActiveInvocation invocation, QueryStreamObserver observer,
         Throwable error) {
-        if (!invocation.finish() || observer.isCancelled()) {
+        if (!invocation.beginFinish()) {
             return;
         }
-        String message = isTimeout(error) ? "AgentScope stream timed out" : "AgentScope stream failed";
-        observer.onNext(new QueryChunk(QueryChunk.TYPE_ERROR, Map.of("message", message)));
-        observer.onError(error);
+        try {
+            if (observer.isCancelled()) {
+                return;
+            }
+            String message = isTimeout(error) ? "AgentScope stream timed out" : "AgentScope stream failed";
+            observer.onNext(new QueryChunk(QueryChunk.TYPE_ERROR, Map.of("message", message)));
+            observer.onError(error);
+        } finally {
+            invocation.completeFinish();
+        }
     }
 
     private ActiveInvocation register(String conversationId, RuntimeContext context) {
@@ -292,12 +306,23 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
         }
 
         private boolean finish() {
+            if (!beginFinish()) {
+                return false;
+            }
+            completeFinish();
+            return true;
+        }
+
+        private boolean beginFinish() {
             if (!closed.compareAndSet(false, true)) {
                 return false;
             }
             remove(this);
-            done.countDown();
             return true;
+        }
+
+        private void completeFinish() {
+            done.countDown();
         }
 
         private void cancel() {

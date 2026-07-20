@@ -21,6 +21,7 @@ import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.lifecycle.InterruptReason;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
+import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.event.AgentStartEvent;
 import io.agentscope.core.event.RequireUserConfirmEvent;
 import io.agentscope.core.event.TextBlockDeltaEvent;
@@ -32,6 +33,7 @@ import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.state.AgentState;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -40,13 +42,15 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -183,6 +187,31 @@ class AgentScopeAgentHandlerTest {
     }
 
     @Test
+    void streamWaitsForObserverCompletion() throws Exception {
+        AgentScopeInvoker invoker = mock(AgentScopeInvoker.class);
+        ToolUseBlock tool = tool("call-1", ToolCallState.ASKING);
+        when(invoker.getAgentState("user", "conversation")).thenReturn(stateWith(tool));
+        when(invoker.streamEvents(any(), any())).thenReturn(Flux.<AgentEvent>just(
+            new RequireUserConfirmEvent("reply", List.of(tool))).subscribeOn(Schedulers.boundedElastic()));
+        BlockingCompletionObserver observer = new BlockingCompletionObserver();
+        ExecutorService executor = newSingleTaskExecutor();
+        try {
+            Future<?> stream = executor.submit(() ->
+                handler(invoker).streamQuery(request("conversation", "transfer"), observer));
+            assertThat(observer.completionEntered.await(1, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> stream.get(100, TimeUnit.MILLISECONDS))
+                .isInstanceOf(TimeoutException.class);
+
+            observer.allowCompletion.countDown();
+            stream.get(1, TimeUnit.SECONDS);
+        } finally {
+            observer.allowCompletion.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void streamReportsSynchronousArgumentFailureThroughObserver() {
         AgentScopeInvoker invoker = mock(AgentScopeInvoker.class);
         IllegalArgumentException failure = new IllegalArgumentException("invalid stream input");
@@ -296,7 +325,7 @@ class AgentScopeAgentHandlerTest {
         when(invoker.call(any(), any())).thenReturn(Mono.create(sink -> subscribed.countDown()));
         AgentScopeAgentHandler handler = handler(invoker);
         AtomicReference<IllegalStateException> failure = new AtomicReference<>();
-        ExecutorService executor = Executors.newSingleThreadExecutor();
+        ExecutorService executor = newSingleTaskExecutor();
         try {
             Future<?> query = executor.submit(() -> {
                 try {
@@ -391,6 +420,16 @@ class AgentScopeAgentHandlerTest {
         return new AgentScopeAgentHandler(invoker, Duration.ofSeconds(2), Duration.ofSeconds(2));
     }
 
+    private static ExecutorService newSingleTaskExecutor() {
+        return new ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(1),
+            new ThreadPoolExecutor.AbortPolicy());
+    }
+
     private static IllegalStateException queryFailure(AgentScopeAgentHandler handler) {
         try {
             handler.query(request("conversation", "wait"));
@@ -438,6 +477,32 @@ class AgentScopeAgentHandlerTest {
         @Override
         public void onComplete() {
             completed++;
+        }
+    }
+
+    private static final class BlockingCompletionObserver implements QueryStreamObserver {
+        private final CountDownLatch completionEntered = new CountDownLatch(1);
+        private final CountDownLatch allowCompletion = new CountDownLatch(1);
+
+        @Override
+        public void onNext(QueryChunk chunk) {
+        }
+
+        @Override
+        public void onError(Throwable error) {
+            throw new AssertionError("Unexpected stream error", error);
+        }
+
+        @Override
+        public void onComplete() {
+            completionEntered.countDown();
+            try {
+                if (!allowCompletion.await(1, TimeUnit.SECONDS)) {
+                    throw new AssertionError("Completion observer was not released");
+                }
+            } catch (InterruptedException error) {
+                throw new AssertionError("Completion observer was interrupted", error);
+            }
         }
     }
 }
