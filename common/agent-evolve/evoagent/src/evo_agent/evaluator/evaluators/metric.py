@@ -1,4 +1,8 @@
-"""Deterministic MetricEvaluator — inherits openjiuwen MetricEvaluator."""
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+"""Deterministic MetricEvaluator — extends openjiuwen ``MetricEvaluator``.
+
+Adds batch-level aggregation while reusing upstream score aggregation helpers.
+"""
 
 from __future__ import annotations
 
