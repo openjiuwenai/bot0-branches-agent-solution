@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.spi.registry;
+package com.openjiuwen.rdc.model;
 
 /**
  * Categorises the runtime framework that backs a registered agent entry.

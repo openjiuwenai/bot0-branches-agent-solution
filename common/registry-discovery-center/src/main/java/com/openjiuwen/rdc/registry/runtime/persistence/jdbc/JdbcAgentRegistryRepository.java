@@ -4,8 +4,8 @@
 
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
-import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.FrameworkType;
 
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;

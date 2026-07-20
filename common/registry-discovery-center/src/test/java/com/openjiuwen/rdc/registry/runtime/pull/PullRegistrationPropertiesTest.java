@@ -6,7 +6,7 @@ package com.openjiuwen.rdc.registry.runtime.pull;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
+import com.openjiuwen.rdc.model.FrameworkType;
 
 import org.junit.jupiter.api.Test;
 

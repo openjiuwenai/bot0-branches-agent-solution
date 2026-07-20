@@ -8,9 +8,9 @@
  *
  * <p>Authority: ADR-0160 (Stage 4 Registry SPI Runtime Promotion). The dual-method
  * {@link com.openjiuwen.rdc.spi.registry.AgentDiscoveryService} contract,
- * the unified {@link com.openjiuwen.rdc.spi.registry.AgentCardDto} with
+ * the unified {@link com.openjiuwen.rdc.model.AgentCardDto} with
  * {@code @Nullable} business definition fields, the
- * {@link com.openjiuwen.rdc.spi.registry.RouteResolution} returned by
+ * {@link com.openjiuwen.rdc.model.RouteResolution} returned by
  * {@code resolveRouteHandle}, and the
  * {@link com.openjiuwen.rdc.spi.registry.TenantContext} port all live here so
  * that callers (Orchestrator / Gateway / forwarding layer) depend on no
@@ -27,7 +27,7 @@
  * via {@code @Primary}; the phase-2 Consul implementation swaps in without
  * touching this package.
  *
- * <p>{@link com.openjiuwen.rdc.spi.registry.Nullable} is a local marker
+ * <p>{@link com.openjiuwen.rdc.model.Nullable} is a local marker
  * annotation defined in this package so the SPI stays self-contained — no
  * {@code jakarta.annotation} / {@code org.springframework.lang} dependency
  * is pulled across the SPI boundary.

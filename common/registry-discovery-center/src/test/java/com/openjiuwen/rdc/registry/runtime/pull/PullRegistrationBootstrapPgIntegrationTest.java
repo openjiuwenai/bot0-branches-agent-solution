@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
+import com.openjiuwen.rdc.model.FrameworkType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

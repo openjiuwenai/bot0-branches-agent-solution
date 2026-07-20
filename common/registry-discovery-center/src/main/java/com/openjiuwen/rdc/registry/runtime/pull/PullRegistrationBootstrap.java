@@ -7,10 +7,10 @@ package com.openjiuwen.rdc.registry.runtime.pull;
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
-import com.openjiuwen.rdc.spi.registry.InstanceIdCodec;
-import com.openjiuwen.rdc.spi.registry.ServiceIdCodec;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.model.InstanceIdCodec;
+import com.openjiuwen.rdc.model.ServiceIdCodec;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

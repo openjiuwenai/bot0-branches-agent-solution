@@ -4,7 +4,7 @@
 
 package com.openjiuwen.rdc.registry.runtime.pull;
 
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
+import com.openjiuwen.rdc.model.FrameworkType;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;

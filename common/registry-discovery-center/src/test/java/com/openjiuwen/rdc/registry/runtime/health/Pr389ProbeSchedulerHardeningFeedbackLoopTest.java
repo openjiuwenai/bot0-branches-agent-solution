@@ -189,7 +189,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
         }
 
         @Override
-        public void upsert(com.openjiuwen.rdc.spi.registry.AgentRegistryEntry card, String a2aAgentCardJson) {
+        public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String a2aAgentCardJson) {
         }
 
         @Override

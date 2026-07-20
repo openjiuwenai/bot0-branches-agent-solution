@@ -9,11 +9,11 @@ import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository.EndpointEntry;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository.RegistryRow;
-import com.openjiuwen.rdc.spi.registry.AgentCardDto;
+import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.spi.registry.AgentDiscoveryService;
-import com.openjiuwen.rdc.spi.registry.RouteResolution;
+import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
-import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
+import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Primary;

@@ -6,6 +6,10 @@ package com.openjiuwen.rdc.spi.registry;
 
 import java.util.List;
 
+import com.openjiuwen.rdc.model.AgentCardDto;
+import com.openjiuwen.rdc.model.RouteResolution;
+import com.openjiuwen.rdc.model.TenantIsolationViolationException;
+
 /**
  * agent-bus owned runtime route index lookup entry (HD3-001). The upper
  * Orchestrator / Gateway depends on this interface only; the persistence

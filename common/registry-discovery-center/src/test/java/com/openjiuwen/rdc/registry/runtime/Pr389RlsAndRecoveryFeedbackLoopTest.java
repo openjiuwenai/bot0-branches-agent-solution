@@ -9,9 +9,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
-import com.openjiuwen.rdc.spi.registry.InstanceIdCodec;
-import com.openjiuwen.rdc.spi.registry.ServiceIdCodec;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.InstanceIdCodec;
+import com.openjiuwen.rdc.model.ServiceIdCodec;
 
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 
@@ -416,7 +416,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
         card.setTenantId(tenant);
         card.setAgentId(agent);
         card.setAgentName("test-agent");
-        card.setFrameworkType(com.openjiuwen.rdc.spi.registry.FrameworkType.JIUWEN);
+        card.setFrameworkType(com.openjiuwen.rdc.model.FrameworkType.JIUWEN);
         card.setRouteKey("rk://svc/default");
         card.setContractVersion("1.0.0");
         card.setCapabilityVersion("2.1.0");

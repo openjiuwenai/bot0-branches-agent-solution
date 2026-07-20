@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.spi.registry;
+package com.openjiuwen.rdc.model;
 
 /**
  * Resolved view of an opaque {@code routeHandle} — returned by

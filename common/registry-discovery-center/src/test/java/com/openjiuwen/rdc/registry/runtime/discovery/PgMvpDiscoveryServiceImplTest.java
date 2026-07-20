@@ -9,11 +9,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentCardDto;
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
-import com.openjiuwen.rdc.spi.registry.RouteResolution;
+import com.openjiuwen.rdc.model.AgentCardDto;
+import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
-import com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException;
+import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -220,7 +220,7 @@ class PgMvpDiscoveryServiceImplTest {
 
     private static final class FakeRepository implements AgentRegistryRepository {
         @Override
-        public void upsert(com.openjiuwen.rdc.spi.registry.AgentRegistryEntry card, String a2aAgentCardJson) {
+        public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String a2aAgentCardJson) {
         }
 
         @Override

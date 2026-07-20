@@ -4,8 +4,8 @@
 
 package com.openjiuwen.rdc.registry.runtime.persistence.jdbc;
 
-import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.FrameworkType;
 
 import java.util.List;
 import java.util.Optional;

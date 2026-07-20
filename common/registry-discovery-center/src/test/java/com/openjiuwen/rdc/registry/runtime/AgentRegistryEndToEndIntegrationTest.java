@@ -12,10 +12,10 @@ import com.openjiuwen.rdc.registry.runtime.discovery.PgMvpDiscoveryServiceImpl;
 import com.openjiuwen.rdc.registry.runtime.health.MvpHealthProbeScheduler;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.spi.registry.AgentRegistryEntry;
-import com.openjiuwen.rdc.spi.registry.AgentCardDto;
-import com.openjiuwen.rdc.spi.registry.FrameworkType;
-import com.openjiuwen.rdc.spi.registry.RouteResolution;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.AgentCardDto;
+import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.model.RouteResolution;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
@@ -190,7 +190,7 @@ class AgentRegistryEndToEndIntegrationTest {
 
         // tenant-B caller must be rejected when resolving tenant-A's handle.
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-B"))
-                .isInstanceOf(com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException.class);
+                .isInstanceOf(com.openjiuwen.rdc.model.TenantIsolationViolationException.class);
     }
 
     @Test

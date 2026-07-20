@@ -53,7 +53,7 @@ import java.util.Base64;
  * HTTP 400 {@code malformed_handle}. Tenant mismatch (the decoded
  * {@code tenantId} does not equal the caller's tenant) is detected by the
  * caller (discovery service) and raises
- * {@link com.openjiuwen.rdc.spi.registry.TenantIsolationViolationException}
+ * {@link com.openjiuwen.rdc.model.TenantIsolationViolationException}
  * (HTTP 400 {@code tenant_isolation_violation}).
  *
  * <p>Pure functions on Jackson + {@code java.util.Base64} — no Spring / JDBC

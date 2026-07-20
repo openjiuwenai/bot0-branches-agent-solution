@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.spi.registry;
+package com.openjiuwen.rdc.model;
 
 import org.a2aproject.sdk.spec.AgentCard;
 

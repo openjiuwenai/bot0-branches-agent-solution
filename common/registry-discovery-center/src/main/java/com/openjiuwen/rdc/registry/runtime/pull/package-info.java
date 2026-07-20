@@ -10,8 +10,8 @@
  * {@link com.openjiuwen.rdc.registry.runtime.pull.PullRegistrationBootstrap}
  * listens for {@code ApplicationReadyEvent} and serially HTTP GETs each
  * configured runtime's {@code /.well-known/agent-card.json}, constructs an
- * {@link com.openjiuwen.rdc.spi.registry.AgentRegistryEntry} from the card
- * + the operator-pinned {@link com.openjiuwen.rdc.spi.registry.FrameworkType}
+ * {@link com.openjiuwen.rdc.model.AgentRegistryEntry} from the card
+ * + the operator-pinned {@link com.openjiuwen.rdc.model.FrameworkType}
  * + tenantId / routeKey / region from config, and upserts it via
  * {@link com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository}.
  * Single runtime failure is logged + skipped; startup never blocks.
