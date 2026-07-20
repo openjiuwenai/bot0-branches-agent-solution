@@ -8,24 +8,14 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 from agent_adapter.kafka_consumer.otlp_parser import parse_otlp_envelope
 
-JSONL = Path(__file__).resolve().parents[3] / "mock-assets" / "scripts" / "deployment" / "temp" / "otel_spans_v2.jsonl"
-# 上面 parents[3] 指向 evoagent-adapter; jsonl 在 OpenJiuwen 仓库根的 mock-assets/... 下,
-# 测试运行时通过环境变量 OPENJIUWEN_ROOT 或默认相对路径定位。
-_JSONL_CANDIDATES = [
-    JSONL,
-    Path(__file__).resolve().parents[6] / "mock-assets" / "scripts" / "deployment" / "temp" / "otel_spans_v2.jsonl",
-    Path("/mnt/d/Workspace/Test_Run/OpenJiuwen/mock-assets/scripts/deployment/temp/otel_spans_v2.jsonl"),
-]
+from tests._testdata import otel_spans_jsonl
 
 
 def _load_jsonl_spans() -> list[dict]:
-    p = next((c for c in _JSONL_CANDIDATES if c.exists()), None)
-    assert p is not None, f"otel_spans_v2.jsonl 未找到, 试过: {[str(c) for c in _JSONL_CANDIDATES]}"
-    raw = p.read_text(encoding="utf-8")
+    raw = otel_spans_jsonl().read_text(encoding="utf-8")
     dec = json.JSONDecoder()
     i, n, spans = 0, len(raw), []
     while i < n:

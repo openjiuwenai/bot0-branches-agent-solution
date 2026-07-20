@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from agent_adapter.repository.aggregation import (
     build_trace_tree,
@@ -21,22 +20,12 @@ from agent_adapter.repository.aggregation import (
     worst_status,
 )
 
-_JSONL_REL = Path("mock-assets") / "scripts" / "deployment" / "temp" / "otel_spans_v2.jsonl"
-
-
-def _find_jsonl() -> Path:
-    """向上查找 mock-assets/.../otel_spans_v2.jsonl (兼容 Windows/WSL 与不同测试目录深度)。"""
-    here = Path(__file__).resolve()
-    for parent in [here.parent, *here.parents]:
-        cand = parent / _JSONL_REL
-        if cand.exists():
-            return cand
-    raise AssertionError(f"otel_spans_v2.jsonl 未找到 (从 {here} 向上查找 {_JSONL_REL})")
+from tests._testdata import otel_spans_jsonl
 
 
 def _load_jsonl_spans() -> list[dict]:
     """加载 jsonl 并提升 service_name/conversation_id (对齐 parse_span 输出形状)。"""
-    p = _find_jsonl()
+    p = otel_spans_jsonl()
     raw = p.read_text(encoding="utf-8")
     dec = json.JSONDecoder()
     i, n, spans = 0, len(raw), []

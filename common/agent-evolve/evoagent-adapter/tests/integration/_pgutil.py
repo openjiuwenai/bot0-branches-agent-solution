@@ -12,14 +12,14 @@ from pathlib import Path
 
 import asyncpg
 
+from tests._testdata import otel_spans_jsonl
+
 PG_HOST = os.environ.get("ADAPTER_TEST_PG_HOST", "127.0.0.1")
 PG_PORT = int(os.environ.get("ADAPTER_TEST_PG_PORT", "5432"))
 PG_USER = os.environ.get("ADAPTER_TEST_PG_USER", "otel_user")
 PG_PASSWORD = os.environ.get("ADAPTER_TEST_PG_PASSWORD", "otel_password")
 MAINT_DB = os.environ.get("ADAPTER_TEST_PG_MAINT_DB", "otel_db")
 TEST_DB = os.environ.get("ADAPTER_TEST_PG_DB", "agent_adapter_test")
-
-_JSONL_REL = Path("mock-assets") / "scripts" / "deployment" / "temp" / "otel_spans_v2.jsonl"
 
 
 def dsn(db: str) -> str:
@@ -35,12 +35,8 @@ def pg_available() -> bool:
 
 
 def find_jsonl() -> Path:
-    here = Path(__file__).resolve()
-    for parent in [here.parent, *here.parents]:
-        cand = parent / _JSONL_REL
-        if cand.exists():
-            return cand
-    raise AssertionError(f"otel_spans_v2.jsonl 未找到 (从 {here} 向上)")
+    """返回归档在 tests/data 下的 jsonl 路径 (与 unit 测试共用同一份数据)。"""
+    return otel_spans_jsonl()
 
 
 def load_jsonl_spans() -> list[dict]:

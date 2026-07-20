@@ -15,25 +15,15 @@ trace_cleaner.clean_traces 零改动。关键映射:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from agent_adapter.trace_cleaner import clean_traces
 from agent_adapter.trace_source.spans_to_records import spans_to_records
 
-_JSONL_REL = Path("mock-assets") / "scripts" / "deployment" / "temp" / "otel_spans_v2.jsonl"
-
-
-def _find_jsonl() -> Path:
-    here = Path(__file__).resolve()
-    for parent in [here.parent, *here.parents]:
-        cand = parent / _JSONL_REL
-        if cand.exists():
-            return cand
-    raise AssertionError(f"otel_spans_v2.jsonl 未找到 (从 {here} 向上)")
+from tests._testdata import otel_spans_jsonl
 
 
 def _load_jsonl_spans() -> list[dict]:
-    raw = _find_jsonl().read_text(encoding="utf-8")
+    raw = otel_spans_jsonl().read_text(encoding="utf-8")
     dec = json.JSONDecoder()
     i, n, spans = 0, len(raw), []
     while i < n:
