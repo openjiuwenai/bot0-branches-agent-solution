@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.registry.runtime.health;
+package com.openjiuwen.rdc.health;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

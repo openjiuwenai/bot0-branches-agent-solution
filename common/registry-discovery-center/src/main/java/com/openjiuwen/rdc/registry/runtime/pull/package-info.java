@@ -17,7 +17,7 @@
  * Single runtime failure is logged + skipped; startup never blocks.
  *
  * <p>Bootstrap-only — no re-pull, no scheduled refresh. The
- * {@link com.openjiuwen.rdc.registry.runtime.health.MvpHealthProbeScheduler}
+ * {@link com.openjiuwen.rdc.health.MvpHealthProbeScheduler}
  * picks up the inserted entries automatically (they live in the same
  * {@code agent_registry_mvp} table as push-based entries).
  *
