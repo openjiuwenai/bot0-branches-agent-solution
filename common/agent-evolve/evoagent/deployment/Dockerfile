@@ -44,8 +44,7 @@ RUN pip install --no-cache-dir vendor/openjiuwen-*.whl && \
 
 # 复制源码
 COPY src/ ./src/
-# scenarios 实际位于 examples/scenarios/，复制到镜像内 /app/scenarios/
-COPY examples/scenarios/ ./scenarios/
+COPY examples/scenarios/ ./examples/scenarios/
 COPY skills/ ./skills/
 
 EXPOSE 8000

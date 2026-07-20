@@ -104,6 +104,42 @@ async def test_concurrent_updates_serialize(tmp_path: Path) -> None:
     assert storage.read_revision() == DocStorage.sha256(RULE_V3)
 
 
+async def test_different_agents_apply_in_parallel(tmp_path: Path) -> None:
+    """Per-Agent locks do not serialize independent Agents."""
+    strategies = {"edp": GatedStrategy(), "other": GatedStrategy()}
+    agents: list[AgentEntryConfig] = []
+    for agent_name in strategies:
+        path = tmp_path / "host" / agent_name / "AgentRule.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(RULE_V1, encoding="utf-8")
+        agents.append(
+            AgentEntryConfig(
+                name=agent_name,
+                managed_docs=[
+                    ManagedDocConfig(kind="agent_rule", path=str(path), apply="file_only")
+                ],
+            )
+        )
+    registry = ManagedDocRegistry(agents=agents, defaults=ManagedDocDefaults())
+    service = ManagedDocService(
+        registry=registry,
+        strategy_factory=lambda cfg: strategies[Path(cfg.path).parent.name],
+    )
+
+    results = await asyncio.gather(
+        service.update("edp", "agent_rule", RULE_V2),
+        service.update("other", "agent_rule", RULE_V2),
+    )
+    await asyncio.sleep(0)
+
+    assert strategies["edp"].call_count == 1
+    assert strategies["other"].call_count == 1
+
+    for strategy in strategies.values():
+        strategy.event.set()
+    await asyncio.gather(*(service.join_apply(result["task_id"]) for result in results))
+
+
 # ── AC10.2 事件循环不阻塞：apply 跑期间 GET /health 秒回 ─────────────
 
 

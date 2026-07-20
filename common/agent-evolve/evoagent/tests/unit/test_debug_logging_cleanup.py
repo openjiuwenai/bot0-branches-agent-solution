@@ -76,7 +76,10 @@ class TestEvalPromptDebugGated:
         # 清除上一次 evaluate 可能设置的标志
         evaluator._debug_prompt_logged = False  # type: ignore[attr-defined]
         with patch("builtins.open", autospec=True) as mock_open:
-            _run_evaluate(evaluator, '{"score": 0.8, "is_pass": true}')
+            _run_evaluate(
+                evaluator,
+                '{"score":0.8,"is_pass":true,"attributed_skill":"","reason":"ok"}',
+            )
         out = capsys.readouterr()
         assert "[DEBUG]" not in out.out
         # 不应打开 /tmp/eval_prompt_sample.txt
@@ -100,7 +103,10 @@ class TestEvalPromptDebugGated:
         caplog.set_level(logging.DEBUG, logger="evo_agent.evaluator.evaluators.llm")
         evaluator = _make_evaluator()
         evaluator._debug_prompt_logged = False  # type: ignore[attr-defined]
-        _run_evaluate(evaluator, '{"score": 0.8, "is_pass": true}')
+        _run_evaluate(
+            evaluator,
+            '{"score":0.8,"is_pass":true,"attributed_skill":"","reason":"ok"}',
+        )
         debug_msgs = [rec.getMessage() for rec in caplog.records if rec.levelno == logging.DEBUG]
         assert any("eval prompt" in m for m in debug_msgs)
         # 仅记录一次
@@ -115,7 +121,10 @@ class TestEvalPromptDebugGated:
         monkeypatch.setenv("EVO_DEBUG_EVAL_PROMPT", "1")
         evaluator = _make_evaluator()
         evaluator._debug_prompt_logged = False  # type: ignore[attr-defined]
-        _run_evaluate(evaluator, '{"score": 0.8, "is_pass": true}')
+        _run_evaluate(
+            evaluator,
+            '{"score":0.8,"is_pass":true,"attributed_skill":"","reason":"ok"}',
+        )
         out = capsys.readouterr()
         assert "[DEBUG]" not in out.out
 

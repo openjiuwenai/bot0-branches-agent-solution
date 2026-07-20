@@ -9,9 +9,15 @@ build/
 .venv/
 venv/
 
-# IDE
+# IDE and local agent tooling
 .idea/
 .vscode/
+/.agents/
+/.claude/
+/.codex/
+/.cursor/
+/.trae/
+/.codegraph/
 
 # Env
 .env
@@ -30,20 +36,13 @@ workspace/
 # OS
 .DS_Store
 
-# docs/ — 只跟踪 rules/、develop/、api/ 和 ROADMAP.md
-docs/*
-!docs/rules/
-!docs/develop/
-!docs/api/
-!docs/ROADMAP.md
+# agent-store 迁移时明确排除的内部资料
+/docs/
 
 /data/*
 
 # 构建期预下载的依赖 wheel（build 时生成，勿提交）
 vendor/
-
-# CodeGraph 索引（本地代码图谱产物，勿提交）
-.codegraph/
 
 # 离线交付包（镜像 tar / bundle 解压目录 / 分卷归档，打包产物不入仓）
 deployment/agent-adapter-offline-*/

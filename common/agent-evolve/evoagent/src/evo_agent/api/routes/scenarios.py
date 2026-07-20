@@ -16,7 +16,7 @@ router = APIRouter(prefix="/scenarios", tags=["scenarios"])
 async def list_scenarios() -> list[dict[str, Any]]:
     """列出所有可用场景。
 
-    扫描 ``scenarios/*/scenario.yaml``，返回场景名、optimizer 类路径和超参数。
+    扫描 ``examples/scenarios/*/scenario.yaml``，返回场景名、optimizer 类路径和超参数。
     """
     scenarios_dir = SCENARIOS_DIR
     result: list[dict[str, Any]] = []

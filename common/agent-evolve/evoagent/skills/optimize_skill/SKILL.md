@@ -16,7 +16,7 @@ tools:
 ## 执行步骤
 
 1. **解析用户指令**，提取以下参数：
-   - 场景名称（必填，如 `edp_agent`，对应 `scenarios/<name>/scenario.yaml`）
+   - 场景名称（必填，如 `edp_agent`，对应 `examples/scenarios/<name>/scenario.yaml`）
    - dataset manifest 路径（必填，`dataset.yaml`）
    - Adapter 地址（可选，默认从 scenario.yaml 读取）
    - Agent 名称（可选，默认使用场景名称）
@@ -25,7 +25,7 @@ tools:
 
 2. **查看场景配置**（可选，用于确认参数）：
    ```bash
-   cat scenarios/<场景名称>/scenario.yaml
+   cat examples/scenarios/<场景名称>/scenario.yaml
    ```
 
 3. **执行优化脚本**：

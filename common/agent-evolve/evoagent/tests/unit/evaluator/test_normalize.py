@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from evo_agent.evaluator.domain.models import StandardTrajectory
 from evo_agent.evaluator.trajectory.normalize import normalize_trace_to_trajectory
 
@@ -64,7 +62,13 @@ class TestSummary:
 
     def test_tool_calls_count_from_assistants(self) -> None:
         messages = [
-            {"role": "assistant", "tool_calls": [{"function": {"name": "a"}}, {"function": {"name": "b"}}]},
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {"function": {"name": "a"}},
+                    {"function": {"name": "b"}},
+                ],
+            },
             {"role": "assistant", "tool_calls": [{"function": {"name": "c"}}]},
             {"role": "user", "tool_calls": [{"function": {"name": "ignored"}}]},
         ]
@@ -140,9 +144,7 @@ class TestMessageNormalization:
         assert msg["tool_call_id"] == "t1"
 
     def test_name_omitted_when_none(self) -> None:
-        result = normalize_trace_to_trajectory(
-            {"messages": [{"role": "tool", "content": "r"}]}
-        )
+        result = normalize_trace_to_trajectory({"messages": [{"role": "tool", "content": "r"}]})
         msg = result["messages"][0]
         assert "name" not in msg
         assert "tool_call_id" not in msg

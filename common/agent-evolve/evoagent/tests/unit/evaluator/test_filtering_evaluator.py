@@ -172,7 +172,13 @@ class TestBatchEvaluate:
         """filtered 保留 + delegate 失败丢弃，顺序正确。"""
         delegate = MagicMock()
 
-        def delegate_evaluate(case: Case, predict: dict[str, Any]) -> EvaluatedCase:
+        def delegate_evaluate(
+            case: Case,
+            predict: dict[str, Any],
+            *,
+            enable_attribution: bool = True,
+        ) -> EvaluatedCase:
+            del enable_attribution
             if predict.get("fail"):
                 raise EvaluationError("boom")
             return EvaluatedCase(case=case, answer=predict, score=0.7)
@@ -195,3 +201,55 @@ class TestBatchEvaluate:
         results2 = evaluator_filtered.batch_evaluate([case_filtered], [{"a": 1}])
         assert len(results2) == 1
         assert results2[0].score == 0.0
+
+    def test_detailed_batch_preserves_delegate_failure_identity(self) -> None:
+        """Filtering seam 也要提供与 LLM evaluator 相同的无损 outcome 契约。"""
+        delegate = MagicMock()
+
+        def evaluate(
+            case: Case,
+            predict: dict[str, Any],
+            *,
+            enable_attribution: bool = True,
+        ) -> EvaluatedCase:
+            del enable_attribution
+            if predict.get("fail"):
+                raise EvaluationError(
+                    category="llm_invoke_error", safe_message="provider unavailable"
+                )
+            return EvaluatedCase(case=case, answer=predict, score=0.8)
+
+        delegate.evaluate.side_effect = evaluate
+        evaluator = FilteringEvaluator(delegate=delegate, filters=[_FakeFilter("f")])
+        cases = [_case(_TRAJECTORY), _case(_TRAJECTORY), _case(_TRAJECTORY)]
+
+        batch = evaluator.batch_evaluate_detailed(
+            cases,
+            [{"answer": 1}, {"fail": True}, {"answer": 3}],
+        )
+
+        assert [outcome.case_id for outcome in batch.outcomes] == [case.case_id for case in cases]
+        assert batch.outcomes[1].failure is not None
+        assert batch.outcomes[1].failure.category == "llm_invoke_error"
+        assert batch.evaluated_count == 2
+
+    def test_detailed_batch_forwards_validation_attribution_mode(self) -> None:
+        """Validation 的精简 schema 开关必须透传到未命中的 delegate。"""
+        case = _case(_TRAJECTORY)
+        expected = EvaluatedCase(case=case, answer={"answer": "ok"}, score=0.9)
+        delegate = MagicMock()
+        delegate.evaluate.return_value = expected
+        evaluator = FilteringEvaluator(delegate=delegate, filters=[_FakeFilter("f")])
+
+        batch = evaluator.batch_evaluate_detailed(
+            [case],
+            [{"answer": "ok"}],
+            enable_attribution=False,
+        )
+
+        assert batch.successes == (expected,)
+        delegate.evaluate.assert_called_once_with(
+            case,
+            {"answer": "ok"},
+            enable_attribution=False,
+        )

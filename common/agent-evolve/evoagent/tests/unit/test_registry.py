@@ -235,7 +235,7 @@ class ScenarioOpt:
 
 
 def test_registry_default_scenarios_dir_loads_edp_agent() -> None:
-    """验证默认 registry 能找到仓库根目录下的 scenarios/edp_agent。"""
+    """验证默认 registry 能找到 examples/scenarios/edp_agent。"""
     request = _make_request(scenario="edp_agent")
     try:
         optimizer = ScenarioRegistry().build_optimizer(
@@ -251,7 +251,7 @@ def test_registry_default_scenarios_dir_loads_edp_agent() -> None:
             },
         )
     except (FileNotFoundError, ImportError, ValueError):
-        pytest.skip("scenarios/edp_agent/ not available")
+        pytest.skip("examples/scenarios/edp_agent/ not available")
 
     assert optimizer is not None
 

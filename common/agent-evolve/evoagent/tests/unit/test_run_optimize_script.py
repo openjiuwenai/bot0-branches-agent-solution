@@ -41,6 +41,7 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "dataset_manifest": Path("data/dataset.yaml"),
         "adapter_url": None,
         "skills": None,
+        "managed_doc_kind": None,
         "agent_name": None,
         "epochs": 3,
         "batch_size": 4,
@@ -299,3 +300,64 @@ def test_cli_task_name_format() -> None:
         request = resolve_params(args)
 
     assert request.task_name == "cli-my_scenario"
+
+
+# ── managed-doc CLI（spec F9）──
+
+
+def test_run_optimize_managed_doc_kind_flag_disables_skill_fallback() -> None:
+    """--managed-doc-kind 走 F7 builder 分支，禁止 scenario skill fallback。"""
+    args = _make_args(managed_doc_kind="agent_rule")
+    # config 含 optimize=true skills（skill_a/skill_c）；若 fallback 触发会出现在
+    # request.skills 中。managed-doc 模式必须 skills=[] 证明未 fallback。
+    config = _make_config()
+
+    with patch.object(_run_optimize, "ScenarioRegistry") as mock_reg:
+        mock_reg.return_value.load_scenario_config.return_value = config
+        request = resolve_params(args)
+
+    # managed_doc_kind 透传（strip，不小写化）
+    assert request.managed_doc_kind == "agent_rule"
+    # skills 强制为空（yaml 的 skill_a/skill_c 未被 fallback 读取）
+    assert request.skills == []
+
+
+def test_run_optimize_managed_doc_kind_strips_whitespace() -> None:
+    """managed_doc_kind strip，空白视为未提供（回退现有 skill 路径）。"""
+    args = _make_args(managed_doc_kind="  agent_rule  ")
+    config = _make_config()
+
+    with patch.object(_run_optimize, "ScenarioRegistry") as mock_reg:
+        mock_reg.return_value.load_scenario_config.return_value = config
+        request = resolve_params(args)
+
+    assert request.managed_doc_kind == "agent_rule"
+
+
+def test_run_optimize_managed_doc_kind_pure_whitespace_treated_as_absent() -> None:
+    """纯空白 managed_doc_kind 视为未提供（回退现有 skill 路径）。
+
+    P2#6：(x or "").strip() or None 对纯空白 "   " → None（与叶子 types.py 一致），
+    避免纯空白穿透 both-absent 门触发无目标 eval-only 路径。
+    """
+    args = _make_args(managed_doc_kind="   ")
+    config = _make_config()
+
+    with patch.object(_run_optimize, "ScenarioRegistry") as mock_reg:
+        mock_reg.return_value.load_scenario_config.return_value = config
+        request = resolve_params(args)
+
+    assert request.managed_doc_kind is None
+
+
+def test_run_optimize_no_managed_doc_kind_uses_existing_skill_path() -> None:
+    """不传 --managed-doc-kind 时现有 Skill 路径不变（不回归）。"""
+    args = _make_args()  # managed_doc_kind=None
+    config = _make_config()
+
+    with patch.object(_run_optimize, "ScenarioRegistry") as mock_reg:
+        mock_reg.return_value.load_scenario_config.return_value = config
+        request = resolve_params(args)
+
+    assert request.managed_doc_kind is None
+    assert request.skills == ["skill_a", "skill_c"]  # 现有 yaml fallback 行为

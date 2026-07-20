@@ -1,7 +1,7 @@
 # EvoAgent 客户现场部署教程（双容器）
 
 > 适用：客户 Linux 环境，EvoAgent + EvoAgentAdapter **双容器**联合部署。
-> 仓内姊妹文档：`deployment/README.md`（EvoAgent 单容器细节）、`community/EvoAgentAdapter/deployment/`（Adapter 细节）。
+> 仓内姊妹文档：`deployment/README.md`（EvoAgent 单容器细节）、`common/agent-evolve/evoagent-adapter/deployment/`（Adapter 细节）。
 
 ---
 
@@ -126,12 +126,12 @@ docker network create evo-net
 
 ## 4. Adapter 部署
 
-> 目录：`community/EvoAgentAdapter/deployment/`
+> 目录：`common/agent-evolve/evoagent-adapter/deployment/`
 
 ### 4.1 配置
 
 ```bash
-cd community/EvoAgentAdapter/deployment
+cd common/agent-evolve/evoagent-adapter/deployment
 cp config/.env.example config/.env
 vim config/.env
 ```
@@ -164,19 +164,17 @@ docker ps --filter "name=adapter"          # 期望 (healthy)
 
 ## 5. EvoAgent 部署
 
-> 目录：`community/EvoAgent/deployment/`
+> 目录：`common/agent-evolve/evoagent/deployment/`
 
 ### 5.1 构建镜像（联网机器）
 
-> 路径说明：`agent-store` 仓库内 EvoAgent 位于 `community/EvoAgent`，`agent-solution` 仓库内位于 `common/agent-evolve/evoagent`。`build.sh` 会自动探测，无需手动指定 `EVOAGENT_REL_PATH`。
-
 ```bash
-cd community/EvoAgent/deployment   # agent-solution 仓库改为 cd common/agent-evolve/evoagent/deployment
+cd common/agent-evolve/evoagent/deployment
 
 # 推荐：PyPI 拉 openjiuwen wheel
 HOME=/home/evolution/build \
-EVOAGENT_STORE_REPO=https://gitcode.com/AE-TEAM/agent-store.git \
-EVOAGENT_STORE_BRANCH=dev_enterprise_evolution \
+EVOAGENT_SOLUTION_REPO=https://gitcode.com/AE-TEAM/agent-solution.git \
+EVOAGENT_SOLUTION_BRANCH=common \
 EVOAGENT_IMAGE_TAG=evoagent:latest \
 ./build.sh --local
 ```
@@ -211,11 +209,17 @@ EVO_LLM_PROVIDER=ICBC
 EVO_ICBC_TOKEN=<JWT,Secret 注入,勿写明文>
 EVO_ICBC_USER_ID=<工行分配的固定 userId>
 EVO_ICBC_ENDPOINT=http://aigc.sdc.cs.icbc/mlpmodelservice/aigc/chat/completions
+EVO_ICBC_CONTEXT_WINDOW_TOKENS=32768
 EVO_ICBC_TIMEOUT=120.0
 
 # ===== Adapter sidecar 地址（API 模式必填）=====
 # 同机：host.docker.internal；跨机：Adapter 机器 IP
 EVO_ADAPTER_URL=http://host.docker.internal:8900
+EVO_MANAGED_DOC_APPLY_DEADLINE=600
+EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE=900
+EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db
+EVO_MANAGED_DOC_CONTENT_POLICIES={"agent_rule":"preserving"}
+EVO_MANAGED_DOC_PROTECTED_SECTIONS={}
 
 # ===== 数据集路径白名单（防路径穿越，逗号分隔）=====
 EVO_ALLOWED_DATA_ROOTS=/data/evo_agent,/tmp/evo_agent
@@ -247,7 +251,7 @@ EVO_ARTIFACT_DIR=./workspace/artifacts
 |---|---|
 | 始终 | `EVO_ADAPTER_URL` |
 | `EVO_LLM_PROVIDER=OpenAI` | `EVO_LLM_API_KEY` / `EVO_LLM_BASE_URL` / `EVO_OPTIMIZER_MODEL` / `EVO_TARGET_MODEL` |
-| `EVO_LLM_PROVIDER=ICBC` | `EVO_ICBC_TOKEN` / `EVO_ICBC_USER_ID` / `EVO_ICBC_ENDPOINT`（其余 LLM_* 被忽略） |
+| `EVO_LLM_PROVIDER=ICBC` | `EVO_ICBC_TOKEN` / `EVO_ICBC_USER_ID` / `EVO_ICBC_ENDPOINT` / `EVO_ICBC_CONTEXT_WINDOW_TOKENS`（其余 LLM_* 被忽略） |
 
 ### 5.3 启动
 
@@ -359,13 +363,13 @@ curl -X POST http://localhost:8000/optimize/job_xxx/cancel
 
 ```bash
 # EvoAgent
-cd community/EvoAgent/deployment
+cd common/agent-evolve/evoagent/deployment
 ./build.sh --local
 ./export-bundle.sh evoagent:latest
 # → ../evoagent-offline-YYYYMMDD.tar.gz
 
 # Adapter
-cd community/EvoAgentAdapter/deployment
+cd common/agent-evolve/evoagent-adapter/deployment
 ./export-bundle.sh agent-adapter:latest
 # → ../agent-adapter-offline-YYYYMMDD.tar.gz
 ```
@@ -435,7 +439,7 @@ ls -lh deployment/workspace/artifacts/   # 训练过程产物（skill patches、
 | `422 Dataset path must be under allowed roots` | `dataset_path` 不在 `EVO_ALLOWED_DATA_ROOTS` 下，或宿主/容器路径映射搞反 |
 | `422 Dataset file not found` | 容器内 `/data` ← 宿主 `/home/evolution/data`，文件要放对地方 |
 | 容器一直 `starting` 不转 `healthy` | 等 15s 启动期后 `docker logs evoagent`，多为 `.env` 缺必填或 ICBC 凭证错 |
-| ICBC 模式启动 fail-fast 报必填缺失 | `EVO_LLM_PROVIDER=ICBC` 时 `EVO_ICBC_TOKEN/USER_ID/ENDPOINT` 三项不能空 |
+| ICBC 模式启动 fail-fast 报必填缺失 | `EVO_LLM_PROVIDER=ICBC` 时 `EVO_ICBC_TOKEN/USER_ID/ENDPOINT/CONTEXT_WINDOW_TOKENS` 四项不能空 |
 | `ICBCTokenExpiredError` | JWT 过期，需找客户换 token 后改 `.env` 重启 |
 | `docker build` 拉 wheel 失败 | 换 `PIP_INDEX_URL` 为可用源，或离线包导入 |
 | Adapter 与 EvoAgent 数据集路径不一致 | EvoAgent 把数据集路径传给 Adapter，两边挂载要协调（skill 文件通常由 Adapter 的 `HOST_SKILLS_DIR` 管） |
@@ -446,8 +450,8 @@ ls -lh deployment/workspace/artifacts/   # 训练过程产物（skill patches、
 
 ```bash
 # 启动
-cd community/EvoAgentAdapter/deployment && ./start.sh
-cd community/EvoAgent/deployment && ./run.sh
+cd common/agent-evolve/evoagent-adapter/deployment && ./start.sh
+cd common/agent-evolve/evoagent/deployment && ./run.sh
 
 # 验证
 curl http://localhost:8900/api/v1/status
@@ -464,8 +468,8 @@ docker logs -f evoagent
 docker logs -f adapter
 
 # 停
-cd community/EvoAgent/deployment && ./stop.sh
-cd community/EvoAgentAdapter/deployment && ./stop.sh
+cd common/agent-evolve/evoagent/deployment && ./stop.sh
+cd common/agent-evolve/evoagent-adapter/deployment && ./stop.sh
 ```
 
 ---

@@ -33,14 +33,14 @@ tests/skill_hotupdate/
 
 ### EvoAgent 客户端单元测试（可选）
 
-在 **EvoAgent** 工程中执行（见 `community/EvoAgent`）：
+在 **EvoAgent** 工程中执行（见 `common/agent-evolve/evoagent`）：
 
 | 项目 | 要求 |
 | --- | --- |
 | Python | ≥ 3.12 |
 | pytest | ≥ 8.0；`pytest-asyncio`、`pytest-httpx` |
 | openjiuwen | 与 EvoAgent 源码匹配的版本（通常 editable 安装 `agent-core`） |
-| EvoAgent | `pip install -e community/EvoAgent[dev]` |
+| EvoAgent | `pip install -e common/agent-evolve/evoagent[dev]` |
 
 ## 快速执行
 
@@ -67,8 +67,8 @@ python run_api_suite.py
 ## 相关文档
 
 - Adapter Skill 存储设计：`docs/skills-storage-design.md`
-- Adapter 使用指导 Skill 章节：`docs/deployment-guide.md`（1.4 Skill 存储设计 / 4.1.7 Skill 管理）
-- API 契约：`community/EvoAgent/docs/api/adapter-api-contract.md`
+- Adapter 使用说明：`common/agent-evolve/evoagent-adapter/README.md`
+- API 契约：`common/agent-evolve/evoagent/docs/api/adapter-api-contract.md`
 
 ## 注意事项
 

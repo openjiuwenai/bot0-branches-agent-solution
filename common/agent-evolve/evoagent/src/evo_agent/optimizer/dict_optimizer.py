@@ -52,6 +52,7 @@ class DictSkillDocumentOptimizer(SkillDocumentOptimizer):
         if exporter.enabled:
             self._artifact_exporter = DictArtifactExporter(
                 str(exporter._output_dir),
+                score_threshold=self._score_threshold,
                 export_trajectories=self._artifact_export_trajectories,
             )
 

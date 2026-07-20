@@ -156,7 +156,12 @@ def test_read_file_tool_result_is_truncated() -> None:
     prompt = mock_invoke.await_args.args[0][0].content
     assert "read_file" in prompt
     assert len(prompt) < len(long_skill)
-    assert "…" in prompt
+    assert "TOOL_RESULT_TRUNCATED" in prompt
+    trajectory = json.loads(prompt.split("轨迹：\n", 1)[1])
+    assert (
+        trajectory["messages"][0]["tool_calls"][0]["function"]["arguments"]
+        == '{"path": "/skills/fund_planning_skill/SKILL.md"}'
+    )
 
 
 def test_empty_trajectory_raises_evaluation_error() -> None:
@@ -187,3 +192,42 @@ def test_missing_goal_raises_evaluation_error() -> None:
         mock_invoke.return_value = mock_response
         with pytest.raises(EvaluationError, match="missing valid 'goal'"):
             generator.generate(value)
+
+
+def test_generate_repairs_one_schema_allowed_missing_comma_without_retry() -> None:
+    generator = _make_generator()
+    value = _input_with_messages([TrajectoryMessage(role="user", content="查询余额。")])
+    mock_response = type(
+        "Response",
+        (),
+        {"content": '{"goal": "查询余额" "confidence": 0.8}'},
+    )()
+
+    with patch.object(generator._model, "invoke", new_callable=AsyncMock) as mock_invoke:
+        mock_invoke.return_value = mock_response
+        result = generator.generate(value)
+
+    assert result.goal == "查询余额"
+    assert result.metadata["confidence"] == 0.8
+    assert mock_invoke.await_count == 1
+
+
+def test_generate_retries_invalid_confidence_and_consumes_second_response() -> None:
+    generator = _make_generator()
+    value = _input_with_messages([TrajectoryMessage(role="user", content="查询余额。")])
+    responses = [
+        type("Response", (), {"content": '{"goal": "wrong", "confidence": "high"}'})(),
+        type("Response", (), {"content": '{"goal": "right", "confidence": 0.7}'})(),
+    ]
+
+    with patch.object(generator._model, "invoke", new_callable=AsyncMock) as mock_invoke:
+        mock_invoke.side_effect = responses
+        result = generator.generate(value)
+
+    assert result.goal == "right"
+    assert result.metadata["confidence"] == 0.7
+    assert mock_invoke.await_count == 2
+    retry_prompt = mock_invoke.await_args_list[1].args[0][0].content
+    assert "goal" in retry_prompt
+    assert "查询余额。" in retry_prompt
+    assert "非空字符串" not in retry_prompt

@@ -29,6 +29,9 @@ class EvaluationResult(BaseModel):
     per_metric: dict[str, float] | None = None
     reason: str = ""
     attributed_skill: str = ""
+    repaired: bool = False
+    parse_mode: str = "exact"
+    repair_operations: list[dict[str, Any]] = Field(default_factory=list)
     filter_matches: list[FilterMatch] = Field(default_factory=list)
 
     @classmethod
@@ -40,6 +43,9 @@ class EvaluationResult(BaseModel):
 
         status: EvaluationStatus = "evaluated"
         attributed_skill: str = ""
+        repaired = False
+        parse_mode = "exact"
+        repair_operations: list[dict[str, Any]] = []
         is_pass: bool = True
         filter_matches: list[FilterMatch] = []
         if evaluated.reason:
@@ -52,6 +58,17 @@ class EvaluationResult(BaseModel):
                     raw_pass = parsed.get("is_pass")
                     if isinstance(raw_pass, bool):
                         is_pass = raw_pass
+                    raw_repaired = parsed.get("repaired")
+                    if isinstance(raw_repaired, bool):
+                        repaired = raw_repaired
+                    raw_parse_mode = parsed.get("parse_mode")
+                    if isinstance(raw_parse_mode, str):
+                        parse_mode = raw_parse_mode
+                    raw_operations = parsed.get("repair_operations")
+                    if isinstance(raw_operations, list) and all(
+                        isinstance(item, dict) for item in raw_operations
+                    ):
+                        repair_operations = [dict(item) for item in raw_operations]
                     if parsed.get("status") == "filtered":
                         raw_matches = parsed.get("filter_matches", [])
                         filter_matches = [FilterMatch.model_validate(item) for item in raw_matches]
@@ -67,5 +84,8 @@ class EvaluationResult(BaseModel):
             per_metric=per_metric,
             reason=evaluated.reason,
             attributed_skill=attributed_skill,
+            repaired=repaired,
+            parse_mode=parse_mode,
+            repair_operations=repair_operations,
             filter_matches=filter_matches,
         )

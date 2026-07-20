@@ -1,0 +1,27 @@
+{
+  "agent_name": "edp",
+  "items": [
+    {
+      "doc_kind": "agent_rule",
+      "display_name": "AgentRule.md",
+      "filename": "AgentRule.md",
+      "apply_mode": "restart",
+      "max_task_seconds": 217
+    },
+    {
+      "doc_kind": "agents_instructions",
+      "display_name": "AGENTS.md",
+      "filename": "AGENTS.md",
+      "apply_mode": "restart",
+      "max_task_seconds": 217
+    },
+    {
+      "doc_kind": "claude_instructions",
+      "display_name": "CLAUDE.md",
+      "filename": "CLAUDE.md",
+      "apply_mode": "restart",
+      "max_task_seconds": 217
+    }
+  ],
+  "total": 3
+}

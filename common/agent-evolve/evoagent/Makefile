@@ -1,4 +1,4 @@
-.PHONY: install lint fix test test-unit dev serve clean
+.PHONY: install lint fix test test-unit test-managed-doc-e2e dev serve clean
 
 install:
 	uv sync --all-extras
@@ -17,6 +17,9 @@ test:
 
 test-unit:
 	uv run pytest tests/unit/ -v
+
+test-managed-doc-e2e:
+	EVO_RUN_MANAGED_DOC_E2E=1 uv run pytest tests/e2e/test_managed_doc_optimize.py -s -vv
 
 dev:
 	uv run python -m evo_agent
