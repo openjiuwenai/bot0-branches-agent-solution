@@ -12,6 +12,12 @@ import java.util.Set;
  * <p>Zero LLM, zero framework coupling. Replaces the pev kernel dependency:
  * EDPA-alpha and PEV are peer agents that must not depend on each other.
  *
+ * <p><b>Drift boundary (honest)</b>: {@link #toReplanAction} is a byte-identical port of
+ * {@code PevKernel.toReplanAction}. There is currently NO automated cross-module sync
+ * (no property/equivalence test). If PEV changes the IFF contract (thresholds, new RootCause
+ * variant), this function must be manually updated. A cross-module property test is tracked
+ * as follow-up (xuefanfan Q2).
+ *
  * @since 2026-07
  */
 public final class EdpaKernel {
