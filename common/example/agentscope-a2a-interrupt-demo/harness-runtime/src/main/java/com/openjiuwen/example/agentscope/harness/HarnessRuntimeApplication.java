@@ -6,12 +6,7 @@ package com.openjiuwen.example.agentscope.harness;
 
 import com.openjiuwen.service.adapters.agentscope.agentfw.AgentScopeAgentHandler;
 import io.agentscope.core.model.Model;
-import io.agentscope.core.permission.PermissionBehavior;
-import io.agentscope.core.permission.PermissionContextState;
-import io.agentscope.core.permission.PermissionMode;
-import io.agentscope.core.permission.PermissionRule;
-import io.agentscope.core.tool.Tool;
-import io.agentscope.core.tool.ToolParam;
+import io.agentscope.core.model.ToolSchema;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import io.agentscope.harness.agent.HarnessAgent;
@@ -21,8 +16,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
-/** HarnessAgent runtime used to verify A2A HITL interrupt and resume. */
+/** HarnessAgent runtime used to verify A2A external-tool interrupt and resume. */
 @SpringBootApplication
 public class HarnessRuntimeApplication {
     public static void main(String[] args) {
@@ -46,18 +43,16 @@ public class HarnessRuntimeApplication {
     HarnessAgent harnessAgent(
         Model deepSeekModel,
         @Value("${agentscope.demo.workspace}") String workspace) {
-        Toolkit toolkit = new Toolkit();
-        toolkit.registerTool(new TransferTools());
         return HarnessAgent.builder()
             .name("runtime-harness-agent")
             .sysPrompt("""
-                You are a transfer execution agent. When the user requests a transfer, you MUST call
-                execute_transfer exactly once with the requested recipient and amount. Never claim that
-                a transfer succeeded before the tool returns. After the tool returns, answer concisely.
+                You are an external information lookup agent. For every user request, you MUST call
+                external_lookup exactly once. Extract the customer identifier into customer_id and the
+                requested information into attribute. The tool is executed outside AgentScope. After its
+                result is supplied, summarize that result concisely.
                 """)
             .model(deepSeekModel)
-            .toolkit(toolkit)
-            .permissionContext(askBeforeTransfer())
+            .toolkit(externalToolkit())
             .workspace(Path.of(workspace))
             .disableFilesystemTools()
             .disableShellTool()
@@ -77,12 +72,22 @@ public class HarnessRuntimeApplication {
         return AgentScopeAgentHandler.forHarnessAgent(harnessAgent);
     }
 
-    private static PermissionContextState askBeforeTransfer() {
-        return PermissionContextState.builder()
-            .mode(PermissionMode.DEFAULT)
-            .addAskRule("execute_transfer", new PermissionRule(
-                "execute_transfer", null, PermissionBehavior.ASK, "demo-policy"))
-            .build();
+    static Toolkit externalToolkit() {
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerSchema(ToolSchema.builder()
+            .name("external_lookup")
+            .description("Look up information in an external system")
+            .parameters(Map.of(
+                "type", "object",
+                "properties", Map.of(
+                    "customer_id", Map.of("type", "string", "description", "Customer identifier"),
+                    "attribute", Map.of(
+                        "type", "string",
+                        "description", "Customer attribute to retrieve, for example account_tier")),
+                "required", List.of("customer_id", "attribute"),
+                "additionalProperties", false))
+            .build());
+        return toolkit;
     }
 
     private static String required(String value, String environmentName) {
@@ -90,14 +95,5 @@ public class HarnessRuntimeApplication {
             throw new IllegalStateException(environmentName + " must be configured");
         }
         return value;
-    }
-
-    static final class TransferTools {
-        @Tool(name = "execute_transfer", description = "Execute a money transfer after user approval")
-        public String executeTransfer(
-            @ToolParam(name = "recipient", description = "Transfer recipient") String recipient,
-            @ToolParam(name = "amount", description = "Amount in CNY") double amount) {
-            return "Transfer executed: CNY " + amount + " to " + recipient;
-        }
     }
 }

@@ -89,7 +89,7 @@ class AgentScopeAgentIntegrationTest {
             assertThat(interruptChunks).hasSize(1);
             QueryChunk interruptChunk = interruptChunks.get(0);
             Map<String, Object> interaction = interaction(interruptChunk.getData());
-            assertInteraction(interaction, "confirmation", "transfer");
+            assertInteraction(interaction, "confirmation", "transfer", null);
             assertThat(observer.completed).isEqualTo(1);
             assertThat(observer.errors).isEmpty();
 
@@ -139,7 +139,11 @@ class AgentScopeAgentIntegrationTest {
             Map<String, Object> first = result(runtime.handler().query(request("search")));
             assertThat(first).as("first external-tool result for %s", kind).containsKey("_interrupt");
             Map<String, Object> interaction = interaction(first.get("_interrupt"));
-            assertInteraction(interaction, "tool_result", "external_search");
+            assertInteraction(
+                interaction,
+                "tool_result",
+                "external_search",
+                Map.of("query", "agent runtime"));
 
             QueryResponse resumed = runtime.handler().query(resume("external payload", interaction));
 
@@ -265,14 +269,22 @@ class AgentScopeAgentIntegrationTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static void assertInteraction(Map<String, Object> interaction, String kind, String toolName) {
+    private static void assertInteraction(Map<String, Object> interaction, String kind, String toolName,
+        Map<String, Object> expectedArguments) {
         Map<String, Object> payload = payload(interaction);
         assertThat(payload).containsEntry("kind", kind);
         List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
-        assertThat(items).singleElement().satisfies(item -> assertThat(item)
-            .containsEntry("type", "tool_call")
-            .containsEntry("name", toolName)
-            .doesNotContainKeys("id", "arguments"));
+        assertThat(items).singleElement().satisfies(item -> {
+            assertThat(item)
+                .containsEntry("type", "tool_call")
+                .containsEntry("name", toolName)
+                .doesNotContainKey("id");
+            if (expectedArguments == null) {
+                assertThat(item).doesNotContainKey("arguments");
+            } else {
+                assertThat(item).containsEntry("arguments", expectedArguments);
+            }
+        });
     }
 
     private static ChatResponse textResponse(String text) {

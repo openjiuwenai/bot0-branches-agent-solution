@@ -20,14 +20,14 @@ openjiuwen:
         enabled: false
     a2a:
       agent-name: "AgentScopeHarnessAgent"
-      agent-description: "AgentScope HarnessAgent with A2A HITL confirmation"
+      agent-description: "AgentScope HarnessAgent with A2A external-tool result resume"
       provider-organization: "OpenJiuwen"
       streaming: true
       default-input-modes: ["text", "text/plain"]
       default-output-modes: ["text", "text/plain"]
       skills:
-        - id: "approved_transfer"
-          name: "Approved Transfer"
-          description: "Execute a transfer after explicit structured approval"
-          tags: ["agentscope", "harness", "hitl", "transfer"]
-          examples: ["Transfer 5 CNY to Li Ming"]
+        - id: "external_lookup"
+          name: "External Lookup"
+          description: "Request an external lookup result and continue after it is supplied"
+          tags: ["agentscope", "harness", "interrupt", "external-tool"]
+          examples: ["Look up the profile for customer C001"]

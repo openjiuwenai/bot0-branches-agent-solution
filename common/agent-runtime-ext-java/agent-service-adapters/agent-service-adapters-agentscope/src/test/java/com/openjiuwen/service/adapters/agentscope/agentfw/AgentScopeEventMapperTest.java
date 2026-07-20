@@ -289,9 +289,14 @@ class AgentScopeEventMapperTest {
         assertThat(payload).containsEntry("kind", kind);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
-        assertThat(items).singleElement().satisfies(item -> assertThat(item)
-            .containsKeys("type", "name")
-            .doesNotContainKeys("id", "arguments"));
+        assertThat(items).singleElement().satisfies(item -> {
+            assertThat(item).containsKeys("type", "name").doesNotContainKey("id");
+            if ("tool_result".equals(kind)) {
+                assertThat(item).containsEntry("arguments", Map.of("amount", 5));
+            } else {
+                assertThat(item).doesNotContainKey("arguments");
+            }
+        });
     }
 
     private static ToolUseBlock tool(String id, String name, ToolCallState state) {

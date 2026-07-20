@@ -179,6 +179,9 @@ final class AgentScopeEventMapper {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("type", "tool_call");
             item.put("name", tool.getName());
+            if ("tool_result".equals(kind)) {
+                item.put("arguments", new LinkedHashMap<>(tool.getInput()));
+            }
             items.add(item);
         }
         Map<String, Object> payload = new LinkedHashMap<>();
