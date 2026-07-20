@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Validates standard A2A Agent Card JSON per Feat-015 0711 scope §5.1.2.
@@ -72,7 +71,9 @@ public final class AgentCardValidator {
             return ValidationResult.valid(
                     root.path("version").asText(null),
                     contractVersion);
-        } catch (JsonProcessingException ex) {
+        } catch (JsonProcessingException | IllegalArgumentException ex) {
+            // Schema/field checks throw IllegalArgumentException; map to AGENT_CARD_INVALID
+            // rather than propagating (callers expect ValidationResult, not unchecked).
             return ValidationResult.invalid("AGENT_CARD_INVALID", ex.getMessage());
         }
     }
