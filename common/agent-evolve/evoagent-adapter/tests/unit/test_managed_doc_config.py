@@ -136,3 +136,26 @@ def test_load_config_managed_doc_defaults_typo_rejected(tmp_path) -> None:
     )
     with pytest.raises(ValidationError):
         load_config(yaml_path)
+
+
+# ── AC1.4 max_content_bytes 默认 + per-doc 覆写 + 边界（G1/C8） ─────────
+
+
+def test_max_content_bytes_default_256k() -> None:
+    cfg = ManagedDocConfig(kind="agent_rule", path="/x")
+    assert cfg.max_content_bytes == 262_144
+
+
+def test_max_content_bytes_per_doc_override() -> None:
+    cfg = ManagedDocConfig(kind="agent_rule", path="/x", max_content_bytes=1024)
+    assert cfg.max_content_bytes == 1024
+
+
+def test_max_content_bytes_negative_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ManagedDocConfig(kind="agent_rule", path="/x", max_content_bytes=-1)  # type: ignore[arg-type]
+
+
+def test_max_content_bytes_non_int_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ManagedDocConfig(kind="agent_rule", path="/x", max_content_bytes="big")  # type: ignore[arg-type]

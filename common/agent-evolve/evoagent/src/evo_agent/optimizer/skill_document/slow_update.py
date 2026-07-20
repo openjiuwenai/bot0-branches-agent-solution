@@ -7,21 +7,26 @@ injection into the skill document and operator sync.
 
 from __future__ import annotations
 
-import json
-import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from openjiuwen.core.common.logging import logger
 
+from evo_agent.llm.invocation import LLMInvocation, LLMInvocationError
+from evo_agent.llm.structured_output import (
+    StructuredOutputResult,
+    log_structured_output,
+    parse_structured_output,
+)
 from evo_agent.optimizer.llm_resilience import (
     LLMInvokePolicy,
-    invoke_text_with_retry,
+    invoke_with_retry,
 )
 from evo_agent.optimizer.skill_document.prompts import load_skill_opt_prompt
+from evo_agent.optimizer.skill_document.structured_validators import (
+    SLOW_UPDATE_POLICY,
+    validate_slow_update_output,
+)
 from evo_agent.optimizer.skill_document.types import SlowUpdateResult
-
-if TYPE_CHECKING:
-    from openjiuwen.core.foundation.llm.model import Model
 
 _SLOW_UPDATE_POLICY = LLMInvokePolicy(
     attempt_timeout_secs=90,  # A8: 180→90
@@ -103,41 +108,30 @@ def build_comparison_text(
 
 def _parse_slow_update_response(raw: str) -> SlowUpdateResult:
     """Parse LLM response into SlowUpdateResult. Graceful on failure."""
-    raw = raw.strip()
-    if not raw:
+    if not raw.strip():
         return SlowUpdateResult(reasoning="", slow_update_content="", action="empty_response")
-
-    # Try direct JSON parse, then fallback extraction
-    parsed = None
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        # Try stripping markdown fences
-        cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
-        cleaned = re.sub(r"```\s*$", "", cleaned, flags=re.MULTILINE).strip()
-        try:
-            parsed = json.loads(cleaned)
-        except json.JSONDecodeError:
-            # Try extracting JSON object
-            match = re.search(r"\{[\s\S]*\}", cleaned)
-            if match:
-                try:
-                    parsed = json.loads(match.group(0))
-                except json.JSONDecodeError:
-                    pass
-
-    if not isinstance(parsed, dict):
+    extraction = parse_structured_output(
+        raw,
+        policy=SLOW_UPDATE_POLICY,
+        validator=validate_slow_update_output,
+    )
+    parsed = extraction.data
+    if parsed is None:
         return SlowUpdateResult(reasoning="", slow_update_content="", action="parse_failed")
 
+    reasoning = parsed.get("reasoning", "")
+    content = parsed.get("slow_update_content", "")
+    assert isinstance(reasoning, str)
+    assert isinstance(content, str)
     return SlowUpdateResult(
-        reasoning=str(parsed.get("reasoning", "")),
-        slow_update_content=str(parsed.get("slow_update_content", "")),
-        action="success" if parsed.get("slow_update_content") else "missing_content",
+        reasoning=reasoning,
+        slow_update_content=content,
+        action="success" if content else "missing_content",
     )
 
 
 async def run_slow_update(
-    llm: Model,
+    llm: LLMInvocation,
     model: str,
     *,
     prev_skill: str,
@@ -159,16 +153,61 @@ async def run_slow_update(
     )
     if prev_guidance:
         prompt += f"## Previous Slow Update Guidance\n{prev_guidance}\n\n"
+    retry_prompt = (
+        "格式重试：请依据下方任务证据重新生成真实的 slow update 内容，只输出合法 JSON "
+        "对象；reasoning 与 slow_update_content 如出现必须是字符串，不要照抄字段说明。\n\n"
+        f"## Previous Epoch Skill\n{prev_skill}\n\n"
+        f"## Current Epoch Skill\n{curr_skill}\n\n"
+        f"## Longitudinal Evidence\n{comparison_text}\n\n"
+    )
+    if prev_guidance:
+        retry_prompt += f"## Previous Slow Update Guidance\n{prev_guidance}\n"
+
+    def parse(text: str) -> StructuredOutputResult:
+        return parse_structured_output(
+            text,
+            policy=SLOW_UPDATE_POLICY,
+            validator=validate_slow_update_output,
+        )
 
     try:
-        raw = await invoke_text_with_retry(
+        invocation = await invoke_with_retry(
             llm,
             model,
             prompt,
             policy=_SLOW_UPDATE_POLICY,
+            stage="slow_update",
+            retry_prompt=retry_prompt,
+            result_validator=lambda text: parse(text).data is not None,
+            result_error_classifier=lambda text: parse(text).error_category,
+            output_schema_name=SLOW_UPDATE_POLICY.schema_name,
         )
+    except LLMInvocationError as exc:
+        if exc.category == "unusable_response":
+            logger.warning(
+                "structured output failed stage=slow_update schema_name=slow_update "
+                "fallback=parse_failed category=%s",
+                exc.output_error_category or "unknown",
+            )
+            return SlowUpdateResult(reasoning="", slow_update_content="", action="parse_failed")
+        if exc.category == "empty_response":
+            return SlowUpdateResult(reasoning="", slow_update_content="", action="empty_response")
+        logger.warning("slow_update LLM call failed", exc_info=True)
+        return SlowUpdateResult(reasoning="", slow_update_content="", action="llm_error")
     except Exception:
         logger.warning("slow_update LLM call failed", exc_info=True)
         return SlowUpdateResult(reasoning="", slow_update_content="", action="llm_error")
 
+    raw = invocation.text
+    extraction = parse(raw)
+    if extraction.data is not None:
+        log_structured_output(
+            extraction,
+            stage="slow_update",
+            schema_name=SLOW_UPDATE_POLICY.schema_name,
+            invocation_id=invocation.invocation_id,
+            attempt=invocation.metadata.get("attempt", "unknown"),
+            finish_reason=invocation.finish_reason or "unknown",
+            transport_complete=invocation.transport_complete,
+        )
     return _parse_slow_update_response(raw)

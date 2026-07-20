@@ -23,12 +23,13 @@ class InvalidDocContentError(DocStorageError):
     """content failed V2 structural validation (frontmatter/YAML/body)."""
 
 
-def validate(content: str) -> None:
+def validate(content: str, max_content_bytes: int = 262_144) -> None:
     """Raise ``InvalidDocContentError`` if content is not a valid doc body.
 
     1. frontmatter closed (opening + closing ``---`` fences)
     2. frontmatter block parses as YAML (schema-agnostic)
     3. body (after the closing fence) is non-empty
+    4. content is UTF-8 encodable and within ``max_content_bytes`` (spec G1/C8)
     """
     match = _FRONTMATTER_RE.match(content)
     if not match:
@@ -42,3 +43,12 @@ def validate(content: str) -> None:
         raise InvalidDocContentError(f"frontmatter is not valid YAML: {exc}") from exc
     if not body.strip():
         raise InvalidDocContentError("body is empty")
+    # G1/C8: 按 UTF-8 编码后的字节数校验。lone surrogate 等不可编码 → 400 不落盘。
+    try:
+        encoded = content.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise InvalidDocContentError(f"content is not UTF-8 encodable: {exc}") from exc
+    if len(encoded) > max_content_bytes:
+        raise InvalidDocContentError(
+            f"content size {len(encoded)} bytes exceeds max {max_content_bytes}"
+        )

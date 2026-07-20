@@ -49,6 +49,9 @@ class ManagedDocConfig(BaseModel):
     kind: str
     path: str
     apply: Literal["file_only", "restart"] = "file_only"
+    # 最大内容尺寸（UTF-8 字节数，spec G1/C8）。默认 256 KiB；允许 per-doc 覆写。
+    # validation.validate 按编码后字节数校验，超限/编码失败 → 400 INVALID_ACTION 不落盘。
+    max_content_bytes: int = Field(default=262_144, ge=0)
     # Host-side mount root the configured ``path`` must resolve under (spec D3).
     # When set, DocStorage enforces real path-traversal protection; when None,
     # storage falls back to ``path``'s parent dir (only catches ``..`` escape).
@@ -233,6 +236,22 @@ class AdapterConfig(BaseSettings):
 
     # ── Multi-Agent ──
     agents: list[AgentEntryConfig] = Field(default_factory=list)
+
+    # ── Trace source (设计文档 §5): log 读归档 | standard 读 PG (经 kafka 消费) ──
+    trace_source: Literal["log", "standard"] = "log"
+    # ── DB (Repository 工厂, standard 模式用; 复用 collector 的 otel 库) ──
+    db_type: Literal["postgres"] = "postgres"
+    pg_host: str = "127.0.0.1"
+    pg_port: int = 5432
+    pg_db: str = "otel_db"
+    pg_user: str = "otel_user"
+    pg_password: str = "otel_password"
+    # ── Kafka (standard 模式消费 otlp_traces) ──
+    kafka_brokers: str = "kafka:9092"
+    kafka_topic: str = "otlp_traces"
+    kafka_group: str = "agent-adapter"
+    # ── GET /traces/{conv} 服务端短等待 (设计文档 §7: 5s 上报 + 余量) ──
+    trace_wait_timeout: float = 10.0
 
     # ── Internal (not from YAML/env) ──
     _yaml_path: str | None = None

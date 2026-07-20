@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scenario",
         default="edp_agent",
-        help="场景名称（对应 scenarios/<name>/scenario.yaml）",
+        help="场景名称（对应 examples/scenarios/<name>/scenario.yaml）",
     )
     parser.add_argument(
         "--dataset-manifest",
@@ -67,6 +67,15 @@ def parse_args() -> argparse.Namespace:
         "--skills",
         default=None,
         help="要优化的 skill 名称，逗号分隔（默认从 scenario.yaml 读取 optimize=true 的 skill）",
+    )
+    parser.add_argument(
+        "--managed-doc-kind",
+        default=None,
+        help=(
+            "managed-doc 单文档优化模式（spec F9）：精确 doc_kind，走 F7 builder 分支。"
+            "使用该参数时禁止 scenario skill fallback（skills 强制为空）。"
+            "与 --skills 互斥。"
+        ),
     )
     parser.add_argument(
         "--agent-name",
@@ -118,8 +127,15 @@ def resolve_params(args: argparse.Namespace) -> OptimizeRequest:
             f"adapter_url 必须以 http:// 或 https:// 开头: {adapter_url}",
         )
 
-    # skills: CLI（显式传入时覆盖，含空串）> scenario.yaml optimize=true
-    if args.skills is not None:
+    # managed-doc 模式（spec F9）：--managed-doc-kind 非空 → 走 F7 builder 分支，
+    # skills 强制为空（禁止 scenario skill fallback），managed_doc_kind 只 strip 不
+    # 小写化（adapter 精确匹配），空白视为未提供。
+    managed_doc_raw = getattr(args, "managed_doc_kind", None)
+    managed_doc_kind = (managed_doc_raw or "").strip() or None
+    if managed_doc_kind is not None:
+        skills: list[str] = []
+    elif args.skills is not None:
+        # CLI 显式传入时覆盖，含空串
         skills = [s.strip() for s in args.skills.split(",") if s.strip()]
     else:
         skills = scenario_config.get_optimize_skills()
@@ -138,6 +154,7 @@ def resolve_params(args: argparse.Namespace) -> OptimizeRequest:
         adapter_url=adapter_url,
         num_epochs=args.epochs,
         batch_size=args.batch_size,
+        managed_doc_kind=managed_doc_kind,
         hyperparams={},
         train_split=0.8,
         val_split=0.2,

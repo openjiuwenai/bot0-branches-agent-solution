@@ -78,3 +78,71 @@ def test_restart_apply_real_canary_down_up() -> None:
         )
 
     asyncio.run(_run())
+
+
+def test_restart_content_apply_mode_and_max_task_seconds() -> None:
+    """AC8 restart kind content: apply_mode=='restart' 且 max_task_seconds>0。
+
+    联调 canary 配置（restart_timeout=60, max_attempts=2, backoff_base=5,
+    backoff_max=30, health_up=180, health_poll=0.5）→ 公式上界 609s，>0。
+    """
+    import pathlib
+
+    from agent_adapter.config import (
+        AgentEntryConfig,
+        ManagedDocConfig,
+        ManagedDocDefaults,
+    )
+    from agent_adapter.managed_doc.registry import ManagedDocRegistry
+    from agent_adapter.managed_doc.service import ManagedDocService
+
+    pathlib.Path(_RULE_PATH).write_text(
+        "---\nauthor: it\n---\n# canary\n", encoding="utf-8"
+    )
+    cfg = ManagedDocConfig(
+        kind="agent_rule",
+        path=_RULE_PATH,
+        apply="restart",
+        restart_cmd=_RESTART_CMD,
+        health_url=f"{_AGENT_URL}/health",
+        health_down_timeout=60.0,
+        health_up_timeout=180.0,
+        health_up_consecutive=3,
+        health_poll_interval=0.5,
+        restart_timeout=60,
+        max_attempts=2,
+        backoff_base=5.0,
+        backoff_max=30.0,
+    )
+    agent = AgentEntryConfig(name="edp-canary", managed_docs=[cfg])
+    reg = ManagedDocRegistry(agents=[agent], defaults=ManagedDocDefaults())
+    svc = ManagedDocService(registry=reg)
+    body = svc.content("edp-canary", "agent_rule")
+    assert body["apply_mode"] == "restart"
+    assert body["max_task_seconds"] > 0
+
+
+def test_file_only_content_max_task_seconds_zero() -> None:
+    """AC8 file_only kind content: apply_mode=='file_only' 且 max_task_seconds==0。"""
+    import pathlib
+
+    from agent_adapter.config import (
+        AgentEntryConfig,
+        ManagedDocConfig,
+        ManagedDocDefaults,
+    )
+    from agent_adapter.managed_doc.registry import ManagedDocRegistry
+    from agent_adapter.managed_doc.service import ManagedDocService
+
+    pathlib.Path(_RULE_PATH).write_text(
+        "---\nauthor: it\n---\n# file-only canary\n", encoding="utf-8"
+    )
+    cfg = ManagedDocConfig(
+        kind="agent_rule", path=_RULE_PATH, apply="file_only"
+    )
+    agent = AgentEntryConfig(name="edp-canary", managed_docs=[cfg])
+    reg = ManagedDocRegistry(agents=[agent], defaults=ManagedDocDefaults())
+    svc = ManagedDocService(registry=reg)
+    body = svc.content("edp-canary", "agent_rule")
+    assert body["apply_mode"] == "file_only"
+    assert body["max_task_seconds"] == 0

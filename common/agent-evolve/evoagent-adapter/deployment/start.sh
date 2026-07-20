@@ -82,20 +82,38 @@ set +a
 # 应用默认值（.env 未设置时）
 : "${HOST_LOG_ROOT:?HOST_LOG_ROOT 未设置，请检查 .env}"
 : "${HOST_SKILLS_ROOT:?HOST_SKILLS_ROOT 未设置，请检查 .env}"
+: "${HOST_AGENTS_ROOT:=/opt/agents/runtime}"
 : "${HOST_OUTPUT_DIR:=/opt/agent-adapter/data}"
 : "${HOST_CONFIG_FILE:=/opt/agent-adapter/agent_adapter_config.yaml}"
+: "${ADAPTER_ENABLE_DOCKER_RESTART:=false}"
+: "${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
 : "${ADAPTER_POLL_INTERVAL:=60}"
 : "${ADAPTER_START_FROM:=tail}"
 : "${ADAPTER_OUTPUT_RETENTION_DAYS:=30}"
 : "${ADAPTER_OUTPUT_MAX_FILES:=2000}"
 : "${ADAPTER_OUTPUT_MAX_FILE_SIZE:=20MB}"
+# ── 轨迹获取模式 (log 读归档 | standard 读 PG+kafka) + DB/Kafka 配置 ──
+# standard 模式需 ADAPTER_NETWORK=openjiuwen-net 以访问 collector 的 kafka/postgres (容器别名)。
+: "${ADAPTER_TRACE_SOURCE:=log}"
+: "${ADAPTER_DB_TYPE:=postgres}"
+: "${ADAPTER_PG_HOST:=postgres}"
+: "${ADAPTER_PG_PORT:=5432}"
+: "${ADAPTER_PG_DB:=agent_adapter}"
+: "${ADAPTER_PG_USER:=otel_user}"
+: "${ADAPTER_PG_PASSWORD:=otel_password}"
+: "${ADAPTER_KAFKA_BROKERS:=kafka:9092}"
+: "${ADAPTER_KAFKA_TOPIC:=otlp_traces}"
+: "${ADAPTER_KAFKA_GROUP:=agent-adapter}"
+: "${ADAPTER_NETWORK:=}"   # 留空=默认 bridge; standard 模式设 openjiuwen-net
 
 info "配置已加载:"
 info "  HOST_LOG_ROOT    = $HOST_LOG_ROOT"
 info "  HOST_SKILLS_ROOT = $HOST_SKILLS_ROOT"
+info "  HOST_AGENTS_ROOT = $HOST_AGENTS_ROOT"
 info "  HOST_OUTPUT_DIR  = $HOST_OUTPUT_DIR"
 info "  HOST_CONFIG_FILE = $HOST_CONFIG_FILE"
 info "  ADAPTER_PORT     = $PORT"
+info "  DOCKER_RESTART   = $ADAPTER_ENABLE_DOCKER_RESTART"
 echo ""
 
 # ── 构建镜像 ─────────────────────────────────────────────────────────
@@ -112,6 +130,7 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 \
 # ── 确保主机目录存在 ─────────────────────────────────────────────────
 mkdir -p "$HOST_LOG_ROOT" 2>/dev/null || warn "无法创建 HOST_LOG_ROOT: $HOST_LOG_ROOT"
 mkdir -p "$HOST_SKILLS_ROOT" 2>/dev/null || warn "无法创建 HOST_SKILLS_ROOT: $HOST_SKILLS_ROOT"
+mkdir -p "$HOST_AGENTS_ROOT" 2>/dev/null || warn "无法创建 HOST_AGENTS_ROOT: $HOST_AGENTS_ROOT"
 mkdir -p "$HOST_OUTPUT_DIR" 2>/dev/null || warn "无法创建 HOST_OUTPUT_DIR: $HOST_OUTPUT_DIR"
 mkdir -p "$(dirname "$HOST_CONFIG_FILE")" 2>/dev/null || warn "无法创建 HOST_CONFIG_FILE 父目录: $(dirname "$HOST_CONFIG_FILE")"
 
@@ -130,6 +149,25 @@ else
         rm -f "$seed_tmp"
         error "从镜像 seed 配置文件失败，请确认镜像 $IMAGE 含 /app/agent_adapter_config.yaml"
     fi
+fi
+
+# ── 可选 Docker restart 赋权 ────────────────────────────────────────
+# 镜像内始终有 Docker CLI，但只有显式开启时才把宿主 socket 暴露给容器。
+DOCKER_RESTART_OPTS=()
+case "${ADAPTER_ENABLE_DOCKER_RESTART,,}" in
+    1|true|yes|on)
+        [ -S "$HOST_DOCKER_SOCKET" ] \
+            || error "Docker restart 已启用，但 socket 不存在或不是 Unix socket: $HOST_DOCKER_SOCKET"
+        DOCKER_RESTART_OPTS=(-v "$HOST_DOCKER_SOCKET:/var/run/docker.sock")
+        warn "已启用 Docker restart：Adapter 将获得宿主 Docker daemon 控制权限"
+        ;;
+    0|false|no|off|'') ;;
+    *) error "ADAPTER_ENABLE_DOCKER_RESTART 必须是 true/false，当前值: $ADAPTER_ENABLE_DOCKER_RESTART" ;;
+esac
+
+SECRET_ENV_OPTS=()
+if [ -n "${ADAPTER_AGENT_TOKEN:-}" ]; then
+    SECRET_ENV_OPTS=(-e "ADAPTER_AGENT_TOKEN=$ADAPTER_AGENT_TOKEN")
 fi
 
 # ── 清理旧容器 ─────────────────────────────────────────────────────
@@ -156,11 +194,21 @@ fi
 # ── 启动容器 ────────────────────────────────────────────────────────
 info "启动容器 $NAME（镜像: $IMAGE, 端口: $PORT）"
 
+# standard 模式需接入 collector 所在的 docker 网络 (访问 kafka:9092 / postgres:5432)
+NETWORK_OPTS=()
+if [ -n "$ADAPTER_NETWORK" ]; then
+    NETWORK_OPTS=(--network "$ADAPTER_NETWORK")
+    info "接入 docker 网络: $ADAPTER_NETWORK (standard 模式访问 kafka/postgres)"
+fi
+
 docker run -d \
     --name "$NAME" \
     --init \
     "${SECURITY_OPTS[@]}" \
     "${ADD_HOST_OPTS[@]}" \
+    "${DOCKER_RESTART_OPTS[@]}" \
+    "${SECRET_ENV_OPTS[@]}" \
+    "${NETWORK_OPTS[@]}" \
     -p "${PORT}:8900" \
     -e ADAPTER_HOST="0.0.0.0" \
     -e ADAPTER_PORT=8900 \
@@ -172,10 +220,21 @@ docker run -d \
     -e ADAPTER_OUTPUT_MAX_FILES="$ADAPTER_OUTPUT_MAX_FILES" \
     -e ADAPTER_OUTPUT_MAX_FILE_SIZE="$ADAPTER_OUTPUT_MAX_FILE_SIZE" \
     -e ADAPTER_LOG_LEVEL="${ADAPTER_LOG_LEVEL:-INFO}" \
+    -e ADAPTER_TRACE_SOURCE="$ADAPTER_TRACE_SOURCE" \
+    -e ADAPTER_DB_TYPE="$ADAPTER_DB_TYPE" \
+    -e ADAPTER_PG_HOST="$ADAPTER_PG_HOST" \
+    -e ADAPTER_PG_PORT="$ADAPTER_PG_PORT" \
+    -e ADAPTER_PG_DB="$ADAPTER_PG_DB" \
+    -e ADAPTER_PG_USER="$ADAPTER_PG_USER" \
+    -e ADAPTER_PG_PASSWORD="$ADAPTER_PG_PASSWORD" \
+    -e ADAPTER_KAFKA_BROKERS="$ADAPTER_KAFKA_BROKERS" \
+    -e ADAPTER_KAFKA_TOPIC="$ADAPTER_KAFKA_TOPIC" \
+    -e ADAPTER_KAFKA_GROUP="$ADAPTER_KAFKA_GROUP" \
     -v "$HOST_OUTPUT_DIR:/app/data" \
     -v "$HOST_CONFIG_FILE:/app/agent_adapter_config.yaml" \
     -v "$HOST_LOG_ROOT:/data/logs:ro" \
     -v "$HOST_SKILLS_ROOT:/data/skills" \
+    -v "$HOST_AGENTS_ROOT:/data/agents" \
     --restart always \
     --health-cmd="curl -f http://localhost:8900/api/v1/status || exit 1" \
     --health-interval=30s \
@@ -213,6 +272,10 @@ info "镜像:     $IMAGE"
 info "端口映射: ${PORT}:8900"
 info "日志目录: $HOST_LOG_ROOT → /data/logs (ro, per-agent 子目录 /data/logs/{name})"
 info "Skills:   $HOST_SKILLS_ROOT → /data/skills (rw, per-agent 子目录 /data/skills/{name})"
+info "Docs:     $HOST_AGENTS_ROOT → /data/agents (rw, per-agent 子目录 /data/agents/{name})"
+if [ "${#DOCKER_RESTART_OPTS[@]}" -gt 0 ]; then
+    info "Docker:   $HOST_DOCKER_SOCKET → /var/run/docker.sock (rw, managed-doc restart 已启用)"
+fi
 info "输出目录: $HOST_OUTPUT_DIR → /app/data (rw)"
 info "配置文件: $HOST_CONFIG_FILE → /app/agent_adapter_config.yaml (rw)"
 info ""

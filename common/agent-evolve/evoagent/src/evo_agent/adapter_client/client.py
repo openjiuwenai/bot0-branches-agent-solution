@@ -15,6 +15,14 @@ from typing import Any
 
 import httpx
 
+from evo_agent.adapter_client.types import (
+    AlreadyApplied,
+    ManagedDocSnapshot,
+    ManagedDocUpdateResult,
+    TaskState,
+    UpdateStarted,
+)
+
 
 class AdapterError(Exception):
     """Adapter sidecar 返回的错误。
@@ -225,6 +233,121 @@ class AdapterClient:
                 raise AdapterError(str(e), status_code=0) from e
         raise last_error  # type: ignore[misc]
 
+    # ── managed-doc 同步 transport（spec F4）──
+
+    def _sync_timeout(self, request_timeout: float | None) -> httpx.Timeout:
+        """把 Applier 传入的 remaining-deadline timeout 转为 httpx.Timeout。
+
+        None → 使用 Client 配置的默认 timeout（``self._timeout``）；
+        float → 限制单次请求不超过 remaining deadline。
+        注意：httpx 中显式传 ``timeout=None`` 是「禁用超时」而非「用 client 默认」，
+        故 None 时必须回退到 ``self._timeout``，不能传 None。
+        """
+        return httpx.Timeout(request_timeout if request_timeout is not None else self._timeout)
+
+    def get_managed_doc_sync(
+        self,
+        kind: str,
+        *,
+        request_timeout: float | None = None,
+    ) -> ManagedDocSnapshot:
+        """POST /api/v1/managed-docs  action=content → ManagedDocSnapshot。
+
+        只做 HTTP 调用 + 响应解析；不含状态机/deadline/hash 去重（归 Applier）。
+        GET 临时网络错误不在 transport 层吞，交 Applier 在总 deadline 内轮询。
+        """
+        body = {
+            "agent_name": self._agent_name,
+            "doc_kind": kind,
+            "action": "content",
+        }
+        response = self._sync_http.post(
+            "/api/v1/managed-docs", json=body, timeout=self._sync_timeout(request_timeout)
+        )
+        data = self._handle_response(response)
+        try:
+            return ManagedDocSnapshot(
+                content=data["content"],
+                file_revision=data["file_revision"],
+                applied_revision=data.get("applied_revision"),
+                pending_apply=data["pending_apply"],
+                apply_mode=data["apply_mode"],
+                max_task_seconds=data["max_task_seconds"],
+            )
+        except (ValueError, KeyError, TypeError) as e:
+            raise AdapterError(
+                f"missing field in managed-doc snapshot: {e}",
+                status_code=response.status_code,
+            ) from e
+
+    def start_managed_doc_update_sync(
+        self,
+        kind: str,
+        content: str,
+        *,
+        request_timeout: float | None = None,
+    ) -> ManagedDocUpdateResult:
+        """POST /api/v1/managed-docs  action=update → UpdateStarted(202) | AlreadyApplied(200)。
+
+        POST 永不自动重试（避免响应丢失后重复触发 restart）。transport 只做 HTTP +
+        双分支解析；AlreadyApplied 仅是 Adapter .meta 判断，Applier 仍需重新读 snapshot
+        确认 file/applied revision。
+        """
+        body = {
+            "agent_name": self._agent_name,
+            "doc_kind": kind,
+            "action": "update",
+            "content": content,
+        }
+        response = self._sync_http.post(
+            "/api/v1/managed-docs", json=body, timeout=self._sync_timeout(request_timeout)
+        )
+        data = self._handle_response(response)
+        try:
+            # Adapter: 202 if "task_id" in result else 200（routes.py 状态码分支）
+            if response.status_code == 202 or "task_id" in data:
+                return UpdateStarted(task_id=data["task_id"])
+            return AlreadyApplied(revision=data["revision"])
+        except (ValueError, KeyError, TypeError) as e:
+            raise AdapterError(
+                f"missing field in managed-doc update result: {e}",
+                status_code=response.status_code,
+            ) from e
+
+    def get_managed_doc_task_sync(
+        self,
+        task_id: str,
+        *,
+        request_timeout: float | None = None,
+    ) -> TaskState:
+        """GET /api/v1/managed-docs/tasks/{task_id} → TaskState。
+
+        status 原样使用 Adapter 四态 PENDING|RUNNING|SUCCEEDED|FAILED，状态归并归
+        Applier。404 TaskNotFound → AdapterError（不重发，交 Applier 决策）。
+        """
+        response = self._sync_http.get(
+            f"/api/v1/managed-docs/tasks/{task_id}",
+            timeout=self._sync_timeout(request_timeout),
+        )
+        data = self._handle_response(response)
+        try:
+            return TaskState(
+                status=data["status"],
+                task_id=data["task_id"],
+                revision=data.get("revision"),
+                pending_apply=data["pending_apply"],
+                last_error=data.get("last_error"),
+                attempts=data["attempts"],
+                down_seen=data.get("down_seen"),
+                created_at=data.get("created_at"),
+                updated_at=data.get("updated_at"),
+            )
+        except (ValueError, KeyError, TypeError) as e:
+            raise AdapterError(
+                f"missing field in managed-doc task state: {e}",
+                status_code=response.status_code,
+            ) from e
+
     async def skill_list(self) -> list[dict[str, Any]]:
         """POST /api/v1/skills  action=skill_list
 
@@ -304,7 +427,16 @@ class AdapterClient:
                 message = response.text
             raise AdapterError(message, status_code=response.status_code)
 
-        return response.json()  # type: ignore[no-any-return]
+        try:
+            data = response.json()
+        except (ValueError, KeyError, TypeError) as e:
+            # 成功路径(2xx) 也可能 malformed JSON；schema 失败必须转 fatal，
+            # 否则 Applier 的 except AdapterError 漏接 → 静默故障（训练继续但 remote 未确认）。
+            raise AdapterError(
+                f"malformed success response (status={response.status_code}): {e}",
+                status_code=response.status_code,
+            ) from e
+        return data  # type: ignore[no-any-return]
 
     async def _request_with_retry(
         self,

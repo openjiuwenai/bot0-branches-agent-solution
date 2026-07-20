@@ -96,7 +96,7 @@ SKILL_TARGET_PATH=/tmp
 ### 3. Adapter
 
 ```bash
-cd AE-TEAM/agent-store/community/EvoAgentAdapter
+cd agent-solution/common/agent-evolve/evoagent-adapter
 cp deployment/sandbox-experiment/.env.example deployment/sandbox-experiment/.env
 # 编辑 .env 路径
 docker compose -f deployment/sandbox-experiment/docker-compose.yml \

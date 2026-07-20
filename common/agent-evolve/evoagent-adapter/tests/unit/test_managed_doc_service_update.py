@@ -33,11 +33,17 @@ def _build_service(
     *,
     strategy: FakeStrategy,
     ttl: int = 600,
+    max_content_bytes: int = 262_144,
 ) -> tuple[ManagedDocService, Path]:
     path = tmp_path / "host" / "edp" / "AgentRule.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(RULE_V1, encoding="utf-8")
-    doc = ManagedDocConfig(kind="agent_rule", path=str(path), apply="file_only")
+    doc = ManagedDocConfig(
+        kind="agent_rule",
+        path=str(path),
+        apply="file_only",
+        max_content_bytes=max_content_bytes,
+    )
     agent = AgentEntryConfig(name="edp", managed_docs=[doc])
     registry = ManagedDocRegistry(agents=[agent], defaults=ManagedDocDefaults())
     tasks = TaskRegistry(ttl_seconds=ttl)
@@ -189,3 +195,23 @@ async def test_re_send_after_success_is_no_op(tmp_path: Path) -> None:
     assert again["success"] is True
     assert again["pending_apply"] is False
     assert strategy.call_count == 1  # 没有第二次 apply
+
+
+# ── AC G1/C8: 超限内容 → 400 不落盘 ─────────────────────────────────
+
+
+async def test_oversize_content_does_not_write_file(tmp_path: Path) -> None:
+    """per-doc max_content_bytes 超限 → InvalidDocContentError，文件不落盘。"""
+    strategy = FakeStrategy(ApplyResult(ok=True))
+    service, path = _build_service(tmp_path, strategy=strategy, max_content_bytes=64)
+
+    # 编码后远超 64 字节但结构合法（frontmatter + 非空 body）
+    big_body = "x" * 200
+    oversize = f"---\nauthor: x\n---\n{big_body}\n"
+    with pytest.raises(InvalidDocContentError):
+        await service.update("edp", "agent_rule", oversize)
+
+    # 文件不变（不落盘）
+    assert path.read_text(encoding="utf-8") == RULE_V1
+    # 不建 task、不调 apply
+    assert strategy.call_count == 0

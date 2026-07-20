@@ -398,6 +398,137 @@ class TestOptimizeReportTrainVal:
         assert report.skill_scores[0].pass_rate_after == 0.7
 
 
+# ── managed-doc: OptimizeRequest XOR 校验 ──
+
+
+class TestManagedDocRequest:
+    """F1: skills 与 managed_doc_kind 互斥（XOR）—— 二者必须且只能提供一种。"""
+
+    def test_managed_doc_kind_only_constructs(self) -> None:
+        """只传 managed_doc_kind → 走 managed-doc 路径，skills 归一化为空。"""
+        req = OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="test_agent",
+            managed_doc_kind="agent_rule",
+        )
+        assert req.managed_doc_kind == "agent_rule"
+        assert req.skills == []
+
+    def test_skills_only_constructs(self) -> None:
+        """只传 skills → 现有 Skill 路径不变，managed_doc_kind 为 None。"""
+        req = OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="test_agent",
+            skills=["skill_a"],
+        )
+        assert req.skills == ["skill_a"]
+        assert req.managed_doc_kind is None
+
+    def test_both_present_raises(self) -> None:
+        """skills 与 managed_doc_kind 同时存在 → 校验失败（互斥）。"""
+        with pytest.raises(ValueError):
+            OptimizeRequest(
+                scenario="edp_agent",
+                agent_name="test_agent",
+                skills=["skill_a"],
+                managed_doc_kind="agent_rule",
+            )
+
+    def test_both_absent_allowed(self) -> None:
+        """两者都缺 → 允许：runner 对空 skills 有 eval-only/baseline 路径
+        （test_empty_skills_uses_run_id_artifact_dir）；「无目标即拒绝」
+        在入口层（F3 路由 / F9 CLI）按需收口，不在叶子 dataclass 层强加。"""
+        req = OptimizeRequest(scenario="edp_agent", agent_name="test_agent")
+        assert req.skills == []
+        assert req.managed_doc_kind is None
+
+    def test_managed_doc_kind_stripped(self) -> None:
+        """managed_doc_kind 构造时 strip，空白视为未提供。"""
+        req = OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="test_agent",
+            managed_doc_kind="  agent_rule  ",
+        )
+        assert req.managed_doc_kind == "agent_rule"
+
+    def test_managed_doc_kind_blank_treated_as_absent(self) -> None:
+        """空白 managed_doc_kind 视为未提供（strip 后置 None）。
+        此时 skills 亦空 → both-absent，属 eval-only/baseline 路径，允许构造。"""
+        req = OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="test_agent",
+            managed_doc_kind="   ",
+        )
+        assert req.managed_doc_kind is None
+        assert req.skills == []
+
+    def test_managed_doc_kind_blank_with_skills_uses_skill_path(self) -> None:
+        """空白 managed_doc_kind 视为未提供；若 skills 非空 → 走 Skill 路径。"""
+        req = OptimizeRequest(
+            scenario="edp_agent",
+            agent_name="test_agent",
+            skills=["skill_a"],
+            managed_doc_kind="   ",
+        )
+        assert req.managed_doc_kind is None
+        assert req.skills == ["skill_a"]
+
+
+# ── managed-doc: OptimizeReport 字段 ──
+
+
+class TestManagedDocReport:
+    """F1: OptimizeReport 增加 managed-doc 四字段，tuple / frozen 友好。"""
+
+    def _base_report(self, **overrides: object) -> OptimizeReport:
+        defaults: dict[str, object] = dict(
+            skills=("managed_doc:agent_rule",),
+            dataset="test_dataset",
+            epochs_completed=1,
+            edits_applied=2,
+            train=TrainResult(0.4, 0.7, "+75%", 0.4, 0.7, 10),
+            val=ValResult(0.6, 0.6, (0.6,), 5),
+            gate_results=("accepted",),
+            artifact_dir=Path("/tmp"),
+        )
+        defaults.update(overrides)
+        return OptimizeReport(**defaults)  # type: ignore[arg-type]
+
+    def test_default_managed_doc_fields(self) -> None:
+        """未传 managed-doc 字段时默认值符合 spec。"""
+        report = self._base_report()
+        assert report.managed_doc_kind is None
+        assert report.managed_doc_content_before is None
+        assert report.managed_doc_content_after is None
+        assert report.managed_doc_task_ids == ()
+
+    def test_managed_doc_fields_populated(self) -> None:
+        """成功路径回填 managed-doc 字段。"""
+        report = self._base_report(
+            managed_doc_kind="agent_rule",
+            managed_doc_content_before="# before",
+            managed_doc_content_after="# after",
+            managed_doc_task_ids=("task-1", "task-2"),
+        )
+        assert report.managed_doc_kind == "agent_rule"
+        assert report.managed_doc_content_before == "# before"
+        assert report.managed_doc_content_after == "# after"
+        assert report.managed_doc_task_ids == ("task-1", "task-2")
+
+    def test_managed_doc_task_ids_is_tuple(self) -> None:
+        """managed_doc_task_ids 使用 tuple，frozen 友好。"""
+        report = self._base_report(managed_doc_task_ids=("t1",))
+        assert isinstance(report.managed_doc_task_ids, tuple)
+        # frozen dataclass：尝试赋值抛 FrozenInstanceError
+        with pytest.raises(Exception):
+            report.managed_doc_task_ids = ("t2",)  # type: ignore[misc]
+
+    def test_task_ids_collects_only_non_empty_default(self) -> None:
+        """task_ids 默认空 tuple —— runner 侧只收集非空 task_id。"""
+        report = self._base_report()
+        assert report.managed_doc_task_ids == ()
+
+
 # ── TrajectoryUnavailableError ──
 
 

@@ -17,7 +17,7 @@ is ``doc`` (explicit) > ``defaults`` (explicit) > profile base (§8.4 table).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from agent_adapter.config import (
     AdapterConfig,
@@ -25,6 +25,7 @@ from agent_adapter.config import (
     ManagedDocConfig,
     ManagedDocDefaults,
 )
+from agent_adapter.managed_doc.deadline import compute_max_task_seconds
 from agent_adapter.managed_doc.storage import (
     AgentNotFoundError,
     DocNotFoundError,
@@ -59,12 +60,15 @@ class ManagedDocRegistry:
         defaults: ManagedDocDefaults,
     ) -> None:
         self._map: dict[str, dict[str, ManagedDocConfig]] = {}
+        # G2.2: 构建期计算并缓存 max_task_seconds，避免 content 每次重算。
+        self._deadlines: dict[str, dict[str, int]] = {}
         # Guard against silent cross-agent .meta/snapshot collision (I2): two
         # docs sharing (parent_dir, kind) would share .meta/{kind}.* and step on
         # each other. Fail at build time instead.
         seen: set[tuple[str, str]] = set()
         for agent in agents:
             by_kind: dict[str, ManagedDocConfig] = {}
+            by_deadline: dict[str, int] = {}
             for doc in agent.managed_docs:
                 resolved = self._resolve(agent, doc, defaults)
                 key = (str(Path(doc.path).resolve().parent), doc.kind)
@@ -75,7 +79,9 @@ class ManagedDocRegistry:
                     )
                 seen.add(key)
                 by_kind[doc.kind] = resolved
+                by_deadline[doc.kind] = compute_max_task_seconds(resolved)
             self._map[agent.name] = by_kind
+            self._deadlines[agent.name] = by_deadline
 
     @classmethod
     def from_config(cls, config: AdapterConfig) -> ManagedDocRegistry:
@@ -91,6 +97,23 @@ class ManagedDocRegistry:
                 f"doc_kind '{doc_kind}' not registered for agent '{agent_name}'"
             )
         return doc
+
+    def list_for_agent(self, agent_name: str) -> list[ManagedDocConfig]:
+        """Return registered documents for an Agent in configuration order."""
+        by_kind = self._map.get(agent_name)
+        if by_kind is None:
+            raise AgentNotFoundError(f"Agent '{agent_name}' not found")
+        return list(by_kind.values())
+
+    def max_task_seconds(self, agent_name: str, doc_kind: str) -> int:
+        """Return the cached G2.2 worst-case upper bound (build-time computed).
+
+        file_only docs cache 0; restart docs cache the fixed-formula ceiling.
+        Mirrors ``get``'s not-found contract so callers see the same 404 paths.
+        """
+        # 触发与 get 相同的 not-found 错误，再返回缓存值（避免 content 重算）。
+        self.get(agent_name, doc_kind)
+        return self._deadlines[agent_name][doc_kind]
 
     def agents(self) -> list[str]:
         return list(self._map.keys())
@@ -111,6 +134,8 @@ class ManagedDocRegistry:
             "path": doc.path,
             "allow_root": doc.allow_root,
             "apply": "restart",
+            # G1/C8: max_content_bytes 无 profile 基线，doc 显式值或默认（262_144）。
+            "max_content_bytes": doc.max_content_bytes,
         }
 
         # profile 背书的参数：doc > defaults 显式 > profile 基线
@@ -144,9 +169,48 @@ class ManagedDocRegistry:
         fields["health_url"] = health_url
 
         try:
-            return ManagedDocConfig(**fields)
+            resolved = ManagedDocConfig(**fields)
         except ValueError as exc:
             # apply=restart but restart_cmd unresolved → validator 触发
             raise ManagedDocRegistryError(
                 f"restart doc '{doc.kind}' for agent '{agent.name}': {exc}"
             ) from exc
+        _validate_restart_finite(resolved, doc.kind, agent.name)
+        return resolved
+
+
+def _validate_restart_finite(
+    cfg: ManagedDocConfig, kind: str, agent_name: str
+) -> None:
+    """G2.1: post-resolve finite 校验。
+
+    所有 restart 时间/重试字段必须 finite 且合法；任一非法 →
+    ``ManagedDocRegistryError``（启动期失败，符合 spec「构建期校验」语义）。
+    profile 背书的字段在 resolve 后必非 None；restart_timeout 无 profile
+    基线，未显式提供则为 None → 拒绝（C11：deploy 契约要求 > 0）。
+    """
+
+    def _fail(msg: str) -> NoReturn:
+        raise ManagedDocRegistryError(
+            f"restart doc '{kind}' for agent '{agent_name}': {msg}"
+        )
+
+    if cfg.restart_timeout is None or cfg.restart_timeout <= 0:
+        _fail(f"restart_timeout must be > 0 (got {cfg.restart_timeout!r})")
+    if cfg.max_attempts is None or cfg.max_attempts < 1:
+        _fail(f"max_attempts must be >= 1 (got {cfg.max_attempts!r})")
+    if cfg.health_down_timeout is None or cfg.health_down_timeout < 0:
+        _fail(f"health_down_timeout must be >= 0 (got {cfg.health_down_timeout!r})")
+    if cfg.health_up_timeout is None or cfg.health_up_timeout <= 0:
+        _fail(f"health_up_timeout must be > 0 (got {cfg.health_up_timeout!r})")
+    if cfg.health_poll_interval is None or cfg.health_poll_interval <= 0:
+        _fail(f"health_poll_interval must be > 0 (got {cfg.health_poll_interval!r})")
+    if cfg.health_up_consecutive is None or cfg.health_up_consecutive < 1:
+        _fail(f"health_up_consecutive must be >= 1 (got {cfg.health_up_consecutive!r})")
+    if cfg.backoff_base is None or cfg.backoff_base < 0:
+        _fail(f"backoff_base must be >= 0 (got {cfg.backoff_base!r})")
+    if cfg.backoff_max is None or cfg.backoff_max < cfg.backoff_base:
+        _fail(
+            "backoff_max must be >= backoff_base "
+            f"(got backoff_max={cfg.backoff_max!r}, backoff_base={cfg.backoff_base!r})"
+        )

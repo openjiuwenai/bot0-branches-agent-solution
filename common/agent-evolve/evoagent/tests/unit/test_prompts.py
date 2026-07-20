@@ -30,7 +30,7 @@ def test_load_prompt_from_scenario_folder(scenarios_dir: Path) -> None:
 
 
 def test_load_prompt_default_dir_finds_edp_prompt() -> None:
-    """验证默认 prompt loader 能找到仓库 scenarios/edp_agent/prompts。"""
+    """验证默认 prompt loader 能找到仓库 examples/scenarios/edp_agent/prompts。"""
     result = load_prompt("analyst_error", "edp_agent")
 
     assert "失败模式分析" in result

@@ -16,6 +16,11 @@ from typing import Any
 from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
 
 from evo_agent.dataset.case import merge_extra_data
+from evo_agent.evaluator.batch_result import (
+    EvaluationBatchResult,
+    EvaluationFailure,
+    EvaluationOutcome,
+)
 from evo_agent.evaluator.trajectory.normalize import normalize_trace_to_trajectory
 from evo_agent.optimizer import DictSkillDocumentOptimizer
 from evo_agent.optimizer.skill_document.types import AttributedBatch
@@ -417,23 +422,6 @@ class EDPAgentOptimizer(DictSkillDocumentOptimizer):
         if diff_src.exists():
             shutil.move(str(diff_src), str(diff_dst))
 
-    async def run_epoch_end(
-        self,
-        epoch: int,
-        val_results: list[EvaluatedCase] | None = None,
-    ) -> None:
-        """Override to fix unicode in gate_result.json (vendor writes with ensure_ascii)."""
-        await super().run_epoch_end(epoch, val_results)
-
-        if len(self._operators) <= 1 or not self._artifact_exporter.enabled:
-            return
-
-        # Rewrite gate_result.json with ensure_ascii=False for readable Chinese
-        run_dir = self._artifact_exporter._output_dir
-        gate_path = run_dir / f"epoch_{epoch}" / "gate_result.json"
-        if gate_path.exists():
-            _copy_json_utf8(gate_path, gate_path)
-
     async def _attribute(
         self,
         *,
@@ -602,9 +590,23 @@ class EDPAgentOptimizer(DictSkillDocumentOptimizer):
         改用项目的 load_prompt()，优先加载场景级 prompt 覆盖。
 
         ``slim=True`` 时省略 step_buffer / meta_skill，用作超时重试精简 prompt（B4）。
+
+        managed-doc 模式（spec F10）：当唯一 target id 以 ``managed_doc:`` 开头时，
+        加入 agent-rule 语义段并把 ``Current Skill`` 标题改为 ``Current Agent Rule
+        Document``。``_llm_merge_edits`` / ``meta_skill`` 仍用基类 Skill 措辞，不改。
         """
         system = load_prompt(template_name, self._SCENARIO_NAME)
-        user = f"## Current Skill\n{skill_content}\n\n"
+        is_managed_doc = self._is_managed_doc_target()
+        user = ""
+        if is_managed_doc:
+            user += (
+                "Target type: agent runtime rule document\n"
+                "Scope: applies globally to every conversation\n"
+                "Constraints: preserve identity, safety, tool-policy "
+                "and mandatory business rules\n\n"
+            )
+        title = "Current Agent Rule Document" if is_managed_doc else "Current Skill"
+        user += f"## {title}\n{skill_content}\n\n"
         user += f"## Edits Budget\nProduce at most L={self._scheduler.max_lr} edits.\n\n"
         if not slim and step_buffer_context.strip():
             user += f"## Previous Steps in This Epoch\n{step_buffer_context}\n\n"
@@ -617,6 +619,16 @@ class EDPAgentOptimizer(DictSkillDocumentOptimizer):
             user += f"## Successful Trajectories\n{trajectories_text}"
 
         return f"{system}\n\n{user}"
+
+    def _is_managed_doc_target(self) -> bool:
+        """唯一 target id 以 ``managed_doc:`` 开头 → managed-doc 单文档优化模式。
+
+        单 operator short-circuit 下，sole operator id 即 canonical id
+        ``managed_doc:{kind}``；多 operator 永远不是 managed-doc 模式（本期不支持
+        混合优化）。
+        """
+        op_ids = list(self._operators.keys())
+        return len(op_ids) == 1 and op_ids[0].startswith("managed_doc:")
 
     # ── Rollout ─────────────────────────────────────────────────────────
 
@@ -711,12 +723,27 @@ class EDPAgentOptimizer(DictSkillDocumentOptimizer):
         eval_cases: list[Case] = []
         answers: list[dict[str, Any]] = []
         traj_by_case_id: dict[str, dict[str, Any]] = {}
-        ordered_case_ids: list[str] = []
+        eligible_indexes: list[int] = []
+        infrastructure_outcomes: dict[int, EvaluationOutcome] = {}
 
-        for case, (case_id, answer, trace_data, _conv_id) in zip(cases, results):
+        for index, (case, (case_id, answer, trace_data, _conv_id)) in enumerate(
+            zip(cases, results)
+        ):
             if trace_data is None:
                 # 排除：基础设施故障，不是 skill 质量问题（与验证集行为对齐）
                 logger.warning("训练 trace 不可用，排除 case %s（不计入评分）", case_id)
+                category = "rollout_error" if answer.get("error") else "trace_unavailable"
+                infrastructure_outcomes[index] = EvaluationOutcome(
+                    index=index,
+                    case_id=case_id,
+                    case=case,
+                    trajectory=None,
+                    evaluated=None,
+                    failure=EvaluationFailure(
+                        category=category,
+                        safe_message=f"Training infrastructure failed for case {case_id}",
+                    ),
+                )
                 continue
 
             # 4. 规范化轨迹并构造带 trajectory 的 case copy
@@ -737,20 +764,34 @@ class EDPAgentOptimizer(DictSkillDocumentOptimizer):
             answers.append(answer if isinstance(answer, dict) else {"answer": str(answer)})
             messages = trace_data.get("messages", [])
             traj_by_case_id[case_id] = {"case_id": case_id, "messages": messages}
-            ordered_case_ids.append(case_id)
+            eligible_indexes.append(index)
 
-        # 5. 并发评估（batch_evaluate 经 ThreadPool 并行，逐 case 结果顺序保留）
-        evaluated_list: list[EvaluatedCase] = (
-            self._evaluator.batch_evaluate(
+        # 5. 并发评估并保留每个 evaluator failure outcome。
+        eligible_trajectories = [traj_by_case_id[case.case_id] for case in eval_cases]
+        evaluated_batch = (
+            self._evaluate_training_batch(
                 eval_cases,
                 answers,
-                num_parallel=self._num_parallel,
-                # 训练 bad-case 归因需要 attributed_skill，保持开启
+                eligible_trajectories,
                 enable_attribution=True,
             )
             if eval_cases
-            else []
+            else EvaluationBatchResult(())
         )
+        outcomes_by_index = dict(infrastructure_outcomes)
+        for original_index, outcome in zip(eligible_indexes, evaluated_batch.outcomes):
+            outcomes_by_index[original_index] = EvaluationOutcome(
+                index=original_index,
+                case_id=outcome.case_id,
+                case=outcome.case,
+                trajectory=outcome.trajectory,
+                evaluated=outcome.evaluated,
+                failure=outcome.failure,
+            )
+        self._last_training_batch = EvaluationBatchResult(
+            tuple(outcomes_by_index[index] for index in range(len(cases)))
+        )
+        evaluated_list = list(self._last_training_batch.successes)
 
         # 6. 按 case_id 配对轨迹（batch_evaluate 可能排除评估失败的 case）
         trajectories: list[dict[str, Any]] = [

@@ -136,3 +136,21 @@ class ManagedDocActionRequest(BaseModel):
         if self.action == "update" and self.content is None:
             raise ValueError("content is required when action is update")
         return self
+
+
+class ManagedDocListItem(BaseModel):
+    """Safe capability projection for one registered managed document."""
+
+    doc_kind: str
+    display_name: str
+    filename: str
+    apply_mode: Literal["file_only", "restart"]
+    max_task_seconds: int
+
+
+class ManagedDocListResponse(BaseModel):
+    """Registered managed documents that callers may address by ``doc_kind``."""
+
+    agent_name: str
+    items: list[ManagedDocListItem]
+    total: int

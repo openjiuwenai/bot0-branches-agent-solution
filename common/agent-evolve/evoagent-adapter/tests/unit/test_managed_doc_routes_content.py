@@ -1,6 +1,5 @@
 """Unit tests for POST /api/v1/managed-docs action=content (T4)."""
 
-import textwrap
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -25,19 +24,30 @@ def _make_app(tmp_path: Path, *, docs_yaml: str):
     return app
 
 
-def _edp_yaml(tmp_path: Path, *, apply: str = "file_only", restart_cmd: str | None = None) -> str:
+def _edp_yaml(
+    tmp_path: Path,
+    *,
+    apply: str = "file_only",
+    restart_cmd: str | None = None,
+    restart_timeout: int | None = None,
+) -> str:
     path = tmp_path / "host" / "edp" / "AgentRule.md"
     path.parent.mkdir(parents=True, exist_ok=True)
-    extra = f"        restart_cmd: {restart_cmd}\n" if restart_cmd else ""
-    return textwrap.dedent(f"""\
-        agents:
-          - name: edp
-            agent_url: http://localhost:8090
-            managed_docs:
-              - kind: agent_rule
-                path: {path}
-                apply: {apply}
-        {extra}""")
+    # 显式行构建（避免 textwrap.dedent 对多行 extra 的缩进错位）。
+    item_fields = ["kind: agent_rule", f"path: {path}", f"apply: {apply}"]
+    if restart_cmd:
+        item_fields.append(f"restart_cmd: {restart_cmd}")
+    if restart_timeout is not None:
+        item_fields.append(f"restart_timeout: {restart_timeout}")
+    lines = [
+        "agents:",
+        "  - name: edp",
+        "    agent_url: http://localhost:8090",
+        "    managed_docs:",
+        "      - " + item_fields[0],
+    ]
+    lines += ["        " + f for f in item_fields[1:]]
+    return "\n".join(lines) + "\n"
 
 
 def _seed_rule(tmp_path: Path, body: str = "# Rule v1\n") -> Path:
@@ -67,6 +77,31 @@ class TestContentRoute:
         assert data["file_revision"] == DocStorage.sha256("# Rule v1\n")
         assert "applied_revision" in data
         assert "pending_apply" in data
+        # G2.3: content 新增 apply_mode + max_task_seconds（file_only → 0）
+        assert data["apply_mode"] == "file_only"
+        assert data["max_task_seconds"] == 0
+
+    def test_content_restart_apply_mode_and_max_task_seconds(self, tmp_path: Path) -> None:
+        _seed_rule(tmp_path, "# Rule v1\n")
+        app = _make_app(
+            tmp_path,
+            docs_yaml=_edp_yaml(
+                tmp_path,
+                apply="restart",
+                restart_cmd="docker restart edp",
+                restart_timeout=30,
+            ),
+        )
+        client = TestClient(app)
+        resp = client.post(
+            "/api/v1/managed-docs",
+            json={"agent_name": "edp", "doc_kind": "agent_rule", "action": "content"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["apply_mode"] == "restart"
+        # burst 默认 + restart_timeout=30 → 217（见 T5 表驱动断言）
+        assert data["max_task_seconds"] == 217
 
     def test_content_pending_true_when_no_meta(self, tmp_path: Path) -> None:
         _seed_rule(tmp_path, "# Rule v1\n")

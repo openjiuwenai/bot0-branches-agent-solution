@@ -2,11 +2,35 @@
 
 from __future__ import annotations
 
+import difflib
+import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
-from evo_agent.types import OptimizeReport, SkillContentSnapshot, SkillScore, TrainResult, ValResult
+from evo_agent.types import (
+    ManagedDocEpochContent,
+    OptimizeReport,
+    SkillContentSnapshot,
+    SkillScore,
+    TrainResult,
+    ValResult,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _training_eval_files(root: Path) -> list[Path]:
+    """Return only epoch/step training results, excluding validation artifacts."""
+    files = []
+    for path in root.rglob("eval_results.json"):
+        if not path.parent.name.startswith("step_"):
+            continue
+        if not any(parent.name.startswith("epoch_") for parent in path.parents):
+            continue
+        files.append(path)
+    return sorted(files)
 
 
 class ReportFormatter:
@@ -28,6 +52,16 @@ class ReportFormatter:
         num_val_cases: int = 0,
         val_baseline_case_scores: list[float] | None = None,
         val_per_epoch_case_scores: list[list[float]] | None = None,
+        # managed-doc 上下文（spec F8）：runner 在成功路径把 baseline snapshot 内容
+        # （before）、operator committed 内容（after）、applier records 与非空 task_ids
+        # 传入。formatter 写 managed_doc_final.md / managed_doc_diff.patch 并回填 report
+        # 字段；失败路径的 before/tasks.json 由 runner finally 负责（不在 formatter）。
+        managed_doc_kind: str | None = None,
+        managed_doc_content_before: str | None = None,
+        managed_doc_content_after: str | None = None,
+        managed_doc_epoch_contents: tuple[ManagedDocEpochContent, ...] = (),
+        managed_doc_task_ids: tuple[str, ...] = (),
+        managed_doc_records: tuple[Any, ...] = (),
     ) -> None:
         self._artifact_dir = artifact_dir
         self._skills = skills
@@ -40,6 +74,12 @@ class ReportFormatter:
         # （候选 fresh eval）同序同长，按 argmax(候选分) 取 best-epoch 通过率。
         self._val_baseline_case_scores = val_baseline_case_scores or []
         self._val_per_epoch_case_scores = val_per_epoch_case_scores or []
+        self._managed_doc_kind = managed_doc_kind
+        self._managed_doc_content_before = managed_doc_content_before
+        self._managed_doc_content_after = managed_doc_content_after
+        self._managed_doc_epoch_contents = managed_doc_epoch_contents
+        self._managed_doc_task_ids = managed_doc_task_ids
+        self._managed_doc_records = managed_doc_records
 
     def format(self) -> OptimizeReport:
         """汇总 artifact 目录中的数据，生成 OptimizeReport。
@@ -56,6 +96,21 @@ class ReportFormatter:
         train = self._collect_train_result(skill_scores)
         val = self._collect_val_result()
 
+        # managed-doc 成功路径 artifact（spec F8）：写 final.md + diff.patch。
+        # before.md / tasks.json 由 runner（baseline + finally）负责；formatter 只读
+        # 成功结果。日志只记 hash + 长度 + task_id，不记全文（ADR §10）。
+        managed_doc_after = self._managed_doc_content_after
+        if self._managed_doc_kind is not None:
+            self._write_managed_doc_artifacts()
+
+        md_kwargs: dict[str, Any] = {
+            "managed_doc_kind": self._managed_doc_kind,
+            "managed_doc_content_before": self._managed_doc_content_before,
+            "managed_doc_content_after": managed_doc_after,
+            "managed_doc_epoch_contents": self._managed_doc_epoch_contents,
+            "managed_doc_task_ids": self._managed_doc_task_ids,
+        }
+
         if skill_scores:
             # 多 skill 模式
             total_edits = sum(s.edits_applied for s in skill_scores)
@@ -71,6 +126,7 @@ class ReportFormatter:
                 artifact_dir=self._artifact_dir,
                 skill_scores=tuple(skill_scores),
                 skill_contents=tuple(self._collect_skill_contents()),
+                **md_kwargs,
             )
 
         # 单 skill 模式（向下兼容）
@@ -84,6 +140,46 @@ class ReportFormatter:
             gate_results=tuple(gate_results),
             artifact_dir=self._artifact_dir,
             skill_contents=tuple(self._collect_skill_contents()),
+            **md_kwargs,
+        )
+
+    def _write_managed_doc_artifacts(self) -> None:
+        """成功路径写 managed_doc_final.md + managed_doc_diff.patch（spec F8）。
+
+        参照 edp_agent ``_write_per_operator_snapshots`` 的 before/after/diff 模式。
+        before 由 runner baseline 阶段写入（formatter 只读不写 before）。日志只记
+        hash + 长度 + task_id，**不输出全文** managed-doc（ADR §10 / F8 AC）。
+        """
+        before = self._managed_doc_content_before or ""
+        after = self._managed_doc_content_after or ""
+        before_hash = hashlib.sha256(before.encode("utf-8")).hexdigest()
+        after_hash = hashlib.sha256(after.encode("utf-8")).hexdigest()
+        self._artifact_dir.mkdir(parents=True, exist_ok=True)
+        (self._artifact_dir / "managed_doc_final.md").write_text(after, encoding="utf-8")
+        diff = difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile="managed_doc_before",
+            tofile="managed_doc_final",
+        )
+        (self._artifact_dir / "managed_doc_diff.patch").write_text("".join(diff), encoding="utf-8")
+        logger.info(
+            "managed-doc artifacts written: kind=%s before_hash=%s before_length=%d "
+            "after_hash=%s after_length=%d task_ids=%s",
+            self._managed_doc_kind,
+            before_hash,
+            len(before),
+            after_hash,
+            len(after),
+            list(self._managed_doc_task_ids),
+            extra={
+                "managed_doc_kind": self._managed_doc_kind,
+                "before_hash": before_hash,
+                "before_length": len(before),
+                "after_hash": after_hash,
+                "after_length": len(after),
+                "task_ids": list(self._managed_doc_task_ids),
+            },
         )
 
     # ── Train / Val 结果 ────────────────────────────────────────────
@@ -225,7 +321,7 @@ class ReportFormatter:
         if not self._artifact_dir.exists():
             return None
 
-        eval_files: list[Path] = sorted(self._artifact_dir.rglob("eval_results.json"))
+        eval_files = _training_eval_files(self._artifact_dir)
         if not eval_files:
             return None
 
@@ -250,7 +346,7 @@ class ReportFormatter:
         """从第一个 eval_results.json 获取 case 数量。"""
         if not self._artifact_dir.exists():
             return 0
-        eval_files = sorted(self._artifact_dir.rglob("eval_results.json"))
+        eval_files = _training_eval_files(self._artifact_dir)
         if not eval_files:
             return 0
         try:
@@ -264,7 +360,7 @@ class ReportFormatter:
         """扫描所有 eval_results.json，返回最高 avg_score。"""
         if not self._artifact_dir.exists():
             return None
-        eval_files = sorted(self._artifact_dir.rglob("eval_results.json"))
+        eval_files = _training_eval_files(self._artifact_dir)
         if not eval_files:
             return None
         scores: list[float] = []
@@ -290,7 +386,7 @@ class ReportFormatter:
         """
         if not self._artifact_dir.exists():
             return None
-        eval_files = sorted(self._artifact_dir.rglob("eval_results.json"))
+        eval_files = _training_eval_files(self._artifact_dir)
         if not eval_files:
             return None
         best_data: dict[str, Any] | None = None
@@ -439,7 +535,7 @@ class ReportFormatter:
         # 收集所有 eval_results.json（按 epoch/step 排序）
         eval_files: list[Path] = []
         for search_dir in search_dirs:
-            for p in sorted(search_dir.rglob("eval_results.json")):
+            for p in _training_eval_files(search_dir):
                 if p not in eval_files:
                     eval_files.append(p)
 

@@ -47,3 +47,4 @@ common/agents/edpa-alpha/
 # TestRun artifacts — local/manual only, do not commit or merge
 TestRun/
 TestRun.rar
+/.pipeline/

@@ -59,3 +59,34 @@ def test_invalid_yaml_mapping_rejected() -> None:
 
 def test_invalid_doc_content_is_doc_storage_error() -> None:
     assert issubclass(InvalidDocContentError, DocStorageError)
+
+
+# ── G1/C8: UTF-8 编码 + 最大字节数校验 ────────────────────────────────
+
+
+def test_oversize_content_rejected() -> None:
+    """编码后字节数超过 max_content_bytes → InvalidDocContentError。"""
+    body = "x" * 300
+    content = f"---\nauthor: x\n---\n{body}\n"
+    with pytest.raises(InvalidDocContentError):
+        validate(content, 100)
+
+
+def test_exact_max_bytes_passes() -> None:
+    """编码后字节数恰好等于上限 → 通过（边界 inclusive）。"""
+    content = "---\nauthor: x\n---\n# ok\n"
+    n = len(content.encode("utf-8"))
+    validate(content, n)
+
+
+def test_non_utf8_encodable_rejected() -> None:
+    """含 lone surrogate（无法编码为 UTF-8）→ InvalidDocContentError。"""
+    content = "---\nauthor: x\n---\nbad \udc80 surrogate\n"
+    with pytest.raises(InvalidDocContentError):
+        validate(content, 262_144)
+
+
+def test_default_max_256k_passes_normal_doc() -> None:
+    """默认上限（262_144）下普通文档通过——保持向后兼容签名。"""
+    content = "---\nauthor: x\n---\n# Rule\n\nDo thing.\n"
+    validate(content)  # 不传 max_content_bytes → 默认 262_144

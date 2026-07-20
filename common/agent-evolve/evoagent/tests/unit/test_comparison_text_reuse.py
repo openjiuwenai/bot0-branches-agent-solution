@@ -68,7 +68,7 @@ async def test_run_epoch_end_builds_comparison_text_once() -> None:
     opt = _make_optimizer()
     p_cmp, p_slow, p_meta, p_extract = _patches()
     with p_cmp as cmp, p_slow, p_meta, p_extract:
-        await opt.run_epoch_end(epoch=1, val_results=[])
+        await opt.run_epoch_end(trainer_epoch=1, val_results=[])
     assert cmp.call_count == 1
 
 
@@ -77,7 +77,7 @@ async def test_run_epoch_end_no_comparison_at_epoch_zero() -> None:
     opt = _make_optimizer()
     p_cmp, p_slow, p_meta, p_extract = _patches()
     with p_cmp as cmp, p_slow, p_meta, p_extract:
-        await opt.run_epoch_end(epoch=0, val_results=[])
+        await opt.run_epoch_end(trainer_epoch=0, val_results=[])
     assert cmp.call_count == 0
 
 
@@ -87,7 +87,7 @@ async def test_run_epoch_end_only_slow_update_still_one_call() -> None:
     opt._use_meta_skill = False
     p_cmp, p_slow, p_meta, p_extract = _patches()
     with p_cmp as cmp, p_slow, p_meta, p_extract:
-        await opt.run_epoch_end(epoch=1, val_results=[])
+        await opt.run_epoch_end(trainer_epoch=1, val_results=[])
     assert cmp.call_count == 1
 
 
@@ -97,5 +97,5 @@ async def test_run_epoch_end_only_meta_skill_still_one_call() -> None:
     opt._use_slow_update = False
     p_cmp, p_slow, p_meta, p_extract = _patches()
     with p_cmp as cmp, p_slow, p_meta, p_extract:
-        await opt.run_epoch_end(epoch=1, val_results=[])
+        await opt.run_epoch_end(trainer_epoch=1, val_results=[])
     assert cmp.call_count == 1

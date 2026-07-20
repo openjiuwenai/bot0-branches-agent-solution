@@ -78,6 +78,62 @@ def test_api_request_valid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert req.task_name == "test-task"
 
 
+@pytest.mark.parametrize("optimizer_type", ["unknown", "managed_doc", "PROMPT"])
+def test_api_request_rejects_unknown_optimizer_type(tmp_path: Path, optimizer_type: str) -> None:
+    data_file = tmp_path / "items.json"
+    data_file.write_text("[]", encoding="utf-8")
+    data = _make_valid_request(dataset_path=str(data_file))
+    data["optimizer_type"] = optimizer_type
+
+    with pytest.raises(ValidationError):
+        OptimizeAPIRequest.model_validate(data)
+
+
+def test_api_request_rejects_skill_with_managed_doc(tmp_path: Path) -> None:
+    data_file = tmp_path / "items.json"
+    data_file.write_text("[]", encoding="utf-8")
+    data = _make_valid_request(dataset_path=str(data_file))
+    data.update(skills=[], managed_doc_kind="agent_rule")
+
+    with pytest.raises(ValidationError, match="skill optimization requires skills"):
+        OptimizeAPIRequest.model_validate(data)
+
+
+def test_api_request_rejects_prompt_with_skills(tmp_path: Path) -> None:
+    data_file = tmp_path / "items.json"
+    data_file.write_text("[]", encoding="utf-8")
+    data = _make_valid_request(dataset_path=str(data_file))
+    data.update(
+        optimizer_type="prompt",
+        skills=["skill_a"],
+        managed_doc_kind=None,
+        client_task_id="studio-task-1",
+        managed_doc_expected_revision="rev-1",
+    )
+
+    with pytest.raises(ValidationError, match="prompt optimization requires managed_doc_kind"):
+        OptimizeAPIRequest.model_validate(data)
+
+
+def test_tool_request_ignores_prompt_control_fields(tmp_path: Path) -> None:
+    data_file = tmp_path / "items.json"
+    data_file.write_text("[]", encoding="utf-8")
+    data = _make_valid_request(dataset_path=str(data_file))
+    data.update(
+        optimizer_type="tool",
+        managed_doc_kind="agent_rule",
+        client_task_id="studio-task-1",
+        managed_doc_expected_revision="rev-1",
+    )
+
+    request = OptimizeAPIRequest.model_validate(data)
+
+    assert request.skills == ["skill_a"]
+    assert request.managed_doc_kind is None
+    assert request.client_task_id is None
+    assert request.managed_doc_expected_revision is None
+
+
 def test_api_request_splits_not_sum_to_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """train_split + val_split != 1.0 → ValidationError。"""
     data_file = tmp_path / "items.json"

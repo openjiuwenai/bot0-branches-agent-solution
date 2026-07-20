@@ -9,6 +9,12 @@ import pytest
 from openjiuwen.agent_evolving.trainer.progress import Callbacks
 
 from evo_agent.conversation import ConversationIdFactory
+from evo_agent.errors import ValidationCoverageError
+from evo_agent.evaluator.batch_result import (
+    EvaluationBatchResult,
+    EvaluationFailure,
+    EvaluationOutcome,
+)
 from evo_agent.trainer import EvoTrainer
 
 
@@ -29,6 +35,8 @@ def _make_trainer(
     empty_extract_max_attempts: int = 3,
     empty_extract_retry_backoff: float = 0.0,
     num_parallel: int = 2,
+    validation_min_success_ratio: float = 1.0,
+    validation_require_same_case_set: bool = True,
 ) -> EvoTrainer:
     """Build an EvoTrainer with sensible defaults for tests."""
     return EvoTrainer(
@@ -41,6 +49,8 @@ def _make_trainer(
         trace_retry_backoff=trace_retry_backoff,
         empty_extract_max_attempts=empty_extract_max_attempts,
         empty_extract_retry_backoff=empty_extract_retry_backoff,
+        validation_min_success_ratio=validation_min_success_ratio,
+        validation_require_same_case_set=validation_require_same_case_set,
     )
 
 
@@ -145,9 +155,9 @@ def test_evaluate_uses_unique_conversation_ids() -> None:
     # Each case should have a unique conversation_id
     assert len(invoked_ids) == 3
     assert len(set(invoked_ids)) == 3  # All unique
-    # Format: run1:val:{n}:{case_id}
+    # Format: run1_val_{n}_{case_id}
     for cid in invoked_ids:
-        assert cid.startswith("run1:val:")
+        assert cid.startswith("run1_val_")
 
 
 def test_evaluate_injects_trajectory() -> None:
@@ -285,6 +295,60 @@ def test_evaluate_original_case_unchanged() -> None:
     assert "trajectory" not in original_case.inputs
 
 
+def test_evaluate_retries_only_failed_cases() -> None:
+    """validation 重试不得重复调用已经成功的 case。"""
+    agent = AsyncMock()
+    agent.invoke = AsyncMock(return_value={"answer": "ok"})
+    adapter = AsyncMock()
+    adapter.get_traces = AsyncMock(
+        return_value={"messages": [{"role": "assistant", "content": "ok"}]}
+    )
+    evaluator = MagicMock()
+
+    def detailed(cases: list[Any], predicts: list[Any], **kwargs: Any) -> EvaluationBatchResult:
+        del predicts, kwargs
+        outcomes = []
+        for index, case in enumerate(cases):
+            if case.case_id == "c2" and evaluator.batch_evaluate_detailed.call_count == 1:
+                outcomes.append(
+                    EvaluationOutcome(
+                        index,
+                        case.case_id,
+                        case,
+                        case.inputs["trajectory"],
+                        None,
+                        EvaluationFailure("json_parse_error", "bad JSON"),
+                    )
+                )
+            else:
+                evaluated = _make_evaluated_case(case.case_id, 0.8)
+                outcomes.append(
+                    EvaluationOutcome(
+                        index,
+                        case.case_id,
+                        case,
+                        case.inputs["trajectory"],
+                        evaluated,
+                        None,
+                    )
+                )
+        return EvaluationBatchResult(tuple(outcomes))
+
+    evaluator.batch_evaluate_detailed = MagicMock(side_effect=detailed)
+    trainer = _make_trainer(adapter_client=adapter, evaluator=evaluator)
+    cases = MagicMock()
+    cases.get_cases.return_value = [_make_case("c1"), _make_case("c2")]
+
+    score, evaluated = trainer.evaluate(agent, cases)
+
+    assert score == pytest.approx(0.8)
+    assert {item.case.case_id for item in evaluated} == {"c1", "c2"}
+    retried_ids = [
+        case.case_id for case in evaluator.batch_evaluate_detailed.call_args_list[1].args[0]
+    ]
+    assert retried_ids == ["c2"]
+
+
 def test_evaluate_reraises_cancelled_error() -> None:
     """asyncio.CancelledError 应被重新抛出，而不是静默丢弃结果。"""
     import asyncio
@@ -390,6 +454,76 @@ def test_select_best_candidate_uses_cached_baseline_for_base_candidate() -> None
     assert trainer._gate_epoch_scores == [{"base_score": 0.6, "candidate_score": 0.8}]
 
 
+def test_gate_fails_closed_when_base_and_candidate_case_sets_differ() -> None:
+    """幸存 case 集错配时不得比较均分或保留 candidate state。"""
+    trainer = _make_trainer()
+    base_eval = _make_evaluated_case("base-case", 0.6)
+    candidate_eval = _make_evaluated_case("different-case", 0.9)
+    trainer.record_validation_baseline(0.6, [base_eval])
+    trainer.evaluate = MagicMock(return_value=(0.9, [candidate_eval]))  # type: ignore[method-assign]
+    operator = _make_mock_operator()
+
+    with pytest.raises(ValidationCoverageError, match="case_set_mismatch"):
+        trainer._select_best_candidate_on_val(
+            agent=MagicMock(),
+            operators={"skill_a": operator},
+            candidates=_two_candidates(),
+            val_cases=MagicMock(),
+        )
+
+    assert trainer._cached_base_val_evaluated == [base_eval]
+    assert trainer._gate_epoch_scores == []
+
+
+def test_candidate_coverage_failure_restores_base_and_emits_detailed_batches() -> None:
+    """candidate 覆盖不足时，诊断必须带 identity-safe batch 且运行态回到 base。"""
+    callbacks = MagicMock(spec=Callbacks)
+    callbacks.on_validation_coverage_failed = MagicMock()
+    trainer = _make_trainer()
+    trainer._callbacks = callbacks
+    base_eval = _make_evaluated_case("c1", 0.6)
+    trainer.record_validation_baseline(0.6, [base_eval])
+    failed_case = _make_case("c1")
+    failed_batch = EvaluationBatchResult(
+        (
+            EvaluationOutcome(
+                0,
+                "c1",
+                failed_case,
+                {"messages": []},
+                None,
+                EvaluationFailure("json_parse_error", "bad JSON"),
+            ),
+        )
+    )
+
+    def fail_candidate(*_args: Any, **_kwargs: Any) -> tuple[float, list[Any]]:
+        trainer._last_validation_batch = failed_batch
+        raise ValidationCoverageError(
+            attempted_count=1,
+            evaluated_count=0,
+            min_success_ratio=1.0,
+            reason="validation_coverage_below_minimum",
+        )
+
+    trainer.evaluate = MagicMock(side_effect=fail_candidate)  # type: ignore[method-assign]
+    operator = _make_mock_operator()
+
+    with pytest.raises(ValidationCoverageError, match="validation_coverage_below_minimum"):
+        trainer._select_best_candidate_on_val(
+            agent=MagicMock(),
+            operators={"skill_a": operator},
+            candidates=_two_candidates(),
+            val_cases=MagicMock(),
+        )
+
+    payload = callbacks.on_validation_coverage_failed.call_args.args[0]
+    assert payload.error.reason == "validation_coverage_below_minimum"
+    assert payload.candidate_batches == (failed_batch,)
+    assert payload.base_batch.evaluated_count == 1
+    assert operator.load_state.call_args_list[-1].args[0] == {"skill_content": "original"}
+
+
 def test_select_best_candidate_picks_higher_score() -> None:
     """Candidate with higher val score wins and is restored."""
     trainer = _make_trainer()
@@ -415,6 +549,41 @@ def test_select_best_candidate_picks_higher_score() -> None:
 
     assert score == 0.8
     assert evaluated == [base_eval]
+
+
+def test_managed_doc_candidate_content_is_captured_even_when_gate_rejects() -> None:
+    class Operator:
+        def __init__(self) -> None:
+            self.content = "baseline"
+
+        def get_state(self) -> dict[str, str]:
+            return {"skill_content": self.content}
+
+        def load_state(self, state: dict[str, str]) -> None:
+            self.content = state["skill_content"]
+
+        def set_parameter(self, target: str, value: str) -> None:
+            assert target == "skill_content"
+            self.content = value
+
+    trainer = _make_trainer()
+    base_eval = _make_evaluated_case("c1", 0.8)
+    rejected_eval = _make_evaluated_case("c1", 0.4)
+    trainer.evaluate = MagicMock(  # type: ignore[method-assign]
+        side_effect=[(0.8, [base_eval]), (0.4, [rejected_eval])]
+    )
+
+    trainer._select_best_candidate_on_val(
+        agent=MagicMock(),
+        operators={"managed_doc:agent_rule": Operator()},
+        candidates=[
+            {("managed_doc:agent_rule", "skill_content"): "baseline"},
+            {("managed_doc:agent_rule", "skill_content"): "rejected candidate"},
+        ],
+        val_cases=MagicMock(),
+    )
+
+    assert trainer.managed_doc_epoch_contents("managed_doc:agent_rule") == ("rejected candidate",)
 
 
 def test_select_best_candidate_single_candidate_no_record() -> None:
@@ -589,6 +758,33 @@ def test_tie_reval_base_wins_when_mean_below_base() -> None:
     assert evaluated == [base_eval]  # 回退到缓存 base evaluated
     assert trainer._gate_epoch_scores == [
         {"base_score": 0.6, "candidate_score": pytest.approx(0.55)}
+    ]
+
+
+def test_tie_reval_overrides_initial_candidate_win_when_mean_loses() -> None:
+    """候选首轮略高但重评均值落后时，返回结果必须与 gate 的 base 决策一致。"""
+    trainer, _recorder = _make_trainer_with_recorder()
+    trainer._tie_reval_eps = 0.02
+
+    base_eval = _make_evaluated_case("c1", 0.6)
+    cand_first = _make_evaluated_case("c1", 0.61)
+    cand_reval = _make_evaluated_case("c1", 0.5)
+    trainer.record_validation_baseline(0.6, [base_eval])
+    trainer.evaluate = MagicMock(  # type: ignore[method-assign]
+        side_effect=[(0.61, [cand_first]), (0.5, [cand_reval])]
+    )
+
+    score, evaluated = trainer._select_best_candidate_on_val(
+        agent=MagicMock(),
+        operators={"skill_a": _make_mock_operator()},
+        candidates=_two_candidates(),
+        val_cases=MagicMock(),
+    )
+
+    assert score == 0.6
+    assert evaluated == [base_eval]
+    assert trainer._gate_epoch_scores == [
+        {"base_score": 0.6, "candidate_score": pytest.approx(0.555)}
     ]
 
 

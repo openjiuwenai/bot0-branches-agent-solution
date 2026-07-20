@@ -62,3 +62,6 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
+markers = [
+    "managed_doc_e2e: launches the sibling Adapter and a fake business Agent",
+]

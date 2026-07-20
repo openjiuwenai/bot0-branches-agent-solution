@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 from typing import Any
 
@@ -16,15 +15,41 @@ from openjiuwen.core.foundation.llm import (
 from evo_agent.evaluator.domain.models import (
     GoalGenerationInput,
     GoalGenerationOutput,
-    StandardTrajectory,
 )
 from evo_agent.evaluator.domain.scoring import EvaluationError
-from evo_agent.evaluator.evaluators.llm import _extract_json, _run_coroutine
 from evo_agent.evaluator.prompts.goal_generation import GOAL_GENERATION_PROMPT_TEMPLATE
+from evo_agent.llm.invocation import (
+    LLMInvocation,
+    LLMInvocationContext,
+    LLMInvocationError,
+    LLMInvocationRequest,
+    LLMProviderCapabilities,
+    LLMRetryPolicy,
+)
+from evo_agent.llm.structured_output import (
+    StructuredOutputPolicy,
+    StructuredOutputResult,
+    ValidationResult,
+    log_structured_output,
+    parse_structured_output,
+)
+from evo_agent.llm.trajectory_compaction import (
+    TrajectoryCompactionContext,
+    TrajectoryCompactionError,
+    TrajectoryCompactionPolicy,
+    compact_trajectory,
+)
 
-_CONTENT_LIMIT = 1000
-_ARGUMENT_LIMIT = 1000
-_TOOL_RESULT_LIMIT = 1200
+_GOAL_POLICY = StructuredOutputPolicy(
+    schema_name="goal_generation",
+    required_keys=frozenset({"goal"}),
+    allowed_comma_next_keys=frozenset({"goal", "reason", "confidence"}),
+)
+_GOAL_FORMAT_RETRY_INSTRUCTION = (
+    "格式重试：请依据下方轨迹证据重新提炼真实目标，只输出一个合法 JSON 对象。"
+    "对象必须包含 goal 字符串，可包含 reason 字符串和 confidence 有限数值。"
+    "不要照抄字段说明；禁止 Markdown、code fence、注释、NaN 或 Infinity。"
+)
 
 
 class TrajectoryGoalGenerator:
@@ -34,21 +59,89 @@ class TrajectoryGoalGenerator:
         self,
         model_config: ModelRequestConfig,
         model_client_config: ModelClientConfig,
+        invocation: LLMInvocation | None = None,
     ) -> None:
         self._model = Model(model_client_config, model_config)
+        self._invocation = invocation or LLMInvocation(
+            self._model,
+            capabilities=LLMProviderCapabilities(32768, False, True, True, True, "either"),
+            parallelism=4,
+            safety_margin_tokens=512,
+            chars_per_token=2.0,
+            default_output_reserve_tokens=1200,
+        )
 
     def generate(self, value: GoalGenerationInput) -> GoalGenerationOutput:
         """Generate the final user goal represented by the full trajectory."""
         if not value.trajectory.messages:
             raise EvaluationError("Empty trajectory: no messages to generate goal from")
 
-        prompt = _build_goal_prompt(value.trajectory)
+        prompt_without_trajectory = GOAL_GENERATION_PROMPT_TEMPLATE.replace("{messages}", "")
+        trajectory_budget = self._invocation.input_token_budget("goal_generator", 1200)
+        trajectory_budget -= self._invocation.estimate_messages(
+            (UserMessage(content=prompt_without_trajectory),)
+        )
+        try:
+            compacted = compact_trajectory(
+                value.trajectory,
+                policy=TrajectoryCompactionPolicy(stage="goal_generator"),
+                context=TrajectoryCompactionContext(),
+                token_budget=trajectory_budget,
+            )
+        except TrajectoryCompactionError as exc:
+            raise EvaluationError(
+                category="prompt_budget_exceeded",
+                safe_message=f"Goal trajectory cannot fit prompt budget: {exc}",
+            ) from exc
+        prompt = GOAL_GENERATION_PROMPT_TEMPLATE.replace("{messages}", compacted.text)
+        retry_prompt = f"{_GOAL_FORMAT_RETRY_INSTRUCTION}\n\n轨迹证据：\n{compacted.text}"
+
+        def parse(text: str) -> StructuredOutputResult:
+            return parse_structured_output(
+                text,
+                policy=_GOAL_POLICY,
+                validator=_validate_goal_output,
+            )
 
         try:
-            response = _run_coroutine(self._model.invoke([UserMessage(content=prompt)])).content
+            result = self._invocation.invoke_sync(
+                LLMInvocationRequest(
+                    stage="goal_generator",
+                    messages=(UserMessage(content=prompt),),
+                    retry_messages=(UserMessage(content=retry_prompt),),
+                    result_validator=lambda text: parse(text).data is not None,
+                    result_error_classifier=lambda text: parse(text).error_category,
+                    context=LLMInvocationContext(run_id="goal_generator"),
+                    retry_policy=LLMRetryPolicy(2, 120.0, 300.0, 1.0, 0.0),
+                    output_schema_name="goal_generation",
+                    reserved_output_tokens=1200,
+                )
+            )
+            response = result.text
         except Exception as e:
+            if isinstance(e, LLMInvocationError) and e.category == "unusable_response":
+                message = (
+                    "LLM response missing valid 'goal' field"
+                    if e.output_error_category == "required_key"
+                    else "Failed to extract JSON from LLM goal response"
+                )
+                raise EvaluationError(
+                    category=e.output_error_category or "json_parse_error",
+                    safe_message=message,
+                ) from e
             raise EvaluationError(f"LLM goal generation failed: {e}") from e
 
+        final_extraction = parse(response)
+        if final_extraction.data is not None:
+            log_structured_output(
+                final_extraction,
+                stage="goal_generator",
+                schema_name=_GOAL_POLICY.schema_name,
+                invocation_id=result.invocation_id,
+                attempt=result.metadata.get("attempt", "unknown"),
+                finish_reason=result.finish_reason or "unknown",
+                transport_complete=result.transport_complete,
+            )
         data = _parse_goal_response(response)
         goal = data["goal"]
 
@@ -64,131 +157,38 @@ class TrajectoryGoalGenerator:
         return GoalGenerationOutput(goal=goal, metadata=metadata)
 
 
-def _build_goal_prompt(trajectory: StandardTrajectory) -> str:
-    messages = _simplify_trajectory_for_goal(trajectory)
-    return GOAL_GENERATION_PROMPT_TEMPLATE.replace("{messages}", messages)
-
-
-def _simplify_trajectory_for_goal(trajectory: StandardTrajectory) -> str:
-    """Serialize trajectory facts for goal generation.
-
-    Unlike evaluator simplification, all tool results are truncated, including
-    ``read_file`` outputs, so skill documents do not dominate user-goal extraction.
-    """
-    simplified: list[dict[str, Any]] = []
-    tool_names_by_id: dict[str, str] = {}
-
-    for index, message in enumerate(trajectory.messages):
-        if message.role in {"user", "assistant"}:
-            item: dict[str, Any] = {
-                "index": index,
-                "role": message.role,
-            }
-            content = _stringify_content(message.content)
-            if content:
-                item["content"] = _truncate(content, _CONTENT_LIMIT)
-
-            tool_calls = [_parse_tool_call(tc) for tc in message.tool_calls]
-            tool_calls = [tc for tc in tool_calls if tc["tool_name"]]
-            if tool_calls:
-                item["tool_calls"] = [
-                    {
-                        "tool_name": tc["tool_name"],
-                        "tool_arguments": tc["tool_arguments"],
-                    }
-                    for tc in tool_calls
-                ]
-                for tc in tool_calls:
-                    tool_call_id = tc.get("tool_call_id")
-                    if isinstance(tool_call_id, str) and tool_call_id:
-                        tool_names_by_id[tool_call_id] = str(tc["tool_name"])
-
-            if "content" in item or "tool_calls" in item:
-                simplified.append(item)
-
-        if message.role == "tool":
-            content = _stringify_content(message.content)
-            if not content:
-                continue
-            simplified.append(
-                {
-                    "index": index,
-                    "role": "tool",
-                    "tool_name": tool_names_by_id.get(message.tool_call_id or ""),
-                    "tool_result": _truncate(content, _TOOL_RESULT_LIMIT),
-                }
-            )
-
-    return json.dumps({"messages": simplified}, ensure_ascii=False, default=str)
-
-
-def _parse_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
-    function = tool_call.get("function")
-    if not isinstance(function, dict):
-        return {
-            "tool_name": None,
-            "tool_arguments": None,
-            "tool_call_id": tool_call.get("id"),
-        }
-
-    name = function.get("name")
-    arguments = _parse_arguments(function.get("arguments"))
-    return {
-        "tool_name": name if isinstance(name, str) else None,
-        "tool_arguments": arguments,
-        "tool_call_id": tool_call.get("id"),
-    }
-
-
-def _parse_arguments(arguments: Any) -> dict[str, Any] | str | None:
-    if arguments is None:
-        return None
-    if isinstance(arguments, dict):
-        return _limit_arguments(arguments)
-    if not isinstance(arguments, str):
-        return _truncate(str(arguments), _ARGUMENT_LIMIT)
-    try:
-        parsed = json.loads(arguments)
-    except json.JSONDecodeError:
-        return _truncate(arguments, _ARGUMENT_LIMIT)
-    if isinstance(parsed, dict):
-        return _limit_arguments(parsed)
-    return _truncate(arguments, _ARGUMENT_LIMIT)
-
-
-def _limit_arguments(arguments: dict[str, Any]) -> dict[str, Any] | str:
-    serialized = json.dumps(arguments, ensure_ascii=False, default=str)
-    if len(serialized) <= _ARGUMENT_LIMIT:
-        return arguments
-    return _truncate(serialized, _ARGUMENT_LIMIT)
-
-
-def _stringify_content(content: Any) -> str | None:
-    if content is None:
-        return None
-    if isinstance(content, str):
-        stripped = content.strip()
-        return stripped or None
-    return json.dumps(content, ensure_ascii=False, default=str)
-
-
-def _truncate(value: str, limit: int) -> str:
-    if len(value) <= limit:
-        return value
-    return value[:limit] + "…"
-
-
 def _parse_goal_response(response: str) -> dict[str, Any]:
-    try:
-        data = _extract_json(response)
-    except Exception as e:
-        raise EvaluationError(f"Failed to extract JSON from LLM response: {e}") from e
+    extraction = parse_structured_output(
+        response,
+        policy=_GOAL_POLICY,
+        validator=_validate_goal_output,
+    )
+    data = extraction.data
+    if data is None:
+        if extraction.error_category == "field_type" and "goal" in extraction.error:
+            message = "LLM response missing valid 'goal' field"
+        else:
+            message = f"Failed to extract JSON from LLM response: {extraction.error}"
+        raise EvaluationError(
+            category=extraction.error_category or "json_parse_error",
+            safe_message=message,
+        )
 
-    if not isinstance(data, dict):
-        raise EvaluationError(f"Failed to extract JSON from LLM response: {response[:200]}")
-
-    goal = data.get("goal")
-    if not isinstance(goal, str) or not goal.strip():
-        raise EvaluationError(f"LLM response missing valid 'goal' field: {goal!r}")
+    goal = data["goal"]
+    assert isinstance(goal, str)
     data["goal"] = goal.strip()
     return data
+
+
+def _validate_goal_output(data: dict[str, Any]) -> ValidationResult:
+    goal = data.get("goal")
+    if not isinstance(goal, str) or not goal.strip():
+        return ValidationResult(False, "field_type", "goal must be a non-empty string")
+    confidence = data.get("confidence")
+    if confidence is not None and (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(confidence)
+    ):
+        return ValidationResult(False, "field_type", "confidence must be a finite number")
+    return ValidationResult(True)

@@ -17,10 +17,12 @@ _MODEL_PATCH = "evo_agent.evaluator.evaluators.llm.Model"
 
 # 无 attributed_skill 字段的 LLM 响应（模拟关闭归因时 LLM 的输出）
 _RESP_NO_ATTR = (
-    '{"task_completion":0.8,"trajectory_quality":0.8,"safety":1.0,"is_pass":true,"score":0.8}'
+    '{"task_completion":0.8,"trajectory_quality":0.8,"safety":1.0,'
+    '"is_pass":true,"score":0.8,"reason":"ok"}'
 )
 _RESP_FULL_PASS = (
-    '{"task_completion":1.0,"trajectory_quality":1.0,"safety":1.0,"is_pass":true,"score":1.0}'
+    '{"task_completion":1.0,"trajectory_quality":1.0,"safety":1.0,'
+    '"is_pass":true,"score":1.0,"reason":"ok"}'
 )
 
 
@@ -143,7 +145,8 @@ def test_pass_fail_consistency_regardless_of_attribution() -> None:
     """同一 LLM 评分输出，开/关归因的 score 判定一致（pass/fail 由 score 反映）。"""
     response = (
         '{"task_completion":0.5,"trajectory_quality":0.5,"safety":1.0,'
-        '"is_pass":false,"score":0.4,"attributed_skill":"product_recommend_skill"}'
+        '"is_pass":false,"score":0.4,"attributed_skill":"product_recommend_skill",'
+        '"reason":"failed"}'
     )
     evaluator = _make_evaluator()
     mock_response = type("Response", (), {"content": response})()

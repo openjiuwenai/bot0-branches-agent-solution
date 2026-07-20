@@ -94,6 +94,26 @@ class ManagedDocService:
             return FileOnlyApply()
         return RestartApply(cfg=cfg, client=self._get_http_client())
 
+    # ── capability listing (sync, read-only) ────────────────────────
+
+    def list_documents(self, agent_name: str) -> dict[str, object]:
+        """Project restart-capable documents onto the safe optimization whitelist."""
+        items: list[dict[str, object]] = []
+        for cfg in self._registry.list_for_agent(agent_name):
+            if cfg.apply != "restart":
+                continue
+            filename = Path(cfg.path).name
+            items.append(
+                {
+                    "doc_kind": cfg.kind,
+                    "display_name": filename,
+                    "filename": filename,
+                    "apply_mode": cfg.apply,
+                    "max_task_seconds": self._registry.max_task_seconds(agent_name, cfg.kind),
+                }
+            )
+        return {"agent_name": agent_name, "items": items, "total": len(items)}
+
     # ── content (sync, spec §6.3) ───────────────────────────────────
 
     def content(self, agent_name: str, doc_kind: str) -> dict[str, object]:
@@ -108,6 +128,9 @@ class ManagedDocService:
             "file_revision": file_sha,
             "applied_revision": applied,
             "pending_apply": file_sha != applied,
+            # G2.3: 暴露 apply 能力与时限上界，供消费方做 deadline 校验（file_only→0）。
+            "apply_mode": cfg.apply,
+            "max_task_seconds": self._registry.max_task_seconds(agent_name, doc_kind),
         }
 
     # ── task polling (spec §7.3) ────────────────────────────────────
@@ -125,7 +148,7 @@ class ManagedDocService:
         content: str,
     ) -> dict[str, object]:
         cfg = self._config(agent_name, doc_kind)
-        validate(content)  # InvalidDocContentError → 400, no write
+        validate(content, cfg.max_content_bytes)  # InvalidDocContentError → 400, no write
         new_sha = DocStorage.sha256(content)
         storage = self._storage(cfg)
 
@@ -173,7 +196,8 @@ class ManagedDocService:
         spawned = False
         try:
             snapshot = storage.read_snapshot()  # DocNotFoundError → 404 if absent
-            validate(snapshot)  # defensive V2 (snapshot was valid when written)
+            # Defensive V2: the snapshot was valid when it was written.
+            validate(snapshot, cfg.max_content_bytes)
             new_sha = DocStorage.sha256(snapshot)
             storage.write_file_atomic(snapshot)
 

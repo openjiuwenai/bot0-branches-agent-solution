@@ -34,6 +34,11 @@ class PipelinePhase(StrEnum):
     VALIDATION = "validation"
     EPOCH_END = "epoch_end"
     TRAIN_END = "train_end"
+    CANCEL_REQUESTED = "cancel_requested"
+    CANCEL_WAITING_INFLIGHT = "cancel_waiting_inflight"
+    ROLLBACK_STARTED = "rollback_started"
+    ROLLBACK_COMPLETED = "rollback_completed"
+    ROLLBACK_FAILED = "rollback_failed"
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+from evo_agent.errors import ValidationCoverageError
+from evo_agent.evaluator.batch_result import EvaluationBatchResult
 
 if TYPE_CHECKING:
     from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
@@ -22,6 +25,7 @@ class Edit:
     target: str = ""
     support_count: int = 0
     source_type: str = "failure"
+    source_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,10 @@ class RawPatch:
     batch_size: int = 0
     failure_summary: str = ""
     operator_id: str = ""
+    repaired: bool = False
+    parse_mode: str = "exact"
+    repair_operations: tuple[dict[str, Any], ...] = ()
+    source_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -61,11 +69,41 @@ class SlowUpdateResult:
     action: str
 
 
+@dataclass(frozen=True)
+class GateEvaluationRecord:
+    """Complete gate scores and tie re-evaluation provenance for one epoch."""
+
+    base_score: float
+    candidate_score: float
+    decision: Literal["base", "candidate"]
+    tie_revalued: bool = False
+    candidate_score_first: float | None = None
+    candidate_score_reval: float | None = None
+
+
+@dataclass(frozen=True)
+class GateEpochArtifactInput:
+    gate: GateEvaluationRecord
+    base_batch: EvaluationBatchResult
+    candidate_batches: tuple[EvaluationBatchResult, ...]
+    selected_batch: EvaluationBatchResult
+
+
+@dataclass(frozen=True)
+class ValidationCoverageFailureInput:
+    base_batch: EvaluationBatchResult
+    candidate_batches: tuple[EvaluationBatchResult, ...]
+    error: ValidationCoverageError
+
+
 __all__ = [
     "AttributedBatch",
     "Edit",
     "EditOp",
+    "GateEpochArtifactInput",
+    "GateEvaluationRecord",
     "Patch",
     "RawPatch",
     "SlowUpdateResult",
+    "ValidationCoverageFailureInput",
 ]

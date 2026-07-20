@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+from types import MappingProxyType
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,9 +16,9 @@ from openjiuwen.agent_evolving.evaluator.evaluator import BaseEvaluator
 from evo_agent.evaluator.domain.scoring import EvaluationError
 from evo_agent.evaluator.evaluators.llm import (
     LLMEvaluator,
-    _extract_json,
     _validate_attributed_skill,
 )
+from evo_agent.evaluator.json_util import extract_json_data as _extract_json
 from evo_agent.evaluator.prompts.formatter import (
     build_dimension_keys,
     build_evaluation_prompt,
@@ -24,6 +26,11 @@ from evo_agent.evaluator.prompts.formatter import (
 )
 from evo_agent.evaluator.prompts.policy_v1 import (
     DEFAULT_PROMPT_TEMPLATE,
+)
+from evo_agent.llm.invocation import (
+    LLMInvocation,
+    LLMInvocationResult,
+    LLMProviderCapabilities,
 )
 
 _MODEL_PATCH = "evo_agent.evaluator.evaluators.llm.Model"
@@ -160,6 +167,45 @@ class TestEvaluateWithExpected:
             "safety",
         }
 
+    def test_single_missing_comma_is_repaired_with_provenance(self) -> None:
+        evaluator = _make_evaluator()
+        response = (
+            '{"task_completion":1,"trajectory_quality":1,"safety":1,'
+            '"is_pass":true,"score":0.8 "attributed_skill":"",'
+            '"reason":"ok"}'
+        )
+
+        evaluated = _run_evaluate(evaluator, llm_response=response)
+
+        reason = json.loads(evaluated.reason)
+        assert reason["repaired"] is True
+        assert reason["parse_mode"] == "deterministic_comma_repair"
+        assert reason["repair_operations"][0]["op"] == "insert_comma"
+        assert reason["repair_operations"][0]["next_key"] == "attributed_skill"
+
+    def test_successful_repair_logs_original_and_repaired_response(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """恢复成功也要保留现场证据，且日志保持单行。"""
+        evaluator = _make_evaluator()
+        response = '{"is_pass":true,"score":0.8 "attributed_skill":"","reason":"line 1\\nline 2"}'
+
+        with caplog.at_level(logging.WARNING):
+            _run_evaluate(evaluator, llm_response=response)
+
+        messages = [
+            record.getMessage()
+            for record in caplog.records
+            if "JSON repaired" in record.getMessage()
+        ]
+        assert len(messages) == 1
+        message = messages[0]
+        assert "parse_mode=deterministic_comma_repair" in message
+        assert "insert_comma" in message
+        assert 'original_response="' in message
+        assert 'repaired_response="' in message
+        assert "\\n" in message
+
 
 class TestEvaluateWithTrajectory:
     """有轨迹的评估。"""
@@ -187,6 +233,67 @@ class TestEvaluateWithTrajectory:
         assert result.per_metric is not None
         assert "trajectory_quality" in result.per_metric
         assert result.per_metric["trajectory_quality"] == 0.75
+
+    def test_long_trajectory_uses_shared_compactor_then_scores_once(self) -> None:
+        """单条长轨迹压缩后仍是一次完整评分，tool arguments 保真。"""
+        provider = MagicMock()
+        provider.invoke = AsyncMock(
+            return_value=type(
+                "Response",
+                (),
+                {"content": _mock_llm_response("ok", score=0.8), "metadata": {}},
+            )()
+        )
+        invocation = LLMInvocation(
+            provider,
+            capabilities=LLMProviderCapabilities(
+                context_window_tokens=8000,
+                supports_max_output_tokens=False,
+                supports_finish_reason=False,
+                supports_usage=False,
+                supports_json_mode=False,
+                completion_signal="either",
+            ),
+            parallelism=1,
+            safety_margin_tokens=512,
+            chars_per_token=2.0,
+            default_output_reserve_tokens=1200,
+        )
+        evaluator = _make_evaluator()
+        evaluator._invocation = invocation
+        arguments = '{"path":"/customer/exact.json","limit":42}'
+        case = _make_case(
+            trajectory={
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call-1",
+                                "function": {"name": "read_file", "arguments": arguments},
+                            }
+                        ],
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call-1",
+                        "content": "head" + "x" * 20_000 + "tail",
+                    },
+                    {"role": "assistant", "content": "final answer"},
+                ]
+            }
+        )
+
+        evaluated = evaluator.evaluate(case, {"answer": "ignored"})
+
+        assert evaluated.score == pytest.approx(0.8)
+        provider.invoke.assert_awaited_once()
+        sent_prompt = provider.invoke.await_args.args[0][0].content
+        assert "TOOL_RESULT_TRUNCATED" in sent_prompt
+        trajectory_text = sent_prompt.split("### 3. 轨迹消息\n", 1)[1].split("\n\n---", 1)[0]
+        sent_trajectory = json.loads(trajectory_text)
+        assert sent_trajectory["messages"][0]["tool_calls"][0]["function"]["arguments"] == arguments
+        assert "final answer" in sent_prompt
 
     def test_sends_simplified_trajectory_to_model_without_mutating_case(self) -> None:
         evaluator = _make_evaluator()
@@ -364,6 +471,83 @@ class TestLLMErrorHandling:
                 llm_response="this is not json at all",
             )
 
+    def test_complete_invalid_json_uses_format_retry(self) -> None:
+        """完整但不可修复的 JSON 必须触发一次格式重试。"""
+        evaluator = _make_evaluator()
+        valid_response = _mock_llm_response("ok after retry", score=0.9)
+        responses = [
+            type("Response", (), {"content": "{not valid json}", "metadata": {}})(),
+            type("Response", (), {"content": valid_response, "metadata": {}})(),
+        ]
+
+        with (
+            patch.object(
+                evaluator._model,
+                "invoke",
+                new_callable=AsyncMock,
+                side_effect=responses,
+            ) as mock_invoke,
+            patch(
+                "evo_agent.llm.invocation.asyncio.sleep",
+                new_callable=AsyncMock,
+            ),
+        ):
+            evaluated = evaluator.evaluate(_make_case(), {"answer": "42"})
+
+        assert evaluated.score == pytest.approx(0.9)
+        assert mock_invoke.await_count == 2
+        retry_prompt = mock_invoke.await_args_list[1].args[0][0].content
+        assert "格式重试" in retry_prompt
+
+    def test_parse_failure_log_contains_complete_invocation_diagnostics(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """单 case 入口也要把完整单行 raw 与调用诊断消费到唯一 WARNING。"""
+        evaluator = _make_evaluator()
+        invocation_result = LLMInvocationResult(
+            invocation_id="inv-123",
+            text="bad\nresponse",
+            finish_reason=None,
+            input_tokens=None,
+            output_tokens=None,
+            transport_complete=True,
+            metadata=MappingProxyType(
+                {
+                    "provider": "ICBC",
+                    "estimated_input_tokens": 321,
+                    "output_reserve_tokens": 1200,
+                    "compacted": True,
+                    "completion_signal": "done",
+                    "chunk_count": 4,
+                }
+            ),
+        )
+        evaluator._invocation.invoke_sync = MagicMock(return_value=invocation_result)
+
+        with caplog.at_level(logging.WARNING), pytest.raises(EvaluationError):
+            evaluator.evaluate(_make_case(), {"answer": "42"})
+
+        messages = [
+            record.getMessage()
+            for record in caplog.records
+            if "Evaluation skipped" in record.getMessage()
+        ]
+        assert len(messages) == 1
+        message = messages[0]
+        assert 'raw_response="bad\\nresponse"' in message
+        for expected in (
+            "invocation_id=inv-123",
+            "stage=evaluator",
+            "provider=ICBC",
+            "prompt_estimated_tokens=321",
+            "output_reserve_tokens=1200",
+            "compacted=True",
+            "finish_reason=unknown",
+            "completion_signal=done",
+            "chunk_count=4",
+        ):
+            assert expected in message
+
     def test_missing_score_raises_evaluation_error(self) -> None:
         """缺少 score 字段必须报错。"""
         evaluator = _make_evaluator()
@@ -387,6 +571,14 @@ class TestLLMErrorHandling:
                 predict={"answer": "42"},
                 llm_response=response,
             )
+
+    def test_missing_reason_is_rejected_before_schema_defaults(self) -> None:
+        """本次输出 schema 的必填字段不能由 Pydantic/default 静默补齐。"""
+        evaluator = _make_evaluator()
+        response = json.dumps({"score": 0.75, "is_pass": True, "attributed_skill": ""})
+
+        with pytest.raises(EvaluationError, match="missing required keys"):
+            _run_evaluate(evaluator, llm_response=response)
 
     def test_non_numeric_score_raises_evaluation_error(self) -> None:
         """非数值 score 必须报错。"""
@@ -443,30 +635,26 @@ class TestLLMErrorHandling:
         # per_metric may be empty or None since no dimensions were provided
         assert result.per_metric is None or result.per_metric == {}
 
-    def test_invalid_dimension_values_not_in_per_metric(self) -> None:
-        """非法维度值被静默跳过，不进入 per_metric。"""
+    def test_invalid_dimension_values_are_rejected(self) -> None:
+        """已出现的非法维度值触发 schema retry，耗尽后拒绝整份响应。"""
         evaluator = _make_evaluator()
         data = {
             "task_completion": "high",
             "trajectory_quality": 0.8,
-            "safety": float("nan"),
+            "safety": 0.5,
             "score": 0.75,
             "is_pass": True,
             "attributed_skill": "",
             "reason": "some dims invalid",
         }
         response = f"```json\n{json.dumps(data)}\n```"
-        case = _make_case()
-        result = _run_evaluate(
-            evaluator,
-            predict={"answer": "42"},
-            case=case,
-            llm_response=response,
-        )
-        assert result.per_metric is not None
-        assert "task_completion" not in result.per_metric  # string value, skipped
-        assert result.per_metric["trajectory_quality"] == 0.8  # valid
-        assert "safety" not in result.per_metric  # NaN, skipped
+        with pytest.raises(EvaluationError, match="finite number"):
+            _run_evaluate(
+                evaluator,
+                predict={"answer": "42"},
+                case=_make_case(),
+                llm_response=response,
+            )
 
 
 class TestBatchEvaluate:
@@ -517,6 +705,35 @@ class TestBatchEvaluate:
         evaluator = _make_evaluator()
         results = evaluator.batch_evaluate([], [])
         assert results == []
+
+    def test_batch_failure_artifact_does_not_expose_invalid_field_value(self) -> None:
+        evaluator = _make_evaluator()
+        secret = "sensitive-model-field-value"
+        response = json.dumps(
+            {
+                "score": secret,
+                "is_pass": True,
+                "reason": "invalid score type",
+                "attributed_skill": "",
+            }
+        )
+        mock_response = type("Response", (), {"content": response, "metadata": {}})()
+
+        with (
+            patch.object(
+                evaluator._model,
+                "invoke",
+                new_callable=AsyncMock,
+                return_value=mock_response,
+            ),
+            patch("evo_agent.llm.invocation.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = evaluator.batch_evaluate_detailed([_make_case()], [{"answer": "42"}])
+
+        failure = result.outcomes[0].failure
+        assert failure is not None
+        assert failure.category == "field_type"
+        assert secret not in failure.safe_message
 
     def test_mean_score_filters_nan_safety_net(self) -> None:
         """_mean_score 防御性过滤 NaN。"""
@@ -703,8 +920,8 @@ class TestParseResult:
         assert result["safety"] == 0.75
         assert "trajectory_quality" not in result  # missing, not in per_metric
 
-    def test_parse_result_nan_dimension_skipped(self) -> None:
-        """NaN 维度值被跳过。"""
+    def test_parse_result_nan_dimension_is_rejected(self) -> None:
+        """NaN 维度值违反 evaluator schema。"""
         evaluator = _make_evaluator()
         data = {
             "task_completion": 0.5,
@@ -716,25 +933,25 @@ class TestParseResult:
             "reason": "test",
         }
         response = f"```json\n{json.dumps(data)}\n```"
-        result = evaluator._parse_result(response)
-        assert result["task_completion"] == 0.5
-        assert "trajectory_quality" not in result  # NaN, skipped
-        assert result["safety"] == 0.75
+        with pytest.raises(EvaluationError, match="invalid JSON syntax"):
+            evaluator._parse_result(response)
 
     def test_parse_result_non_numeric_score_raises(self) -> None:
         """非数值 score 必须报错。"""
         evaluator = _make_evaluator()
-        data = {"score": "high", "is_pass": True, "reason": "ok"}
+        secret = "sensitive-model-field-value"
+        data = {"score": secret, "is_pass": True, "reason": "ok"}
         response = f"```json\n{json.dumps(data)}\n```"
-        with pytest.raises(EvaluationError, match="missing valid 'score'"):
+        with pytest.raises(EvaluationError, match="missing valid 'score'") as exc_info:
             evaluator._parse_result(response)
+        assert secret not in exc_info.value.safe_message
 
     def test_parse_result_nan_score_raises(self) -> None:
         """NaN score 必须报错。"""
         evaluator = _make_evaluator()
         data = {"score": float("nan"), "is_pass": True, "reason": "ok"}
         response = f"```json\n{json.dumps(data)}\n```"
-        with pytest.raises(EvaluationError, match="non-finite"):
+        with pytest.raises(EvaluationError, match="invalid JSON syntax"):
             evaluator._parse_result(response)
 
     def test_parse_result_inf_score_raises(self) -> None:
@@ -742,7 +959,7 @@ class TestParseResult:
         evaluator = _make_evaluator()
         data = {"score": float("inf"), "is_pass": True, "reason": "ok"}
         response = f"```json\n{json.dumps(data)}\n```"
-        with pytest.raises(EvaluationError, match="non-finite"):
+        with pytest.raises(EvaluationError, match="invalid JSON syntax"):
             evaluator._parse_result(response)
 
     def test_parse_result_non_boolean_is_pass_raises(self) -> None:
@@ -825,6 +1042,29 @@ class TestValueError:
         )
         with pytest.raises(EvaluationError, match="skill_names is required"):
             evaluator.evaluate(case, {"answer": "42"})
+
+    def test_rollout_failure_keeps_infrastructure_category(self) -> None:
+        evaluator = _make_evaluator()
+
+        with pytest.raises(EvaluationError) as exc_info:
+            evaluator.evaluate(
+                _make_case(),
+                {"answer": "", "error": "RAW INTERNAL ROLLOUT ERROR"},
+            )
+
+        assert exc_info.value.category == "rollout_error"
+        assert "RAW INTERNAL" not in exc_info.value.safe_message
+
+    def test_empty_trajectory_is_trace_unavailable(self) -> None:
+        evaluator = _make_evaluator()
+
+        with pytest.raises(EvaluationError) as exc_info:
+            evaluator.evaluate(
+                _make_case(trajectory={"messages": []}),
+                {"answer": "ok"},
+            )
+
+        assert exc_info.value.category == "trace_unavailable"
 
 
 class TestPrompt:

@@ -20,7 +20,9 @@ _FM_MARKER = "---\nname: demo"
 
 
 def _make_exporter(tmp_path: Path) -> ArtifactExporter:
-    return ArtifactExporter(str(tmp_path / "artifacts"), export_trajectories=False)
+    return ArtifactExporter(
+        str(tmp_path / "artifacts"), score_threshold=0.5, export_trajectories=False
+    )
 
 
 # ── AC5: snapshot 两种开关都含 frontmatter ──

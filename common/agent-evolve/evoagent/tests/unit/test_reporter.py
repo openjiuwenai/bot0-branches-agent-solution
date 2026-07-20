@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from evo_agent.reporter.formatter import ReportFormatter
 from evo_agent.types import OptimizeReport
 
@@ -461,3 +463,98 @@ def test_val_result_no_per_case_data(tmp_path: Path) -> None:
     assert report.val.pass_rate_before == 0.0  # 空 baseline → 0.0
     # best(0.8) > score_before(0.4) 但无 per-case → 回退 pass_rate_before
     assert report.val.pass_rate_after == 0.0
+
+
+# ── managed-doc formatter artifact（spec F8）──
+
+
+def _write_summary(tmp_path: Path) -> None:
+    summary = {
+        "skills": ["managed_doc:agent_rule"],
+        "dataset": "agent_rule_dataset",
+        "epochs_completed": 1,
+        "edits_applied": 0,
+    }
+    (tmp_path / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+
+def test_report_includes_managed_doc_kind_before_after_task_ids(tmp_path: Path) -> None:
+    """report 回填 F1 四字段：kind / before / after / task_ids。"""
+    _write_summary(tmp_path)
+    before, after = "# rule v1", "# rule v2"
+    report = ReportFormatter(
+        tmp_path,
+        skills=("managed_doc:agent_rule",),
+        managed_doc_kind="agent_rule",
+        managed_doc_content_before=before,
+        managed_doc_content_after=after,
+        managed_doc_task_ids=("task-1", "task-2"),
+    ).format()
+    assert report.managed_doc_kind == "agent_rule"
+    assert report.managed_doc_content_before == before
+    assert report.managed_doc_content_after == after
+    assert report.managed_doc_task_ids == ("task-1", "task-2")
+
+
+def test_formatter_writes_before_final_diff_tasks_artifacts(tmp_path: Path) -> None:
+    """成功路径四 artifact 落盘：before/tasks 由 runner，final/diff 由 formatter。"""
+    _write_summary(tmp_path)
+    before = "# agent rule\nkeep this line\nold line"
+    after = "# agent rule\nkeep this line\nnew line"
+    # runner 已写 before.md + tasks.json（formatter 只读 before 不写）
+    (tmp_path / "managed_doc_before.md").write_text(before, encoding="utf-8")
+    (tmp_path / "managed_doc_tasks.json").write_text(
+        json.dumps({"task_ids": ["t1"]}), encoding="utf-8"
+    )
+    ReportFormatter(
+        tmp_path,
+        skills=("managed_doc:agent_rule",),
+        managed_doc_kind="agent_rule",
+        managed_doc_content_before=before,
+        managed_doc_content_after=after,
+        managed_doc_task_ids=("t1",),
+    ).format()
+    # final.md = operator committed content
+    assert (tmp_path / "managed_doc_final.md").read_text(encoding="utf-8") == after
+    # diff.patch 是 before→final unified diff
+    diff = (tmp_path / "managed_doc_diff.patch").read_text(encoding="utf-8")
+    assert "managed_doc_before" in diff
+    assert "managed_doc_final" in diff
+    assert "-old line" in diff
+    assert "+new line" in diff
+    # before + tasks（runner 写的）仍保留
+    assert (tmp_path / "managed_doc_before.md").read_text(encoding="utf-8") == before
+    assert (tmp_path / "managed_doc_tasks.json").exists()
+
+
+def test_formatter_logs_hash_and_length_not_full_content(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """日志只记 hash + 长度 + task_id，不泄露全文 managed-doc（ADR §10）。"""
+    import logging
+
+    _write_summary(tmp_path)
+    secret_before = "SECRET_BASELINE_RULE_CONTENT"
+    secret_after = "SECRET_FINAL_RULE_CONTENT"
+    with caplog.at_level(logging.INFO, logger="evo_agent.reporter.formatter"):
+        ReportFormatter(
+            tmp_path,
+            skills=("managed_doc:agent_rule",),
+            managed_doc_kind="agent_rule",
+            managed_doc_content_before=secret_before,
+            managed_doc_content_after=secret_after,
+            managed_doc_task_ids=("task-secret",),
+        ).format()
+    md_records = [r for r in caplog.records if "managed-doc artifacts written" in r.getMessage()]
+    assert md_records, "expected managed-doc artifact log record"
+    rec = md_records[0]
+    # 只记 hash + 长度 + task_id，不记全文
+    assert hasattr(rec, "before_hash") and len(rec.before_hash) == 64  # sha256 hex
+    assert hasattr(rec, "after_hash") and len(rec.after_hash) == 64
+    assert rec.before_length == len(secret_before)
+    assert rec.after_length == len(secret_after)
+    assert list(rec.task_ids) == ["task-secret"]
+    # 全文不得出现在任何日志记录里
+    for record in caplog.records:
+        assert secret_before not in record.getMessage()
+        assert secret_after not in record.getMessage()
