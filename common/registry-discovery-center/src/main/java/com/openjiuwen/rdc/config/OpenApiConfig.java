@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Configuration;
  * <p>Programmatic {@code @Bean OpenAPI} is preferred over
  * {@code @OpenAPIDefinition} so the metadata lives in one place and stays
  * free of swagger-annotations on the SPI / controller layer (VR-3 / VR-4 —
- * {@code com.openjiuwen.rdc.spi.registry} stays pure Java per ADR-0160
+ * {@code com.openjiuwen.rdc.model} stays pure Java per ADR-0160
  * decision 1, and {@code MvpRegistryController} stays annotation-free).
  *
  * <p>{@code servers} / {@code contact} / {@code license} are intentionally

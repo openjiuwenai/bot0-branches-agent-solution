@@ -97,7 +97,6 @@ class AgentRdcRegistryJdbcPurityTest {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc..")
                 .and().resideOutsideOfPackage(JDBC_ADAPTER)
                 .and().resideOutsideOfPackage(CONFIG_ROOT)
-                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")
                 .should().dependOnClassesThat().resideInAPackage("javax.sql..")
                 .because("javax.sql (DataSource) lives only in repository.. "
                         + "(ADR-0160 decision 4) and the config wiring package "
@@ -165,7 +164,6 @@ class AgentRdcRegistryJdbcPurityTest {
                 .because("tenant package stays pure Java so background schedulers / async "
                         + "handlers can use ThreadLocalTenantContext without pulling Spring Web "
                         + "onto the classpath (ESC-2 design pivot, ADR-0160 decision 6).")
-                .allowEmptyShould(true)
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -185,7 +183,6 @@ class AgentRdcRegistryJdbcPurityTest {
                 .because("tenant package stays pure Java so background schedulers / async "
                         + "handlers can use ThreadLocalTenantContext without pulling Micrometer "
                         + "onto the classpath (ESC-2 design pivot).")
-                .allowEmptyShould(true)
                 .check(REGISTRY_RUNTIME);
     }
 
@@ -218,9 +215,6 @@ class AgentRdcRegistryJdbcPurityTest {
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.controller..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.pull..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.config..")
-                .and().resideOutsideOfPackage("com.openjiuwen.rdc.controller..")
-                .and().resideOutsideOfPackage("com.openjiuwen.rdc.pull..")
-                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")
                 .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson..")
                 .because("Jackson is licensed only inside service (RouteHandleCodec opaque "
                         + "handle encoding), controller (A2A AgentCard JSON serialization at "
