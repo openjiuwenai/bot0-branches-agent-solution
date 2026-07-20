@@ -37,7 +37,7 @@ import java.util.Set;
  * (delta ≈ 0 for {@code stallWindow} consecutive rounds) while below
  * {@code coverageCritical}, the trajectory is diverging.
  *
- * <p><b>Dispatch</b> (zero new sealed types — reuses the PEV kernel): on stall,
+ * <p><b>Dispatch</b> (zero new sealed types — reuses EdpaKernel, byte-identical peer of PevKernel): on stall,
  * {@code RootCause.PlanOrAnswerError(∅)} → {@link EdpaKernel#toReplanAction} →
  * {@link ReplanAction.GlobalReplan} → {@link AgentCallbackContext#pushSteering}.
  * Only exercises the {@code GlobalReplan} arm (LocalReplan/AcceptPartial bypassed).

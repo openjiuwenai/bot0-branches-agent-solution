@@ -232,11 +232,24 @@ class McpToolCallMatrixRealLlmE2eTest {
     }
 
     private static void applyBearingGate(List<Map<String, Object>> results) {
+        if (results.isEmpty()) {
+            return; // all keys unset → entirely skipped, no gate
+        }
         long completed = results.stream().filter(r -> "completed".equals(r.get("status"))).count();
+        // Env-readiness gate: at least 1 cell completed = MCP + API + SDK wiring works.
         org.junit.jupiter.api.Assertions.assertTrue(completed >= 1,
-                "bearing floor: at least one cell must complete with MCP tool-call + non-empty output"
-                        + " (got completed=" + completed + " of " + results.size()
+                "env-readiness gate: at least one cell must complete (got completed=" + completed
+                        + " of " + results.size()
                         + " — check API keys + MCP server availability)");
+        // Bearing gate: when cells ran (>=4 = at least 2 models × 2 thinking), majority must complete.
+        // Allows transient flakiness (timeout/429) without silent CI pass.
+        if (results.size() >= 4) {
+            long threshold = (results.size() + 1) / 2; // ≥ half
+            org.junit.jupiter.api.Assertions.assertTrue(completed >= threshold,
+                    "bearing gate: at least " + threshold + "/" + results.size()
+                            + " cells must complete (got " + completed
+                            + " — model regressions or widespread flakiness)");
+        }
     }
 
     static class CountingMcpClient implements McpClient {

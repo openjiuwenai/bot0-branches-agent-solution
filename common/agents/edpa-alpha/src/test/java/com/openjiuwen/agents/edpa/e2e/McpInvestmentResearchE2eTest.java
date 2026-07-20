@@ -55,7 +55,7 @@ import java.util.logging.Logger;
  * <p>Tests the full E→D→P→A loop with real financial data from SEC EDGAR:
  * <ul>
  *   <li><b>E</b>xplore: LLM calls explore tool → LlmExplorer gathers analysis angles</li>
- *   <li><b>D</b>ecision: tool failures or stale data → __replan__ → PevKernel dispatch</li>
+ *   <li><b>D</b>ecision: tool failures or stale data → __replan__ → EdpaKernel dispatch</li>
  *   <li><b>P</b>lan: 7-section MS report structure is the execution plan</li>
  *   <li><b>A</b>ction: report verified by CriteriaReplanBridgeRail against MS section keywords</li>
  * </ul>

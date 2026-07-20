@@ -9,6 +9,7 @@ import com.openjiuwen.agents.edpa.explore.ExploreBudget;
 import com.openjiuwen.agents.edpa.explore.Explorer;
 import com.openjiuwen.agents.reactrails.observability.RailEvent;
 import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
+import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.BaseMessage;
 import com.openjiuwen.core.foundation.llm.schema.UserMessage;
@@ -39,7 +40,7 @@ import java.util.stream.Collectors;
  * delay by 2 rounds.
  *
  * <p><b>Honest boundary (铁律①)</b>: only pushes on tool-call rounds within
- * the explore window. Final-answer rounds are skipped — PevReplanRail proved
+ * the explore window. Final-answer rounds are skipped — ReActAgent's own loop-limit
  * steering cannot redirect a loop terminating at offset 844/857.
  *
  * <p><b>IFF 契约</b>:
@@ -69,11 +70,8 @@ public class ExploreRail extends AgentRail {
 
     private final ExploreBudget budget;
 
-    /** Current explore round (incremented per tool-call explore). */
-    private int exploreRound = 0;
-
-    /** Cached user input from messages[1]; lazy-initialized once. */
-    private String userInputCache;
+    /** Per-invocation state key (4-lens M6: migrated from bare instance fields to RailInvocationState). */
+    private final String stateKey = RailInvocationState.newKey(ExploreRail.class);
 
     /**
      * Constructs an Explore-phase rail.
@@ -111,8 +109,8 @@ public class ExploreRail extends AgentRail {
      * @param ctx callback context for the pending model call
      */
     @Override
-    public synchronized void beforeModelCall(AgentCallbackContext ctx) {
-        ctx.getExtra().put(EXTRA_EXPLORE_ROUND, exploreRound);
+    public void beforeModelCall(AgentCallbackContext ctx) {
+        ctx.getExtra().put(EXTRA_EXPLORE_ROUND, state(ctx).exploreRound);
         // Intentionally no setInjectionMode here — zero conflict with priority-80 rail.
     }
 
@@ -126,7 +124,7 @@ public class ExploreRail extends AgentRail {
      * for the next iteration.
      *
      * <p>Final-answer rounds are skipped (steering cannot redirect a
-     * terminating loop — proven by PevReplanRail at offset 844/857).
+     * terminating loop — proven by ReActAgent's max-iterations guard).
      *
      * <p>Timing (bytecode-verified against agent-core-java 0.1.12):
      * <ul>
@@ -141,7 +139,7 @@ public class ExploreRail extends AgentRail {
      * @param ctx callback context carrying model-call inputs
      */
     @Override
-    public synchronized void afterModelCall(AgentCallbackContext ctx) {
+    public void afterModelCall(AgentCallbackContext ctx) {
         Optional<ModelCallInputs> inputs = extractModelCallInputs(ctx);
         if (inputs.isEmpty()) {
             return;
@@ -151,14 +149,16 @@ public class ExploreRail extends AgentRail {
             return;
         }
 
+        InvocationState s = state(ctx);
+
         // [1][2] Skip non-explorable rounds (window exhausted or final-answer)
-        if (!isExplorableRound(msg.get())) {
+        if (!isExplorableRound(msg.get(), s)) {
             return;
         }
 
         // [3] Resolve user input once (messages[1] = UserMessage(initial query),
         //     per HistoryCompressorRail convention)
-        String userInput = resolveUserInput(ctx);
+        String userInput = resolveUserInput(ctx, s);
         if (userInput.isEmpty()) {
             return;
         }
@@ -169,7 +169,7 @@ public class ExploreRail extends AgentRail {
             return;
         }
 
-        exploreRound++;
+        s.exploreRound++;
 
         // [5] Push findings into steering queue → consumed by
         //     injectPendingSteering(offset 675) NEXT iteration
@@ -216,9 +216,9 @@ public class ExploreRail extends AgentRail {
      * @param msg assistant message from the current round
      * @return true if this round should run the Explorer
      */
-    private boolean isExplorableRound(AssistantMessage msg) {
+    private boolean isExplorableRound(AssistantMessage msg, InvocationState s) {
         // [1] Explore window exhausted → stop injecting findings (let BUILD phase proceed)
-        if (exploreRound >= budget.maxRounds()) {
+        if (s.exploreRound >= budget.maxRounds()) {
             return false;
         }
         // [2] Final-answer round → loop is terminating, steering would be wasted
@@ -274,16 +274,16 @@ public class ExploreRail extends AgentRail {
      * @return the initial user query text, or an empty string when not
      *         resolvable (never null)
      */
-    private String resolveUserInput(AgentCallbackContext ctx) {
-        if (userInputCache != null) {
-            return userInputCache;
+    private String resolveUserInput(AgentCallbackContext ctx, InvocationState s) {
+        if (s.userInputCache != null) {
+            return s.userInputCache;
         }
         List<BaseMessage> messages = extractMessages(ctx);
         if (messages.isEmpty()) {
             return "";
         }
-        cacheFirstUserMessage(messages);
-        return userInputCache == null ? "" : userInputCache;
+        cacheFirstUserMessage(messages, s);
+        return s.userInputCache == null ? "" : s.userInputCache;
     }
 
     /**
@@ -305,12 +305,12 @@ public class ExploreRail extends AgentRail {
      *
      * @param messages the message list to scan (non-null, non-empty)
      */
-    private void cacheFirstUserMessage(List<BaseMessage> messages) {
+    private void cacheFirstUserMessage(List<BaseMessage> messages, InvocationState s) {
         for (BaseMessage msg : messages) {
             if (msg instanceof UserMessage um) {
                 String content = um.getContentAsString();
                 if (content != null && !content.isEmpty()) {
-                    userInputCache = content;
+                    s.userInputCache = content;
                     return;
                 }
             }
@@ -335,14 +335,26 @@ public class ExploreRail extends AgentRail {
         return sb.toString();
     }
 
+    // ---- Per-invocation state (M6: migrated from bare instance fields) ----
+
+    private InvocationState state(AgentCallbackContext ctx) {
+        return RailInvocationState.get(ctx, stateKey, InvocationState.class, InvocationState::new);
+    }
+
+    private static final class InvocationState {
+        private int exploreRound = 0;
+        private String userInputCache;
+    }
+
     // ---- Test observation points ----
 
     /**
-     * Current explore round count.
+     * Current explore round count for the given invocation context.
      *
-     * @return number of explore rounds executed so far
+     * @param ctx callback context for the invocation
+     * @return number of explore rounds executed so far in this invocation
      */
-    public synchronized int getExploreRound() {
-        return exploreRound;
+    public int getExploreRound(AgentCallbackContext ctx) {
+        return state(ctx).exploreRound;
     }
 }
