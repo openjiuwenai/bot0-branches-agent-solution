@@ -5,11 +5,13 @@
 package com.openjiuwen.example.agentscope.harness;
 
 import com.openjiuwen.service.adapters.agentscope.agentfw.AgentScopeAgentHandler;
+
 import io.agentscope.core.model.Model;
 import io.agentscope.core.model.ToolSchema;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import io.agentscope.harness.agent.HarnessAgent;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -19,7 +21,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-/** HarnessAgent runtime used to verify A2A external-tool interrupt and resume. */
+/**
+ * HarnessAgent runtime used to verify A2A external-tool interrupt and resume.
+ *
+ * @since 2026-07-20
+ */
 @SpringBootApplication
 public class HarnessRuntimeApplication {
     public static void main(String[] args) {

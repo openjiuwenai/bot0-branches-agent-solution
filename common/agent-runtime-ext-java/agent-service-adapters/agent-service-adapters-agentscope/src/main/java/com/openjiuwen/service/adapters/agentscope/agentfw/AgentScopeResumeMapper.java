@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentscope.agentfw;
 
 import com.openjiuwen.service.spec.dto.ServeRequest;
+
 import io.agentscope.core.event.ConfirmResult;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
@@ -23,6 +24,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Converts runtime resume requests into AgentScope confirmation and tool-result messages.
+ *
+ * @since 2026-07-20
+ */
 final class AgentScopeResumeMapper {
     private static final String INTERRUPT = "_interrupt";
 

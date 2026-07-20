@@ -15,12 +15,18 @@ import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.state.AgentState;
 import io.agentscope.harness.agent.HarnessAgent;
-import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 
+/**
+ * Tests ReAct and Harness invocation delegation.
+ *
+ * @since 2026-07-20
+ */
 class AgentScopeInvokerTest {
     @Test
     void reactInvokerDelegatesCallsStateAndInterruptToReactAgent() {

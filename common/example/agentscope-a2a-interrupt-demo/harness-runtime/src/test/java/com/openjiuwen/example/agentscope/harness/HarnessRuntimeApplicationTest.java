@@ -4,15 +4,21 @@
 
 package com.openjiuwen.example.agentscope.harness;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.agentscope.core.model.ToolSchema;
 import io.agentscope.core.tool.Toolkit;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * Tests the Harness schema-only external tool definition.
+ *
+ * @since 2026-07-20
+ */
 class HarnessRuntimeApplicationTest {
     @Test
     @SuppressWarnings("unchecked")

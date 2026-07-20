@@ -11,14 +11,17 @@ import com.openjiuwen.service.spec.lifecycle.AgentInterruptHandler;
 import com.openjiuwen.service.spec.lifecycle.InterruptReason;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.state.AgentState;
 import io.agentscope.harness.agent.HarnessAgent;
+import reactor.core.Disposable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.Disposable;
 
 import java.time.Duration;
 import java.util.List;
@@ -34,6 +37,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Transparent bridge from the OpenJiuwen runtime SPI to a local AgentScope Java agent.
+ *
+ * @since 2026-07-20
  */
 public final class AgentScopeAgentHandler implements AgentHandler, AgentInterruptHandler {
     private static final Logger log = LoggerFactory.getLogger(AgentScopeAgentHandler.class);
@@ -49,18 +54,30 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
     private final AgentScopeEventMapper eventMapper = new AgentScopeEventMapper();
     private final ConcurrentHashMap<String, ActiveInvocation> inFlight = new ConcurrentHashMap<>();
 
-    public static AgentScopeAgentHandler forReActAgent(ReActAgent agent) {
-        return new AgentScopeAgentHandler(new ReActAgentScopeInvoker(agent), QUERY_TIMEOUT, STREAM_TIMEOUT);
-    }
-
-    public static AgentScopeAgentHandler forHarnessAgent(HarnessAgent agent) {
-        return new AgentScopeAgentHandler(new HarnessAgentScopeInvoker(agent), QUERY_TIMEOUT, STREAM_TIMEOUT);
-    }
-
     AgentScopeAgentHandler(AgentScopeInvoker invoker, Duration queryTimeout, Duration streamTimeout) {
         this.invoker = Objects.requireNonNull(invoker, "invoker must not be null");
         this.queryTimeout = positive(queryTimeout, "queryTimeout");
         this.streamTimeout = positive(streamTimeout, "streamTimeout");
+    }
+
+    /**
+     * Creates a handler backed by a local {@link ReActAgent}.
+     *
+     * @param agent configured ReAct agent
+     * @return AgentScope handler
+     */
+    public static AgentScopeAgentHandler forReActAgent(ReActAgent agent) {
+        return new AgentScopeAgentHandler(new ReActAgentScopeInvoker(agent), QUERY_TIMEOUT, STREAM_TIMEOUT);
+    }
+
+    /**
+     * Creates a handler backed by a local {@link HarnessAgent}.
+     *
+     * @param agent configured Harness agent
+     * @return AgentScope handler
+     */
+    public static AgentScopeAgentHandler forHarnessAgent(HarnessAgent agent) {
+        return new AgentScopeAgentHandler(new HarnessAgentScopeInvoker(agent), QUERY_TIMEOUT, STREAM_TIMEOUT);
     }
 
     @Override
@@ -77,10 +94,13 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
                     result::set,
                     error -> {
                         failure.set(error);
-                        if (isTimeout(error)) {
-                            invocation.interruptAgent();
+                        try {
+                            if (isTimeout(error)) {
+                                invocation.interruptAgent();
+                            }
+                        } finally {
+                            invocation.finish();
                         }
-                        invocation.finish();
                     },
                     invocation::finish);
             invocation.bind(subscription);
@@ -114,44 +134,10 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
         AgentScopeEventMapper.StreamState streamState = new AgentScopeEventMapper.StreamState();
         try {
             List<Msg> messages = resolveMessages(request, context);
-            Disposable subscription = invoker.streamEvents(messages, context)
-                .timeout(streamTimeout)
-                .subscribe(
-                    event -> {
-                        if (invocation.isClosed() || observer.isCancelled()) {
-                            if (observer.isCancelled()) {
-                                invocation.cancel();
-                            }
-                            return;
-                        }
-                        eventMapper.map(
-                            event,
-                            () -> invoker.getAgentState(context.getUserId(), context.getSessionId()),
-                            streamState).ifPresent(observer::onNext);
-                    },
-                    error -> handleStreamError(invocation, observer, error),
-                    () -> {
-                        if (!invocation.finish() || observer.isCancelled()) {
-                            return;
-                        }
-                        if (!streamState.hasTerminalEvent()) {
-                            IllegalStateException error = new IllegalStateException(
-                                "AgentScope stream completed without a terminal event");
-                            observer.onNext(new QueryChunk(
-                                QueryChunk.TYPE_ERROR,
-                                Map.of("message", "AgentScope stream completed without a terminal event")));
-                            observer.onError(error);
-                            return;
-                        }
-                        observer.onComplete();
-                    });
+            Disposable subscription = subscribe(messages, context, invocation, observer, streamState);
             invocation.bind(subscription);
-            while (!invocation.await(CANCEL_POLL_MILLIS, TimeUnit.MILLISECONDS)) {
-                if (observer.isCancelled()) {
-                    invocation.cancel();
-                }
-            }
-        } catch (RuntimeException error) {
+            awaitStream(invocation, observer);
+        } catch (IllegalArgumentException | IllegalStateException error) {
             if (invocation.finish() && !observer.isCancelled()) {
                 observer.onNext(new QueryChunk(QueryChunk.TYPE_ERROR, Map.of("message", "AgentScope stream failed")));
                 observer.onError(error);
@@ -160,6 +146,55 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
             }
         } finally {
             invocation.finish();
+        }
+    }
+
+    private Disposable subscribe(List<Msg> messages, RuntimeContext context, ActiveInvocation invocation,
+        QueryStreamObserver observer, AgentScopeEventMapper.StreamState streamState) {
+        return invoker.streamEvents(messages, context)
+            .timeout(streamTimeout)
+            .subscribe(
+                event -> handleStreamEvent(event, context, invocation, observer, streamState),
+                error -> handleStreamError(invocation, observer, error),
+                () -> handleStreamComplete(invocation, observer, streamState));
+    }
+
+    private void handleStreamEvent(AgentEvent event, RuntimeContext context, ActiveInvocation invocation,
+        QueryStreamObserver observer, AgentScopeEventMapper.StreamState streamState) {
+        if (invocation.isClosed() || observer.isCancelled()) {
+            if (observer.isCancelled()) {
+                invocation.cancel();
+            }
+            return;
+        }
+        eventMapper.map(
+            event,
+            () -> invoker.getAgentState(context.getUserId(), context.getSessionId()),
+            streamState).ifPresent(observer::onNext);
+    }
+
+    private void handleStreamComplete(ActiveInvocation invocation, QueryStreamObserver observer,
+        AgentScopeEventMapper.StreamState streamState) {
+        if (!invocation.finish() || observer.isCancelled()) {
+            return;
+        }
+        if (!streamState.hasTerminalEvent()) {
+            IllegalStateException error = new IllegalStateException(
+                "AgentScope stream completed without a terminal event");
+            observer.onNext(new QueryChunk(
+                QueryChunk.TYPE_ERROR,
+                Map.of("message", "AgentScope stream completed without a terminal event")));
+            observer.onError(error);
+            return;
+        }
+        observer.onComplete();
+    }
+
+    private static void awaitStream(ActiveInvocation invocation, QueryStreamObserver observer) {
+        while (!invocation.await(CANCEL_POLL_MILLIS, TimeUnit.MILLISECONDS)) {
+            if (observer.isCancelled()) {
+                invocation.cancel();
+            }
         }
     }
 
@@ -187,9 +222,17 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
     }
 
     private void handleStreamError(ActiveInvocation invocation, QueryStreamObserver observer, Throwable error) {
-        if (isTimeout(error)) {
-            invocation.interruptAgent();
+        try {
+            if (isTimeout(error)) {
+                invocation.interruptAgent();
+            }
+        } finally {
+            finishStreamError(invocation, observer, error);
         }
+    }
+
+    private static void finishStreamError(ActiveInvocation invocation, QueryStreamObserver observer,
+        Throwable error) {
         if (!invocation.finish() || observer.isCancelled()) {
             return;
         }
@@ -262,19 +305,22 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
                 return;
             }
             cancelled.set(true);
-            interruptAgent();
-            Disposable disposable = subscription.get();
-            if (disposable != null) {
-                disposable.dispose();
+            try {
+                interruptAgent();
+            } finally {
+                Disposable disposable = subscription.get();
+                if (disposable != null) {
+                    disposable.dispose();
+                }
+                remove(this);
+                done.countDown();
             }
-            remove(this);
-            done.countDown();
         }
 
         private void interruptAgent() {
             try {
                 invoker.interrupt(userId, sessionId);
-            } catch (RuntimeException error) {
+            } catch (IllegalArgumentException | IllegalStateException error) {
                 log.warn("AgentScope session interrupt failed conversationId={}", conversationId, error);
             }
         }
@@ -283,9 +329,8 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
             try {
                 done.await();
             } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
                 cancel();
-                throw new CancellationException("Interrupted while waiting for AgentScope");
+                throw interrupted("Interrupted while waiting for AgentScope", error);
             }
         }
 
@@ -293,10 +338,15 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
             try {
                 return done.await(timeout, unit);
             } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
                 cancel();
-                throw new CancellationException("Interrupted while waiting for AgentScope stream");
+                throw interrupted("Interrupted while waiting for AgentScope stream", error);
             }
+        }
+
+        private CancellationException interrupted(String message, InterruptedException cause) {
+            CancellationException cancellation = new CancellationException(message);
+            cancellation.initCause(cause);
+            return cancellation;
         }
 
         private boolean isClosed() {

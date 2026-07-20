@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentscope.agentfw;
 
 import com.openjiuwen.service.spec.dto.QueryChunk;
+
 import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.event.AgentResultEvent;
 import io.agentscope.core.event.RequestStopEvent;
@@ -25,6 +26,11 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+/**
+ * Maps AgentScope events and results to OpenJiuwen runtime response payloads.
+ *
+ * @since 2026-07-20
+ */
 final class AgentScopeEventMapper {
     Optional<QueryChunk> map(AgentEvent event, Supplier<AgentState> stateSupplier, StreamState streamState) {
         if (event instanceof TextBlockDeltaEvent delta) {
@@ -33,71 +39,76 @@ final class AgentScopeEventMapper {
                 Map.of("type", "answer_delta", "content", delta.getDelta())));
         }
         if (event instanceof RequireUserConfirmEvent confirmation) {
-            if (streamState.interruptEmitted) {
-                return Optional.empty();
-            }
-            validateConfirmationPending(confirmation.getToolCalls(), stateSupplier.get());
-            streamState.markInterrupt();
-            return Optional.of(interrupt(
-                "confirmation",
-                "The following operation requires confirmation.",
-                confirmation.getToolCalls()));
+            return mapConfirmationEvent(confirmation, stateSupplier, streamState);
         }
         if (event instanceof AgentResultEvent result && result.getResult() != null) {
-            streamState.terminalEventObserved = true;
-            GenerateReason reason = result.getResult().getGenerateReason();
-            if (reason == GenerateReason.TOOL_SUSPENDED) {
-                if (streamState.interruptEmitted) {
-                    return Optional.empty();
-                }
-                streamState.markInterrupt();
-                return Optional.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, externalFromState(stateSupplier.get())));
-            }
-            if (reason == GenerateReason.PERMISSION_ASKING) {
-                if (streamState.interruptEmitted) {
-                    return Optional.empty();
-                }
-                streamState.markInterrupt();
-                return Optional.of(new QueryChunk(
-                    QueryChunk.TYPE_INTERRUPT,
-                    confirmationFromState(stateSupplier.get())));
-            }
-            if (isMessagePause(reason) && !streamState.interruptEmitted) {
-                streamState.markInterrupt();
-                return Optional.of(interrupt("message", pauseMessage(result.getResult()), List.of()));
-            }
-            if (reason == GenerateReason.INTERRUPTED) {
-                throw new IllegalStateException("Unsupported AgentScope generate reason: INTERRUPTED");
-            }
-            if (reason == GenerateReason.TOOL_CALLS) {
-                throw new IllegalStateException(
-                    "AgentScope returned TOOL_CALLS as a terminal result without a supported pause state");
-            }
-            return Optional.empty();
+            return mapAgentResultEvent(result, stateSupplier, streamState);
         }
         if (event instanceof RequestStopEvent stop) {
-            if (stop.getGenerateReason() == GenerateReason.PERMISSION_ASKING) {
-                if (streamState.interruptEmitted) {
-                    return Optional.empty();
-                }
-                streamState.markInterrupt();
-                return Optional.of(new QueryChunk(
-                    QueryChunk.TYPE_INTERRUPT,
-                    confirmationFromState(stateSupplier.get())));
-            }
-            if (!isMessagePause(stop.getGenerateReason())) {
-                return Optional.empty();
-            }
-            String message = stop.getReason() == null || stop.getReason().isBlank()
-                ? "Agent execution paused"
-                : stop.getReason();
-            if (streamState.interruptEmitted) {
-                return Optional.empty();
-            }
-            streamState.markInterrupt();
-            return Optional.of(interrupt("message", message, List.of()));
+            return mapRequestStopEvent(stop, stateSupplier, streamState);
         }
         return Optional.empty();
+    }
+
+    private static Optional<QueryChunk> mapConfirmationEvent(RequireUserConfirmEvent confirmation,
+        Supplier<AgentState> stateSupplier, StreamState streamState) {
+        if (streamState.interruptEmitted) {
+            return Optional.empty();
+        }
+        validateConfirmationPending(confirmation.getToolCalls(), stateSupplier.get());
+        streamState.markInterrupt();
+        return Optional.of(interrupt(
+            "confirmation",
+            "The following operation requires confirmation.",
+            confirmation.getToolCalls()));
+    }
+
+    private static Optional<QueryChunk> mapAgentResultEvent(AgentResultEvent result,
+        Supplier<AgentState> stateSupplier, StreamState streamState) {
+        streamState.terminalEventObserved = true;
+        GenerateReason reason = result.getResult().getGenerateReason();
+        if (reason == GenerateReason.TOOL_SUSPENDED) {
+            return emitStateInterrupt(streamState, () -> externalFromState(stateSupplier.get()));
+        }
+        if (reason == GenerateReason.PERMISSION_ASKING) {
+            return emitStateInterrupt(streamState, () -> confirmationFromState(stateSupplier.get()));
+        }
+        if (isMessagePause(reason) && !streamState.interruptEmitted) {
+            streamState.markInterrupt();
+            return Optional.of(interrupt("message", pauseMessage(result.getResult()), List.of()));
+        }
+        if (reason == GenerateReason.INTERRUPTED) {
+            throw new IllegalStateException("Unsupported AgentScope generate reason: INTERRUPTED");
+        }
+        if (reason == GenerateReason.TOOL_CALLS) {
+            throw new IllegalStateException(
+                "AgentScope returned TOOL_CALLS as a terminal result without a supported pause state");
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<QueryChunk> mapRequestStopEvent(RequestStopEvent stop,
+        Supplier<AgentState> stateSupplier, StreamState streamState) {
+        if (stop.getGenerateReason() == GenerateReason.PERMISSION_ASKING) {
+            return emitStateInterrupt(streamState, () -> confirmationFromState(stateSupplier.get()));
+        }
+        if (!isMessagePause(stop.getGenerateReason()) || streamState.interruptEmitted) {
+            return Optional.empty();
+        }
+        String message = stop.getReason() == null || stop.getReason().isBlank()
+            ? "Agent execution paused"
+            : stop.getReason();
+        streamState.markInterrupt();
+        return Optional.of(interrupt("message", message, List.of()));
+    }
+
+    private static Optional<QueryChunk> emitStateInterrupt(StreamState streamState,
+        Supplier<Map<String, Object>> interactionSupplier) {
+        if (streamState.interruptEmitted) {
+            return Optional.empty();
+        }
+        streamState.markInterrupt();
+        return Optional.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, interactionSupplier.get()));
     }
 
     Map<String, Object> mapResult(Msg result, AgentState state) {
@@ -124,7 +135,7 @@ final class AgentScopeEventMapper {
             case INTERRUPTED -> throw new IllegalStateException(
                 "Unsupported AgentScope generate reason: INTERRUPTED");
             case MODEL_STOP, STRUCTURED_OUTPUT, MAX_ITERATIONS, ALL_TOOLS_DENIED -> {
-                // Normal terminal results.
+                return mapped;
             }
             case TOOL_CALLS -> throw new IllegalStateException(
                 "AgentScope returned TOOL_CALLS as a terminal result without a supported pause state");

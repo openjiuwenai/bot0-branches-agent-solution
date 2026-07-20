@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentscope.agentfw;
 
 import com.openjiuwen.service.spec.dto.ServeRequest;
+
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.UserMessage;
@@ -12,7 +13,13 @@ import io.agentscope.core.message.UserMessage;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
+/**
+ * Maps OpenJiuwen requests to AgentScope runtime contexts and user messages.
+ *
+ * @since 2026-07-20
+ */
 final class AgentScopeRequestMapper {
     RuntimeContext mapContext(ServeRequest request) {
         Objects.requireNonNull(request, "request must not be null");
@@ -40,35 +47,33 @@ final class AgentScopeRequestMapper {
     static String latestEffectiveContent(ServeRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         List<Map<String, Object>> messages = request.getMessages();
-        String fallback = null;
+        Optional<String> fallback = Optional.empty();
         if (messages != null) {
             for (int index = messages.size() - 1; index >= 0; index--) {
                 Map<String, Object> message = messages.get(index);
-                String content = effectiveContent(message);
-                if (content == null) {
+                Optional<String> content = effectiveContent(message);
+                if (content.isEmpty()) {
                     continue;
                 }
-                if (fallback == null) {
+                if (fallback.isEmpty()) {
                     fallback = content;
                 }
                 Object role = message.get("role");
                 if (role != null && "user".equalsIgnoreCase(String.valueOf(role))) {
-                    return content;
+                    return content.get();
                 }
             }
         }
-        if (fallback != null) {
-            return fallback;
-        }
-        throw new IllegalArgumentException("request must contain an effective message");
+        return fallback.orElseThrow(
+            () -> new IllegalArgumentException("request must contain an effective message"));
     }
 
-    private static String effectiveContent(Map<String, Object> message) {
+    private static Optional<String> effectiveContent(Map<String, Object> message) {
         if (message == null || message.get("content") == null) {
-            return null;
+            return Optional.empty();
         }
         String content = String.valueOf(message.get("content"));
-        return content.isBlank() ? null : content;
+        return content.isBlank() ? Optional.empty() : Optional.of(content);
     }
 
     private static void putIfPresent(RuntimeContext.Builder builder, String key, Object value) {

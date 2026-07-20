@@ -8,14 +8,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.service.spec.dto.ServeRequest;
+
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests request identity, metadata allowlisting, and message selection.
+ *
+ * @since 2026-07-20
+ */
 class AgentScopeRequestMapperTest {
     private final AgentScopeRequestMapper mapper = new AgentScopeRequestMapper();
 

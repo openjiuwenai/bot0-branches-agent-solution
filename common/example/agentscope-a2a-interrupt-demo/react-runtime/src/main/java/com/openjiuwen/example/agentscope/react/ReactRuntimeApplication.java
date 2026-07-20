@@ -5,6 +5,7 @@
 package com.openjiuwen.example.agentscope.react;
 
 import com.openjiuwen.service.adapters.agentscope.agentfw.AgentScopeAgentHandler;
+
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.permission.PermissionBehavior;
@@ -15,12 +16,17 @@ import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
-/** ReActAgent runtime used to verify A2A HITL interrupt and resume. */
+/**
+ * ReActAgent runtime used to verify A2A HITL interrupt and resume.
+ *
+ * @since 2026-07-20
+ */
 @SpringBootApplication
 public class ReactRuntimeApplication {
     public static void main(String[] args) {
@@ -78,6 +84,13 @@ public class ReactRuntimeApplication {
     }
 
     static final class TransferTools {
+        /**
+         * Executes the transfer after AgentScope permission approval.
+         *
+         * @param recipient transfer recipient
+         * @param amount amount in CNY
+         * @return transfer execution summary
+         */
         @Tool(name = "execute_transfer", description = "Execute a money transfer after user approval")
         public String executeTransfer(
             @ToolParam(name = "recipient", description = "Transfer recipient") String recipient,

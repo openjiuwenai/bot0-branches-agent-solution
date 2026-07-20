@@ -15,6 +15,11 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Invokes a configured local AgentScope {@link ReActAgent}.
+ *
+ * @since 2026-07-20
+ */
 final class ReActAgentScopeInvoker implements AgentScopeInvoker {
     private final ReActAgent agent;
 

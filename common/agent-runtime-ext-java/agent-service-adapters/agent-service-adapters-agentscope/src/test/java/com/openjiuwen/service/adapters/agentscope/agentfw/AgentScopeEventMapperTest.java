@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.service.spec.dto.QueryChunk;
+
 import io.agentscope.core.event.AgentResultEvent;
 import io.agentscope.core.event.RequestStopEvent;
 import io.agentscope.core.event.RequireUserConfirmEvent;
@@ -18,11 +19,17 @@ import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.ToolCallState;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.state.AgentState;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests AgentScope event and final-result mapping to runtime chunks.
+ *
+ * @since 2026-07-20
+ */
 class AgentScopeEventMapperTest {
     @Test
     void mapsTextDeltaToAnswerChunk() {
@@ -60,7 +67,7 @@ class AgentScopeEventMapperTest {
     }
 
     @Test
-    void permissionStopWithoutPrecedingConfirmationEventUsesCurrentAskingState() {
+    void permissionStopUsesCurrentAskingStateWithoutPriorEvent() {
         ToolUseBlock tool = tool("call-1", "transfer", ToolCallState.ASKING);
         AgentScopeEventMapper mapper = new AgentScopeEventMapper();
         AgentScopeEventMapper.StreamState streamState = new AgentScopeEventMapper.StreamState();
@@ -92,7 +99,7 @@ class AgentScopeEventMapperTest {
     }
 
     @Test
-    void mapsExternalSuspensionFromFinalResultWhenNoDedicatedEventIsEmitted() {
+    void mapsExternalSuspensionWithoutDedicatedEvent() {
         ToolUseBlock tool = tool("call-1", "external_search", ToolCallState.PENDING);
         Msg suspended = Msg.builder().role(MsgRole.ASSISTANT)
             .generateReason(GenerateReason.TOOL_SUSPENDED).build();
@@ -121,7 +128,7 @@ class AgentScopeEventMapperTest {
     }
 
     @Test
-    void mapsLegacyReasoningStopFromFinalResultWhenNoRequestStopEventIsEmitted() {
+    void mapsLegacyReasoningStopWithoutRequestStopEvent() {
         Msg paused = Msg.builder().role(MsgRole.ASSISTANT)
             .textContent("Review before acting")
             .generateReason(GenerateReason.REASONING_STOP_REQUESTED)
@@ -151,7 +158,9 @@ class AgentScopeEventMapperTest {
             .build();
 
         assertThat(mapper.map(
-            new RequestStopEvent("Review before acting"), AgentScopeEventMapperTest::stateWith, streamState)).isPresent();
+            new RequestStopEvent("Review before acting"),
+            AgentScopeEventMapperTest::stateWith,
+            streamState)).isPresent();
         assertThat(mapper.map(
             new AgentResultEvent(paused), AgentScopeEventMapperTest::stateWith, streamState)).isEmpty();
     }
@@ -162,7 +171,9 @@ class AgentScopeEventMapperTest {
         AgentScopeEventMapper.StreamState streamState = new AgentScopeEventMapper.StreamState();
 
         assertThat(mapper.map(
-            new RequestStopEvent("Review before acting"), AgentScopeEventMapperTest::stateWith, streamState)).isPresent();
+            new RequestStopEvent("Review before acting"),
+            AgentScopeEventMapperTest::stateWith,
+            streamState)).isPresent();
         assertThat(mapper.map(
             new RequestStopEvent("Review before acting"), AgentScopeEventMapperTest::stateWith, streamState)).isEmpty();
     }

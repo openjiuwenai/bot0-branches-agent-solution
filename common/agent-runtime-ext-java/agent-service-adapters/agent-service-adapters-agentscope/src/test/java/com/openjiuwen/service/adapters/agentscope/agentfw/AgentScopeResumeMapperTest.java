@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.service.spec.dto.ServeRequest;
+
 import io.agentscope.core.event.ConfirmResult;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
@@ -16,11 +17,17 @@ import io.agentscope.core.message.ToolCallState;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.state.AgentState;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests runtime interaction conversion into AgentScope resume messages.
+ *
+ * @since 2026-07-20
+ */
 class AgentScopeResumeMapperTest {
     private static final String INTERRUPT = "_interrupt";
 
@@ -56,11 +63,13 @@ class AgentScopeResumeMapperTest {
         ToolResultBlock result = resume.getFirstContentBlock(ToolResultBlock.class);
         assertThat(result.getId()).isEqualTo("call-1");
         assertThat(result.getName()).isEqualTo("external_search");
-        assertThat(((TextBlock) result.getOutput().get(0)).getText()).isEqualTo("found");
+        assertThat(result.getOutput()).singleElement().isInstanceOfSatisfying(
+            TextBlock.class,
+            block -> assertThat(block.getText()).isEqualTo("found"));
     }
 
     @Test
-    void resumesMessageInteractionWithEmptyCallEvenWhenInternalToolIsPending() {
+    void resumesMessageWithEmptyCallWhenInternalToolIsPending() {
         ToolUseBlock internal = tool("call-1", "search", ToolCallState.PENDING);
 
         List<Msg> messages = new AgentScopeResumeMapper()

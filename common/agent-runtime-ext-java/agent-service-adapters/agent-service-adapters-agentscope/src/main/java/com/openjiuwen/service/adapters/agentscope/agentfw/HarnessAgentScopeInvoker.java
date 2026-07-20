@@ -15,6 +15,11 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Invokes a configured local AgentScope {@link HarnessAgent}.
+ *
+ * @since 2026-07-20
+ */
 final class HarnessAgentScopeInvoker implements AgentScopeInvoker {
     private final HarnessAgent agent;
 
