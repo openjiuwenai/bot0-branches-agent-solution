@@ -11,12 +11,11 @@ import java.net.URI;
 
 /**
  * Validates push {@link AgentRegistryEntry} before persistence (0711 {@code REGISTRY_ENTRY_INVALID}).
-
-  * @since 0.1.0 (2026)
-  */
+ *
+ * @since 0.1.0 (2026)
+ */
 final class RegistryEntryValidator {
     private RegistryEntryValidator() {
-
     }
 
     static void validate(AgentRegistryEntry entry, String traceId) {
@@ -37,25 +36,25 @@ final class RegistryEntryValidator {
     }
 
     private static void requireText(String value, String field, String traceId) {
-            if (value == null || value.isBlank()) {
+        if (value == null || value.isBlank()) {
             throw new RegistryEntryInvalidException(field + " must be non-empty", traceId);
         }
     }
 
     private static void requireEndpoint(String endpointUrl, String traceId) {
-            if (endpointUrl == null || endpointUrl.isBlank()) {
-                throw new RegistryEntryInvalidException("endpointUrl is required", traceId);
-            }
+        if (endpointUrl == null || endpointUrl.isBlank()) {
+            throw new RegistryEntryInvalidException("endpointUrl is required", traceId);
+        }
         try {
-                URI uri = URI.create(endpointUrl.trim());
-                String scheme = uri.getScheme();
-                if (scheme == null
-                || (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https"))) {
+            URI uri = URI.create(endpointUrl.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null
+                    || (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https"))) {
                 throw new RegistryEntryInvalidException(
-                "endpointUrl must use http or https scheme", traceId);
+                        "endpointUrl must use http or https scheme", traceId);
             }
         } catch (IllegalArgumentException ex) {
-                throw new RegistryEntryInvalidException("endpointUrl is not a valid URI", traceId);
-            }
+            throw new RegistryEntryInvalidException("endpointUrl is not a valid URI", traceId);
+        }
     }
 }

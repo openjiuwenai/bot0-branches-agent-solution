@@ -77,7 +77,6 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * @param tenantId tenantId
      * @since 0.1.0
      */
-
     static void set(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId must not be null or blank");
@@ -91,7 +90,6 @@ public final class ThreadLocalTenantContext implements TenantContext {
      *
      * @since 0.1.0
      */
-
     static void clear() {
         CURRENT.remove();
     }

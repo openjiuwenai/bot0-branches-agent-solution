@@ -108,7 +108,6 @@ public interface AgentRegistryRepository {
      *                        bootstrap) so this port stays Jackson-free
      *                        (ADR-0160 decision 3/5).
      */
-
     void upsert(AgentRegistryEntry entry, String a2aAgentCardJson);
 
     /**
@@ -123,7 +122,6 @@ public interface AgentRegistryRepository {
      * @return {@code true} if at least one row was deleted, {@code false}
      *         if no entry existed for {@code (tenantId, agentId)}
      */
-
     boolean delete(String tenantId, String agentId);
 
     /**
@@ -138,7 +136,6 @@ public interface AgentRegistryRepository {
      * @return {@code true} if at least one row was deleted, {@code false}
      *         if no entry existed for the triple
      */
-
     boolean delete(String tenantId, String agentId, String serviceId);
 
     /**
@@ -154,7 +151,6 @@ public interface AgentRegistryRepository {
      * @return {@code true} if a row was deleted, {@code false} if no entry
      *         existed for the 4-field PK
      */
-
     boolean delete(String tenantId, String agentId, String serviceId, String instanceId);
 
     /**
@@ -175,7 +171,6 @@ public interface AgentRegistryRepository {
      * @param limit             max number of rows to return
      * @return immutable list of {@link ProbeTarget}; empty list on no match
      */
-
     List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit);
 
     /**
@@ -192,7 +187,6 @@ public interface AgentRegistryRepository {
      * @param update the status-update request (PK + new status + heartbeat flag)
      * @return {@code true} if a row was updated
      */
-
     boolean updateStatus(StatusUpdate update);
 
     /**
@@ -209,7 +203,6 @@ public interface AgentRegistryRepository {
      * @return result
      * @since 0.1.0
      */
-
     record StatusUpdate(
             String tenantId,
             String agentId,
@@ -242,7 +235,6 @@ public interface AgentRegistryRepository {
      *         instance; empty list if no ONLINE/DEGRADED/DRAINING entry
      *         matches (never {@code null})
      */
-
     List<RegistryRow> listByAgentId(String tenantId, String agentId, String contractVersion);
 
     /**
@@ -260,7 +252,6 @@ public interface AgentRegistryRepository {
      * @param contractVersion nullable contract version filter
      * @return immutable list of {@link RegistryRow}; empty list on no match
      */
-
     List<RegistryRow> listByServiceId(String tenantId, String serviceId, String contractVersion);
 
     /**
@@ -278,7 +269,6 @@ public interface AgentRegistryRepository {
      * @param contractVersion nullable contract version filter
      * @return immutable list of {@link RegistryRow}; empty list on no match
      */
-
     List<RegistryRow> listByCapability(String tenantId, String capability, String contractVersion);
 
     /**
@@ -306,7 +296,6 @@ public interface AgentRegistryRepository {
      * @return {@link EndpointEntry} when a row matches; {@code Optional#empty()}
      *         when no row matches
      */
-
     Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
                                          String serviceId, String instanceId);
 
@@ -333,7 +322,6 @@ public interface AgentRegistryRepository {
      * @return result
      * @since 0.1.0
      */
-
     record RegistryRow(
             String serviceId,
             String instanceId,
@@ -363,7 +351,6 @@ public interface AgentRegistryRepository {
      * @return result
      * @since 0.1.0
      */
-
     record EndpointEntry(String endpointUrl, String routeKey, String contractVersion) {
     }
 
@@ -382,7 +369,6 @@ public interface AgentRegistryRepository {
      * @return result
      * @since 0.1.0
      */
-
     record ProbeTarget(
             String tenantId, String agentId, String serviceId,
             String instanceId, String endpointUrl) {
@@ -399,7 +385,6 @@ public interface AgentRegistryRepository {
      * @return result
      * @since 0.1.0
      */
-
     List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter);
 
     record DiscoveryFilter(
@@ -433,6 +418,7 @@ public interface AgentRegistryRepository {
     ) {
 
     }
+
     /**
      * reconcileUpsert.
      *
@@ -702,6 +688,7 @@ public interface AgentRegistryRepository {
     default java.util.UUID upsertLogicalRegistration(UpsertLogicalRegistrationCommand command) {
         return java.util.UUID.randomUUID();
     }
+
     /**
      * upsertSourceRef.
      *
@@ -762,7 +749,6 @@ public interface AgentRegistryRepository {
      * @param cardDigest cardDigest
      * @since 0.1.0
      */
-
     default void clearLogicalRegistrationStaleCard(
             String tenantId, String deploymentServiceId, String cardDigest) {
     }
@@ -776,10 +762,10 @@ public interface AgentRegistryRepository {
      * @return result
      * @since 0.1.0
      */
-
     default boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {
         return false;
     }
+
     /**
      * queryLogicalByTargetSelector.
      *

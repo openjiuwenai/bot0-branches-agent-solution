@@ -143,15 +143,15 @@ class ReconciliationSchedulerPluggabilityTest {
             @Override
             public DeploymentDiscoveryProvider getObject() throws BeansException {
                 if (providers.length == 0) {
-        throw new NoSuchBeanDefinitionException(DeploymentDiscoveryProvider.class);
-    }
+                    throw new NoSuchBeanDefinitionException(DeploymentDiscoveryProvider.class);
+                }
                 return providers[0];
             }
 
             @Override
             public Stream<DeploymentDiscoveryProvider> stream() {
-                    return Arrays.stream(providers);
-                }
+                return Arrays.stream(providers);
+            }
         };
     }
 
@@ -163,10 +163,12 @@ class ReconciliationSchedulerPluggabilityTest {
         private RecordingProvider(String sourceId) {
             this.sourceId = sourceId;
         }
+
         @Override
         public String sourceId() {
             return sourceId;
         }
+
         @Override
         public ListDeploymentInstancesResult listInstances() {
             listCalls.incrementAndGet();

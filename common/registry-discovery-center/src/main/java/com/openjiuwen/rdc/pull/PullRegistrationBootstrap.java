@@ -100,7 +100,6 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
      *
      * @since 0.1.0
      */
-
     void runBootstrap() {
         if (!properties.isEnabled() || properties.getRuntimes().isEmpty()) {
             return;

@@ -1141,18 +1141,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     /**
      * upsertLogicalRegistration.
      *
-     * @param tenantId tenantId
-     * @param agentId agentId
-     * @param deploymentServiceId deploymentServiceId
-     * @param cardDigest cardDigest
-     * @param contractVersion contractVersion
-     * @param capabilityVersion capabilityVersion
-     * @param registrationStatus registrationStatus
-     * @param freshness freshness
-     * @param a2aAgentCardJson a2aAgentCardJson
+     * @param command command
      * @return result
      * @since 0.1.0
-     * @param command command
      */
     @Override
     public java.util.UUID upsertLogicalRegistration(UpsertLogicalRegistrationCommand command) {
@@ -1398,16 +1389,9 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     /**
      * relinkLogicalSourceRef.
      *
-     * @param tenantId tenantId
-     * @param deploymentServiceId deploymentServiceId
-     * @param instanceId instanceId
-     * @param cardDigest cardDigest
-     * @param sourceId sourceId
-     * @param sourceRevision sourceRevision
-     * @param internalBaseUrl internalBaseUrl
+     * @param command command
      * @return result
      * @since 0.1.0
-     * @param command command
      */
     @Override
     public boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {
@@ -1489,28 +1473,28 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
     }
 
     private void syncLogicalFromReconcileUpsert(ReconcileUpsertCommand command) {
-            java.util.UUID registrationId = upsertLogicalRegistration(new UpsertLogicalRegistrationCommand(
-            command.tenantId(),
-            command.agentId(),
-            command.deploymentServiceId(),
-            command.cardDigest(),
-            command.contractVersion(),
-            command.capabilityVersion(),
-            "REGISTERED",
-            command.freshness(),
-            command.a2aAgentCardJson()));
-            upsertSourceRef(new UpsertSourceRefCommand(
-            command.tenantId(),
-            command.deploymentServiceId(),
-            command.instanceId(),
-            command.sourceId(),
-            command.sourceRevision(),
-            command.endpointUrl(),
-            null,
-            "READY",
-            registrationId));
-            recomputeRegistrationStatus(registrationId);
-        }
+        java.util.UUID registrationId = upsertLogicalRegistration(new UpsertLogicalRegistrationCommand(
+                command.tenantId(),
+                command.agentId(),
+                command.deploymentServiceId(),
+                command.cardDigest(),
+                command.contractVersion(),
+                command.capabilityVersion(),
+                "REGISTERED",
+                command.freshness(),
+                command.a2aAgentCardJson()));
+        upsertSourceRef(new UpsertSourceRefCommand(
+                command.tenantId(),
+                command.deploymentServiceId(),
+                command.instanceId(),
+                command.sourceId(),
+                command.sourceRevision(),
+                command.endpointUrl(),
+                null,
+                "READY",
+                registrationId));
+        recomputeRegistrationStatus(registrationId);
+    }
 
     private void syncLogicalFromReconcilePending(ReconcilePendingCommand command) {
         String placeholderDigest = "pending:" + command.instanceId();

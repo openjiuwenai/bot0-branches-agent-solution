@@ -56,22 +56,6 @@ public final class AgentCardFetcher {
                 InternalNetworkPolicy.permissive());
     }
 
-    /**
-     * fromSecurity.
-     *
-     * @param options options
-     * @return result
-     * @since 0.1.0
-     */
-    public static AgentCardFetcher fromSecurity(RdcCardFetchOptions options) {
-        Objects.requireNonNull(options, "options");
-        return new AgentCardFetcher(
-                AgentCardMtlsHttpClientFactory.create(options),
-                options.getResponseDeadline(),
-                AgentCardSignatureVerifier.from(options),
-                InternalNetworkPolicy.from(options));
-    }
-
     AgentCardFetcher(HttpClient httpClient, Duration readTimeout) {
         this(httpClient, readTimeout, AgentCardSignatureVerifier.disabled(), InternalNetworkPolicy.permissive());
     }
@@ -90,6 +74,22 @@ public final class AgentCardFetcher {
                 ? signatureVerifier
                 : AgentCardSignatureVerifier.disabled();
         this.networkPolicy = networkPolicy != null ? networkPolicy : InternalNetworkPolicy.permissive();
+    }
+
+    /**
+     * fromSecurity.
+     *
+     * @param options options
+     * @return result
+     * @since 0.1.0
+     */
+    public static AgentCardFetcher fromSecurity(RdcCardFetchOptions options) {
+        Objects.requireNonNull(options, "options");
+        return new AgentCardFetcher(
+                AgentCardMtlsHttpClientFactory.create(options),
+                options.getResponseDeadline(),
+                AgentCardSignatureVerifier.from(options),
+                InternalNetworkPolicy.from(options));
     }
 
     /**
@@ -138,10 +138,11 @@ public final class AgentCardFetcher {
             }
             return FetchResult.success(body);
         } catch (InterruptedException ex) {
-                return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
-                } catch (IOException ex) {
-                return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
-            }
+            Thread.currentThread().interrupt();
+            return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
+        } catch (IOException ex) {
+            return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
+        }
     }
 
     /**
@@ -183,14 +184,21 @@ public final class AgentCardFetcher {
      * @return result
      * @since 0.1.0
      */
-    public record FetchResult(boolean success, String cardJson, String capabilityVersion,
-                              String contractVersion, String failureCode, String message) {
+    public record FetchResult(
+            boolean success,
+            String cardJson,
+            String capabilityVersion,
+            String contractVersion,
+            String failureCode,
+            String message) {
         static FetchResult success(String cardJson) {
             return new FetchResult(true, cardJson, null, null, null, null);
         }
+
         static FetchResult success(String cardJson, String capabilityVersion, String contractVersion) {
             return new FetchResult(true, cardJson, capabilityVersion, contractVersion, null, null);
         }
+
         static FetchResult failure(String failureCode, String message) {
             return new FetchResult(false, null, null, null, failureCode, message);
         }

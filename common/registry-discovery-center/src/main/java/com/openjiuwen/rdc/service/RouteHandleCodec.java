@@ -67,13 +67,11 @@ import java.util.Base64;
  *
  * @since 2026-07-10
  */
-
 final class RouteHandleCodec {
     /**
      * Version-2 prefix marker. FEAT-016 encode always produces this prefix;
      * decode requires it — old v1: / no-prefix handles are rejected.
      */
-
     static final String V2_PREFIX = "v2:";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -92,7 +90,6 @@ final class RouteHandleCodec {
      *
      * @return opaque route handle with {@code v2:} prefix; never {@code null}
      */
-
     static String encode(HandleFields fields) {
         requireNonBlank(fields.tenantId(), "tenantId");
         requireNonBlank(fields.agentId(), "agentId");
@@ -128,7 +125,6 @@ final class RouteHandleCodec {
      * @throws IllegalArgumentException if the handle is malformed (no
      *         {@code v2:} prefix, bad base64, bad JSON, missing fields)
      */
-
     static HandleFields decode(String handle) {
         requireNonBlank(handle, "handle");
         String payload = stripPrefix(handle);
@@ -207,7 +203,6 @@ final class RouteHandleCodec {
      * @return result
      * @since 0.1.0
      */
-
     record HandleFields(
             String tenantId, String agentId, String serviceId,
             String instanceId, String routeKey, String contractVersion) {

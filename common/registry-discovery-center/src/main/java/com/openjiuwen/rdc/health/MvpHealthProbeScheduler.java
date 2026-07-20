@@ -167,7 +167,6 @@ public class MvpHealthProbeScheduler {
      * @return result
      * @since 0.1.0
      */
-
     static String composeProbeUrl(String endpointUrl) {
         if (endpointUrl == null || endpointUrl.isBlank()) {
             throw new IllegalArgumentException("endpointUrl must not be blank");

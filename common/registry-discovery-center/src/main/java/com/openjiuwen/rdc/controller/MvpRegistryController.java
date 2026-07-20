@@ -104,8 +104,8 @@ public class MvpRegistryController {
      * register.
      *
      * @param card card
-     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
-     * @param false false
+     * @param traceparent traceparent
+     * @param xTraceId xTraceId
      * @return result
      * @since 0.1.0
      */
@@ -156,8 +156,9 @@ public class MvpRegistryController {
      * Structured Agent Card discovery per Feat-015 0713 {@code DiscoverAgentCards}.
      *
      * @param request request
-     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
-     * @param false false
+     * @param traceparent traceparent
+     * @param xTraceId xTraceId
+     * @param callerRefHeader callerRefHeader
      * @return result
      * @since 0.1.0
      */
@@ -195,15 +196,12 @@ public class MvpRegistryController {
     }
 
     /**
-     * Deregister all instances for the given {@code (tenantId, agentId)}
-     * pair. REQ-2026-006 semantic generalization: previously deleted a single
-     * row; now deletes every instance matching the pair. Single-instance
-     * callers are backward compatible — they get all instances removed.
+     * Deregister all instances for the given {@code (tenantId, agentId)} pair.
      *
      * @param tenantId tenantId
      * @param agentId agentId
-     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
-     * @param false false
+     * @param traceparent traceparent
+     * @param xTraceId xTraceId
      * @return result
      * @since 0.1.0
      */
@@ -235,18 +233,13 @@ public class MvpRegistryController {
     }
 
     /**
-     * Deregister a single instance by triple
-     * {@code (tenantId, agentId, serviceId)}. REQ-2026-006 new endpoint:
-     * rolling deploy of one replica must not evict other replicas.
-     * {@code serviceId} is in the path — HD3-006 allows it because
-     * {@code serviceId} is the server-derived instance id, not the physical
-     * endpoint.
+     * Deregister a single instance by triple {@code (tenantId, agentId, serviceId)}.
      *
      * @param tenantId tenantId
      * @param agentId agentId
      * @param serviceId serviceId
-     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
-     * @param false false
+     * @param traceparent traceparent
+     * @param xTraceId xTraceId
      * @return result
      * @since 0.1.0
      */

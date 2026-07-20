@@ -55,10 +55,9 @@ public class InstanceRouteController {
      *
      * @param tenantId tenantId
      * @param agentId agentId
-     * @param false false
+     * @param contractVersion contractVersion
      * @return result
      * @since 0.1.0
-     * @param "contractVersion" "contractVersion"
      */
     @GetMapping("/instances/{tenantId}/{agentId}")
     public List<AgentCardDto> listInstances(
@@ -74,10 +73,9 @@ public class InstanceRouteController {
      *
      * @param tenantId tenantId
      * @param serviceId serviceId
-     * @param false false
+     * @param contractVersion contractVersion
      * @return result
      * @since 0.1.0
-     * @param "contractVersion" "contractVersion"
      */
     @GetMapping("/instances/by-service/{tenantId}/{serviceId}")
     public List<AgentCardDto> listInstancesByService(
@@ -93,10 +91,9 @@ public class InstanceRouteController {
      *
      * @param tenantId tenantId
      * @param capability capability
-     * @param false false
+     * @param contractVersion contractVersion
      * @return result
      * @since 0.1.0
-     * @param "contractVersion" "contractVersion"
      */
     @GetMapping("/instances/by-capability/{tenantId}/{capability}")
     public List<AgentCardDto> listInstancesByCapability(
@@ -111,8 +108,9 @@ public class InstanceRouteController {
      * resolveRouteHandle.
      *
      * @param request request
-     * @param TRACE_PARENT_HEADER TRACE_PARENT_HEADER
-     * @param false false
+     * @param traceparent traceparent
+     * @param xTraceId xTraceId
+     * @param callerRefHeader callerRefHeader
      * @return result
      * @since 0.1.0
      */

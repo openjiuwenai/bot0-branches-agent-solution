@@ -26,7 +26,6 @@ public interface CallerAuthorizationPolicy {
      * Allow-all policy when no allowlist is configured.
      */
     final class Permissive implements CallerAuthorizationPolicy {
-
         /**
          * authorize.
          *

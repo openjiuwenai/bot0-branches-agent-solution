@@ -78,6 +78,10 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     private static JdbcAgentRegistryRepository appRoleRepo;
     private static JdbcAgentRegistryRepository ownerRepo;
 
+    private static final String SAMPLE_ENDPOINT = "https://agent.example/agent";
+    private static final String SERVICE_ID = ServiceIdCodec.derive(SAMPLE_ENDPOINT);
+    private static final String INSTANCE_ID = InstanceIdCodec.derive(SAMPLE_ENDPOINT);
+
     @BeforeAll
     static void bootPostgresAndRestrictedRole() throws Exception {
         superuser = EmbeddedPostgresTestSupport.sharedDataSource();
@@ -385,10 +389,6 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     /**
      * FEAT-016: {@code service_id} is host-only; {@code instance_id} is host-port.
      */
-    private static final String SAMPLE_ENDPOINT = "https://agent.example/agent";
-    private static final String SERVICE_ID = ServiceIdCodec.derive(SAMPLE_ENDPOINT);
-    private static final String INSTANCE_ID = InstanceIdCodec.derive(SAMPLE_ENDPOINT);
-
     private static void upsertCard(AgentRegistryRepository repo, AgentRegistryEntry card) {
         // REQ-2026-006: serviceId is server-derived from endpointUrl. The
         // production push path (MvpRegistryController) and pull path

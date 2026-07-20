@@ -52,12 +52,6 @@ import javax.sql.DataSource;
  * @since 0.1.0 (2026)
  */
 class ReconciliationScenarioIntegrationTest {
-    private static final class TestProbeException extends RuntimeException {
-        TestProbeException(String message) {
-            super(message);
-        }
-    }
-
     private static DataSource dataSource;
     private static MockWebServer oldRuntimeServer;
     private static MockWebServer newRuntimeServer;
@@ -355,10 +349,10 @@ class ReconciliationScenarioIntegrationTest {
     }
 
     private String readLifecycle(String instanceId) {
-            return new JdbcTemplate(dataSource).queryForObject(
-            "SELECT lifecycle_status FROM agent_registry_mvp WHERE tenant_id = ? AND instance_id = ?",
-            String.class, TENANT, instanceId);
-        }
+        return new JdbcTemplate(dataSource).queryForObject(
+                "SELECT lifecycle_status FROM agent_registry_mvp WHERE tenant_id = ? AND instance_id = ?",
+                String.class, TENANT, instanceId);
+    }
 
     private String readEffectiveHealth(String instanceId) {
         return new JdbcTemplate(dataSource).queryForObject(
@@ -370,5 +364,11 @@ class ReconciliationScenarioIntegrationTest {
         return new JdbcTemplate(dataSource).queryForObject(
                 "SELECT freshness FROM agent_registry_mvp WHERE tenant_id = ? AND instance_id = ?",
                 String.class, TENANT, instanceId);
+    }
+
+    private static final class TestProbeException extends RuntimeException {
+        TestProbeException(String message) {
+            super(message);
+        }
     }
 }

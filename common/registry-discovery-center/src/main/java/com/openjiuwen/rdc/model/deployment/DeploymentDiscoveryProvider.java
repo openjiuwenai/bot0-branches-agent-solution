@@ -26,7 +26,6 @@ public interface DeploymentDiscoveryProvider {
      * @return result
      * @since 0.1.0
      */
-
     ListDeploymentInstancesResult listInstances();
 
     /**
@@ -38,7 +37,6 @@ public interface DeploymentDiscoveryProvider {
      * @param consumer consumer
      * @since 0.1.0
      */
-
     default void watchInstances(DeploymentInstanceEventConsumer consumer) {
         // optional for MVP static provider
     }

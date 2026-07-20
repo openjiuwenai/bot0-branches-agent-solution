@@ -31,16 +31,14 @@ import java.util.Optional;
 /**
  * Applies Feat-015 0713 structured logical Agent Card discovery filtering and
  * outcome semantics against {@code agent_card_registration}.
-
-  * @since 0.1.0 (2026)
-  */
-
+ *
+ * @since 0.1.0 (2026)
+ */
 final class StructuredDiscoveryEngine {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int OUTCOME_EVAL_LIMIT = 500;
 
     private StructuredDiscoveryEngine() {
-
     }
 
     static DiscoveryResult discover(AgentRegistryRepository repository, DiscoveryQuery query) {

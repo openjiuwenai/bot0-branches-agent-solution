@@ -13,12 +13,11 @@ import java.util.stream.Collectors;
 
 /**
  * Deterministic fingerprint of a provider snapshot for revision conflict detection.
-
-  * @since 0.1.0 (2026)
-  */
+ *
+ * @since 0.1.0 (2026)
+ */
 final class SnapshotFingerprint {
     private SnapshotFingerprint() {
-
     }
 
     static String compute(ListDeploymentInstancesResult snapshot) {

@@ -32,6 +32,33 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "rdc.pull-registration")
 public class PullRegistrationProperties {
     /**
+     * HTTP connect timeout for the pull GET. Code-defaulted (OQ-3 H2).
+     * Not exposed as a config key to prevent operator misconfiguration.
+     */
+    public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+    /**
+     * HTTP read timeout for the pull GET. Code-defaulted (OQ-3 H2).
+     * Not exposed as a config key to prevent operator misconfiguration.
+     */
+    public static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
+    /**
+     * Default {@code maxConcurrency} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.max_concurrency}
+     * and the push-path convention documented in the README.
+     */
+    public static final int DEFAULT_MAX_CONCURRENCY = 10;
+
+    /**
+     * Default {@code weight} applied by
+     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
+     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.weight}.
+     */
+    public static final int DEFAULT_WEIGHT = 100;
+
+    /**
      * Master switch. Default {@code false} — pull registration is opt-in.
      * When {@code false}, {@link PullRegistrationBootstrap} no-ops on
      * {@code ApplicationReadyEvent}.
@@ -94,7 +121,6 @@ public class PullRegistrationProperties {
      * {@code contractVersion}, {@code capabilityVersion}.
      */
     public static class RuntimeEntry {
-
         /**
          * Runtime origin URL, e.g. {@code http://localhost:8090}. Also used as endpointUrl.
          */
@@ -395,30 +421,4 @@ public class PullRegistrationProperties {
         }
     }
 
-    /**
-     * HTTP connect timeout for the pull GET. Code-defaulted (OQ-3 H2).
-     * Not exposed as a config key to prevent operator misconfiguration.
-     */
-    public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-
-    /**
-     * HTTP read timeout for the pull GET. Code-defaulted (OQ-3 H2).
-     * Not exposed as a config key to prevent operator misconfiguration.
-     */
-    public static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
-
-    /**
-     * Default {@code maxConcurrency} applied by
-     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
-     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.max_concurrency}
-     * and the push-path convention documented in the README.
-     */
-    public static final int DEFAULT_MAX_CONCURRENCY = 10;
-
-    /**
-     * Default {@code weight} applied by
-     * {@link PullRegistrationBootstrap#buildEntry} when the operator omits it.
-     * Matches the DB-level DEFAULT on {@code agent_registry_mvp.weight}.
-     */
-    public static final int DEFAULT_WEIGHT = 100;
 }
