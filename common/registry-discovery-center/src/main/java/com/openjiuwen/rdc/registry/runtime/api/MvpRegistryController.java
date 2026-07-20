@@ -8,7 +8,7 @@ import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentCardDto;
-import com.openjiuwen.rdc.spi.registry.AgentDiscoveryService;
+import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.RouteResolution;

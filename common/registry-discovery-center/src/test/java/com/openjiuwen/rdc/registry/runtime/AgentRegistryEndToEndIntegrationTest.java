@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.registry.runtime.api.MvpRegistryController;
-import com.openjiuwen.rdc.registry.runtime.discovery.PgMvpDiscoveryServiceImpl;
+import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
 import com.openjiuwen.rdc.registry.runtime.health.MvpHealthProbeScheduler;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.JdbcAgentRegistryRepository;

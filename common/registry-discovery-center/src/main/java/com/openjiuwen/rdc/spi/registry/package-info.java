@@ -7,7 +7,7 @@
  * contract surface owned by the Bus &amp; State Hub plane.
  *
  * <p>Authority: ADR-0160 (Stage 4 Registry SPI Runtime Promotion). The dual-method
- * {@link com.openjiuwen.rdc.spi.registry.AgentDiscoveryService} contract,
+ * {@link com.openjiuwen.rdc.service.AgentDiscoveryService} contract,
  * the unified {@link com.openjiuwen.rdc.model.AgentCardDto} with
  * {@code @Nullable} business definition fields, the
  * {@link com.openjiuwen.rdc.model.RouteResolution} returned by

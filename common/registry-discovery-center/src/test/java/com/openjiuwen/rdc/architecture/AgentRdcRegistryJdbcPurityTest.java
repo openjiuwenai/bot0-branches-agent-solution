@@ -90,7 +90,7 @@ class AgentRdcRegistryJdbcPurityTest {
     private static final String[] SPRING_WEB_MICROMETER_ALLOWED = {
             "com.openjiuwen.rdc.registry.runtime..",
             "com.openjiuwen.rdc.registry.runtime.api..",
-            "com.openjiuwen.rdc.registry.runtime.discovery..",
+            "com.openjiuwen.rdc.service..",
             "com.openjiuwen.rdc.registry.runtime.health.."
     };
 
@@ -257,7 +257,7 @@ class AgentRdcRegistryJdbcPurityTest {
     @Test
     void jackson_confined_to_discovery_and_api_subpackages() {
         noClasses().that().resideInAPackage("com.openjiuwen.rdc.registry..")
-                .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.discovery..")
+                .and().resideOutsideOfPackage("com.openjiuwen.rdc.service..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.api..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime.pull..")
                 .and().resideOutsideOfPackage("com.openjiuwen.rdc.registry.runtime")

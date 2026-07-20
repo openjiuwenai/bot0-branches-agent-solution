@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.registry.runtime.discovery;
+package com.openjiuwen.rdc.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,7 +16,7 @@ import java.util.Base64;
  * Encode / decode opaque route handles (ADR-0160 decision 3, HD3-006).
  *
  * <p>The route handle is the <b>only</b> reference an
- * {@link com.openjiuwen.rdc.spi.registry.AgentDiscoveryService} caller
+ * {@link com.openjiuwen.rdc.service.AgentDiscoveryService} caller
  * receives — it never sees the physical {@code endpointUrl} or
  * {@code routeKey} in plain form. The forwarding layer recovers them via
  * {@code AgentDiscoveryService.resolveRouteHandle(handle, tenantId)}, which

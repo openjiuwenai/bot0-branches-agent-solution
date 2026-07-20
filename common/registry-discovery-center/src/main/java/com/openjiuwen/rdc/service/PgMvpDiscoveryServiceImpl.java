@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.registry.runtime.discovery;
+package com.openjiuwen.rdc.service;
 
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
@@ -10,7 +10,6 @@ import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryReposit
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository.EndpointEntry;
 import com.openjiuwen.rdc.registry.runtime.persistence.jdbc.AgentRegistryRepository.RegistryRow;
 import com.openjiuwen.rdc.model.AgentCardDto;
-import com.openjiuwen.rdc.spi.registry.AgentDiscoveryService;
 import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.spi.registry.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
