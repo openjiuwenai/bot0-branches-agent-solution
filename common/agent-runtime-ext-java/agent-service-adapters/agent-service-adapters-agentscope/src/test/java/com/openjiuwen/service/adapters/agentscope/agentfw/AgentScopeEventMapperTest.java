@@ -52,6 +52,10 @@ class AgentScopeEventMapperTest {
         assertThat(mapper.map(
             new RequestStopEvent("standalone", GenerateReason.MIDDLEWARE_STOP_REQUESTED),
             () -> stateWith(tool),
+            streamState)).isEmpty();
+        assertThat(mapper.map(
+            new RequestStopEvent("standalone", GenerateReason.MIDDLEWARE_STOP_REQUESTED),
+            () -> stateWith(tool),
             new AgentScopeEventMapper.StreamState())).isPresent();
     }
 
@@ -150,6 +154,29 @@ class AgentScopeEventMapperTest {
             new RequestStopEvent("Review before acting"), AgentScopeEventMapperTest::stateWith, streamState)).isPresent();
         assertThat(mapper.map(
             new AgentResultEvent(paused), AgentScopeEventMapperTest::stateWith, streamState)).isEmpty();
+    }
+
+    @Test
+    void deduplicatesRepeatedStandaloneStops() {
+        AgentScopeEventMapper mapper = new AgentScopeEventMapper();
+        AgentScopeEventMapper.StreamState streamState = new AgentScopeEventMapper.StreamState();
+
+        assertThat(mapper.map(
+            new RequestStopEvent("Review before acting"), AgentScopeEventMapperTest::stateWith, streamState)).isPresent();
+        assertThat(mapper.map(
+            new RequestStopEvent("Review before acting"), AgentScopeEventMapperTest::stateWith, streamState)).isEmpty();
+    }
+
+    @Test
+    void deduplicatesRepeatedConfirmationEvents() {
+        ToolUseBlock tool = tool("call-1", "transfer", ToolCallState.ASKING);
+        AgentScopeEventMapper mapper = new AgentScopeEventMapper();
+        AgentScopeEventMapper.StreamState streamState = new AgentScopeEventMapper.StreamState();
+
+        assertThat(mapper.map(
+            new RequireUserConfirmEvent("reply", List.of(tool)), () -> stateWith(tool), streamState)).isPresent();
+        assertThat(mapper.map(
+            new RequireUserConfirmEvent("reply", List.of(tool)), () -> stateWith(tool), streamState)).isEmpty();
     }
 
     @Test

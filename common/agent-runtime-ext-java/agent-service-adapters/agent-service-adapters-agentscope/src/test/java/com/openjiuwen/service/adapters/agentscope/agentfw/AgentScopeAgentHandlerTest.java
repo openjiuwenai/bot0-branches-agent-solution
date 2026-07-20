@@ -136,7 +136,7 @@ class AgentScopeAgentHandlerTest {
     }
 
     @Test
-    void streamDoesNotReadAgentStateForTextDeltaEvents() {
+    void streamReportsErrorWhenTextDeltaIsNotFollowedByTerminalEvent() {
         AgentScopeInvoker invoker = mock(AgentScopeInvoker.class);
         when(invoker.streamEvents(any(), any())).thenReturn(Flux.just(
             new TextBlockDeltaEvent("reply", "block", "hello")));
@@ -145,12 +145,16 @@ class AgentScopeAgentHandlerTest {
         handler(invoker).streamQuery(request("conversation", "hello"), observer);
 
         verify(invoker, times(0)).getAgentState(any(), any());
-        assertThat(observer.chunks).singleElement().satisfies(chunk ->
-            assertThat(chunk.getType()).isEqualTo(QueryChunk.TYPE_CHUNK));
+        assertThat(observer.chunks).extracting(QueryChunk::getType)
+            .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ERROR);
+        assertThat(observer.errors).singleElement().satisfies(error -> assertThat(error)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("without a terminal event"));
+        assertThat(observer.completed).isZero();
     }
 
     @Test
-    void streamDoesNotReadAgentStateForUnrelatedEvents() {
+    void streamReportsErrorWhenOnlyUnrelatedEventsAreEmitted() {
         AgentScopeInvoker invoker = mock(AgentScopeInvoker.class);
         when(invoker.streamEvents(any(), any())).thenReturn(Flux.just(
             new AgentStartEvent("conversation", "reply", "agent")));
@@ -159,9 +163,12 @@ class AgentScopeAgentHandlerTest {
         handler(invoker).streamQuery(request("conversation", "hello"), observer);
 
         verify(invoker, times(0)).getAgentState(any(), any());
-        assertThat(observer.chunks).isEmpty();
-        assertThat(observer.errors).isEmpty();
-        assertThat(observer.completed).isEqualTo(1);
+        assertThat(observer.chunks).singleElement().satisfies(chunk ->
+            assertThat(chunk.getType()).isEqualTo(QueryChunk.TYPE_ERROR));
+        assertThat(observer.errors).singleElement().satisfies(error -> assertThat(error)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("without a terminal event"));
+        assertThat(observer.completed).isZero();
     }
 
     @Test

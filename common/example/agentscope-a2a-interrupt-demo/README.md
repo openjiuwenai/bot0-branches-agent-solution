@@ -301,7 +301,7 @@ $response2 | ConvertTo-Json -Depth 100
 
 第二轮必须在第一轮返回 `INPUT_REQUIRED` 后发送；同一 `contextId` 存在在途调用时，adapter 会直接拒绝后到请求，不在内部排队。第二轮不需要 `params.metadata`，也不需要回传 interaction item 或 AgentScope tool-call ID。runtime 根据 `taskId` 在 TaskStore 中命中第一轮 Task 后，只把上一轮 status message（当前 SDK 续轮时已移入 history）的 `_interrupt` 带入 `ServeRequest.metadata`；adapter 自行解析其 `payload.kind`，再用相同 `contextId` 读取 AgentScope 当前 pending state，使用其中真实的 tool-call ID 构造 `ConfirmResult`。这些内部数据都不由客户端填写。
 
-正常恢复无需客户端填写 `params.metadata._interrupt`。同 Task 续轮时，runtime 只使用 TaskStore status/history message 中的 `_interrupt`；新 Task 仍不清理客户端主动提交的该保留字段，因此示例服务仅应向可信 A2A 客户端开放。
+正常恢复无需客户端填写 `params.metadata._interrupt`。runtime 会先清理客户端主动提交的该保留字段；只有原 Task 当前处于 `INPUT_REQUIRED`，且 TaskStore 的 status/history 中存在有效 agent message 保存的 `_interrupt` 时，才会把该存储值带给 adapter。新 Task、非 `INPUT_REQUIRED` Task 或找不到存储值时，客户端同名字段都不会进入恢复分支。
 
 当 pending interaction 是确认中断时，adapter 只接受精确的 `APPROVE` 或 `REJECT`（忽略大小写和首尾空白），并把该动作转换为 metadata-only AgentScope `UserMessage`：
 

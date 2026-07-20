@@ -131,9 +131,19 @@ public final class AgentScopeAgentHandler implements AgentHandler, AgentInterrup
                     },
                     error -> handleStreamError(invocation, observer, error),
                     () -> {
-                        if (invocation.finish() && !observer.isCancelled()) {
-                            observer.onComplete();
+                        if (!invocation.finish() || observer.isCancelled()) {
+                            return;
                         }
+                        if (!streamState.hasTerminalEvent()) {
+                            IllegalStateException error = new IllegalStateException(
+                                "AgentScope stream completed without a terminal event");
+                            observer.onNext(new QueryChunk(
+                                QueryChunk.TYPE_ERROR,
+                                Map.of("message", "AgentScope stream completed without a terminal event")));
+                            observer.onError(error);
+                            return;
+                        }
+                        observer.onComplete();
                     });
             invocation.bind(subscription);
             while (!invocation.await(CANCEL_POLL_MILLIS, TimeUnit.MILLISECONDS)) {

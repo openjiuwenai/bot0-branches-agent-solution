@@ -63,7 +63,6 @@ public class HarnessRuntimeApplication {
             .disableShellTool()
             .disableMemoryTools()
             .disableMemoryHooks()
-            .disableSessionPersistence()
             .disableWorkspaceContext()
             .disableAtPathExpansion()
             .disableSubagents()

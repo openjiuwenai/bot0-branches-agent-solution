@@ -33,29 +33,37 @@ final class AgentScopeEventMapper {
                 Map.of("type", "answer_delta", "content", delta.getDelta())));
         }
         if (event instanceof RequireUserConfirmEvent confirmation) {
+            if (streamState.interruptEmitted) {
+                return Optional.empty();
+            }
             validateConfirmationPending(confirmation.getToolCalls(), stateSupplier.get());
-            streamState.confirmationEmitted = true;
+            streamState.markInterrupt();
             return Optional.of(interrupt(
                 "confirmation",
                 "The following operation requires confirmation.",
                 confirmation.getToolCalls()));
         }
         if (event instanceof AgentResultEvent result && result.getResult() != null) {
+            streamState.terminalEventObserved = true;
             GenerateReason reason = result.getResult().getGenerateReason();
             if (reason == GenerateReason.TOOL_SUSPENDED) {
+                if (streamState.interruptEmitted) {
+                    return Optional.empty();
+                }
+                streamState.markInterrupt();
                 return Optional.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, externalFromState(stateSupplier.get())));
             }
             if (reason == GenerateReason.PERMISSION_ASKING) {
-                if (streamState.confirmationEmitted) {
+                if (streamState.interruptEmitted) {
                     return Optional.empty();
                 }
-                streamState.confirmationEmitted = true;
+                streamState.markInterrupt();
                 return Optional.of(new QueryChunk(
                     QueryChunk.TYPE_INTERRUPT,
                     confirmationFromState(stateSupplier.get())));
             }
-            if (isMessagePause(reason) && !streamState.messageEmitted) {
-                streamState.messageEmitted = true;
+            if (isMessagePause(reason) && !streamState.interruptEmitted) {
+                streamState.markInterrupt();
                 return Optional.of(interrupt("message", pauseMessage(result.getResult()), List.of()));
             }
             if (reason == GenerateReason.INTERRUPTED) {
@@ -69,10 +77,10 @@ final class AgentScopeEventMapper {
         }
         if (event instanceof RequestStopEvent stop) {
             if (stop.getGenerateReason() == GenerateReason.PERMISSION_ASKING) {
-                if (streamState.confirmationEmitted) {
+                if (streamState.interruptEmitted) {
                     return Optional.empty();
                 }
-                streamState.confirmationEmitted = true;
+                streamState.markInterrupt();
                 return Optional.of(new QueryChunk(
                     QueryChunk.TYPE_INTERRUPT,
                     confirmationFromState(stateSupplier.get())));
@@ -83,7 +91,10 @@ final class AgentScopeEventMapper {
             String message = stop.getReason() == null || stop.getReason().isBlank()
                 ? "Agent execution paused"
                 : stop.getReason();
-            streamState.messageEmitted = true;
+            if (streamState.interruptEmitted) {
+                return Optional.empty();
+            }
+            streamState.markInterrupt();
             return Optional.of(interrupt("message", message, List.of()));
         }
         return Optional.empty();
@@ -194,7 +205,16 @@ final class AgentScopeEventMapper {
     }
 
     static final class StreamState {
-        private boolean confirmationEmitted;
-        private boolean messageEmitted;
+        private boolean interruptEmitted;
+        private boolean terminalEventObserved;
+
+        private void markInterrupt() {
+            interruptEmitted = true;
+            terminalEventObserved = true;
+        }
+
+        boolean hasTerminalEvent() {
+            return terminalEventObserved;
+        }
     }
 }
