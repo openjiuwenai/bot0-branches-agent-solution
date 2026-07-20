@@ -5,6 +5,7 @@
 package com.openjiuwen.example.deepresearch.runtime;
 
 import com.openjiuwen.example.deepresearch.DeepResearchProperties;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**

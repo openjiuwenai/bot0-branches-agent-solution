@@ -16,6 +16,7 @@ import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtH
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClientFactory;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -9,6 +9,7 @@ import com.openjiuwen.example.deepresearch.search.SearchAgentFactory;
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
