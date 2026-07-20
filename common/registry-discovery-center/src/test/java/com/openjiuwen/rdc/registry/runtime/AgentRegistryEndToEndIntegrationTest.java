@@ -86,7 +86,7 @@ class AgentRegistryEndToEndIntegrationTest {
         observability = new RegistryObservabilityConfig(new SimpleMeterRegistry());
         discovery = new PgMvpDiscoveryServiceImpl(
                 repository,
-                new com.openjiuwen.rdc.registry.runtime.tenant.ThreadLocalTenantContext(),
+                new com.openjiuwen.rdc.tenant.ThreadLocalTenantContext(),
                 observability);
         controller = new MvpRegistryController(
                 repository, discovery, observability, new com.fasterxml.jackson.databind.ObjectMapper());

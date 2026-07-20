@@ -12,7 +12,7 @@ import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.RouteResolution;
-import com.openjiuwen.rdc.spi.registry.TenantContext;
+import com.openjiuwen.rdc.tenant.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

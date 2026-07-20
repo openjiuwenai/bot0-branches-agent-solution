@@ -8,7 +8,7 @@ import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.registry.runtime.RegistryOpContext;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.ProbeTarget;
-import com.openjiuwen.rdc.registry.runtime.tenant.ThreadLocalTenantContext;
+import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;

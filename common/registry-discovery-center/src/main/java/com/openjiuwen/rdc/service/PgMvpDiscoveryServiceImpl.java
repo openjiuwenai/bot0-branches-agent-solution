@@ -11,7 +11,7 @@ import com.openjiuwen.rdc.repository.AgentRegistryRepository.EndpointEntry;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.RegistryRow;
 import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.model.RouteResolution;
-import com.openjiuwen.rdc.spi.registry.TenantContext;
+import com.openjiuwen.rdc.tenant.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 
 import org.slf4j.MDC;

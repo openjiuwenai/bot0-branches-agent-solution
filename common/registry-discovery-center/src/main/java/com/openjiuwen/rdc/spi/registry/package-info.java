@@ -12,7 +12,7 @@
  * {@code @Nullable} business definition fields, the
  * {@link com.openjiuwen.rdc.model.RouteResolution} returned by
  * {@code resolveRouteHandle}, and the
- * {@link com.openjiuwen.rdc.spi.registry.TenantContext} port all live here so
+ * {@link com.openjiuwen.rdc.tenant.TenantContext} port all live here so
  * that callers (Orchestrator / Gateway / forwarding layer) depend on no
  * implementation detail — only on Java types.
  *

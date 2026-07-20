@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.openjiuwen.rdc.registry.runtime.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
-import com.openjiuwen.rdc.spi.registry.TenantContext;
+import com.openjiuwen.rdc.tenant.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

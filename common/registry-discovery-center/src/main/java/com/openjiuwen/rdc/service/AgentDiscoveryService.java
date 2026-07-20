@@ -9,6 +9,7 @@ import java.util.List;
 import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
+import com.openjiuwen.rdc.tenant.TenantContext;
 
 /**
  * agent-bus owned runtime route index lookup entry (HD3-001). The upper

@@ -2,12 +2,11 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.registry.runtime.tenant;
+package com.openjiuwen.rdc.tenant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.openjiuwen.rdc.spi.registry.TenantContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -225,6 +224,6 @@ class ThreadLocalTenantContextTest {
 
     @Test
     void current_implements_tenant_context_interface() {
-        assertThat(context).isInstanceOf(com.openjiuwen.rdc.spi.registry.TenantContext.class);
+        assertThat(context).isInstanceOf(com.openjiuwen.rdc.tenant.TenantContext.class);
     }
 }
