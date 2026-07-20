@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openjiuwen.agent_evolving.trainer.progress import Callbacks
@@ -102,7 +102,6 @@ def test_evaluate_retries_when_extract_field_empty() -> None:
             },
         }
     )
-    evaluator.batch_evaluate = MagicMock(return_value=[])  # type: ignore[method-assign]
 
     trainer = _make_trainer(
         adapter_client=adapter,
@@ -111,7 +110,8 @@ def test_evaluate_retries_when_extract_field_empty() -> None:
     )
     mock_cases = MagicMock()
     mock_cases.get_cases.return_value = [_make_case("c1")]
-    trainer.evaluate(agent, mock_cases)
+    with patch.object(evaluator, "batch_evaluate", MagicMock(return_value=[])):
+        trainer.evaluate(agent, mock_cases)
 
     assert len(calls) == 2
     assert calls[0] != calls[1]

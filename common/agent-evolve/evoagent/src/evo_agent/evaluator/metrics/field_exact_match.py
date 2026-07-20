@@ -12,7 +12,7 @@ from evo_agent.evaluator.metrics.extract import (
 )
 
 
-class FieldExtractExactMatchMetric(ExactMatchMetric):  # type: ignore[misc]
+class FieldExtractExactMatchMetric:
     """Extract a JSON field from ``<answer>`` then exact-match against the label.
 
     Without extract config this class is not used; plain ``ExactMatchMetric``
@@ -25,13 +25,14 @@ class FieldExtractExactMatchMetric(ExactMatchMetric):  # type: ignore[misc]
         *,
         normalize: bool = False,
     ) -> None:
-        super().__init__(normalize=normalize)
+        self._metric = ExactMatchMetric(normalize=normalize)
         self._extract = extract
+        self._normalize = normalize
 
     @property
     def name(self) -> str:
-        return "exact_match" if not self._normalize_flag else "normalized_exact_match"
+        return "exact_match" if not self._normalize else "normalized_exact_match"
 
     def compute(self, prediction: Any, label: Any, **kwargs: Any) -> float:
         extracted = extract_prediction_field(prediction, self._extract)
-        return super().compute(extracted, label, **kwargs)
+        return float(self._metric.compute(extracted, label, **kwargs))

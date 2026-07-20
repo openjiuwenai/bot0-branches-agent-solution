@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock
+from typing import Any, cast
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from openjiuwen.agent_evolving.dataset import Case
@@ -73,11 +73,15 @@ def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
     opt._sample_cases = TfGrpoOptimizer._sample_cases.__get__(opt, TfGrpoOptimizer)
     opt._push_phase = TfGrpoOptimizer._push_phase.__get__(opt, TfGrpoOptimizer)
     opt._on_step_apply = TfGrpoOptimizer._on_step_apply.__get__(opt, TfGrpoOptimizer)
-    opt._read_skills_from_operators = (  # type: ignore[method-assign]
-        lambda: {k: v.get_state()["skill_content"] for k, v in opt._operators.items()}
+    setattr(
+        opt,
+        "_read_skills_from_operators",
+        lambda: {k: v.get_state()["skill_content"] for k, v in opt._operators.items()},
     )
-    opt._sync_skill_to_operator_by_id = (  # type: ignore[method-assign]
-        lambda op_id, content: opt._operators[op_id].set_parameter("skill_content", content)
+    setattr(
+        opt,
+        "_sync_skill_to_operator_by_id",
+        lambda op_id, content: opt._operators[op_id].set_parameter("skill_content", content),
     )
     return opt
 
@@ -85,7 +89,7 @@ def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
 @pytest.mark.asyncio
 async def test_backward_generates_variants_hot_updates_and_keeps_best() -> None:
     opt = _make_opt(group_size=2)
-    op: _FakeOperator = opt._operators["demo_skill"]  # type: ignore[assignment]
+    op = cast(_FakeOperator, opt._operators["demo_skill"])
 
     variants = [
         "---\nname: demo\n---\n\n# Variant A\n",
@@ -98,7 +102,7 @@ async def test_backward_generates_variants_hot_updates_and_keeps_best() -> None:
         gen_calls["n"] += 1
         return variants[i]
 
-    async def _fake_score(cases: list[Case]) -> tuple[float, int, list]:
+    async def _fake_score(cases: list[Case]) -> tuple[float, int, list[Any]]:
         content = op.get_state()["skill_content"]
         score = 0.9 if "better" in content else 0.2
         return score, len(cases), []
@@ -109,14 +113,17 @@ async def test_backward_generates_variants_hot_updates_and_keeps_best() -> None:
     async def _fake_summarize(**kwargs: Any) -> str:
         return f"summary for {kwargs.get('variant_id')}"
 
-    opt._generate_variant = AsyncMock(side_effect=_fake_generate)  # type: ignore[method-assign]
-    opt._score_variant_on_cases = AsyncMock(side_effect=_fake_score)  # type: ignore[method-assign]
-    opt._summarize_rollout = AsyncMock(side_effect=_fake_summarize)  # type: ignore[method-assign]
-    opt._extract_and_update_experiences = AsyncMock(  # type: ignore[method-assign]
-        side_effect=_fake_extract
-    )
-
-    await TfGrpoOptimizer._backward(opt, [])
+    with (
+        patch.object(opt, "_generate_variant", new=AsyncMock(side_effect=_fake_generate)),
+        patch.object(opt, "_score_variant_on_cases", new=AsyncMock(side_effect=_fake_score)),
+        patch.object(opt, "_summarize_rollout", new=AsyncMock(side_effect=_fake_summarize)),
+        patch.object(
+            opt,
+            "_extract_and_update_experiences",
+            new=AsyncMock(side_effect=_fake_extract),
+        ),
+    ):
+        await TfGrpoOptimizer._backward(opt, [])
 
     assert gen_calls["n"] == 2
     assert len(op.updates) >= 2
