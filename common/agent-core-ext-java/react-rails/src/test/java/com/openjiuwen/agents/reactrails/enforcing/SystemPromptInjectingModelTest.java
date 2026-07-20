@@ -428,6 +428,120 @@ class SystemPromptInjectingModelTest {
     }
 
     // ================================================================
+    // stream 路径 content-IFF（PLAN/BUILD via model.stream，补 streaming 承重覆盖）
+    // =================================================================
+    // 生产 SystemPromptInjectingModel.stream override 也调 prepareMessages（与 invoke 共享 replaceSystemPrompt
+    // 替换），但之前只测了 stream + USER_MESSAGE_INJECT（streamInjectsPhaseOverrideBeforeDelegating）。
+    // 下方两测试把 content-IFF 扩到 stream + PLAN/BUILD —— 钉死流式路径也把 MODE 绑到外置 prompt 内容。
+
+    /**
+     * PLAN_MODE via {@code model.stream()} also replaces the SystemMessage with the divergent prompt.
+     *
+     * <p>stream content-IFF：{@code model.stream → prepareMessages(replaceSystemPrompt) → super.stream}
+     * → BaseModelClient.stream 收到的 messages 含 "DIVERGENT EXPLORATION"。
+     *
+     * <p>mutation-RED：剥 {@link SystemPromptInjectingModel#stream} override 里的 prepareMessages 调用
+     * → super.stream 收到原始 messages → SystemMessage 保持 "base system prompt" → contains RED。
+     *
+     * @throws Exception when model stream fails unexpectedly
+     */
+    @Test
+    void streamModeReplacesSystemMessageWithDivergentExploration() throws Exception {
+        String provider = "test-stream-plan-" + System.nanoTime();
+        AtomicReference<List<?>> streamed = registerStreamCaptureProvider(provider);
+        SystemPromptInjectingModel planModel = model(provider);
+        planModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.PLAN_MODE);
+
+        List<BaseMessage> messages = List.of(new SystemMessage("base system prompt"),
+                new UserMessage("analyze from multiple angles"));
+        planModel.stream(messages, List.of(), 0.3f, null, "test-model", null, null, null, null, null).next();
+
+        List<?> streamedMessages = streamed.get();
+        assertThat(streamedMessages).as("PLAN_MODE stream must reach the BaseModelClient").isNotNull();
+        String systemContent = streamedMessages.stream().filter(SystemMessage.class::isInstance)
+                .map(SystemMessage.class::cast).findFirst().map(SystemMessage::getContentAsString)
+                .orElse("<no SystemMessage>");
+        assertThat(systemContent).as("PLAN_MODE via stream must inject the divergent-exploration framing")
+                .contains("DIVERGENT EXPLORATION");
+        assertThat(systemContent).as("PLAN_MODE via stream must NOT inject the convergent framing")
+                .doesNotContain("CONVERGENT EXECUTION");
+        assertThat(systemContent).as("PLAN_MODE via stream must replace (not append to) the original prompt")
+                .doesNotContain("base system prompt");
+        // mutation-RED: strip prepareMessages in SystemPromptInjectingModel.stream override →
+        // super.stream gets original messages → systemContent stays "base system prompt" → RED
+    }
+
+    /**
+     * BUILD_MODE via {@code model.stream()} — symmetric stream content-IFF.
+     *
+     * @throws Exception when model stream fails unexpectedly
+     */
+    @Test
+    void streamModeReplacesSystemMessageWithConvergentExecution() throws Exception {
+        String provider = "test-stream-build-" + System.nanoTime();
+        AtomicReference<List<?>> streamed = registerStreamCaptureProvider(provider);
+        SystemPromptInjectingModel buildModel = model(provider);
+        buildModel.setInjectionMode(SystemPromptInjectingModel.InjectionMode.BUILD_MODE);
+
+        List<BaseMessage> messages = List.of(new SystemMessage("base system prompt"),
+                new UserMessage("produce the final answer"));
+        buildModel.stream(messages, List.of(), 0.3f, null, "test-model", null, null, null, null, null).next();
+
+        List<?> streamedMessages = streamed.get();
+        assertThat(streamedMessages).as("BUILD_MODE stream must reach the BaseModelClient").isNotNull();
+        String systemContent = streamedMessages.stream().filter(SystemMessage.class::isInstance)
+                .map(SystemMessage.class::cast).findFirst().map(SystemMessage::getContentAsString)
+                .orElse("<no SystemMessage>");
+        assertThat(systemContent).as("BUILD_MODE via stream must inject the convergent-execution framing")
+                .contains("CONVERGENT EXECUTION");
+        assertThat(systemContent).as("BUILD_MODE via stream must NOT inject the divergent framing")
+                .doesNotContain("DIVERGENT EXPLORATION");
+        assertThat(systemContent).as("BUILD_MODE via stream must replace (not append to) the original prompt")
+                .doesNotContain("base system prompt");
+        // mutation-RED: strip prepareMessages in stream override → RED
+    }
+
+    /**
+     * Register a provider whose {@link StubModelClient} captures the messages passed to {@code stream()}
+     * (for stream-path content-IFF). {@code invoke} returns a probe (unused on the stream path but
+     * required by BaseModelClient abstract).
+     *
+     * @param provider unique provider name
+     * @return capture sink for the messages the BaseModelClient.stream received
+     */
+    private static AtomicReference<List<?>> registerStreamCaptureProvider(String provider) {
+        DefaultModelClientFactories.ensureRegistered();
+        AtomicReference<List<?>> streamedMessages = new AtomicReference<>();
+        Model.registerFactory(new Model.ModelClientFactory() {
+            @Override
+            public String providerName() {
+                return provider;
+            }
+
+            @Override
+            public BaseModelClient create(ModelRequestConfig r, ModelClientConfig c) {
+                return new StubModelClient(r, c) {
+                    @Override
+                    public AssistantMessage invoke(Object messages, Object tools, Float temperature, Float topP,
+                            String model, Integer maxTokens, String stop, BaseOutputParser outputParser,
+                            Float timeout, Map<String, Object> kwargs) {
+                        return probeMessage();
+                    }
+
+                    @Override
+                    public Iterator<AssistantMessageChunk> stream(Object messages, Object tools, Float temperature,
+                            Float topP, String model, Integer maxTokens, String stop, BaseOutputParser outputParser,
+                            Float timeout, Map<String, Object> kwargs) {
+                        streamedMessages.set(messages instanceof List ? (List<?>) messages : List.of());
+                        return List.of(AssistantMessageChunk.builder().content("streamed").build()).iterator();
+                    }
+                };
+            }
+        });
+        return streamedMessages;
+    }
+
+    // ================================================================
     // Phase-prompt config-consumer-reachability 双向（铁律⑰，Phase2b-C1）
     // =================================================================
     // 三 setter（setPlanSystemPrompt / setBuildSystemPrompt / setFirstPrinciplesPrompt）双向 IFF：
