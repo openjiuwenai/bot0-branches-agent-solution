@@ -92,8 +92,8 @@ class ReconciliationFailureCodeTest {
     }
 
     private static final class StubRepository extends AgentRegistryRepositoryStub {
-        private final long lastRevision;
         boolean logicalStaleMarked;
+        private final long lastRevision;
 
         StubRepository(long lastRevision) {
             this.lastRevision = lastRevision;

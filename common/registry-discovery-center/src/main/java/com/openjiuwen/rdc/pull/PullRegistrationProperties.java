@@ -420,5 +420,4 @@ public class PullRegistrationProperties {
             this.weight = weight;
         }
     }
-
 }

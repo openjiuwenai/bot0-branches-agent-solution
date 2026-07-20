@@ -81,6 +81,7 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
     private static final String SAMPLE_ENDPOINT = "https://agent.example/agent";
     private static final String SERVICE_ID = ServiceIdCodec.derive(SAMPLE_ENDPOINT);
     private static final String INSTANCE_ID = InstanceIdCodec.derive(SAMPLE_ENDPOINT);
+    private static final ObjectMapper TEST_MAPPER = new ObjectMapper();
 
     @BeforeAll
     static void bootPostgresAndRestrictedRole() throws Exception {
@@ -384,10 +385,11 @@ class Pr389RlsAndRecoveryFeedbackLoopTest {
 
     // ---- helpers ---------------------------------------------------------
 
-    private static final ObjectMapper TEST_MAPPER = new ObjectMapper();
-
     /**
      * FEAT-016: {@code service_id} is host-only; {@code instance_id} is host-port.
+     *
+     * @param repo repo
+     * @param card card
      */
     private static void upsertCard(AgentRegistryRepository repo, AgentRegistryEntry card) {
         // REQ-2026-006: serviceId is server-derived from endpointUrl. The
