@@ -1,9 +1,15 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.security;
 
 import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
 
 /**
  * Tenant-scoped caller authorization per Feat-015 0711 §5.1.6.
+ *
+ * @since 0.1.0
  */
 public interface CallerAuthorizationPolicy {
 

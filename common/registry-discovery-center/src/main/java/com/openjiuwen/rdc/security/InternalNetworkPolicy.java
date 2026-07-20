@@ -1,13 +1,19 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.security;
 
 import java.net.InetAddress;
-import java.net.URI;
 import java.net.UnknownHostException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Restricts Agent Card fetch targets to configured CIDR allowlists (0711 §5.1.3).
+ *
+ * @since 0.1.0
  */
 public final class InternalNetworkPolicy {
 

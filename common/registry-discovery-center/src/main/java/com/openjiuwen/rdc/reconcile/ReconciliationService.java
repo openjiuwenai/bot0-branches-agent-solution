@@ -1,14 +1,15 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
 
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.card.AgentCardFetcher;
 import com.openjiuwen.rdc.card.CardDigest;
 import com.openjiuwen.rdc.card.RouteTargetDeriver;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.InstanceKey;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.ReconcilePendingCommand;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.ReconcileUpsertCommand;
+import com.openjiuwen.rdc.model.AgentIdCodec;
 import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEvent;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEventType;
@@ -17,8 +18,12 @@ import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.deployment.SourceRevisionConflictException;
 import com.openjiuwen.rdc.model.deployment.SourceRevisionGapException;
-import com.openjiuwen.rdc.model.AgentIdCodec;
 import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.InstanceKey;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.ReconcilePendingCommand;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.ReconcileUpsertCommand;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +38,8 @@ import java.util.Set;
 /**
  * Reconciles {@link DeploymentDiscoveryProvider} snapshots with the registry
  * index (Feat-015 0711 §5.1.3–5.1.5).
+ *
+ * @since 0.1.0
  */
 public final class ReconciliationService {
 

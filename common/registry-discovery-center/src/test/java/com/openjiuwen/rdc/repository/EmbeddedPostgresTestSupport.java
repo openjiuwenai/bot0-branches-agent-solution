@@ -1,7 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.repository;
 
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
+
+import java.io.IOException;
 
 import javax.sql.DataSource;
 
@@ -28,7 +35,7 @@ public final class EmbeddedPostgresTestSupport {
                     if (postgres != null) {
                         postgres.close();
                     }
-                } catch (Exception ignored) {
+                } catch (IOException | RuntimeException | Error ignored) {
                     // best-effort JVM shutdown cleanup
                 }
             }, "embedded-postgres-shutdown"));

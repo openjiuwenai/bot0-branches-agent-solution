@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.time.Instant;
@@ -8,6 +12,8 @@ import java.util.Objects;
  * {@code AgentCardCandidate}). Candidates are deduplicated by Card identity
  * and version — they do not expose instance identifiers, health, or route
  * references (those belong to FEAT-016).
+ *
+ * @since 0.1.0
  */
 public final class DiscoveryCandidate {
 

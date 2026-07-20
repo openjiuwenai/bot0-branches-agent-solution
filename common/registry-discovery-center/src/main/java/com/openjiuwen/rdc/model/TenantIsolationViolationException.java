@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 /**
@@ -7,6 +11,8 @@ package com.openjiuwen.rdc.model;
  *
  * <p>Authority: ADR-0160 + HD3-003. Kept as a distinct type for backward
  * compatibility with existing audit outcome labels.
+ *
+ * @since 0.1.0
  */
 public class TenantIsolationViolationException extends RegistryFailureException {
 

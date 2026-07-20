@@ -1,22 +1,28 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.MalformedRouteHandleException;
-import com.openjiuwen.rdc.tenant.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+import com.openjiuwen.rdc.tenant.TenantContext;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Feedback-loop tests for PR #389 review issue #1: security-boundary failure

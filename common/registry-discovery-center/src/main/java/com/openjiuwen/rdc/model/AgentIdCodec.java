@@ -1,8 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 /**
  * Derives stable {@code agent_id} from deployment service identity per
  * Feat-015 0711 scope §5.1.1 ({@code tenantId + serviceId}).
+ *
+ * @since 0.1.0
  */
 public final class AgentIdCodec {
 

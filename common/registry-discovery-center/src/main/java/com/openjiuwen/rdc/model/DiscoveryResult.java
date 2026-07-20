@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.util.List;
@@ -5,6 +9,8 @@ import java.util.Objects;
 
 /**
  * Structured discovery response (Feat-015 0711 scope §3 {@code DiscoveryResult}).
+ *
+ * @since 0.1.0
  */
 public record DiscoveryResult(
         DiscoveryOutcome outcome,

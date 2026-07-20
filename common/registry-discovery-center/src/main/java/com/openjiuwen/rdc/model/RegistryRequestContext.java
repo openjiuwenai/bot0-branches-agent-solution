@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.time.Instant;
@@ -6,6 +10,8 @@ import java.util.Objects;
 /**
  * Unified governance context for discovery and trusted route resolution
  * (Feat-015 0711 scope §3 {@code RegistryRequestContext}).
+ *
+ * @since 0.1.0
  */
 public record RegistryRequestContext(
         String tenantId,

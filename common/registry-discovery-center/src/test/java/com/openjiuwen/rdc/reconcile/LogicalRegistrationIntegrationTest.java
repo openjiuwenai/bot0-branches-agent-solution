@@ -1,36 +1,42 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.rdc.card.AgentCardFetcher;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
-import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
-import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
 import com.openjiuwen.rdc.model.AgentIdCodec;
+import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.DiscoveryOutcome;
+import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.Freshness;
 import com.openjiuwen.rdc.model.RegistrationStatus;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
-import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
+import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import javax.sql.DataSource;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Integration tests for logical AgentCardRegistration catalog: multi-instance dedup,

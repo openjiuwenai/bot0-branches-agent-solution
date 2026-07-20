@@ -1,6 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.pull;
 
 import com.openjiuwen.rdc.model.FrameworkType;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +25,8 @@ import java.util.Map;
  * <p>HTTP client timeouts are code-defaulted (not exposed as config keys)
  * to prevent operator misconfiguration that could block bootstrap:
  * connect 5s, read 10s (OQ-3 H2 resolution).
+ *
+ * @since 0.1.0
  */
 @Component
 @ConfigurationProperties(prefix = "rdc.pull-registration")

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model.deployment;
 
 import java.time.Instant;
@@ -6,6 +10,8 @@ import java.util.Objects;
 /**
  * Provider observation of a single physical runtime instance (Feat-015 0711
  * {@code DeploymentInstanceObservation}).
+ *
+ * @since 0.1.0
  */
 public record DeploymentInstanceObservation(
         String tenantId,

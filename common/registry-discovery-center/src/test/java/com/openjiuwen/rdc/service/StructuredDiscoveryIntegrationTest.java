@@ -1,10 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.controller.MvpRegistryController;
 import com.openjiuwen.rdc.controller.RegistryObjectMapper;
-import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
@@ -13,16 +17,18 @@ import com.openjiuwen.rdc.model.DiscoveryOutcome;
 import com.openjiuwen.rdc.model.DiscoveryResult;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
+import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import javax.sql.DataSource;
 import java.time.Instant;
 import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Integration tests for Feat-015 0713 structured {@code DiscoverAgentCards}.

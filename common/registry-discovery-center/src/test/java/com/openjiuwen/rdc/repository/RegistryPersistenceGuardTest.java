@@ -1,11 +1,16 @@
-package com.openjiuwen.rdc.repository;
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 
-import com.openjiuwen.rdc.model.RegistryUnavailableException;
-import org.junit.jupiter.api.Test;
-import org.springframework.dao.DataAccessResourceFailureException;
+package com.openjiuwen.rdc.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.openjiuwen.rdc.model.RegistryUnavailableException;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 class RegistryPersistenceGuardTest {
 
@@ -15,7 +20,10 @@ class RegistryPersistenceGuardTest {
             throw new DataAccessResourceFailureException("connection refused");
         }))
                 .isInstanceOf(RegistryUnavailableException.class)
-                .satisfies(ex -> assertThat(((RegistryUnavailableException) ex).failure().failureCode())
-                        .isEqualTo("REGISTRY_UNAVAILABLE"));
+                .satisfies(ex -> {
+                    if (ex instanceof RegistryUnavailableException unavailable) {
+                        assertThat(unavailable.failure().failureCode()).isEqualTo("REGISTRY_UNAVAILABLE");
+                    }
+                });
     }
 }

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -32,7 +36,7 @@ final class ContinuationTokenCodec {
             return payload.offset();
         } catch (IllegalArgumentException ex) {
             throw ex;
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             throw new IllegalArgumentException("malformed continuation token", ex);
         }
     }

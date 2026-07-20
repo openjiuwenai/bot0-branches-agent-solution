@@ -1,16 +1,23 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.card.AgentCardFetcher;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
-
-import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
+
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,8 +27,6 @@ import java.security.KeyPairGenerator;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Card fetch failure codes during reconciliation (0713 §5.1.6).

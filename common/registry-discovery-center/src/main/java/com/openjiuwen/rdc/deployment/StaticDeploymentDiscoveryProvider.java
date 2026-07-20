@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.deployment;
 
 import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
@@ -10,14 +14,16 @@ import com.openjiuwen.rdc.model.deployment.Readiness;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Static config-backed {@link DeploymentDiscoveryProvider} with snapshot diff watch.
+ *
+ * @since 0.1.0
  */
 public final class StaticDeploymentDiscoveryProvider implements DeploymentDiscoveryProvider {
 

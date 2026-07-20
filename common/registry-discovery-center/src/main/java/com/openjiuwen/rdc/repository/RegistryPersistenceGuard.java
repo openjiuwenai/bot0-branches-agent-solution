@@ -1,12 +1,19 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.repository;
 
 import com.openjiuwen.rdc.model.RegistryUnavailableException;
+
 import org.springframework.dao.DataAccessException;
 
 import java.util.function.Supplier;
 
 /**
  * Maps persistence failures to structured {@link RegistryUnavailableException}.
+ *
+ * @since 0.1.0
  */
 public final class RegistryPersistenceGuard {
 

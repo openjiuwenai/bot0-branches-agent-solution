@@ -1,11 +1,16 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.controller;
 
-import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentCardDto;
-import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
 import com.openjiuwen.rdc.model.RouteResolution;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.service.AgentDiscoveryService;
+import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
+
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +32,8 @@ import java.util.UUID;
  *
  * <p>Logical Agent Card discovery remains on {@link MvpRegistryController}
  * ({@code POST /api/registry/discover}).
+ *
+ * @since 0.1.0
  */
 @RestController
 @RequestMapping("/api/registry")

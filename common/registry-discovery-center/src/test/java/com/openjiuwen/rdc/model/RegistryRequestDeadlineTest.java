@@ -1,12 +1,16 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
-
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
 
 class RegistryRequestDeadlineTest {
 
@@ -22,7 +26,10 @@ class RegistryRequestDeadlineTest {
         assertThatThrownBy(() -> RegistryRequestDeadline.enforce(
                 Instant.now().minusSeconds(1), "trace-deadline"))
                 .isInstanceOf(DeadlineExceededException.class)
-                .satisfies(ex -> assertThat(((DeadlineExceededException) ex).failure().failureCode())
-                        .isEqualTo("DEADLINE_EXCEEDED"));
+                .satisfies(ex -> {
+                    if (ex instanceof DeadlineExceededException deadline) {
+                        assertThat(deadline.failure().failureCode()).isEqualTo("DEADLINE_EXCEEDED");
+                    }
+                });
     }
 }

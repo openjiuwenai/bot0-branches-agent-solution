@@ -1,24 +1,29 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.InstanceIdCodec;
+import com.openjiuwen.rdc.model.ServiceIdCodec;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.model.AgentRegistryEntry;
-import com.openjiuwen.rdc.model.ServiceIdCodec;
-import com.openjiuwen.rdc.model.InstanceIdCodec;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.AbstractDataSource;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Feedback-loop tests for PR #389 review issues #3 and #4 — both are

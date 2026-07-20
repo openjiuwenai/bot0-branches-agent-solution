@@ -1,26 +1,33 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.card.AgentCardFetcher;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
-import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
+
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import javax.sql.DataSource;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Mirrors {@link ReconciliationScheduler}: provider registers watch before reconcile.
@@ -73,7 +80,7 @@ class ReconciliationWatchIntegrationTest {
             if (server != null) {
                 try {
                     server.shutdown();
-                } catch (Exception ignored) {
+                } catch (IOException ignored) {
                     // Best-effort isolation between tests.
                 }
             }

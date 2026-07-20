@@ -1,24 +1,29 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
-import com.openjiuwen.rdc.repository.RegistryPersistenceGuard;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
-import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.DiscoveryConstraints;
 import com.openjiuwen.rdc.model.DiscoveryQuery;
 import com.openjiuwen.rdc.model.DiscoveryResult;
 import com.openjiuwen.rdc.model.HealthRequirement;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.model.InstanceIdCodec;
+import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
 import com.openjiuwen.rdc.model.RegistryEntryInvalidException;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
-import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.ServiceIdCodec;
-import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.RegistryPersistenceGuard;
+import com.openjiuwen.rdc.service.AgentDiscoveryService;
+
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,9 +34,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import java.time.Instant;
 
 /**
  * HTTP entry point for agent registry push/pull registration, deregister (agent /
@@ -66,6 +71,8 @@ import java.time.Instant;
  *
  * <p>Authority: ADR-0160 decisions 4 / 6 / 7 + HD3-001 / 002 / 003 / 006 +
  * REQ-2026-006 (multi-instance) + Feat-015 discover.
+ *
+ * @since 0.1.0
  */
 @RestController
 @RequestMapping("/api/registry")
@@ -246,8 +253,6 @@ public class MvpRegistryController {
         }
     }
 
-    // Exception → HTTP status mapping: see RegistryApiExceptionHandler.
-
     // ===== helpers =====
 
     /**
@@ -294,8 +299,10 @@ public class MvpRegistryController {
 
     /**
      * Shared context fields for discover request bodies.
-     */
-    public record DiscoverRequest(
+ *
+ * @since 0.1.0
+ */
+public record DiscoverRequest(
             ContextRequest context,
             String agentId,
             String serviceId,

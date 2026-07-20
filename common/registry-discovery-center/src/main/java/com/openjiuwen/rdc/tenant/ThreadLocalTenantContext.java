@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.tenant;
 
 import com.openjiuwen.rdc.tenant.TenantContext;
@@ -22,6 +26,8 @@ import java.util.Objects;
  *
  * <p>Phase-2 swap path: a reactor-context-backed implementation may replace
  * this class without touching the {@link TenantContext} port or any caller.
+ *
+ * @since 0.1.0
  */
 public final class ThreadLocalTenantContext implements TenantContext {
 

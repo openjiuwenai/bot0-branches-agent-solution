@@ -1,14 +1,19 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.model.DiscoveryConstraints;
 import com.openjiuwen.rdc.model.DiscoveryQuery;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ContinuationTokenCodecTest {
 

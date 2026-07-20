@@ -1,14 +1,23 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.card;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.SignatureException;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.HashMap;
@@ -17,6 +26,8 @@ import java.util.Objects;
 
 /**
  * Optional Agent Card JWS-style signature verification (0711 {@code AGENT_CARD_SIGNATURE_INVALID}).
+ *
+ * @since 0.1.0
  */
 public final class AgentCardSignatureVerifier {
 
@@ -70,12 +81,13 @@ public final class AgentCardSignatureVerifier {
                 }
             }
             return VerificationResult.invalid("no trusted signature matched");
-        } catch (Exception ex) {
+        } catch (JsonProcessingException | InvalidKeyException | NoSuchAlgorithmException | SignatureException ex) {
             return VerificationResult.invalid(ex.getMessage());
         }
     }
 
-    private boolean verifyOne(JsonNode signatureNode, byte[] payloadBytes) throws Exception {
+    private boolean verifyOne(JsonNode signatureNode, byte[] payloadBytes)
+            throws JsonProcessingException, InvalidKeyException, NoSuchAlgorithmException, SignatureException {
         String protectedHeader = textOrNull(signatureNode, "protectedHeader");
         String signatureValue = textOrNull(signatureNode, "signature");
         if (protectedHeader == null || signatureValue == null) {
@@ -97,7 +109,7 @@ public final class AgentCardSignatureVerifier {
         return verifier.verify(base64UrlDecode(signatureValue));
     }
 
-    private static String unsignedPayload(JsonNode root) throws Exception {
+    private static String unsignedPayload(JsonNode root) throws JsonProcessingException {
         ObjectNode copy = root.deepCopy();
         copy.remove("signatures");
         return MAPPER.writeValueAsString(copy);
@@ -121,7 +133,7 @@ public final class AgentCardSignatureVerifier {
             byte[] decoded = Base64.getDecoder().decode(normalized);
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             return keyFactory.generatePublic(new X509EncodedKeySpec(decoded));
-        } catch (Exception ex) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException ex) {
             throw new IllegalStateException("failed to parse trusted signer public key", ex);
         }
     }

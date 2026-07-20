@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
 import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
@@ -17,6 +21,8 @@ import java.util.List;
  *
  * <p>Feat-015: structured {@link #discover(DiscoveryQuery)} for logical Agent Card
  * catalog discovery.
+ *
+ * @since 0.1.0
  */
 public interface AgentDiscoveryService {
 

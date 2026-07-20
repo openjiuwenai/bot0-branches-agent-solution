@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.health;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
@@ -7,16 +13,16 @@ import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Feedback-loop tests for PR #389 review issue #2 — the probe scheduler
@@ -75,7 +81,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
         if (agentServer != null) {
             try {
                 agentServer.shutdown();
-            } catch (Exception ignored) {
+            } catch (IOException ignored) {
                 // best-effort — in-process server is reclaimed at JVM exit
             }
         }
@@ -123,7 +129,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
                         "tenant-A", "agent-fast", "fast-host-8080", "fast-host-8080", fastUrl)));
 
         MvpHealthProbeScheduler scheduler = new MvpHealthProbeScheduler(
-                repo, observability, /* staleBeforeMs = */ 1_000L, /* scanLimit = */ 100);
+                repo, observability, 1_000L, 100);
 
         long start = System.currentTimeMillis();
         scheduler.probeOnlineAgents();

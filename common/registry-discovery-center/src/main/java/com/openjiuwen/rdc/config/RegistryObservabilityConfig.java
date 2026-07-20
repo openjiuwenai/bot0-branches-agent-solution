@@ -1,8 +1,13 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.config;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
@@ -45,6 +50,8 @@ import java.util.concurrent.TimeUnit;
  * <p>Each {@code observeXxx} method emits BOTH the audit line and the
  * metric update for one operation, so callers make a single call per op
  * (no risk of audit-without-metric or vice versa).
+ *
+ * @since 0.1.0
  */
 @Configuration
 public class RegistryObservabilityConfig {
@@ -90,7 +97,7 @@ public class RegistryObservabilityConfig {
                         + "latencyMs={} resultCount={}",
                 traceId, tenantId, agentId == null ? PLACEHOLDER : agentId,
                 PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
-                resultCount < 0 ? PLACEHOLDER : resultCount);
+                resultCount < 0 ? PLACEHOLDER : String.valueOf(resultCount));
         recordMetrics("discover", outcome, latencyMs);
     }
 

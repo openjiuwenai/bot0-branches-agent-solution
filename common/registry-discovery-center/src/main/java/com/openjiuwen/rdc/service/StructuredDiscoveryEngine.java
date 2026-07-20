@@ -1,11 +1,13 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.card.AgentCardValidator;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.DiscoveryFilter;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
 import com.openjiuwen.rdc.model.AgentIdCodec;
 import com.openjiuwen.rdc.model.DiscoveryCandidate;
 import com.openjiuwen.rdc.model.DiscoveryConstraints;
@@ -16,6 +18,9 @@ import com.openjiuwen.rdc.model.Freshness;
 import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
 import com.openjiuwen.rdc.model.RegistrationInvalidException;
 import com.openjiuwen.rdc.model.RegistrationStatus;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.DiscoveryFilter;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -202,7 +207,7 @@ final class StructuredDiscoveryEngine {
                     }
                 }
                 matched.add(row);
-            } catch (Exception ignored) {
+            } catch (JsonProcessingException ignored) {
                 // skip malformed card snapshots
             }
         }
@@ -275,7 +280,7 @@ final class StructuredDiscoveryEngine {
         }
         try {
             MAPPER.readTree(row.a2aAgentCardJson());
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             throw new RegistrationInvalidException(
                     "REGISTERED logical registration has malformed card snapshot: serviceId="
                             + row.serviceId(),

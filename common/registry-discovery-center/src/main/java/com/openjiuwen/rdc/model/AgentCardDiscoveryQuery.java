@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.util.Objects;
@@ -5,6 +9,8 @@ import java.util.Objects;
 /**
  * Structured Agent Card discovery request (Feat-015 0713
  * {@code AgentCardDiscoveryQuery}).
+ *
+ * @since 0.1.0
  */
 public final class AgentCardDiscoveryQuery {
 

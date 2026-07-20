@@ -1,14 +1,20 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.card;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.net.URI;
-import java.util.Locale;
 
 /**
  * Derives internal route target JSON and contract version from provider base URL + Card.
+ *
+ * @since 0.1.0
  */
 public final class RouteTargetDeriver {
 
@@ -43,7 +49,7 @@ public final class RouteTargetDeriver {
                 target.put("protocolVersion", contractVersion);
             }
             return new DerivedRoute(MAPPER.writeValueAsString(target), contractVersion);
-        } catch (Exception ex) {
+        } catch (JsonProcessingException | IllegalArgumentException ex) {
             throw new IllegalArgumentException("failed to derive route target", ex);
         }
     }
@@ -57,7 +63,7 @@ public final class RouteTargetDeriver {
             JsonNode root = MAPPER.readTree(cardJson);
             JsonNode name = root.get("name");
             return name != null && name.isTextual() ? name.asText() : "unknown-agent";
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             return "unknown-agent";
         }
     }

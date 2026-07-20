@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.tenant;
 
 /**
@@ -15,6 +19,8 @@ package com.openjiuwen.rdc.tenant;
  *
  * <p>Pure Java — no Spring / JDBC / Jackson / Consul imports (ADR-0160
  * decision 1).
+ *
+ * @since 0.1.0
  */
 public interface TenantContext {
 

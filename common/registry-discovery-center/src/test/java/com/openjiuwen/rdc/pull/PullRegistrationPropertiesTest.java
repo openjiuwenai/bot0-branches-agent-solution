@@ -1,9 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.pull;
 
-import com.openjiuwen.rdc.model.FrameworkType;
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import com.openjiuwen.rdc.model.FrameworkType;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link PullRegistrationProperties} — default values +

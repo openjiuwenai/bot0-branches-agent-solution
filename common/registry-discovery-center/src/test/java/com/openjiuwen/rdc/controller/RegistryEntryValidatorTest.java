@@ -1,11 +1,16 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.controller;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.RegistryEntryInvalidException;
-import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 
 class RegistryEntryValidatorTest {
 
@@ -42,7 +47,9 @@ class RegistryEntryValidatorTest {
     }
 
     private static void assertThatFailureCode(Throwable ex, String code) {
-        org.assertj.core.api.Assertions.assertThat(
-                ((RegistryEntryInvalidException) ex).failure().failureCode()).isEqualTo(code);
+        org.assertj.core.api.Assertions.assertThat(ex).isInstanceOf(RegistryEntryInvalidException.class);
+        if (ex instanceof RegistryEntryInvalidException invalid) {
+            org.assertj.core.api.Assertions.assertThat(invalid.failure().failureCode()).isEqualTo(code);
+        }
     }
 }

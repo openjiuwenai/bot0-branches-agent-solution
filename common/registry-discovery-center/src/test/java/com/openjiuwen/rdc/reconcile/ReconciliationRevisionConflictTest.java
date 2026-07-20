@@ -1,24 +1,29 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
 
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.card.AgentCardFetcher;
-import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.rdc.card.AgentCardFetcher;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceObservation;
 import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
 import com.openjiuwen.rdc.model.deployment.Readiness;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class ReconciliationRevisionConflictTest {
 

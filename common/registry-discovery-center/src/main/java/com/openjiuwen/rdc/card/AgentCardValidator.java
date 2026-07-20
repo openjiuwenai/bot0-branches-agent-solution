@@ -1,5 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.card;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -9,6 +14,8 @@ import java.util.Locale;
 /**
  * Validates standard A2A Agent Card JSON per Feat-015 0711 scope §5.1.2.
  * Runtime-only — uses Jackson, not part of SPI.
+ *
+ * @since 0.1.0
  */
 public final class AgentCardValidator {
 
@@ -65,7 +72,7 @@ public final class AgentCardValidator {
             return ValidationResult.valid(
                     root.path("version").asText(null),
                     contractVersion);
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             return ValidationResult.invalid("AGENT_CARD_INVALID", ex.getMessage());
         }
     }

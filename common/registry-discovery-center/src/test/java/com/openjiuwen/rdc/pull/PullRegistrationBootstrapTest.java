@@ -1,27 +1,32 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.pull;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
+import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 
-import com.openjiuwen.rdc.model.AgentRegistryEntry;
-import com.openjiuwen.rdc.model.FrameworkType;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.SpringApplication;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link PullRegistrationBootstrap} — serial GET + upsert +

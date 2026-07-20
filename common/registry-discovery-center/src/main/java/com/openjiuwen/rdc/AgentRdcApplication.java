@@ -4,8 +4,8 @@
 
 package com.openjiuwen.rdc;
 
-import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.SpringApplication;
 
 /**
  * Standalone entry point for the agent-bus plane (PR #389 review issue #6).

@@ -1,7 +1,12 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.controller;
 
 import com.openjiuwen.rdc.model.RegistryFailure;
 import com.openjiuwen.rdc.model.RegistryFailureException;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,6 +23,8 @@ import java.util.Map;
  * controller — after instance/resolve endpoints moved off
  * {@code MvpRegistryController}, failures such as {@code TENANT_SCOPE_DENIED}
  * otherwise fell through to Spring Boot's default 500 error body.
+ *
+ * @since 0.1.0
  */
 @RestControllerAdvice(basePackageClasses = {
         MvpRegistryController.class,

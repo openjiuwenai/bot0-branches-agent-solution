@@ -1,35 +1,40 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.model.DeadlineExceededException;
 import com.openjiuwen.rdc.model.DiscoveryConstraints;
 import com.openjiuwen.rdc.model.DiscoveryQuery;
-import com.openjiuwen.rdc.model.RegistryRequestContext;
-import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.EntryNotFoundException;
+import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.MalformedRouteHandleException;
-import com.openjiuwen.rdc.model.RouteResolution;
-import com.openjiuwen.rdc.tenant.TenantContext;
-import com.openjiuwen.rdc.security.RdcCardFetchOptions;
+import com.openjiuwen.rdc.model.RegistryRequestContext;
 import com.openjiuwen.rdc.model.RegistryUnavailableException;
-import org.springframework.dao.DataAccessResourceFailureException;
+import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
+import com.openjiuwen.rdc.tenant.TenantContext;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for {@link PgMvpDiscoveryServiceImpl} —
@@ -154,8 +159,11 @@ class PgMvpDiscoveryServiceImplTest {
     void resolve_route_handle_malformed_raises_registry_failure() {
         assertThatThrownBy(() -> discovery.resolveRouteHandle("!!!not-base64!!!", "tenant-A"))
                 .isInstanceOf(MalformedRouteHandleException.class)
-                .satisfies(ex -> assertThat(((MalformedRouteHandleException) ex).failure().failureCode())
-                        .isEqualTo("MALFORMED_ROUTE_HANDLE"));
+                .satisfies(ex -> {
+                    if (ex instanceof MalformedRouteHandleException m) {
+                        assertThat(m.failure().failureCode()).isEqualTo("MALFORMED_ROUTE_HANDLE");
+                    }
+                });
     }
 
     @Test
@@ -164,8 +172,11 @@ class PgMvpDiscoveryServiceImplTest {
 
         assertThatThrownBy(() -> discovery.resolveRouteHandle(handle, "tenant-A"))
                 .isInstanceOf(EntryNotFoundException.class)
-                .satisfies(ex -> assertThat(((EntryNotFoundException) ex).failure().failureCode())
-                        .isEqualTo("ENTRY_NOT_FOUND"));
+                .satisfies(ex -> {
+                    if (ex instanceof EntryNotFoundException e) {
+                        assertThat(e.failure().failureCode()).isEqualTo("ENTRY_NOT_FOUND");
+                    }
+                });
     }
 
     @Test

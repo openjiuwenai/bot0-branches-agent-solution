@@ -1,30 +1,35 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
-
-import com.openjiuwen.rdc.card.AgentCardFetcher;
-import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
-import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
-import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEventConsumer;
-import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
-import com.openjiuwen.rdc.model.FrameworkType;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.NoSuchBeanDefinitionException;
-import org.springframework.beans.factory.ObjectProvider;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import com.openjiuwen.rdc.card.AgentCardFetcher;
+import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
+import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
+import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
+import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEventConsumer;
+import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
+import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
+import org.springframework.beans.factory.ObjectProvider;
+
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * Unit coverage for pluggable {@link DeploymentDiscoveryProvider} wiring in

@@ -1,19 +1,25 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.card;
 
-import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.security.InternalNetworkPolicy;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * Fetches {@code /.well-known/agent-card.json} with security boundaries (0711 §5.1.3).
+ *
+ * @since 0.1.0
  */
 public final class AgentCardFetcher {
 

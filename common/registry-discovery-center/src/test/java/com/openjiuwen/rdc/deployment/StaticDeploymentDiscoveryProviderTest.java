@@ -1,14 +1,19 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.deployment;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEvent;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEventType;
 import com.openjiuwen.rdc.model.deployment.Readiness;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class StaticDeploymentDiscoveryProviderTest {
 

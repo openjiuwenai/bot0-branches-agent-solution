@@ -1,9 +1,15 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.util.Set;
 
 /**
  * Hard constraints for {@link DiscoveryQuery} (Feat-015 0711 scope §5.1.6).
+ *
+ * @since 0.1.0
  */
 public final class DiscoveryConstraints {
 

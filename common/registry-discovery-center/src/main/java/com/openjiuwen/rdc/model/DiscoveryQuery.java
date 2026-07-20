@@ -1,9 +1,15 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.util.Objects;
 
 /**
  * Structured discovery request (Feat-015 0711 scope §3 {@code DiscoveryQuery}).
+ *
+ * @since 0.1.0
  */
 public final class DiscoveryQuery {
 

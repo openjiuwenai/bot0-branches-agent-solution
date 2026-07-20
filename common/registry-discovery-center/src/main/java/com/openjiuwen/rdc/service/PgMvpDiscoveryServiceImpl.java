@@ -1,14 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.repository.RegistryPersistenceGuard;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.EndpointEntry;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.RegistryRow;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.ResolveRow;
-import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
 import com.openjiuwen.rdc.model.AgentCardDto;
-import com.openjiuwen.rdc.service.AgentDiscoveryService;
 import com.openjiuwen.rdc.model.DeadlineExceededException;
 import com.openjiuwen.rdc.model.DiscoveryQuery;
 import com.openjiuwen.rdc.model.DiscoveryResult;
@@ -19,17 +16,25 @@ import com.openjiuwen.rdc.model.MalformedRouteHandleException;
 import com.openjiuwen.rdc.model.RegistryRequestDeadline;
 import com.openjiuwen.rdc.model.RegistryUnavailableException;
 import com.openjiuwen.rdc.model.RouteResolution;
-import com.openjiuwen.rdc.tenant.TenantContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.EndpointEntry;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.RegistryRow;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.ResolveRow;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.RegistryPersistenceGuard;
+import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
+import com.openjiuwen.rdc.service.AgentDiscoveryService;
+import com.openjiuwen.rdc.tenant.TenantContext;
+
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.time.Instant;
 
 /**
  * MVP phase-1 implementation of {@link AgentDiscoveryService} — single
@@ -64,6 +69,8 @@ import java.time.Instant;
  * {@code entry_not_found}); tenant mismatch →
  * {@link TenantIsolationViolationException} (HTTP 400
  * {@code tenant_isolation_violation}).
+ *
+ * @since 0.1.0
  */
 @Primary
 @Service

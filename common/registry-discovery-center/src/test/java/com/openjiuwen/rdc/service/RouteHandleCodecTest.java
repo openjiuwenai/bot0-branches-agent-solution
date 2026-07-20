@@ -1,9 +1,13 @@
-package com.openjiuwen.rdc.service;
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 
-import org.junit.jupiter.api.Test;
+package com.openjiuwen.rdc.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Round-trip + baseline-breaking rejection tests for {@link RouteHandleCodec}

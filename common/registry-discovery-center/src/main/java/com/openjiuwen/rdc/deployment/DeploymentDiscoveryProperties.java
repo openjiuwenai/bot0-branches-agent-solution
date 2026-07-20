@@ -1,6 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.deployment;
 
 import com.openjiuwen.rdc.model.FrameworkType;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +16,8 @@ import java.util.Map;
 
 /**
  * Configuration for Feat-015 P1 deployment discovery + reconciliation.
+ *
+ * @since 0.1.0
  */
 @Component
 @ConfigurationProperties(prefix = "rdc.deployment-discovery")

@@ -1,30 +1,19 @@
 /*
- * Copyright (C) 2026 Huawei Technologies Co., Ltd.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.rdc.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.card.AgentCardFetcher;
+import com.openjiuwen.rdc.controller.RegistryObjectMapper;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
 import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 import com.openjiuwen.rdc.security.RegistrySecurityProperties;
-import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.controller.RegistryObjectMapper;
-import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 import com.openjiuwen.rdc.tenant.TenantContext;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -85,6 +74,8 @@ import javax.sql.DataSource;
  * them.
  *
  * <p>Authority: ADR-0160 decision 7 + REQ-2026-002 VR-2 / VR-7.
+ *
+ * @since 0.1.0
  */
 @Configuration
 public class RegistryRuntimeBeanConfig {

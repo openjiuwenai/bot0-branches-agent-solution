@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.time.Instant;
@@ -5,6 +9,8 @@ import java.util.Objects;
 
 /**
  * Enforces {@link RegistryRequestContext#deadline()} per Feat-015 0711 §5.1.8.
+ *
+ * @since 0.1.0
  */
 public final class RegistryRequestDeadline {
 

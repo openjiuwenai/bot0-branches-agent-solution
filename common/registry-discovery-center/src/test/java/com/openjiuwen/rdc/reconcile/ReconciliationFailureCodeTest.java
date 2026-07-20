@@ -1,18 +1,22 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.card.AgentCardFetcher;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
-
 import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
 import com.openjiuwen.rdc.model.deployment.SourceRevisionGapException;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class ReconciliationFailureCodeTest {
 

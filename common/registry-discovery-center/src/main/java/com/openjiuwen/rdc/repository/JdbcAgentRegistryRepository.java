@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.repository;
 
 import com.openjiuwen.rdc.card.CardDigest;
@@ -10,14 +14,14 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import javax.sql.DataSource;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.function.Supplier;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Supplier;
+import javax.sql.DataSource;
 
 /**
  * Postgres JDBC adapter for {@code agent_registry_mvp} (Stage 4 / ADR-0160
@@ -79,6 +83,8 @@ import java.util.function.Supplier;
  * (Rule R-C.c); RLS is the defence-in-depth fallback. The table owner
  * (superuser) bypasses RLS, so superuser-backed integration tests are
  * unaffected.
+ *
+ * @since 0.1.0
  */
 public final class JdbcAgentRegistryRepository implements AgentRegistryRepository {
 
@@ -614,8 +620,8 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("agentId", agentId)
                             .addValue("serviceId", serviceId));
             for (java.util.Map<String, Object> row : rows) {
-                String capabilityVersion = (String) row.get("capability_version");
-                String cardDigest = (String) row.get("card_digest");
+                String capabilityVersion = stringColumn(row, "capability_version");
+                String cardDigest = stringColumn(row, "card_digest");
                 if (capabilityVersion != null && cardDigest != null) {
                     // Logical catalog keys by deployment service id (= stable agentId per AgentIdCodec).
                     markLogicalRegistrationStaleCard(
@@ -787,6 +793,21 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         });
     }
 
+    private static String stringColumn(java.util.Map<String, Object> row, String column) {
+        Object value = row.get(column);
+        return value instanceof String s ? s : null;
+    }
+
+    private static java.util.UUID uuidColumn(Object value) throws java.sql.SQLException {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof java.util.UUID uuid) {
+            return uuid;
+        }
+        throw new java.sql.SQLException("expected UUID column value, got " + value.getClass().getName());
+    }
+
     /** Row mapper for {@link RegistryRow} — single instance, stateless. */
     private static final class RegistryRowMapper
             implements org.springframework.jdbc.core.RowMapper<RegistryRow> {
@@ -820,8 +841,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                 return List.of();
             }
             Object raw = arr.getArray();
-            if (raw instanceof String[]) {
-                String[] caps = (String[]) raw;
+            if (raw instanceof String[] caps) {
                 return caps.length == 0 ? List.of() : List.copyOf(Arrays.asList(caps));
             }
             return List.of();
@@ -921,7 +941,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("registrationStatus", registrationStatus)
                             .addValue("freshness", freshness)
                             .addValue("a2aAgentCard", a2aAgentCardJson),
-                    (rs, rowNum) -> (java.util.UUID) rs.getObject("registration_id"));
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
             return ids.get(0);
         });
     }
@@ -947,7 +967,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("tenantId", command.tenantId())
                             .addValue("serviceId", command.deploymentServiceId())
                             .addValue("instanceId", command.instanceId()),
-                    (rs, rowNum) -> (java.util.UUID) rs.getObject("registration_id"));
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
             java.util.UUID previousRegistrationId = prior.isEmpty() ? null : prior.get(0);
 
             String sql = "INSERT INTO " + SOURCE_REF_TABLE + " ("
@@ -995,7 +1015,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("tenantId", tenantId)
                             .addValue("serviceId", deploymentServiceId)
                             .addValue("instanceId", instanceId),
-                    (rs, rowNum) -> (java.util.UUID) rs.getObject("registration_id"));
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
             jdbc.update("DELETE FROM " + SOURCE_REF_TABLE
                             + " WHERE tenant_id = :tenantId AND service_id = :serviceId AND instance_id = :instanceId",
                     new MapSqlParameterSource()
@@ -1097,7 +1117,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                             .addValue("tenantId", tenantId)
                             .addValue("serviceId", deploymentServiceId)
                             .addValue("cardDigest", cardDigest),
-                    (rs, rowNum) -> (java.util.UUID) rs.getObject("registration_id"));
+                    (rs, rowNum) -> uuidColumn(rs.getObject("registration_id")));
             if (ids.isEmpty()) {
                 return false;
             }
@@ -1226,7 +1246,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
                         .addValue("agentId", agentId)
                         .addValue("instanceId", instanceId)));
         for (java.util.Map<String, Object> row : rows) {
-            String deploymentServiceId = (String) row.get("deployment_service_id");
+            String deploymentServiceId = stringColumn(row, "deployment_service_id");
             if (deploymentServiceId == null || deploymentServiceId.isBlank()) {
                 deploymentServiceId = agentId;
             }
@@ -1243,7 +1263,7 @@ public final class JdbcAgentRegistryRepository implements AgentRegistryRepositor
         public LogicalRegistrationRow mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
             java.sql.Timestamp lastValidated = rs.getTimestamp("last_validated_at");
             return new LogicalRegistrationRow(
-                    (java.util.UUID) rs.getObject("registration_id"),
+                    uuidColumn(rs.getObject("registration_id")),
                     rs.getString("tenant_id"),
                     rs.getString("agent_id"),
                     rs.getString("service_id"),

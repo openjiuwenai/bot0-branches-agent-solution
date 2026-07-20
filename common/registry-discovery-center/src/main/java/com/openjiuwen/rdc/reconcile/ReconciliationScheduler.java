@@ -1,13 +1,18 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.reconcile;
 
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.card.AgentCardFetcher;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,6 +34,8 @@ import java.util.Objects;
  * {@code rdc.deployment-discovery.instances} is non-empty, the built-in static
  * yml provider. Observations without a matching yml binding use
  * {@code rdc.deployment-discovery.binding-defaults}.
+ *
+ * @since 0.1.0
  */
 @Component
 @ConditionalOnProperty(prefix = "rdc.deployment-discovery", name = "enabled", havingValue = "true")

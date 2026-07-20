@@ -1,9 +1,16 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.card;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.security.RdcCardFetchOptions;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -12,8 +19,6 @@ import java.security.KeyPairGenerator;
 import java.security.Signature;
 import java.util.Base64;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class AgentCardSignatureVerifierTest {
 
@@ -75,7 +80,9 @@ class AgentCardSignatureVerifierTest {
     }
 
     private static String signedCard(KeyPair keyPair) throws Exception {
-        ObjectNode root = (ObjectNode) MAPPER.readTree(unsignedCardJson());
+        if (!(MAPPER.readTree(unsignedCardJson()) instanceof ObjectNode root)) {
+            throw new IllegalStateException("expected object node");
+        }
         String unsignedPayload = MAPPER.writeValueAsString(root);
 
         Signature signer = Signature.getInstance("SHA256withRSA");

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.config;
 
 import org.springframework.context.annotation.Bean;
@@ -23,6 +27,8 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
  * <p>Authority: ADR-0160 + PR #389 review issue #6 (agent-bus is a runnable
  * Spring Boot application) + PR #389 review issue #2 (probe scheduler thread
  * isolation).
+ *
+ * @since 0.1.0
  */
 @Configuration
 @EnableScheduling

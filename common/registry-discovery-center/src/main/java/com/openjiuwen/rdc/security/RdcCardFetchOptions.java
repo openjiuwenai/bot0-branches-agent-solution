@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.security;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -14,6 +18,8 @@ import java.util.Map;
  *
  * <p>Domain-specific naming (mutual TLS material, dial/response deadlines, signer
  * PEMs, fetch CIDRs) — intentionally not shaped like a generic REST client SSL bean.
+ *
+ * @since 0.1.0
  */
 @Component
 @ConfigurationProperties(prefix = "rdc.registry.card-fetch")

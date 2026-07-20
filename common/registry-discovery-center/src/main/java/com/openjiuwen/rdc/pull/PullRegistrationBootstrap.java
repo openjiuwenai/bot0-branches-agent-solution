@@ -1,12 +1,18 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.pull;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.ServiceIdCodec;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -130,7 +136,7 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
         } catch (RuntimeException ex) {
             outcome = "error";
             throw ex;
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             outcome = "error";
             throw new IllegalStateException("pull-bootstrap failed: " + ex.getMessage(), ex);
         } finally {

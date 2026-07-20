@@ -1,12 +1,12 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.service;
 
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
-import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.DiscoveryFilter;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
-import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
-import com.openjiuwen.rdc.security.RegistrySecurityProperties;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
 import com.openjiuwen.rdc.model.DiscoveryOutcome;
@@ -14,7 +14,15 @@ import com.openjiuwen.rdc.model.DiscoveryQuery;
 import com.openjiuwen.rdc.model.RegistrationInvalidException;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
 import com.openjiuwen.rdc.model.TenantIsolationViolationException;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.DiscoveryFilter;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository.LogicalRegistrationRow;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
+import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
+import com.openjiuwen.rdc.security.RegistrySecurityProperties;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,9 +30,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Feat-015 logical Agent Card discovery semantics without embedded PostgreSQL.
@@ -57,8 +62,11 @@ class AgentCardDiscoverySemanticsTest {
 
         assertThatThrownBy(() -> discover())
                 .isInstanceOf(RegistrationInvalidException.class)
-                .satisfies(ex -> assertThat(((RegistrationInvalidException) ex).failure().failureCode())
-                        .isEqualTo("REGISTRATION_INVALID"));
+                .satisfies(ex -> {
+                    if (ex instanceof RegistrationInvalidException invalid) {
+                        assertThat(invalid.failure().failureCode()).isEqualTo("REGISTRATION_INVALID");
+                    }
+                });
     }
 
     @Test
@@ -113,8 +121,11 @@ class AgentCardDiscoverySemanticsTest {
 
         assertThatThrownBy(() -> discover())
                 .isInstanceOf(TenantIsolationViolationException.class)
-                .satisfies(ex -> assertThat(((TenantIsolationViolationException) ex).failure().failureCode())
-                        .isEqualTo("TENANT_SCOPE_DENIED"));
+                .satisfies(ex -> {
+                    if (ex instanceof TenantIsolationViolationException violation) {
+                        assertThat(violation.failure().failureCode()).isEqualTo("TENANT_SCOPE_DENIED");
+                    }
+                });
     }
 
     @Test

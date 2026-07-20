@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -9,13 +15,13 @@ import com.openjiuwen.rdc.model.DiscoveryOutcome;
 import com.openjiuwen.rdc.model.DiscoveryResult;
 import com.openjiuwen.rdc.model.Freshness;
 import com.openjiuwen.rdc.model.RegistrationStatus;
-import org.junit.jupiter.api.Test;
+
 import tools.jackson.databind.json.JsonMapper;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Guards {@code POST /discover} JSON shape for Feat-015 0713 logical candidates.

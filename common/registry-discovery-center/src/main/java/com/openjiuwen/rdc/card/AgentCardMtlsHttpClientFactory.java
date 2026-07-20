@@ -1,16 +1,26 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.card;
 
 import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyManagementException;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 import java.util.Objects;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 
 /**
  * Builds {@link HttpClient} for Agent Card fetch, optionally with mTLS client credentials.
@@ -57,12 +67,14 @@ final class AgentCardMtlsHttpClientFactory {
                     tmf != null ? tmf.getTrustManagers() : null,
                     null);
             return sslContext;
-        } catch (Exception ex) {
+        } catch (IOException | KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException
+                | CertificateException | KeyManagementException ex) {
             throw new IllegalStateException("failed to configure mTLS for Agent Card fetch", ex);
         }
     }
 
-    private static KeyStore loadStore(String path, String secret, String format) throws Exception {
+    private static KeyStore loadStore(String path, String secret, String format)
+            throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException {
         KeyStore store = KeyStore.getInstance(format != null ? format : "PKCS12");
         try (InputStream in = Files.newInputStream(Path.of(path))) {
             store.load(in, secretChars(secret));

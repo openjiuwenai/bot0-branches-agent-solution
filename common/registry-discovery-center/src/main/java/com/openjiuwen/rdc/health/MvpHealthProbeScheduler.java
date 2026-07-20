@@ -1,9 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.health;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.ProbeTarget;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
+
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -70,6 +75,8 @@ import java.util.UUID;
  *
  * <p>Authority: ADR-0160 + HD3-004 + Rule R-C.c (Stage 24 RLS wiring) +
  * PR #389 review issue #2 (timeout / trailing-slash / thread isolation).
+ *
+ * @since 0.1.0
  */
 @Component
 public class MvpHealthProbeScheduler {
@@ -88,9 +95,7 @@ public class MvpHealthProbeScheduler {
                                    @Value("${agent-bus.registry.mvp.probe-stale-before-ms:5000}") long staleBeforeMs,
                                    @Value("${agent-bus.registry.mvp.probe-scan-limit:200}") int scanLimit) {
         this(repository, observability, staleBeforeMs, scanLimit,
-                defaultRequestFactory(
-                        /* connectTimeoutMs = */ 2_000,
-                        /* readTimeoutMs = */ 2_000));
+                defaultRequestFactory(2_000, 2_000));
     }
 
     /**

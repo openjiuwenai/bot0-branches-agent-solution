@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.util.Objects;
@@ -40,6 +44,8 @@ import java.util.Objects;
  *
  * <p>Hand-written builder (no Lombok) so the {@code spi.registry} package
  * stays pure Java (ADR-0160 decision 1).
+ *
+ * @since 0.1.0
  */
 public final class AgentCardDto {
 

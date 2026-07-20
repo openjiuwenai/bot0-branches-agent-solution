@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.security;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -10,6 +14,8 @@ import java.util.Set;
 
 /**
  * Security-related registry configuration (caller allowlist).
+ *
+ * @since 0.1.0
  */
 @Component
 @ConfigurationProperties(prefix = "rdc.registry.security")

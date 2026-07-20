@@ -1,29 +1,35 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.controller.MvpRegistryController;
-import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
 import com.openjiuwen.rdc.health.MvpHealthProbeScheduler;
-import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
-import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.AgentCardDto;
+import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.RouteResolution;
+import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
+import com.openjiuwen.rdc.service.PgMvpDiscoveryServiceImpl;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
-import javax.sql.DataSource;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import javax.sql.DataSource;
 
 /**
  * End-to-end integration test for the Stage 4 agent registry MVP (RB5),
@@ -83,9 +89,7 @@ class AgentRegistryEndToEndIntegrationTest {
                 repository, discovery, observability, new com.fasterxml.jackson.databind.ObjectMapper(),
                 new com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties());
         scheduler = new MvpHealthProbeScheduler(
-                repository, observability,
-                /* staleBeforeMs = */ 1_000L,
-                /* scanLimit = */ 200);
+                repository, observability, 1_000L, 200);
     }
 
     @AfterAll

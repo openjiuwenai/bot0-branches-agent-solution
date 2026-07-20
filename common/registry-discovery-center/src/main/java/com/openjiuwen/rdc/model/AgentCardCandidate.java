@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
 
 import java.time.Instant;
@@ -7,6 +11,8 @@ import java.util.Objects;
  * Single logical Agent Card discovery candidate (Feat-015 0713
  * {@code AgentCardCandidate}). Does not expose instance identifiers, health,
  * or route references (FEAT-016).
+ *
+ * @since 0.1.0
  */
 public final class AgentCardCandidate {
 

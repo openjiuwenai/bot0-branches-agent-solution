@@ -1,8 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model.deployment;
 
 /**
  * Deployment fact source port (Feat-015 0711 {@code DeploymentDiscoveryProvider}).
  * Pure Java — no Spring / JDBC imports.
+ *
+ * @since 0.1.0
  */
 public interface DeploymentDiscoveryProvider {
 

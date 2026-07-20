@@ -1,16 +1,22 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.card;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.rdc.security.RdcCardFetchOptions;
+
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class AgentCardFetcherTest {
 
@@ -108,7 +114,7 @@ class AgentCardFetcherTest {
             java.security.KeyPair keyPair = generator.generateKeyPair();
             String encoded = java.util.Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
             return "-----BEGIN PUBLIC KEY-----\n" + encoded + "\n-----END PUBLIC KEY-----";
-        } catch (Exception ex) {
+        } catch (java.security.NoSuchAlgorithmException ex) {
             throw new IllegalStateException(ex);
         }
     }

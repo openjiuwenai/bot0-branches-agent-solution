@@ -1,13 +1,21 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.pull;
 
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
-import com.openjiuwen.rdc.model.FrameworkType;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,8 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end integration test for {@link PullRegistrationBootstrap} against a

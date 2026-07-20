@@ -1,12 +1,17 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.security;
-
-import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
-import org.junit.jupiter.api.Test;
-
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.openjiuwen.rdc.model.CallerNotAuthorizedException;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 class CallerAuthorizationPolicyTest {
 

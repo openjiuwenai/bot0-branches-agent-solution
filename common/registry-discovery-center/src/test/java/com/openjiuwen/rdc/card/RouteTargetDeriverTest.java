@@ -1,9 +1,13 @@
-package com.openjiuwen.rdc.card;
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 
-import org.junit.jupiter.api.Test;
+package com.openjiuwen.rdc.card;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
 
 class RouteTargetDeriverTest {
 
