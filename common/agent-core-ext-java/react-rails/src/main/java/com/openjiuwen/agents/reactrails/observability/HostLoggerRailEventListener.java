@@ -36,7 +36,8 @@ public class HostLoggerRailEventListener implements RailEventListener {
                 LOG.warning("[{}] Exit-3 degraded: {}", rail, fe.details());
             }
         } else if (event instanceof RailEvent.SteeringEvent se) {
-            LOG.info("[{}] Exit-2 steering (source={}): {}", rail, se.source(), se.hintExcerpt());
+            LOG.info("[{}] Exit-2 steering (source={}, queueBound={}): {}",
+                    rail, se.source(), se.queueBound(), se.hintExcerpt());
         } else if (event instanceof RailEvent.VerifyEvent ve) {
             LOG.debug("[{}] verify verdict (passed={}, violations={})",
                     rail, ve.passed(), ve.violationCount());

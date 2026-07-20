@@ -8,6 +8,7 @@ import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.agents.reactrails.observability.RailEvent;
 import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.agents.reactrails.replan.ReplanRail;
+import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.agents.reactrails.types.Violation;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
@@ -140,7 +141,8 @@ public class CriteriaReplanBridgeRail extends AgentRail {
                     String hint = buildCorrectionHint(violations);
                     ctx.pushSteering(hint);
                     RailTelemetry.current().fire(new RailEvent.SteeringEvent(
-                            RAIL, "CRITERIA", hint.substring(0, Math.min(80, hint.length()))));
+                            RAIL, "CRITERIA", hint.substring(0, Math.min(80, hint.length())),
+                            ctx.hasSteeringQueue()));
                 }
             }
         } else {
@@ -201,7 +203,13 @@ public class CriteriaReplanBridgeRail extends AgentRail {
                 sb.append("  ").append(v.reason()).append(LINE_SEPARATOR);
             }
         }
-        sb.append("如需调整当前分析方法或方向，请调用 __replan__ 工具。");
+        // Note (issue #16, Phase1 B): this gradient hint is dead code today — hasGradient is always
+        // false because no react-rails verifier produces isPartial metadata yet. When a future
+        // GradientVerifier activates this branch, gate the __replan__ line on
+        // ReplanTool.isReachable(ctx) (thread ctx through buildCorrectionHint/buildGradientHint)
+        // and fall back to a tool-agnostic hint, mirroring PreCompletionChecklistRail's COVERAGE
+        // branch. Left as a constant reference now so single-source renaming already holds.
+        sb.append("如需调整当前分析方法或方向，请调用 ").append(ReplanTool.TOOL_NAME).append(" 工具。");
         return sb.toString();
     }
 

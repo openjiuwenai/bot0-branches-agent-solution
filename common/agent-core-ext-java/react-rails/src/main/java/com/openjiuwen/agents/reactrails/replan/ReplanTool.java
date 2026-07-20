@@ -6,9 +6,13 @@ package com.openjiuwen.agents.reactrails.replan;
 
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.foundation.tool.ToolCard;
+import com.openjiuwen.core.foundation.tool.schema.ToolInfo;
 import com.openjiuwen.core.runner.Runner;
 import com.openjiuwen.core.runner.resourcemanager.ResourceMgr;
+import com.openjiuwen.core.singleagent.AbilityManager;
+import com.openjiuwen.core.singleagent.BaseAgent;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
+import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 
 import java.util.Iterator;
 import java.util.List;
@@ -114,5 +118,39 @@ public class ReplanTool extends Tool {
         ResourceMgr resourceMgr = Runner.resourceMgr();
         resourceMgr.addTool(tool, null);
         return tool;
+    }
+
+    /**
+     * Runtime reachability probe (issue #16 fail-loud): is {@code __replan__} visible to the LLM
+     * on this agent's {@link AbilityManager}? Rails call this before emitting a
+     * {@code "call __replan__"} prompt line — when it returns false, the rail must fall back to a
+     * tool-agnostic hint instead of guiding the LLM toward an unregistered tool (silent
+     * hallucination → AbilityManager executeSingleToolCall returns null → the LLM sees an error).
+     *
+     * <p><b>Honest boundary (visibility-only)</b>: this probes only the <b>visibility</b> channel
+     * ({@link AbilityManager#listToolInfo()}). The <b>dispatch</b> channel
+     * ({@code Runner.resourceMgr().getTool(...)}) is guaranteed atomically by
+     * {@link #registerOnto(ReActAgent)} — card and executable register together. A consumer that
+     * bypasses {@code registerOnto} and calls {@code abilityManager.add(card)} without
+     * {@code resourceMgr.addTool(...)} would pass this visibility probe but still silent-fail on
+     * dispatch; that misuse is documented in the class javadoc and is out of this probe's scope
+     * (the 3-arg {@code getTool(name, owner, TagMatchStrategy)} dispatch probe is intentionally
+     * not wired here — Simplicity First; registerOnto makes it redundant for the supported path).
+     *
+     * @param ctx callback context (must carry a {@link BaseAgent}; mock ctxs return false honestly)
+     * @return true iff {@code __replan__} is in the agent's AbilityManager tool list
+     */
+    public static boolean isReachable(AgentCallbackContext ctx) {
+        Object agent = ctx.getAgent();
+        if (!(agent instanceof BaseAgent)) {
+            return false;
+        }
+        AbilityManager abilityManager = ((BaseAgent) agent).getAbilityManager();
+        for (ToolInfo info : abilityManager.listToolInfo()) {
+            if (TOOL_NAME.equals(info.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
