@@ -43,3 +43,7 @@ MR_*.md
 
 # EDPA-alpha — local exploration, not in MR
 common/agents/edpa-alpha/
+
+# TestRun artifacts — local/manual only, do not commit or merge
+TestRun/
+TestRun.rar
