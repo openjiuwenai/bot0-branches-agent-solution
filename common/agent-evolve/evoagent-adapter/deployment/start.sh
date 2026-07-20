@@ -89,6 +89,19 @@ set +a
 : "${ADAPTER_OUTPUT_RETENTION_DAYS:=30}"
 : "${ADAPTER_OUTPUT_MAX_FILES:=2000}"
 : "${ADAPTER_OUTPUT_MAX_FILE_SIZE:=20MB}"
+# ── 轨迹获取模式 (log 读归档 | standard 读 PG+kafka) + DB/Kafka 配置 ──
+# standard 模式需 ADAPTER_NETWORK=openjiuwen-net 以访问 collector 的 kafka/postgres (容器别名)。
+: "${ADAPTER_TRACE_SOURCE:=log}"
+: "${ADAPTER_DB_TYPE:=postgres}"
+: "${ADAPTER_PG_HOST:=postgres}"
+: "${ADAPTER_PG_PORT:=5432}"
+: "${ADAPTER_PG_DB:=agent_adapter}"
+: "${ADAPTER_PG_USER:=otel_user}"
+: "${ADAPTER_PG_PASSWORD:=otel_password}"
+: "${ADAPTER_KAFKA_BROKERS:=kafka:9092}"
+: "${ADAPTER_KAFKA_TOPIC:=otlp_traces}"
+: "${ADAPTER_KAFKA_GROUP:=agent-adapter}"
+: "${ADAPTER_NETWORK:=}"   # 留空=默认 bridge; standard 模式设 openjiuwen-net
 
 info "配置已加载:"
 info "  HOST_LOG_ROOT    = $HOST_LOG_ROOT"
@@ -156,11 +169,19 @@ fi
 # ── 启动容器 ────────────────────────────────────────────────────────
 info "启动容器 $NAME（镜像: $IMAGE, 端口: $PORT）"
 
+# standard 模式需接入 collector 所在的 docker 网络 (访问 kafka:9092 / postgres:5432)
+NETWORK_OPTS=()
+if [ -n "$ADAPTER_NETWORK" ]; then
+    NETWORK_OPTS=(--network "$ADAPTER_NETWORK")
+    info "接入 docker 网络: $ADAPTER_NETWORK (standard 模式访问 kafka/postgres)"
+fi
+
 docker run -d \
     --name "$NAME" \
     --init \
     "${SECURITY_OPTS[@]}" \
     "${ADD_HOST_OPTS[@]}" \
+    "${NETWORK_OPTS[@]}" \
     -p "${PORT}:8900" \
     -e ADAPTER_HOST="0.0.0.0" \
     -e ADAPTER_PORT=8900 \
@@ -172,6 +193,16 @@ docker run -d \
     -e ADAPTER_OUTPUT_MAX_FILES="$ADAPTER_OUTPUT_MAX_FILES" \
     -e ADAPTER_OUTPUT_MAX_FILE_SIZE="$ADAPTER_OUTPUT_MAX_FILE_SIZE" \
     -e ADAPTER_LOG_LEVEL="${ADAPTER_LOG_LEVEL:-INFO}" \
+    -e ADAPTER_TRACE_SOURCE="$ADAPTER_TRACE_SOURCE" \
+    -e ADAPTER_DB_TYPE="$ADAPTER_DB_TYPE" \
+    -e ADAPTER_PG_HOST="$ADAPTER_PG_HOST" \
+    -e ADAPTER_PG_PORT="$ADAPTER_PG_PORT" \
+    -e ADAPTER_PG_DB="$ADAPTER_PG_DB" \
+    -e ADAPTER_PG_USER="$ADAPTER_PG_USER" \
+    -e ADAPTER_PG_PASSWORD="$ADAPTER_PG_PASSWORD" \
+    -e ADAPTER_KAFKA_BROKERS="$ADAPTER_KAFKA_BROKERS" \
+    -e ADAPTER_KAFKA_TOPIC="$ADAPTER_KAFKA_TOPIC" \
+    -e ADAPTER_KAFKA_GROUP="$ADAPTER_KAFKA_GROUP" \
     -v "$HOST_OUTPUT_DIR:/app/data" \
     -v "$HOST_CONFIG_FILE:/app/agent_adapter_config.yaml" \
     -v "$HOST_LOG_ROOT:/data/logs:ro" \

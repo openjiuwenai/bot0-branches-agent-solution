@@ -2,17 +2,21 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
 
 from agent_adapter.agent_client import AgentClient
 from agent_adapter.config import AdapterConfig
+from agent_adapter.kafka_consumer.consumer import TraceConsumer
 from agent_adapter.managed_doc.registry import ManagedDocRegistry
 from agent_adapter.managed_doc.service import ManagedDocService
 from agent_adapter.managed_doc.task import TaskRegistry
 from agent_adapter.pipeline import Pipeline, create_pipeline_for_agent
+from agent_adapter.repository.factory import make_repository
 from agent_adapter.skill_store_factory import build_skill_store
+from agent_adapter.trace_source.factory import make_trace_source
 
 logger = structlog.get_logger(__name__)
 
@@ -34,6 +38,60 @@ def _build_pipelines(config: AdapterConfig) -> dict[str, Pipeline]:
     for agent_cfg in config.agents:
         pipelines[agent_cfg.name] = create_pipeline_for_agent(agent_cfg, config)
     return pipelines
+
+
+def _output_dirs(config: AdapterConfig) -> dict[str, Path]:
+    """log 模式 TraceSource 所需 agent_name → output_dir 映射。"""
+    if config.agents:
+        return {a.name: Path(a.output_dir) for a in config.agents if a.output_dir}
+    return {"default": Path(config.output_dir)}
+
+
+async def _start_trace_backend(app: FastAPI, config: AdapterConfig) -> None:
+    """standard 模式: 起 repo (连接池+建表) + kafka 消费者 + DbTraceSource。
+
+    log 模式的 LogTraceSource 已在 create_app 同步构建 (不依赖 lifespan), 此处无操作。
+    repo 连接失败是致命的 (无法读轨迹); kafka 消费者启动失败仅告警 (API 读仍可用),
+    兼顾生产鲁棒性与测试 (kafka 不可达时 app 仍启)。
+    """
+    if config.trace_source != "standard":
+        return
+    repo = make_repository(config)
+    await repo.start()
+    await repo.init_schema()
+    app.state.repo = repo
+    app.state.trace_source = make_trace_source(config, repo=repo)
+    consumer = TraceConsumer(
+        repo,
+        brokers=config.kafka_brokers,
+        topic=config.kafka_topic,
+        group_id=config.kafka_group,
+    )
+    try:
+        await consumer.start()
+        app.state.consumer = consumer
+        logger.info(
+            "trace_source_standard_started",
+            db=config.pg_db, topic=config.kafka_topic, group=config.kafka_group,
+        )
+    except Exception:
+        logger.exception(
+            "trace_consumer_start_failed_kafka_unreachable",
+            brokers=config.kafka_brokers, topic=config.kafka_topic,
+        )
+        app.state.consumer = None
+
+
+async def _stop_trace_backend(app: FastAPI) -> None:
+    """shutdown: 停 kafka 消费者 + 关 repo 连接池 (standard 模式)。"""
+    consumer = getattr(app.state, "consumer", None)
+    if consumer is not None:
+        await consumer.stop()
+        app.state.consumer = None
+    repo = getattr(app.state, "repo", None)
+    if repo is not None:
+        await repo.stop()
+        app.state.repo = None
 
 
 def _build_agent_clients(config: AdapterConfig) -> dict[str, AgentClient]:
@@ -97,6 +155,10 @@ async def _lifespan(app: FastAPI):
 
     app.state.poll_task = asyncio.create_task(_poll_loop())
     app.state.cleanup_task = asyncio.create_task(_cleanup_loop())
+
+    # trace backend (log 归档 / standard PG+kafka) —— routes 经 app.state.trace_source 读
+    await _start_trace_backend(app, config)
+
     logger.info("adapter_http_server_started", agent_count=len(pipelines))
     yield
     # Shutdown: cancel the poll loop and cleanup timer
@@ -108,6 +170,7 @@ async def _lifespan(app: FastAPI):
                 await task
             except asyncio.CancelledError:
                 pass
+    await _stop_trace_backend(app)
     # Managed-doc: cancel running apply tasks + await subprocess exit within grace
     managed_doc_service = getattr(app.state, "managed_doc_service", None)
     if managed_doc_service is not None:
@@ -149,6 +212,14 @@ def create_app(config: AdapterConfig) -> FastAPI:
     app.state.managed_doc_service = managed_doc_service
     app.state.pipeline = next(iter(pipelines.values())) if pipelines else None  # backward compat
     app.state.poll_task: asyncio.Task | None = None
+    # log 模式 TraceSource 同步建 (不依赖 lifespan, 兼容不进 lifespan 的 TestClient);
+    # standard 模式 DbTraceSource 由 lifespan 异步建 (需 repo 连接池)。
+    app.state.trace_source = (
+        make_trace_source(config, output_dirs=_output_dirs(config))
+        if config.trace_source == "log" else None
+    )
+    app.state.repo = None  # standard 模式 TraceRepository (lifespan 填充)
+    app.state.consumer = None  # standard 模式 kafka 消费者 (lifespan 填充, 可能为 None)
     app.state._config_lock = asyncio.Lock()  # protect YAML concurrent writes
 
     logger.info(

@@ -22,7 +22,7 @@ RUN for idx in \
     do \
     echo "Trying PyPI index: $idx"; \
     pip install --no-cache-dir -i "$idx" --trusted-host $(echo $idx | awk -F/ '{print $3}') \
-    aiofiles fastapi httpx pydantic-settings pyyaml rich structlog typer uvicorn && \
+    aiofiles aiokafka asyncpg cramjam fastapi httpx pydantic-settings pyyaml rich structlog typer uvicorn && \
     echo "pip install succeeded with: $idx" && \
     break; \
     done
