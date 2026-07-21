@@ -27,6 +27,7 @@ from agent_adapter.sandbox_resolve import (
 from agent_adapter.skill_store import (
     AgentNotFoundError,
     InvalidSkillNameError,
+    SandboxUnavailableError,
     SkillContent,
     SkillNotFoundError,
     SkillRestoreResult,
@@ -125,6 +126,11 @@ class JiuwenBoxSkillStore:
             )
         except JiuwenBoxClientError as exc:
             if exc.status_code == 404:
+                # Same HTTP status for missing file vs dead sandbox — distinguish.
+                if self._agent_sandbox_unavailable(agent_name):
+                    raise SandboxUnavailableError(
+                        f"Sandbox unavailable for agent '{agent_name}'"
+                    ) from exc
                 raise SkillNotFoundError(
                     f"Skill '{skill_name}' not found for agent '{agent_name}'"
                 ) from exc
@@ -330,9 +336,27 @@ class JiuwenBoxSkillStore:
                 log_pattern=self._log_pattern,
             )
         except SandboxResolveError as exc:
-            raise SkillStoreError(str(exc)) from exc
+            raise SandboxUnavailableError(str(exc)) from exc
         self._cached_sandbox_ids[agent_name] = sid
         return sid
+
+    def _agent_sandbox_unavailable(self, agent_name: str) -> bool:
+        """True when there is no ready sandbox or the cached id is no longer ready."""
+        try:
+            sandboxes = self._client.list_sandboxes()
+        except JiuwenBoxClientError:
+            return True
+        ready_ids = {
+            str(item.get("id"))
+            for item in sandboxes
+            if isinstance(item, dict) and str(item.get("phase", "")).lower() == "ready"
+        }
+        if not ready_ids:
+            return True
+        cached = self._cached_sandbox_ids.get(agent_name)
+        if cached is not None and cached not in ready_ids:
+            return True
+        return False
 
     def _remote_root(self, agent_name: str) -> str:
         return (self._agent_remote_dirs.get(agent_name) or self._remote_skills_dir).rstrip("/")

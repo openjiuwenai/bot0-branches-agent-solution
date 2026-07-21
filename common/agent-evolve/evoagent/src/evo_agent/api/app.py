@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     """创建并配置 FastAPI 应用。"""
+    from evo_agent.stdio_utf8 import ensure_utf8_stdio
+
+    ensure_utf8_stdio()
     app = FastAPI(
         title="EvoAgent API",
         description="Skill 文档自动优化服务",

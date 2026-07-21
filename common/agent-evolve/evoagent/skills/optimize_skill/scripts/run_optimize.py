@@ -19,6 +19,7 @@
   - adapter_url: CLI > scenario.yaml > 报错
   - skills: CLI (显式传入时覆盖，含空串) > scenario.yaml optimize=true 列表
   - agent_name: CLI > scenario 名称
+  - epochs / batch_size: CLI 显式传入 > scenario.yaml hyperparams > EvolveConfig
 """
 
 from __future__ import annotations
@@ -33,7 +34,11 @@ from evo_agent.callbacks import ConsoleProgressCallback
 from evo_agent.config import EvolveConfig
 from evo_agent.optimizer_runner import run_optimization
 from evo_agent.scenario.registry import ScenarioRegistry
+from evo_agent.stdio_utf8 import ensure_utf8_stdio
 from evo_agent.types import OptimizeRequest
+
+# 尽早切 UTF-8，避免 Windows GBK 控制台把中文进度打成乱码
+ensure_utf8_stdio()
 
 
 class ResolveParamsError(Exception):
@@ -77,8 +82,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="目标 Agent 名称（默认使用场景名称）",
     )
-    parser.add_argument("--epochs", type=int, default=3, help="优化轮数")
-    parser.add_argument("--batch-size", type=int, default=4, help="每批 case 数")
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=None,
+        help="优化轮数（默认使用 scenario.yaml hyperparams.num_epochs）",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="每批 case 数（默认使用 scenario.yaml hyperparams.batch_size）",
+    )
     return parser.parse_args()
 
 

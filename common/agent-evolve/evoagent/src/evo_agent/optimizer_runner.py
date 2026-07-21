@@ -590,6 +590,7 @@ async def run_optimization(
                 train_split=resolved.train_split,
                 val_split=resolved.val_split,
                 eval_runtime=eval_runtime,
+                evaluator_config=resolved.evaluator_config,
             )
 
         # 5. 构建 LLM
@@ -668,6 +669,8 @@ async def run_optimization(
             num_parallel=resolved.num_parallel,
             trace_max_retries=resolved.trace_max_retries,
             trace_retry_backoff=resolved.trace_retry_backoff,
+            empty_extract_max_attempts=resolved.empty_extract_max_attempts,
+            empty_extract_retry_backoff=resolved.empty_extract_retry_backoff,
             tie_reval_eps=resolved.tie_reval_eps,
             validation_max_case_attempts=resolved.validation_max_case_attempts,
             validation_min_success_ratio=resolved.validation_min_success_ratio,
@@ -1047,4 +1050,7 @@ def _build_model_client_config(config: EvolveConfig) -> ModelClientConfig:
         api_key=config.llm_api_key,
         api_base=config.llm_base_url,
         verify_ssl=False,
+        # DashScope 直连；SKILL.md 变体生成可能超过默认 60s
+        timeout=300.0,
+        max_retries=2,
     )

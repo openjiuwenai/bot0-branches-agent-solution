@@ -1066,6 +1066,7 @@ async def test_runner_api_mode_uses_build_dataset(
         assert call_kwargs["evaluator_prompt"] == "test prompt"
         assert call_kwargs["train_split"] == 0.8
         assert call_kwargs["val_split"] == 0.2
+        assert call_kwargs["evaluator_config"] == {"type": "metric"}
 
 
 @pytest.mark.asyncio

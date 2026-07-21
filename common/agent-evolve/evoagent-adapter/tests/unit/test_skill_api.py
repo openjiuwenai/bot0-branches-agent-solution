@@ -112,6 +112,7 @@ class TestSkillsApi:
         data = response.json()
         assert data["success"] is True
         assert data["skill_name"] == "demo_skill"
+        assert isinstance(data.get("revision"), str) and len(data["revision"]) == 64
 
         skill_path = tmp_path / "skills" / "edp_agent" / "demo_skill" / "SKILL.md"
         assert skill_path.read_text(encoding="utf-8") == "# Updated\n"

@@ -25,6 +25,7 @@ from agent_adapter.skill_store import (
 )
 from agent_adapter.skill_store import (
     InvalidSkillNameError,
+    SandboxUnavailableError,
     SkillNotFoundError,
     SkillStoreProtocol,
 )
@@ -35,10 +36,17 @@ router = APIRouter()
 
 
 def _contract_error(code: str, message: str, status_code: int) -> JSONResponse:
-    """Return adapter-api-contract unified error payload."""
+    """Return adapter-api-contract unified error payload.
+
+    Includes legacy ``detail`` alongside ``error`` so older AdapterClient
+    parsers that only read FastAPI-style ``detail`` keep working.
+    """
     return JSONResponse(
         status_code=status_code,
-        content={"error": {"code": code, "message": message}},
+        content={
+            "error": {"code": code, "message": message},
+            "detail": message,
+        },
     )
 
 
@@ -63,24 +71,35 @@ async def call_agent(
     SSE 行原样转发（StreamingResponse），客户端实时看到中间事件，避免 VA 慢
     时聚合阻塞导致断连。
     """
-    body = await request.json()
-    call_request = AgentCallRequest(**body)
+    from pydantic import ValidationError
+
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        return _contract_error("INVALID_ACTION", "Request body must be valid JSON", 400)
+
+    try:
+        call_request = AgentCallRequest.model_validate(body)
+    except ValidationError as exc:
+        errors = exc.errors()
+        first = errors[0] if errors else {}
+        loc = ".".join(str(part) for part in first.get("loc", ())) or "body"
+        msg = first.get("msg", "Invalid request parameters")
+        return _contract_error("INVALID_ACTION", f"{loc}: {msg}", 400)
 
     agent_clients: dict = request.app.state.agent_clients
 
     # Check if agent exists at all (in pipelines)
     pipelines: dict = request.app.state.pipelines
     if agent_name not in pipelines:
-        return JSONResponse(
-            status_code=404,
-            content={"detail": f"Agent '{agent_name}' 不存在"},
-        )
+        return _contract_error("AGENT_NOT_FOUND", f"Agent '{agent_name}' 不存在", 404)
 
     # Check if agent has call proxy enabled (agent_url configured)
     if agent_name not in agent_clients:
-        return JSONResponse(
-            status_code=400,
-            content={"detail": f"Agent '{agent_name}' 未配置 agent_url，不支持调用中转"},
+        return _contract_error(
+            "INVALID_ACTION",
+            f"Agent '{agent_name}' 未配置 agent_url，不支持调用中转",
+            400,
         )
 
     client = agent_clients[agent_name]
@@ -176,6 +195,7 @@ async def skills_action(request: Request) -> JSONResponse:
             payload: dict = {
                 "success": result.success,
                 "skill_name": result.skill_name,
+                "revision": result.revision,
             }
             if result.message:
                 payload["message"] = result.message
@@ -187,6 +207,10 @@ async def skills_action(request: Request) -> JSONResponse:
         return _contract_error("AGENT_NOT_FOUND", str(exc), 404)
     except SkillNotFoundError as exc:
         return _contract_error("SKILL_NOT_FOUND", str(exc), 404)
+    except SandboxUnavailableError as exc:
+        # Map to INTERNAL_ERROR 500 (not SKILL_NOT_FOUND) so callers can
+        # distinguish sandbox/downstream failure from a missing skill file.
+        return _contract_error("INTERNAL_ERROR", str(exc), 500)
     except InvalidSkillNameError as exc:
         return _contract_error("INVALID_ACTION", str(exc), 400)
     except Exception:

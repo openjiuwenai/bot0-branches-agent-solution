@@ -42,6 +42,10 @@ class SkillNotFoundError(SkillStoreError):
     """Skill directory or SKILL.md missing."""
 
 
+class SandboxUnavailableError(SkillStoreError):
+    """jiuwenbox sandbox missing, not ready, or otherwise unreachable."""
+
+
 class InvalidSkillNameError(SkillStoreError):
     """skill_name failed validation."""
 
