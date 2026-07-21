@@ -21,7 +21,8 @@ public interface DeploymentDiscoveryProvider {
 
     /**
      * Authoritative full snapshot for reconciliation after startup, revision gap,
-     * or periodic refresh.
+     * or periodic refresh. Transport / probe failures should be signaled as
+     * {@link DeploymentSourceException} (mapped to {@code DEPLOYMENT_SOURCE_UNAVAILABLE}).
      *
      * @return result
      * @since 0.1.0

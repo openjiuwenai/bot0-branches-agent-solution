@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.openjiuwen.rdc.card.AgentCardFetcher;
 import com.openjiuwen.rdc.deployment.DeploymentDiscoveryProperties;
 import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
+import com.openjiuwen.rdc.model.deployment.DeploymentSourceException;
 import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
 import com.openjiuwen.rdc.model.deployment.SourceRevisionGapException;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
@@ -86,7 +87,7 @@ class ReconciliationFailureCodeTest {
 
             @Override
             public ListDeploymentInstancesResult listInstances() {
-                throw new TestProbeException("connection refused");
+                throw new DeploymentSourceException("connection refused");
             }
         };
     }
@@ -196,12 +197,6 @@ class ReconciliationFailureCodeTest {
 
         @Override
         public void markRefreshDegraded(String tenantId, String agentId, String serviceId) {
-        }
-    }
-
-    private static final class TestProbeException extends RuntimeException {
-        TestProbeException(String message) {
-            super(message);
         }
     }
 }

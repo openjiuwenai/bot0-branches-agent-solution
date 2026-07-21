@@ -14,6 +14,8 @@ import java.time.Instant;
  * Jackson mixin for logical discovery candidates ({@code agentId()}-style
  * accessors on {@link com.openjiuwen.rdc.model.DiscoveryCandidate} and
  * {@link com.openjiuwen.rdc.model.AgentCardCandidate}).
+ *
+ * @since 0.1.0 (2026)
  */
 
 public abstract class DiscoveryCandidateJacksonMixin {

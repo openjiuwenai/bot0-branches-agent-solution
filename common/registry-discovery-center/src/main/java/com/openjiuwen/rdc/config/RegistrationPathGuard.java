@@ -21,8 +21,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class RegistrationPathGuard implements InitializingBean {
-    private static final Logger LOG = LoggerFactory.getLogger(RegistrationPathGuard.class);
-
     static final String DUAL_ENABLE_MESSAGE =
             "Cannot enable both rdc.pull-registration and rdc.deployment-discovery. "
                     + "pull-registration is deprecated; migrate to rdc.deployment-discovery.instances "
@@ -37,6 +35,8 @@ public class RegistrationPathGuard implements InitializingBean {
             "rdc.registry.card-fetch.target-cidrs is empty — Agent Card fetch allows any host. "
                     + "For production, set private/loopback CIDRs per Feat-015 §5.1.3 "
                     + "(e.g. 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16).";
+
+    private static final Logger LOG = LoggerFactory.getLogger(RegistrationPathGuard.class);
 
     private final PullRegistrationProperties pullRegistration;
     private final DeploymentDiscoveryProperties deploymentDiscovery;

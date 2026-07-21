@@ -13,6 +13,7 @@ import com.openjiuwen.rdc.deployment.StaticDeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.AgentIdCodec;
 import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceObservation;
+import com.openjiuwen.rdc.model.deployment.DeploymentSourceException;
 import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.DiscoveryConstraints;
@@ -306,7 +307,7 @@ class ReconciliationScenarioIntegrationTest {
     }
             @Override
             public ListDeploymentInstancesResult listInstances() {
-                throw new TestProbeException("provider unreachable");
+                throw new DeploymentSourceException("provider unreachable");
             }
         };
     }
@@ -364,11 +365,5 @@ class ReconciliationScenarioIntegrationTest {
         return new JdbcTemplate(dataSource).queryForObject(
                 "SELECT freshness FROM agent_registry_mvp WHERE tenant_id = ? AND instance_id = ?",
                 String.class, TENANT, instanceId);
-    }
-
-    private static final class TestProbeException extends RuntimeException {
-        TestProbeException(String message) {
-            super(message);
-        }
     }
 }

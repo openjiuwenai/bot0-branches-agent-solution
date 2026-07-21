@@ -14,6 +14,7 @@ import com.openjiuwen.rdc.model.deployment.DeploymentDiscoveryProvider;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEvent;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceEventType;
 import com.openjiuwen.rdc.model.deployment.DeploymentInstanceObservation;
+import com.openjiuwen.rdc.model.deployment.DeploymentSourceException;
 import com.openjiuwen.rdc.model.deployment.ListDeploymentInstancesResult;
 import com.openjiuwen.rdc.model.deployment.Readiness;
 import com.openjiuwen.rdc.model.deployment.SourceRevisionConflictException;
@@ -26,7 +27,9 @@ import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.time.Instant;
 import java.util.HashSet;
@@ -125,7 +128,8 @@ public final class ReconciliationService {
             markSourceStale(sourceId);
             return ReconciliationResult.failure(
                     sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
-        } catch (RuntimeException ex) {
+        } catch (DeploymentSourceException | DataAccessException | IllegalArgumentException
+                | IllegalStateException | NullPointerException | UncheckedIOException ex) {
             LOG.warn("reconciliation source {} unavailable: {}", sourceId, ex.getMessage());
             markSourceStale(sourceId);
             return ReconciliationResult.failure(
@@ -155,7 +159,8 @@ public final class ReconciliationService {
             }
             reconcileObservation(obs);
             repository.updateLastProcessedRevision(obs.sourceId(), obs.sourceRevision());
-        } catch (RuntimeException ex) {
+        } catch (DeploymentSourceException | DataAccessException | IllegalArgumentException
+                | IllegalStateException | NullPointerException | UncheckedIOException ex) {
             LOG.warn("reconcileEvent failed for source {}: {}",
                     event != null && event.observation() != null ? event.observation().sourceId() : "?",
                     ex.getMessage(), ex);

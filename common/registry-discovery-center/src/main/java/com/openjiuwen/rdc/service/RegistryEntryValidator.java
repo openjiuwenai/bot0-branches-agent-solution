@@ -18,6 +18,13 @@ public final class RegistryEntryValidator {
     private RegistryEntryValidator() {
     }
 
+    /**
+     * validate.
+     *
+     * @param entry registry entry to validate
+     * @param traceId request trace id for failure mapping
+     * @since 0.1.0 (2026)
+     */
     public static void validate(AgentRegistryEntry entry, String traceId) {
         if (entry == null || !entry.hasRegistryKey()) {
             throw new RegistryEntryInvalidException(
