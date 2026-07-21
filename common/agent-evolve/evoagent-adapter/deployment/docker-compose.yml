@@ -27,6 +27,22 @@ services:
       ADAPTER_LOG_DIR: /data/logs
       ADAPTER_SKILLS_ROOT: /data/skills
       ADAPTER_AGENT_TOKEN: ${ADAPTER_AGENT_TOKEN:-}
+      # ── Agent 轨迹采集（基于 OTel）──
+      # log=读归档日志（默认，零外部依赖）；standard=读 collector 侧 PG+Kafka
+      ADAPTER_TRACE_SOURCE: ${ADAPTER_TRACE_SOURCE:-log}
+      ADAPTER_DB_TYPE: ${ADAPTER_DB_TYPE:-postgres}
+      ADAPTER_PG_HOST: ${ADAPTER_PG_HOST:-postgres}
+      ADAPTER_PG_PORT: ${ADAPTER_PG_PORT:-5432}
+      ADAPTER_PG_DB: ${ADAPTER_PG_DB:-agent_adapter}
+      ADAPTER_PG_USER: ${ADAPTER_PG_USER:-otel_user}
+      ADAPTER_PG_PASSWORD: ${ADAPTER_PG_PASSWORD:-otel_password}
+      ADAPTER_KAFKA_BROKERS: ${ADAPTER_KAFKA_BROKERS:-kafka:9092}
+      ADAPTER_KAFKA_TOPIC: ${ADAPTER_KAFKA_TOPIC:-otlp_traces}
+      ADAPTER_KAFKA_GROUP: ${ADAPTER_KAFKA_GROUP:-agent-adapter}
+      # GET /traces/{conv} 等根 span 的服务端短等待秒数（standard 模式）
+      ADAPTER_TRACE_WAIT_TIMEOUT: ${ADAPTER_TRACE_WAIT_TIMEOUT:-10.0}
+    # standard 模式（ADAPTER_TRACE_SOURCE=standard）需接入 collector 所在的 docker 网络以解析
+    # kafka/postgres 容器别名。启用方式见文件末尾注释块（log 模式无需任何改动）。
     volumes:
       - ${HOST_OUTPUT_DIR}:/app/data
       - ${HOST_CONFIG_FILE:-/opt/agent-adapter/agent_adapter_config.yaml}:/app/agent_adapter_config.yaml
@@ -34,3 +50,15 @@ services:
       - ${HOST_SKILLS_ROOT}:/data/skills
       - ${HOST_AGENTS_ROOT:-/opt/agents/runtime}:/data/agents
     restart: always
+
+# ── standard 模式（轨迹采集读 PG+Kafka）网络接入示例 ──
+# collector（OTel collector + kafka + postgres）由独立 stack 管理，网络预先存在。
+# 切 standard 模式时：在 .env 设 ADAPTER_TRACE_SOURCE=standard，并取消下面两处注释：
+#
+# services:
+#   adapter:
+#     networks:
+#       - openjiuwen-net
+# networks:
+#   openjiuwen-net:
+#     external: true

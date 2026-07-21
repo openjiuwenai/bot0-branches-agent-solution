@@ -12,9 +12,9 @@ def test_trace_config_defaults():
     c = AdapterConfig()
     assert c.trace_source == "log"  # 默认保持现行为
     assert c.db_type == "postgres"
-    assert c.pg_host == "127.0.0.1"
+    assert c.pg_host == "postgres"
     assert c.pg_port == 5432
-    assert c.pg_db
+    assert c.pg_db == "agent_adapter"
     assert c.pg_user
     assert c.kafka_brokers == "kafka:9092"
     assert c.kafka_topic == "otlp_traces"
