@@ -33,6 +33,9 @@ class EvolveConfig(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     optimizer_model: str = "gpt-4o"
     target_model: str = "gpt-4o"
+    # LLM HTTP 调用超时（秒）。大 prompt / 慢模型需调大（对齐 bank 150 / 建议 300）。
+    # openjiuwen Model 默认 60s 易 408。EVO_LLM_TIMEOUT。
+    llm_timeout: float = 300.0
     # ICBC 内网 provider 凭证（仅 llm_provider=="ICBC" 时必填）
     icbc_token: str = ""  # EVO_ICBC_TOKEN（JWT，走 Secret）
     icbc_user_id: str = ""  # EVO_ICBC_USER_ID（固定值）
@@ -85,6 +88,10 @@ class EvolveConfig(BaseSettings):
         default=Path("./workspace/evoagent-control.db"),
         validation_alias="EVOAGENT_CONTROL_DB_PATH",
     )
+    # golden_data 工具的持久化知识库根：离线建 GU 的最终产物（global_understanding/
+    # 下 index.md / system_wide.md / per_skill/<skill>.md 等）落此，多次 build 累积/覆盖。
+    # builder 的 run workspace（中间结果）仍走 artifact_dir，与此分离。EVO_GOLDEN_DATA_DIR。
+    golden_data_dir: Path = Path("./workspace/golden_data")
 
     # ── Wave 8: 平台 API 配置 ──
     adapter_url: str = ""  # EVO_ADAPTER_URL — Adapter sidecar 地址

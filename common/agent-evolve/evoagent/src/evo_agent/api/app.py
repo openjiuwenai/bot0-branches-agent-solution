@@ -8,7 +8,7 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from evo_agent.api.routes import capabilities, evaluate, evaluate_dataset, optimize, scenarios
+from evo_agent.api.routes import capabilities, evaluate, evaluate_dataset, golden_data, optimize, scenarios
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     app.include_router(evaluate.router)
     app.include_router(evaluate_dataset.router)
     app.include_router(capabilities.router)
+    app.include_router(golden_data.router)
 
     @app.exception_handler(RequestValidationError)
     async def stable_request_validation_error(
