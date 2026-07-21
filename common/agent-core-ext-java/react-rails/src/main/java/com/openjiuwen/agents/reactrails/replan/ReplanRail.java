@@ -1,0 +1,142 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.agents.reactrails.replan;
+
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
+import com.openjiuwen.agents.reactrails.state.RailInvocationState;
+import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
+import com.openjiuwen.core.foundation.llm.schema.ToolCall;
+import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
+import com.openjiuwen.core.singleagent.rail.AgentRail;
+import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Beta cognitive rail for ReActAgent — replan counting + over-limit escalation.
+ *
+ * <p>Hooks {@code afterModelCall}: when the LLM calls {@code __replan__} (via
+ * {@link ReplanTool}), increments the replan counter. If count exceeds maxReplan,
+ * escalates to {@code forceFinish(degraded)} — honest terminal, stops the loop.
+ *
+ * <p><b>IFF 契约</b>: replan count ⟺ over-limit escalate. Strip the count increment
+ * → canReplan永远 true →永不 forceFinish → 测试 RED.
+ *
+ * @since 2026-07
+ */
+public class ReplanRail extends AgentRail {
+    /** Result key for whether replan limit was exceeded. */
+    public static final String REPLAN_EXCEEDED_KEY = "replan_exceeded";
+
+    /** Result key for degraded terminal state. */
+    public static final String DEGRADED_KEY = "degraded";
+
+    /** Result key for current replan count. */
+    public static final String REPLAN_COUNT_KEY = "replan_count";
+
+    /** Result key for configured maximum replan count. */
+    public static final String MAX_REPLAN_KEY = "max_replan";
+
+    private final int maxReplan;
+    private final String stateKey = RailInvocationState.newKey(ReplanRail.class);
+
+    /**
+     * 指定最大 replan 次数构造 rail。
+     *
+     * @param maxReplan maximum replan count before degradation
+     */
+    public ReplanRail(int maxReplan) {
+        this.maxReplan = maxReplan;
+    }
+
+    /**
+     * 默认构造，最大 replan 次数取 2。
+     */
+    public ReplanRail() {
+        this(2);
+    }
+
+    /**
+     * Current replan count (test observation).
+     *
+     * @param ctx current invocation callback context
+     * @return current replan count
+     */
+    public int replanCount(AgentCallbackContext ctx) {
+        return state(ctx).replanCount;
+    }
+
+    /**
+     * 公开计数方法 — bridge rail 调用同一计数器。递增 replan 并返回是否超限。
+     * 让 LLM 发起的 __replan__ 和系统发起的 verify-failure retry 共享总预算。
+     *
+     * @param ctx current invocation callback context
+     * @return true if replanCount > maxReplan (超限，应降级)
+     */
+    public boolean incrementAndCheckOverLimit(AgentCallbackContext ctx) {
+        InvocationState state = state(ctx);
+        state.replanCount++;
+        RailTelemetry.current().fire(new RailEvent.ReplanCountEvent(
+                "ReplanRail", state.replanCount, "VERIFY_RETRY", maxReplan));
+        return state.replanCount > maxReplan;
+    }
+
+    /**
+     * 模型回调钩子：检测 __replan__ 调用并计数，超限则 forceFinish 降级终态。
+     *
+     * @param ctx callback context carrying model-call inputs
+     */
+    @Override
+    public void afterModelCall(AgentCallbackContext ctx) {
+        if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
+            return;
+        }
+        if (!(inputs.getResponse() instanceof AssistantMessage msg)) {
+            return;
+        }
+        if (msg.getToolCalls() == null) {
+            return;
+        }
+
+        for (ToolCall tc : msg.getToolCalls()) {
+            if (ReplanTool.TOOL_NAME.equals(tc.getName())) {
+                InvocationState state = state(ctx);
+                state.replanCount++;
+                if (state.replanCount > maxReplan) {
+                    Map<String, Object> degraded = degradedResult(state.replanCount);
+                    ctx.requestForceFinish(degraded);
+                    // ForceFinishEvent 由 ObservingRail 自动 fire（peek source_rail="ReplanRail"）
+                } else {
+                    RailTelemetry.current().fire(new RailEvent.ReplanCountEvent(
+                            "ReplanRail", state.replanCount, "LLM", maxReplan));
+                }
+                // Else(non-over-limit): allow the replan — agent executes ReplanTool
+                // → gets confirmation → tries new strategy
+            }
+        }
+    }
+
+    private InvocationState state(AgentCallbackContext ctx) {
+        return RailInvocationState.get(ctx, stateKey, InvocationState.class, InvocationState::new);
+    }
+
+    private Map<String, Object> degradedResult(int replanCount) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(ObservingRail.SOURCE_RAIL_KEY, "ReplanRail");
+        result.put(REPLAN_EXCEEDED_KEY, true);
+        result.put(DEGRADED_KEY, true);
+        result.put(REPLAN_COUNT_KEY, replanCount);
+        result.put(MAX_REPLAN_KEY, maxReplan);
+        result.put("output", "Replan 次数已达上限 " + maxReplan + "，降级终态");
+        return result;
+    }
+
+    private static final class InvocationState {
+        private int replanCount;
+    }
+}

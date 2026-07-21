@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  registry-discovery-center — Agent Registry & Discovery Center plane.
+
+  Derived from spring-ai-ascend/agent-bus (Stage 4 registry/discovery runtime,
+  ADR-0160). This module retains only the registry/discovery feature set:
+    - com.openjiuwen.rdc.spi.registry          — transport-agnostic SPI
+    - com.openjiuwen.rdc.registry.runtime.*     — Spring Boot runtime
+      (api controller, discovery service, health probe scheduler,
+       JDBC repository, Flyway migration, tenant context)
+
+  Forwarding / ingress / s2c / federation / engine substrates from the
+  original agent-bus module are intentionally NOT shipped here.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.openjiuwen</groupId>
+  <artifactId>registry-discovery-center</artifactId>
+  <version>0.1.0</version>
+  <name>registry-discovery-center</name>
+  <description>Agent Registry &amp; Discovery Center — registry SPI + Spring Boot runtime (JDBC repository, Flyway migration, probe scheduler, discovery service, tenant isolation).</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- Versions pinned explicitly (not managed by spring-boot-starter-parent BOM). -->
+    <flyway.version>11.19.1</flyway.version>
+    <archunit.version>1.4.2</archunit.version>
+    <embedded-postgres.version>2.0.7</embedded-postgres.version>
+    <embedded-postgres-binaries.version>16.2.0</embedded-postgres-binaries.version>
+    <a2a-sdk-spec.version>1.0.0.CR1</a2a-sdk-spec.version>
+    <!-- springdoc-openapi 3.0.x targets Spring Boot 4.x (artifact names like
+         spring-boot-starter-webmvc-test confirm Boot 4 baseline). Pinned
+         explicitly — not managed by spring-boot-starter-parent BOM. -->
+    <springdoc.version>3.0.3</springdoc.version>
+
+
+    <!-- Default off: macOS kern.sysv.shmmni is often 32; parallel class init of
+         EmbeddedPostgres races orphan SHM even with a shared DataSource helper.
+         Opt in with -DjunitParallel=true when SHM headroom is ample. -->
+    <junitParallel>false</junitParallel>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Flyway — pin to the version the migration was authored against.
+        Spring Boot 4.0.5's BOM manages flyway-core, but we keep the
+        explicit pin to survive future Boot upgrades that change Flyway's
+        SQL semantics (RLS / partial index / GENERATED column behavior).
+      -->
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-core</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-database-postgresql</artifactId>
+        <version>${flyway.version}</version>
+      </dependency>
+
+      <!-- ArchUnit for module dependency-direction / purity tests. -->
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit-junit5</artifactId>
+        <version>${archunit.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- Zonky embedded-postgres — real PostgreSQL binary in-process. -->
+      <dependency>
+        <groupId>io.zonky.test</groupId>
+        <artifactId>embedded-postgres</artifactId>
+        <version>${embedded-postgres.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <!--
+        Zonky ships platform binaries only for amd64 / darwin / windows by
+        default; on Linux aarch64 the resolver needs the arm64v8 binary
+        declared explicitly. Both amd64 and arm64v8 are declared so the
+        test suite runs on x86_64 dev hosts and arm64 CI alike.
+      -->
+      <dependency>
+        <groupId>io.zonky.test.postgres</groupId>
+        <artifactId>embedded-postgres-binaries-linux-amd64</artifactId>
+        <version>${embedded-postgres-binaries.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.zonky.test.postgres</groupId>
+        <artifactId>embedded-postgres-binaries-linux-arm64v8</artifactId>
+        <version>${embedded-postgres-binaries.version}</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!--
+      Registry persistence — Spring JdbcTemplate against the
+      agent_registry_mvp table (V2 Flyway migration). Confined to
+      com.openjiuwen.rdc.registry.runtime.persistence.jdbc by
+      AgentBusRegistryJdbcPurityTest.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <!--
+      Registry API + probe scheduler runtime — @SpringBootApplication
+      (AgentBusApplication) + @RestController (MvpRegistryController) +
+      @Scheduled (MvpHealthProbeScheduler). Compile scope so registry-discovery-center
+      boots standalone. Confined to registry.runtime.{api,discovery,health}
+      by AgentBusRegistryJdbcPurityTest.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!--
+      Micrometer Counter / Timer APIs used by RegistryObservabilityConfig.
+      Compile scope (was: provided) because registry-discovery-center boots standalone and
+      must bundle micrometer-core for the observability facade to work
+      without a separate actuator dependency.
+    -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <!--
+      A2A SDK spec — provides org.a2aproject.sdk.spec.AgentCard record type
+      embedded as a field on AgentRegistryEntry. REQ-2026-001: registry entry
+      now carries the A2A standard card as metadata so discovery callers can
+      reach the A2A entry without a separate /.well-known/agent-card.json
+      fetch. Pure-Java record (no Jackson annotations) — does not violate
+      ADR-0160 decision 1 (spi.registry stays pure Java, no Jackson annotation
+      crosses the SPI boundary).
+    -->
+    <dependency>
+      <groupId>org.a2aproject.sdk</groupId>
+      <artifactId>a2a-java-sdk-spec</artifactId>
+      <version>${a2a-sdk-spec.version}</version>
+    </dependency>
+    <!--
+      OpenAPI 3.1 documentation + Swagger UI (REQ-2026-007).
+      springdoc-openapi-starter-webmvc-ui 3.0.x autoconfigures three endpoints:
+        /swagger-ui.html (302 → /swagger-ui/index.html)
+        /v3/api-docs      (OpenAPI 3.1 JSON)
+        /v3/api-docs.yaml (OpenAPI 3.1 YAML)
+      No Spring Security / actuator / profile gate / project-level toggle is
+      added — registry API is unauthenticated and the doc endpoints add no
+      real attack surface (VR-10, prod-exposure decision A). OpenApiConfig
+      provides @Bean OpenAPI metadata; controllers stay annotation-free
+      (springdoc reflects over @RequestMapping at runtime).
+    -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      MockWebServer simulates agent HTTP endpoints for the registry probe
+      scheduler and end-to-end registry IT — same "in-process HTTP server"
+      pattern as embedded-postgres for SQL. Version explicit: not reliably
+      covered by spring-boot-dependencies BOM management; 4.12.0 matches
+      the okhttp already on the classpath.
+    -->
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>mockwebserver</artifactId>
+      <version>4.12.0</version>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      Real-SQL verification. The execution host's Docker daemon pulls every
+      registry through a proxy that requires authentication; embedded-postgres
+      runs the real PostgreSQL binary in-process — same SQL semantics under test
+      (FOR UPDATE SKIP LOCKED, RLS, partial index, CHECK, ON CONFLICT).
+    -->
+    <dependency>
+      <groupId>io.zonky.test</groupId>
+      <artifactId>embedded-postgres</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.zonky.test.postgres</groupId>
+      <artifactId>embedded-postgres-binaries-linux-arm64v8</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!--
+      Legacy jar basename: artifactId is registry-discovery-center, but
+      finalName stays agent-rdc-${project.version} so existing deployment
+      scripts that reference agent-rdc-0.1.0.jar keep working.
+    -->
+    <finalName>agent-rdc-${project.version}</finalName>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <configuration>
+            <excludes>
+              <exclude>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+              </exclude>
+            </excludes>
+          </configuration>
+          <executions>
+            <execution>
+              <goals>
+                <goal>repackage</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <!--
+          Parallel test execution:
+          - forkCount=1 + reuseForks=true keeps a single JVM per module so
+            Spring's ApplicationContext cache survives across test classes.
+          - junit.jupiter.execution.parallel.* runs test CLASSES concurrently
+            inside each JVM (methods stay same_thread to avoid intra-class
+            shared-state races).
+          - Local opt-out: -DjunitParallel=false reverts to sequential.
+        -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <forkCount>1</forkCount>
+            <reuseForks>true</reuseForks>
+            <properties>
+              <configurationParameters>
+                junit.jupiter.execution.parallel.enabled=${junitParallel}
+                junit.jupiter.execution.parallel.mode.default=same_thread
+                junit.jupiter.execution.parallel.mode.classes.default=concurrent
+                junit.jupiter.execution.parallel.config.strategy=fixed
+                junit.jupiter.execution.parallel.config.fixed.parallelism=4
+                junit.jupiter.execution.parallel.config.fixed.max-pool-size=4
+              </configurationParameters>
+            </properties>
+          </configuration>
+        </plugin>
+        <!--
+          Failsafe keeps test CLASSES same-thread within a fork: Spring Boot
+          4.0.5 isn't fully thread-safe at SpringApplication.run()
+          initialization, and two ITs booting contexts concurrently in the
+          same JVM hit ConcurrentModificationException on shared internals.
+        -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <configuration>
+            <includes>
+              <include>**/*IT.java</include>
+            </includes>
+            <forkCount>1</forkCount>
+            <reuseForks>true</reuseForks>
+            <argLine>-Djava.net.useSystemProxies=false</argLine>
+          </configuration>
+          <executions>
+            <execution>
+              <goals>
+                <goal>integration-test</goal>
+                <goal>verify</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

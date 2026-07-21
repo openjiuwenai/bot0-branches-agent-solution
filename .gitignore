@@ -30,6 +30,12 @@ target/
 *.key
 *.pem
 
+# test/ 本地脚本与数据（评测/跑批脚本、人工标注、run 产物、测试 trace/skill）不提交
+test/
+
+# evoagent 运行产物（GU/golden_data/intermediate 等 workspace 产物）
+common/agent-evolve/evoagent/workspace/
+
 # Logs
 *.log
 logs/
@@ -37,3 +43,14 @@ logs/
 # Cache
 .cache/
 *.cache
+
+# MR description working copies (not production code)
+MR_*.md
+
+# EDPA-alpha — local exploration, not in MR
+common/agents/edpa-alpha/
+
+# TestRun artifacts — local/manual only, do not commit or merge
+TestRun/
+TestRun.rar
+/.pipeline/

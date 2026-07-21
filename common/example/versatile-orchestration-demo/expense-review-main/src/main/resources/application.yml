@@ -1,0 +1,32 @@
+server:
+  port: ${EXPENSE_REVIEW_MAIN_PORT:18097}
+
+spring:
+  application:
+    # Drives the A2A card "name". The remote-agents entry below must match the
+    # workflow module's spring.application.name (expense-review).
+    name: expense-review-main
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    agent-id: expense-review-main
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-description: "报销审核主控 ReActAgent — 通过 LLM 决策调用 Expense Review Workflow Agent"
+      streaming: true
+      default-input-modes: ["text"]
+      default-output-modes: ["text"]
+      remote-agents:
+        - name: expense-review
+          url: ${EXPENSE_REVIEW_CARD_URL:http://127.0.0.1:18096}
+
+expense-review-main:
+  model-provider: ${LLM_PROVIDER:openai}
+  api-key: ${LLM_API_KEY:}
+  api-base: ${LLM_API_BASE:http://localhost:4000/v1}
+  model-name: ${LLM_MODEL:gpt-4o-mini}
+  ssl-verify: ${LLM_SSL_VERIFY:true}

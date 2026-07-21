@@ -15,13 +15,37 @@
     <packaging>jar</packaging>
 
     <name>agent-deep-research</name>
-    <description>Deep research DeepAgent library — depends only on agent-core-java, no runtime/Spring</description>
+    <description>Deep research agent — SDK (com.openjiuwen.example.deepresearch.*) + Spring Boot runtime (com.openjiuwen.example.deepresearch.runtime.*)</description>
 
     <dependencies>
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
             <version>${agent-core-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-app</artifactId>
+            <version>${agent-runtime-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+            <version>${agent-runtime-ext-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>4.33.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -33,6 +57,18 @@
                 <configuration>
                     <release>17</release>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.openjiuwen.example.deepresearch.runtime.DeepResearchRuntimeApplication</mainClass>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
             </plugin>
         </plugins>
     </build>

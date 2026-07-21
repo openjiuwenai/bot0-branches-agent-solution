@@ -1,0 +1,57 @@
+server:
+  port: ${SEARCH_AGENT_PORT:18091}
+
+spring:
+  application:
+    name: SearchAgent
+
+openjiuwen:
+  service:
+    handler: agentcore
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "SearchAgent"
+      agent-description: "ReAct web-search sub-agent (Tavily + source-kind reranker)"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "web_search"
+          name: "Web search with source-kind classification"
+          description: "Run one web_search query, classify each hit as official/blog/news/forum, reweight vendor-official hits, return a ranked JSON payload."
+          tags: ["search", "web", "deep-research"]
+          examples: ["豆包 1.6 模型的上下文长度是多少？请给出官方资料。"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+  demo:
+    search-agent:
+      provider: ${LLM_PROVIDER:OpenAI}
+      api-key: ${LLM_API_KEY:}
+      api-base: ${LLM_API_BASE:https://api.deepseek.com}
+      model-name: ${LLM_MODEL:deepseek-chat}
+      ssl-verify: ${LLM_SSL_VERIFY:true}
+      temperature: ${LLM_TEMPERATURE:0.2}
+      top-p: ${LLM_TOP_P:0.8}
+      max-iterations: ${SEARCH_AGENT_MAX_ITERATIONS:4}
+      use-stub: ${SEARCH_AGENT_USE_STUB:false}
+
+logging:
+  level:
+    com.openjiuwen.example.deepresearch.search: DEBUG
+    com.openjiuwen.service.adapters.agentcore: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: stub
+
+openjiuwen:
+  demo:
+    search-agent:
+      use-stub: true

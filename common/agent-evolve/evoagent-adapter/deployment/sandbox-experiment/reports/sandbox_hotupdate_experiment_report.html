@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>沙箱模式开发串讲报告 · EvoAgent 生态与三容器联调</title>
+<style>
+  :root {
+    --bg: #0c1222;
+    --card: #151d2e;
+    --ink: #e8eef8;
+    --muted: #94a3b8;
+    --line: #2a3548;
+    --accent: #5eead4;
+    --accent-dim: #2dd4bf;
+    --accent-soft: #134e4a;
+    --pass: #4ade80;
+    --pass-bg: #14532d66;
+    --warn: #fbbf24;
+    --warn-bg: #42200699;
+    --info: #38bdf8;
+    --info-bg: #0c4a6e66;
+    --code: #0b1020;
+    --toc-bg: #111827ee;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "IBM Plex Sans", "Source Han Sans SC", "PingFang SC", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1000px 480px at 8% -8%, #0f766e33 0%, transparent 55%),
+      radial-gradient(800px 420px at 100% 0%, #1e3a5f55 0%, transparent 50%),
+      radial-gradient(600px 300px at 50% 100%, #312e8155 0%, transparent 45%),
+      var(--bg);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.hero {
+    border: 1px solid var(--line);
+    background: linear-gradient(145deg, #1a2438 0%, #12261f 100%);
+    border-radius: 18px;
+    padding: 28px 32px;
+    margin-bottom: 18px;
+  }
+  .eyebrow { color: var(--accent); font-weight: 600; letter-spacing: .04em; font-size: 13px; text-transform: uppercase; }
+  h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.25; font-family: "IBM Plex Serif", "Source Han Serif SC", Georgia, serif; color: #f8fafc; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .badges { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge {
+    display: inline-block; padding: 7px 13px; border-radius: 999px;
+    background: var(--pass-bg); color: var(--pass); font-weight: 700; font-size: 13px;
+    border: 1px solid #22c55e55;
+  }
+  .badge.info { background: var(--info-bg); color: #7dd3fc; border-color: #38bdf855; }
+  .badge.purple { background: #312e8166; color: #c4b5fd; border-color: #a78bfa55; }
+  nav.toc {
+    background: var(--toc-bg);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+    backdrop-filter: blur(8px);
+  }
+  nav.toc h2 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font-family: inherit;
+  }
+  nav.toc ol {
+    margin: 0;
+    padding-left: 22px;
+    columns: 2;
+    column-gap: 28px;
+  }
+  @media (max-width: 700px) { nav.toc ol { columns: 1; } }
+  nav.toc li { margin: 4px 0; break-inside: avoid; font-size: 14px; }
+  nav.toc a {
+    color: #cbd5e1;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  nav.toc a:hover { color: var(--accent); border-bottom-color: var(--accent-soft); }
+  .part-divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 8px 0 18px;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .part-divider::before,
+  .part-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #2dd4bf55, transparent);
+  }
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+    scroll-margin-top: 20px;
+  }
+  h2 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-family: "IBM Plex Serif", "Source Han Serif SC", Georgia, serif;
+    border-bottom: 2px solid var(--accent-soft);
+    padding-bottom: 8px;
+    color: #f1f5f9;
+  }
+  h3 { margin: 18px 0 8px; font-size: 16px; color: var(--accent-dim); }
+  h3:first-of-type { margin-top: 14px; }
+  p, li { font-size: 15px; color: #dbe4f0; }
+  strong { color: #f8fafc; }
+  .muted { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: #1e293b; color: #e2e8f0; }
+  td { background: #121a2b; color: #cbd5e1; }
+  tr.pass td:first-child { color: var(--pass); font-weight: 700; }
+  code, pre {
+    font-family: "IBM Plex Mono", "JetBrains Mono", Consolas, monospace;
+    font-size: 12.5px;
+  }
+  code { background: #0f172a; color: #99f6e4; padding: 1px 6px; border-radius: 4px; border: 1px solid #334155; }
+  pre {
+    background: var(--code); color: #e2e8f0; padding: 14px 16px; border-radius: 10px;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    border: 1px solid var(--line);
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  .card-mini {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #0f172a;
+  }
+  .card-mini h4 { margin: 0 0 6px; font-size: 14px; color: #f8fafc; }
+  .card-mini ul { margin: 6px 0 0; padding-left: 18px; }
+  .flow {
+    background: #0b1628; border: 1px dashed var(--accent-dim); border-radius: 10px;
+    padding: 14px 16px; font-family: "IBM Plex Mono", Consolas, monospace; font-size: 12.5px;
+    line-height: 1.55; color: #99f6e4; margin: 8px 0;
+  }
+  .callout {
+    background: var(--warn-bg); border-left: 4px solid var(--warn);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14px; color: #fde68a;
+  }
+  .callout.info {
+    background: var(--info-bg); border-left-color: var(--info); color: #bae6fd;
+  }
+  .quote {
+    background: #0f172a; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; margin: 8px 0; font-size: 13.5px; color: #cbd5e1;
+  }
+  .quote .label { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 13px; text-align: center; }
+  a.back-top {
+    position: fixed; right: 20px; bottom: 24px; z-index: 20;
+    background: #1e293bcc; color: var(--accent); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 999px; text-decoration: none; font-size: 13px;
+    backdrop-filter: blur(6px);
+  }
+  a.back-top:hover { background: #334155; }
+  .diagram {
+    background: #0b1628;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 16px;
+    margin: 12px 0 8px;
+    overflow-x: auto;
+  }
+  .diagram-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    min-width: 280px;
+  }
+  .diagram-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+  }
+  .node {
+    background: #152238;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    color: #e2e8f0;
+    font-size: 13px;
+    line-height: 1.45;
+    max-width: 320px;
+  }
+  .node strong { display: block; color: #f8fafc; margin-bottom: 2px; font-size: 13.5px; }
+  .node .sub { color: var(--muted); font-size: 12px; }
+  .node.accent {
+    border-color: #2dd4bf88;
+    background: linear-gradient(160deg, #134e4a55, #152238);
+  }
+  .node.skill {
+    border-color: #38bdf888;
+    background: linear-gradient(160deg, #0c4a6e55, #152238);
+  }
+  .node.host {
+    border-color: #38bdf888;
+    background: linear-gradient(160deg, #0c4a6e55, #152238);
+  }
+  .arrow {
+    color: var(--accent);
+    font-size: 18px;
+    line-height: 1.2;
+    padding: 6px 0;
+    font-family: "IBM Plex Mono", Consolas, monospace;
+  }
+  .arrow-label {
+    color: #94a3b8;
+    font-size: 11.5px;
+    text-align: center;
+    margin-top: -2px;
+    margin-bottom: 4px;
+    font-family: "IBM Plex Mono", Consolas, monospace;
+  }
+  .branch {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    gap: 10px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  @media (max-width: 800px) { .branch { grid-template-columns: 1fr; } }
+  .branch .node { max-width: none; }
+  .steps { display: flex; flex-direction: column; gap: 0; width: 100%; }
+  .step {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #134e4a; color: var(--accent); border: 1px solid #2dd4bf66;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; margin-top: 8px;
+  }
+  .step-body .node { text-align: left; max-width: none; width: 100%; }
+  .step-connector {
+    grid-column: 1;
+    justify-self: center;
+    width: 2px; height: 14px;
+    background: #2dd4bf66;
+  }
+  .compare-ok { background: #134e4a44 !important; }
+  .compare-chg { background: #42200655 !important; }
+  td.tag-vm { color: #fbbf24; font-weight: 600; }
+  td.tag-sb { color: var(--accent); font-weight: 600; }
+  .topo-panel {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 12px 12px;
+    background: #0f172a;
+  }
+  .topo-panel h4 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: #f8fafc;
+    text-align: center;
+  }
+  .topo-panel .diagram {
+    margin: 0 0 10px;
+    padding: 14px 10px;
+  }
+  .topo-panel .node { max-width: none; width: 100%; }
+  .topo-shared {
+    border: 1px dashed #fbbf2488;
+    background: linear-gradient(160deg, #42200655, #152238);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+    color: #fde68a;
+    font-size: 12.5px;
+    line-height: 1.45;
+    width: 100%;
+  }
+  .topo-shared strong { display: block; color: #fbbf24; margin-bottom: 2px; font-size: 13px; }
+  .topo-lane {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  @media (max-width: 600px) { .topo-lane { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Sandbox Mode · Development Briefing Report</div>
+  <h1>沙箱模式开发串讲报告<br/>EvoAgent 生态定位 · 部署改造 · 三容器联调实证</h1>
+  <p class="meta">
+    报告版本：2026-07-13　·　实验时间（UTC）：2026-07-12T13:27:15Z　·　
+    环境：Docker Desktop（Windows → Linux 容器）　·　模型：Qwen/Qwen3.5-9B @ SiliconFlow　·　
+    代码改动范围：仅 EvoAgentAdapter
+  </p>
+  <div class="badges">
+    <span class="badge">实验结论：8 / 8 PASS</span>
+    <span class="badge info">Skill 热更前后对话实证</span>
+    <span class="badge purple">测试交付：tests/sandbox_mode</span>
+  </div>
+</header>
+
+<nav class="toc" id="toc" aria-label="目录">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#sec-evo">1. EvoAgent 与生态定位</a></li>
+    <li><a href="#sec-workflow">2. 整体工作流程</a></li>
+    <li><a href="#sec-problem">3. 问题：旧挂载为何失效</a></li>
+    <li><a href="#sec-deploy">4. 虚拟机 → 沙箱容器改造对比</a></li>
+    <li><a href="#sec-solution">5. 改造方案与实现要点</a></li>
+    <li><a href="#sec-goal">6. 实验目标与验证范围</a></li>
+    <li><a href="#sec-env">7. 实验环境</a></li>
+    <li><a href="#sec-flow">8. 端到端流程</a></li>
+    <li><a href="#sec-result">9. 联调结果与能力验证</a></li>
+    <li><a href="#sec-config">10. 配置说明与兼容性</a></li>
+    <li><a href="#sec-ops">11. 运维要点与边界</a></li>
+    <li><a href="#sec-artifact">12. 产物与复现</a></li>
+    <li><a href="#sec-summary">13. 总结</a></li>
+  </ol>
+</nav>
+
+<div class="part-divider">上篇 · 生态定位与改造方案</div>
+
+<section id="sec-evo">
+  <h2>1. EvoAgent 与生态定位</h2>
+  <h3>1.1 EvoAgent 是什么</h3>
+  <p>
+    <strong>EvoAgent</strong> 是基于 agent-core 的<strong>自进化元 Agent</strong>，面向平台或运维侧提供
+    <strong>Skill 优化编排</strong>能力：接收优化指令后，经 Adapter 远程触发业务对话、采集轨迹、热更 Skill，
+    并输出优化报告。它是 SkillOpt 方案在业务侧的<strong>使用层 / 编排层</strong>，不承载具体业务对话逻辑。
+  </p>
+  <div class="grid2">
+    <div class="card-mini">
+      <h4>核心能力</h4>
+      <ul>
+        <li><strong>Skill 自动优化</strong>：ReflACT 管线（reflect / aggregate / select / apply 等）</li>
+        <li><strong>远程 rollout</strong>：经 Adapter 触发业务 Agent 对话并收集轨迹</li>
+        <li><strong>Skill 热更</strong>：经 Adapter 写回 Skill 正文，支撑下一轮迭代</li>
+        <li><strong>双入口</strong>：CLI（<code>dataset.yaml</code>）与 API（<code>/optimize</code>、SSE 进度）</li>
+      </ul>
+    </div>
+    <div class="card-mini">
+      <h4>边界（不负责）</h4>
+      <ul>
+        <li>企业对话业务逻辑 → 业务 Agent（如 EDPAgent）</li>
+        <li>原始日志结构化 → EvoAgentAdapter</li>
+        <li>Linux 沙箱生命周期 → jiuwenbox</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>1.2 四组件定位</h3>
+  <table>
+    <thead><tr><th>组件</th><th>角色</th><th>典型职责</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>EvoAgent</strong></td>
+        <td>优化编排方</td>
+        <td>下发优化任务；经 Adapter 发起对话、查询 traces、更新 Skill</td>
+      </tr>
+      <tr>
+        <td><strong>EvoAgentAdapter</strong></td>
+        <td>Sidecar 集成面</td>
+        <td>轨迹采集（日志 → JSONL）；调用代理（SSE 转发）；Skill 存储与热更</td>
+      </tr>
+      <tr>
+        <td><strong>EDPAgent</strong> 等业务 Agent</td>
+        <td>业务执行体</td>
+        <td>规则驱动动态规划（DPA）；SysOperation（<code>read_file</code> / shell）；sandbox 模式下在 jiuwenbox 内执行</td>
+      </tr>
+      <tr>
+        <td><strong>jiuwenbox</strong></td>
+        <td>沙箱运行时</td>
+        <td>bwrap + policy 管理沙箱；File API / exec；为业务 Agent 提供隔离文件系统</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>1.3 协作关系</h3>
+  <div class="diagram" role="img" aria-label="生态协作关系">
+    <div class="diagram-col" style="width:100%">
+      <div class="node accent"><strong>EvoAgent</strong><span class="sub">Skill 优化编排 · CLI / API</span></div>
+      <div class="arrow">↓</div>
+      <div class="arrow-label">HTTP：skills · conversations · traces</div>
+      <div class="node host"><strong>EvoAgentAdapter</strong><span class="sub">唯一稳定集成面 · :8900 / :18900</span></div>
+      <div class="arrow">↓</div>
+      <div class="branch">
+        <div class="node"><strong>Pipeline</strong><span class="sub">读挂载日志 → 轨迹</span></div>
+        <div class="node"><strong>AgentClient</strong><span class="sub">SSE 代理 → 业务 Agent</span></div>
+        <div class="node skill"><strong>SkillStore</strong><span class="sub">local 或 jiuwenbox → 热更</span></div>
+      </div>
+      <div class="arrow">↕</div>
+      <div class="diagram-row" style="width:100%">
+        <div class="node" style="flex:1;max-width:none"><strong>EDPAgent</strong><span class="sub">业务对话 · DPA · SysOperation</span></div>
+        <div class="node skill" style="flex:1;max-width:none"><strong>jiuwenbox</strong><span class="sub">sandbox 管理 · 隔离 FS</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="callout info">
+    <strong>关键契约：</strong>EvoAgent 只对接 Adapter HTTP API，不直连业务 Agent 日志或 jiuwenbox。
+    Adapter 是优化侧与运行侧之间的唯一稳定集成面。
+  </div>
+</section>
+
+<section id="sec-workflow">
+  <h2>2. 整体工作流程</h2>
+  <p>以「一次 Skill 优化迭代」为视角，四组件的典型协作顺序如下（§8 给出实验侧具体步骤）。</p>
+  <div class="diagram">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body"><div class="node accent"><strong>启动与注册</strong><span class="sub">EDPAgent 启动 → jiuwenbox 创建 sandbox → 上传/解压 Skill → 注册 SysOperation；日志写出 <code>sandbox_id</code></span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body"><div class="node host"><strong>Adapter 就绪</strong><span class="sub">轮询 <code>process_*.log</code>；若 <code>skill_backend=jiuwenbox</code>，解析 sandbox_id 并装配沙箱 SkillStore</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body"><div class="node"><strong>rollout 对话</strong><span class="sub">EvoAgent → Adapter → EDPAgent；业务在沙箱内 <code>read_file</code> / 执行脚本</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body"><div class="node"><strong>轨迹采集</strong><span class="sub">EDP 写 TAG 日志 → Adapter 增量解析 → EvoAgent 通过 traces API 取回</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body"><div class="node skill"><strong>Skill 热更</strong><span class="sub">EvoAgent → Adapter <code>update_skill</code> → jiuwenbox upload 写沙箱 <code>SKILL.md</code></span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body"><div class="node accent"><strong>优化闭环</strong><span class="sub">EvoAgent 基于 traces 与新 Skill 继续 reflect / apply，输出 OptimizeReport</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sec-problem">
+  <h2>3. 问题：旧挂载为何失效</h2>
+  <div class="grid2">
+    <div class="card-mini">
+      <h4>旧假设：共享宿主机目录</h4>
+      <p class="muted">Adapter / EDP / jiuwenbox 三方 bind 同一 <code>HOST_SKILLS</code>，再由 policy 映射进沙箱。</p>
+      <p>前提：沙箱看到的是<strong>同一块宿主机盘</strong>。</p>
+    </div>
+    <div class="card-mini">
+      <h4>EDP sandbox 实际路径</h4>
+      <p class="muted">启动时本地 zip → <code>upload</code> → 解压到 <code>{SKILL_TARGET_PATH}</code>（默认 <code>/tmp</code>）；因 zip 含 <code>skills/</code> 前缀，skills 根为 <code>{SKILL_TARGET_PATH}/skills</code>（默认 <code>/tmp/skills</code>）。</p>
+      <p>运行时只读<strong>该 sandbox_id 的独立 FS</strong>，改宿主机文件不会进入沙箱。</p>
+    </div>
+  </div>
+  <div class="callout">
+    在「纯 zip 上传、无 skills bind」部署下，Adapter 只写宿主机 skills
+    <strong>无法</strong>热更新沙箱内 Skill，必须改写到 jiuwenbox File API。
+  </div>
+</section>
+
+<section id="sec-deploy">
+  <h2>4. 虚拟机部署 → 沙箱容器改造对比</h2>
+  <p>
+    原<strong>虚拟机 / 裸机 / 共享挂载</strong>部署中，Adapter 与业务 Agent 共用宿主机
+    <code>skills_dir</code> 与 <code>log_dir</code>，Skill 热更即「写共享目录 → 下次 <code>read_file</code> 生效」。
+    当 EDPAgent 开启 <strong>sandbox 模式</strong>（<code>SANDBOX_URL → jiuwenbox</code>）后，
+    Skill 运行时真源变为<strong>沙箱内文件系统</strong>，Adapter 必须改造 Skill 写路径；
+    三组件以独立容器组网联调。
+  </p>
+
+  <h3>4.1 拓扑对比</h3>
+  <div class="grid2">
+    <div class="topo-panel">
+      <h4>改造前 · 虚拟机 / 共享挂载</h4>
+      <div class="diagram" role="img" aria-label="改造前拓扑">
+        <div class="diagram-col" style="width:100%">
+          <div class="node accent"><strong>EvoAgent</strong><span class="sub">优化编排</span></div>
+          <div class="arrow">↓</div>
+          <div class="arrow-label">HTTP</div>
+          <div class="node host"><strong>EvoAgentAdapter</strong><span class="sub">skill_backend: local</span></div>
+          <div class="arrow">↓</div>
+          <div class="arrow-label">写 Skill　/　读日志</div>
+          <div class="topo-shared">
+            <strong>宿主机共享目录</strong>
+            <span>skills_dir · log_dir（同一块盘）</span>
+          </div>
+          <div class="arrow">↑</div>
+          <div class="arrow-label">read_file　/　写 process_*.log</div>
+          <div class="node"><strong>EDPAgent</strong><span class="sub">本地 / 共享挂载 SysOperation</span></div>
+        </div>
+      </div>
+      <p class="muted" style="margin:0;text-align:center">Skill 与日志同盘；Adapter 写盘即对业务生效。</p>
+    </div>
+
+    <div class="topo-panel">
+      <h4>改造后 · 沙箱容器</h4>
+      <div class="diagram" role="img" aria-label="改造后拓扑">
+        <div class="diagram-col" style="width:100%">
+          <div class="node accent"><strong>EvoAgent</strong><span class="sub">优化编排</span></div>
+          <div class="arrow">↓</div>
+          <div class="arrow-label">HTTP</div>
+          <div class="node host"><strong>EvoAgentAdapter</strong><span class="sub">skill_backend: jiuwenbox</span></div>
+          <div class="arrow">↓</div>
+          <div class="arrow-label">两条独立路径</div>
+          <div class="topo-lane">
+            <div class="node skill"><strong>① Skill 热更</strong><span class="sub">File API · upload</span></div>
+            <div class="node"><strong>② 轨迹采集</strong><span class="sub">挂载读日志卷</span></div>
+          </div>
+          <div class="arrow">↓　　　　　　↑</div>
+          <div class="topo-lane">
+            <div class="node skill"><strong>jiuwenbox</strong><span class="sub">/tmp/skills</span></div>
+            <div class="node"><strong>process_*.log</strong><span class="sub">宿主机日志卷</span></div>
+          </div>
+          <div class="arrow">↕　　　　　　↑</div>
+          <div class="arrow-label">同一 sandbox_id　　写 TAG 日志</div>
+          <div class="node"><strong>EDPAgent（sandbox）</strong><span class="sub">read_file 只读沙箱 FS</span></div>
+        </div>
+      </div>
+      <p class="muted" style="margin:0;text-align:center">Skill 真源在沙箱；轨迹与沙箱 FS 解耦。</p>
+    </div>
+  </div>
+
+  <h3>4.2 维度对比</h3>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>虚拟机 / 共享挂载</th><th>沙箱容器（本报告）</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>部署单元</td>
+        <td class="tag-vm">VM 进程或少量容器，路径 bind 对齐</td>
+        <td class="tag-sb">jiuwenbox + EDPAgent + Adapter 三容器</td>
+      </tr>
+      <tr>
+        <td>EDP 运行模式</td>
+        <td class="tag-vm">本地 / 共享挂载 SysOperation</td>
+        <td class="tag-sb"><code>SANDBOX_URL</code>，工具在沙箱内执行</td>
+      </tr>
+      <tr>
+        <td>Skill 运行时真源</td>
+        <td class="tag-vm">宿主机 <code>skills_dir</code></td>
+        <td class="tag-sb">沙箱 <code>/tmp/skills/.../SKILL.md</code></td>
+      </tr>
+      <tr>
+        <td>Skill 写路径</td>
+        <td class="tag-vm"><code>skill_backend: local</code></td>
+        <td class="tag-sb"><code>skill_backend: jiuwenbox</code> → File API</td>
+      </tr>
+      <tr>
+        <td>轨迹采集</td>
+        <td>挂载 <code>process_*.log</code></td>
+        <td class="compare-ok">相同，无需改造</td>
+      </tr>
+      <tr>
+        <td>调用代理</td>
+        <td><code>agent_url</code> 转发 SSE</td>
+        <td class="compare-ok">相同（容器内用服务名，勿用 localhost）</td>
+      </tr>
+      <tr>
+        <td>隔离性</td>
+        <td class="tag-vm">进程级，共享目录</td>
+        <td class="tag-sb">bwrap + Landlock + seccomp + cgroup + netns</td>
+      </tr>
+      <tr>
+        <td>改造范围</td>
+        <td class="tag-vm">—</td>
+        <td class="tag-sb"><strong>仅改 Adapter 源码</strong>；EDP / jiuwenbox 不改代码（部署仍需 <code>SANDBOX_URL</code> 等）</td>
+      </tr>
+      <tr>
+        <td>兼容策略</td>
+        <td class="tag-vm">默认行为</td>
+        <td class="tag-sb">opt-in：默认仍为 <code>local</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.3 Adapter 三大能力改造结论</h3>
+  <table>
+    <thead><tr><th>能力</th><th>虚拟机模式</th><th>沙箱模式</th></tr></thead>
+    <tbody>
+      <tr><td>轨迹采集</td><td>Pipeline 读 <code>log_dir</code></td><td class="compare-ok">无改动</td></tr>
+      <tr><td>调用代理</td><td>AgentClient → <code>agent_url</code></td><td class="compare-ok">无改动（注意容器 DNS）</td></tr>
+      <tr><td>Skill 热更</td><td>写本地 / 共享 <code>skills_dir</code></td><td class="compare-chg">新增 JiuwenBoxSkillStore + sandbox_id 解析</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sec-solution">
+  <h2>5. 改造方案与实现要点</h2>
+  <h3>5.1 沙箱拓扑下的请求路径</h3>
+  <p class="muted">与 §1.3 逻辑视图一致，此处强调 Adapter 三大能力的落地路径。</p>
+  <div class="diagram" role="img" aria-label="Adapter能力落地路径">
+    <div class="diagram-col" style="width:100%">
+      <div class="node accent"><strong>调用方（EvoAgent / 测试脚本）</strong></div>
+      <div class="arrow">↓</div>
+      <div class="arrow-label">POST /api/v1/skills · /conversations · /traces</div>
+      <div class="node host"><strong>EvoAgentAdapter (:18900)</strong></div>
+      <div class="arrow">↓</div>
+      <div class="branch">
+        <div class="node"><strong>Pipeline</strong><span class="sub">挂载 process_*.log<br/>→ 轨迹采集</span></div>
+        <div class="node"><strong>AgentClient</strong><span class="sub">SSE → edpagent:8090<br/>→ 调用代理</span></div>
+        <div class="node skill"><strong>JiuwenBoxSkillStore</strong><span class="sub">upload / download<br/>→ Skill 热更</span></div>
+      </div>
+      <div class="arrow">↓ Skill 路径</div>
+      <div class="node skill"><strong>jiuwenbox (:8321)</strong><span class="sub">sandbox {id} · /tmp/skills/.../SKILL.md</span></div>
+      <div class="arrow">↕</div>
+      <div class="arrow-label">SysOperation：read_file / shell</div>
+      <div class="node"><strong>EDPAgent（sandbox）</strong><span class="sub">运行时只读沙箱 FS</span></div>
+    </div>
+  </div>
+
+  <h3>5.2 Adapter 新增模块</h3>
+  <table>
+    <thead><tr><th>模块</th><th>作用</th></tr></thead>
+    <tbody>
+      <tr><td><code>jiuwenbox_client.py</code></td><td>封装沙箱 list / files / download / upload / exec</td></tr>
+      <tr><td><code>sandbox_resolve.py</code></td><td>解析 <code>sandbox_id</code>（默认 <code>from_logs</code>；日志未命中时<strong>仅</strong>回退 <code>list_ready</code>；<code>fixed</code> 为独立互斥模式）</td></tr>
+      <tr><td><code>jiuwenbox_skill_store.py</code></td><td>Skill CRUD 映射到沙箱路径；<code>.meta</code> 快照仍落 Adapter 本地</td></tr>
+      <tr><td><code>skill_store_factory.py</code></td><td>按 <code>agents[].skill_backend</code> 装配 local 或 jiuwenbox</td></tr>
+      <tr><td><code>config.py</code></td><td>新增 <code>jiuwenbox_url</code>、<code>remote_skills_dir</code>、<code>sandbox_id_resolve</code> 等</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 sandbox_id 发现（不改 EDP 源码）</h3>
+  <p>EDPAgent 创建沙箱后会打日志：</p>
+  <pre>[DPA] SysOperationCard 已注册：..., sandbox_id=&lt;id&gt;</pre>
+  <pre>skill_backend: jiuwenbox
+jiuwenbox_url: http://jiuwenbox:8321
+sandbox_id_resolve: from_logs   # 失败则退回 list_ready
+remote_skills_dir: /tmp/skills  # 对齐 SKILL_TARGET_PATH/skills</pre>
+  <p class="muted">revision / snapshot 写在 Adapter 本地 <code>/data/skills/{agent}/.meta</code>，不依赖沙箱持久化即可 <code>restore_skill</code>。</p>
+</section>
+
+<div class="part-divider">下篇 · 联调实验与交付</div>
+
+<section id="sec-goal">
+  <h2>6. 实验目标与验证范围</h2>
+  <p>
+    在「EDPAgent sandbox + jiuwenbox + Adapter」三容器拓扑下，验证 Adapter
+    <strong>轨迹采集、调用代理、Skill 热更</strong>是否仍可闭环；重点证明热更后的 Skill
+    能被<strong>后续对话真实读到</strong>（不仅文件层变更）。
+  </p>
+  <ul>
+    <li><strong>轨迹采集</strong>：能否从 EDPAgent <code>process_*.log</code> 抽出对话轨迹</li>
+    <li><strong>调用代理</strong>：经 Adapter HTTP 能否完成业务对话（SiliconFlow 模型）</li>
+    <li><strong>Skill 热更</strong>：Adapter 经 jiuwenbox File API 写沙箱后，新会话 <code>read_file</code> 是否读到新正文</li>
+  </ul>
+</section>
+
+<section id="sec-env">
+  <h2>7. 实验环境</h2>
+  <table>
+    <thead><tr><th>组件</th><th>形态</th><th>地址 / 关键配置</th></tr></thead>
+    <tbody>
+      <tr><td>jiuwenbox</td><td>容器（privileged）</td><td><code>http://127.0.0.1:8321</code> / 网内 <code>jiuwenbox:8321</code></td></tr>
+      <tr><td>EDPAgent</td><td>容器 sandbox 模式</td><td><code>http://127.0.0.1:18001</code>；<code>SANDBOX_URL</code>、<code>LOG_DIR</code></td></tr>
+      <tr><td>EvoAgentAdapter</td><td>容器（jiuwenbox 后端）</td><td><code>http://127.0.0.1:18900</code>（避开宿主机 8900）</td></tr>
+      <tr><td>Redis</td><td>容器</td><td>服务名 <code>redis</code></td></tr>
+      <tr><td>LLM</td><td>SiliconFlow</td><td><code>Qwen/Qwen3.5-9B</code></td></tr>
+      <tr><td>目标 Skill</td><td>沙箱内文件</td><td><code>/tmp/skills/product_recommend_skill/SKILL.md</code></td></tr>
+      <tr><td>sandbox_id</td><td>本次运行</td><td><code>723842d9-fb8</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sec-flow">
+  <h2>8. 端到端流程</h2>
+  <h3>8.1 启动与初始化</h3>
+  <ol>
+    <li>创建 Docker 网络 <code>evo-sandbox-net</code>，启动 redis / jiuwenbox / edpagent / evo-adapter。</li>
+    <li>EDPAgent：<code>SANDBOX_URL=http://jiuwenbox:8321</code>，LLM 使用 SiliconFlow。</li>
+    <li>EDPAgent <code>initialize_dpa</code>：创建 sandbox → zip 上传 → 解压到 <code>{SKILL_TARGET_PATH}</code>（默认 <code>/tmp</code>，zip 内含 <code>skills/</code> 前缀 → 根路径 <code>/tmp/skills</code>）→ 注册 Skill。</li>
+    <li>Adapter 加载 <code>skill_backend=jiuwenbox</code>，后台轮询日志。</li>
+  </ol>
+
+  <h3>8.2 调用代理</h3>
+  <div class="diagram">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body"><div class="node"><strong>POST</strong> <code>/api/v1/agents/edp_agent/conversations/{id}</code></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body"><div class="node"><strong>AgentClient</strong> 转发 → EDPAgent SSE 流</div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body"><div class="node"><strong>聚合响应</strong> AgentCallResponse（success / answer / events）</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>8.3 轨迹采集</h3>
+  <div class="diagram">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body"><div class="node"><strong>EDPAgent</strong> 写出 TAG_* 日志 → <code>process_*.log</code></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body"><div class="node"><strong>Adapter Pipeline.poll()</strong> 增量读取并组装轨迹</div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body"><div class="node">归档 JSONL → <strong>GET</strong> <code>.../traces/{conversation_id}</code></div></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>8.4 Skill 热更实证流程</h3>
+  <ol>
+    <li>写入 Skill，内含 <code>HOTUPDATE_MARKER=BEFORE_...</code>。</li>
+    <li><strong>对话 A</strong>：经 Adapter 要求 Agent <code>read_file</code> 并原样引用 marker。</li>
+    <li><code>update_skill</code> → jiuwenbox <code>upload</code>，覆盖为 <code>AFTER_...</code>。</li>
+    <li><strong>对话 B</strong>（新会话）再次 <code>read_file</code>：须出现 AFTER，且不再出现 BEFORE。</li>
+  </ol>
+  <div class="diagram" role="img" aria-label="Skill热更实证流程">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">A</div>
+        <div class="step-body"><div class="node"><strong>对话 A · read_file</strong><span class="sub">回答含 HOTUPDATE_MARKER=<b style="color:#4ade80">BEFORE_...</b></span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">↑</div>
+        <div class="step-body"><div class="node skill"><strong>Adapter update_skill</strong><span class="sub">→ jiuwenbox upload → /tmp/skills/.../SKILL.md</span></div></div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-num">B</div>
+        <div class="step-body"><div class="node"><strong>对话 B · read_file</strong><span class="sub">回答含 HOTUPDATE_MARKER=<b style="color:#5eead4">AFTER_...</b>，且不含 BEFORE</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sec-result">
+  <h2>9. 联调结果与能力验证</h2>
+  <p><strong>结论：8 / 8 PASS。</strong> Skill 热更在文件层与对话层均得到确认。</p>
+
+  <table>
+    <thead>
+      <tr><th>结果</th><th>检查项</th><th>耗时</th><th>关键证据</th></tr>
+    </thead>
+    <tbody>
+      <tr class="pass"><td>PASS</td><td>jiuwenbox /health</td><td>79 ms</td><td>HTTP 200，sandboxes_active=1</td></tr>
+      <tr class="pass"><td>PASS</td><td>EDPAgent /health</td><td>39 ms</td><td>HTTP 200 healthy</td></tr>
+      <tr class="pass"><td>PASS</td><td>Adapter /health</td><td>38 ms</td><td>HTTP 200</td></tr>
+      <tr class="pass"><td>PASS</td><td>准备 Skill · MARKER_A</td><td>190 ms</td><td>沙箱含 <code>BEFORE_9E4ABBA9</code></td></tr>
+      <tr class="pass"><td>PASS</td><td>调用代理 · 对话 A</td><td>5909 ms</td><td>回答引用 BEFORE；events=274</td></tr>
+      <tr class="pass"><td>PASS</td><td>Skill 热更 → MARKER_B</td><td>106 ms</td><td>update success；沙箱变为 AFTER</td></tr>
+      <tr class="pass"><td>PASS</td><td>调用代理 · 对话 B</td><td>8014 ms</td><td>含 AFTER、不含 BEFORE；events=257</td></tr>
+      <tr class="pass"><td>PASS</td><td>轨迹采集（A+B）</td><td>2140 ms</td><td>A total=5，B total=5</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.1 对话摘录</h3>
+  <div class="quote">
+    <div class="label">对话 A · dlg-5175973c8254</div>
+    Agent 经 <code>read_file</code> 输出：<code>HOTUPDATE_MARKER=BEFORE_9E4ABBA9</code>
+  </div>
+  <div class="quote">
+    <div class="label">热更后 · 沙箱文件</div>
+    <code>HOTUPDATE_MARKER=AFTER_743DF61C</code>
+  </div>
+  <div class="quote">
+    <div class="label">对话 B · dlg-60fa8395c2a6</div>
+    新会话再次 <code>read_file</code> 输出：<code>HOTUPDATE_MARKER=AFTER_743DF61C</code><br/>
+    <span class="muted">回答中不再出现 BEFORE → 证明运行时读到热更后内容。</span>
+  </div>
+
+  <h3>9.2 三大能力对照</h3>
+  <table>
+    <thead><tr><th>能力</th><th>机制</th><th>本实验结论</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>调用代理</td>
+        <td>Adapter → EDPAgent SSE</td>
+        <td>两轮对话均成功，模型可用</td>
+      </tr>
+      <tr>
+        <td>轨迹采集</td>
+        <td>轮询 <code>process_*.log</code> → JSONL</td>
+        <td>两会话均采集到 traces（各 5 条）</td>
+      </tr>
+      <tr>
+        <td>Skill 热更</td>
+        <td>Adapter → jiuwenbox upload</td>
+        <td>文件层 + 对话层双重确认（BEFORE → AFTER）</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sec-config">
+  <h2>10. 配置说明与兼容性</h2>
+  <p>
+    方案为 <strong>opt-in</strong>：仅当 Agent 条目显式配置 <code>skill_backend: jiuwenbox</code> 时启用沙箱热更；
+    默认 <code>local</code>，虚拟机 / 共享挂载部署无需改配置。
+  </p>
+
+  <h3>10.1 Adapter <code>agents[]</code> 新增字段</h3>
+  <table>
+    <thead>
+      <tr><th>字段</th><th>默认</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>skill_backend</code></td>
+        <td><code>local</code></td>
+        <td>沙箱热更时改为 <code>jiuwenbox</code></td>
+      </tr>
+      <tr>
+        <td><code>jiuwenbox_url</code></td>
+        <td><code>null</code></td>
+        <td><code>jiuwenbox</code> 模式下必填，如 <code>http://jiuwenbox:8321</code></td>
+      </tr>
+      <tr>
+        <td><code>sandbox_id_resolve</code></td>
+        <td><code>from_logs</code></td>
+        <td>选型优先级：<code>from_logs</code> &gt; <code>fixed</code> &gt; <code>list_ready</code>（运行时仅 <code>from_logs→list_ready</code> 自动回退）</td>
+      </tr>
+      <tr>
+        <td><code>sandbox_id</code></td>
+        <td><code>null</code></td>
+        <td><code>fixed</code> 时必填</td>
+      </tr>
+      <tr>
+        <td><code>remote_skills_dir</code></td>
+        <td><code>/tmp/skills</code></td>
+        <td>对齐 EDP <code>SKILL_TARGET_PATH/skills</code></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="muted">
+    既有字段继续沿用：<code>log_dir</code>（轨迹与 from_logs）、
+    <code>skills_dir</code>（jiuwenbox 模式下主要存 <code>.meta</code>）、
+    <code>agent_url</code> / <code>project_id</code> / <code>agent_id</code>（调用代理）。
+  </p>
+
+  <h3>10.2 沙箱场景 YAML 示例</h3>
+  <pre>agents:
+  - name: edp_agent
+    log_dir: /data/logs/edp_agent
+    skills_dir: /data/skills/edp_agent
+    agent_url: http://edpagent:8090
+    project_id: default
+    agent_id: edp_agent
+    skill_backend: jiuwenbox
+    jiuwenbox_url: http://jiuwenbox:8321
+    sandbox_id_resolve: from_logs
+    remote_skills_dir: /tmp/skills</pre>
+
+  <h3>10.3 EDPAgent 侧环境变量</h3>
+  <table>
+    <thead><tr><th>变量</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>SANDBOX_URL</code></td><td>非空则 sandbox 模式，如 <code>http://jiuwenbox:8321</code></td></tr>
+      <tr><td><code>SKILL_TARGET_PATH</code></td><td>默认 <code>/tmp</code>；skills 根为 <code>{该值}/skills</code></td></tr>
+      <tr><td><code>LOG_DIR</code></td><td>需设置以产出 <code>process_*.log</code>（轨迹 + from_logs）</td></tr>
+    </tbody>
+  </table>
+
+  <h3>10.4 兼容性</h3>
+  <ul>
+    <li>默认 <code>skill_backend: local</code>，与改前行为一致。</li>
+    <li>仅当出现 <code>jiuwenbox</code> 后端时才装配新 SkillStore；否则仍走原工厂逻辑。</li>
+    <li>官方默认配置不强制新增字段 → 现有部署零配置变更。</li>
+    <li>轨迹采集、调用代理 HTTP 契约不变；新字段只影响 Skill 存储后端。</li>
+  </ul>
+</section>
+
+<section id="sec-ops">
+  <h2>11. 运维要点与边界</h2>
+  <ul>
+    <li><strong>LOG_DIR</strong>：EDPAgent 需显式设置，否则可能无 <code>process_*.log</code>，轨迹与 <code>from_logs</code> 都会失败。</li>
+    <li><strong>端口</strong>：宿主机 8900 被占用时，实验 Adapter 使用 <strong>18900</strong>。</li>
+    <li><strong>jiuwenbox 权限</strong>：Docker Desktop 下 isolated 网络沙箱建议 <code>--privileged</code>。</li>
+    <li><strong>sandbox_id</strong>：EDP 重启会换新 id；Adapter 宜重启或清缓存，确保与最新日志对齐。</li>
+    <li><strong>frontmatter</strong>：Skill 正文/脚本可热更；name/description 等注册元数据仍可能需进程重启（既有行为）。</li>
+  </ul>
+</section>
+
+<section id="sec-artifact">
+  <h2>12. 产物与复现</h2>
+  <div class="grid2">
+    <div class="card-mini">
+      <h4>文档与报告</h4>
+      <ul>
+        <li>本报告：<code>deployment/sandbox-experiment/reports/sandbox_hotupdate_experiment_report.html</code></li>
+        <li>串讲文档：<code>tests/sandbox_mode/docs/沙箱模式开发串讲文档.md</code></li>
+        <li>jiuwenbox 架构：<code>tests/sandbox_mode/docs/jiuwenbox运行原理与隔离架构.html</code></li>
+        <li>测试用例 / 执行报告：<code>tests/sandbox_mode/docs/</code></li>
+        <li>原始 JSON：<code>.../dialogue_e2e_20260712_212715.json</code></li>
+      </ul>
+    </div>
+    <div class="card-mini">
+      <h4>脚本与配置</h4>
+      <ul>
+        <li>联调脚本：<code>run_dialogue_skill_e2e.py</code></li>
+        <li>栈启动：<code>start_stack.ps1</code></li>
+        <li>Adapter 配置：<code>agent_adapter_config.yaml</code></li>
+        <li>设计补充：<code>docs/skills-storage-design.md</code> §3.1</li>
+      </ul>
+    </div>
+  </div>
+  <pre># 复现（需已有镜像与网络）
+$env:PLANNING_AGENT_MODEL_API_KEY="&lt;siliconflow-key&gt;"
+$env:PLANNING_AGENT_MODEL_BASE_URL="https://api.siliconflow.cn/v1"
+$env:PLANNING_AGENT_MODEL_NAME="Qwen/Qwen3.5-9B"
+.\deployment\sandbox-experiment\start_stack.ps1
+python deployment\sandbox-experiment\run_dialogue_skill_e2e.py `
+  --adapter-url http://127.0.0.1:18900</pre>
+</section>
+
+<section id="sec-summary">
+  <h2>13. 总结</h2>
+  <p>
+    <strong>生态：</strong>EvoAgent 负责 Skill 优化编排；Adapter 作为 Sidecar 统一提供轨迹、代理与热更；
+    业务 Agent（如 EDPAgent）执行对话；jiuwenbox 提供沙箱隔离与文件真源。优化闭环经 Adapter HTTP 契约贯通。
+  </p>
+  <p>
+    <strong>改造：</strong>从虚拟机共享挂载迁到沙箱容器后，轨迹与代理路径可保持不变；
+    Skill 热更须切换为 <code>skill_backend: jiuwenbox</code>，写入与 EDP 相同的 <code>sandbox_id</code>。
+    本方案<strong>仅改 EvoAgentAdapter 源码</strong>；EDP / jiuwenbox 沿用既有 API，部署侧仍需配置 <code>SANDBOX_URL</code>、<code>LOG_DIR</code> 等。
+  </p>
+  <p>
+    <strong>实证：</strong>三容器联调 8 / 8 PASS；前后两轮对话分别读出不同
+    <code>HOTUPDATE_MARKER</code>，证明热更已进入运行时可见的沙箱文件系统。
+  </p>
+</section>
+
+<footer>
+  沙箱模式开发串讲报告 · EvoAgentAdapter · 联调 dialogue_e2e_20260712_212715 · 不含 API Key
+</footer>
+
+<a class="back-top" href="#toc">↑ 目录</a>
+
+</div>
+</body>
+</html>

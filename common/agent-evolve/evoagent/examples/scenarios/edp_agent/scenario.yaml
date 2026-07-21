@@ -1,0 +1,18 @@
+schema_version: "1.0"
+optimizer_class: optimizer.EDPAgentOptimizer
+adapter_url: "http://localhost:9090"
+skills:
+  - name: product_recommend_skill
+    optimize: true
+  - name: interact_finance_rec_skill
+    optimize: true
+  - name: fund_planning_skill
+    optimize: false
+rollout:
+  max_turns: 10
+  extra_data:
+    role_id: "1"
+    role_name: "mobile-bank"
+hyperparams:
+  batch_size: 8
+  num_parallel: 8

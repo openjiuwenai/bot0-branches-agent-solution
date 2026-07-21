@@ -15,6 +15,7 @@
     <properties>
         <agent-runtime-ext.java.release>17</agent-runtime-ext.java.release>
         <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+        <agentscope.version>2.0.0</agentscope.version>
         <spring-boot.version>4.0.6</spring-boot.version>
         <jackson.version>2.20.1</jackson.version>
         <junit-jupiter.version>6.0.1</junit-jupiter.version>
@@ -26,6 +27,7 @@
     <modules>
         <module>agent-service-adapters/agent-service-adapters-versatile</module>
         <module>agent-service-adapters/agent-service-adapters-agentcore-ext</module>
+        <module>agent-service-adapters/agent-service-adapters-agentscope</module>
     </modules>
 
     <dependencyManagement>
@@ -56,6 +58,16 @@
                 <groupId>com.openjiuwen</groupId>
                 <artifactId>agent-core-java</artifactId>
                 <version>0.1.13</version>
+            </dependency>
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-core</artifactId>
+                <version>${agentscope.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-harness</artifactId>
+                <version>${agentscope.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>

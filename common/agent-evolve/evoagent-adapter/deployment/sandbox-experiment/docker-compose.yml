@@ -1,0 +1,63 @@
+# 三容器 sandbox 实验：jiuwenbox + EDPAgent + EvoAgentAdapter
+#
+# 本 compose 只编排网络与 Adapter；EDPAgent / jiuwenbox 可用各自官方脚本启动
+# 并加入同一外部网络 `evo-sandbox-net`，或取消下方服务注释后按本地路径构建。
+#
+# 用法（在 EvoAgentAdapter 仓库）:
+#   docker network create evo-sandbox-net
+#   docker compose -f deployment/sandbox-experiment/docker-compose.yml --env-file deployment/sandbox-experiment/.env up -d adapter
+#
+# Skill 热更走 jiuwenbox API（不再依赖 HOST_SKILLS 三方挂载到沙箱）。
+
+networks:
+  evo-sandbox-net:
+    external: true
+    name: evo-sandbox-net
+
+services:
+  adapter:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile
+    container_name: evo-adapter-sandbox-exp
+    ports:
+      - "${ADAPTER_PORT:-8900}:8900"
+    environment:
+      ADAPTER_HOST: "0.0.0.0"
+      ADAPTER_PORT: "8900"
+      ADAPTER_POLL_INTERVAL: "${ADAPTER_POLL_INTERVAL:-5}"
+      ADAPTER_START_FROM: "${ADAPTER_START_FROM:-head}"
+      ADAPTER_LOG_DIR: /data/logs
+      ADAPTER_SKILLS_ROOT: /data/skills
+    volumes:
+      - ${HOST_OUTPUT_DIR}:/app/data
+      - ${HOST_CONFIG_FILE}:/app/agent_adapter_config.yaml
+      - ${HOST_LOG_ROOT}:/data/logs:ro
+      # 本地只存 .meta 快照；SKILL.md 真源在 jiuwenbox sandbox FS
+      - ${HOST_SKILLS_META}:/data/skills
+    networks:
+      - evo-sandbox-net
+    restart: unless-stopped
+
+  # 可选：若本机已构建 jiuwenbox:latest，可一并拉起
+  jiuwenbox:
+    profiles: ["full"]
+    image: ${JIUWENBOX_IMAGE:-jiuwenbox:latest}
+    container_name: jiuwenbox-sandbox-exp
+    privileged: true
+    ports:
+      - "${JIUWENBOX_HOST_PORT:-8321}:8321"
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    security_opt:
+      - seccomp=unconfined
+      - apparmor:unconfined
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    cgroup: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    networks:
+      - evo-sandbox-net
+    restart: unless-stopped
