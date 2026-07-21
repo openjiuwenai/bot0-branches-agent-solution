@@ -578,6 +578,8 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             )
             self._current_skill_by_operator[op_id] = candidate
 
+        self._export_experience_libraries(artifact_epoch)
+
         self._current_skill_content = next(
             iter(self._current_skill_by_operator.values()),
             self._epoch_base_skill_content,
@@ -600,6 +602,36 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             ),
             n_operators=len(self._operators),
         )
+
+    def _export_experience_libraries(self, artifact_epoch: int) -> None:
+        """Persist each operator's experience library for this artifact epoch."""
+        exporter = getattr(self, "_artifact_exporter", None)
+        export_fn = getattr(exporter, "export_experience_library", None)
+        if not callable(export_fn):
+            return
+        multi = len(self._experience_libs) > 1
+        for op_id, library in self._experience_libs.items():
+            export_fn(
+                artifact_epoch,
+                library.to_dict(),
+                operator_id=op_id if multi else "",
+            )
+            self._push_phase(
+                "log",
+                {
+                    "level": "info",
+                    "message": (
+                        f"TF-GRPO 已导出经验库 epoch={artifact_epoch} "
+                        f"op={op_id} n={len(library.experiences)}"
+                    ),
+                    "phase": "tf_grpo_experience_export",
+                    "epoch": artifact_epoch,
+                    "data": {
+                        "operator_id": op_id,
+                        "n_experiences": len(library.experiences),
+                    },
+                },
+            )
 
     def _on_step_apply(self, step: int, n_edits: int, n_operators: int) -> None:
         self._push_phase(
