@@ -55,7 +55,6 @@ import java.util.zip.ZipFile;
  * @since 2026-07-15
  */
 public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
-
     private static final Logger log = LoggerFactory.getLogger(OpenJiuwenSkillHubProvider.class);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -185,7 +184,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             return false;
         }
         if (!Files.isDirectory(skillPath)) {
-            log.warn("SkillHub skill verify failed skillPath={} category=CHECKSUM_MISMATCH reason=not-directory-or-missing",
+            log.warn("SkillHub skill verify failed skillPath={} category=CHECKSUM_MISMATCH"
+                    + " reason=not-directory-or-missing",
                     sanitizePath(skillPath));
             return false;
         }
@@ -210,7 +210,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             // so Manager's verifiedSkillPaths never gets a path that would fail to register.
             String content = Files.readString(skillMd, StandardCharsets.UTF_8);
             if (!hasFrontMatter(content)) {
-                log.warn("SkillHub skill verify failed skillPath={} category=CHECKSUM_MISMATCH reason=missing-yaml-front-matter",
+                log.warn("SkillHub skill verify failed skillPath={} category=CHECKSUM_MISMATCH"
+                        + " reason=missing-yaml-front-matter",
                         sanitizePath(skillPath));
                 return false;
             }
@@ -219,7 +220,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                     sanitizePath(skillPath));
             return false;
         }
-        log.info("SkillHub skill verified skillPath={} method=extracted-dir-has-SKILL.md-with-front-matter verified=true",
+        log.info("SkillHub skill verified skillPath={} method=extracted-dir-has-SKILL.md-with-front-matter"
+                + " verified=true",
                 sanitizePath(skillPath));
         return true;
     }
@@ -607,6 +609,9 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
 
     /**
      * Strip path after host to avoid leaking query/credentials in logs.
+     *
+     * @param endpoint the original endpoint URL, may contain path/query
+     * @return the scheme+host portion, or empty string when input is null/empty
      */
     private static String sanitizeEndpoint(String endpoint) {
         if (endpoint == null || endpoint.isEmpty()) {
@@ -617,7 +622,12 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         return pathStart > 0 ? endpoint.substring(0, pathStart) : endpoint;
     }
 
-    /** Never log full path; show only file name to avoid leaking internal dirs. */
+    /**
+     * Never log full path; show only file name to avoid leaking internal dirs.
+     *
+     * @param path the path to sanitize, may be null
+     * @return the file name portion, or empty string when input is null or has no file name
+     */
     private static String sanitizePath(Path path) {
         if (path == null) {
             return "";
@@ -649,5 +659,5 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
 
     /** Internal view of artifact info from {@code /artifacts/{id}}. */
     private record ArtifactInfo(String downloadUrl, String checksumSha256,
-                                 long fileSize, String name, String version) { }
+            long fileSize, String name, String version) { }
 }

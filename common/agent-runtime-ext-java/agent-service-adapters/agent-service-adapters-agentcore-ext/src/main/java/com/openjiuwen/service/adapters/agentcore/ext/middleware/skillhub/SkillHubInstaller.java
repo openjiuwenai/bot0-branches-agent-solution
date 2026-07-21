@@ -36,7 +36,6 @@ import java.util.Optional;
  * @since 2026-07-15
  */
 public class SkillHubInstaller {
-
     private static final Logger log = LoggerFactory.getLogger(SkillHubInstaller.class);
 
     /**

@@ -57,7 +57,6 @@ import java.util.stream.Stream;
 @Tag("integration")
 @EnabledIfSystemProperty(named = "skillhub.e2e.enabled", matches = "true")
 class OpenJiuwenSkillHubProviderE2ETest {
-
     private static final String DEFAULT_ENDPOINT = "https://swarmskills.openjiuwen.com";
 
     @TempDir

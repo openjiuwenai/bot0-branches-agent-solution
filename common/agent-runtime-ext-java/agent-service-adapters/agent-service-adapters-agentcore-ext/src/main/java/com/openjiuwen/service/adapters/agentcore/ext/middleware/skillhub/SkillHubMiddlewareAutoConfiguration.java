@@ -42,7 +42,6 @@ import org.springframework.context.annotation.Bean;
         havingValue = "true")
 @ConditionalOnClass(name = "com.openjiuwen.core.runner.RunnerConfig")
 public class SkillHubMiddlewareAutoConfiguration {
-
     private static final Logger log = LoggerFactory.getLogger(SkillHubMiddlewareAutoConfiguration.class);
 
     /**
@@ -149,7 +148,12 @@ public class SkillHubMiddlewareAutoConfiguration {
         }
     }
 
-    /** Treat the Spring-bound properties as the pure POJO contract SkillHubConfig. */
+    /**
+     * Treat the Spring-bound properties as the pure POJO contract SkillHubConfig.
+     *
+     * @param properties the Spring-bound SkillHubMiddlewareProperties instance
+     * @return the same instance viewed as the SkillHubConfig contract type
+     */
     private static SkillHubConfig asConfig(SkillHubMiddlewareProperties properties) {
         // SkillHubMiddlewareProperties extends SkillHubConfig, so it IS-A SkillHubConfig
         return properties;

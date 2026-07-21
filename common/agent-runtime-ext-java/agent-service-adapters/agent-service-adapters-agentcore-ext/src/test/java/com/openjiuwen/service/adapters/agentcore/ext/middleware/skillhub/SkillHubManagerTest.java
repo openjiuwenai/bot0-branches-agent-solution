@@ -26,7 +26,6 @@ import java.util.List;
  * @since 2026-07-15
  */
 class SkillHubManagerTest {
-
     private SkillHubManager manager;
 
     @AfterEach
@@ -346,6 +345,9 @@ class SkillHubManagerTest {
      * failing path is marked processed-for-this-agent, so a second register()
      * call on the SAME agent is a no-op (not a re-throw). The path STAYS in
      * verifiedSkillPaths so other agents can still attempt their own handover.
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     * @throws Exception if filesystem setup or manager operations fail
      */
     @Test
     void installFailedPathDoesNotReThrowOnSubsequentRegister_Issue1(@TempDir Path tempDir) throws Exception {
@@ -390,6 +392,9 @@ class SkillHubManagerTest {
      *
      * <p>Expected: after first-fail-then-succeed cycle, manually triggering
      * download() failure again must start a fresh background retry.
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     * @throws Exception if filesystem setup or manager operations fail
      */
     @Test
     void backgroundRetryCanRestartAfterSuccess_Issue3(@TempDir Path tempDir) throws Exception {
@@ -438,7 +443,10 @@ class SkillHubManagerTest {
      *
      * <p>Expected: after register(agentA), a second register(agentB) on a
      * DIFFERENT agent instance also picks up the same skill paths (each agent
-     * has its own SkillManager — registration is per-agent).
+     * has its own SkillManager - registration is per-agent).
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     * @throws Exception if filesystem setup or manager operations fail
      */
     @Test
     void multipleAgentsEachGetSkillsRegistered_Issue10(@TempDir Path tempDir) throws Exception {
@@ -570,7 +578,14 @@ class SkillHubManagerTest {
      * @param <R> return type
      */
     @FunctionalInterface
-    interface ThrowingFunction<T, R> {
+    interface ThrowingFunction<T extends Object, R extends Object> {
+        /**
+         * Apply this function to the given input.
+         *
+         * @param t the input value
+         * @return the function result
+         * @throws IOException if a filesystem or I/O operation fails
+         */
         R apply(T t) throws IOException;
     }
 }

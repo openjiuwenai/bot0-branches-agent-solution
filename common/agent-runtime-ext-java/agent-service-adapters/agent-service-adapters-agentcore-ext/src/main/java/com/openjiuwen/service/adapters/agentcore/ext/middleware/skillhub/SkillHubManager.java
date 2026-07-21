@@ -64,7 +64,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2026-07-15
  */
 public class SkillHubManager {
-
     private static final Logger log = LoggerFactory.getLogger(SkillHubManager.class);
 
     /** Fixed retry interval; FEAT-005 does not fix a strategy, this is a simple default. */
@@ -343,6 +342,8 @@ public class SkillHubManager {
      * Returns the union of all paths marked processed-for-some-agent across
      * every agent seen so far. Retained for test compatibility; production
      * code should treat the result as "any agent has been handed this skill".
+     *
+     * @return an unmodifiable snapshot of all paths ever handed to any agent
      */
     List<Path> getRegisteredList() {
         synchronized (listLock) {
@@ -358,6 +359,8 @@ public class SkillHubManager {
      * Test probe: true while a background retry executor is running OR while
      * {@link #backgroundRetryStarted} is still set (i.e. retry has not yet
      * been reset after success).
+     *
+     * @return true if a background retry executor is running or the retry flag is still set
      */
     boolean isBackgroundRetryActiveForTest() {
         synchronized (bgLock) {
@@ -502,6 +505,9 @@ public class SkillHubManager {
 
     /**
      * Best-effort category extraction from a SkillHub[CATEGORY] message.
+     *
+     * @param ex the exception whose message starts with {@code SkillHub[}
+     * @return the parsed category, or {@code "UNKNOWN"} when the message format is unrecognized
      */
     private static String categoryOf(IllegalStateException ex) {
         if (ex.getMessage() != null

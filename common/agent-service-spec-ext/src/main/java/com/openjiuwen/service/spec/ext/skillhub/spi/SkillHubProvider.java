@@ -30,7 +30,6 @@ import java.nio.file.Path;
  * @since 2026-07-15
  */
 public interface SkillHubProvider {
-
     /**
      * Start the provider (build connection pool, warm up auth, etc.).
      * Called by {@code SkillHubManager}'s constructor.

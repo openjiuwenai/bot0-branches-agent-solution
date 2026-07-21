@@ -67,7 +67,6 @@ import java.util.Optional;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @EnabledIfSystemProperty(named = "deepseek.api.key", matches = "sk-.*")
 class SkillHubAgentLifecycleRealLlmTest {
-
     private static final String USER_ID = "skillhub-e2e-user";
 
     @Autowired

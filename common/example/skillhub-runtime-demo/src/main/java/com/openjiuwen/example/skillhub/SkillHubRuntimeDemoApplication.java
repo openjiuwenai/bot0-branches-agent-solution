@@ -48,10 +48,14 @@ public class SkillHubRuntimeDemoApplication {
      * is configured, so the SkillHub-only slices still boot without an LLM.
      *
      * <p>{@link JiuwenCoreAgentExtHandler} (not {@code JiuwenCoreAgentHandler}) is used
-     * because it has {@code @Autowired SkillHubManager} — when the skillhub middleware
+     * because it has {@code @Autowired SkillHubManager} - when the skillhub middleware
      * is enabled, Spring injects the manager and the handler's {@code start()} triggers
      * {@code manager.download()} (background retry on failure), and {@code query()} triggers
      * {@code manager.register(agent)} on the request thread.
+     *
+     * @param llmProperties the LLM configuration properties (api-key, base-url, model, etc.)
+     * @param llmConfigResolver the resolver that produces a ResolvedLlmConfig from properties
+     * @return the assembled AgentHandler backed by a ReActAgent with SkillHub chain injected
      */
     @Bean
     @ConditionalOnProperty(name = "openjiuwen.service.llm.api-key")

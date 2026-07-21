@@ -46,7 +46,6 @@ import java.util.Map;
 @Tag("integration")
 @EnabledIfSystemProperty(named = "deepseek.api.key", matches = "sk-.*")
 class ReActAgentSkillSmokeTest {
-
     private static final String UNIQUE_MARKER = "flying-purple-elephant-7749";
 
     @Test
@@ -92,8 +91,8 @@ class ReActAgentSkillSmokeTest {
         assertThat(config)
                 .as("agent.getConfig() should return a ReActAgentConfig")
                 .isInstanceOf(ReActAgentConfig.class);
-        ReActAgentConfig reactConfig = (ReActAgentConfig) config;
-        if (reactConfig instanceof ReActAgentConfig) {
+        if (config instanceof ReActAgentConfig) {
+            ReActAgentConfig reactConfig = (ReActAgentConfig) config;
             reactConfig.setSysOperationId("smoke-agent");
         }
 
