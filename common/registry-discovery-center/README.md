@@ -155,12 +155,13 @@ java -jar agent-rdc-0.1.0.jar
 
 ```yaml
 rdc:
-  # 正式路径（Feat-015）。本仓库 application.yml 默认 enabled=true + localhost 8090/8091 demo。
+  # 正式路径（Feat-015）。本仓库 application.yml 为上线模板：enabled=true、instances=[]。
+  # 本地 E2E 取消注释 yml 内 8090/8091 example，或注入 DeploymentDiscoveryProvider。
   # 与 rdc.pull-registration.enabled 互斥（同时为 true 启动失败）。
   deployment-discovery:
     enabled: true              # true 时 push /register → 410；测 push 时改为 false
     reconcile-interval: 30s
-    instances: [...]           # 静态 provider；生产改真实 URL 或注入 DeploymentDiscoveryProvider
+    instances: []              # 生产填真实 URL 或注入 Provider；本地见注释 example
   # 遗留路径（REQ-2026-004）— 已 @Deprecated；勿与 deployment-discovery 同时开启。
   # agentId 为 yml 手填；deployment-discovery 则用 AgentIdCodec.derive(tenantId, serviceId)。
   pull-registration:
@@ -209,7 +210,7 @@ rdc:
 
 响应：`200 OK`（无 body）。
 
-> **Feat-015：** 当 `rdc.deployment-discovery.enabled=true` 时，本端点返回 **410 Gone**（`push_registration_disabled`）。正式注册走 provider 全量/增量对账 + 主动抓取 Agent Card，不再接受 HTTP push。本仓库 `application.yml` 默认已开启并带 localhost demo instances；测 push 时把 `enabled` 改为 `false`。
+> **Feat-015：** 当 `rdc.deployment-discovery.enabled=true` 时，本端点返回 **410 Gone**（`push_registration_disabled`）。正式注册走 provider 全量/增量对账 + 主动抓取 Agent Card，不再接受 HTTP push。本仓库 `application.yml` 默认开启 discovery 且 `instances=[]`；本地 E2E 取消注释 8090/8091 example。测 push 时把 `enabled` 改为 `false`。
 
 ### 从 `pull-registration` 迁移到 `deployment-discovery`（方案 B）
 
