@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * Broker transport adapter for the C3 forwarding substrate (Stage 26, T4 hybrid).
  *

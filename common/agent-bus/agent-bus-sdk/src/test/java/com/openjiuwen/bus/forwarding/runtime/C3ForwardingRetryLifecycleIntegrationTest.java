@@ -1,26 +1,32 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.a2a.A2aForwardingDeliveryPort;
 import com.openjiuwen.bus.forwarding.runtime.transport.a2a.A2aForwardingProperties;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
-import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import javax.sql.DataSource;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.sql.Connection;
@@ -33,7 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Stage 19 (MI19-001 / MI19-002) &mdash; end-to-end verification of the C3 retry
@@ -102,11 +108,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * helpers &mdash; no concrete broker/MQ, no payload body / token stream / Task state,
  * no cross-tenant fallback.
  *
- * <p>Authority: {@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage18-review-and-stage19-plan.md}
+ * <p>Authority:
+ * {@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage18-review-and-stage19-plan.md}
  * &sect;2 / &sect;4 MI19-001 / MI19-002.
  */
 class C3ForwardingRetryLifecycleIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static JdbcForwardingOutbox outbox;
@@ -145,6 +151,8 @@ class C3ForwardingRetryLifecycleIntegrationTest {
      *   <li>{@code attempt_count} stops at {@code maxAttempts} because {@code moveToDlq}
      *       does not bump it (only {@code scheduleRetry} does).</li>
      * </ul>
+     *
+     * @throws Exception if embedded postgres boot or the tick run / SQL fails
      */
     @Test
     void dispatch_loop_retries_to_exhaustion_then_dlq() throws Exception {
@@ -184,6 +192,20 @@ class C3ForwardingRetryLifecycleIntegrationTest {
         ForwardingDispatcherWorker.DispatchTickResult tick =
                 loop.run(tenant, 5, "worker-retry-life", 60_000);
 
+        assertExhaustedToDlq(tick, tenant, messageId);
+    }
+
+    /**
+     * Assert the exhaustion-lifecycle tick counts, the self-consistency invariant,
+     * and the persisted DLQ outcome (RECEIVER_UNAVAILABLE + attempt_count==maxAttempts).
+     *
+     * @param tick      the aggregate tick result to assert on
+     * @param tenant    the tenant scope of the retried record
+     * @param messageId the message id of the retried record
+     * @throws SQLException if the persisted DLQ row read fails
+     */
+    private static void assertExhaustedToDlq(ForwardingDispatcherWorker.DispatchTickResult tick,
+                                             String tenant, String messageId) throws SQLException {
         assertThat(tick.claimed())
                 .as("same record claimed 4x: once PENDING + 3x RETRY_SCHEDULED reclaim")
                 .isEqualTo(4);
@@ -226,6 +248,8 @@ class C3ForwardingRetryLifecycleIntegrationTest {
      * business failure cannot model "retry then recover" (it would DLQ on attempt 1).
      * Retryable failure is a <em>transport-layer</em> concept; the fake port injects it
      * directly. The claimDue reclaim + attempt_count bump + markAcked are all REAL SQL.
+     *
+     * @throws Exception if embedded postgres boot or the tick run / SQL fails
      */
     @Test
     void dispatch_loop_recovers_to_acked_after_intermittent_failure() throws Exception {
@@ -300,7 +324,11 @@ class C3ForwardingRetryLifecycleIntegrationTest {
             return current;
         }
 
-        /** Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back). */
+        /**
+         * Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back).
+         *
+         * @param instantMillisEpoch the epoch-millis instant to advance to
+         */
         void advanceTo(long instantMillisEpoch) {
             this.current = instantMillisEpoch;
         }
@@ -317,6 +345,12 @@ class C3ForwardingRetryLifecycleIntegrationTest {
      * <p>{@code stepMillis} must exceed any backoff the policy can produce (the default
      * {@code +61s} beats the {@code 60s} cap), so each tick is past the prior record's
      * {@code next_attempt_at} and {@code claimDue} reclaims it.
+     *
+     * @param clock       the shared mutable clock advanced to each tick instant
+     * @param baseInstant the first tick instant (epoch millis)
+     * @param stepMillis  the gap between successive tick instants
+     * @param ticks       the number of instants to yield before stopping
+     * @return a tick source that yields {@code ticks} instants, advancing the shared clock
      */
     private static ForwardingDispatchLoop.TickSource advanceableTickSource(
             MutableEpochClock clock, long baseInstant, long stepMillis, int ticks) {
@@ -336,6 +370,9 @@ class C3ForwardingRetryLifecycleIntegrationTest {
      * Fake {@link ForwardingDeliveryPort} that replays a fixed outcome sequence &mdash;
      * models an intermittent transport failure that recovers. The claim/reclaim/ack
      * SQL against the real outbox is untouched; only the delivery outcome is injected.
+     *
+     * @param sequence the ordered delivery outcomes to replay (e.g. retry, retry, acked)
+     * @return a delivery port that returns the next outcome on each call
      */
     private static ForwardingDeliveryPort fakeDeliveryPort(List<ForwardingDeliveryResult> sequence) {
         Iterator<ForwardingDeliveryResult> results = sequence.iterator();
@@ -362,6 +399,9 @@ class C3ForwardingRetryLifecycleIntegrationTest {
      * A port that is (transiently) not listened on: bind an ephemeral socket then close
      * it, so the real transport gets a genuine connection refusal (mirrors Stage 18
      * scenario 2 — no MockWebServer, a route whose target agent-runtime is down).
+     *
+     * @return the ephemeral port number that was bound and immediately closed
+     * @throws IOException if binding the ephemeral socket fails
      */
     private static int freeUnusedPort() throws IOException {
         try (ServerSocket s = new ServerSocket(0)) {
@@ -374,12 +414,17 @@ class C3ForwardingRetryLifecycleIntegrationTest {
      * path ({@code claimDue} leases), so the IT reads {@code last_failure_code} /
      * {@code attempt_count} / {@code next_attempt_at} directly to assert on-disk retry
      * state across the lifecycle (mirrors Stage 18 IT).
+     *
+     * @param tenantId the tenant scope of the outbox row
+     * @param messageIdValue the message id of the outbox row
+     * @return a map of the row's {@code last_failure_code} / {@code attempt_count} / {@code next_attempt_at}
+     * @throws SQLException if the JDBC read fails
      */
     private static Map<String, Object> outboxRow(String tenantId, String messageIdValue) throws SQLException {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT last_failure_code, attempt_count, next_attempt_at "
-                   + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
+                PreparedStatement ps = c.prepareStatement(
+                        "SELECT last_failure_code, attempt_count, next_attempt_at "
+                                + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
             ps.setString(1, tenantId);
             ps.setString(2, messageIdValue);
             try (ResultSet rs = ps.executeQuery()) {

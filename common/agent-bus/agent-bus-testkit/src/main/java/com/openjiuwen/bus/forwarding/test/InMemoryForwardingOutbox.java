@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
@@ -34,10 +37,14 @@ import java.util.Objects;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4.1};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §4}.
+ *
+ * @since 0.1.0
  */
 // non-production — test fixture only; real persistence is Stage 8
 public final class InMemoryForwardingOutbox
         implements ForwardingOutboxPort, ForwardingOutboxClaimPort {
+    private final Map<Key, Entry> store = new LinkedHashMap<>();
+    private final ForwardingStateMachine stateMachine = new ForwardingStateMachine();
 
     private record Key(String tenantId, String messageId) {}
 
@@ -65,9 +72,6 @@ public final class InMemoryForwardingOutbox
         }
     }
 
-    private final Map<Key, Entry> store = new LinkedHashMap<>();
-    private final ForwardingStateMachine stateMachine = new ForwardingStateMachine();
-
     // ===== ForwardingOutboxPort =====
 
     @Override
@@ -93,7 +97,7 @@ public final class InMemoryForwardingOutbox
     public synchronized ForwardingStatus.Outbox markAcked(ForwardingMessageId id, String tenantId,
                                                            String leaseOwner) {
         return leaseGuardedMutate(id, tenantId, leaseOwner,
-                ForwardingStateMachine.OutboxEvent.ACK, null, 0L);
+                new OutboxMutation(ForwardingStateMachine.OutboxEvent.ACK, null, 0L));
     }
 
     @Override
@@ -106,7 +110,7 @@ public final class InMemoryForwardingOutbox
                     "scheduleRetry requires a retryable failureCode; " + code + " is not retryable (MI9-004)");
         }
         return leaseGuardedMutate(id, tenantId, leaseOwner,
-                ForwardingStateMachine.OutboxEvent.RETRY, code, nextAttemptAtMillisEpoch);
+                new OutboxMutation(ForwardingStateMachine.OutboxEvent.RETRY, code, nextAttemptAtMillisEpoch));
     }
 
     @Override
@@ -118,14 +122,15 @@ public final class InMemoryForwardingOutbox
                     "moveToDlq must not carry a dedup failureCode (MI9-004)");
         }
         return leaseGuardedMutate(id, tenantId, leaseOwner,
-                ForwardingStateMachine.OutboxEvent.EXHAUST_RETRIES, code, 0L);
+                new OutboxMutation(ForwardingStateMachine.OutboxEvent.EXHAUST_RETRIES, code, 0L));
     }
 
     @Override
     public synchronized ForwardingStatus.Outbox markExpired(ForwardingMessageId id, String tenantId,
                                                             String leaseOwner) {
         return leaseGuardedMutate(id, tenantId, leaseOwner,
-                ForwardingStateMachine.OutboxEvent.EXPIRE, ForwardingFailureCode.DELIVERY_TIMEOUT, 0L);
+                new OutboxMutation(ForwardingStateMachine.OutboxEvent.EXPIRE,
+                        ForwardingFailureCode.DELIVERY_TIMEOUT, 0L));
     }
 
     @Override
@@ -172,7 +177,7 @@ public final class InMemoryForwardingOutbox
     }
 
     /** Why (or why not) a row is claimable at the given instant. */
-    private enum ClaimKind { NONE, FRESH, RETRY, RECLAIM }
+    private enum ClaimKind {NONE, FRESH, RETRY, RECLAIM}
 
     private ClaimKind claimKindOf(Entry row, long nowMillisEpoch) {
         ForwardingLease existing = row.lease;
@@ -218,34 +223,57 @@ public final class InMemoryForwardingOutbox
 
     // ===== test-only introspection =====
 
-    /** Test-only introspection: current attempt count. */
+    /**
+     * Test-only introspection: current attempt count.
+     *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @return the current attempt count for the entry
+     */
     public synchronized int attemptCountOf(ForwardingMessageId id, String tenantId) {
         return requireEntry(id, tenantId).attemptCount;
     }
 
-    /** Test-only introspection: the full record projection (tenant-scoped). */
+    /**
+     * Test-only introspection: the full record projection (tenant-scoped).
+     *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @return the immutable {@link ForwardingOutboxRecord} projection
+     */
     public synchronized ForwardingOutboxRecord recordOf(ForwardingMessageId id, String tenantId) {
         return snapshot(requireEntry(id, tenantId));
     }
 
-    /** Test-only introspection: number of distinct outbox records. */
+    /**
+     * Test-only introspection: number of distinct outbox records.
+     *
+     * @return the number of distinct outbox records in the store
+     */
     public synchronized int entryCount() {
         return store.size();
     }
 
     // ===== internals =====
 
+    /** Carries the outbox mutation intent: the state-machine event, the failure code, and the next-attempt instant. */
+    private record OutboxMutation(ForwardingStateMachine.OutboxEvent event,
+                                  ForwardingFailureCode failureCode, long nextAttemptAt) {}
+
     /**
      * Lease-owner guarded mutation (Stage 9, MI9-001). A record reaches
      * DISPATCHING only via {@code claimDue}; every outbound transition is
      * rejected unless the caller is the current lease holder of a DISPATCHING
      * record. The lease is cleared on terminal + retry (MI9-002).
+     *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @param leaseOwner the lease owner claiming the record
+     * @param mutation the mutation intent (event, failure code, next-attempt instant)
+     * @return the resulting outbox status after the transition
      */
     private ForwardingStatus.Outbox leaseGuardedMutate(ForwardingMessageId id, String tenantId,
-                                                       String leaseOwner,
-                                                       ForwardingStateMachine.OutboxEvent event,
-                                                       ForwardingFailureCode failureCode,
-                                                       long nextAttemptAt) {
+                                                       String leaseOwner, OutboxMutation mutation) {
         requireNonBlank(leaseOwner, "leaseOwner");
         Entry entry = store.get(new Key(tenantId, id.value()));
         if (entry == null) {
@@ -266,15 +294,15 @@ public final class InMemoryForwardingOutbox
                     "record not DISPATCHING (status=" + entry.status + ") for tenantId=" + tenantId
                     + " messageId=" + id.value());
         }
-        ForwardingStatus.Outbox next = stateMachine.transitOutbox(entry.status, event);
+        ForwardingStatus.Outbox next = stateMachine.transitOutbox(entry.status, mutation.event());
         entry.status = next;
-        if (event == ForwardingStateMachine.OutboxEvent.RETRY) {
+        if (mutation.event() == ForwardingStateMachine.OutboxEvent.RETRY) {
             entry.attemptCount = entry.attemptCount + 1;
-            entry.nextAttemptAt = nextAttemptAt;
+            entry.nextAttemptAt = mutation.nextAttemptAt();
         }
         entry.lastFailureCode = (next == ForwardingStatus.Outbox.ACKED)
                 ? null
-                : (failureCode != null ? failureCode : entry.lastFailureCode);
+                : (mutation.failureCode() != null ? mutation.failureCode() : entry.lastFailureCode);
         entry.lease = null; // MI9-002: clear lease on terminal + retry
         entry.updatedAt = System.currentTimeMillis();
         return next;

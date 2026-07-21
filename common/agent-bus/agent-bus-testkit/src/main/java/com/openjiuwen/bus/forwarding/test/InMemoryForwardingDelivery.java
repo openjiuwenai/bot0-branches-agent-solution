@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryPort;
@@ -18,19 +22,29 @@ import java.util.Objects;
  * physical endpoint and never writes Task execution state.
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §5}.
+ *
+ * @since 0.1.0
  */
 // non-production — test fixture only; real transport binding is a later stage
 public final class InMemoryForwardingDelivery implements ForwardingDeliveryPort {
-
     private ForwardingDeliveryResult defaultResult = ForwardingDeliveryResult.acked();
     private final Map<String, ForwardingDeliveryResult> perMessage = new HashMap<>();
 
-    /** Set the outcome returned for any message without an explicit override. */
+    /**
+     * Set the outcome returned for any message without an explicit override.
+     *
+     * @param result the default delivery result (required)
+     */
     public void setDefault(ForwardingDeliveryResult result) {
         this.defaultResult = Objects.requireNonNull(result, "result is required");
     }
 
-    /** Pin the outcome for a specific {@code messageId}. */
+    /**
+     * Pin the outcome for a specific {@code messageId}.
+     *
+     * @param messageId the message id to pin the result for (required)
+     * @param result    the delivery result to return for this message (required)
+     */
     public void put(String messageId, ForwardingDeliveryResult result) {
         Objects.requireNonNull(messageId, "messageId is required");
         Objects.requireNonNull(result, "result is required");

@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime.persistence.jdbc;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
@@ -6,16 +9,18 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import javax.sql.DataSource;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
+
+import javax.sql.DataSource;
 
 /**
  * Postgres JDBC adapter for the C3 inbox substrate (Stage 12, MI12-002).
@@ -61,9 +66,10 @@ import java.util.function.Supplier;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md}
  * §3.2 / §4 / §7.3; {@code ICD-Agent-Bus-Forwarding-Runtime}.
+ *
+ * @since 0.1.0
  */
 public final class JdbcForwardingInbox implements ForwardingInboxPort {
-
     private static final String TABLE = "agent_bus_forwarding_inbox";
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -74,6 +80,8 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
      * Backwards-compatible constructor (Stage 12 form): derives a per-DataSource
      * {@link DataSourceTransactionManager} so every method runs inside a short
      * transaction that sets {@code app.tenant_id} (Stage 24 RLS wiring).
+     *
+     * @param dataSource the backing Postgres datasource (forwarding inbox table)
      */
     public JdbcForwardingInbox(DataSource dataSource) {
         this(dataSource, new DataSourceTransactionManager(dataSource));
@@ -84,6 +92,9 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
      * so production can supply a pooled / XA-aware manager. The manager must bind
      * connections from the same {@link DataSource} so the transactional connection is
      * the one {@code app.tenant_id} is set on.
+     *
+     * @param dataSource the backing Postgres datasource (forwarding inbox table)
+     * @param txManager the transaction manager binding connections from {@code dataSource}
      */
     public JdbcForwardingInbox(DataSource dataSource, PlatformTransactionManager txManager) {
         Objects.requireNonNull(dataSource, "dataSource is required");
@@ -126,7 +137,7 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
                                                String consumerServiceId) {
         long now = System.currentTimeMillis();
         return withTenant(tenantId, () -> mutate(id, tenantId, consumerServiceId,
-                ForwardingStateMachine.InboxEvent.CONSUME, null, now));
+                new InboxTransition(ForwardingStateMachine.InboxEvent.CONSUME, null), now));
     }
 
     @Override
@@ -177,6 +188,11 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
      * remains the primary isolation (Rule R-C.c); RLS is the defence-in-depth
      * fallback. A {@link RuntimeException} from {@code work} rolls the transaction
      * back and propagates.
+     *
+     * @param tenantId the tenant scope to set as the transaction {@code app.tenant_id}
+     * @param work     the business SQL to run under the tenant-scoped transaction
+     * @param <T>      the result type of {@code work}
+     * @return the value returned by {@code work}
      */
     private <T> T withTenant(String tenantId, Supplier<T> work) {
         return txTemplate.execute(status -> {
@@ -189,19 +205,37 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
     }
 
     /**
+     * Bundles the inbox transition event with its optional failure code so the
+     * {@link #mutate} call site stays under the G.MET.01 parameter limit. The
+     * {@code code} is {@code null} for non-REJECT transitions.
+     *
+     * @param event the inbox event driving the transition
+     * @param code  the failure code (non-null only for {@link ForwardingStateMachine.InboxEvent#REJECT})
+     */
+    private record InboxTransition(ForwardingStateMachine.InboxEvent event,
+                                   ForwardingFailureCode code) {
+    }
+
+    /**
      * Terminal guarded mutation. The {@code WHERE status='RECEIVED'} guard is
      * atomic; zero rows is diagnosed to match the in-memory contract — a missing
      * row raises {@code IllegalStateException}, an already-terminal row re-runs the
      * state machine against its real status to raise
      * {@code IllegalStateTransitionException}. The next status is computed from
      * {@code RECEIVED} (the only state the guard admits) before persisting.
+     *
+     * @param id               the inbox record message id
+     * @param tenantId         the tenant scope of the inbox record
+     * @param consumerServiceId the consumer owning the inbox record
+     * @param transition       the transition event + optional failure code
+     * @param now              the epoch-millis instant to stamp on the mutation
+     * @return the next inbox status computed by the state machine
      */
     private ForwardingStatus.Inbox mutate(ForwardingMessageId id, String tenantId,
                                           String consumerServiceId,
-                                          ForwardingStateMachine.InboxEvent event,
-                                          ForwardingFailureCode code, long now) {
+                                          InboxTransition transition, long now) {
         ForwardingStatus.Inbox next =
-                stateMachine.transitInbox(ForwardingStatus.Inbox.RECEIVED, event);
+                stateMachine.transitInbox(ForwardingStatus.Inbox.RECEIVED, transition.event());
         StringBuilder set = new StringBuilder("status = :next");
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("next", next.name())
@@ -213,14 +247,16 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
             params.addValue("now", now);
         } else if (next == ForwardingStatus.Inbox.REJECTED) {
             set.append(", failure_code = :failureCode");
-            params.addValue("failureCode", code.wireCode());
+            params.addValue("failureCode", transition.code().wireCode());
+        } else {
+            // no extra columns for this transition (fall-through, never hit by the inbox state machine)
         }
         String sql = "UPDATE " + TABLE + " SET " + set
                 + " WHERE tenant_id = :tenantId AND message_id = :messageId"
                 + " AND consumer_service_id = :consumerServiceId AND status = 'RECEIVED'";
         int affected = jdbc.update(sql, params);
         if (affected == 0) {
-            classifyInboxFailure(id, tenantId, consumerServiceId, event);
+            classifyInboxFailure(id, tenantId, consumerServiceId, transition.event());
         }
         return next;
     }
@@ -238,6 +274,13 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
      * invariant for the existing-row case, so a CONSUMED / DUPLICATE_SUPPRESSED row is
      * left untouched. The next status is computed by {@link ForwardingStateMachine}
      * from RECEIVED + REJECT (always REJECTED).
+     *
+     * @param id               the inbox record message id
+     * @param tenantId         the tenant scope of the inbox record
+     * @param consumerServiceId the consumer owning the inbox record
+     * @param code             the failure code to persist on the REJECTED row
+     * @param now              the epoch-millis instant to stamp as received_at
+     * @return the REJECTED inbox status computed by the state machine
      */
     private ForwardingStatus.Inbox upsertRejected(ForwardingMessageId id, String tenantId,
                                                   String consumerServiceId, ForwardingFailureCode code,
@@ -267,6 +310,11 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
      * missing row → {@code IllegalStateException}; present-but-not-RECEIVED row →
      * the state machine re-evaluates the (now terminal) transition and raises
      * {@code IllegalStateTransitionException}.
+     *
+     * @param id               the inbox record message id
+     * @param tenantId         the tenant scope of the inbox record
+     * @param consumerServiceId the consumer owning the inbox record
+     * @param event            the transition event to re-evaluate against the real status
      */
     private void classifyInboxFailure(ForwardingMessageId id, String tenantId, String consumerServiceId,
                                       ForwardingStateMachine.InboxEvent event) {

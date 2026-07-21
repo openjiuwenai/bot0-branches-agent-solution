@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
@@ -16,6 +20,7 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,12 +87,11 @@ import java.util.Set;
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md §1.2 / §4.1};
  * {@code docs/4plus1/delta/event-bus-relay/decision-tree.md} Q1a.
+ *
+ * @since 0.1.0
  */
 // scope: forwarding.runtime.relay — event-bus two-hop governance relay worker; pure Java
 public final class EventBusRelayWorker {
-
-    private static final Logger log = LoggerFactory.getLogger(EventBusRelayWorker.class);
-
     /**
      * The FEAT-013/014 forward-request eventTypes a <b>forward relay</b> relays
      * (hop1 {@code ascend_bus_*_req} → hop2 {@code ascend_bus_*_deliver}). The
@@ -125,6 +129,8 @@ public final class EventBusRelayWorker {
             AgentBusEventType.A2A_CALL_RESPONSE,
             AgentBusEventType.A2A_STREAM_READY,
             AgentBusEventType.A2A_CALL_TERMINAL);
+
+    private static final Logger log = LoggerFactory.getLogger(EventBusRelayWorker.class);
 
     private final BrokerForwardingConsumerPort consumer;
     private final ForwardingInboxPort inbox;
@@ -199,80 +205,12 @@ public final class EventBusRelayWorker {
             log.info("[{}] RECV messageId={} eventType={} corrId={} tenant={} source={} target={}",
                     role, msg.messageId(), msg.eventType(), msg.correlationId(),
                     msg.tenantId(), msg.sourceServiceId(), msg.targetServiceId());
-
-            // governance 1: skip non-relayable echoes / control / out-of-direction (soft eventType
-            // absent or not in this relay's configured type set) — commit + advance.
-            AgentBusEventType eventType = BrokerControlDescriptor.softEventType(msg.payloadRef());
-            if (eventType == null || !relayableTypes.contains(eventType)) {
-                log.info("[{}] SKIP non-relayable softEventType={} (not in {} relayable set) messageId={}",
-                        role, eventType, role, msg.messageId());
-                consumer.commit(msg);
-                skipped++;
-                continue;
-            }
-
-            // governance 2: descriptor decode (recovers control fields lost crossing the hop).
-            BrokerControlDescriptor.Descriptor desc;
-            try {
-                desc = BrokerControlDescriptor.decode(msg.payloadRef());
-            } catch (RuntimeException ex) {
-                log.warn("[{}] REJECT poison (descriptor decode failed) messageId={} error={}",
-                        role, msg.messageId(), ex.toString());
-                rejectPoison(msg, ForwardingFailureCode.PAYLOAD_REF_INVALID);
-                governanceRejected++;
-                continue;
-            }
-
-            // governance 3: correlation match (native header corrId == descriptor corrId).
-            if (!Objects.equals(msg.correlationId(), desc.correlationId())) {
-                log.warn("[{}] REJECT poison (correlation mismatch header={} desc={}) messageId={}",
-                        role, msg.correlationId(), desc.correlationId(), msg.messageId());
-                rejectPoison(msg, ForwardingFailureCode.PAYLOAD_REF_INVALID);
-                governanceRejected++;
-                continue;
-            }
-
-            // governance 4: inbox dedup (a replayed hop1 must not double-produce hop2).
-            ForwardingEnvelope env = buildHop2Envelope(msg, desc);
-            ForwardingStatus.Inbox inboxStatus = inbox.receive(env, consumerServiceId, nowMillisEpoch);
-            if (inboxStatus == ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED) {
-                log.info("[{}] DEDUP suppressed (replayed hop1, not re-published) messageId={}",
-                        role, msg.messageId());
-                consumer.commit(msg);
-                dedupSuppressed++;
-                continue;
-            }
-
-            // re-publish: enqueue → claim → produce → markAcked (mirrors gateway dispatch).
-            ForwardingReceipt receipt = outbox.enqueue(env, sourceServiceId, env.targetServiceId(), nowMillisEpoch);
-            Objects.requireNonNull(receipt, "enqueue receipt");
-            List<ForwardingOutboxRecord> claimed = claimPort.claimDue(tenantId, nowMillisEpoch, 1,
-                    consumerServiceId, nowMillisEpoch + leaseDurationMillis);
-            BrokerProduceOutcome outcome = null;
-            for (ForwardingOutboxRecord record : claimed) {
-                outcome = relay.produce(record, nowMillisEpoch);
-                if (outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
-                    outbox.markAcked(record.messageId(), tenantId, consumerServiceId);
-                }
-            }
-
-            if (outcome != null && outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
-                inbox.markConsumed(env.messageId(), tenantId, consumerServiceId);
-                consumer.commit(msg);
-                log.info("[{}] SEND hop2 messageId={} eventType={} corrId={} tenant={} source={} target={} route={}",
-                        role, env.messageId(), env.eventType(), env.correlationId(), env.tenantId(),
-                        env.sourceServiceId(), env.targetServiceId(), env.routeHandle().value());
-                relayed++;
-            } else {
-                // produce UNAVAILABLE / ROUTE_NOT_FOUND (or nothing claimed): reject → redeliver.
-                // The agent-bus retry policy owns when; ROUTE_NOT_FOUND redelivery still cannot fix
-                // a bad route, but rejecting leaves the hop1 message visible for operator intervention.
-                ForwardingFailureCode code = (outcome != null && outcome.failureCode() != null)
-                        ? outcome.failureCode()
-                        : ForwardingFailureCode.RECEIVER_UNAVAILABLE;
-                log.warn("[{}] REJECT redeliver (produce outcome={} failureCode={}) messageId={}",
-                        role, outcome == null ? "none-claimed" : outcome.outcome(), code, msg.messageId());
-                consumer.reject(msg, code);
+            switch (relayOneMessage(msg, tenantId, nowMillisEpoch, role)) {
+                case RELAYED -> relayed++;
+                case DEDUP_SUPPRESSED -> dedupSuppressed++;
+                case GOVERNANCE_REJECTED -> governanceRejected++;
+                case SKIPPED -> skipped++;
+                case REDELIVERED -> { /* reject-for-redeliver: no counter; retry policy owns re-drive */ }
             }
         }
         if (relayed + dedupSuppressed + governanceRejected + skipped > 0) {
@@ -282,12 +220,111 @@ public final class EventBusRelayWorker {
         return new RelayTickResult(relayed, dedupSuppressed, governanceRejected, skipped);
     }
 
-    /** Human label for logs: which relay role this worker drives (forward / response / relay). */
+    /**
+     * Drive one polled hop1 message through the between-hops governance (skip non-relayable,
+     * descriptor decode, correlation match, inbox dedup) and hand off to the re-publish path.
+     *
+     * @param msg           the polled hop1 message
+     * @param tenantId      tenant scope (for the claim / markAcked / markConsumed calls in republish)
+     * @param nowMillisEpoch the poll / produce instant
+     * @param role          human label for log lines (forward / response / relay)
+     * @return the per-message outcome used to aggregate tick counters
+     */
+    private MessageOutcome relayOneMessage(BrokerInboundMessage msg, String tenantId,
+                                           long nowMillisEpoch, String role) {
+        // governance 1: skip non-relayable echoes / control / out-of-direction (soft eventType
+        // absent or not in this relay's configured type set) — commit + advance.
+        AgentBusEventType eventType = BrokerControlDescriptor.softEventType(msg.payloadRef()).orElse(null);
+        if (eventType == null || !relayableTypes.contains(eventType)) {
+            log.info("[{}] SKIP non-relayable softEventType={} (not in {} relayable set) messageId={}",
+                    role, eventType, role, msg.messageId());
+            consumer.commit(msg);
+            return MessageOutcome.SKIPPED;
+        }
+
+        // governance 2: descriptor decode (recovers control fields lost crossing the hop).
+        BrokerControlDescriptor.Descriptor desc;
+        try {
+            desc = BrokerControlDescriptor.decode(msg.payloadRef());
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            log.warn("[{}] REJECT poison (descriptor decode failed) messageId={} error={}",
+                    role, msg.messageId(), ex.toString());
+            rejectPoison(msg, ForwardingFailureCode.PAYLOAD_REF_INVALID);
+            return MessageOutcome.GOVERNANCE_REJECTED;
+        }
+
+        // governance 3: correlation match (native header corrId == descriptor corrId).
+        if (!Objects.equals(msg.correlationId(), desc.correlationId())) {
+            log.warn("[{}] REJECT poison (correlation mismatch header={} desc={}) messageId={}",
+                    role, msg.correlationId(), desc.correlationId(), msg.messageId());
+            rejectPoison(msg, ForwardingFailureCode.PAYLOAD_REF_INVALID);
+            return MessageOutcome.GOVERNANCE_REJECTED;
+        }
+
+        // governance 4: inbox dedup (a replayed hop1 must not double-produce hop2).
+        ForwardingEnvelope env = buildHop2Envelope(msg, desc);
+        ForwardingStatus.Inbox inboxStatus = inbox.receive(env, consumerServiceId, nowMillisEpoch);
+        if (inboxStatus == ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED) {
+            log.info("[{}] DEDUP suppressed (replayed hop1, not re-published) messageId={}",
+                    role, msg.messageId());
+            consumer.commit(msg);
+            return MessageOutcome.DEDUP_SUPPRESSED;
+        }
+
+        // re-publish (mirrors gateway dispatch); RELAYED on accepted, REDELIVERED on produce failure.
+        return republishHop2(env, msg, tenantId, nowMillisEpoch, role);
+    }
+
+    /**
+     * Re-publish the hop2 envelope (enqueue → claim → produce → markAcked) and report the outcome.
+     *
+     * @param env           the hop2 envelope built from the inbound message + descriptor
+     * @param msg           the inbound hop1 message (committed on success, rejected on failure)
+     * @param tenantId      tenant scope (for claim / markAcked / markConsumed)
+     * @param nowMillisEpoch the produce instant
+     * @param role          human label for log lines
+     * @return RELAYED on accepted produce, REDELIVERED on unavailable / route-not-found / nothing claimed
+     */
+    private MessageOutcome republishHop2(ForwardingEnvelope env, BrokerInboundMessage msg,
+                                         String tenantId, long nowMillisEpoch, String role) {
+        ForwardingReceipt receipt = outbox.enqueue(env, sourceServiceId, env.targetServiceId(), nowMillisEpoch);
+        Objects.requireNonNull(receipt, "enqueue receipt");
+        List<ForwardingOutboxRecord> claimed = claimPort.claimDue(tenantId, nowMillisEpoch, 1,
+                consumerServiceId, nowMillisEpoch + leaseDurationMillis);
+        BrokerProduceOutcome outcome = null;
+        for (ForwardingOutboxRecord record : claimed) {
+            outcome = relay.produce(record, nowMillisEpoch);
+            if (outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
+                outbox.markAcked(record.messageId(), tenantId, consumerServiceId);
+            }
+        }
+        if (outcome != null && outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
+            inbox.markConsumed(env.messageId(), tenantId, consumerServiceId);
+            consumer.commit(msg);
+            log.info("[{}] SEND hop2 messageId={} eventType={} corrId={} tenant={} source={} target={} route={}",
+                    role, env.messageId(), env.eventType(), env.correlationId(), env.tenantId(),
+                    env.sourceServiceId(), env.targetServiceId(), env.routeHandle().value());
+            return MessageOutcome.RELAYED;
+        }
+        // produce UNAVAILABLE / ROUTE_NOT_FOUND (or nothing claimed): reject → redeliver; the agent-bus
+        // retry policy owns when, and rejecting leaves the hop1 message visible for operator intervention.
+        ForwardingFailureCode code = (outcome != null && outcome.failureCode() != null)
+                ? outcome.failureCode()
+                : ForwardingFailureCode.RECEIVER_UNAVAILABLE;
+        log.warn("[{}] REJECT redeliver (produce outcome={} failureCode={}) messageId={}",
+                role, outcome == null ? "none-claimed" : outcome.outcome(), code, msg.messageId());
+        consumer.reject(msg, code);
+        return MessageOutcome.REDELIVERED;
+    }
+
+    /**
+     * Human label for logs: which relay role this worker drives (forward / response / relay).
+     */
     private String roleLabel() {
-        if (relayableTypes.equals(FORWARD_REQUEST_TYPES)) {
+        if (FORWARD_REQUEST_TYPES.equals(relayableTypes)) {
             return "forward";
         }
-        if (relayableTypes.equals(RESPONSE_TYPES)) {
+        if (RESPONSE_TYPES.equals(relayableTypes)) {
             return "response";
         }
         return "relay";
@@ -307,6 +344,11 @@ public final class EventBusRelayWorker {
      * the descriptor; {@code sourceServiceId} = this relay; {@code targetServiceId} =
      * the original runtime target; {@code payloadRef} = the same descriptor (so the
      * runtime can decode it on hop2).
+     *
+     * @param msg  the inbound hop1 message (carries tenantId, targetServiceId, payloadRef)
+     * @param desc the decoded request control descriptor (eventType / traceId / correlationId /
+     *             idempotencyKey / routeHandle / capability / deadline)
+     * @return the hop2 forward envelope (fresh {@code eb-} messageId, control fields from desc)
      */
     private ForwardingEnvelope buildHop2Envelope(BrokerInboundMessage msg,
                                                  BrokerControlDescriptor.Descriptor desc) {
@@ -331,6 +373,9 @@ public final class EventBusRelayWorker {
      * Commit a poison message (do NOT redeliver — a broker redelivery cannot fix a
      * malformed / data-integrity failure and would loop) and mark the inbox REJECTED
      * for audit.
+     *
+     * @param msg  the poison inbound message to commit (no redelivery)
+     * @param code the failure code recorded against the inbox entry
      */
     private void rejectPoison(BrokerInboundMessage msg, ForwardingFailureCode code) {
         consumer.commit(msg);
@@ -345,6 +390,11 @@ public final class EventBusRelayWorker {
                 throw new IllegalArgumentException("tick counts must be non-negative");
             }
         }
+    }
+
+    /** Per-message outcome of one relay iteration, used to aggregate tick counters in {@link #runOnce}. */
+    private enum MessageOutcome {
+        RELAYED, DEDUP_SUPPRESSED, GOVERNANCE_REJECTED, SKIPPED, REDELIVERED
     }
 
     private static String requireNonBlank(String value, String name) {

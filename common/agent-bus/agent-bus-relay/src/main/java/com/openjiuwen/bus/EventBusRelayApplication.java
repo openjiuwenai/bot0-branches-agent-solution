@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus;
 
 import org.springframework.boot.SpringApplication;
@@ -17,10 +18,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * }</pre>
  * Requires a Postgres datasource (forwarding outbox/inbox) and a RocketMQ
  * nameserver (broker produce/consume) — all env-overridable in application.yml.
+ *
+ * @since 0.1.0
  */
 @SpringBootApplication(scanBasePackages = "com.openjiuwen.bus")
 public class EventBusRelayApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(EventBusRelayApplication.class, args);
     }

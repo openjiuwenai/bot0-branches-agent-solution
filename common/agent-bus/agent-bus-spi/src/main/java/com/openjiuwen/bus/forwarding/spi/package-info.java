@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * Pure-Java contract surface for the C3 forwarding runtime: envelope, receipt,
  * outbox / inbox record models, lease value type, status / failure-code enums,

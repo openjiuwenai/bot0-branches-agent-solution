@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi;
 
 import java.util.Objects;
@@ -78,7 +81,11 @@ public record ForwardingDeliveryResult(Outcome outcome, ForwardingFailureCode fa
         ACKED, RETRY_SCHEDULED, DLQ, EXPIRED
     }
 
-    /** Successful synchronous ack (ICD Delivery Model). */
+    /**
+     * Successful synchronous ack (ICD Delivery Model).
+     *
+     * @return a delivery result with outcome {@link Outcome#ACKED} and no failure code
+     */
     public static ForwardingDeliveryResult acked() {
         return new ForwardingDeliveryResult(Outcome.ACKED, null);
     }
@@ -88,6 +95,9 @@ public record ForwardingDeliveryResult(Outcome outcome, ForwardingFailureCode fa
      * retryable} (MI9-004). <em>When</em> the retry fires is decided by
      * {@code ForwardingRetryPolicy} (Stage 14); the result no longer carries a
      * next-attempt instant.
+     *
+     * @param failureCode the retryable failure code; must not be {@code null} and must be retryable
+     * @return a delivery result with outcome {@link Outcome#RETRY_SCHEDULED} carrying the failure code
      */
     public static ForwardingDeliveryResult retry(ForwardingFailureCode failureCode) {
         return new ForwardingDeliveryResult(Outcome.RETRY_SCHEDULED, failureCode);
@@ -98,12 +108,19 @@ public record ForwardingDeliveryResult(Outcome outcome, ForwardingFailureCode fa
      * {@link ForwardingFailureCode#nonRetryable() non-retryable} code or a
      * retryable code whose retries have been exhausted; rejects the dedup
      * outcome (MI9-004).
+     *
+     * @param failureCode the failure code; must not be {@code null} and must not be a dedup outcome
+     * @return a delivery result with outcome {@link Outcome#DLQ} carrying the failure code
      */
     public static ForwardingDeliveryResult dlq(ForwardingFailureCode failureCode) {
         return new ForwardingDeliveryResult(Outcome.DLQ, failureCode);
     }
 
-    /** Envelope deadline exceeded → EXPIRED. */
+    /**
+     * Envelope deadline exceeded → EXPIRED.
+     *
+     * @return a delivery result with outcome {@link Outcome#EXPIRED} and no failure code
+     */
     public static ForwardingDeliveryResult expired() {
         return new ForwardingDeliveryResult(Outcome.EXPIRED, null);
     }

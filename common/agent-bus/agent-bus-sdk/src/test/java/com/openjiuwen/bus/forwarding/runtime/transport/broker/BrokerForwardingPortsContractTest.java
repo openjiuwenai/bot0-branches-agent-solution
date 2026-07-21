@@ -1,4 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
@@ -15,9 +22,6 @@ import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Contract test for the broker SPI scaffold (Stage 26 + decision packet
@@ -43,7 +47,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BrokerForwardingPortsContractTest {
 
     // ===== produce: payloadRef in header, never in body (§6.2②) =====
-
     @Test
     void produce_data_bearing_carries_payload_ref_in_header_not_body() {
         InMemoryBroker broker = broker(route -> Optional.of("topic-" + route.tenantScope()));
@@ -52,7 +55,7 @@ class BrokerForwardingPortsContractTest {
         BrokerProduceOutcome outcome = broker.produce(record, 1_000L);
 
         assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ACCEPTED);
-        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-1");
+        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-1").orElse(null);
         assertThat(stored).isNotNull();
         // payload reference rides in the header (conditionally present for data-bearing)...
         assertThat(stored.headers().payloadRef()).isEqualTo("ref-secret-payload");
@@ -68,7 +71,7 @@ class BrokerForwardingPortsContractTest {
 
         broker.produce(record, 1_000L);
 
-        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-1");
+        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-1").orElse(null);
         assertThat(stored.headers().payloadRef()).isNull();
         assertThat(stored.headers().carriesPayloadRef()).isFalse();
     }
@@ -76,7 +79,7 @@ class BrokerForwardingPortsContractTest {
     // ===== produce: routeHandle resolved via resolver, never unwrapped (HD4) =====
 
     @Test
-    void produce_resolves_topic_via_resolver_without_unwrapping_route_handle() {
+    void produce_resolves_topic_via_resolver_no_unwrapping() {
         // The resolver is the sanctioned seam; the broker must publish to the topic the resolver
         // returns, not by unwrapping routeHandle.value() itself.
         InMemoryBroker broker = broker(route -> Optional.of("topic-from-resolver"));
@@ -291,7 +294,7 @@ class BrokerForwardingPortsContractTest {
     }
 
     @Test
-    void inbound_message_requires_consumer_service_id_and_routing_metadata() {
+    void inbound_message_requires_consumer_service_id_and_metadata() {
         assertThatThrownBy(() -> new BrokerInboundMessage("tenant", "m", "s", "t", null, null, null, null))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new BrokerInboundMessage("tenant", "m", "s", "t", " ", null, null, null))
@@ -305,7 +308,7 @@ class BrokerForwardingPortsContractTest {
     // ===== correlationId propagation (FEAT-013 §4.2: gateway matches responses by correlationId) =====
 
     @Test
-    void produce_then_poll_propagates_correlation_id_record_to_headers_to_inbound() {
+    void produce_then_poll_propagates_corr_id_to_headers_to_inbound() {
         InMemoryBroker broker = broker(route -> Optional.of("topic-" + route.tenantScope()));
         // record() fixture mirrors correlationId="corr-"+messageId from the envelope; produce builds
         // headers from the record; poll mirrors headers→inbound. The gateway (S2) reads inbound.correlationId().
@@ -319,9 +322,9 @@ class BrokerForwardingPortsContractTest {
         assertThat(m.correlationId()).isEqualTo("corr-msg-corr");
         assertThat(m.eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
         // and the stored outbound carries the same correlationId + eventType in its headers
-        assertThat(broker.outboundMessage("tenant-a", "msg-corr").headers().correlationId())
+        assertThat(broker.outboundMessage("tenant-a", "msg-corr").orElseThrow().headers().correlationId())
                 .isEqualTo("corr-msg-corr");
-        assertThat(broker.outboundMessage("tenant-a", "msg-corr").headers().eventType())
+        assertThat(broker.outboundMessage("tenant-a", "msg-corr").orElseThrow().headers().eventType())
                 .isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
     }
 
@@ -332,7 +335,7 @@ class BrokerForwardingPortsContractTest {
         InMemoryBroker broker = broker(route -> Optional.of("topic-" + route.tenantScope()));
         broker.produce(record("tenant-a", "msg-corr-ctrl", null), 1_000L);
 
-        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-corr-ctrl");
+        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-corr-ctrl").orElse(null);
         assertThat(stored.headers().correlationId()).isEqualTo("corr-msg-corr-ctrl");
         assertThat(stored.headers().eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
     }
@@ -362,7 +365,7 @@ class BrokerForwardingPortsContractTest {
                 0L,
                 null,
                 null,
-                "corr-" + messageId,    // FEAT-013 correlationId (mirrors envelope; non-null so propagation is testable)
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED);  // FEAT-013/014 eventType (mirrors envelope; non-null so propagation is testable)
+                "corr-" + messageId, // correlationId (non-null for propagation test)
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED); // eventType (non-null for propagation test)
     }
 }

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
@@ -24,10 +28,11 @@ import java.util.Optional;
  * route→topic mapping sub-decision in {@code docs/4plus1/delta/event-bus-relay/deviations.md}.
  *
  * <p>Plain JDK — no Spring / broker types (forwarding purity preserved).
+ *
+ * @since 0.1.0
  */
 // scope: forwarding transport — pure-Java convention resolver (no Spring/broker types)
 public final class BrokerTopicResolver implements ForwardingEndpointResolver {
-
     /** The L2 §5.2 topic-name prefix shared by every agent-bus broker topic. */
     public static final String TOPIC_PREFIX = "ascend_bus_";
 

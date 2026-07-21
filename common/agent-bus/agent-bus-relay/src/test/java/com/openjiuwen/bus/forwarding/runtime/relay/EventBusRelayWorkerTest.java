@@ -1,16 +1,20 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxClaimPort;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
@@ -29,8 +33,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 /**
  * Unit tests for {@link EventBusRelayWorker} — the consume→govern→re-produce relay.
  *
@@ -46,18 +48,41 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class EventBusRelayWorkerTest {
 
     // ===== inline fakes =====
-
     static final class FakeConsumer implements BrokerForwardingConsumerPort {
         final Deque<BrokerInboundMessage> queue = new ArrayDeque<>();
         final List<BrokerInboundMessage> committed = new ArrayList<>();
         final List<Map.Entry<BrokerInboundMessage, ForwardingFailureCode>> rejected = new ArrayList<>();
 
-        @Override public void subscribe(String consumerServiceId, ForwardingRouteHandle route, DeliveryFilter filter) { }
-        @Override public Optional<BrokerInboundMessage> poll(long nowMillisEpoch) { return Optional.ofNullable(queue.poll()); }
-        @Override public void commit(BrokerInboundMessage message) { committed.add(message); }
-        @Override public void reject(BrokerInboundMessage message, ForwardingFailureCode code) { rejected.add(Map.entry(message, code)); }
-        @Override public void close() { }
-        @Override public boolean supportsBrokerSidePropertyFilter() { return true; }
+        @Override
+        public void subscribe(String consumerServiceId, ForwardingRouteHandle route,
+                DeliveryFilter filter) {
+            // no-op: inline fake does not track subscriptions
+        }
+
+        @Override
+        public Optional<BrokerInboundMessage> poll(long nowMillisEpoch) {
+            return Optional.ofNullable(queue.poll());
+        }
+
+        @Override
+        public void commit(BrokerInboundMessage message) {
+            committed.add(message);
+        }
+
+        @Override
+        public void reject(BrokerInboundMessage message, ForwardingFailureCode code) {
+            rejected.add(Map.entry(message, code));
+        }
+
+        @Override
+        public void close() {
+            // no-op: inline fake holds no external resources
+        }
+
+        @Override
+        public boolean supportsBrokerSidePropertyFilter() {
+            return true;
+        }
     }
 
     static final class FakeInbox implements ForwardingInboxPort {
@@ -65,19 +90,31 @@ class EventBusRelayWorkerTest {
         final List<ForwardingMessageId> consumed = new ArrayList<>();
         final List<ForwardingMessageId> rejected = new ArrayList<>();
 
-        @Override public ForwardingStatus.Inbox receive(ForwardingEnvelope env, String consumerServiceId, long nowMillisEpoch) {
+        @Override
+        public ForwardingStatus.Inbox receive(ForwardingEnvelope env, String consumerServiceId,
+                long nowMillisEpoch) {
             String key = env.tenantId() + "|" + env.messageId().value() + "|" + consumerServiceId;
-            return seen.add(key) ? ForwardingStatus.Inbox.RECEIVED : ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED;
+            return seen.add(key) ? ForwardingStatus.Inbox.RECEIVED
+                    : ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED;
         }
-        @Override public ForwardingStatus.Inbox markConsumed(ForwardingMessageId id, String tenantId, String consumerServiceId) {
+
+        @Override
+        public ForwardingStatus.Inbox markConsumed(ForwardingMessageId id, String tenantId,
+                String consumerServiceId) {
             consumed.add(id);
             return ForwardingStatus.Inbox.CONSUMED;
         }
-        @Override public ForwardingStatus.Inbox markRejected(ForwardingMessageId id, String tenantId, String consumerServiceId, ForwardingFailureCode code) {
+
+        @Override
+        public ForwardingStatus.Inbox markRejected(ForwardingMessageId id, String tenantId,
+                String consumerServiceId, ForwardingFailureCode code) {
             rejected.add(id);
             return ForwardingStatus.Inbox.REJECTED;
         }
-        @Override public ForwardingStatus.Inbox statusOf(ForwardingMessageId id, String tenantId, String consumerServiceId) {
+
+        @Override
+        public ForwardingStatus.Inbox statusOf(ForwardingMessageId id, String tenantId,
+                String consumerServiceId) {
             return ForwardingStatus.Inbox.RECEIVED;
         }
     }
@@ -86,7 +123,8 @@ class EventBusRelayWorkerTest {
         final List<ForwardingOutboxRecord> produced = new ArrayList<>();
         BrokerProduceOutcome outcome = BrokerProduceOutcome.accepted();
 
-        @Override public BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
+        @Override
+        public BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
             produced.add(record);
             return outcome;
         }
@@ -108,19 +146,23 @@ class EventBusRelayWorkerTest {
                 EventBusRelayWorker.FORWARD_REQUEST_TYPES);
     }
 
-    /** Response-relay worker (RESPONSE_TYPES, consumerServiceId "event-bus-resp" — distinct dedup key). */
+    /**
+     * Response-relay worker (RESPONSE_TYPES, consumerServiceId "event-bus-resp" — distinct dedup key).
+     */
     private static EventBusRelayWorker newResponseWorker(FakeConsumer c, FakeInbox inbox,
                                                           InMemoryForwardingOutbox outbox, FakeRelay relay) {
         return new EventBusRelayWorker(c, inbox, outbox, outbox, relay, "event-bus-resp", "event-bus", 60_000L,
                 EventBusRelayWorker.RESPONSE_TYPES);
     }
 
-    /** A resp_in response message: descriptor payloadRef (symmetric to the request) + taskId/status tokens. */
+    /**
+     * A resp_in response message: descriptor payloadRef (symmetric to the request) + taskId/status tokens.
+     */
     private static BrokerInboundMessage respInMessage(String tenant, String messageId, String corrId,
-                                                       AgentBusEventType eventType, String taskId, String status) {
+                                                       AgentBusEventType eventType, String responseTokens) {
         String desc = BrokerControlDescriptor.encode(eventType, "trace-" + messageId, corrId,
                 "idem-" + messageId, "invocation", "a2a", Long.MAX_VALUE)
-                + ";taskId=" + taskId + ";status=" + status;
+                + ";" + responseTokens;
         return new BrokerInboundMessage(tenant, messageId, "runtime-1", "gateway-1", "event-bus-resp",
                 desc, corrId, eventType);
     }
@@ -243,7 +285,8 @@ class EventBusRelayWorkerTest {
         FakeRelay relay = new FakeRelay();
         EventBusRelayWorker w = newResponseWorker(c, inbox, outbox, relay);
 
-        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_RESPONSE, "task-1", "snapshot"));
+        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_RESPONSE,
+                "taskId=task-1;status=snapshot"));
 
         EventBusRelayWorker.RelayTickResult r = w.runOnce("t1", 100L, 5);
 
@@ -264,11 +307,13 @@ class EventBusRelayWorkerTest {
         FakeRelay relay = new FakeRelay();
         EventBusRelayWorker w = newResponseWorker(c, inbox, outbox, relay);
 
-        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_RESPONSE, "task-1", "snapshot"));
+        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_RESPONSE,
+                "taskId=task-1;status=snapshot"));
         w.runOnce("t1", 100L, 5);                    // first relay → 1 resp_out
 
         // redeliver the SAME resp_in (at-least-once): inbox dedup suppresses, no second resp_out.
-        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_RESPONSE, "task-1", "snapshot"));
+        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_RESPONSE,
+                "taskId=task-1;status=snapshot"));
         EventBusRelayWorker.RelayTickResult r2 = w.runOnce("t1", 200L, 5);
 
         assertEquals(0, r2.relayed());

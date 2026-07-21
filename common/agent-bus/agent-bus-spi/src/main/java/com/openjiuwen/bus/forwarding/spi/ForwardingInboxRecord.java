@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 import java.util.Objects;
@@ -54,6 +58,10 @@ public record ForwardingInboxRecord(
     /**
      * Per-status condition-field invariants (MI9-003). {@code consumedAtMillisEpoch == 0}
      * denotes "unset" (long primitive); only {@code CONSUMED} requires a positive value.
+     *
+     * @param status the inbox status to validate
+     * @param consumedAtMillisEpoch the consumption instant (0 denotes unset)
+     * @param failureCode the failure code (may be null depending on status)
      */
     static void validateStatusInvariants(ForwardingStatus.Inbox status,
                                          long consumedAtMillisEpoch,
@@ -81,7 +89,11 @@ public record ForwardingInboxRecord(
         }
     }
 
-    /** Whether this inbox record is in a terminal state. */
+    /**
+     * Whether this inbox record is in a terminal state.
+     *
+     * @return true if the status is DUPLICATE_SUPPRESSED, CONSUMED, or REJECTED
+     */
     public boolean isTerminal() {
         return status == ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED
                 || status == ForwardingStatus.Inbox.CONSUMED

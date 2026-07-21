@@ -1,15 +1,24 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.persistence.jdbc;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingLeaseException;
+import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
-import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -17,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.util.ArrayList;
@@ -26,12 +34,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import javax.sql.DataSource;
 
 /**
  * Real-SQL integration test for the Stage 12 C3 JDBC adapter (MI12-004).
@@ -51,7 +59,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * RLS binds.
  */
 class ForwardingJdbcIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static JdbcForwardingOutbox outbox;
     private static JdbcForwardingInbox inbox;
@@ -146,7 +153,8 @@ class ForwardingJdbcIntegrationTest {
 
         CountDownLatch ready = new CountDownLatch(1);
         CountDownLatch start = new CountDownLatch(2);
-        ExecutorService pool = Executors.newFixedThreadPool(2);
+        ExecutorService pool = new ThreadPoolExecutor(
+                2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         List<Future<List<ForwardingOutboxRecord>>> futures = new ArrayList<>();
         for (String owner : List.of("worker-1", "worker-2")) {
             futures.add(pool.submit(() -> {
@@ -184,10 +192,10 @@ class ForwardingJdbcIntegrationTest {
         outbox.claimDue(t, now, 5, "owner-A", now + 60_000);
 
         assertThatThrownBy(() -> outbox.markAcked(id("s1"), t, "owner-B"))
-                .isInstanceOf(ForwardingLeaseException.class)
-                .hasMessageContaining("owner mismatch")
-                .extracting(e -> ((ForwardingLeaseException) e).reason())
-                .isEqualTo(ForwardingLeaseException.Reason.OWNER_MISMATCH);
+                .isInstanceOfSatisfying(ForwardingLeaseException.class, ex -> {
+                    assertThat(ex).hasMessageContaining("owner mismatch");
+                    assertThat(ex.reason()).isEqualTo(ForwardingLeaseException.Reason.OWNER_MISMATCH);
+                });
         // record untouched: still DISPATCHING, still owned by A
         assertThat(outbox.statusOf(id("s1"), t)).isEqualTo(ForwardingStatus.Outbox.DISPATCHING);
     }
@@ -196,9 +204,8 @@ class ForwardingJdbcIntegrationTest {
     void ack_of_unknown_record_is_record_not_found() {
         String t = tenant();
         assertThatThrownBy(() -> outbox.markAcked(id("ghost"), t, "owner-A"))
-                .isInstanceOf(ForwardingLeaseException.class)
-                .extracting(e -> ((ForwardingLeaseException) e).reason())
-                .isEqualTo(ForwardingLeaseException.Reason.RECORD_NOT_FOUND);
+                .isInstanceOfSatisfying(ForwardingLeaseException.class, ex ->
+                        assertThat(ex.reason()).isEqualTo(ForwardingLeaseException.Reason.RECORD_NOT_FOUND));
     }
 
     // ===== MI12-004 #3: expired lease is reclaimable (stuck-holder reclaim) =====
@@ -250,9 +257,8 @@ class ForwardingJdbcIntegrationTest {
         outbox.claimDue(t, past, 5, "owner-A", past + 1); // expired, not renewed
 
         assertThatThrownBy(() -> outbox.markAcked(id("rn2"), t, "owner-A"))
-                .isInstanceOf(ForwardingLeaseException.class)
-                .extracting(e -> ((ForwardingLeaseException) e).reason())
-                .isEqualTo(ForwardingLeaseException.Reason.NO_LEASE);
+                .isInstanceOfSatisfying(ForwardingLeaseException.class, ex ->
+                        assertThat(ex.reason()).isEqualTo(ForwardingLeaseException.Reason.NO_LEASE));
         assertThat(outbox.statusOf(id("rn2"), t)).isEqualTo(ForwardingStatus.Outbox.DISPATCHING);
     }
 

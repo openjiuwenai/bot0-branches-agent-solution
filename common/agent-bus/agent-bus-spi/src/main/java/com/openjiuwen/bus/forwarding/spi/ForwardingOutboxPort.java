@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -30,9 +33,10 @@ package com.openjiuwen.bus.forwarding.spi;
  * <p>Authority: {@code ICD-Agent-Bus-Forwarding-Runtime};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4.1/§8};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §4/§5}.
+ *
+ * @since 0.1.0
  */
 public interface ForwardingOutboxPort {
-
     /**
      * Enqueue an envelope into the outbox and return the synchronous ack
      * receipt. A duplicate {@code (tenantId, messageId)} returns an
@@ -45,6 +49,12 @@ public interface ForwardingOutboxPort {
      * gateway audit context — NOT by unpacking {@link ForwardingRouteHandle}
      * (MI9-005) — never a physical endpoint. They live on the record, not on
      * the envelope.
+     *
+     * @param envelope the forwarding envelope to enqueue
+     * @param sourceServiceId the calling service instance identity written onto the record
+     * @param targetServiceId the target service identity from discovery metadata
+     * @param nowMillisEpoch the enqueue instant, in milliseconds since the epoch
+     * @return the synchronous ack receipt (newly enqueued or already-accepted on duplicate)
      */
     ForwardingReceipt enqueue(ForwardingEnvelope envelope, String sourceServiceId,
                               String targetServiceId, long nowMillisEpoch);
@@ -53,6 +63,10 @@ public interface ForwardingOutboxPort {
      * Transition a claimed DISPATCHING entry to ACKED (terminal-success).
      * Clears the lease (MI9-002).
      *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @param leaseOwner the lease owner claiming the record
+     * @return the resulting outbox status (ACKED)
      * @throws ForwardingLeaseException if the record is unknown, holds no lease,
      *         is leased to a different owner, or is not DISPATCHING
      */
@@ -64,6 +78,12 @@ public interface ForwardingOutboxPort {
      * future. Clears the lease so the next dispatch is gated by
      * {@code nextAttemptAt} only (MI9-002). Increments {@code attemptCount}.
      *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @param leaseOwner the lease owner claiming the record
+     * @param code the retryable failure code
+     * @param nextAttemptAtMillisEpoch the instant at which the next dispatch may fire
+     * @return the resulting outbox status (RETRY_SCHEDULED)
      * @throws ForwardingLeaseException if the record is unknown, holds no lease,
      *         is leased to a different owner, or is not DISPATCHING
      * @throws IllegalArgumentException if {@code code} is not retryable
@@ -76,6 +96,11 @@ public interface ForwardingOutboxPort {
      * non-retryable failure or a retryable code whose retries are exhausted;
      * the dedup outcome is rejected (MI9-004). Clears the lease (MI9-002).
      *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @param leaseOwner the lease owner claiming the record
+     * @param code the failure code (non-retryable or exhausted retryable; not a dedup outcome)
+     * @return the resulting outbox status (DLQ)
      * @throws ForwardingLeaseException if the record is unknown, holds no lease,
      *         is leased to a different owner, or is not DISPATCHING
      */
@@ -86,11 +111,21 @@ public interface ForwardingOutboxPort {
      * Mark a claimed DISPATCHING entry EXPIRED (terminal) — deadline exceeded.
      * Clears the lease (MI9-002).
      *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @param leaseOwner the lease owner claiming the record
+     * @return the resulting outbox status (EXPIRED)
      * @throws ForwardingLeaseException if the record is unknown, holds no lease,
      *         is leased to a different owner, or is not DISPATCHING
      */
     ForwardingStatus.Outbox markExpired(ForwardingMessageId id, String tenantId, String leaseOwner);
 
-    /** Current status of an outbox entry (tenant-scoped). */
+    /**
+     * Current status of an outbox entry (tenant-scoped).
+     *
+     * @param id the message id of the outbox entry
+     * @param tenantId the tenant identity scoping the outbox entry
+     * @return the current outbox status
+     */
     ForwardingStatus.Outbox statusOf(ForwardingMessageId id, String tenantId);
 }

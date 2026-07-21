@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.test;
 
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
@@ -80,10 +84,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * feat-013-client-invocation-event-forwarding.md §4.3 / §4.4 / §6};
  * {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-014-a2a-call-event-forwarding.md §4.4}.
+ *
+ * @since 0.1.0
  */
 // non-production — test fixture only; stands in for external agent-runtime-java
 public final class TestAgentRuntime {
-
     /** Configurable response behaviour for a REQUESTED event (FEAT-013 §6 scenarios). */
     public enum ResponseMode {
         /** REQUESTED → ACCEPTED + RESPONSE + TERMINAL(completed) — §6.2.1 blocking final response. */
@@ -98,17 +103,33 @@ public final class TestAgentRuntime {
 
     /** Outcome of a single {@link #pollAndProcess} tick. */
     public record ProcessingOutcome(Outcome outcome, String requestMessageId, String taskId,
-                                   List<ForwardingEnvelope> responses) {
-        public enum Outcome { PROCESSED, SKIPPED_NON_REQUEST, IDLE }
+            List<ForwardingEnvelope> responses) {
+        /** Result classification of a pollAndProcess tick. */
+        public enum Outcome {
+            PROCESSED, SKIPPED_NON_REQUEST, IDLE
+        }
         public ProcessingOutcome {
             Objects.requireNonNull(outcome, "outcome is required");
             Objects.requireNonNull(responses, "responses is required");
         }
-        /** Convenience: the event types of the produced responses, in order. */
+
+        /**
+         * Convenience: the event types of the produced responses, in order.
+         */
         public List<AgentBusEventType> responseEventTypes() {
             return responses.stream().map(ForwardingEnvelope::eventType).toList();
         }
     }
+
+    private final InMemoryBroker broker;
+    private final BrokerForwardingConsumerPort consumer;
+    private final InMemoryForwardingOutbox outbox;
+    private final String consumerServiceId;
+    private final String tenantId;
+    private final AtomicLong taskIdSeq = new AtomicLong();
+    private final AtomicLong respIdSeq = new AtomicLong();
+    private final Map<String, TaskEntry> taskByIdempotencyKey = new LinkedHashMap<>();
+    private ResponseMode responseMode = ResponseMode.BLOCKING;
 
     private record RequestDescriptor(
             AgentBusEventType eventType, String traceId, String correlationId,
@@ -121,18 +142,10 @@ public final class TestAgentRuntime {
         final String taskId;
         boolean responsesEmitted;   // has the runtime ever emitted ACCEPTED/RESPONSE/TERMINAL for this task?
 
-        TaskEntry(String taskId) { this.taskId = taskId; }
+        TaskEntry(String taskId) {
+            this.taskId = taskId;
+        }
     }
-
-    private final InMemoryBroker broker;
-    private final BrokerForwardingConsumerPort consumer;
-    private final InMemoryForwardingOutbox outbox;
-    private final String consumerServiceId;
-    private final String tenantId;
-    private final AtomicLong taskIdSeq = new AtomicLong();
-    private final AtomicLong respIdSeq = new AtomicLong();
-    private final Map<String, TaskEntry> taskByIdempotencyKey = new LinkedHashMap<>();
-    private ResponseMode responseMode = ResponseMode.BLOCKING;
 
     public TestAgentRuntime(InMemoryBroker broker, InMemoryForwardingOutbox outbox,
                             String consumerServiceId, String tenantId) {
@@ -150,22 +163,39 @@ public final class TestAgentRuntime {
                 DeliveryFilter.forRuntime(tenantId, consumerServiceId));
     }
 
-    /** Test-only: switch the response behaviour for subsequent REQUESTED events. */
+    /**
+     * Test-only: switch the response behaviour for subsequent REQUESTED events.
+     *
+     * @param mode the response behaviour to apply to subsequent REQUESTED events
+     */
     public void setResponseMode(ResponseMode mode) {
         this.responseMode = Objects.requireNonNull(mode, "mode is required");
     }
 
-    /** Test-only: the broker this runtime talks to (for introspection in assertions). */
+    /**
+     * Test-only: the broker this runtime talks to (for introspection in assertions).
+     *
+     * @return the in-memory broker this runtime consumes from
+     */
     public InMemoryBroker broker() {
         return broker;
     }
 
-    /** Test-only: this runtime's own outbox (for introspection in assertions). */
+    /**
+     * Test-only: this runtime's own outbox (for introspection in assertions).
+     *
+     * @return the in-memory outbox this runtime produces through
+     */
     public InMemoryForwardingOutbox outbox() {
         return outbox;
     }
 
-    /** Test-only introspection: the taskId a (tenantId, idempotencyKey) resolved to, if any. */
+    /**
+     * Test-only introspection: the taskId a (tenantId, idempotencyKey) resolved to, if any.
+     *
+     * @param idempotencyKey the client retry idempotency key
+     * @return the resolved taskId, or an empty Optional if no task was created for this key
+     */
     public synchronized Optional<String> taskIdFor(String idempotencyKey) {
         requireNonBlank(idempotencyKey, "idempotencyKey");
         TaskEntry e = taskByIdempotencyKey.get(idempotencyKeyKey(tenantId, idempotencyKey));
@@ -177,6 +207,9 @@ public final class TestAgentRuntime {
      * skip (commit) any non-request messages in the way, "process" the request
      * (produce its response sequence back to the broker), then commit the request
      * (model B ack-after-consume).
+     *
+     * @param nowMillisEpoch the poll / process instant (epoch millis)
+     * @return the tick outcome (PROCESSED with responses, SKIPPED_NON_REQUEST, or IDLE)
      */
     public synchronized ProcessingOutcome pollAndProcess(long nowMillisEpoch) {
         while (true) {
@@ -188,7 +221,7 @@ public final class TestAgentRuntime {
             // soft-check the eventType BEFORE full decode: self-produced responses carry a
             // response payloadRef (taskId=...;status=...) with no eventType= token, so the
             // full decoder would throw. Skip+commit anything that is not a request descriptor.
-            AgentBusEventType eventType = softEventType(msg.payloadRef());
+            AgentBusEventType eventType = softEventType(msg.payloadRef()).orElse(null);
             if (eventType == null || !isRequestType(eventType)) {
                 // own responses / control echoes — commit (advance our offset) and keep polling
                 consumer.commit(msg);
@@ -206,7 +239,7 @@ public final class TestAgentRuntime {
 
     private List<ForwardingEnvelope> processRequest(BrokerInboundMessage msg, RequestDescriptor req,
                                                     long nowMillisEpoch) {
-        TaskEntry entry = resolveOrCreateTask(req.eventType(), req.idempotencyKey());
+        TaskEntry entry = resolveOrCreateTask(req.eventType(), req.idempotencyKey()).orElse(null);
         String taskId = entry != null ? entry.taskId : null;
         List<PlannedResponse> planned = planResponses(req.eventType(), taskId, req.idempotencyKey());
         // mark the task's responses as emitted BEFORE producing so a retry within the same tick dedups
@@ -226,22 +259,32 @@ public final class TestAgentRuntime {
      * Server-side creation idempotency (§4.4 layer 2): a REQUESTED/A2A_CALL_REQUESTED
      * creates a task; a repeat with the same {@code (tenantId, idempotencyKey)}
      * reuses the SAME taskId (no second logical call). CANCEL/QUERY/SUBSCRIBE do
-     * NOT create tasks (they operate on an existing taskId), so they return null.
+     * NOT create tasks (they operate on an existing taskId), so they return an empty
+     * Optional.
+     *
+     * @param eventType      the request event type
+     * @param idempotencyKey the client retry idempotency key
+     * @return the created/reused task entry, or an empty Optional for non-creating request types
      */
-    private TaskEntry resolveOrCreateTask(AgentBusEventType eventType, String idempotencyKey) {
+    private Optional<TaskEntry> resolveOrCreateTask(AgentBusEventType eventType, String idempotencyKey) {
         if (eventType != AgentBusEventType.CLIENT_INVOCATION_REQUESTED
                 && eventType != AgentBusEventType.A2A_CALL_REQUESTED) {
-            return null; // stubs operate on an existing taskId; no creation here
+            return Optional.empty(); // stubs operate on an existing taskId; no creation here
         }
-        return taskByIdempotencyKey.computeIfAbsent(
+        return Optional.of(taskByIdempotencyKey.computeIfAbsent(
                 idempotencyKeyKey(tenantId, idempotencyKey),
-                k -> new TaskEntry("task-" + taskIdSeq.incrementAndGet()));
+                k -> new TaskEntry("task-" + taskIdSeq.incrementAndGet())));
     }
 
     /**
      * Map a request eventType to its response sequence per L2 §4.3 + the §6
      * scenarios. FEAT-001 stubs (CANCEL/QUERY/SUBSCRIBE and their A2A twins)
      * produce canned responses.
+     *
+     * @param eventType      the request event type (REQUESTED family or a FEAT-001 stub type)
+     * @param taskId         the task id stamped on the responses (null for non-creating stubs)
+     * @param idempotencyKey the client retry idempotency key (for the already-emitted dedup check)
+     * @return the planned response sequence for the request type
      */
     private List<PlannedResponse> planResponses(AgentBusEventType eventType, String taskId,
                                                String idempotencyKey) {
@@ -281,6 +324,9 @@ public final class TestAgentRuntime {
      * FEAT-001 stubs: CancelTask / SubscribeToTask / ListTasks(GetTask) and their
      * FEAT-014 A2A twins. The real external agent-runtime does not yet route these
      * (FEAT-001 gap); these canned responses unblock E2E for this version.
+     *
+     * @param eventType the stub request event type (CANCEL/QUERY/SUBSCRIBE or an A2A twin)
+     * @return the canned response sequence for the stub type
      */
     private List<PlannedResponse> cannedResponses(AgentBusEventType eventType) {
         return switch (eventType) {
@@ -333,6 +379,9 @@ public final class TestAgentRuntime {
      * Simplified-but-realistic produce path (mirrors the gateway): enqueue into
      * the runtime's own outbox → claim → {@link BrokerForwardingRelayPort#produce}
      * → markAcked. A full worker loop is intentionally not modelled.
+     *
+     * @param env           the response envelope to produce
+     * @param nowMillisEpoch the produce instant
      */
     private void produceResponse(ForwardingEnvelope env, long nowMillisEpoch) {
         ForwardingReceipt receipt = outbox.enqueue(env, env.sourceServiceId(), env.targetServiceId(), nowMillisEpoch);
@@ -352,14 +401,28 @@ public final class TestAgentRuntime {
      * Build a request envelope whose {@code payloadRef} carries the control
      * descriptor (eventType/traceId/correlationId/idempotencyKey/routeHandle/
      * capability/deadline). Use {@link #publishRequest} to put it on the broker.
+     *
+     * @param messageId           the request message id (broker keys / dedup hook)
+     * @param eventType           the request event type (FEAT-013/014 family)
+     * @param tenantId            tenant scope
+     * @param traceId             W3C 32-char hex trace id
+     * @param correlationId       cross-hop correlation key (gateway = requestId)
+     * @param idempotencyKey      client retry idempotency key
+     * @param routeHandleValue    opaque route handle value (resolved via ForwardingEndpointResolver)
+     * @param capability          capability identifier
+     * @param sourceServiceId     the request source service id (the caller/gateway)
+     * @param targetServiceId     the request target service id (the runtime)
+     * @param deadlineMillisEpoch absolute deadline, or {@code Long.MAX_VALUE} for none
+     * @return the request envelope carrying the control descriptor in its payloadRef
      */
     public static ForwardingEnvelope buildRequest(String messageId, AgentBusEventType eventType,
                                                   String tenantId, String traceId, String correlationId,
                                                   String idempotencyKey, String routeHandleValue,
                                                   String capability, String sourceServiceId,
                                                   String targetServiceId, long deadlineMillisEpoch) {
-        String descriptor = encodeDescriptor(eventType, traceId, correlationId, idempotencyKey,
-                routeHandleValue, capability, deadlineMillisEpoch);
+        RequestDescriptor reqDescriptor = new RequestDescriptor(eventType, traceId, correlationId,
+                idempotencyKey, routeHandleValue, capability, deadlineMillisEpoch);
+        String descriptor = encodeDescriptor(reqDescriptor);
         return new ForwardingEnvelope(
                 new ForwardingMessageId(messageId),
                 eventType, tenantId, traceId, correlationId, idempotencyKey,
@@ -368,7 +431,13 @@ public final class TestAgentRuntime {
                 ForwardingEnvelope.PayloadPolicy.DATA_BEARING, descriptor);
     }
 
-    /** Produce a request envelope onto the broker so a {@link TestAgentRuntime} can poll it. */
+    /**
+     * Produce a request envelope onto the broker so a {@link TestAgentRuntime} can poll it.
+     *
+     * @param broker        the in-memory broker to produce onto
+     * @param request       the request envelope (built via {@link #buildRequest})
+     * @param nowMillisEpoch the produce instant
+     */
     public static void publishRequest(InMemoryBroker broker, ForwardingEnvelope request, long nowMillisEpoch) {
         Objects.requireNonNull(broker, "broker is required");
         Objects.requireNonNull(request, "request is required");
@@ -394,20 +463,21 @@ public final class TestAgentRuntime {
     // package-private delegates keep the call sites (buildRequest / pollAndProcess)
     // and the RequestDescriptor shape unchanged — behaviour is identical.
 
-    static String encodeDescriptor(AgentBusEventType eventType, String traceId, String correlationId,
-                                  String idempotencyKey, String routeHandleValue, String capability,
-                                  long deadlineMillisEpoch) {
-        return BrokerControlDescriptor.encode(eventType, traceId, correlationId,
-                idempotencyKey, routeHandleValue, capability, deadlineMillisEpoch);
+    static String encodeDescriptor(RequestDescriptor req) {
+        return BrokerControlDescriptor.encode(req.eventType(), req.traceId(), req.correlationId(),
+                req.idempotencyKey(), req.routeHandleValue(), req.capability(), req.deadlineMillisEpoch());
     }
 
     /**
      * Soft-extract the {@code eventType} token from a payloadRef without throwing —
-     * returns null if the descriptor has no {@code eventType=} token or the value is
+     * returns an empty Optional if the descriptor has no {@code eventType=} token or the value is
      * not a known {@link AgentBusEventType}. Used to skip self-produced responses
      * (which carry {@code taskId=...;status=...}) before the full, validating decode.
+     *
+     * @param payloadRef the descriptor (nullable; null/blank → empty)
+     * @return the event type, or an empty Optional if absent / unknown
      */
-    static AgentBusEventType softEventType(String payloadRef) {
+    static Optional<AgentBusEventType> softEventType(String payloadRef) {
         return BrokerControlDescriptor.softEventType(payloadRef);
     }
 

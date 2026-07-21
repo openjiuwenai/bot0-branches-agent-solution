@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -18,14 +21,21 @@ package com.openjiuwen.bus.forwarding.spi;
  * endpoint and never writes Task execution state.
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §3/§8}.
+ *
+ * @since 0.1.0
  */
 public interface ForwardingDispatcher {
-
     /**
      * Accept a forwarding envelope into the outbox and return the synchronous
      * ack receipt. {@code sourceServiceId} and {@code targetServiceId} are
      * written onto the resulting {@link ForwardingOutboxRecord} (MI8-002).
      * Delivery orchestration is the {@code ForwardingDispatcherWorker} role.
+     *
+     * @param envelope the forwarding envelope to accept into the outbox
+     * @param sourceServiceId the source service identity stamped onto the outbox record
+     * @param targetServiceId the target service identity stamped onto the outbox record
+     * @param nowMillisEpoch the accept instant, in milliseconds since the epoch
+     * @return the synchronous ack receipt for the enqueued outbox record
      */
     ForwardingReceipt dispatch(ForwardingEnvelope envelope, String sourceServiceId,
                                String targetServiceId, long nowMillisEpoch);

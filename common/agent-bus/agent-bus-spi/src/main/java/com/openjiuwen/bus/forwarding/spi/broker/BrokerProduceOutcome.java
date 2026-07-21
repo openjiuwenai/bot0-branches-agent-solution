@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi.broker;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
@@ -75,7 +79,11 @@ public record BrokerProduceOutcome(Outcome outcome, ForwardingFailureCode failur
         ACCEPTED, UNAVAILABLE, ROUTE_NOT_FOUND
     }
 
-    /** Broker accepted the message (fire-and-forget; the reverse ack comes later). */
+    /**
+     * Broker accepted the message (fire-and-forget; the reverse ack comes later).
+     *
+     * @return an {@code ACCEPTED} outcome with no failure code
+     */
     public static BrokerProduceOutcome accepted() {
         return new BrokerProduceOutcome(Outcome.ACCEPTED, null);
     }
@@ -84,6 +92,9 @@ public record BrokerProduceOutcome(Outcome outcome, ForwardingFailureCode failur
      * Broker transiently unavailable / rejected the produce — retryable. The code
      * MUST be {@link ForwardingFailureCode#retryable() retryable}; the agent-bus
      * retry policy (Stage 14) owns when to retry (broker native retry is OFF).
+     *
+     * @param failureCode the retryable failure code classifying the produce failure
+     * @return a {@code UNAVAILABLE} outcome carrying the retryable failure code
      */
     public static BrokerProduceOutcome unavailable(ForwardingFailureCode failureCode) {
         return new BrokerProduceOutcome(Outcome.UNAVAILABLE, failureCode);
@@ -93,6 +104,9 @@ public record BrokerProduceOutcome(Outcome outcome, ForwardingFailureCode failur
      * Route handle could not be mapped to a broker topic (resolver returned empty)
      * — non-retryable. The code MUST be {@link ForwardingFailureCode#nonRetryable()
      * non-retryable}.
+     *
+     * @param failureCode the non-retryable failure code classifying the routing failure
+     * @return a {@code ROUTE_NOT_FOUND} outcome carrying the non-retryable failure code
      */
     public static BrokerProduceOutcome routeNotFound(ForwardingFailureCode failureCode) {
         return new BrokerProduceOutcome(Outcome.ROUTE_NOT_FOUND, failureCode);

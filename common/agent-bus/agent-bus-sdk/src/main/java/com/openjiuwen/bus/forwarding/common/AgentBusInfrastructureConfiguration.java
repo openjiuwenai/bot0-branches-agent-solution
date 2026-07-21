@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.common;
 
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingInbox;
@@ -55,12 +59,18 @@ import javax.sql.DataSource;
  *
  * <p>Authority: arch-driven gateway-assembly-purify follow-on (shared-infra extraction);
  * ADR-0163 (forwarding-reorg layering).
+ *
+ * @since 0.1.0
  */
 @Configuration
 @EnableConfigurationProperties(AgentBusBrokerProperties.class)
 public class AgentBusInfrastructureConfiguration {
-
-    /** Generic broker connection config — broker-neutral (no RocketMQ / Kafka types). */
+    /**
+     * Generic broker connection config — broker-neutral (no RocketMQ / Kafka types).
+     *
+     * @param props the broker properties (nameserver, namespace)
+     * @return a broker-neutral connection config
+     */
     @Bean
     BrokerClientProperties brokerClientProperties(AgentBusBrokerProperties props) {
         return new BrokerClientProperties(props.nameserver(), props.namespace());
@@ -70,6 +80,9 @@ public class AgentBusInfrastructureConfiguration {
      * Durable outbox — implements {@code ForwardingOutboxPort} AND
      * {@code ForwardingOutboxClaimPort}; typed for injection as either SPI port. Shared
      * by the gateway (request dispatch) and the event-bus relay (re-publish).
+     *
+     * @param dataSource the JDBC datasource for the outbox tables
+     * @return a durable JDBC outbox implementing both SPI ports
      */
     @Bean
     JdbcForwardingOutbox forwardingOutbox(DataSource dataSource) {
@@ -80,6 +93,9 @@ public class AgentBusInfrastructureConfiguration {
      * Durable inbox — event-bus relay governance dedup. Declared on the shared config so
      * the event-bus process form injects it without owning the bean (the gateway does not
      * use it, but the bean is harmless when idle).
+     *
+     * @param dataSource the JDBC datasource for the inbox table
+     * @return a durable JDBC inbox for governance dedup
      */
     @Bean
     ForwardingInboxPort forwardingInbox(DataSource dataSource) {

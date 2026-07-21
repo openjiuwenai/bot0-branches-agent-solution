@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.spi.ingress;
 
 /**
@@ -27,9 +31,10 @@ package com.openjiuwen.bus.spi.ingress;
  *
  * <p>Pure Java — no Spring, no Reactor, no Jackson imports. SPI purity
  * enforced by {@code SpiPurityGeneralizedArchTest}.
+ *
+ * @since 0.1.0
  */
 public interface IngressGateway {
-
     /**
      * Forward a client-originated request to the compute_control plane and
      * return the synchronous acknowledgement envelope. Long-running work

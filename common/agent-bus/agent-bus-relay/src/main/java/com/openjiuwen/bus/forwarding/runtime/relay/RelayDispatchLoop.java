@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import java.util.Objects;
@@ -17,23 +21,34 @@ import java.util.OptionalLong;
  *
  * <p>Authority: {@code docs/superpowers/specs/2026-07-15-relay-scheduler-design.md} §4.2;
  * mirrors {@code ForwardingDispatchLoop} (forwarding/runtime/ForwardingDispatchLoop.java).
+ *
+ * @since 0.1.0
  */
 public final class RelayDispatchLoop {
+    /** No-op idle strategy: never backs off. For fixed-delay drivers / tests. */
+    public static final RelayIdleStrategy NO_BACKOFF = tick -> {};
 
     /** Supplies the instant of the next tick, or empty to stop the loop. Injected (no clock in the loop). */
     @FunctionalInterface
     public interface TickSource {
+        /**
+         * Return the epoch millis at which the next tick should fire, or empty to stop the loop.
+         *
+         * @return the next tick instant, or empty to stop the loop
+         */
         OptionalLong nextTickMillisEpoch();
     }
 
     /** Reacts to an idle tick (one that polled nothing — all counts zero). The loop itself never sleeps. */
     @FunctionalInterface
     public interface RelayIdleStrategy {
+        /**
+         * React to an idle tick (one that polled nothing — all counts zero).
+         *
+         * @param lastTick the result of the idle tick
+         */
         void onIdle(EventBusRelayWorker.RelayTickResult lastTick);
     }
-
-    /** No-op idle strategy: never backs off. For fixed-delay drivers / tests. */
-    public static final RelayIdleStrategy NO_BACKOFF = tick -> { };
 
     private final RelayTick worker;
     private final TickSource tickSource;
@@ -84,7 +99,9 @@ public final class RelayDispatchLoop {
         return new EventBusRelayWorker.RelayTickResult(relayed, dedupSuppressed, governanceRejected, skipped);
     }
 
-    /** A tick that polled nothing — all four counts zero. */
+    /**
+     * A tick that polled nothing — all four counts zero.
+     */
     private static boolean isIdle(EventBusRelayWorker.RelayTickResult tick) {
         return tick.relayed() == 0 && tick.dedupSuppressed() == 0
                 && tick.governanceRejected() == 0 && tick.skipped() == 0;

@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
@@ -21,17 +24,18 @@ import java.util.Objects;
  * stored entry.
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4.2}.
+ *
+ * @since 0.1.0
  */
 // non-production — test fixture only; real persistence is Stage 8
 public final class InMemoryForwardingInbox implements ForwardingInboxPort {
+    private final Map<Key, Entry> store = new HashMap<>();
+    private final ForwardingStateMachine stateMachine = new ForwardingStateMachine();
 
     private record Key(String tenantId, String messageId, String consumerServiceId) {}
 
     private record Entry(ForwardingStatus.Inbox status, long receivedAt,
-                         long consumedAt, ForwardingFailureCode failureCode) {}
-
-    private final Map<Key, Entry> store = new HashMap<>();
-    private final ForwardingStateMachine stateMachine = new ForwardingStateMachine();
+            long consumedAt, ForwardingFailureCode failureCode) {}
 
     @Override
     public ForwardingStatus.Inbox receive(ForwardingEnvelope envelope,
@@ -79,6 +83,8 @@ public final class InMemoryForwardingInbox implements ForwardingInboxPort {
             store.put(key, new Entry(next, System.currentTimeMillis(), 0L, code));
         } else if (existing.status() == ForwardingStatus.Inbox.RECEIVED) {
             store.put(key, new Entry(next, existing.receivedAt(), existing.consumedAt(), code));
+        } else {
+            // fall-through: already-terminal row left untouched (idempotent)
         }
         return next;
     }

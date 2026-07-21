@@ -1,6 +1,13 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -11,8 +18,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Scheduler-mechanism test for {@link RelayScheduler} — plain JUnit 5 (agent-bus has
  * no {@code @SpringBootTest}). Constructs a real {@link ThreadPoolTaskScheduler} +
@@ -22,7 +27,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code C3ForwardingMultiWorkerConcurrencyIntegrationTest}.
  */
 class EventBusRelaySchedulerTest {
-
     private ThreadPoolTaskScheduler scheduler;
 
     private ThreadPoolTaskScheduler newScheduler() {
@@ -59,7 +63,7 @@ class EventBusRelaySchedulerTest {
                 latch.countDown();
             }
             if (throwOnFirst > 0 && n <= throwOnFirst) {
-                throw new RuntimeException("simulated tick failure #" + n);
+                throw new IllegalStateException("simulated tick failure #" + n);
             }
             return new EventBusRelayWorker.RelayTickResult(0, 0, 0, 0); // idle tick
         }

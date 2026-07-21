@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
@@ -19,12 +23,15 @@ import java.util.Optional;
  *
  * <p>Authority: Stage 15 PoC — A2A transport adapter
  * ({@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage14-review-and-stage15-plan.md}).
+ *
+ * @since 0.1.0
  */
 public final class MapEndpointResolver implements ForwardingEndpointResolver {
-
     private final Map<String, String> endpoints;
 
     /**
+     * Construct a resolver backed by an immutable copy of the supplied endpoint map.
+     *
      * @param endpoints map of {@code routeHandle.value()} → endpoint URL; copied
      *                  unmodifiable. Values may be null (mapped to
      *                  {@link Optional#empty()}).

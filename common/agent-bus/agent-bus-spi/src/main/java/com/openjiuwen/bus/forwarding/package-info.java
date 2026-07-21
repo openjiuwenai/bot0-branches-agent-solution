@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * C3 forwarding runtime substrate — broker-agnostic, tenant-scoped, durable
  * outbox / inbox domain model, ports and state machine.

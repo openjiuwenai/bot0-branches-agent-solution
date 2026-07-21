@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
@@ -20,9 +23,10 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4}
  * (outbox / inbox migration tables — the single source of truth); mirror the
  * L2 tables exactly when editing.
+ *
+ * @since 0.1.0
  */
 public final class ForwardingStateMachine {
-
     /** Events that drive an outbox record through its lifecycle. */
     public enum OutboxEvent {
         ENQUEUE, BEGIN_DISPATCH, ACK, RETRY, EXHAUST_RETRIES, EXPIRE

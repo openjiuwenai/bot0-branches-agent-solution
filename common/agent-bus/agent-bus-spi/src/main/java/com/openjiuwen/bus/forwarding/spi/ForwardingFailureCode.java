@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -28,6 +31,8 @@ package com.openjiuwen.bus.forwarding.spi;
  * <p>Authority: {@code ICD-Agent-Bus-Forwarding} (Failure Modes);
  * {@code ICD-Agent-Bus-Forwarding-Runtime};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §7}.
+ *
+ * @since 0.1.0
  */
 public enum ForwardingFailureCode {
     ROUTE_NOT_FOUND("route_not_found", Classification.NON_RETRYABLE),
@@ -50,22 +55,38 @@ public enum ForwardingFailureCode {
         this.classification = classification;
     }
 
-    /** Snake_case ICD identifier (drift guard vs the runtime ICD / yaml). */
+    /**
+     * Snake_case ICD identifier (drift guard vs the runtime ICD / yaml).
+     *
+     * @return the wire identifier persisted on the outbox / inbox record
+     */
     public String wireCode() {
         return wireCode;
     }
 
-    /** Whether this code is a retryable delivery failure (may drive RETRY_SCHEDULED). */
+    /**
+     * Whether this code is a retryable delivery failure (may drive RETRY_SCHEDULED).
+     *
+     * @return {@code true} if the classification is {@link Classification#RETRYABLE}
+     */
     public boolean retryable() {
         return classification == Classification.RETRYABLE;
     }
 
-    /** Whether this code is a non-retryable failure (direct DLQ / reject). */
+    /**
+     * Whether this code is a non-retryable failure (direct DLQ / reject).
+     *
+     * @return {@code true} if the classification is {@link Classification#NON_RETRYABLE}
+     */
     public boolean nonRetryable() {
         return classification == Classification.NON_RETRYABLE;
     }
 
-    /** Whether this code is a dedup outcome (never a delivery failure). */
+    /**
+     * Whether this code is a dedup outcome (never a delivery failure).
+     *
+     * @return {@code true} if the classification is {@link Classification#DEDUP}
+     */
     public boolean dedup() {
         return classification == Classification.DEDUP;
     }

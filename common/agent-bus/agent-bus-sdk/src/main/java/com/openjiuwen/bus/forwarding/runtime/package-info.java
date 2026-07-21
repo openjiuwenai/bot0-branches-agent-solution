@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 /**
  * Runtime machinery for the C3 forwarding substrate: the pure state-transition
  * engine ({@code ForwardingStateMachine}) and the dispatcher worker skeleton

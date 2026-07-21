@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 import java.util.List;
@@ -30,9 +34,10 @@ import java.util.List;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4.1/§8};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §4}.
+ *
+ * @since 0.1.0
  */
 public interface ForwardingOutboxClaimPort {
-
     /**
      * Atomically claim up to {@code limit} due outbox records for {@code tenantId},
      * granting each to {@code leaseOwner} until {@code leaseUntilMillisEpoch}.
@@ -59,6 +64,13 @@ public interface ForwardingOutboxClaimPort {
      * Extend an active lease the caller already holds. No-op (returns
      * {@code false}) if the record is unknown, tenant-scoped elsewhere, not
      * currently DISPATCHING, or held by a different owner.
+     *
+     * @param id                   the message id of the record whose lease is renewed
+     * @param tenantId             tenant scope of the record
+     * @param leaseOwner           identity of the claiming dispatcher instance holding the lease
+     * @param leaseUntilMillisEpoch new instant until which the lease is extended ({@code > nowMillisEpoch})
+     * @return {@code true} if the lease was extended; {@code false} if the record is unknown,
+     *         cross-tenant, not DISPATCHING, or held by a different owner
      */
     boolean renewLease(ForwardingMessageId id, String tenantId, String leaseOwner,
                        long leaseUntilMillisEpoch);
@@ -67,6 +79,12 @@ public interface ForwardingOutboxClaimPort {
      * Release a lease the caller holds (e.g. after a terminal ACK). No-op
      * (returns {@code false}) if the record is unknown, tenant-scoped elsewhere,
      * or held by a different owner.
+     *
+     * @param id         the message id of the record whose lease is released
+     * @param tenantId   tenant scope of the record
+     * @param leaseOwner identity of the claiming dispatcher instance holding the lease
+     * @return {@code true} if the lease was released; {@code false} if the record is unknown,
+     *         cross-tenant, or held by a different owner
      */
     boolean releaseLease(ForwardingMessageId id, String tenantId, String leaseOwner);
 }

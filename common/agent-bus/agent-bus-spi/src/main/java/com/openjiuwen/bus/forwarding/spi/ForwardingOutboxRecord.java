@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 import java.util.Objects;
@@ -88,13 +92,20 @@ public record ForwardingOutboxRecord(
     /**
      * Per-status condition-field invariants (MI9-003). Extracted so the
      * constructor stays readable; exercised directly by the harness.
+     *
+     * @param status the outbox status to validate
+     * @param nextAttemptAtMillisEpoch the scheduled next-attempt instant (epoch millis)
+     * @param lastFailureCode the last failure code recorded on the outbox row
+     * @param lease the current lease held on the outbox row, or null if unleased
      */
     static void validateStatusInvariants(ForwardingStatus.Outbox status,
                                          long nextAttemptAtMillisEpoch,
                                          ForwardingFailureCode lastFailureCode,
                                          ForwardingLease lease) {
         switch (status) {
-            case PENDING -> { /* fresh entry: no extra invariants */ }
+            case PENDING -> {
+                /* fresh entry: no extra invariants */
+            }
             case DISPATCHING -> requireCondition(lease != null,
                     "DISPATCHING outbox record must hold a non-null lease (lease-safe, MI9-002)");
             case RETRY_SCHEDULED -> {
@@ -139,12 +150,21 @@ public record ForwardingOutboxRecord(
         }
     }
 
-    /** Whether this record currently holds an unexpired lease at the given instant. */
+    /**
+     * Whether this record currently holds an unexpired lease at the given instant.
+     *
+     * @param nowMillisEpoch the instant to test, in epoch milliseconds
+     * @return true if the record holds a non-null, unexpired lease at the given instant
+     */
     public boolean isActivelyLeasedAt(long nowMillisEpoch) {
         return lease != null && !lease.isExpiredAt(nowMillisEpoch);
     }
 
-    /** Whether this record is in a terminal state (no further dispatch). */
+    /**
+     * Whether this record is in a terminal state (no further dispatch).
+     *
+     * @return true if the status is ACKED, DLQ, or EXPIRED
+     */
     public boolean isTerminal() {
         return status == ForwardingStatus.Outbox.ACKED
                 || status == ForwardingStatus.Outbox.DLQ

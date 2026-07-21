@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
@@ -45,8 +48,19 @@ import java.util.function.LongSupplier;
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §5};
  * {@code docs/architecture/l0/10-governance/review-packets/agent-bus-forwarding-runtime-transport-candidates.md}
  * (deliver-retry-policy-subitem).
+ *
+ * @since 0.1.0
  */
 public interface ForwardingRetryPolicy {
+    /**
+     * Default exponential-backoff policy: {@code base 100ms}, {@code cap 60s},
+     * {@code maxAttempts 5} (so a message is attempted once then retried up to
+     * five times), no jitter. Production may construct an
+     * {@link ExponentialBackoff} with a jitter source; tests inject a fixed
+     * jitter for determinism.
+     */
+    ForwardingRetryPolicy DEFAULT =
+            new ExponentialBackoff(100L, 60_000L, 5, () -> 0L);
 
     /**
      * The instant at which a retryable failure should next become due, given the
@@ -80,18 +94,9 @@ public interface ForwardingRetryPolicy {
      * failure.
      *
      * @param attemptCount retries already recorded ({@code >= 0})
+     * @return {@code true} if retries are exhausted and the record should go to DLQ
      */
     boolean exhausted(int attemptCount);
-
-    /**
-     * Default exponential-backoff policy: {@code base 100ms}, {@code cap 60s},
-     * {@code maxAttempts 5} (so a message is attempted once then retried up to
-     * five times), no jitter. Production may construct an
-     * {@link ExponentialBackoff} with a jitter source; tests inject a fixed
-     * jitter for determinism.
-     */
-    ForwardingRetryPolicy DEFAULT =
-            new ExponentialBackoff(100L, 60_000L, 5, () -> 0L);
 
     /**
      * Exponential-backoff implementation: {@code delay = min(cap, base <<
@@ -117,9 +122,12 @@ public interface ForwardingRetryPolicy {
      * first retry.
      */
     record ExponentialBackoff(long baseMillis, long capMillis, int maxAttempts,
-                              LongSupplier jitterMillis) implements ForwardingRetryPolicy {
+            LongSupplier jitterMillis) implements ForwardingRetryPolicy {
 
         /**
+         * Validates the invariants of the backoff policy components so a
+         * misconfigured policy fails at construction, not at the first retry.
+         *
          * @param baseMillis  base delay for {@code attemptCount == 0} ({@code > 0})
          * @param capMillis   upper bound on the backoff delay ({@code >= baseMillis})
          * @param maxAttempts max retries before exhaustion ({@code >= 0};
@@ -160,6 +168,9 @@ public interface ForwardingRetryPolicy {
          * attempt)}. The shift is capped at {@code 62 - (highest set bit of base)}
          * so {@code base << shift} stays positive; any value at or above the cap
          * is clamped to {@code capMillis}.
+         *
+         * @param attemptCount retries already recorded ({@code >= 0})
+         * @return the clamped backoff delay in millis ({@code <= capMillis})
          */
         private long backoffDelay(int attemptCount) {
             int highestBit = 63 - Long.numberOfLeadingZeros(baseMillis);

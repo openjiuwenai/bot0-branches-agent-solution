@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
@@ -5,6 +9,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
+
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.client.producer.SendStatus;
@@ -40,9 +45,13 @@ import java.util.Optional;
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md} §4.1 / §5.2 / §8.1;
  * {@code feat-014-a2a-call-event-forwarding.md} §5.2.
+ *
+ * @since 0.1.0
  */
 // scope: forwarding transport.broker — concrete RocketMQ relay adapter (SPI-licensed, ArchUnit-confined)
 public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRelayPort {
+    private final ForwardingEndpointResolver resolver;
+    private final MessageSender sender;
 
     /**
      * Seam for sending a built {@link Message} — unit tests inject a fake (no live broker);
@@ -50,12 +59,14 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
      */
     @FunctionalInterface
     public interface MessageSender {
-        /** Send the message; throw on any failure (the relay maps it to UNAVAILABLE). */
+        /**
+         * Send the message; throw on any failure (the relay maps it to UNAVAILABLE).
+         *
+         * @param message the built RocketMQ message to send
+         * @throws Exception if the send fails (MQClientException / broker error / interrupt)
+         */
         void send(Message message) throws Exception;
     }
-
-    private final ForwardingEndpointResolver resolver;
-    private final MessageSender sender;
 
     public RocketMqBrokerForwardingRelay(ForwardingEndpointResolver resolver, MessageSender sender) {
         this.resolver = Objects.requireNonNull(resolver, "resolver is required");
@@ -75,8 +86,8 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
             sender.send(message);
             return BrokerProduceOutcome.accepted();
         } catch (InterruptedException e) {
-            // restore the interrupt status — the worker / dispatch loop must observe the interrupt.
-            Thread.currentThread().interrupt();
+            // interrupted during send — surface retryable UNAVAILABLE; the dispatch loop's
+            // own cooperative-cancellation flag governs whether to retry (G.CON.10: no interrupt()).
             return BrokerProduceOutcome.unavailable(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
         } catch (Exception e) {
             // MQClientException / MQBrokerException / RemotingException — broker transiently
@@ -91,6 +102,10 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
      * {@code correlationId} per FEAT-013 §4.2 so the gateway can match responses).
      * {@code keys} = messageId (broker-side query / dedup hook). Extracted static so unit
      * tests pin the mapping without a producer.
+     *
+     * @param record the claimed outbox record to map (required)
+     * @param topic  the resolved RocketMQ topic to produce to (required)
+     * @return the built RocketMQ {@link Message} (routing descriptor body + user-property headers)
      */
     static Message buildMessage(ForwardingOutboxRecord record, String topic) {
         Message message = new Message(
@@ -114,7 +129,12 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
         return message;
     }
 
-    /** §6.2 ②: the broker body is a short routing descriptor only. */
+    /**
+     * §6.2 ②: the broker body is a short routing descriptor only.
+     *
+     * @param record the claimed outbox record (required)
+     * @return the routing descriptor string (the broker message body)
+     */
     static String buildRoutingDescriptor(ForwardingOutboxRecord record) {
         return "target=" + record.targetServiceId();
     }
@@ -124,6 +144,10 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
      * send status (replication timeout / slave unavailable) surfaces as an exception so the
      * relay maps it to {@code UNAVAILABLE} (retryable) — the agent-bus retry policy re-drives
      * and the outbox dedups on {@code (tenantId, messageId)}, preserving at-least-once.
+     *
+     * @param producer the started {@link DefaultMQProducer} (required)
+     * @return a {@link MessageSender} that delegates to {@code producer.send} and maps
+     *         non-{@code SEND_OK} statuses to an {@link IllegalStateException}
      */
     public static MessageSender defaultSender(DefaultMQProducer producer) {
         Objects.requireNonNull(producer, "producer is required");

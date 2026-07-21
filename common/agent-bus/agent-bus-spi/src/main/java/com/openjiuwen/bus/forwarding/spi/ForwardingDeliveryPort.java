@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -14,9 +18,10 @@ package com.openjiuwen.bus.forwarding.spi;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §3};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §5}.
+ *
+ * @since 0.1.0
  */
 public interface ForwardingDeliveryPort {
-
     /**
      * Attempt delivery of a claimed (already DISPATCHING) outbox record and
      * report the outcome the worker should apply to the state machine.
@@ -31,6 +36,7 @@ public interface ForwardingDeliveryPort {
      *
      * @param record         the claimed record (carries routeHandle / payloadRef)
      * @param nowMillisEpoch the delivery instant (epoch millis)
+     * @return the delivery outcome the worker applies to the state machine
      */
     ForwardingDeliveryResult deliver(ForwardingOutboxRecord record, long nowMillisEpoch);
 }

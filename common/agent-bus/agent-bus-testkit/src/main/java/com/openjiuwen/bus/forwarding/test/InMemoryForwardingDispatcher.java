@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingDispatcher;
@@ -18,10 +21,11 @@ import java.util.Objects;
  * {@link InMemoryForwardingDelivery} fake.
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §3}.
+ *
+ * @since 0.1.0
  */
 // non-production — test fixture only; real delivery binding is a later stage
 public final class InMemoryForwardingDispatcher implements ForwardingDispatcher {
-
     private final ForwardingOutboxPort outbox;
 
     public InMemoryForwardingDispatcher(ForwardingOutboxPort outbox) {

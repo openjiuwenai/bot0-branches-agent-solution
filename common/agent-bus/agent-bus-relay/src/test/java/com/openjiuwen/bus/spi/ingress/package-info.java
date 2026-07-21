@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 /**
  * agent-bus client-to-server ingress SPI — the single cross-plane control
  * surface for {@code edge} → {@code compute_control} traffic per CLAUDE.md

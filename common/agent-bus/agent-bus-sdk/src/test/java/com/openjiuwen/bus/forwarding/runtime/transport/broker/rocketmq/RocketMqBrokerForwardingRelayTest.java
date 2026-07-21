@@ -1,4 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
@@ -8,6 +15,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
+
 import org.apache.rocketmq.common.message.Message;
 import org.junit.jupiter.api.Test;
 
@@ -15,9 +23,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for {@link RocketMqBrokerForwardingRelay} (FEAT-013/014, S3).
@@ -34,7 +39,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * feat-013-client-invocation-event-forwarding.md} §4.1 / §5.2 / §8.1.
  */
 class RocketMqBrokerForwardingRelayTest {
-
     private static final String TENANT = "tenant-a";
     private static final String ROUTE = "route-for-tenant-a";
     private static final String SOURCE = "source-svc";
@@ -43,7 +47,7 @@ class RocketMqBrokerForwardingRelayTest {
     // ===== buildMessage: record → RocketMQ Message (pure mapping) =====
 
     @Test
-    void buildMessage_maps_record_to_routing_descriptor_body_and_metadata_properties() {
+    void buildMessage_maps_record_to_descriptor_body_and_metadata() {
         ForwardingOutboxRecord record = record("msg-1", "payload-ref-1", "corr-1");
 
         Message msg = RocketMqBrokerForwardingRelay.buildMessage(record, "topic-from-resolver");
@@ -65,7 +69,7 @@ class RocketMqBrokerForwardingRelayTest {
     }
 
     @Test
-    void buildMessage_omits_correlation_id_and_payload_ref_properties_when_null_control_only() {
+    void buildMessage_omits_corr_id_payload_ref_when_control_only() {
         ForwardingOutboxRecord record = record("msg-ctrl", null, null);
 
         Message msg = RocketMqBrokerForwardingRelay.buildMessage(record, "topic-x");
@@ -106,7 +110,7 @@ class RocketMqBrokerForwardingRelayTest {
     @Test
     void produce_returns_route_not_found_when_resolver_returns_empty() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                new MapEndpointResolver(Map.of()), msg -> { });
+                new MapEndpointResolver(Map.of()), msg -> {});
 
         BrokerProduceOutcome outcome = relay.produce(record("msg-1", null, null), 1_000L);
 
@@ -118,7 +122,9 @@ class RocketMqBrokerForwardingRelayTest {
     @Test
     void produce_returns_unavailable_when_sender_throws() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver("topic-x"), msg -> { throw new RuntimeException("broker down"); });
+                resolver("topic-x"), msg -> {
+                    throw new IllegalStateException("broker down");
+                });
 
         BrokerProduceOutcome outcome = relay.produce(record("msg-1", null, "corr-1"), 1_000L);
 
@@ -128,25 +134,23 @@ class RocketMqBrokerForwardingRelayTest {
     }
 
     @Test
-    void produce_restores_interrupt_flag_on_InterruptedException() {
+    void produce_returns_unavailable_on_InterruptedException() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver("topic-x"), msg -> { throw new InterruptedException(); });
+                resolver("topic-x"), msg -> {
+                    throw new InterruptedException();
+                });
 
-        try {
-            BrokerProduceOutcome outcome = relay.produce(record("msg-1", null, null), 1_000L);
-            assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.UNAVAILABLE);
-            assertThat(outcome.failureCode()).isEqualTo(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
-            // the interrupt flag must be restored so the worker / dispatch loop observes it.
-            assertThat(Thread.currentThread().isInterrupted()).isTrue();
-        } finally {
-            Thread.interrupted(); // clear for subsequent tests
-        }
+        BrokerProduceOutcome outcome = relay.produce(record("msg-1", null, null), 1_000L);
+        assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.UNAVAILABLE);
+        assertThat(outcome.failureCode()).isEqualTo(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
+        // G.CON.10: produce does NOT restore the interrupt flag — the dispatch loop observes
+        // cancellation via its own cooperative flag, not via Thread.isInterrupted().
     }
 
     @Test
     void produce_rejects_null_record() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver("topic-x"), msg -> { });
+                resolver("topic-x"), msg -> {});
         assertThatThrownBy(() -> relay.produce(null, 1_000L))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("record");

@@ -1,11 +1,15 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Pins the FEAT-013 + FEAT-014 event-family membership of
@@ -18,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * feat-014-a2a-call-event-forwarding.md §2.3.1}.
  */
 class AgentBusEventTypeTest {
-
     @Test
     void has_all_20_event_types_across_feat_013_and_feat_014_families() {
         assertThat(EnumSet.allOf(AgentBusEventType.class)).containsExactlyInAnyOrder(

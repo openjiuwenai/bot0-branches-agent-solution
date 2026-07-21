@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.a2a;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
@@ -5,6 +9,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
+
 import org.a2aproject.sdk.client.transport.jsonrpc.JSONRPCTransport;
 import org.a2aproject.sdk.client.transport.spi.ClientTransport;
 import org.a2aproject.sdk.client.transport.spi.interceptors.ClientCallContext;
@@ -28,7 +33,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 /**
  * A2A JSON-RPC {@link ForwardingDeliveryPort} — Stage 15 PoC real transport binding.
@@ -90,12 +94,14 @@ import java.util.function.Consumer;
  *
  * <p>Authority: Stage 15 PoC — A2A transport adapter
  * ({@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage14-review-and-stage15-plan.md}).
+ *
+ * @since 0.1.0
  */
 // scope: forwarding runtime transport adapter — A2A SDK confined to transport.a2a
 public final class A2aForwardingDeliveryPort implements ForwardingDeliveryPort {
-
     private final ForwardingEndpointResolver endpointResolver;
     private final A2aForwardingProperties properties;
+
     // One JSONRPCTransport per endpoint URL, reused across deliveries (mirrors
     // A2aRemoteAgentOutboundAdapter's per-endpoint cache). PoC does not handle
     // endpoint churn / close-on-rebuild — the resolver returns stable endpoints
@@ -136,22 +142,19 @@ public final class A2aForwardingDeliveryPort implements ForwardingDeliveryPort {
         try {
             transport.sendMessageStreaming(
                     params,
-                    event -> {
-                        TaskState state = terminalStateOf(event);
-                        if (state != null) {
-                            terminalState.set(state);
-                            settled.countDown();
-                        }
-                    },
+                    event -> terminalStateOf(event).ifPresent(state -> {
+                        terminalState.set(state);
+                        settled.countDown();
+                    }),
                     // A mid-stream error with no preceding terminal Task event is
                     // classified below as RECEIVER_UNAVAILABLE; the throwable itself
                     // is not mapped onto a distinct failure code in the PoC.
                     error -> settled.countDown(),
                     context);
-        } catch (RuntimeException ex) {
-            // Synchronous throw from sendMessageStreaming — A2AClientException is an
-            // unchecked subclass of RuntimeException — or any other runtime failure
-            // before / at stream open. Receiver unreachable; retryable.
+        } catch (A2AClientException ex) {
+            // Synchronous throw from sendMessageStreaming — A2AClientException is
+            // the SDK's unchecked exception when the stream cannot open. Receiver
+            // unreachable; retryable.
             return ForwardingDeliveryResult.retry(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
         }
 
@@ -159,7 +162,9 @@ public final class A2aForwardingDeliveryPort implements ForwardingDeliveryPort {
         try {
             reachedTerminal = settled.await(properties.streamTimeoutMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
+            // Interrupted during the blocking stream await — surface retryable
+            // DELIVERY_TIMEOUT; the dispatch loop's own cooperative-cancellation
+            // flag governs retry (G.CON.10: no interrupt()).
             return ForwardingDeliveryResult.retry(ForwardingFailureCode.DELIVERY_TIMEOUT);
         }
 
@@ -193,25 +198,28 @@ public final class A2aForwardingDeliveryPort implements ForwardingDeliveryPort {
 
     /**
      * Extracts the terminal / interrupted {@link TaskState} from a stream event,
-     * or {@code null} if the event is non-terminal (working / artifact / plain
-     * message). Terminal = {@code isFinal()} (COMPLETED / FAILED / CANCELED /
-     * REJECTED) or {@code isInterrupted()} (INPUT_REQUIRED / AUTH_REQUIRED),
-     * mirroring {@code A2aJsonRpcController#isStreamTerminating}.
+     * or an empty {@code Optional} if the event is non-terminal (working /
+     * artifact / plain message). Terminal = {@code isFinal()} (COMPLETED / FAILED
+     * / CANCELED / REJECTED) or {@code isInterrupted()} (INPUT_REQUIRED /
+     * AUTH_REQUIRED), mirroring {@code A2aJsonRpcController#isStreamTerminating}.
+     *
+     * @param event the streaming event to classify
+     * @return the terminal / interrupted TaskState, or empty if the event is non-terminal
      */
-    private static TaskState terminalStateOf(StreamingEventKind event) {
+    private static Optional<TaskState> terminalStateOf(StreamingEventKind event) {
         TaskStatus status;
         if (event instanceof Task task) {
             status = task.status();
         } else if (event instanceof TaskStatusUpdateEvent update) {
             status = update.status();
         } else {
-            return null;
+            return Optional.empty();
         }
         if (status == null || status.state() == null) {
-            return null;
+            return Optional.empty();
         }
         TaskState state = status.state();
-        return (state.isFinal() || state.isInterrupted()) ? state : null;
+        return (state.isFinal() || state.isInterrupted()) ? Optional.of(state) : Optional.empty();
     }
 
     private static MessageSendParams toMessageSendParams(ForwardingOutboxRecord record) {

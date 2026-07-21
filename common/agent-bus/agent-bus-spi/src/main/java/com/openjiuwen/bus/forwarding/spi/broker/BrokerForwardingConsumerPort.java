@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi.broker;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
@@ -44,10 +48,11 @@ import java.util.Optional;
  * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/
  * agent-bus-broker-filtering-spi-completion-decision.md} §3 (D3/D4/D5/D8) — delta
  * on {@code agent-bus-forwarding-runtime-transport-decision.md} (Stage 25 §4/§10).
+ *
+ * @since 0.1.0
  */
 // scope: forwarding transport.broker — receiver SPI; subscribe-once + param-less poll (model B, at-least-once)
 public interface BrokerForwardingConsumerPort {
-
     /**
      * Register this consumer's group, route, and delivery filter. Called once at
      * startup (before any {@link #poll}); a real adapter may be called multiple

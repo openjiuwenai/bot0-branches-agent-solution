@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.persistence.jdbc;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
@@ -10,16 +14,18 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import javax.sql.DataSource;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
+
+import javax.sql.DataSource;
 
 /**
  * Postgres JDBC adapter for the C3 outbox substrate (Stage 12, MI12-002).
@@ -75,9 +81,10 @@ import java.util.function.Supplier;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md}
  * §4 / §7.1 / §7.2 / §7.3; {@code ICD-Agent-Bus-Forwarding-Runtime}.
+ *
+ * @since 0.1.0
  */
 public final class JdbcForwardingOutbox implements ForwardingOutboxPort, ForwardingOutboxClaimPort {
-
     /**
      * Sentinel {@code lease_until} stamped by {@link #releaseLease} to expire the
      * lease without clearing {@code lease_owner} (which the
@@ -97,6 +104,8 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
      * Backwards-compatible constructor (Stage 12 form): derives a per-DataSource
      * {@link DataSourceTransactionManager} so every method runs inside a short
      * transaction that sets {@code app.tenant_id} (Stage 24 RLS wiring).
+     *
+     * @param dataSource the JDBC datasource backing the outbox table
      */
     public JdbcForwardingOutbox(DataSource dataSource) {
         this(dataSource, new DataSourceTransactionManager(dataSource));
@@ -107,6 +116,9 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
      * so production can supply a pooled / XA-aware manager, and tests can inject a
      * controlled one. The manager must bind connections from the same {@link DataSource}
      * so the transactional connection is the one {@code app.tenant_id} is set on.
+     *
+     * @param dataSource the JDBC datasource backing the outbox table
+     * @param txManager  the transaction manager binding connections from {@code dataSource}
      */
     public JdbcForwardingOutbox(DataSource dataSource, PlatformTransactionManager txManager) {
         Objects.requireNonNull(dataSource, "dataSource is required");
@@ -329,6 +341,11 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
      * RLS is the defence-in-depth fallback. A {@link RuntimeException} from
      * {@code work} (e.g. {@link ForwardingLeaseException}) rolls the transaction back
      * and propagates.
+     *
+     * @param tenantId the tenant scope to bind on the transaction
+     * @param work     the business SQL to run inside the tenant-bound transaction
+     * @param <T>      the work's return type
+     * @return the value returned by {@code work}
      */
     private <T> T withTenant(String tenantId, Supplier<T> work) {
         return txTemplate.execute(status -> {
@@ -346,6 +363,13 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
      * not the current holder and the row was untouched — classified by a
      * diagnostic SELECT. The {@code setBuilder} appends the event-specific SET
      * fragments (terminal clears the lease; RETRY bumps attempt / sets next attempt).
+     *
+     * @param id          the outbox message identifier to mutate
+     * @param tenantId    the tenant scope of the outbox row
+     * @param leaseOwner  the caller's lease-owner identifier (must be the current holder)
+     * @param event       the state-machine event selecting the next status
+     * @param setBuilder  callback that appends event-specific SET fragments and binds params
+     * @return the next outbox status the UPDATE persisted
      */
     private ForwardingStatus.Outbox leaseGuardedUpdate(ForwardingMessageId id, String tenantId,
                                                         String leaseOwner,
@@ -383,6 +407,12 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
      * {@link ForwardingLeaseException.Reason} (record untouched). Tenant scope is
      * preserved by the {@code tenant_id = :tenantId} filter — a cross-tenant lookup
      * reads as RECORD_NOT_FOUND, never a cross-tenant row.
+     *
+     * @param id         the outbox message identifier that failed to mutate
+     * @param tenantId   the tenant scope of the outbox row
+     * @param leaseOwner the caller's lease-owner identifier (for the mismatch message)
+     * @param now        the instant used for lease-expiry comparison
+     * @return the classified {@link ForwardingLeaseException} describing why the guard missed
      */
     private ForwardingLeaseException classifyLeaseFailure(ForwardingMessageId id, String tenantId,
                                                           String leaseOwner, long now) {
@@ -420,6 +450,13 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
     /** Appends event-specific SET fragments to a guarded UPDATE. */
     @FunctionalInterface
     private interface SetFragmentBuilder {
+        /**
+         * Append the event-specific SET fragments to {@code set} and bind the
+         * corresponding values onto {@code params}.
+         *
+         * @param params the parameter source to bind event-specific values onto
+         * @param set    the running SET-clause builder to append fragments to
+         */
         void build(MapSqlParameterSource params, StringBuilder set);
     }
 

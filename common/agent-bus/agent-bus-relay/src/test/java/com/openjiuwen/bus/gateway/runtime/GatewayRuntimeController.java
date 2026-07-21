@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.gateway.runtime;
 
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
@@ -33,19 +36,28 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md §4.2 / §4.6};
  * {@code docs/4plus1/delta/event-bus-relay/decision-tree.md} (G5-C).
+ *
+ * @since 0.1.0
  */
 // scope: gateway runtime — Spring HTTP controller; web confined to gateway.runtime (ADR-0160)
 @RestController
 @RequestMapping("/a2a")
 @Profile("gateway")
 public final class GatewayRuntimeController {
-
     private final IngressGateway gateway;
 
     public GatewayRuntimeController(IngressGateway gateway) {
         this.gateway = java.util.Objects.requireNonNull(gateway, "gateway is required");
     }
 
+    /**
+     * Forward an ingress client invocation to the bus and map the bus
+     * acknowledgement to an HTTP status: ACCEPTED → 202, DEFERRED → 503
+     * (backpressure), REJECTED → 422.
+     *
+     * @param envelope the ingress request envelope, validated by its compact constructor
+     * @return the HTTP response carrying the bus acknowledgement
+     */
     @PostMapping
     public ResponseEntity<IngressResponse> route(@RequestBody IngressEnvelope envelope) {
         IngressResponse response = gateway.routeClientRequest(envelope);

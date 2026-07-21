@@ -1,33 +1,41 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
-import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
-import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Stage 21 (MI21-001 / MI21-002) &mdash; <b>multi-worker concurrency</b>
@@ -149,12 +157,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * not boot Spring, but it spawns its <em>own</em> worker threads and shares the
  * embedded-postgres boot recipe, so {@code @Isolated} keeps it exclusive.
  *
- * <p>Authority: {@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage20-review-and-stage21-plan.md}
+ * <p>Authority: {@code docs/architecture/l0/10-governance/delivery-projections/
+ * agent-bus-stage20-review-and-stage21-plan.md}
  * &sect;2 / &sect;4 MI21-001 / MI21-002.
  */
 @Isolated
 class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static JdbcForwardingOutbox outbox;
@@ -201,6 +209,8 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
      *   <li>aggregate claimed / acked == M &mdash; no row was claimed but never
      *       resolved, and no row was double-counted.</li>
      * </ul>
+     *
+     * @throws Exception if the worker pool fails to terminate or a worker future fails
      */
     @Test
     void scenario_a_concurrent_claim_skip_locked_no_duplicate_deliveries() throws Exception {
@@ -209,7 +219,7 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
         int messages = 20;
         int workers = 4;
         long t0 = System.currentTimeMillis();
-        long leaseUntil = t0 + 120_000; // 2 min: the real clock never catches it
+        long leaseUntil = t0 + 120_000;
 
         for (int i = 0; i < messages; i++) {
             outbox.enqueue(envelope(tenant, "msg-" + i, route), "svc-src", "svc-tgt", t0);
@@ -226,31 +236,12 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
         };
 
         CountDownLatch startGate = new CountDownLatch(1);
-        ExecutorService pool = Executors.newFixedThreadPool(workers);
+        ExecutorService pool = new ThreadPoolExecutor(workers, workers, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<Future<long[]>> futures = new ArrayList<>();
-
         for (int w = 0; w < workers; w++) {
-            final String leaseOwner = "worker-claim-" + w;
-            ForwardingDispatcherWorker worker = new ForwardingDispatcherWorker(
-                    outbox, outbox, delivery,
-                    ForwardingDispatcherWorker.DispatchLeasePolicy.DISABLED,
-                    clock, ForwardingRetryPolicy.DEFAULT,
-                    ForwardingCircuitBreaker.ALWAYS_CLOSED);
-            futures.add(pool.submit(() -> {
-                startGate.await();
-                long claimed = 0;
-                long acked = 0;
-                while (true) {
-                    ForwardingDispatcherWorker.DispatchTickResult tick =
-                            worker.runOnce(tenant, t0, 5, leaseOwner, leaseUntil);
-                    claimed += tick.claimed();
-                    acked += tick.acked();
-                    if (tick.claimed() == 0) {
-                        break;
-                    }
-                }
-                return new long[]{claimed, acked};
-            }));
+            futures.add(submitClaimWorker(pool, startGate, delivery, clock, tenant, t0,
+                    "worker-claim-" + w, leaseUntil));
         }
 
         startGate.countDown();
@@ -259,31 +250,8 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
                 .as("all workers terminate within 60s (no infinite loop)")
                 .isTrue();
 
-        long totalClaimed = 0;
-        long totalAcked = 0;
-        for (Future<long[]> f : futures) {
-            long[] r = f.get(); // runOnce swallows per-record failures; no exception expected
-            totalClaimed += r[0];
-            totalAcked += r[1];
-        }
-
-        assertThat(deliveryCount.get())
-                .as("no duplicate deliveries under concurrent claim — SKIP LOCKED held "
-                    + "(a dup claim would have delivered the same row twice, inflating "
-                    + "the counter past %d)", messages)
-                .isEqualTo(messages);
-        assertThat(totalAcked)
-                .as("every claimed record reached a terminal ACK")
-                .isEqualTo(messages);
-        assertThat(totalClaimed)
-                .as("no record was double-claimed across workers")
-                .isEqualTo(messages);
-
-        for (int i = 0; i < messages; i++) {
-            assertThat(outbox.statusOf(id("msg-" + i), tenant))
-                    .as("msg-" + i + " reached terminal ACK under concurrent claim")
-                    .isEqualTo(ForwardingStatus.Outbox.ACKED);
-        }
+        long[] totals = collectTotals(futures);
+        assertConcurrentClaimResults(deliveryCount.get(), totals[0], totals[1], messages, tenant);
     }
 
     /**
@@ -318,6 +286,8 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
      *       is either RETRY_SCHEDULED (retry recorded before OPEN) or
      *       DISPATCHING (short-circuited after OPEN).</li>
      * </ul>
+     *
+     * @throws Exception if the worker pool fails to terminate or a worker future fails
      */
     @Test
     void scenario_b_shared_breaker_singleton_concurrent_open() throws Exception {
@@ -344,38 +314,12 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
         ForwardingRouteHandle routeHandle = new ForwardingRouteHandle(route, tenant);
 
         CountDownLatch startGate = new CountDownLatch(1);
-        ExecutorService pool = Executors.newFixedThreadPool(workers);
+        ExecutorService pool = new ThreadPoolExecutor(workers, workers, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
         List<Future<long[]>> futures = new ArrayList<>();
-
         for (int w = 0; w < workers; w++) {
-            final String leaseOwner = "worker-breaker-" + w;
-            ForwardingDispatcherWorker worker = new ForwardingDispatcherWorker(
-                    outbox, outbox, delivery,
-                    ForwardingDispatcherWorker.DispatchLeasePolicy.DISABLED,
-                    clock, ForwardingRetryPolicy.DEFAULT, breaker);
-            futures.add(pool.submit(() -> {
-                startGate.await();
-                long claimed = 0;
-                long acked = 0;
-                long retried = 0;
-                long dlqd = 0;
-                long expired = 0;
-                long skipped = 0;
-                while (true) {
-                    ForwardingDispatcherWorker.DispatchTickResult tick =
-                            worker.runOnce(tenant, t0, 5, leaseOwner, leaseUntil);
-                    claimed += tick.claimed();
-                    acked += tick.acked();
-                    retried += tick.retried();
-                    dlqd += tick.dlqd();
-                    expired += tick.expired();
-                    skipped += tick.skipped();
-                    if (tick.claimed() == 0) {
-                        break;
-                    }
-                }
-                return new long[]{claimed, acked, retried, dlqd, expired, skipped};
-            }));
+            futures.add(submitBreakerWorker(pool, startGate, delivery, clock, breaker,
+                    tenant, t0, "worker-breaker-" + w, leaseUntil));
         }
 
         startGate.countDown();
@@ -384,12 +328,89 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
                 .as("all workers terminate within 60s (OPEN short-circuit converges)")
                 .isTrue();
 
-        long totalClaimed = 0;
-        long totalAcked = 0;
-        long totalRetried = 0;
-        long totalDlqd = 0;
-        long totalExpired = 0;
-        long totalSkipped = 0;
+        long[] totals = collectBreakerTotals(futures);
+        assertBreakerResults(breaker, routeHandle, totals, messages, tenant);
+    }
+
+    // ---- worker submission helpers ----
+
+    private Future<long[]> submitClaimWorker(ExecutorService pool, CountDownLatch startGate,
+            ForwardingDeliveryPort delivery, MutableEpochClock clock, String tenant, long t0,
+            String leaseOwner, long leaseUntil) {
+        ForwardingDispatcherWorker worker = new ForwardingDispatcherWorker(
+                outbox, outbox, delivery,
+                ForwardingDispatcherWorker.DispatchLeasePolicy.DISABLED,
+                clock, ForwardingRetryPolicy.DEFAULT,
+                ForwardingCircuitBreaker.ALWAYS_CLOSED);
+        return pool.submit(() -> {
+            startGate.await();
+            long claimed = 0L;
+            long acked = 0L;
+            while (true) {
+                ForwardingDispatcherWorker.DispatchTickResult tick =
+                        worker.runOnce(tenant, t0, 5, leaseOwner, leaseUntil);
+                claimed += tick.claimed();
+                acked += tick.acked();
+                if (tick.claimed() == 0) {
+                    break;
+                }
+            }
+            return new long[]{claimed, acked};
+        });
+    }
+
+    private Future<long[]> submitBreakerWorker(ExecutorService pool, CountDownLatch startGate,
+            ForwardingDeliveryPort delivery, MutableEpochClock clock, RouteCircuitBreaker breaker,
+            String tenant, long t0, String leaseOwner, long leaseUntil) {
+        ForwardingDispatcherWorker worker = new ForwardingDispatcherWorker(
+                outbox, outbox, delivery,
+                ForwardingDispatcherWorker.DispatchLeasePolicy.DISABLED,
+                clock, ForwardingRetryPolicy.DEFAULT, breaker);
+        return pool.submit(() -> {
+            startGate.await();
+            long claimed = 0L;
+            long acked = 0L;
+            long retried = 0L;
+            long dlqd = 0L;
+            long expired = 0L;
+            long skipped = 0L;
+            while (true) {
+                ForwardingDispatcherWorker.DispatchTickResult tick =
+                        worker.runOnce(tenant, t0, 5, leaseOwner, leaseUntil);
+                claimed += tick.claimed();
+                acked += tick.acked();
+                retried += tick.retried();
+                dlqd += tick.dlqd();
+                expired += tick.expired();
+                skipped += tick.skipped();
+                if (tick.claimed() == 0) {
+                    break;
+                }
+            }
+            return new long[]{claimed, acked, retried, dlqd, expired, skipped};
+        });
+    }
+
+    // ---- result collection helpers ----
+
+    private static long[] collectTotals(List<Future<long[]>> futures) throws Exception {
+        long totalClaimed = 0L;
+        long totalAcked = 0L;
+        for (Future<long[]> f : futures) {
+            long[] r = f.get(); // runOnce swallows per-record failures; no exception expected
+            totalClaimed += r[0];
+            totalAcked += r[1];
+        }
+        return new long[]{totalClaimed, totalAcked};
+    }
+
+    private static long[] collectBreakerTotals(List<Future<long[]>> futures) throws Exception {
+        long totalClaimed = 0L;
+        long totalAcked = 0L;
+        long totalRetried = 0L;
+        long totalDlqd = 0L;
+        long totalExpired = 0L;
+        long totalSkipped = 0L;
         for (Future<long[]> f : futures) {
             long[] r = f.get(); // no exception expected under contention
             totalClaimed += r[0];
@@ -399,7 +420,40 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
             totalExpired += r[4];
             totalSkipped += r[5];
         }
+        return new long[]{totalClaimed, totalAcked, totalRetried, totalDlqd, totalExpired, totalSkipped};
+    }
 
+    // ---- assertion helpers ----
+
+    private void assertConcurrentClaimResults(long deliveryCountValue, long totalClaimed,
+            long totalAcked, int messages, String tenant) {
+        assertThat(deliveryCountValue)
+                .as("no duplicate deliveries under concurrent claim — SKIP LOCKED held "
+                    + "(a dup claim would have delivered the same row twice, inflating "
+                    + "the counter past %d)", messages)
+                .isEqualTo(messages);
+        assertThat(totalAcked)
+                .as("every claimed record reached a terminal ACK")
+                .isEqualTo(messages);
+        assertThat(totalClaimed)
+                .as("no record was double-claimed across workers")
+                .isEqualTo(messages);
+
+        for (int i = 0; i < messages; i++) {
+            assertThat(outbox.statusOf(id("msg-" + i), tenant))
+                    .as("msg-" + i + " reached terminal ACK under concurrent claim")
+                    .isEqualTo(ForwardingStatus.Outbox.ACKED);
+        }
+    }
+
+    private void assertBreakerResults(RouteCircuitBreaker breaker, ForwardingRouteHandle routeHandle,
+            long[] totals, int messages, String tenant) {
+        long totalClaimed = totals[0];
+        long totalAcked = totals[1];
+        long totalRetried = totals[2];
+        long totalDlqd = totals[3];
+        long totalExpired = totals[4];
+        long totalSkipped = totals[5];
         assertThat(breaker.stateOf(routeHandle))
                 .as("the shared breaker singleton reached a coherent OPEN visible to every "
                     + "worker — synchronized(RouteState) prevented a lost update on "

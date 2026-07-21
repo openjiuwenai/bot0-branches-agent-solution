@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
@@ -11,10 +14,10 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
@@ -66,14 +69,18 @@ import java.util.Map;
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md §1.2 / §4.1 / §5.1};
  * {@code docs/4plus1/delta/event-bus-relay/decision-tree.md} Q1a/Q2a.
+ *
+ * @since 0.1.0
  */
 @Configuration
 @Profile("eventbus")
 public class EventBusRelayConfiguration {
-
     private static final Logger log = LoggerFactory.getLogger(EventBusRelayConfiguration.class);
 
-    /** Relay RocketMQ producer (hop2 deliver + resp_out produce). Group is suffixed "-relay" to distinguish from the gateway producer. */
+    /**
+     * Relay RocketMQ producer (hop2 deliver + resp_out produce). Group is suffixed
+     * "-relay" to distinguish from the gateway producer.
+     */
     @Bean(destroyMethod = "shutdown")
     DefaultMQProducer relayProducer(BrokerClientProperties broker, AgentBusBrokerProperties props) throws Exception {
         DefaultMQProducer producer = new DefaultMQProducer(props.producerGroup() + "-relay");
@@ -132,13 +139,17 @@ public class EventBusRelayConfiguration {
                 EventBusRelayWorker.RESPONSE_TYPES);
     }
 
-    /** {@link RelayTick} seam bound to the forward relay worker (hop1 req -> hop2 deliver). */
+    /**
+     * {@link RelayTick} seam bound to the forward relay worker (hop1 req -> hop2 deliver).
+     */
     @Bean(name = "forwardRelayTick")
     RelayTick forwardRelayTick(@Qualifier("forwardRelayWorker") EventBusRelayWorker forwardRelayWorker) {
         return forwardRelayWorker::runOnce;
     }
 
-    /** {@link RelayTick} seam bound to the response relay worker (resp_in -> resp_out). */
+    /**
+     * {@link RelayTick} seam bound to the response relay worker (resp_in -> resp_out).
+     */
     @Bean(name = "responseRelayTick")
     RelayTick responseRelayTick(@Qualifier("responseRelayWorker") EventBusRelayWorker responseRelayWorker) {
         return responseRelayWorker::runOnce;
@@ -149,6 +160,11 @@ public class EventBusRelayConfiguration {
      * <b>tenant-only</b> filter (the intermediary consumes every in-tenant message on its
      * hop-in topic). FIXME (G5-E): the {@code tenant} scope is a single configured value
      * (single-tenant-per-deployment); a multi-tenant relay subscribe is a refinement.
+     *
+     * @param forwardConsumer  the forward relay consumer (hop1 req in)
+     * @param responseConsumer the response relay consumer (resp_in in)
+     * @param props            the agent-bus broker properties (tenant + service ids)
+     * @return a {@link SmartLifecycle} that subscribes both relay consumers at startup
      */
     @Bean
     SmartLifecycle relaySubscriptions(
@@ -166,10 +182,15 @@ public class EventBusRelayConfiguration {
                 // routes "invocation" + "a2a" → BrokerTopicResolver resolves to the right hop-in topic.
                 forwardConsumer.subscribe(eventBus, new ForwardingRouteHandle("invocation", tenant), tenantFilter);
                 forwardConsumer.subscribe(eventBus, new ForwardingRouteHandle("a2a", tenant), tenantFilter);
-                responseConsumer.subscribe(eventBus + "-resp", new ForwardingRouteHandle("invocation", tenant), tenantFilter);
+                responseConsumer.subscribe(eventBus + "-resp",
+                        new ForwardingRouteHandle("invocation", tenant), tenantFilter);
                 responseConsumer.subscribe(eventBus + "-resp", new ForwardingRouteHandle("a2a", tenant), tenantFilter);
-                log.info("SUBSCRIBE forward relay: consumerGroup={} topics=[ascend_bus_invocation_req, ascend_bus_a2a_req] filter=tenantId={}", eventBus, tenant);
-                log.info("SUBSCRIBE response relay: consumerGroup={} topics=[ascend_bus_invocation_resp_in, ascend_bus_a2a_resp_in] filter=tenantId={}", eventBus + "-resp", tenant);
+                log.info("SUBSCRIBE forward relay: consumerGroup={} "
+                        + "topics=[ascend_bus_invocation_req, ascend_bus_a2a_req] "
+                        + "filter=tenantId={}", eventBus, tenant);
+                log.info("SUBSCRIBE response relay: consumerGroup={} "
+                        + "topics=[ascend_bus_invocation_resp_in, ascend_bus_a2a_resp_in] "
+                        + "filter=tenantId={}", eventBus + "-resp", tenant);
                 started = true;
             }
 

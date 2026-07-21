@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi.broker;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
@@ -30,10 +34,11 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
  * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/
  * agent-bus-forwarding-runtime-transport-decision.md} (Stage 25 adopted-t4 §4 / §10,
  * Stage 26 broker SPI scaffold).
+ *
+ * @since 0.1.0
  */
 // scope: forwarding transport.broker — relay SPI; produce is fire-and-forget, not a terminal delivery
 public interface BrokerForwardingRelayPort {
-
     /**
      * Produce a claimed outbox record onto the broker.
      *

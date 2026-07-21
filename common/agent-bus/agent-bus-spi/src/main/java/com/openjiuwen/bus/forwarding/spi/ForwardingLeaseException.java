@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -19,8 +23,16 @@ package com.openjiuwen.bus.forwarding.spi;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §4/§5};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4.1}.
+ *
+ * @since 0.1.0
  */
 public class ForwardingLeaseException extends IllegalStateException {
+    private final Reason reason;
+
+    public ForwardingLeaseException(Reason reason, String message) {
+        super(message);
+        this.reason = reason;
+    }
 
     /** Why a lease-owner guarded mutation was rejected. */
     public enum Reason {
@@ -34,14 +46,11 @@ public class ForwardingLeaseException extends IllegalStateException {
         NOT_DISPATCHING
     }
 
-    private final Reason reason;
-
-    public ForwardingLeaseException(Reason reason, String message) {
-        super(message);
-        this.reason = reason;
-    }
-
-    /** The specific guard that tripped. */
+    /**
+     * Return the specific guard that tripped.
+     *
+     * @return the reason this lease-owner guarded mutation was rejected
+     */
     public Reason reason() {
         return reason;
     }

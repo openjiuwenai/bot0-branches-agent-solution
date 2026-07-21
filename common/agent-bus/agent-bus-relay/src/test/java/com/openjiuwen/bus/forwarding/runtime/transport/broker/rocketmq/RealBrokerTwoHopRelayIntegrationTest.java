@@ -1,23 +1,34 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingInbox;
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
 import com.openjiuwen.bus.forwarding.runtime.relay.EventBusRelayWorker;
 import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
 import com.openjiuwen.bus.spi.ingress.IngressResponse;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
+import org.apache.rocketmq.client.exception.MQBrokerException;
+import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
+import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,14 +39,17 @@ import org.junit.jupiter.api.parallel.Isolated;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
-import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * arch-driven G5-E — real-RocketMQ + real-Postgres TWO-HOP relay integration test for
@@ -108,11 +122,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIfEnvironmentVariable(named = "ROCKETMQ_NAMESERVER", matches = ".+")
 @Isolated
 class RealBrokerTwoHopRelayIntegrationTest {
-
     private static final String TENANT = "tenant-a";
     private static final String GATEWAY = "it-gateway-2hop";
     private static final String RUNTIME = "it-runtime-2hop";
     private static final String EVENTBUS = "it-eventbus-2hop";
+
     // distinct consumer-GROUPS so the forward relay, response relay, and gateway each
     // receive their hop-in messages independently (same group would load-balance → each
     // misses what another got).
@@ -381,10 +395,11 @@ class RealBrokerTwoHopRelayIntegrationTest {
      * failure_code set) + a second tick polling 0 (the poison was committed, not redelivered).
      */
     @Test
-    void forwardRelayCorrelationMismatch_poisonCommittedInboxRejectedNoRedeliver() {
+    void forwardRelayCorrelationMismatch_poisonCommittedNoRedeliver() {
         String messageId = "m-corr-" + UUID.randomUUID();
-        sendHop1Poison(directProducer, messageId, /* native */ "c-corr-header",
-                /* descriptor */ "c-corr-desc", TENANT, RUNTIME);
+        sendHop1Poison(directProducer, messageId,
+                new CorrIds(/* native */ "c-corr-header", /* descriptor */ "c-corr-desc"),
+                TENANT, RUNTIME);
 
         EventBusRelayWorker.RelayTickResult r = forwardRelayWorker.runOnce(TENANT, System.currentTimeMillis(), 1);
         assertThat(r.governanceRejected()).as("corr-mismatch poison rejected").isEqualTo(1);
@@ -409,7 +424,18 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
     // ===== helpers =====
 
-    /** Drive the forward relay tick (limit=1) until it relays, or the deadline. */
+    /** Pairs the native header corrId with the descriptor corrId so hop1 helpers stay ≤5 params (G.MET.01). */
+    private record CorrIds(String nativeCorrId, String descriptorCorrId) {}
+
+    /** Pairs the task cursor (id + status) so produceResponse stays ≤5 params (G.MET.01). */
+    private record TaskCursor(String taskId, String status) {}
+
+    /**
+     * Drive the forward relay tick (limit=1) until it relays, or the deadline.
+     *
+     * @param timeoutMs the maximum time to wait for the relay to produce a hop2
+     * @return true if the relay produced a hop2 within the deadline, false otherwise
+     */
     private static boolean driveForwardRelayUntilRelayed(long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < deadline) {
@@ -425,22 +451,36 @@ class RealBrokerTwoHopRelayIntegrationTest {
      * Produce a hop1 request onto {@code ascend_bus_invocation_req} with a controlled
      * messageId (mirrors {@code RocketMqBrokerForwardingRelay#buildMessage} user-properties
      * so the forward relay's poll adapter + {@link BrokerControlDescriptor#decode} work).
+     *
+     * @param producer  the MQ producer to send the hop1 on
+     * @param messageId the controlled message identifier
+     * @param corrId     the correlation identifier (used for both native header + descriptor)
+     * @param tenant     the tenant scope stamped on the message
+     * @param target     the target service identifier stamped on the message
      */
     private static void sendHop1(DefaultMQProducer producer, String messageId, String corrId,
                                  String tenant, String target) {
-        sendHop1(producer, messageId, corrId, corrId, tenant, target);
+        sendHop1(producer, messageId, new CorrIds(corrId, corrId), tenant, target);
     }
 
-    /** Variant whose native corrId can differ from the descriptor corrId (the poison case). */
-    private static void sendHop1Poison(DefaultMQProducer producer, String messageId, String nativeCorrId,
-                                       String descriptorCorrId, String tenant, String target) {
-        sendHop1(producer, messageId, nativeCorrId, descriptorCorrId, tenant, target);
+    /**
+     * Variant whose native corrId can differ from the descriptor corrId (the poison case).
+     *
+     * @param producer   the MQ producer to send the hop1 on
+     * @param messageId   the controlled message identifier
+     * @param corrIds     the native header corrId + descriptor corrId pair
+     * @param tenant      the tenant scope stamped on the message
+     * @param target      the target service identifier stamped on the message
+     */
+    private static void sendHop1Poison(DefaultMQProducer producer, String messageId, CorrIds corrIds,
+                                       String tenant, String target) {
+        sendHop1(producer, messageId, corrIds, tenant, target);
     }
 
-    private static void sendHop1(DefaultMQProducer producer, String messageId, String nativeCorrId,
-                                 String descriptorCorrId, String tenant, String target) {
+    private static void sendHop1(DefaultMQProducer producer, String messageId, CorrIds corrIds,
+                                 String tenant, String target) {
         String descriptor = BrokerControlDescriptor.encode(
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED, TRACE, descriptorCorrId,
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED, TRACE, corrIds.descriptorCorrId(),
                 "idem-" + messageId, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE);
         Message msg = new Message(TOPIC_REQ, /* tags */ null, messageId,
                 ("target=" + target).getBytes(StandardCharsets.UTF_8));
@@ -448,13 +488,13 @@ class RealBrokerTwoHopRelayIntegrationTest {
         msg.putUserProperty("messageId", messageId);
         msg.putUserProperty("sourceServiceId", GATEWAY);
         msg.putUserProperty("targetServiceId", target);
-        msg.putUserProperty("correlationId", nativeCorrId);
+        msg.putUserProperty("correlationId", corrIds.nativeCorrId());
         msg.putUserProperty("eventType", AgentBusEventType.CLIENT_INVOCATION_REQUESTED.name());
         msg.putUserProperty("payloadRef", descriptor);
         try {
             SendResult result = producer.send(msg);
             assertThat(result.getSendStatus()).isEqualTo(SendStatus.SEND_OK);
-        } catch (Exception e) {
+        } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
             throw new IllegalStateException("failed to send hop1 " + messageId, e);
         }
     }
@@ -508,7 +548,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
         private final AtomicLong respSeq = new AtomicLong();
         private final String runId;
         private volatile boolean running;
-        private Thread pollThread;
+        private ThreadPoolExecutor pollExecutor;
 
         TempRuntime(String nameserver, String runId) {
             this.consumer = new RocketMqBrokerForwardingConsumer(
@@ -524,9 +564,20 @@ class RealBrokerTwoHopRelayIntegrationTest {
             consumer.subscribe(RUNTIME + runId, new ForwardingRouteHandle(ROUTE_INVOCATION, TENANT),
                     DeliveryFilter.forRuntime(TENANT, RUNTIME));
             running = true;
-            pollThread = new Thread(this::pollLoop, "it-runtime-poll");
-            pollThread.setDaemon(true);
-            pollThread.start();
+            // Single-thread executor mirroring StdioMcpClient §315 (G.CON.08/12): the daemon
+            // thread carries an uncaught-exception handler; shutdown uses the executor's
+            // cooperative shutdown (no Thread.interrupt — G.CON.10).
+            ThreadFactory factory = r -> {
+                Thread t = new Thread(r, "it-runtime-poll");
+                t.setDaemon(true);
+                t.setUncaughtExceptionHandler((thr, ex) -> {
+                    // no-op: pollLoop already swallows transient broker hiccups
+                });
+                return t;
+            };
+            pollExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<>(), factory);
+            pollExecutor.submit(this::pollLoop);
         }
 
         private void pollLoop() {
@@ -537,18 +588,16 @@ class RealBrokerTwoHopRelayIntegrationTest {
                         processRequest(msg.get());
                         consumer.commit(msg.get()); // model B ack-after-consume
                     }
-                } catch (Exception e) {
-                    if (running) {
-                        // transient broker hiccup — keep polling (the runtime is long-lived)
-                    }
+                } catch (IllegalStateException e) {
+                    // transient broker hiccup — keep polling (the runtime is long-lived)
                 }
             }
         }
 
         void shutdown() {
             running = false;
-            if (pollThread != null) {
-                pollThread.interrupt();
+            if (pollExecutor != null) {
+                pollExecutor.shutdownNow();
             }
             if (consumer != null) {
                 consumer.close();
@@ -565,7 +614,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
             BrokerControlDescriptor.Descriptor desc;
             try {
                 desc = BrokerControlDescriptor.decode(req.payloadRef());
-            } catch (RuntimeException e) {
+            } catch (IllegalArgumentException e) {
                 return; // not a valid request descriptor — skip
             }
             if (desc.eventType() != AgentBusEventType.CLIENT_INVOCATION_REQUESTED) {
@@ -576,17 +625,26 @@ class RealBrokerTwoHopRelayIntegrationTest {
             String idem = desc.idempotencyKey();
             String taskId = "task-" + taskSeq.incrementAndGet();
             // L2 §6.2.1 BLOCKING: ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed).
-            produceResponse(AgentBusEventType.INVOCATION_ACCEPTED, taskId, "accepted", corrId, trace, idem);
-            produceResponse(AgentBusEventType.INVOCATION_RESPONSE, taskId, "snapshot", corrId, trace, idem);
-            produceResponse(AgentBusEventType.INVOCATION_TERMINAL, taskId, "completed", corrId, trace, idem);
+            produceResponse(AgentBusEventType.INVOCATION_ACCEPTED, new TaskCursor(taskId, "accepted"), corrId, trace, idem);
+            produceResponse(AgentBusEventType.INVOCATION_RESPONSE, new TaskCursor(taskId, "snapshot"), corrId, trace, idem);
+            produceResponse(AgentBusEventType.INVOCATION_TERMINAL, new TaskCursor(taskId, "completed"), corrId, trace, idem);
         }
 
-        /** Build + send a response to {@code resp_in} with a descriptor payloadRef (symmetric to the request). */
-        private void produceResponse(AgentBusEventType eventType, String taskId, String status,
+        /**
+         * Build + send a response to {@code resp_in} with a descriptor payloadRef
+         * (symmetric to the request).
+         *
+         * @param eventType the response event type to stamp on the descriptor + header
+         * @param task      the task cursor (id + status snapshot) carried in the descriptor
+         * @param corrId    the correlation identifier recovered from the request descriptor
+         * @param trace     the trace identifier recovered from the request descriptor
+         * @param idem      the idempotency key recovered from the request descriptor
+         */
+        private void produceResponse(AgentBusEventType eventType, TaskCursor task,
                                      String corrId, String trace, String idem) {
             String descriptor = BrokerControlDescriptor.encode(
                     eventType, trace, corrId, idem, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE)
-                    + ";taskId=" + taskId + ";status=" + status;
+                    + ";taskId=" + task.taskId() + ";status=" + task.status();
             String messageId = "resp-" + respSeq.incrementAndGet();
             Message msg = new Message(TOPIC_RESP_IN, /* tags */ null, messageId,
                     ("target=" + GATEWAY).getBytes(StandardCharsets.UTF_8));
@@ -599,7 +657,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
             msg.putUserProperty("payloadRef", descriptor);
             try {
                 producer.send(msg);
-            } catch (Exception e) {
+            } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
                 throw new IllegalStateException("temp runtime failed to produce response " + eventType, e);
             }
         }

@@ -1,6 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,11 +21,19 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
  * {@code setTaskScheduler}; a {@code @Scheduled} relay method would land there (shared with
  * probes). The relay is instead driven <b>programmatically</b> ({@code scheduleWithFixedDelay})
  * on its own pool — a hung relay tick blocks only its own thread.
+ *
+ * @since 0.1.0
  */
 @Configuration
 @Profile("eventbus")
 public class EventBusRelaySchedulingConfig {
 
+    /**
+     * Build the dedicated relay-scheduler slice (pool size 2, {@code relay-} thread prefix)
+     * that drives the two-hop relay ticks programmatically.
+     *
+     * @return a {@link ThreadPoolTaskScheduler} configured for the relay slice
+     */
     @Bean(destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler relayTaskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
@@ -30,6 +43,16 @@ public class EventBusRelaySchedulingConfig {
         return scheduler;
     }
 
+    /**
+     * Build the {@link RelayScheduler} that drives the forward and response relay ticks
+     * on the dedicated {@code relayTaskScheduler} slice.
+     *
+     * @param forward             the forward-hop {@link RelayTick}
+     * @param response           the response-hop {@link RelayTick}
+     * @param props              the broker/relay properties (tenant, tick limit, cadence)
+     * @param relayTaskScheduler the dedicated relay-scheduler slice
+     * @return a configured {@link RelayScheduler} bound to the relay slice
+     */
     @Bean
     public RelayScheduler relayScheduler(
             @Qualifier("forwardRelayTick") RelayTick forward,

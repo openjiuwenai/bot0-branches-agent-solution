@@ -1,9 +1,12 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi;
-
-import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Contract test for the FEAT-013+014 additive extension of
@@ -16,10 +19,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * feat-013-client-invocation-event-forwarding.md §2.3.1}.
  */
 class ForwardingEnvelopeExtensionTest {
-
     private static final String TENANT = "tenant-a";
 
-    /** Minimal valid envelope (CONTROL_ONLY, no payloadRef). */
+    /**
+     * Minimal valid envelope (CONTROL_ONLY, no payloadRef).
+     *
+     * @param eventType the event-type discriminator
+     * @param sourceServiceId the source service identity
+     * @param targetServiceId the target service identity
+     * @return a minimal valid {@link ForwardingEnvelope} with the given additive fields
+     */
     private static ForwardingEnvelope envelope(AgentBusEventType eventType,
                                                String sourceServiceId,
                                                String targetServiceId) {

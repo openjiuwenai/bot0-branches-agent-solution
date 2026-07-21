@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -11,6 +15,8 @@ package com.openjiuwen.bus.forwarding.spi;
  *
  * <p>Authority: {@code ICD-Agent-Bus-Forwarding-Runtime};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4}.
+ *
+ * @since 0.1.0
  */
 public final class ForwardingStatus {
     private ForwardingStatus() {

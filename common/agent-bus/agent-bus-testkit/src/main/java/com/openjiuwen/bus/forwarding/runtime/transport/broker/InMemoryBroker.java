@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
@@ -58,9 +62,22 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/
  * agent-bus-broker-filtering-spi-completion-decision.md} (§3 after SPI +
  * Stage 25 §10 guardrails, Stage 26 broker SPI scaffold).
+ *
+ * @since 0.1.0
  */
 // non-production — test fixture only; real broker adapter is decision §7 / Stage 28
 public final class InMemoryBroker implements BrokerForwardingRelayPort {
+    private final ForwardingEndpointResolver resolver;
+    // topic → append-only queue
+    private final Map<String, List<QueueEntry>> queues = new LinkedHashMap<>();
+    // consumerServiceId@topic → next read index
+    private final Map<String, Integer> offsets = new LinkedHashMap<>();
+    // tenantId|messageId → location
+    private final Map<String, Location> locations = new LinkedHashMap<>();
+    // messageId → last reject code (observability)
+    private final Map<String, ForwardingFailureCode> rejections = new LinkedHashMap<>();
+    private final AtomicLong sequence = new AtomicLong();
+    private volatile boolean unavailable = false;
 
     /** A queued broker message; its index in the topic list is the consumer-group offset. */
     private static final class QueueEntry {
@@ -76,46 +93,58 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
     /** Locates a polled message for commit / reject without leaking topic/offset on the message. */
     private record Location(String topic, int index) {}
 
-    private final ForwardingEndpointResolver resolver;
-    private final Map<String, List<QueueEntry>> queues = new LinkedHashMap<>();   // topic → append-only queue
-    private final Map<String, Integer> offsets = new LinkedHashMap<>();           // consumerServiceId@topic → next read index
-    private final Map<String, Location> locations = new LinkedHashMap<>();        // tenantId|messageId → location
-    private final Map<String, ForwardingFailureCode> rejections = new LinkedHashMap<>(); // messageId → last reject code (observability)
-    private final AtomicLong sequence = new AtomicLong();
-    private volatile boolean unavailable = false;
-
     public InMemoryBroker(ForwardingEndpointResolver resolver) {
         this.resolver = Objects.requireNonNull(resolver, "resolver is required");
     }
 
-    /** Test-only: force the broker into a transiently-unavailable state (simulates UNAVAILABLE produce). */
+    /**
+     * Test-only: force the broker into a transiently-unavailable state (simulates UNAVAILABLE produce).
+     *
+     * @param unavailable true to mark the broker unavailable, false to clear
+     */
     public void setUnavailable(boolean unavailable) {
         this.unavailable = unavailable;
     }
 
-    /** Test-only introspection: the stored outbound message (so contracts can assert header vs body). */
-    public synchronized BrokerOutboundMessage outboundMessage(String tenantId, String messageId) {
+    /**
+     * Test-only introspection: the stored outbound message (so contracts can assert header vs body).
+     *
+     * @param tenantId  the tenant scope to look up
+     * @param messageId the message identifier to look up
+     * @return the stored outbound message, or an empty {@link Optional} if no message was produced for the pair
+     */
+    public synchronized Optional<BrokerOutboundMessage> outboundMessage(String tenantId, String messageId) {
         requireNonBlank(tenantId, "tenantId");
         requireNonBlank(messageId, "messageId");
         for (List<QueueEntry> q : queues.values()) {
             for (QueueEntry e : q) {
                 BrokerMessageHeaders h = e.message.headers();
                 if (h.tenantId().equals(tenantId) && h.messageId().equals(messageId)) {
-                    return e.message;
+                    return Optional.of(e.message);
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
-    /** Test-only introspection: number of messages produced to a topic. */
+    /**
+     * Test-only introspection: number of messages produced to a topic.
+     *
+     * @param topic the topic to count messages on
+     * @return the number of queued messages on the topic (0 if the topic is unknown)
+     */
     public synchronized int messageCount(String topic) {
         requireNonBlank(topic, "topic");
         List<QueueEntry> q = queues.get(topic);
         return q == null ? 0 : q.size();
     }
 
-    /** Test-only introspection: last recorded reject code for a message (null if none / not rejected). */
+    /**
+     * Test-only introspection: last reject code recorded for a message (null if none / not rejected).
+     *
+     * @param messageId the message identifier whose reject code to read
+     * @return the last recorded reject code, or {@code null} if the message was never rejected
+     */
     public synchronized ForwardingFailureCode lastRejectCode(String messageId) {
         requireNonBlank(messageId, "messageId");
         return rejections.get(messageId);
@@ -126,6 +155,9 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
      * given consumer-group, backed by this shared broker's queues. Each consumer
      * subscribes with its own {@link DeliveryFilter}; offsets are tracked per
      * {@code consumerServiceId} so distinct consumers are isolated (L3).
+     *
+     * @param consumerServiceId the broker consumer-group identifier
+     * @return a per-consumer double backed by this broker's queues
      */
     public BrokerForwardingConsumerPort consumerFor(String consumerServiceId) {
         requireNonBlank(consumerServiceId, "consumerServiceId");
@@ -231,7 +263,8 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
                 return Optional.empty();
             }
             BrokerMessageHeaders h = picked.message.headers();
-            // consumerServiceId is materialised into the in-flight message at poll time (ownership until commit/reject).
+            // consumerServiceId is materialised into the in-flight message at poll time
+            // (ownership until commit/reject).
             return Optional.of(new BrokerInboundMessage(
                     h.tenantId(),
                     h.messageId(),
@@ -278,7 +311,12 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             return true;
         }
 
-        /** True if the message's header properties satisfy at least one accumulated filter (D3 matching). */
+        /**
+         * True if the message's header properties satisfy at least one accumulated filter (D3 matching).
+         *
+         * @param h the message headers to test against the accumulated filters
+         * @return true if at least one subscribed filter accepts the message
+         */
         private boolean matchesAnyFilter(BrokerMessageHeaders h) {
             for (DeliveryFilter f : filters) {
                 if (matches(h, f)) {
@@ -299,7 +337,13 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             return true;
         }
 
-        /** Map a DeliveryFilter property key to the message's header value (the known routing headers). */
+        /**
+         * Map a DeliveryFilter property key to the message's header value (the known routing headers).
+         *
+         * @param h   the message headers to read from
+         * @param key the DeliveryFilter property key
+         * @return the header value for the key, or {@code null} if the key is unknown
+         */
         private static String headerProperty(BrokerMessageHeaders h, String key) {
             return switch (key) {
                 case "tenantId" -> h.tenantId();

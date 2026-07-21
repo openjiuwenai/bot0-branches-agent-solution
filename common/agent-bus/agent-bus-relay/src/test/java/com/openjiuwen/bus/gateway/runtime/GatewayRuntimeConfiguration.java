@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.gateway.runtime;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
@@ -55,11 +59,12 @@ import java.util.Map;
  *
  * <p>Authority: {@code docs/4plus1/delta/gateway-assembly-purify/} (G2 as-is · G3
  * decision tree · G4 to-be + sign-off); ADR-0163 (the forwarding-reorg this closes).
+ *
+ * @since 0.1.0
  */
 @Configuration
 @Profile("gateway")
 public class GatewayRuntimeConfiguration {
-
     @Bean
     IngressGateway gatewayRuntimeService(ForwardingOutboxPort outbox,
                                          ForwardingOutboxClaimPort outboxClaim,
@@ -85,6 +90,10 @@ public class GatewayRuntimeConfiguration {
      * {@link ForwardingRouteHandle}); it now receives the adapter-provided
      * {@code responseConsumer} bean (de-gateway-ified from the prior
      * {@code gatewayResponseConsumer} name) instead of a gateway-constructed one.
+     *
+     * @param responseConsumer the broker response consumer bean (adapter-provided)
+     * @param props the gateway broker properties (carries gatewayServiceId)
+     * @return the subscribe-at-startup SmartLifecycle for the response consumer
      */
     @Bean
     SmartLifecycle gatewayResponseSubscription(

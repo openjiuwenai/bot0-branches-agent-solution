@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi.broker;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
@@ -56,7 +60,12 @@ public record BrokerInboundMessage(
         // eventType: nullable (control-only / JDBC back-compat); no further validation (enum).
     }
 
-    /** Whether this message carries a payload reference (data-bearing). */
+    /**
+     * Whether this message carries a payload reference (data-bearing).
+     *
+     * @return {@code true} if {@code payloadRef} is non-null (a data-bearing message);
+     *         {@code false} for a control-only message
+     */
     public boolean carriesPayloadRef() {
         return payloadRef != null;
     }

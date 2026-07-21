@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime.relay;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
@@ -8,9 +14,6 @@ import java.util.Deque;
 import java.util.List;
 import java.util.OptionalLong;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 /**
  * Deterministic unit tests for {@link RelayDispatchLoop} — the pure relay-tick
  * loop. No Spring / threads / sleep: the {@link RelayTick} worker, the
@@ -18,7 +21,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * are inline fakes. Mirrors the testability story of {@code ForwardingDispatchLoop}.
  */
 class RelayDispatchLoopTest {
-
     /** Fake worker: records (tenant, now, limit) per tick + returns scripted results. */
     static final class RecordingRelayTick implements RelayTick {
         final List<String> tenants = new ArrayList<>();
@@ -38,14 +40,21 @@ class RelayDispatchLoopTest {
     /** Capturing idle strategy: records every idle tick. */
     static final class CapturingIdle implements RelayDispatchLoop.RelayIdleStrategy {
         final List<EventBusRelayWorker.RelayTickResult> idleTicks = new ArrayList<>();
+
         @Override
-        public void onIdle(EventBusRelayWorker.RelayTickResult lastTick) { idleTicks.add(lastTick); }
+        public void onIdle(EventBusRelayWorker.RelayTickResult lastTick) {
+            idleTicks.add(lastTick);
+        }
     }
 
-    /** Queue-based TickSource: yields the given instants in order, then empty (stop). */
+    /**
+     * Queue-based TickSource: yields the given instants in order, then empty (stop).
+     */
     static RelayDispatchLoop.TickSource source(long... instants) {
         Deque<Long> q = new ArrayDeque<>();
-        for (long t : instants) q.add(t);
+        for (long t : instants) {
+            q.add(t);
+        }
         return () -> q.isEmpty() ? OptionalLong.empty() : OptionalLong.of(q.poll());
     }
 
@@ -72,9 +81,9 @@ class RelayDispatchLoopTest {
     @Test
     void fires_onIdle_only_for_all_zero_ticks() {
         RecordingRelayTick worker = new RecordingRelayTick();
-        worker.scripted.add(new EventBusRelayWorker.RelayTickResult(1, 0, 0, 0)); // busy (relayed)
+        worker.scripted.add(new EventBusRelayWorker.RelayTickResult(1, 0, 0, 0));
         worker.scripted.add(new EventBusRelayWorker.RelayTickResult(0, 0, 0, 0)); // idle
-        worker.scripted.add(new EventBusRelayWorker.RelayTickResult(0, 0, 0, 1)); // busy (skipped > 0)
+        worker.scripted.add(new EventBusRelayWorker.RelayTickResult(0, 0, 0, 1));
         CapturingIdle idle = new CapturingIdle();
         RelayDispatchLoop loop = new RelayDispatchLoop(worker, source(10L, 20L, 30L), idle);
 

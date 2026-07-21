@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime;
 
 import java.util.Objects;
@@ -26,8 +29,12 @@ import java.util.OptionalLong;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §5};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §5}.
+ *
+ * @since 0.1.0
  */
 public final class ForwardingDispatchLoop {
+    /** No-op idle strategy: a busy loop that never backs off. For tests / tight loops. */
+    public static final IdleStrategy NO_BACKOFF = tick -> {};
 
     /**
      * Supplies the instant of the next tick, or empty to stop the loop. Injected
@@ -36,6 +43,8 @@ public final class ForwardingDispatchLoop {
     @FunctionalInterface
     public interface TickSource {
         /**
+         * Returns the next tick instant, or empty to signal the loop should stop.
+         *
          * @return the next tick instant, or empty to signal the loop should stop
          */
         OptionalLong nextTickMillisEpoch();
@@ -48,11 +57,14 @@ public final class ForwardingDispatchLoop {
      */
     @FunctionalInterface
     public interface IdleStrategy {
+        /**
+         * React to an idle tick — one that claimed no records (the implementation
+         * may back off or do nothing).
+         *
+         * @param lastTick the result of the idle tick
+         */
         void onIdle(ForwardingDispatcherWorker.DispatchTickResult lastTick);
     }
-
-    /** No-op idle strategy: a busy loop that never backs off. For tests / tight loops. */
-    public static final IdleStrategy NO_BACKOFF = tick -> { };
 
     private final ForwardingDispatcherWorker worker;
     private final TickSource tickSource;

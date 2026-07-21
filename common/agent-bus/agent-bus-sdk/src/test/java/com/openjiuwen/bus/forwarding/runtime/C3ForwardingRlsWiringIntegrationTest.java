@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingInbox;
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
@@ -8,7 +14,9 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,14 +24,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.springframework.jdbc.datasource.AbstractDataSource;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Stage 24 (MI24-005) &mdash; end-to-end proof that the &sect;7.3 RLS
@@ -87,13 +94,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and these embedded-postgres ITs are not thread-safe to boot concurrently.
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md}
- * &sect;7.3; {@code docs/architecture/l0/10-governance/review-packets/agent-bus-forwarding-runtime-decision.md} &sect;8 Stage 24.
+ * &sect;7.3; {@code docs/architecture/l0/10-governance/review-packets/
+ * agent-bus-forwarding-runtime-decision.md} &sect;8 Stage 24.
  */
 @Isolated
 class C3ForwardingRlsWiringIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource superuser;
+
     /** DataSource whose every connection {@code SET ROLE app_role} first — bound by RLS. */
     private static DataSource appRoleSource;
     private static JdbcForwardingOutbox appRoleOutbox;
@@ -180,6 +188,8 @@ class C3ForwardingRlsWiringIntegrationTest {
      * <p>Tenant A's row is enqueued here as the superuser (the owner) so the INSERT is
      * independent of the app_role DML path exercised in scenario A; what matters is
      * that the row exists on disk for the app_role visibility probe.
+     *
+     * @throws Exception if the raw SQL visibility probe or the enqueue fails
      */
     @Test
     void scenario_b_rls_policy_genuinely_filters_app_role_visibility() throws Exception {

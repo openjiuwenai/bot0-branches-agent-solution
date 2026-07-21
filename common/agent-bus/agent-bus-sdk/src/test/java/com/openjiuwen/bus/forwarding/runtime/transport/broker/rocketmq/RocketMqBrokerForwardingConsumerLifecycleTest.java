@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
@@ -7,6 +13,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
+
 import org.apache.rocketmq.common.message.MessageExt;
 import org.junit.jupiter.api.Test;
 
@@ -16,9 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for the {@link RocketMqBrokerForwardingConsumer} consumer lifecycle (decision packet
@@ -36,7 +40,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * agent-bus-broker-filtering-spi-completion-decision.md} §3 (D3/D4/D5/D8/D14) / §7 slice 2.
  */
 class RocketMqBrokerForwardingConsumerLifecycleTest {
-
     private static final String TENANT = "tenant-a";
     private static final String ROUTE = "route-for-tenant-a";
     private static final String SOURCE = "source-svc";
@@ -45,7 +48,7 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     // ===== subscribe: resolver→topic + filter→SQL92, lazy poller creation =====
 
     @Test
-    void subscribe_wires_resolver_topic_and_sql92_filter_and_lazily_creates_poller() {
+    void subscribe_wires_resolver_topic_sql92_filter_lazy_poller() {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
                 resolver(ROUTE, "topic-from-resolver"), factory, 1_000L);
@@ -86,7 +89,7 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     // ===== poll: MessageExt → BrokerInboundMessage, materialised consumerServiceId, in-flight tracked =====
 
     @Test
-    void poll_maps_polled_message_ext_to_inbound_with_subscribed_consumer_service_id() {
+    void poll_maps_polled_msg_ext_to_inbound_with_consumer_service_id() {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
                 resolver(ROUTE, "topic-x"), factory, 1_000L);
@@ -206,7 +209,12 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
         return new ForwardingRouteHandle(routeValue, TENANT);
     }
 
-    /** Wire a consumer subscribed as {@code group} on ROUTE→"topic-x" with a recording factory. */
+    /**
+     * Wire a consumer subscribed as {@code group} on ROUTE→"topic-x" with a recording factory.
+     *
+     * @param group the consumer group id to subscribe under
+     * @return a wired consumer subscribed on ROUTE with a recording factory
+     */
     private static RocketMqBrokerForwardingConsumer consumerWith(String group) {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(

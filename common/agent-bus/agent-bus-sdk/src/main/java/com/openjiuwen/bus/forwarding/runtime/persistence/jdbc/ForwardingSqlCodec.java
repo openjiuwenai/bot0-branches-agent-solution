@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.persistence.jdbc;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
@@ -8,10 +12,12 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Optional;
 
 /**
  * Column ↔ record codec for the C3 forwarding JDBC adapter (Stage 12, MI12-002).
@@ -46,11 +52,6 @@ import java.sql.SQLException;
  * (record fields).
  */
 final class ForwardingSqlCodec {
-
-    private ForwardingSqlCodec() {
-        throw new AssertionError("ForwardingSqlCodec is a namespace of static codecs");
-    }
-
     /** Maps an {@code agent_bus_forwarding_outbox} row to a {@link ForwardingOutboxRecord}. */
     static final RowMapper<ForwardingOutboxRecord> OUTBOX_ROW_MAPPER =
             (rs, rowNum) -> mapOutbox(rs);
@@ -58,6 +59,10 @@ final class ForwardingSqlCodec {
     /** Maps an {@code agent_bus_forwarding_inbox} row to a {@link ForwardingInboxRecord}. */
     static final RowMapper<ForwardingInboxRecord> INBOX_ROW_MAPPER =
             (rs, rowNum) -> mapInbox(rs);
+
+    private ForwardingSqlCodec() {
+        throw new AssertionError("ForwardingSqlCodec is a namespace of static codecs");
+    }
 
     static ForwardingOutboxRecord mapOutbox(ResultSet rs) throws SQLException {
         String tenantId = rs.getString("tenant_id");
@@ -78,12 +83,12 @@ final class ForwardingSqlCodec {
                 nullableLongOrDefault(rs, "next_attempt_at", 0L),
                 rs.getLong("created_at"),
                 rs.getLong("updated_at"),
-                decodeFailureCode(rs.getString("last_failure_code")),
+                decodeFailureCode(rs.getString("last_failure_code")).orElse(null),
                 lease,
                 // FEAT-013 V3: correlation_id recovered from the column (null for pre-FEAT-013 rows).
                 rs.getString("correlation_id"),
                 // FEAT-013 V3: event_type recovered → AgentBusEventType (null for pre-FEAT-013 rows).
-                decodeEventType(rs.getString("event_type")));
+                decodeEventType(rs.getString("event_type")).orElse(null));
     }
 
     static ForwardingInboxRecord mapInbox(ResultSet rs) throws SQLException {
@@ -94,21 +99,25 @@ final class ForwardingSqlCodec {
                 ForwardingStatus.Inbox.valueOf(rs.getString("status")),
                 rs.getLong("received_at"),
                 nullableLongOrDefault(rs, "consumed_at", 0L),
-                decodeFailureCode(rs.getString("failure_code")));
+                decodeFailureCode(rs.getString("failure_code")).orElse(null));
     }
 
     /**
      * Snake_case ICD wire code → {@link ForwardingFailureCode} (null-safe). An
      * unknown wire value means the on-disk row drifted from the enum — surface it
      * loudly rather than silently misclassify.
+     *
+     * @param wire the on-disk snake_case wire code; {@code null} for an absent column
+     * @return the matching failure code wrapped in an {@link Optional}, or
+     *         {@link Optional#empty()} when {@code wire} is {@code null}
      */
-    static ForwardingFailureCode decodeFailureCode(String wire) {
+    static Optional<ForwardingFailureCode> decodeFailureCode(String wire) {
         if (wire == null) {
-            return null;
+            return Optional.empty();
         }
         for (ForwardingFailureCode code : ForwardingFailureCode.values()) {
             if (code.wireCode().equals(wire)) {
-                return code;
+                return Optional.of(code);
             }
         }
         throw new IllegalStateException(
@@ -119,12 +128,16 @@ final class ForwardingSqlCodec {
      * FEAT-013 V3: on-disk event_type → {@link AgentBusEventType} (null-safe, mirrors
      * {@link #decodeFailureCode}'s "surface unknown loudly" stance). Null for
      * pre-FEAT-013 / control-only rows.
+     *
+     * @param wire the on-disk event-type wire name; {@code null} or blank for absent
+     * @return the matching event type wrapped in an {@link Optional}, or
+     *         {@link Optional#empty()} when {@code wire} is {@code null} or blank
      */
-    static AgentBusEventType decodeEventType(String wire) {
+    static Optional<AgentBusEventType> decodeEventType(String wire) {
         if (wire == null || wire.isBlank()) {
-            return null;
+            return Optional.empty();
         }
-        return AgentBusEventType.valueOf(wire);
+        return Optional.of(AgentBusEventType.valueOf(wire));
     }
 
     private static long nullableLongOrDefault(ResultSet rs, String column, long defaultValue)

@@ -1,16 +1,20 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
 
-import java.util.Optional;
-import java.util.function.Function;
-
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Contract tests for {@link TestAgentRuntime} — the in-repo test double that
@@ -30,7 +34,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * feat-014-a2a-call-event-forwarding.md §4.4}.
  */
 class TestAgentRuntimeTest {
-
     private static final String TENANT = "tenant-a";
     private static final String RUNTIME = "test-agent-runtime";
     private static final String GATEWAY = "test-gateway";
@@ -66,7 +69,7 @@ class TestAgentRuntimeTest {
         assertThat(extractStatus(out.responses().get(2))).isEqualTo("completed");
         // all three responses reached the broker (per-message introspection)
         for (ForwardingEnvelope r : out.responses()) {
-            assertThat(runtime.broker().outboundMessage(TENANT, r.messageId().value())).isNotNull();
+            assertThat(runtime.broker().outboundMessage(TENANT, r.messageId().value())).isPresent();
         }
         // the request was committed (model B ack-after-consume) — re-poll yields only responses, then idle
         assertThat(runtime.pollAndProcess(3_000L).outcome())
@@ -282,23 +285,27 @@ class TestAgentRuntimeTest {
                 idempotencyKey, ROUTE, "cap-1", GATEWAY, RUNTIME, Long.MAX_VALUE);
     }
 
-    /** Extract {@code taskId=<id>} from a response payloadRef, or null if absent. */
+    /**
+     * Extract {@code taskId=<id>} from a response payloadRef, or null if absent.
+     */
     private static String extractTaskId(ForwardingEnvelope env) {
-        return token(env.payloadRef(), "taskId");
+        return token(env.payloadRef(), "taskId").orElse(null);
     }
 
-    /** Extract {@code status=<status>} from a response payloadRef, or null if absent. */
+    /**
+     * Extract {@code status=<status>} from a response payloadRef, or null if absent.
+     */
     private static String extractStatus(ForwardingEnvelope env) {
-        return token(env.payloadRef(), "status");
+        return token(env.payloadRef(), "status").orElse(null);
     }
 
-    private static String token(String descriptor, String key) {
+    private static Optional<String> token(String descriptor, String key) {
         for (String pair : descriptor.split(";")) {
             int eq = pair.indexOf('=');
             if (eq > 0 && pair.substring(0, eq).equals(key)) {
-                return pair.substring(eq + 1);
+                return Optional.of(pair.substring(eq + 1));
             }
         }
-        return null;
+        return Optional.empty();
     }
 }

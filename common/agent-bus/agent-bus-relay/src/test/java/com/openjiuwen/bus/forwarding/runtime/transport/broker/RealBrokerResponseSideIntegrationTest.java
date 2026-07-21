@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
@@ -16,11 +22,12 @@ import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 import com.openjiuwen.bus.spi.ingress.IngressResponse;
 
+import org.apache.rocketmq.client.exception.MQBrokerException;
+import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
-import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
-
+import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,9 +40,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * S7 prototype — real-RocketMQ RESPONSE-side integration test for FEAT-013/014
@@ -84,10 +93,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIfEnvironmentVariable(named = "ROCKETMQ_NAMESERVER", matches = ".+")
 @Isolated
 class RealBrokerResponseSideIntegrationTest {
-
     private static final String TENANT = "tenant-a";
     private static final String GATEWAY = "it-gateway";
     private static final String RUNTIME = "it-agent-runtime";
+
     // distinct consumer-GROUPS so A (acceptWindow) and V (verifier) each receive every response
     // (same group would load-balance queues → each misses what the other got).
     private static final String GROUP_RESP = "it-gateway-resp";
@@ -102,14 +111,16 @@ class RealBrokerResponseSideIntegrationTest {
 
     private static final long ACCEPT_TIMEOUT_MS = 15_000L;
     private static final long RESPONSE_TIMEOUT_MS = 30_000L;
+
     // the adapter's poll blocks up to this long for an async message (broker round-trip latency budget).
     private static final long POLL_WAIT_MS = 5_000L;
 
-    // produce-side (gateway dispatch) + the three LitePull consumer adapters (A=gateway resp, V=verifier, T=temp runtime req).
+    // produce-side (gateway dispatch) + the three LitePull consumer adapters:
+    // A=gateway resp, V=verifier (separate group → receives every response), T=temp runtime req.
     private static DefaultMQProducer gatewayProducer;
-    private static RocketMqBrokerForwardingConsumer responseAdapter;   // A: acceptWindow polls this (model B)
-    private static RocketMqBrokerForwardingConsumer verifyAdapter;     // V: pollNext / UC-10 (separate group → all messages)
-    private static TempRuntime tempRuntime;                           // T: LitePull poll-loop consuming requests
+    private static RocketMqBrokerForwardingConsumer responseAdapter; // A: acceptWindow polls this (model B)
+    private static RocketMqBrokerForwardingConsumer verifyAdapter; // V: verifier (pollNext / UC-10)
+    private static TempRuntime tempRuntime; // T: LitePull poll-loop consuming requests
 
     private GatewayRuntimeService gateway;
 
@@ -168,7 +179,13 @@ class RealBrokerResponseSideIntegrationTest {
         wireGateway(ACCEPT_TIMEOUT_MS, RESPONSE_TIMEOUT_MS);
     }
 
-    /** Wire the gateway with per-test accept/response timeouts; the response consumer is the shared adapter A. */
+    /**
+     * Wire the gateway with per-test accept/response timeouts; the response consumer is the shared
+     * adapter A.
+     *
+     * @param acceptTimeoutMs  per-test accept window (no accepted within → UNKNOWN)
+     * @param responseTimeoutMs per-test post-accepted window (no terminal within → ACCEPTED_WITH_TASK)
+     */
     private void wireGateway(long acceptTimeoutMs, long responseTimeoutMs) {
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
         MapEndpointResolver resolver = new MapEndpointResolver(Map.of(
@@ -185,6 +202,9 @@ class RealBrokerResponseSideIntegrationTest {
      * {@code expectedCorrId} (blocking). Polling by corrId disambiguates the two TERMINAL variants
      * and skips leftovers from prior tests — V (a separate group) accumulates every response, so
      * non-matching ones are committed + skipped here.
+     *
+     * @param expectedCorrId the correlationId to match (== requestId.toString())
+     * @return the next matching response (committed out of V's queue by the caller)
      */
     private BrokerInboundMessage pollNext(String expectedCorrId) {
         long deadline = System.currentTimeMillis() + ACCEPT_TIMEOUT_MS;
@@ -268,7 +288,13 @@ class RealBrokerResponseSideIntegrationTest {
                 InvocationResponseStatus.FAILED);
     }
 
-    /** Produce one response of {@code eventType}, poll it by corrId, assert classify maps it. */
+    /**
+     * Produce one response of {@code eventType}, poll it by corrId, assert classify maps it.
+     *
+     * @param eventType the response event type to produce + classify
+     * @param payloadRef the response payloadRef (carrying status / taskId / streamRef tokens)
+     * @param expected   the classification {@code gateway.classify} should yield
+     */
     private void assertClassify(AgentBusEventType eventType, String payloadRef,
                                 InvocationResponseStatus expected) {
         String corrId = UUID.randomUUID().toString();
@@ -339,6 +365,8 @@ class RealBrokerResponseSideIntegrationTest {
      * → the temp runtime dedups (tenantId|idempotencyKey) → both responses share ONE taskId.
      * Drain the verifier for all responses matching this corrId and assert exactly one distinct
      * taskId.
+     *
+     * @throws Exception if interrupted while sleeping / polling for the temp runtime's responses
      */
     @Test
     void uc10_idempotency_duplicate_dispatch_emits_one_task_id() throws Exception {
@@ -360,7 +388,7 @@ class RealBrokerResponseSideIntegrationTest {
                 break;
             }
             if (corrId.equals(m.correlationId())) {
-                String tid = BrokerControlDescriptor.token(m.payloadRef(), "taskId");
+                String tid = BrokerControlDescriptor.token(m.payloadRef(), "taskId").orElse(null);
                 if (tid != null) {
                     taskIds.add(tid);
                 }
@@ -379,6 +407,8 @@ class RealBrokerResponseSideIntegrationTest {
      * (pull 0). If {@code enablePropertyFilter} were off, the broker would deliver the non-matching
      * message (the adapter does NOT client-filter — {@code supportsBrokerSidePropertyFilter()=true}),
      * surfacing the missing config as a failure rather than a silent degrade.
+     *
+     * @throws Exception if broker produce / poll / subscribe fails during the filter proof
      */
     @Test
     void d9_bysql_filter_is_enforced_broker_side() throws Exception {
@@ -415,8 +445,16 @@ class RealBrokerResponseSideIntegrationTest {
         }
     }
 
-    /** Produce one response message to the resp topic with the given targetServiceId (used by D9). */
-    private static void sendD9Message(DefaultMQProducer producer, String messageId, String targetServiceId) throws Exception {
+    /**
+     * Produce one response message to the resp topic with the given targetServiceId (used by D9).
+     *
+     * @param producer        the RocketMQ producer to send through
+     * @param messageId       the message id (broker keys + user-property)
+     * @param targetServiceId the target service id stamped on the message (the bySql filter key)
+     * @throws Exception if the broker send fails
+     */
+    private static void sendD9Message(DefaultMQProducer producer, String messageId,
+                                      String targetServiceId) throws Exception {
         Message msg = new Message(TOPIC_INVOCATION_RESP_OUT, /* tags */ null, messageId,
                 ("target=" + targetServiceId).getBytes(StandardCharsets.UTF_8));
         msg.putUserProperty("tenantId", TENANT);
@@ -429,7 +467,13 @@ class RealBrokerResponseSideIntegrationTest {
         assertThat(producer.send(msg).getSendStatus()).isEqualTo(SendStatus.SEND_OK);
     }
 
-    /** Poll a consumer until it returns a message or the timeout elapses (empty → no matching message). */
+    /**
+     * Poll a consumer until it returns a message or the timeout elapses (empty → no matching message).
+     *
+     * @param c         the consumer to poll
+     * @param timeoutMs the maximum time to wait for a message
+     * @return the first polled message, or an empty Optional if the timeout elapses with no message
+     */
     private static Optional<BrokerInboundMessage> pollFirst(RocketMqBrokerForwardingConsumer c, long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < deadline) {
@@ -455,17 +499,17 @@ class RealBrokerResponseSideIntegrationTest {
      */
     static final class TempRuntime {
 
-        /** Configurable response behaviour for a consumed REQUESTED event (mirrors TestAgentRuntime). */
-        enum ResponseMode { BLOCKING, SILENT, STREAMING }
-
-        private final RocketMqBrokerForwardingConsumer consumer;   // T: LitePull adapter (request consumption)
-        private final DefaultMQProducer producer;                  // produce responses
+        private final RocketMqBrokerForwardingConsumer consumer; // T: LitePull adapter (request consumption)
+        private final DefaultMQProducer producer; // produce responses
         private final AtomicLong taskSeq = new AtomicLong();
         private final AtomicLong respSeq = new AtomicLong();
         private final Map<String, TaskEntry> taskByKey = new ConcurrentHashMap<>();
         private volatile ResponseMode responseMode = ResponseMode.BLOCKING;
         private volatile boolean running;
-        private Thread pollThread;
+        private ThreadPoolExecutor pollExecutor;
+
+        /** Configurable response behaviour for a consumed REQUESTED event (mirrors TestAgentRuntime). */
+        enum ResponseMode {BLOCKING, SILENT, STREAMING}
 
         TempRuntime(String nameserver) {
             ForwardingEndpointResolver reqResolver = new MapEndpointResolver(
@@ -481,9 +525,20 @@ class RealBrokerResponseSideIntegrationTest {
             consumer.subscribe(RUNTIME, new ForwardingRouteHandle(ROUTE_INVOCATION, TENANT),
                     DeliveryFilter.forRuntime(TENANT, RUNTIME));
             running = true;
-            pollThread = new Thread(this::pollLoop, "it-temp-runtime-poll");
-            pollThread.setDaemon(true);
-            pollThread.start();
+            // Single-thread executor mirroring StdioMcpClient §315 (G.CON.08/12): the daemon thread
+            // carries an uncaught-exception handler; shutdown uses the executor's cooperative
+            // shutdown (no Thread.interrupt — G.CON.10).
+            ThreadFactory factory = r -> {
+                Thread t = new Thread(r, "it-temp-runtime-poll");
+                t.setDaemon(true);
+                t.setUncaughtExceptionHandler((thr, ex) -> {
+                    // no-op: pollLoop already swallows transient broker hiccups
+                });
+                return t;
+            };
+            pollExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<>(), factory);
+            pollExecutor.submit(this::pollLoop);
         }
 
         private void pollLoop() {
@@ -494,18 +549,16 @@ class RealBrokerResponseSideIntegrationTest {
                         processRequest(msg.get());
                         consumer.commit(msg.get()); // model B ack-after-consume
                     }
-                } catch (Exception e) {
-                    if (running) {
-                        // transient broker hiccup — keep polling (the runtime is long-lived)
-                    }
+                } catch (IllegalStateException e) {
+                    // transient broker hiccup — keep polling (the runtime is long-lived)
                 }
             }
         }
 
         void shutdown() {
             running = false;
-            if (pollThread != null) {
-                pollThread.interrupt();
+            if (pollExecutor != null) {
+                pollExecutor.shutdownNow();
             }
             if (consumer != null) {
                 consumer.close();
@@ -598,7 +651,7 @@ class RealBrokerResponseSideIntegrationTest {
             msg.putUserProperty("payloadRef", respPayloadRef);
             try {
                 producer.send(msg);
-            } catch (Exception e) {
+            } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
                 throw new IllegalStateException("temp runtime failed to produce response " + eventType, e);
             }
         }

@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi.broker;
 
 import java.util.Map;
@@ -31,6 +34,10 @@ public record DeliveryFilter(Map<String, String> requiredProperties) {
      * Stamp the tenant + target-serviceId a runtime wants to receive — the canonical
      * per-runtime filter (D2 / D10: a {@code runtime-${serviceId}} consumer-group receives
      * only messages targeted at it, within its tenant).
+     *
+     * @param tenantId   the tenant scope the runtime subscribes under (Rule R-C.c)
+     * @param myServiceId the runtime's own service id (stamped as {@code targetServiceId})
+     * @return a {@code tenantId + targetServiceId} delivery filter for the runtime
      */
     public static DeliveryFilter forRuntime(String tenantId, String myServiceId) {
         Objects.requireNonNull(tenantId, "tenantId is required");

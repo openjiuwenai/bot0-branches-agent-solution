@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
@@ -23,7 +29,6 @@ import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.common.message.MessageExt;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,8 +42,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * S7 prototype — real-RocketMQ PRODUCE-side integration test for FEAT-013/014
@@ -81,13 +84,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIfEnvironmentVariable(named = "ROCKETMQ_NAMESERVER", matches = ".+")
 @Isolated
 class RealBrokerProduceSideIntegrationTest {
-
     private static final String TENANT = "tenant-a";
     private static final String GATEWAY = "it-gateway";
     private static final String RUNTIME = "it-agent-runtime";
     private static final String TRACE = "0123456789abcdef0123456789abcdef";
     private static final String ROUTE_INVOCATION = "route-invocation";
     private static final String ROUTE_A2A = "route-a2a";
+
     // RocketMQ topic-name validator (^[%|a-zA-Z0-9_-]+$) forbids '.' — 联调 surfaced
     // that the L2 §5.2 + docker-compose.yml originally used dotted names
     // (ascend.bus.invocation.req), which mqadmin rejects. Reconciled to underscore
@@ -99,6 +102,10 @@ class RealBrokerProduceSideIntegrationTest {
     private static DefaultMQProducer producer;
     private static DefaultMQPushConsumer drainConsumer;
     private static final ConcurrentLinkedQueue<MessageExt> captured = new ConcurrentLinkedQueue<>();
+
+    private InMemoryForwardingOutbox outbox;
+    private RocketMqBrokerForwardingRelay relay;
+    private GatewayRuntimeService gateway;
 
     @BeforeAll
     static void startBrokerClients() throws Exception {
@@ -132,10 +139,6 @@ class RealBrokerProduceSideIntegrationTest {
             producer.shutdown();
         }
     }
-
-    private InMemoryForwardingOutbox outbox;
-    private RocketMqBrokerForwardingRelay relay;
-    private GatewayRuntimeService gateway;
 
     @BeforeEach
     void wireGateway() {
@@ -181,9 +184,11 @@ class RealBrokerProduceSideIntegrationTest {
      * UC-2 — a client RUN_CREATE request dispatched through the gateway lands on the
      * FEAT-013 request topic with complete routing headers and a round-trip control
      * descriptor in the payloadRef.
+     *
+     * @throws Exception if the gateway dispatch, broker produce, or capture fails
      */
     @Test
-    void uc2_clientInvocationRequest_landsOnBrokerWithHeadersAndDescriptor() throws Exception {
+    void uc2_clientInvocationRequest_landsOnBrokerHdrsAndDesc() throws Exception {
         UUID requestId = UUID.randomUUID();
         IngressEnvelope env = new IngressEnvelope(
                 requestId, TENANT, UUID.randomUUID(),
@@ -221,6 +226,8 @@ class RealBrokerProduceSideIntegrationTest {
      * request topic. Driven directly through {@code relay.produce} (not
      * {@code gateway.dispatchRequest}) because the S2 client-ingress gateway cannot
      * emit {@code A2A_CALL_REQUESTED} (A2A ingress is deferred to S4).
+     *
+     * @throws Exception if the relay produce or capture fails
      */
     @Test
     void uc3_a2aCallRequest_producedViaRelay_landsOnA2aTopic() throws Exception {
@@ -259,7 +266,13 @@ class RealBrokerProduceSideIntegrationTest {
         assertThat(decoded.routeHandle()).isEqualTo(ROUTE_A2A);
     }
 
-    /** Drain the captured queue for the message whose correlationId user-property matches. */
+    /**
+     * Drain the captured queue for the message whose correlationId user-property matches.
+     *
+     * @param correlationId the correlation id to match against the captured messages
+     * @return the first captured message whose correlationId matches
+     * @throws InterruptedException if the poll sleep is interrupted
+     */
     private MessageExt awaitCapture(String correlationId) throws InterruptedException {
         long deadline = System.currentTimeMillis() + CAPTURE_TIMEOUT_MS;
         while (System.currentTimeMillis() < deadline) {

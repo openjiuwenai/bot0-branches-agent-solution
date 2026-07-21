@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
 /**
@@ -20,15 +24,19 @@ package com.openjiuwen.bus.forwarding.runtime;
  * JDBC, broker or scheduler dependency.
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §5}.
+ *
+ * @since 0.1.0
  */
 @FunctionalInterface
 public interface EpochClock {
+    /** Default source: {@link System#currentTimeMillis()}. */
+    EpochClock SYSTEM = System::currentTimeMillis;
+
     /**
+     * Get the current time as epoch milliseconds.
+     *
      * @return the current time as epoch milliseconds (same basis as the
      *         {@code nowMillisEpoch} / {@code leaseUntilMillisEpoch} arguments)
      */
     long epochMillis();
-
-    /** Default source: {@link System#currentTimeMillis()}. */
-    EpochClock SYSTEM = System::currentTimeMillis;
 }

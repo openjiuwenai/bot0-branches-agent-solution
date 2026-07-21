@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
@@ -7,8 +11,10 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
+
 import org.apache.rocketmq.client.consumer.DefaultLitePullConsumer;
 import org.apache.rocketmq.client.consumer.MessageSelector;
+import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.message.MessageExt;
 
 import java.util.ArrayList;
@@ -47,9 +53,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/
  * agent-bus-broker-filtering-spi-completion-decision.md} §7 / §3 (D3/D4/D5/D8/D14);
  * L2 feat-013 §5.2.
+ *
+ * @since 0.1.0
  */
 // scope: forwarding transport.broker — concrete RocketMQ consumer adapter (SPI-licensed, ArchUnit-confined)
 public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingConsumerPort {
+
+    private final ForwardingEndpointResolver resolver;
+    private final MessagePollerFactory factory;
+    private final long pollWaitMillis;
+    private MessagePoller poller;                  // lazily created at first subscribe (group-bound)
+    private String consumerServiceId;              // the consumer-group (set at subscribe)
+    private final Map<String, MessageExt> inFlight = new ConcurrentHashMap<>(); // tenantId|messageId → ext
 
     /**
      * Seam that constructs the broker poller for a consumer-group (known at subscribe, not
@@ -59,6 +74,12 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      */
     @FunctionalInterface
     public interface MessagePollerFactory {
+        /**
+         * Construct the broker poller for the given consumer-group.
+         *
+         * @param consumerGroup the RocketMQ consumer-group (known at subscribe, not construction)
+         * @return a {@link MessagePoller} bound to the consumer-group
+         */
         MessagePoller pollerFor(String consumerGroup);
     }
 
@@ -70,23 +91,42 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * NOT ack (redelivered); {@code close} shuts the consumer down.
      */
     public interface MessagePoller {
+        /**
+         * Register a topic + SQL92 expression subscription on this consumer.
+         *
+         * @param topic the RocketMQ topic to subscribe
+         * @param sql92Expression the SQL92 filter expression (broker-side filtering, D8)
+         */
         void subscribe(String topic, String sql92Expression);
 
+        /**
+         * Poll for the next matching message, blocking up to the timeout.
+         *
+         * @param timeoutMillis max wait in milliseconds
+         * @return the next matching message, or empty on timeout
+         */
         Optional<MessageExt> poll(long timeoutMillis);
 
+        /**
+         * Ack a polled message (model B ack-after-consume).
+         *
+         * @param message the polled message to ack
+         */
         void commit(MessageExt message);
 
+        /**
+         * Reject a polled message — NOT acked, so the broker redelivers (at-least-once).
+         *
+         * @param message the polled message to reject
+         * @param code the failure code (recorded for observability)
+         */
         void reject(MessageExt message, ForwardingFailureCode code);
 
+        /**
+         * Shut the consumer down (idempotent).
+         */
         void close();
     }
-
-    private final ForwardingEndpointResolver resolver;
-    private final MessagePollerFactory factory;
-    private final long pollWaitMillis;
-    private MessagePoller poller;                  // lazily created at first subscribe (group-bound)
-    private String consumerServiceId;              // the consumer-group (set at subscribe)
-    private final Map<String, MessageExt> inFlight = new ConcurrentHashMap<>(); // tenantId|messageId → ext
 
     public RocketMqBrokerForwardingConsumer(ForwardingEndpointResolver resolver,
                                             MessagePollerFactory factory, long pollWaitMillis) {
@@ -119,6 +159,8 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
             throw new IllegalArgumentException(
                     "consumerServiceId '" + consumerServiceId + "' does not match this consumer ('"
                             + this.consumerServiceId + "')");
+        } else {
+            // same consumer-group — multi-subscribe accumulates routes on the one consumer (fall-through).
         }
         String topic = resolver.resolve(route)
                 .orElseThrow(() -> new IllegalStateException("unresolvable route: " + route.value()));
@@ -146,6 +188,9 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * Map a polled {@link MessageExt} (routing user-properties) → broker-agnostic
      * {@link BrokerInboundMessage}; the polling {@code consumerServiceId} is materialised at poll
      * time (ownership until commit/reject), mirroring {@link InMemoryBroker} (T4 hybrid).
+     *
+     * @param m the polled RocketMQ message (carrying routing user-properties)
+     * @return the broker-agnostic inbound message with the dedup/inbox key fields materialised
      */
     private BrokerInboundMessage toInbound(MessageExt m) {
         return new BrokerInboundMessage(
@@ -156,28 +201,46 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
                 consumerServiceId,
                 m.getProperty("payloadRef"),
                 m.getProperty("correlationId"),
-                softEventType(m.getProperty("eventType")));
+                softEventType(m.getProperty("eventType")).orElse(null));
     }
 
-    /** In-flight key — the inbox dedup key {@code (tenantId, messageId)} (a polled message is owned until commit/reject). */
+    /**
+     * In-flight key — the inbox dedup key {@code (tenantId, messageId)} (a polled message is owned
+     * until commit/reject).
+     *
+     * @param m the polled RocketMQ message
+     * @return the dedup key {@code tenantId|messageId}
+     */
     private static String inFlightKey(MessageExt m) {
         return m.getProperty("tenantId") + "|" + m.getProperty("messageId");
     }
 
-    /** In-flight key for a {@link BrokerInboundMessage} (commit / reject look up the polled ext by the same dedup key). */
+    /**
+     * In-flight key for a {@link BrokerInboundMessage} (commit / reject look up the polled ext by
+     * the same dedup key).
+     *
+     * @param m the inbound message
+     * @return the dedup key {@code tenantId|messageId}
+     */
     private static String inFlightKey(BrokerInboundMessage m) {
         return m.tenantId() + "|" + m.messageId();
     }
 
-    /** Tolerantly map an eventType user-property → {@link AgentBusEventType} (null / unknown → null, mirroring the IT's response-side consumer). */
-    private static AgentBusEventType softEventType(String name) {
+    /**
+     * Tolerantly map an eventType user-property → {@link AgentBusEventType} (null / unknown → empty,
+     * mirroring the IT's response-side consumer).
+     *
+     * @param name the eventType user-property (may be null / blank)
+     * @return the matching event type, or empty if null / unknown
+     */
+    private static Optional<AgentBusEventType> softEventType(String name) {
         if (name == null || name.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         try {
-            return AgentBusEventType.valueOf(name);
+            return Optional.of(AgentBusEventType.valueOf(name));
         } catch (IllegalArgumentException e) {
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -229,6 +292,8 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * {@code buildMessage} sets them unconditionally), so this is only needed to clear
      * test-injected / prior-run residue on the shared broker topics. Package-private +
      * not for production use.
+     *
+     * @param perPollTimeoutMs max poll wait per message, in milliseconds
      */
     void drainAll(long perPollTimeoutMs) {
         if (poller == null) {
@@ -254,6 +319,9 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * ({@code '} → {@code ''}) per SQL92 string-literal escaping, so a value containing a quote
      * stays well-formed and matches literally. Extracted static + package-private so unit tests
      * pin the mapping without a broker.
+     *
+     * @param filter the broker-agnostic delivery filter (required)
+     * @return the RocketMQ SQL92 expression string (clauses AND-joined)
      */
     static String sql92Expression(DeliveryFilter filter) {
         Objects.requireNonNull(filter, "filter is required");
@@ -326,7 +394,7 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
                     started = true;
                     consumer.start();
                 }
-            } catch (Exception e) {
+            } catch (MQClientException e) {
                 throw new IllegalStateException("DefaultLitePullConsumer.subscribe/start failed topic=" + topic, e);
             }
         }
@@ -344,11 +412,10 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
 
         @Override
         public void commit(MessageExt message) {
-            try {
-                consumer.commitSync(); // acks polled-but-uncommitted messages (model B ack-after-consume)
-            } catch (Exception e) {
-                throw new IllegalStateException("DefaultLitePullConsumer.commitSync failed", e);
-            }
+            // model B ack-after-consume: commitSync acks polled-but-uncommitted messages.
+            // commitSync declares no checked exception; a rare broker failure surfaces as a
+            // RuntimeException that propagates to the dispatch loop (no broad catch — G.ERR.02).
+            consumer.commitSync();
         }
 
         @Override

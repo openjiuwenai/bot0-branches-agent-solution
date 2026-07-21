@@ -1,11 +1,15 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Contract for {@link DeliveryFilter} — the broker-agnostic named-property criteria a
@@ -15,9 +19,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * other brokers to their equivalent — the SPI layer never sees SQL (D3).
  */
 class DeliveryFilterTest {
-
     @Test
-    void for_runtime_stamps_tenant_id_and_target_service_id_as_required_properties() {
+    void for_runtime_stamps_tenant_and_target() {
         DeliveryFilter filter = DeliveryFilter.forRuntime("tenant-a", "svc-a");
 
         assertThat(filter.requiredProperties())

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.test;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
@@ -8,8 +12,13 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 
+import org.apache.rocketmq.client.exception.MQBrokerException;
+import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.common.message.Message;
+import org.apache.rocketmq.remoting.exception.RemotingException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -24,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * two-hop broker forwarding against a REAL RocketMQ + REAL Postgres agent-bus stack.
  *
  * <p>Stands in for the EXTERNAL {@code agent-runtime-java} (which is not yet wired for
- * FEAT-013's broker ingest path). Subscribes to {@code ascend_bus_invocation_deliver}
+ * FEAT-013 broker ingest path). Subscribes to {@code ascend_bus_invocation_deliver}
  * (hop2 deliver), decodes the {@link BrokerControlDescriptor} payloadRef on each polled
  * request, and produces response events back to {@code ascend_bus_invocation_resp_in}
  * (the response relay governs them and re-publishes to {@code ascend_bus_invocation_resp_out}
@@ -52,7 +61,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <h2>Defaults</h2>
  * <ul>
- *   <li>{@code --mode} = {@code BLOCKING} (§6.2.1 阻塞调用返回最终响应)</li>
+ *   <li>{@code --mode} = {@code BLOCKING} (S6.2.1)</li>
  *   <li>{@code --route} = {@code invocation} (FEAT-013; use {@code a2a} for FEAT-014)</li>
  *   <li>{@code --poll-wait-ms} = {@code 3000}</li>
  *   <li>{@code --consumer-group} = {@code runtime-<serviceId>} (per-runtime isolation)</li>
@@ -60,10 +69,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * </ul>
  *
  * <p>The runtime subscribes with {@link DeliveryFilter#forRuntime} ({@code tenantId +
- * targetServiceId = runtime}) — broker-side SQL92 filtering (requires
+ * targetServiceId = runtime}) - broker-side SQL92 filtering (requires
  * {@code enablePropertyFilter=true} in broker.conf). It blocks on {@code poll} and
  * processes one request per tick (model B ack-after-consume: {@code commit} on success,
- * skip+commit on non-request descriptors). Shutdown via SIGINT (Ctrl+C) — the shutdown
+ * skip+commit on non-request descriptors). Shutdown via SIGINT (Ctrl+C) - the shutdown
  * hook closes the consumer + producer cleanly.
  *
  * <p><b>Response routing.</b> Responses are produced directly to
@@ -75,36 +84,39 @@ import java.util.concurrent.atomic.AtomicLong;
  * source (gateway / caller).
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
- * feat-013-client-invocation-event-forwarding.md} §4.3 / §6.2;
+ * feat-013-client-invocation-event-forwarding.md} S4.3 / S6.2;
  * {@code RealBrokerTwoHopRelayIntegrationTest.TempRuntime} (G5-E IT reference impl).
+ *
+ * @since 0.1.0
  */
-// non-production — E2E verification runtime double (mirrors G5-E IT TempRuntime)
+// non-production - E2E verification runtime double (mirrors G5-E IT TempRuntime)
 public final class TempRuntimeMain {
 
-    /** Configurable response behaviour for a REQUESTED event (FEAT-013 §6 scenarios). */
+    private static final Logger log = LoggerFactory.getLogger(TempRuntimeMain.class);
+    private static final String TOPIC_PREFIX = BrokerTopicResolver.TOPIC_PREFIX; // "ascend_bus_"
+    private static final long DEFAULT_POLL_WAIT_MS = 3_000L;
+
+    /** Configurable response behaviour for a REQUESTED event (FEAT-013 S6 scenarios). */
     public enum ResponseMode {
-        /** §6.2.1 — REQUESTED → ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed). */
+        /** S6.2.1 - REQUESTED then ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed). */
         BLOCKING,
-        /** §6.2.4 — REQUESTED → ACCEPTED + STREAM_READY(streamRef). */
+        /** S6.2.4 - REQUESTED then ACCEPTED + STREAM_READY(streamRef). */
         STREAMING,
-        /** §6.2.2 — REQUESTED → ACCEPTED only (degenerate to Task ref). */
+        /** S6.2.2 - REQUESTED then ACCEPTED only (degenerate to Task ref). */
         ACCEPTED_ONLY,
-        /** §6.2.3 — REQUESTED → create task, emit nothing (gateway accept window UNKNOWN). */
+        /** S6.2.3 - REQUESTED then create task, emit nothing (gateway accept window UNKNOWN). */
         SILENT,
-        /** §6.2.5 UC-07 — REQUESTED → REJECTED (server refuses; no Task created). */
+        /** S6.2.5 UC-07 - REQUESTED then REJECTED (server refuses; no Task created). */
         REJECT,
         /**
-         * §6.2.3 UC-03 — first REQUESTED with a given idempotencyKey creates the Task
-         * but emits nothing (gateway accept window → UNKNOWN); a second REQUESTED with
+         * S6.2.3 UC-03 - first REQUESTED with a given idempotencyKey creates the Task
+         * but emits nothing (gateway accept window then UNKNOWN); a second REQUESTED with
          * the same idempotencyKey hits the server-side idempotency map and replays the
          * BLOCKING response sequence with the same taskId. This avoids SIGSTOP/SIGCONT
          * orchestration for the UNKNOWN-then-retry scenario.
          */
         DEFER_THEN_RESOLVE
     }
-
-    private static final String TOPIC_PREFIX = BrokerTopicResolver.TOPIC_PREFIX; // "ascend_bus_"
-    private static final long DEFAULT_POLL_WAIT_MS = 3_000L;
 
     private final String nameserver;
     private final String runtimeServiceId;
@@ -120,7 +132,8 @@ public final class TempRuntimeMain {
     private final String respInTopic;
 
     private final AtomicLong taskSeq = new AtomicLong();
-    // server-side creation idempotency (§4.4 layer 2): (idempotencyKey) → taskId
+
+    // server-side creation idempotency (S4.4 layer 2): (idempotencyKey) then taskId
     private final Map<String, String> taskByIdempotencyKey = new LinkedHashMap<>();
     private volatile boolean running;
 
@@ -151,6 +164,13 @@ public final class TempRuntimeMain {
 
     // ===== lifecycle =====
 
+    /**
+     * Start the runtime: start the producer, subscribe the consumer with the per-runtime
+     * filter, register a JVM shutdown hook, and enter the blocking poll loop. Blocks
+     * until {@link #shutdown()} is invoked (typically via the shutdown hook on Ctrl+C).
+     *
+     * @throws Exception if the producer fails to start or the consumer fails to subscribe
+     */
     public void start() throws Exception {
         log("Starting TempRuntime: nameserver=" + nameserver
                 + " runtime=" + runtimeServiceId + " tenant=" + tenant
@@ -162,14 +182,17 @@ public final class TempRuntimeMain {
         log("Producer started (group=" + producer.getProducerGroup() + ")");
 
         // tenant-only filter would also work for a single-tenant relay, but forRuntime
-        // (tenantId + targetServiceId) is the strict per-runtime filter (D2/D10) — only
+        // (tenantId + targetServiceId) is the strict per-runtime filter (D2/D10) - only
         // messages targeted at THIS runtime are delivered broker-side.
         DeliveryFilter filter = DeliveryFilter.forRuntime(tenant, runtimeServiceId);
         consumer.subscribe(consumerGroup, new ForwardingRouteHandle(route, tenant), filter);
         log("Consumer subscribed: group=" + consumerGroup + " route=" + route
                 + " filter=" + filter.requiredProperties());
 
-        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown, "temp-runtime-shutdown"));
+        Thread shutdownHook = new Thread(this::shutdown, "temp-runtime-shutdown");
+        shutdownHook.setUncaughtExceptionHandler((t, e) ->
+                log.error("Uncaught exception in temp-runtime shutdown hook", e));
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
         running = true;
         pollLoop();
     }
@@ -186,9 +209,9 @@ public final class TempRuntimeMain {
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
-            } catch (Exception e) {
+            } catch (IllegalStateException | NullPointerException e) {
                 if (running) {
-                    log("WARN: poll/process error (transient — keep polling): " + e);
+                    log("WARN: poll/process error (transient - keep polling): " + e);
                     sleepQuiet(1_000);
                 }
             }
@@ -196,6 +219,11 @@ public final class TempRuntimeMain {
         log("Poll loop exited.");
     }
 
+    /**
+     * Cooperative shutdown - sets {@code running=false} (the poll loop checks this and
+     * exits on its next iteration), then closes the consumer and producer. Idempotent -
+     * a second call is a no-op once {@code running} is already false.
+     */
     public synchronized void shutdown() {
         if (!running) {
             return;
@@ -204,12 +232,12 @@ public final class TempRuntimeMain {
         log("Shutting down...");
         try {
             consumer.close();
-        } catch (Exception e) {
+        } catch (IllegalStateException | NullPointerException e) {
             log("WARN: consumer close failed: " + e);
         }
         try {
             producer.shutdown();
-        } catch (Exception e) {
+        } catch (IllegalStateException | NullPointerException e) {
             log("WARN: producer shutdown failed: " + e);
         }
         log("Shutdown complete.");
@@ -225,7 +253,7 @@ public final class TempRuntimeMain {
         BrokerControlDescriptor.Descriptor desc;
         try {
             desc = BrokerControlDescriptor.decode(req.payloadRef());
-        } catch (RuntimeException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             log("SKIP: payloadRef not a valid request descriptor messageId=" + req.messageId()
                     + " err=" + e.getMessage());
             return;
@@ -251,11 +279,12 @@ public final class TempRuntimeMain {
             return;
         }
 
-        // FEAT-001 stubs (CancelTask / GetTask / SubscribeToTask) — canned responses
+        // FEAT-001 stubs (CancelTask / GetTask / SubscribeToTask) - canned responses
         handleStub(eventType, req, desc);
     }
 
     private void handleRequested(BrokerInboundMessage req, BrokerControlDescriptor.Descriptor desc) {
+        RequestCtx ctx = new RequestCtx(req, desc);
         boolean a2a = desc.eventType() == AgentBusEventType.A2A_CALL_REQUESTED;
         AgentBusEventType accepted = a2a ? AgentBusEventType.A2A_CALL_ACCEPTED
                 : AgentBusEventType.INVOCATION_ACCEPTED;
@@ -268,7 +297,7 @@ public final class TempRuntimeMain {
         AgentBusEventType rejected = a2a ? AgentBusEventType.A2A_CALL_REJECTED
                 : AgentBusEventType.INVOCATION_REJECTED;
 
-        // §4.4 layer 2 — server-side creation idempotency: same idempotencyKey → same taskId.
+        // S4.4 layer 2 - server-side creation idempotency: same idempotencyKey then same taskId.
         // REJECT mode does NOT create a task (server refuses the invocation outright).
         // DEFER_THEN_RESOLVE creates the task on first sight but defers the response;
         // the second hit replays the BLOCKING sequence with the same taskId.
@@ -281,51 +310,62 @@ public final class TempRuntimeMain {
 
         switch (mode) {
             case BLOCKING -> {
-                produceResponse(accepted, taskId, "accepted", req, desc);
-                produceResponse(response, taskId, "snapshot", req, desc);
-                produceResponse(terminal, taskId, "completed", req, desc);
+                produceResponse(accepted, taskId, "accepted", ctx);
+                produceResponse(response, taskId, "snapshot", ctx);
+                produceResponse(terminal, taskId, "completed", ctx);
             }
             case STREAMING -> {
-                produceResponse(accepted, taskId, "accepted", req, desc);
-                produceResponse(streamReady, taskId, "streamReady", req, desc,
+                produceResponse(accepted, taskId, "accepted", ctx);
+                produceResponse(streamReady, taskId, "streamReady", ctx,
                         "streamRef=stream://" + taskId);
             }
-            case ACCEPTED_ONLY -> produceResponse(accepted, taskId, "accepted", req, desc);
-            case SILENT -> { /* create task only — gateway accept window will time out (UNKNOWN) */ }
-            case REJECT -> produceResponse(rejected, null, "rejected", req, desc,
+            case ACCEPTED_ONLY -> produceResponse(accepted, taskId, "accepted", ctx);
+            case SILENT -> {
+                // create task only - gateway accept window will time out (UNKNOWN)
+                log("SILENT: task=" + taskId + " created, no response emitted");
+            }
+            case REJECT -> produceResponse(rejected, null, "rejected", ctx,
                     "reason=server-policy-rejected");
             case DEFER_THEN_RESOLVE -> {
                 if (firstSight) {
                     // first REQUESTED: create task (already recorded above), emit nothing
-                    // → gateway accept window drains → UNKNOWN/DEFERRED
+                    // then gateway accept window drains then UNKNOWN/DEFERRED
+                    log("DEFER_THEN_RESOLVE: first sight (task=" + taskId + "), no response emitted");
                 } else {
-                    // second REQUESTED with same idempotencyKey: idempotency hit → replay BLOCKING
-                    // with the SAME taskId (proves §4.4 layer 2 server-side idempotency)
-                    produceResponse(accepted, taskId, "accepted", req, desc);
-                    produceResponse(response, taskId, "snapshot", req, desc);
-                    produceResponse(terminal, taskId, "completed", req, desc);
+                    // second REQUESTED with same idempotencyKey: idempotency hit then replay BLOCKING
+                    // with the SAME taskId (proves S4.4 layer 2 server-side idempotency)
+                    produceResponse(accepted, taskId, "accepted", ctx);
+                    produceResponse(response, taskId, "snapshot", ctx);
+                    produceResponse(terminal, taskId, "completed", ctx);
                 }
             }
         }
     }
 
-    /** FEAT-001 stubs (CancelTask / GetTask / SubscribeToTask and their A2A twins). */
+    /**
+     * FEAT-001 stubs (CancelTask / GetTask / SubscribeToTask and their A2A twins).
+     *
+     * @param eventType the inbound request event type
+     * @param req the inbound broker message
+     * @param desc the decoded control descriptor
+     */
     private void handleStub(AgentBusEventType eventType, BrokerInboundMessage req,
                             BrokerControlDescriptor.Descriptor desc) {
+        RequestCtx ctx = new RequestCtx(req, desc);
         switch (eventType) {
             case CLIENT_INVOCATION_CANCEL_REQUESTED -> produceResponse(
-                    AgentBusEventType.INVOCATION_TERMINAL, null, "cancelled", req, desc);
+                    AgentBusEventType.INVOCATION_TERMINAL, null, "cancelled", ctx);
             case A2A_CALL_CANCEL_REQUESTED -> produceResponse(
-                    AgentBusEventType.A2A_CALL_TERMINAL, null, "cancelled", req, desc);
+                    AgentBusEventType.A2A_CALL_TERMINAL, null, "cancelled", ctx);
             case CLIENT_INVOCATION_QUERY_REQUESTED -> produceResponse(
-                    AgentBusEventType.INVOCATION_RESPONSE, null, "snapshot", req, desc);
+                    AgentBusEventType.INVOCATION_RESPONSE, null, "snapshot", ctx);
             case A2A_CALL_QUERY_REQUESTED -> produceResponse(
-                    AgentBusEventType.A2A_CALL_RESPONSE, null, "snapshot", req, desc);
+                    AgentBusEventType.A2A_CALL_RESPONSE, null, "snapshot", ctx);
             case CLIENT_STREAM_SUBSCRIBE_REQUESTED -> produceResponse(
-                    AgentBusEventType.INVOCATION_STREAM_READY, null, "streamReady", req, desc,
+                    AgentBusEventType.INVOCATION_STREAM_READY, null, "streamReady", ctx,
                     "streamRef=stream://stub");
             case A2A_STREAM_SUBSCRIBE_REQUESTED -> produceResponse(
-                    AgentBusEventType.A2A_STREAM_READY, null, "streamReady", req, desc,
+                    AgentBusEventType.A2A_STREAM_READY, null, "streamReady", ctx,
                     "streamRef=stream://stub");
             default -> log("WARN: no stub handler for eventType=" + eventType);
         }
@@ -344,21 +384,28 @@ public final class TempRuntimeMain {
     // ===== response produce =====
 
     private void produceResponse(AgentBusEventType eventType, String taskId, String status,
-                                 BrokerInboundMessage req, BrokerControlDescriptor.Descriptor desc) {
-        produceResponse(eventType, taskId, status, req, desc, null);
+                                 RequestCtx ctx) {
+        produceResponse(eventType, taskId, status, ctx, null);
     }
 
     /**
      * Build + send a response to {@link #respInTopic} with a symmetric descriptor payloadRef.
-     * Body is a routing descriptor only (§6.2 ②). Routing metadata rides as user properties
+     * Body is a routing descriptor only (S6.2 2). Routing metadata rides as user properties
      * (incl. {@code correlationId} + {@code eventType} so the gateway classifies by NATIVE
-     * headers — no descriptor-decoding for classification).
+     * headers - no descriptor-decoding for classification).
+     *
+     * @param eventType the response event type to emit
+     * @param taskId the task reference (may be {@code null} for reject/cancel/query stubs)
+     * @param status the response status token (e.g. "accepted", "snapshot", "completed")
+     * @param ctx the inbound request + decoded descriptor bundle
+     * @param extraToken an optional extra token appended to the descriptor (e.g. streamRef); may be {@code null}
      */
     private void produceResponse(AgentBusEventType eventType, String taskId, String status,
-                                 BrokerInboundMessage req, BrokerControlDescriptor.Descriptor desc,
-                                 String extraToken) {
+                                 RequestCtx ctx, String extraToken) {
+        BrokerInboundMessage req = ctx.req();
+        BrokerControlDescriptor.Descriptor desc = ctx.desc();
         // response routes back to the ORIGINAL gateway caller (carried end-to-end in the
-        // descriptor's originalCaller field), NOT to req.sourceServiceId() (which is the
+        // descriptor originalCaller field), NOT to req.sourceServiceId() (which is the
         // event-bus relay, not the original gateway).
         String responseTarget = desc.originalCaller() != null ? desc.originalCaller() : req.sourceServiceId();
         String descriptor = BrokerControlDescriptor.encode(
@@ -390,7 +437,7 @@ public final class TempRuntimeMain {
                     + " taskId=" + taskId + " status=" + status
                     + " target=" + responseTarget
                     + (extraToken != null ? " extra=" + extraToken : ""));
-        } catch (Exception e) {
+        } catch (InterruptedException | RemotingException | MQBrokerException | MQClientException e) {
             log("ERROR: producer.send failed for eventType=" + eventType
                     + " messageId=" + messageId + " err=" + e);
         }
@@ -398,8 +445,19 @@ public final class TempRuntimeMain {
 
     // ===== CLI =====
 
+    /**
+     * CLI entry point - parse args, construct the runtime, and start the poll loop.
+     * Returns normally for {@code --help}; otherwise blocks in {@link #start()} until
+     * shutdown (Ctrl+C / SIGINT).
+     *
+     * @param args CLI arguments (see class Javadoc)
+     * @throws Exception if the runtime fails to start
+     */
     public static void main(String[] args) throws Exception {
         Args parsed = Args.parse(args);
+        if (parsed.printHelp) {
+            return;
+        }
         TempRuntimeMain runtime = new TempRuntimeMain(
                 parsed.nameserver, parsed.runtime, parsed.tenant, parsed.mode,
                 parsed.pollWaitMs, parsed.route, parsed.consumerGroup, parsed.producerGroup,
@@ -410,22 +468,38 @@ public final class TempRuntimeMain {
     // ===== helpers =====
 
     private void log(String msg) {
-        if (verbose || msg.startsWith("ERROR") || msg.startsWith("WARN") || msg.startsWith("Starting")
-                || msg.startsWith("Producer") || msg.startsWith("Consumer")
-                || msg.startsWith("Shutdown") || msg.startsWith("Poll loop")) {
-            System.out.println("[TempRuntime " + runtimeServiceId + "] " + msg);
+        if (msg.startsWith("ERROR")) {
+            log.error("[TempRuntime {}] {}", runtimeServiceId, msg);
+        } else if (msg.startsWith("WARN")) {
+            log.warn("[TempRuntime {}] {}", runtimeServiceId, msg);
+        } else if (shouldLogInfo(msg)) {
+            log.info("[TempRuntime {}] {}", runtimeServiceId, msg);
         }
     }
 
-    private static void sleepQuiet(long ms) {
+    private boolean shouldLogInfo(String msg) {
+        if (verbose) {
+            return true;
+        }
+        return msg.startsWith("Starting") || msg.startsWith("Producer")
+                || msg.startsWith("Consumer") || msg.startsWith("Shutdown")
+                || msg.startsWith("Poll loop");
+    }
+
+    private void sleepQuiet(long ms) {
         try {
             Thread.sleep(ms);
         } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
+            // cooperative cancellation - do not re-interrupt; the poll loop running flag drives exit
+            running = false;
         }
     }
 
-    /** Minimal CLI arg parser — flags {@code --key value} (or {@code --key=value}). */
+    /** Bundle of inbound request + decoded control descriptor (always passed together to produceResponse). */
+    private record RequestCtx(BrokerInboundMessage req, BrokerControlDescriptor.Descriptor desc) {
+    }
+
+    /** Minimal CLI arg parser - flags {@code --key value} (or {@code --key=value}). */
     static final class Args {
         String nameserver;
         String runtime;
@@ -436,6 +510,7 @@ public final class TempRuntimeMain {
         String consumerGroup;
         String producerGroup;
         boolean verbose = false;
+        boolean printHelp = false;
 
         static Args parse(String[] args) {
             Args a = new Args();
@@ -443,16 +518,44 @@ public final class TempRuntimeMain {
                 String arg = args[i];
                 String next = (i + 1 < args.length) ? args[i + 1] : null;
                 switch (arg) {
-                    case "--nameserver" -> { a.nameserver = next; i++; }
-                    case "--runtime" -> { a.runtime = next; i++; }
-                    case "--tenant" -> { a.tenant = next; i++; }
-                    case "--mode" -> { a.mode = ResponseMode.valueOf(next); i++; }
-                    case "--poll-wait-ms" -> { a.pollWaitMs = Long.parseLong(next); i++; }
-                    case "--route" -> { a.route = next; i++; }
-                    case "--consumer-group" -> { a.consumerGroup = next; i++; }
-                    case "--producer-group" -> { a.producerGroup = next; i++; }
+                    case "--nameserver" -> {
+                        a.nameserver = next;
+                        i++;
+                    }
+                    case "--runtime" -> {
+                        a.runtime = next;
+                        i++;
+                    }
+                    case "--tenant" -> {
+                        a.tenant = next;
+                        i++;
+                    }
+                    case "--mode" -> {
+                        a.mode = ResponseMode.valueOf(next);
+                        i++;
+                    }
+                    case "--poll-wait-ms" -> {
+                        a.pollWaitMs = Long.parseLong(next);
+                        i++;
+                    }
+                    case "--route" -> {
+                        a.route = next;
+                        i++;
+                    }
+                    case "--consumer-group" -> {
+                        a.consumerGroup = next;
+                        i++;
+                    }
+                    case "--producer-group" -> {
+                        a.producerGroup = next;
+                        i++;
+                    }
                     case "--verbose" -> a.verbose = true;
-                    case "-h", "--help" -> { printHelp(); System.exit(0); }
+                    case "-h", "--help" -> {
+                        printHelp();
+                        a.printHelp = true;
+                        return a;
+                    }
                     default -> {
                         if (arg.startsWith("--") && arg.contains("=")) {
                             int eq = arg.indexOf('=');
@@ -489,8 +592,8 @@ public final class TempRuntimeMain {
         }
 
         private static void printHelp() {
-            System.out.println("""
-                    TempRuntimeMain — standalone agent-runtime double for FEAT-013/014 E2E verification.
+            log.info("""
+                    TempRuntimeMain - standalone agent-runtime double for FEAT-013/014 E2E verification.
 
                     Usage:
                       java -cp agent-bus-*.jar com.openjiuwen.bus.test.TempRuntimeMain \\
@@ -507,19 +610,19 @@ public final class TempRuntimeMain {
 
                     Topology:
                       consumes:  ascend_bus_<route>_deliver   (hop2 forward-relay output)
-                      produces:  ascend_bus_<route>_resp_in   (response relay ingests → resp_out → gateway)
+                      produces:  ascend_bus_<route>_resp_in   (response relay ingests -> resp_out -> gateway)
 
-                    Modes (FEAT-013 §6.2):
-                      BLOCKING           §6.2.1 — ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed)
-                      STREAMING          §6.2.4 — ACCEPTED + STREAM_READY(streamRef)
-                      ACCEPTED_ONLY      §6.2.2 — ACCEPTED only (gateway returns ACCEPTED_WITH_TASK)
-                      SILENT             §6.2.3 — create task, emit nothing (gateway UNKNOWN)
-                      REJECT             §6.2.5 UC-07 — REJECTED (no Task created; gateway returns REJECTED)
-                      DEFER_THEN_RESOLVE §6.2.3 UC-03 — first REQUESTED creates task but emits nothing
+                    Modes (FEAT-013 S6.2):
+                      BLOCKING           S6.2.1 - ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed)
+                      STREAMING          S6.2.4 - ACCEPTED + STREAM_READY(streamRef)
+                      ACCEPTED_ONLY      S6.2.2 - ACCEPTED only (gateway returns ACCEPTED_WITH_TASK)
+                      SILENT             S6.2.3 - create task, emit nothing (gateway UNKNOWN)
+                      REJECT             S6.2.5 UC-07 - REJECTED (no Task created; gateway returns REJECTED)
+                      DEFER_THEN_RESOLVE S6.2.3 UC-03 - first REQUESTED creates task but emits nothing
                                           (gateway UNKNOWN); second REQUESTED with same idempotencyKey
                                           replays BLOCKING with the same taskId (server-side idempotency)
 
-                    Shutdown: Ctrl+C (SIGINT) — clean shutdown hook closes consumer + producer.
+                    Shutdown: Ctrl+C (SIGINT) - clean shutdown hook closes consumer + producer.
                     """);
         }
     }

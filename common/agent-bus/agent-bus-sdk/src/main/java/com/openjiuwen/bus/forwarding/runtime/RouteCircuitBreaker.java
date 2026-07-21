@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
@@ -53,15 +57,18 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §17};
  * Stage 16 plan §3.
+ *
+ * @since 0.1.0
  */
 public final class RouteCircuitBreaker implements ForwardingCircuitBreaker {
-
     private final int failureThreshold;
     private final long cooldownMillis;
     private final EpochClock clock;
     private final ConcurrentMap<String, RouteState> states = new ConcurrentHashMap<>();
 
     /**
+     * Construct a per-route three-state circuit breaker.
+     *
      * @param failureThreshold consecutive retryable failures (in CLOSED) that
      *                         trip the breaker to OPEN ({@code >= 1})
      * @param cooldownMillis  how long an OPEN route stays open before a single
@@ -142,11 +149,14 @@ public final class RouteCircuitBreaker implements ForwardingCircuitBreaker {
                 } else if (++s.consecutiveFailures >= failureThreshold) {
                     s.state = State.OPEN;
                     s.openedAtMillisEpoch = now;
+                } else {
+                    // under threshold — the count is incremented, breaker stays CLOSED
                 }
+            } else {
+                // OPEN: allowsDelivery returned false, so no delivery should record an
+                // outcome here; ignore defensively (a straggler outcome from before the
+                // open cannot flip state on its own).
             }
-            // OPEN: allowsDelivery returned false, so no delivery should record an
-            // outcome here; ignore defensively (a straggler outcome from before the
-            // open cannot flip state on its own).
         }
     }
 
@@ -155,6 +165,10 @@ public final class RouteCircuitBreaker implements ForwardingCircuitBreaker {
      * read by production dispatch code, which uses only {@link #allowsDelivery}).
      * Public so the cross-package architecture / contract tests can assert state
      * transitions directly; the same-package unit test uses it too.
+     *
+     * @param routeHandle the opaque route whose breaker state is queried
+     * @return the breaker's current state for the route ({@code CLOSED} if the
+     *         route has never been seen by {@link #allowsDelivery})
      */
     public State stateOf(ForwardingRouteHandle routeHandle) {
         RouteState s = states.get(routeHandle.value());

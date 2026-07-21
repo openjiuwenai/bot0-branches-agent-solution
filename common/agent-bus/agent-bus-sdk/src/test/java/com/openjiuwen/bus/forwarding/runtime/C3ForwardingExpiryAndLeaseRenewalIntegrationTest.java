@@ -1,21 +1,27 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
-import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -26,7 +32,7 @@ import java.util.Map;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Stage 22 (MI22-001 / MI22-002) &mdash; end-to-end verification of the two
@@ -143,12 +149,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@code ConcurrentModificationException}). {@code @Isolated} makes each run
  * exclusive, and these ITs share the embedded-postgres boot recipe.
  *
- * <p>Authority: {@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage21-review-and-stage22-plan.md}
+ * <p>Authority: {@code docs/architecture/l0/10-governance/delivery-projections/
+ * agent-bus-stage21-review-and-stage22-plan.md}
  * &sect;2 / &sect;4 MI22-001 / MI22-002.
  */
 @Isolated
 class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static JdbcForwardingOutbox outbox;
@@ -196,6 +202,8 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
      *       {@code claimDue}'s candidate set (PENDING / RETRY_SCHEDULED /
      *       DISPATCHING), so a terminal EXPIRED row is never reclaimed.</li>
      * </ul>
+     *
+     * @throws Exception if embedded-postgres boot or Flyway migration fails
      */
     @Test
     void scenario_a_expired_terminal_state_end_to_end() throws Exception {
@@ -230,39 +238,8 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
         ForwardingDispatcherWorker.DispatchTickResult tick =
                 loop.run(tenant, 5, "worker-exp", 60_000);
 
-        assertThat(tick.expired())
-                .as("the single due row was driven to EXPIRED by markExpired")
-                .isEqualTo(1);
-        assertThat(tick.acked()).isZero();
-        assertThat(tick.retried()).isZero();
-        assertThat(tick.dlqd()).isZero();
-        assertThat(tick.skipped()).isZero();
-        assertThat(tick.claimed())
-                .as("EXPIRED is terminal: across 2 ticks only the first claimed the row "
-                    + "(the second tick claims nothing for an EXPIRED row)")
-                .isEqualTo(1);
-        assertThat(tick.claimed())
-                .as("tick counts stay self-consistent")
-                .isEqualTo(tick.acked() + tick.retried() + tick.dlqd() + tick.expired() + tick.skipped());
-
-        assertThat(outbox.statusOf(id(messageId), tenant))
-                .as("markExpired persisted the row as EXPIRED")
-                .isEqualTo(ForwardingStatus.Outbox.EXPIRED);
-        Map<String, Object> row = outboxFullRow(tenant, messageId);
-        assertThat(row.get("status")).isEqualTo("EXPIRED");
-        assertThat(row.get("last_failure_code"))
-                .as("markExpired hard-codes last_failure_code='delivery_timeout' "
-                    + "(satisfies the EXPIRED record invariant: a non-null failure code)")
-                .isEqualTo("delivery_timeout");
-        assertThat(row.get("attempt_count"))
-                .as("EXPIRED is terminal — never a retry, attempt_count untouched")
-                .isEqualTo(0);
-        assertThat(row.get("lease_owner"))
-                .as("markExpired releases the lease (lease_owner cleared)")
-                .isNull();
-        assertThat(row.get("lease_until"))
-                .as("markExpired releases the lease (lease_until cleared)")
-                .isNull();
+        assertExpiredTickCounts(tick);
+        assertExpiredPersistedRow(tenant, messageId);
     }
 
     /**
@@ -288,6 +265,8 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
      *       (returned true) so the record was delivered and acked, not skipped;</li>
      *   <li>the persisted row is {@code ACKED} with {@code attempt_count==0}.</li>
      * </ul>
+     *
+     * @throws Exception if embedded-postgres boot or Flyway migration fails
      */
     @Test
     void scenario_b_lease_renewal_fires_end_to_end() throws Exception {
@@ -301,7 +280,7 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
                 "svc-src", "svc-tgt", t0);
 
         MutableEpochClock clock = new MutableEpochClock(t0);
-        long claimLeaseDurationMillis = 30_000;   // claim sets lease_until = t0 + 30s
+        long claimLeaseDurationMillis = 30_000L;   // claim sets lease_until = t0 + 30s
         long expectedRenewedLeaseUntil = t0 + 90_000; // = (t0+30s) + 60s extension
         AtomicBoolean renewalObserved = new AtomicBoolean(false);
 
@@ -336,6 +315,52 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
         ForwardingDispatcherWorker.DispatchTickResult tick =
                 loop.run(tenant, 5, leaseOwner, claimLeaseDurationMillis);
 
+        assertRenewalTickCounts(tick, renewalObserved);
+        assertRenewalPersistedRow(tenant, messageId);
+    }
+
+    // ---- tick / row assertion helpers (extracted to keep scenario methods ≤50 lines) ----
+
+    private static void assertExpiredTickCounts(ForwardingDispatcherWorker.DispatchTickResult tick) {
+        assertThat(tick.expired())
+                .as("the single due row was driven to EXPIRED by markExpired")
+                .isEqualTo(1);
+        assertThat(tick.acked()).isZero();
+        assertThat(tick.retried()).isZero();
+        assertThat(tick.dlqd()).isZero();
+        assertThat(tick.skipped()).isZero();
+        assertThat(tick.claimed())
+                .as("EXPIRED is terminal: across 2 ticks only the first claimed the row "
+                    + "(the second tick claims nothing for an EXPIRED row)")
+                .isEqualTo(1);
+        assertThat(tick.claimed())
+                .as("tick counts stay self-consistent")
+                .isEqualTo(tick.acked() + tick.retried() + tick.dlqd() + tick.expired() + tick.skipped());
+    }
+
+    private static void assertExpiredPersistedRow(String tenant, String messageId) {
+        assertThat(outbox.statusOf(id(messageId), tenant))
+                .as("markExpired persisted the row as EXPIRED")
+                .isEqualTo(ForwardingStatus.Outbox.EXPIRED);
+        Map<String, Object> row = outboxFullRow(tenant, messageId);
+        assertThat(row.get("status")).isEqualTo("EXPIRED");
+        assertThat(row.get("last_failure_code"))
+                .as("markExpired hard-codes last_failure_code='delivery_timeout' "
+                    + "(satisfies the EXPIRED record invariant: a non-null failure code)")
+                .isEqualTo("delivery_timeout");
+        assertThat(row.get("attempt_count"))
+                .as("EXPIRED is terminal — never a retry, attempt_count untouched")
+                .isEqualTo(0);
+        assertThat(row.get("lease_owner"))
+                .as("markExpired releases the lease (lease_owner cleared)")
+                .isNull();
+        assertThat(row.get("lease_until"))
+                .as("markExpired releases the lease (lease_until cleared)")
+                .isNull();
+    }
+
+    private static void assertRenewalTickCounts(ForwardingDispatcherWorker.DispatchTickResult tick,
+                                                AtomicBoolean renewalObserved) {
         assertThat(tick.acked())
                 .as("the renewed lease let the record deliver and ack")
                 .isEqualTo(1);
@@ -351,7 +376,9 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
         assertThat(renewalObserved)
                 .as("the observing port saw the renewed lease at deliver time — renewal fired")
                 .isTrue();
+    }
 
+    private static void assertRenewalPersistedRow(String tenant, String messageId) {
         assertThat(outbox.statusOf(id(messageId), tenant))
                 .as("the renewed-then-delivered record round-tripped to a persisted ACK")
                 .isEqualTo(ForwardingStatus.Outbox.ACKED);
@@ -381,7 +408,11 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
             return current;
         }
 
-        /** Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back). */
+        /**
+         * Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back).
+         *
+         * @param instantMillisEpoch the instant to advance to, in milliseconds since the epoch
+         */
         void advanceTo(long instantMillisEpoch) {
             this.current = instantMillisEpoch;
         }
@@ -392,6 +423,12 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
      * each {@code stepMillis} apart, then stops. Before yielding each instant it
      * advances the shared clock to the same value &mdash; the two-clock
      * coordination point.
+     *
+     * @param clock the shared mutable clock to advance before each tick
+     * @param baseInstant the first tick instant, in milliseconds since the epoch
+     * @param stepMillis the gap between consecutive tick instants, in milliseconds
+     * @param ticks the number of instants to yield before stopping
+     * @return a tick source that yields the coordinated instants
      */
     private static ForwardingDispatchLoop.TickSource advanceableTickSource(
             MutableEpochClock clock, long baseInstant, long stepMillis, int ticks) {
@@ -411,6 +448,9 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
      * Fake {@link ForwardingDeliveryPort} that replays a fixed outcome sequence.
      * The claim/renew/ack SQL against the real outbox is untouched; only the
      * delivery outcome is injected.
+     *
+     * @param sequence the ordered delivery outcomes to replay
+     * @return a delivery port that returns the outcomes in order
      */
     private static ForwardingDeliveryPort fakeDeliveryPort(List<ForwardingDeliveryResult> sequence) {
         java.util.Iterator<ForwardingDeliveryResult> results = sequence.iterator();
@@ -440,13 +480,17 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
      * the EXPIRED-lease-released and renewal-lease-extended assertions). The port
      * exposes no per-record read path ({@code claimDue} leases), so the IT reads
      * the row directly to assert on-disk state.
+     *
+     * @param tenantId the tenant identity scoping the outbox row
+     * @param messageIdValue the message id of the outbox row
+     * @return a map of column names to values for the persisted outbox row
      */
     private static Map<String, Object> outboxFullRow(String tenantId, String messageIdValue) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT status, last_failure_code, attempt_count, next_attempt_at, "
-                   + "lease_owner, lease_until "
-                   + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
+                    "SELECT status, last_failure_code, attempt_count, next_attempt_at, "
+                    + "lease_owner, lease_until "
+                    + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
             ps.setString(1, tenantId);
             ps.setString(2, messageIdValue);
             try (ResultSet rs = ps.executeQuery()) {
@@ -461,7 +505,7 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
                 return row;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("failed to read outbox row " + messageIdValue, e);
+            throw new IllegalStateException("failed to read outbox row " + messageIdValue, e);
         }
     }
 }

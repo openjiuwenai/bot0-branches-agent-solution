@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
@@ -77,9 +81,10 @@ import java.util.Objects;
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §3/§4.1};
  * {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-persistence.md §5}.
+ *
+ * @since 0.1.0
  */
 public final class ForwardingDispatcherWorker {
-
     private final ForwardingOutboxClaimPort claimPort;
     private final ForwardingOutboxPort outboxPort;
     private final ForwardingDeliveryPort deliveryPort;
@@ -103,7 +108,15 @@ public final class ForwardingDispatcherWorker {
                 ForwardingRetryPolicy.DEFAULT);
     }
 
-    /** Stage 11 (MI11-001): inject the wall clock the renewal check reads. */
+    /**
+     * Stage 11 (MI11-001): inject the wall clock the renewal check reads.
+     *
+     * @param claimPort      the outbox claim / lease-renew port
+     * @param outboxPort     the outbox mutation port (ack / retry / dlq / expire)
+     * @param deliveryPort   the abstract delivery port
+     * @param leasePolicy    the lease-renewal policy
+     * @param clock          the wall clock the renewal check reads
+     */
     public ForwardingDispatcherWorker(ForwardingOutboxClaimPort claimPort,
                                       ForwardingOutboxPort outboxPort,
                                       ForwardingDeliveryPort deliveryPort,
@@ -119,6 +132,13 @@ public final class ForwardingDispatcherWorker {
      * full constructor with the {@link ForwardingCircuitBreaker#ALWAYS_CLOSED}
      * no-op breaker — Stage 16 wired a per-route breaker in, but this overload
      * keeps the Stage 14 signature source-compatible.
+     *
+     * @param claimPort      the outbox claim / lease-renew port
+     * @param outboxPort     the outbox mutation port (ack / retry / dlq / expire)
+     * @param deliveryPort   the abstract delivery port
+     * @param leasePolicy    the lease-renewal policy
+     * @param clock          the wall clock the renewal check reads
+     * @param retryPolicy    the retry / backoff policy
      */
     public ForwardingDispatcherWorker(ForwardingOutboxClaimPort claimPort,
                                       ForwardingOutboxPort outboxPort,
@@ -141,6 +161,14 @@ public final class ForwardingDispatcherWorker {
      * {@link ForwardingCircuitBreaker#recordOutcome}; the breaker classifies it
      * internally (ACKED → success, a retryable failure → failure, DLQ / EXPIRED
      * → ignored).
+     *
+     * @param claimPort       the outbox claim / lease-renew port
+     * @param outboxPort      the outbox mutation port (ack / retry / dlq / expire)
+     * @param deliveryPort    the abstract delivery port
+     * @param leasePolicy    the lease-renewal policy
+     * @param clock          the wall clock the renewal check reads
+     * @param retryPolicy    the retry / backoff policy
+     * @param circuitBreaker  the per-route circuit breaker
      */
     public ForwardingDispatcherWorker(ForwardingOutboxClaimPort claimPort,
                                       ForwardingOutboxPort outboxPort,
@@ -206,107 +234,149 @@ public final class ForwardingDispatcherWorker {
         int expired = 0;
         int skipped = 0;
         for (ForwardingOutboxRecord record : claimed) {
-            try {
-                // Stage 11 (MI11-001): read the live clock once per record — the
-                // renewal check and the delivery instant both use real elapsed time,
-                // not the tick-start instant, so renewal fires when a long tick
-                // approaches the lease TTL. claimDue still uses nowMillisEpoch as
-                // the claim moment.
-                long clockNow = clock.epochMillis();
-                // Stage 10 (MI10-002): if the remaining lease TTL is below the policy
-                // threshold, renew before delivering so a long deliver does not outlive
-                // the lease. A failed renew (reclaimed / not DISPATCHING) is treated
-                // like a lease exception — skip, do not deliver.
-                if (leasePolicy.renewBeforeExpiryMillis() > 0) {
-                    long remaining = leaseUntilMillisEpoch - clockNow;
-                    if (remaining < leasePolicy.renewBeforeExpiryMillis()) {
-                        long extendedUntil = leaseUntilMillisEpoch + leasePolicy.leaseExtensionMillis();
-                        if (!claimPort.renewLease(record.messageId(), tenantId, leaseOwner, extendedUntil)) {
-                            skipped++;
-                            continue;
-                        }
-                    }
-                }
-                // Stage 16: per-route circuit breaker. Placed AFTER the lease-renewal
-                // check (a renew failure skips before the breaker is touched, so it
-                // cannot leak a HALF_OPEN probe marker) and BEFORE delivery. An OPEN
-                // route short-circuits exactly like the existing skip paths: the record
-                // is skipped, left DISPATCHING, reclaimed on lease expiry, and consumes
-                // no attemptCount.
-                if (!circuitBreaker.allowsDelivery(record.routeHandle())) {
-                    skipped++;
-                    continue;
-                }
-                // Stage 11 (MI11-002): a real transport binding must map transport
-                // errors to a ForwardingDeliveryResult and MUST NOT throw (ICD /
-                // delivery port contract). If it still throws a non-lease
-                // RuntimeException, the worker skips the record (left DISPATCHING,
-                // reclaimed on lease expiry) rather than aborting the tick.
-                ForwardingDeliveryResult result;
-                try {
-                    result = deliveryPort.deliver(record, clockNow);
-                } catch (RuntimeException e) {
-                    // Stage 16: feed the failure back so a HALF_OPEN probe that threw
-                    // (and thus never returned a result) cannot strand its in-flight
-                    // marker — a thrown deliver is a transport fault, mapped to a
-                    // retryable RECEIVER_UNAVAILABLE failure.
-                    circuitBreaker.recordOutcome(record.routeHandle(),
-                            ForwardingDeliveryResult.retry(ForwardingFailureCode.RECEIVER_UNAVAILABLE));
-                    skipped++;
-                    continue;
-                }
-                // Stage 16: feed the delivery outcome back BEFORE the state mutation
-                // (markAcked / scheduleRetry / moveToDlq / markExpired), so a lease-guard
-                // exception in the mutation cannot leave a HALF_OPEN probe stranded.
-                circuitBreaker.recordOutcome(record.routeHandle(), result);
-                switch (result.outcome()) {
-                    case ACKED -> {
-                        outboxPort.markAcked(record.messageId(), tenantId, leaseOwner);
-                        acked++;
-                    }
-                    case RETRY_SCHEDULED -> {
-                        // Stage 14: retry governance is the policy's job, not the
-                        // delivery result's. A retryable failure whose retries are
-                        // exhausted goes to DLQ (a retryable code is a legal DLQ
-                        // code); otherwise the policy picks the next-attempt instant
-                        // (record.attemptCount() is the retries already recorded —
-                        // scheduleRetry increments it).
-                        ForwardingFailureCode retryCode = result.failureCode();
-                        if (retryPolicy.exhausted(record.attemptCount())) {
-                            outboxPort.moveToDlq(record.messageId(), tenantId, leaseOwner, retryCode);
-                            dlqd++;
-                        } else {
-                            long nextAttemptAt =
-                                    retryPolicy.nextAttemptAt(retryCode, record.attemptCount(), clockNow);
-                            outboxPort.scheduleRetry(record.messageId(), tenantId, leaseOwner,
-                                    retryCode, nextAttemptAt);
-                            retried++;
-                        }
-                    }
-                    case DLQ -> {
-                        outboxPort.moveToDlq(record.messageId(), tenantId, leaseOwner,
-                                result.failureCode());
-                        dlqd++;
-                    }
-                    case EXPIRED -> {
-                        outboxPort.markExpired(record.messageId(), tenantId, leaseOwner);
-                        expired++;
-                    }
-                }
-            } catch (ForwardingLeaseException e) {
-                // Stage 10 (MI10-001): the lease guard rejected this record — it was
-                // reclaimed by another worker, or the lease is no longer held / not
-                // DISPATCHING. Skip it: the record's true owner (or the next reclaim)
-                // drives it forward. The tick continues with the remaining records.
-                skipped++;
+            // Stage 11 (MI11-001): read the live clock once per record — the
+            // renewal check and the delivery instant both use real elapsed time,
+            // not the tick-start instant, so renewal fires when a long tick
+            // approaches the lease TTL. claimDue still uses nowMillisEpoch as
+            // the claim moment.
+            long clockNow = clock.epochMillis();
+            switch (processRecord(record, clockNow, tenantId, leaseOwner, leaseUntilMillisEpoch)) {
+                case ACKED -> acked++;
+                case RETRIED -> retried++;
+                case DLQ -> dlqd++;
+                case EXPIRED -> expired++;
+                case SKIPPED -> skipped++;
             }
         }
         return new DispatchTickResult(claimed.size(), acked, retried, dlqd, expired, skipped);
     }
 
+    private enum RecordOutcome {ACKED, RETRIED, DLQ, EXPIRED, SKIPPED}
+
+    /**
+     * Process a single claimed record through the lease-renewal check, circuit-breaker
+     * gate, delivery, and outcome mutation. A lease-guard rejection or a delivery fault
+     * is swallowed as a SKIPPED record (left DISPATCHING, reclaimed on lease expiry)
+     * so the tick continues.
+     */
+    private RecordOutcome processRecord(ForwardingOutboxRecord record, long clockNow,
+                                        String tenantId, String leaseOwner, long leaseUntilMillisEpoch) {
+        try {
+            // Stage 10 (MI10-002): if the remaining lease TTL is below the policy
+            // threshold, renew before delivering so a long deliver does not outlive
+            // the lease. A failed renew (reclaimed / not DISPATCHING) is treated
+            // like a lease exception — skip, do not deliver.
+            if (leaseRenewalFailed(record, clockNow, tenantId, leaseOwner, leaseUntilMillisEpoch)) {
+                return RecordOutcome.SKIPPED;
+            }
+            // Stage 16: per-route circuit breaker. Placed AFTER the lease-renewal
+            // check (a renew failure skips before the breaker is touched, so it
+            // cannot leak a HALF_OPEN probe marker) and BEFORE delivery. An OPEN
+            // route short-circuits exactly like the existing skip paths: the record
+            // is skipped, left DISPATCHING, reclaimed on lease expiry, and consumes
+            // no attemptCount.
+            if (!circuitBreaker.allowsDelivery(record.routeHandle())) {
+                return RecordOutcome.SKIPPED;
+            }
+            // Stage 11 (MI11-002): a real transport binding must map transport
+            // errors to a ForwardingDeliveryResult and MUST NOT throw (ICD /
+            // delivery port contract). If it still throws a non-lease
+            // IllegalStateException, the worker skips the record (left DISPATCHING,
+            // reclaimed on lease expiry) rather than aborting the tick.
+            ForwardingDeliveryResult result;
+            try {
+                result = deliveryPort.deliver(record, clockNow);
+            } catch (IllegalStateException | NullPointerException e) {
+                // Stage 16: feed the failure back so a HALF_OPEN probe that threw
+                // (and thus never returned a result) cannot strand its in-flight
+                // marker — a thrown deliver is a transport fault, mapped to a
+                // retryable RECEIVER_UNAVAILABLE failure.
+                circuitBreaker.recordOutcome(record.routeHandle(),
+                        ForwardingDeliveryResult.retry(ForwardingFailureCode.RECEIVER_UNAVAILABLE));
+                return RecordOutcome.SKIPPED;
+            }
+            // Stage 16: feed the delivery outcome back BEFORE the state mutation
+            // (markAcked / scheduleRetry / moveToDlq / markExpired), so a lease-guard
+            // exception in the mutation cannot leave a HALF_OPEN probe stranded.
+            circuitBreaker.recordOutcome(record.routeHandle(), result);
+            return applyOutcome(record, result, clockNow, tenantId, leaseOwner);
+        } catch (ForwardingLeaseException e) {
+            // Stage 10 (MI10-001): the lease guard rejected this record — it was
+            // reclaimed by another worker, or the lease is no longer held / not
+            // DISPATCHING. Skip it: the record's true owner (or the next reclaim)
+            // drives it forward. The tick continues with the remaining records.
+            return RecordOutcome.SKIPPED;
+        }
+    }
+
+    /**
+     * Check whether the lease needs renewal and, if so, whether the renewal failed
+     * (record reclaimed / not DISPATCHING).
+     */
+    private boolean leaseRenewalFailed(ForwardingOutboxRecord record, long clockNow,
+                                      String tenantId, String leaseOwner, long leaseUntilMillisEpoch) {
+        if (leasePolicy.renewBeforeExpiryMillis() <= 0) {
+            return false;
+        }
+        long remaining = leaseUntilMillisEpoch - clockNow;
+        if (remaining >= leasePolicy.renewBeforeExpiryMillis()) {
+            return false;
+        }
+        long extendedUntil = leaseUntilMillisEpoch + leasePolicy.leaseExtensionMillis();
+        return !claimPort.renewLease(record.messageId(), tenantId, leaseOwner, extendedUntil);
+    }
+
+    /**
+     * Apply the delivery outcome to the outbox state machine and return the
+     * corresponding record outcome.
+     */
+    private RecordOutcome applyOutcome(ForwardingOutboxRecord record, ForwardingDeliveryResult result,
+                                      long clockNow, String tenantId, String leaseOwner) {
+        switch (result.outcome()) {
+            case ACKED -> {
+                outboxPort.markAcked(record.messageId(), tenantId, leaseOwner);
+                return RecordOutcome.ACKED;
+            }
+            case RETRY_SCHEDULED -> {
+                return applyRetry(record, result, clockNow, tenantId, leaseOwner);
+            }
+            case DLQ -> {
+                outboxPort.moveToDlq(record.messageId(), tenantId, leaseOwner, result.failureCode());
+                return RecordOutcome.DLQ;
+            }
+            case EXPIRED -> {
+                outboxPort.markExpired(record.messageId(), tenantId, leaseOwner);
+                return RecordOutcome.EXPIRED;
+            }
+            default -> {
+                return RecordOutcome.SKIPPED;
+            }
+        }
+    }
+
+    /**
+     * Apply a retryable result: retry if retries are not exhausted, otherwise DLQ.
+     * Stage 14: retry governance is the policy's job, not the delivery result's.
+     * A retryable failure whose retries are exhausted goes to DLQ (a retryable code
+     * is a legal DLQ code); otherwise the policy picks the next-attempt instant
+     * (record.attemptCount() is the retries already recorded — scheduleRetry
+     * increments it).
+     */
+    private RecordOutcome applyRetry(ForwardingOutboxRecord record, ForwardingDeliveryResult result,
+                                    long clockNow, String tenantId, String leaseOwner) {
+        ForwardingFailureCode retryCode = result.failureCode();
+        if (retryPolicy.exhausted(record.attemptCount())) {
+            outboxPort.moveToDlq(record.messageId(), tenantId, leaseOwner, retryCode);
+            return RecordOutcome.DLQ;
+        }
+        long nextAttemptAt = retryPolicy.nextAttemptAt(retryCode, record.attemptCount(), clockNow);
+        outboxPort.scheduleRetry(record.messageId(), tenantId, leaseOwner, retryCode, nextAttemptAt);
+        return RecordOutcome.RETRIED;
+    }
+
     /** Immutable summary of one dispatch tick. */
     public record DispatchTickResult(int claimed, int acked, int retried, int dlqd, int expired,
-                                     int skipped) {
+            int skipped) {
         public DispatchTickResult {
             if (claimed < 0 || acked < 0 || retried < 0 || dlqd < 0 || expired < 0 || skipped < 0) {
                 throw new IllegalArgumentException("tick counts must be non-negative");

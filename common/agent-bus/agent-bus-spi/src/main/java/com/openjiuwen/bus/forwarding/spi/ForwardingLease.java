@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi;
 
 import java.util.Objects;
@@ -27,12 +30,22 @@ public record ForwardingLease(String leaseOwner, long leaseUntilMillisEpoch) {
         }
     }
 
-    /** Whether this lease is no longer exclusive at the given instant. */
+    /**
+     * Whether this lease is no longer exclusive at the given instant.
+     *
+     * @param nowMillisEpoch the instant to check, in milliseconds since the epoch
+     * @return {@code true} if the lease has expired by the given instant
+     */
     public boolean isExpiredAt(long nowMillisEpoch) {
         return leaseUntilMillisEpoch <= nowMillisEpoch;
     }
 
-    /** Whether the given owner is the current holder of this lease. */
+    /**
+     * Whether the given owner is the current holder of this lease.
+     *
+     * @param owner the owner identity to test
+     * @return {@code true} if the given owner holds this lease
+     */
     public boolean isHeldBy(String owner) {
         return leaseOwner.equals(owner);
     }

@@ -1,21 +1,28 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
-import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -25,7 +32,7 @@ import java.util.Map;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Stage 23 (MI23-002) &mdash; end-to-end verification that a DATA_BEARING
@@ -95,12 +102,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * pattern; embedded-postgres boot is not safe under concurrent access, so the IT
  * runs exclusive of other tests in the suite.
  *
- * <p>Authority: {@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage22-review-and-stage23-plan.md}
+ * <p>Authority: {@code docs/architecture/l0/10-governance/
+ * delivery-projections/agent-bus-stage22-review-and-stage23-plan.md}
  * &sect;2.3 / &sect;4 MI23-002.
  */
 @Isolated
 class C3ForwardingPayloadRefIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static JdbcForwardingOutbox outbox;
@@ -136,6 +143,8 @@ class C3ForwardingPayloadRefIntegrationTest {
      * not just present but <em>correct end to end</em> &mdash; because every layer
      * of the reference is exercised against real SQL with a non-null value, which
      * no prior Stage did.
+     *
+     * @throws Exception if the outbox enqueue or payload-ref round-trip assertions fail
      */
     @Test
     void data_bearing_payload_ref_round_trips_through_real_persistence() throws Exception {
@@ -152,25 +161,8 @@ class C3ForwardingPayloadRefIntegrationTest {
 
         MutableEpochClock clock = new MutableEpochClock(t0);
         AtomicBoolean payloadRefObserved = new AtomicBoolean(false);
-
-        // Observing delivery port: at deliver time the row is DISPATCHING but its
-        // payload_ref was written at enqueue and left untouched by claim. Asserting
-        // BOTH record.payloadRef() (SqlCodec decode) AND the live PG column (raw
-        // JDBC) equal the enqueue value is the smoking gun that the reference
-        // survived the full round-trip.
-        ForwardingDeliveryPort observingDelivery = (record, now) -> {
-            assertThat(record.payloadRef())
-                    .as("the DATA_BEARING payloadRef survived enqueue → claim → deliver "
-                        + "on the decoded record (SqlCodec round-trip)")
-                    .isEqualTo(payloadRef);
-            Map<String, Object> row = outboxFullRow(tenant, messageId);
-            assertThat(row.get("payload_ref"))
-                    .as("the payload_ref column persisted by SqlCodec encode and read "
-                        + "back by raw JDBC matches at deliver time")
-                    .isEqualTo(payloadRef);
-            payloadRefObserved.set(true);
-            return ForwardingDeliveryResult.acked();
-        };
+        ForwardingDeliveryPort observingDelivery =
+                observingDeliveryPort(tenant, messageId, payloadRef, payloadRefObserved);
 
         ForwardingDispatcherWorker worker = new ForwardingDispatcherWorker(
                 outbox, outbox, observingDelivery,
@@ -185,6 +177,44 @@ class C3ForwardingPayloadRefIntegrationTest {
         ForwardingDispatcherWorker.DispatchTickResult tick =
                 loop.run(tenant, 5, "worker-payload", 60_000);
 
+        assertPayloadRefTickCounts(tick, payloadRefObserved);
+
+        assertThat(outbox.statusOf(id(messageId), tenant))
+                .as("the DATA_BEARING record round-tripped to a persisted ACK")
+                .isEqualTo(ForwardingStatus.Outbox.ACKED);
+        Map<String, Object> row = outboxFullRow(tenant, messageId);
+        assertThat(row.get("payload_ref"))
+                .as("the payload_ref column survives the terminal-ACK lifecycle "
+                    + "(markAcked does not clear the data-reference)")
+                .isEqualTo(payloadRef);
+    }
+
+    // Observing delivery port: at deliver time the row is DISPATCHING but its
+    // payload_ref was written at enqueue and left untouched by claim. Asserting
+    // BOTH record.payloadRef() (SqlCodec decode) AND the live PG column (raw
+    // JDBC) equal the enqueue value is the smoking gun that the reference
+    // survived the full round-trip.
+    private static ForwardingDeliveryPort observingDeliveryPort(String tenant, String messageId,
+                                                                String payloadRef,
+                                                                AtomicBoolean payloadRefObserved) {
+        return (record, now) -> {
+            assertThat(record.payloadRef())
+                    .as("the DATA_BEARING payloadRef survived enqueue → claim → deliver "
+                        + "on the decoded record (SqlCodec round-trip)")
+                    .isEqualTo(payloadRef);
+            Map<String, Object> row = outboxFullRow(tenant, messageId);
+            assertThat(row.get("payload_ref"))
+                    .as("the payload_ref column persisted by SqlCodec encode and read "
+                        + "back by raw JDBC matches at deliver time")
+                    .isEqualTo(payloadRef);
+            payloadRefObserved.set(true);
+            return ForwardingDeliveryResult.acked();
+        };
+    }
+
+    // Asserts the tick counts are self-consistent and the observing port fired.
+    private static void assertPayloadRefTickCounts(ForwardingDispatcherWorker.DispatchTickResult tick,
+                                                   AtomicBoolean payloadRefObserved) {
         assertThat(tick.acked())
                 .as("the DATA_BEARING record delivered and acked")
                 .isEqualTo(1);
@@ -198,15 +228,6 @@ class C3ForwardingPayloadRefIntegrationTest {
         assertThat(payloadRefObserved)
                 .as("the observing port saw the payloadRef at deliver time")
                 .isTrue();
-
-        assertThat(outbox.statusOf(id(messageId), tenant))
-                .as("the DATA_BEARING record round-tripped to a persisted ACK")
-                .isEqualTo(ForwardingStatus.Outbox.ACKED);
-        Map<String, Object> row = outboxFullRow(tenant, messageId);
-        assertThat(row.get("payload_ref"))
-                .as("the payload_ref column survives the terminal-ACK lifecycle "
-                    + "(markAcked does not clear the data-reference)")
-                .isEqualTo(payloadRef);
     }
 
     // ---- time-control infrastructure (test-only, plain JDK) ----------------
@@ -229,7 +250,11 @@ class C3ForwardingPayloadRefIntegrationTest {
             return current;
         }
 
-        /** Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back). */
+        /**
+         * Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back).
+         *
+         * @param instantMillisEpoch the instant to advance to, in milliseconds since the epoch
+         */
         void advanceTo(long instantMillisEpoch) {
             this.current = instantMillisEpoch;
         }
@@ -240,6 +265,12 @@ class C3ForwardingPayloadRefIntegrationTest {
      * each {@code stepMillis} apart, then stops. Before yielding each instant it
      * advances the shared clock to the same value &mdash; the two-clock
      * coordination point.
+     *
+     * @param clock the shared mutable clock to advance before each tick
+     * @param baseInstant the first tick instant, in milliseconds since the epoch
+     * @param stepMillis the gap between consecutive tick instants, in milliseconds
+     * @param ticks the number of instants to yield before stopping
+     * @return a tick source that yields the coordinated instants
      */
     private static ForwardingDispatchLoop.TickSource advanceableTickSource(
             MutableEpochClock clock, long baseInstant, long stepMillis, int ticks) {
@@ -265,6 +296,13 @@ class C3ForwardingPayloadRefIntegrationTest {
      * Builds a DATA_BEARING envelope carrying {@code payloadRef} (non-null
      * &rarr; DATA_BEARING policy). This is the one-line delta vs the Stage 17&ndash;22
      * envelope helpers, which all ended in {@code CONTROL_ONLY, null}.
+     *
+     * @param tenant tenant identity for the envelope
+     * @param messageId message id for the envelope
+     * @param route route handle name
+     * @param deadlineMillisEpoch deadline in milliseconds since the epoch
+     * @param payloadRef the data-reference to carry (non-null &rarr; DATA_BEARING)
+     * @return a DATA_BEARING envelope carrying the payloadRef
      */
     private static ForwardingEnvelope envelope(String tenant, String messageId, String route,
                                                long deadlineMillisEpoch, String payloadRef) {
@@ -286,13 +324,17 @@ class C3ForwardingPayloadRefIntegrationTest {
      * data-reference round-trip assertions). The port exposes no per-record read
      * path ({@code claimDue} leases), so the IT reads the row directly to assert
      * on-disk state.
+     *
+     * @param tenantId the tenant identity scoping the outbox row
+     * @param messageIdValue the message id of the outbox row
+     * @return a map of column names to values for the persisted outbox row
      */
     private static Map<String, Object> outboxFullRow(String tenantId, String messageIdValue) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT status, last_failure_code, attempt_count, next_attempt_at, "
-                   + "lease_owner, lease_until, payload_ref "
-                   + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
+                    "SELECT status, last_failure_code, attempt_count, next_attempt_at, "
+                    + "lease_owner, lease_until, payload_ref "
+                    + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
             ps.setString(1, tenantId);
             ps.setString(2, messageIdValue);
             try (ResultSet rs = ps.executeQuery()) {
@@ -308,7 +350,7 @@ class C3ForwardingPayloadRefIntegrationTest {
                 return row;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("failed to read outbox row " + messageIdValue, e);
+            throw new IllegalStateException("failed to read outbox row " + messageIdValue, e);
         }
     }
 }

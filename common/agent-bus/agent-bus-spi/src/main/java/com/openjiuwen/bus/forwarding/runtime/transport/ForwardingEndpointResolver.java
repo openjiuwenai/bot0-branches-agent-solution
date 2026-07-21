@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
@@ -31,9 +35,10 @@ import java.util.Optional;
  *
  * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/agent-bus-forwarding-runtime-decision.md}
  * (Stage 15 — A2A transport adapter permit, §6.1 item 4 lifted to scaffold level).
+ *
+ * @since 0.1.0
  */
 public interface ForwardingEndpointResolver {
-
     /**
      * Resolve an opaque route handle to an endpoint URL, or empty if the handle
      * is not resolvable (the delivery binding maps this to ROUTE_NOT_FOUND).

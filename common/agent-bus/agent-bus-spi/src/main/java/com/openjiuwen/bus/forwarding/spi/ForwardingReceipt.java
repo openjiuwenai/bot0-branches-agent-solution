@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 import java.util.Objects;
@@ -37,13 +41,17 @@ public record ForwardingReceipt(
         }
     }
 
-    /** Accepted receipt factory (no failure code). */
+    /**
+     * Accepted receipt factory (no failure code).
+     */
     public static ForwardingReceipt accepted(ForwardingMessageId messageId,
                                              String tenantId, long acceptedAtMillisEpoch) {
         return new ForwardingReceipt(messageId, tenantId, true, null, acceptedAtMillisEpoch);
     }
 
-    /** Rejected receipt factory (failure code required). */
+    /**
+     * Rejected receipt factory (failure code required).
+     */
     public static ForwardingReceipt rejected(ForwardingMessageId messageId,
                                              String tenantId, ForwardingFailureCode failureCode,
                                              long acceptedAtMillisEpoch) {

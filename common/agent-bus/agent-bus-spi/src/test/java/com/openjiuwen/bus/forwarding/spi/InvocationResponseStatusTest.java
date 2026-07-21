@@ -1,11 +1,14 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.spi;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Pins the six gateway-side observed invocation statuses of
@@ -18,7 +21,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * feat-014-a2a-call-event-forwarding.md §2.3.2}.
  */
 class InvocationResponseStatusTest {
-
     @Test
     void has_six_observed_statuses() {
         assertThat(EnumSet.allOf(InvocationResponseStatus.class)).containsExactlyInAnyOrder(

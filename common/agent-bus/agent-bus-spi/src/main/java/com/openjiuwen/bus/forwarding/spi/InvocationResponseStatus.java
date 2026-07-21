@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -16,6 +20,8 @@ package com.openjiuwen.bus.forwarding.spi;
  * feat-013-client-invocation-event-forwarding.md §2.3.3};
  * {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-014-a2a-call-event-forwarding.md §2.3.2}.
+ *
+ * @since 0.1.0
  */
 // scope: forwarding SPI — pure Java invocation observed-status; no payload body
 public enum InvocationResponseStatus {

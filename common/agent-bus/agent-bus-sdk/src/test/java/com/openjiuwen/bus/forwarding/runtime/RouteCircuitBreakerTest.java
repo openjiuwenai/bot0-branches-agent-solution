@@ -1,12 +1,17 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
-import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link RouteCircuitBreaker} — the three-state machine in
@@ -19,14 +24,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 1000ms} throughout.
  */
 class RouteCircuitBreakerTest {
-
     private static final long T0 = 1_700_000_000_000L;
     private static final ForwardingRouteHandle ROUTE_A =
             new ForwardingRouteHandle("route-a", "tenant-a");
     private static final ForwardingRouteHandle ROUTE_B =
             new ForwardingRouteHandle("route-b", "tenant-b");
 
-    /** Breaker with threshold 3, cooldown 1000ms, reading the mutable clock. */
+    /**
+     * Build a breaker with threshold 3, cooldown 1000ms, reading the mutable clock.
+     */
     private static RouteCircuitBreaker breaker(long[] now) {
         return new RouteCircuitBreaker(3, 1_000L, () -> now[0]);
     }
@@ -35,7 +41,9 @@ class RouteCircuitBreakerTest {
         return ForwardingDeliveryResult.retry(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
     }
 
-    /** Drive a fresh route to OPEN with {@code threshold} consecutive failures. */
+    /**
+     * Drive a fresh route to OPEN with {@code threshold} consecutive failures.
+     */
     private static void trip(RouteCircuitBreaker b, ForwardingRouteHandle route) {
         for (int i = 0; i < 3; i++) {
             b.allowsDelivery(route);

@@ -1,4 +1,10 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.a2a;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
@@ -8,10 +14,12 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import okhttp3.mockwebserver.SocketPolicy;
+
 import org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException;
 import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.jsonrpc.common.wrappers.SendStreamingMessageResponse;
@@ -26,8 +34,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Stage 15 PoC contract harness — proves {@link A2aForwardingDeliveryPort}
@@ -72,7 +78,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage14-review-and-stage15-plan.md}).
  */
 class A2aForwardingDeliveryPortMockWebServerTest {
-
     private static final String TENANT = "tenant-a";
     private static final String ROUTE = "route-1";
     private static final String SOURCE = "svc-source";
@@ -93,8 +98,12 @@ class A2aForwardingDeliveryPortMockWebServerTest {
         server.shutdown();
     }
 
-    /** A fresh PENDING outbox record (no lease, no failure code) — deliver reads
-     *  only the envelope fields, never the status. */
+    /**
+     * A fresh PENDING outbox record (no lease, no failure code) — deliver reads
+     * only the envelope fields, never the status.
+     *
+     * @return a PENDING outbox record carrying {@code payloadRef="payload-ref-1"}
+     */
     private static ForwardingOutboxRecord record() {
         return new ForwardingOutboxRecord(
                 TENANT,
@@ -110,11 +119,15 @@ class A2aForwardingDeliveryPortMockWebServerTest {
                 null);                     // eventType (FEAT-013; A2A test fixture, not exercised)
     }
 
-    /** A CONTROL_ONLY outbox record (payloadRef=null) — the pure-control variant.
-     *  Stage 23 MI23-003: the symmetric counterpart to {@link #record()}, used to
-     *  prove that {@code toMessageSendParams} OMITS the payloadRef from the A2A
-     *  request metadata when the record carries no payload reference (the
-     *  CONTROL_ONLY branch of the &sect;6.2 data-reference contract). */
+    /**
+     * A CONTROL_ONLY outbox record (payloadRef=null) — the pure-control variant.
+     * Stage 23 MI23-003: the symmetric counterpart to {@link #record()}, used to
+     * prove that {@code toMessageSendParams} OMITS the payloadRef from the A2A
+     * request metadata when the record carries no payload reference (the
+     * CONTROL_ONLY branch of the &sect;6.2 data-reference contract).
+     *
+     * @return a PENDING outbox record with {@code payloadRef=null} (CONTROL_ONLY)
+     */
     private static ForwardingOutboxRecord controlOnlyRecord() {
         return new ForwardingOutboxRecord(
                 TENANT,
@@ -130,8 +143,14 @@ class A2aForwardingDeliveryPortMockWebServerTest {
                 null);                     // eventType (FEAT-013; A2A test fixture, not exercised)
     }
 
-    /** A single SSE {@code jsonrpc} frame carrying {@code event} as the stream
-     *  result — byte-identical to what agent-runtime's controller emits. */
+    /**
+     * A single SSE {@code jsonrpc} frame carrying {@code event} as the stream
+     * result — byte-identical to what agent-runtime's controller emits.
+     *
+     * @param event the streaming event to carry in the SSE data frame
+     * @return a two-line SSE frame ready for MockWebServer to serve as the body
+     * @throws JsonProcessingException if the event cannot be serialised to JSON
+     */
     private static String sseFrame(StreamingEventKind event) throws JsonProcessingException {
         String data = JsonUtil.toJson(new SendStreamingMessageResponse("1", event));
         return "event:jsonrpc\ndata:" + data + "\n\n";
@@ -227,7 +246,7 @@ class A2aForwardingDeliveryPortMockWebServerTest {
     }
 
     @Test
-    void deliver_carries_payload_ref_in_a2a_metadata_for_data_bearing_record() throws Exception {
+    void deliver_carries_payload_ref_in_a2a_metadata() throws Exception {
         // Stage 23 MI23-003: a DATA_BEARING record's payloadRef travels into the A2A
         // request metadata (A2aForwardingDeliveryPort.toMessageSendParams injects
         // metadata.payloadRef when record.payloadRef() != null). The existing

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import org.slf4j.Logger;
@@ -42,9 +46,10 @@ import java.util.function.LongSupplier;
  * first few ticks (PR #389 E2E startup issue).
  *
  * <p>Authority: {@code docs/superpowers/specs/2026-07-15-relay-scheduler-design.md} §4.4.
+ *
+ * @since 0.1.0
  */
 public class RelayScheduler implements SmartLifecycle {
-
     private static final Logger log = LoggerFactory.getLogger(RelayScheduler.class);
 
     private final RelayDispatchLoop forwardLoop;
@@ -113,22 +118,26 @@ public class RelayScheduler implements SmartLifecycle {
         return Integer.MIN_VALUE + 101;
     }
 
-    /** One forward-relay tick (hop1 req -> hop2 deliver). Package-private for tests. */
+    /**
+     * One forward-relay tick (hop1 req -> hop2 deliver). Package-private for tests.
+     */
     void driveForward() {
         forwardSource.reset();
         try {
             forwardLoop.run(tenantId, limit);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             log.warn("forward relay tick failed; will retry next fire (tenant={})", tenantId, e);
         }
     }
 
-    /** One response-relay tick (resp_in -> resp_out). Package-private for tests. */
+    /**
+     * One response-relay tick (resp_in -> resp_out). Package-private for tests.
+     */
     void driveResponse() {
         responseSource.reset();
         try {
             responseLoop.run(tenantId, limit);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             log.warn("response relay tick failed; will retry next fire (tenant={})", tenantId, e);
         }
     }

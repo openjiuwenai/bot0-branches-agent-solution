@@ -1,22 +1,29 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
-import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
+
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -27,7 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
 
 /**
  * Stage 20 (MI20-001 / MI20-002) &mdash; end-to-end verification of the two
@@ -129,12 +136,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ({@code ConcurrentModificationException}). {@code @Isolated} makes each run
  * exclusive, and these ITs share the embedded-postgres boot recipe.
  *
- * <p>Authority: {@code docs/architecture/l0/10-governance/delivery-projections/agent-bus-stage19-review-and-stage20-plan.md}
+ * <p>Authority: {@code docs/architecture/l0/10-governance/
+ * delivery-projections/agent-bus-stage19-review-and-stage20-plan.md}
  * &sect;2 / &sect;4 MI20-001 / MI20-002.
  */
 @Isolated
 class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
-
     private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static JdbcForwardingOutbox outbox;
@@ -178,6 +185,8 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
      *       reclaiming a stuck row is a fresh delivery, not a retry, so neither
      *       the count nor a failure code is touched.</li>
      * </ul>
+     *
+     * @throws Exception if the scenario's outbox or reclaim JDBC steps fail
      */
     @Test
     void scenario_a_lease_expiry_reclaims_stuck_dispatching_row() throws Exception {
@@ -269,6 +278,8 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
      * the HALF_OPEN probe that recovered closed the breaker back to CLOSED
      * ({@code stateOf==CLOSED}) &mdash; the single most interaction-rich failure
      * path in the dispatch loop.
+     *
+     * @throws Exception if the scenario's outbox or breaker JDBC steps fail
      */
     @Test
     void scenario_b_circuit_breaker_full_state_machine_with_lease_reclaim() throws Exception {
@@ -358,7 +369,11 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
             return current;
         }
 
-        /** Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back). */
+        /**
+         * Advance the clock to exactly {@code instantMillisEpoch} (monotonic: must not go back).
+         *
+         * @param instantMillisEpoch the instant to advance to, in milliseconds since the epoch
+         */
         void advanceTo(long instantMillisEpoch) {
             this.current = instantMillisEpoch;
         }
@@ -370,6 +385,12 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
      * advances the shared clock to the same value &mdash; the two-clock
      * coordination point. {@code stepMillis} must exceed any backoff the policy
      * produces AND the lease duration, so each tick reclaims the prior row.
+     *
+     * @param clock the shared mutable clock to advance before each tick
+     * @param baseInstant the first tick instant, in milliseconds since the epoch
+     * @param stepMillis the gap between consecutive tick instants, in milliseconds
+     * @param ticks the number of instants to yield before stopping
+     * @return a tick source that yields the coordinated instants
      */
     private static ForwardingDispatchLoop.TickSource advanceableTickSource(
             MutableEpochClock clock, long baseInstant, long stepMillis, int ticks) {
@@ -389,6 +410,9 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
      * Fake {@link ForwardingDeliveryPort} that replays a fixed outcome sequence.
      * The claim/reclaim/ack SQL against the real outbox is untouched; only the
      * delivery outcome is injected.
+     *
+     * @param sequence the ordered delivery outcomes to replay
+     * @return a delivery port that returns the outcomes in order
      */
     private static ForwardingDeliveryPort fakeDeliveryPort(List<ForwardingDeliveryResult> sequence) {
         Iterator<ForwardingDeliveryResult> results = sequence.iterator();
@@ -418,14 +442,20 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
      * {@code lease_owner}; {@code lease_until} is a plain past epoch (not the
      * {@code RELEASED_LEASE_UNTIL} sentinel, which is releaseLease's path). No
      * production code writes a DISPATCHING row without owning the lease.
+     *
+     * @param tenantId tenant of the stuck row
+     * @param messageIdValue message id of the stuck row
+     * @param deadLeaseOwner the dead worker that holds the lease
+     * @param pastLeaseUntil a past epoch millis stamped as lease_until
+     * @throws SQLException if the fixture UPDATE fails
      */
     private static void simulateCrashedDispatch(String tenantId, String messageIdValue,
                                                 String deadLeaseOwner, long pastLeaseUntil) throws SQLException {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "UPDATE agent_bus_forwarding_outbox "
-                   + "SET status = 'DISPATCHING', lease_owner = ?, lease_until = ? "
-                   + "WHERE tenant_id = ? AND message_id = ?")) {
+                    "UPDATE agent_bus_forwarding_outbox "
+                    + "SET status = 'DISPATCHING', lease_owner = ?, lease_until = ? "
+                    + "WHERE tenant_id = ? AND message_id = ?")) {
             ps.setString(1, deadLeaseOwner);
             ps.setLong(2, pastLeaseUntil);
             ps.setString(3, tenantId);
@@ -440,12 +470,17 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
      * port exposes no per-record read path ({@code claimDue} leases), so the IT
      * reads {@code last_failure_code} / {@code attempt_count} / {@code next_attempt_at}
      * directly to assert on-disk state.
+     *
+     * @param tenantId the tenant identity scoping the outbox row
+     * @param messageIdValue the message id of the outbox row
+     * @return a map of the row's failure-code / attempt-count / next-attempt columns
+     * @throws SQLException if the SELECT query fails
      */
     private static Map<String, Object> outboxRow(String tenantId, String messageIdValue) throws SQLException {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT last_failure_code, attempt_count, next_attempt_at "
-                   + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
+                    "SELECT last_failure_code, attempt_count, next_attempt_at "
+                    + "FROM agent_bus_forwarding_outbox WHERE tenant_id = ? AND message_id = ?")) {
             ps.setString(1, tenantId);
             ps.setString(2, messageIdValue);
             try (ResultSet rs = ps.executeQuery()) {

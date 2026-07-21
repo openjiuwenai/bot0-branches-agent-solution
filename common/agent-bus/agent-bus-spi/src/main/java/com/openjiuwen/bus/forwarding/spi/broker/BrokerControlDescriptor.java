@@ -1,15 +1,21 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.spi.broker;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Shared control-descriptor codec for the FEAT-013/014 broker {@code payloadRef}.
  *
- * <p>{@link com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage} carries routing metadata (tenantId / messageId /
- * sourceServiceId / targetServiceId / consumerServiceId / payloadRef) plus the
- * native {@code correlationId} / {@code eventType} (mirrored from headers at poll).
+ * <p>{@link com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage} carries routing
+ * metadata (tenantId / messageId / sourceServiceId / targetServiceId / consumerServiceId /
+ * payloadRef) plus the native {@code correlationId} / {@code eventType} (mirrored from
+ * headers at poll).
  * It does NOT carry the request envelope's {@code traceId} /
  * {@code idempotencyKey} / {@code routeHandle} / {@code capability} / {@code deadline}
  * — those control fields would otherwise be lost crossing the broker hop. They are
@@ -35,6 +41,8 @@ import java.util.Objects;
  * feat-013-client-invocation-event-forwarding.md §4.2 / §4.3};
  * {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-014-a2a-call-event-forwarding.md §4.4}.
+ *
+ * @since 0.1.0
  */
 // scope: forwarding spi.broker — payloadRef-carried control descriptor codec; pure Java.
 // Moved here from forwarding.runtime.transport.broker by the gateway-assembly-purify
@@ -44,7 +52,6 @@ import java.util.Objects;
 // the SHARED codec used by GatewayRuntimeService + TestAgentRuntime, so spi.broker is
 // its natural home (cohesive with the broker SPI surface).
 public final class BrokerControlDescriptor {
-
     private BrokerControlDescriptor() {
         throw new AssertionError("BrokerControlDescriptor is a static codec namespace");
     }
@@ -71,7 +78,9 @@ public final class BrokerControlDescriptor {
             // when present it carries the original gateway serviceId so responses route back.
         }
 
-        /** Convenience canonical ctor without originalCaller (backward-compat for callers). */
+        /**
+         * Convenience canonical ctor without originalCaller (backward-compat for callers).
+         */
         public Descriptor(AgentBusEventType eventType, String traceId, String correlationId,
                           String idempotencyKey, String routeHandle, String capability,
                           long deadlineMillisEpoch) {
@@ -102,9 +111,17 @@ public final class BrokerControlDescriptor {
     /**
      * Encode the request control fields (incl. {@code originalCaller}) into a {@code payloadRef}.
      *
+     * @param eventType          the request event type (FEAT-013/014 family)
+     * @param traceId           W3C 32-char hex trace id
+     * @param correlationId     cross-hop correlation key (gateway = requestId)
+     * @param idempotencyKey    client retry idempotency key
+     * @param routeHandle       opaque route handle value (resolved via ForwardingEndpointResolver)
+     * @param capability        capability identifier
+     * @param deadlineMillisEpoch absolute deadline, or {@code Long.MAX_VALUE} for none
      * @param originalCaller the original gateway serviceId that initiated the request —
      *                       carried end-to-end so responses can route back across the relay;
      *                       {@code null} for descriptors that don't carry it (legacy callers).
+     * @return the compact {@code k=v;k=v;...} descriptor
      */
     public static String encode(AgentBusEventType eventType, String traceId, String correlationId,
                                 String idempotencyKey, String routeHandle, String capability,
@@ -144,8 +161,12 @@ public final class BrokerControlDescriptor {
             throw new IllegalArgumentException("payloadRef (request descriptor) must not be blank");
         }
         AgentBusEventType eventType = null;
-        String traceId = null, correlationId = null, idempotencyKey = null;
-        String routeHandle = null, capability = null, originalCaller = null;
+        String traceId = null;
+        String correlationId = null;
+        String idempotencyKey = null;
+        String routeHandle = null;
+        String capability = null;
+        String originalCaller = null;
         long deadline = 0L;
         for (String pair : payloadRef.split(";")) {
             int eq = pair.indexOf('=');
@@ -163,7 +184,10 @@ public final class BrokerControlDescriptor {
                 case "capability" -> capability = v;
                 case "deadline" -> deadline = Long.parseLong(v);
                 case "originalCaller" -> originalCaller = v;
-                default -> { /* ignore unknown keys (forward-compat) */ }
+                default -> {
+                    // ignore unknown keys (forward-compat)
+                    break;
+                }
             }
         }
         if (eventType == null) {
@@ -179,55 +203,55 @@ public final class BrokerControlDescriptor {
 
     /**
      * Soft-extract the {@code eventType} token from a {@code payloadRef} without
-     * throwing — returns {@code null} if the descriptor has no {@code eventType=}
-     * token or the value is not a known {@link AgentBusEventType}. Used to skip
-     * self-produced responses (which carry {@code taskId=...;status=...}) before the
-     * full, validating decode.
+     * throwing — returns an empty {@link Optional} if the descriptor has no
+     * {@code eventType=} token or the value is not a known {@link AgentBusEventType}.
+     * Used to skip self-produced responses (which carry {@code taskId=...;status=...})
+     * before the full, validating decode.
      *
-     * @param payloadRef the descriptor (nullable; null/blank → null)
-     * @return the event type, or {@code null} if absent / unknown
+     * @param payloadRef the descriptor (nullable; null/blank → empty)
+     * @return the event type, or an empty {@link Optional} if absent / unknown
      */
-    public static AgentBusEventType softEventType(String payloadRef) {
+    public static Optional<AgentBusEventType> softEventType(String payloadRef) {
         if (payloadRef == null || payloadRef.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         for (String pair : payloadRef.split(";")) {
             int eq = pair.indexOf('=');
-            if (eq > 0 && pair.substring(0, eq).equals("eventType")) {
+            if (eq > 0 && "eventType".equals(pair.substring(0, eq))) {
                 try {
-                    return AgentBusEventType.valueOf(pair.substring(eq + 1));
+                    return Optional.of(AgentBusEventType.valueOf(pair.substring(eq + 1)));
                 } catch (IllegalArgumentException ex) {
-                    return null; // unknown event type → treat as non-request
+                    return Optional.empty(); // unknown event type → treat as non-request
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
      * Extract a single {@code key=value} token value from a {@code payloadRef}
      * descriptor. Tolerates response-shaped descriptors ({@code taskId=...;
-     * status=...; streamRef=...}) without throwing. Returns {@code null} if the
-     * payloadRef is null/blank or the key is absent.
+     * status=...; streamRef=...}) without throwing. Returns an empty
+     * {@link Optional} if the payloadRef is null/blank or the key is absent.
      *
      * <p>Used by the gateway to pull the {@code taskId} / {@code status} /
      * {@code streamRef} / {@code reason} tokens from response payloadRefs.
      *
      * @param payloadRef the descriptor (nullable)
      * @param key       the token key to match
-     * @return the token value, or {@code null} if absent
+     * @return the token value, or an empty {@link Optional} if absent
      */
-    public static String token(String payloadRef, String key) {
+    public static Optional<String> token(String payloadRef, String key) {
         if (payloadRef == null || payloadRef.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         for (String pair : payloadRef.split(";")) {
             int eq = pair.indexOf('=');
             if (eq > 0 && pair.substring(0, eq).equals(key)) {
-                return pair.substring(eq + 1);
+                return Optional.of(pair.substring(eq + 1));
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static String requireNonBlank(String value, String name) {

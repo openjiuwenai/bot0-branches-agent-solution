@@ -1,12 +1,15 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;
 
 /**
  * Unit tests for the broker-agnostic {@link DeliveryFilter} → RocketMQ SQL92 mapping on
@@ -16,9 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Pure mapping — no broker, no RocketMQ client needed.
  */
 class RocketMqBrokerForwardingConsumerTest {
-
     @Test
-    void sql92_for_runtime_filter_and_joins_required_properties_sorted_by_key() {
+    void sql92_for_runtime_filter_and_joins_required_props_sorted_by_key() {
         // forRuntime stamps {tenantId, targetServiceId}; the SQL92 expression AND-joins each
         // key='value' clause, keys sorted so the string is deterministic (MessageSelector.bySql
         // does not constrain clause order; the unit pins a stable expression).
@@ -39,7 +41,7 @@ class RocketMqBrokerForwardingConsumerTest {
     }
 
     @Test
-    void sql92_doubles_single_quotes_in_values_so_the_expression_stays_well_formed() {
+    void sql92_doubles_single_quotes_in_values_to_stay_well_formed() {
         // a value containing a single quote is SQL92-escaped by doubling (') -> ('') so the
         // expression stays well-formed and matches literally, not as a syntax error / injection.
         DeliveryFilter filter = new DeliveryFilter(Map.of("targetServiceId", "svc'a"));

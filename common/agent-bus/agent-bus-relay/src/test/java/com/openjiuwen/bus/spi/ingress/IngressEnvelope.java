@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
 package com.openjiuwen.bus.spi.ingress;
 
 import java.util.Map;
@@ -44,6 +47,9 @@ public record IngressEnvelope(
      * chars (0-9, a-f). Mirrors the validator used by
      * {@code S2cCallbackEnvelope.requireLowerHex32} so the two cross-plane
      * surfaces apply the same trace-id discipline.
+     *
+     * @param value     the trace-id string to validate
+     * @param fieldName the field name used in failure messages
      */
     static void requireLowerHex32(String value, String fieldName) {
         Objects.requireNonNull(value, fieldName + " is required");
@@ -54,7 +60,9 @@ public record IngressEnvelope(
             char c = value.charAt(i);
             boolean isLowerHex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
             if (!isLowerHex) {
-                throw new IllegalArgumentException(fieldName + " must be exactly 32 lowercase hex chars (W3C); offending char at index " + i + ": '" + c + "'");
+                throw new IllegalArgumentException(fieldName
+                        + " must be exactly 32 lowercase hex chars (W3C); offending char at index "
+                        + i + ": '" + c + "'");
             }
         }
     }

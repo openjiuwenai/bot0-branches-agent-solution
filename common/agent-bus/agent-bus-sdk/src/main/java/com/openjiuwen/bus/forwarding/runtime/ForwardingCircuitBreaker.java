@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
 import com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult;
@@ -40,10 +44,30 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
  * <p>Plain JDK-portable type — no Spring, JDBC, broker or scheduler dependency
  * (forwarding purity, decision §6.1).
  *
- * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/agent-bus-forwarding-runtime-transport-candidates.md}
+ * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/
+ * agent-bus-forwarding-runtime-transport-candidates.md}
  * (deliver-retry-policy-subitem; circuit-breaker); Stage 16 plan §3.
+ *
+ * @since 0.1.0
  */
 public interface ForwardingCircuitBreaker {
+
+    /**
+     * No-op breaker: the circuit is always closed, so delivery is never blocked
+     * and outcomes are ignored. The default the worker uses when no per-route
+     * breaker is injected.
+     */
+    ForwardingCircuitBreaker ALWAYS_CLOSED = new ForwardingCircuitBreaker() {
+        @Override
+        public boolean allowsDelivery(ForwardingRouteHandle routeHandle) {
+            return true;
+        }
+
+        @Override
+        public void recordOutcome(ForwardingRouteHandle routeHandle, ForwardingDeliveryResult result) {
+            // no-op — the always-closed breaker tracks no per-route state
+        }
+    };
 
     /**
      * Whether delivery to the given route is currently permitted. A real
@@ -53,6 +77,8 @@ public interface ForwardingCircuitBreaker {
      * into a known-failing route.
      *
      * @param routeHandle the opaque route (never unwrapped to a physical endpoint)
+     * @return {@code true} if delivery is permitted (CLOSED / a HALF_OPEN probe slot is free);
+     *         {@code false} if the route is OPEN (short-circuit the delivery)
      */
     boolean allowsDelivery(ForwardingRouteHandle routeHandle);
 
@@ -82,21 +108,4 @@ public interface ForwardingCircuitBreaker {
      * @param result      the delivery result (never {@code null})
      */
     void recordOutcome(ForwardingRouteHandle routeHandle, ForwardingDeliveryResult result);
-
-    /**
-     * No-op breaker: the circuit is always closed, so delivery is never blocked
-     * and outcomes are ignored. The default the worker uses when no per-route
-     * breaker is injected.
-     */
-    ForwardingCircuitBreaker ALWAYS_CLOSED = new ForwardingCircuitBreaker() {
-        @Override
-        public boolean allowsDelivery(ForwardingRouteHandle routeHandle) {
-            return true;
-        }
-
-        @Override
-        public void recordOutcome(ForwardingRouteHandle routeHandle, ForwardingDeliveryResult result) {
-            // no-op — the always-closed breaker tracks no per-route state
-        }
-    };
 }

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
@@ -68,15 +72,21 @@ import org.springframework.context.annotation.Configuration;
  *
  * <p>Authority: {@code docs/4plus1/delta/gateway-assembly-purify/} (de-gateway-
  * ification follow-on); ADR-0163 (forwarding-reorg layering).
+ *
+ * @since 0.1.0
  */
 @Configuration
 public class RocketMqBrokerClientConfiguration {
-
     /**
      * Default RocketMQ producer — base group ({@code props.producerGroup()}), used by
      * {@link #requestRelay} for hop1 request produce. Any caller (gateway or
      * agent-runtime) can inject this for direct produce. Lifecycle: start on bean
      * creation, shutdown on close.
+     *
+     * @param broker the broker-neutral connection config (nameserver endpoints)
+     * @param props the broker properties (producer group)
+     * @return a started DefaultMQProducer with the configured group and nameserver
+     * @throws Exception if the producer fails to start
      */
     @Bean(destroyMethod = "shutdown")
     DefaultMQProducer defaultProducer(BrokerClientProperties broker, AgentBusBrokerProperties props) throws Exception {
@@ -90,6 +100,9 @@ public class RocketMqBrokerClientConfiguration {
      * Hop1 request relay — produces to {@code ascend_bus_*_req} via
      * {@code BrokerTopicResolver("req")}. Used by the gateway AND by any
      * agent-runtime acting as a caller (invoking another agent).
+     *
+     * @param defaultProducer the base RocketMQ producer to send hop1 requests
+     * @return a hop1 request relay bound to the {@code req} topic
      */
     @Bean(name = "requestRelay")
     BrokerForwardingRelayPort requestRelay(DefaultMQProducer defaultProducer) {
@@ -101,6 +114,10 @@ public class RocketMqBrokerClientConfiguration {
      * Response consumer — consumes from {@code ascend_bus_*_resp_out} via
      * {@code BrokerTopicResolver("resp_out")}. Used by the gateway AND by any
      * agent-runtime awaiting a response to its own outbound call.
+     *
+     * @param broker the broker-neutral connection config (nameserver endpoints)
+     * @param props the broker properties (poll wait millis)
+     * @return a response consumer bound to the {@code resp_out} topic
      */
     @Bean(name = "responseConsumer", destroyMethod = "close")
     BrokerForwardingConsumerPort responseConsumer(BrokerClientProperties broker, AgentBusBrokerProperties props) {
