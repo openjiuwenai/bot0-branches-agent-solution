@@ -110,6 +110,9 @@ public final class InternalNetworkPolicy {
      * configured CIDR list are considered (so {@code 127.0.0.0/8} alone does not reject
      * {@code localhost} merely because it also has an {@code ::1} AAAA record). Every
      * considered address must fall in the allowlist to block mixed public/private answers.
+     *
+     * @param addresses DNS-resolved addresses for the fetch host
+     * @return allowlisted candidates of configured address families; empty when rejected
      */
     private List<InetAddress> filterAndEnforceAllowlist(InetAddress[] addresses) {
         boolean hasIpv4Policy = false;
@@ -119,6 +122,8 @@ public final class InternalNetworkPolicy {
                 hasIpv4Policy = true;
             } else if (block.network() instanceof Inet6Address) {
                 hasIpv6Policy = true;
+            } else {
+                // Non IPv4/IPv6 network entries are ignored for family selection.
             }
         }
         List<InetAddress> candidates = new ArrayList<>();
@@ -168,6 +173,8 @@ public final class InternalNetworkPolicy {
     public record PinnedTarget(String scheme, String originalHost, InetAddress address, int port) {
         /**
          * Host header value (includes non-default port when present on the original URL).
+         *
+         * @return {@code Host} header value for the pinned request
          */
         public String hostHeaderValue() {
             if (port < 0) {

@@ -9,6 +9,7 @@ import java.net.Socket;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
+import java.util.Optional;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLEngine;
@@ -149,26 +150,28 @@ final class AgentCardHostnamePin {
             return chain;
         }
 
-        private static SSLSession handshakeSession(Socket socket) {
+        private static Optional<SSLSession> handshakeSession(Socket socket) {
             if (!(socket instanceof SSLSocket sslSocket)) {
-                return null;
+                return Optional.empty();
             }
             SSLSession handshake = sslSocket.getHandshakeSession();
-            return handshake != null ? handshake : sslSocket.getSession();
+            return Optional.ofNullable(handshake != null ? handshake : sslSocket.getSession());
         }
 
-        private static SSLSession handshakeSession(SSLEngine engine) {
+        private static Optional<SSLSession> handshakeSession(SSLEngine engine) {
             if (engine == null) {
-                return null;
+                return Optional.empty();
             }
             SSLSession handshake = engine.getHandshakeSession();
-            return handshake != null ? handshake : engine.getSession();
+            return Optional.ofNullable(handshake != null ? handshake : engine.getSession());
         }
 
-        private static void assertExpectedHostname(SSLSession session) throws CertificateException {
-            if (session == null) {
+        private static void assertExpectedHostname(Optional<SSLSession> maybeSession)
+                throws CertificateException {
+            if (maybeSession.isEmpty()) {
                 throw new CertificateException("missing SSL session for hostname verification");
             }
+            SSLSession session = maybeSession.get();
             String expected = EXPECTED_HOSTNAME.get();
             if (expected == null || expected.isBlank()) {
                 expected = session.getPeerHost();

@@ -81,48 +81,9 @@ public final class ReconciliationService {
     public ReconciliationResult reconcile(DeploymentDiscoveryProvider provider) {
         String sourceId = provider.sourceId();
         try {
-            ListDeploymentInstancesResult snapshot = provider.listInstances();
-            sourceId = snapshot.sourceId();
-            long revision = snapshot.sourceRevision();
-            long lastRevision = repository.getLastProcessedRevision(sourceId);
-            String fingerprint = SnapshotFingerprint.compute(snapshot);
-
-            if (revision < lastRevision) {
-                LOG.info("skip stale snapshot source={} revision={} lastRevision={}",
-                        sourceId, revision, lastRevision);
-                int draining = reconcileMissingFromSnapshot(snapshot);
-                runPostReconcileMaintenance(sourceId);
-                return ReconciliationResult.success(sourceId, revision, 0, 0, draining);
-            }
-            if (revision == lastRevision && lastRevision > 0) {
-                Optional<String> priorFingerprint = repository.getSnapshotFingerprint(sourceId);
-                if (priorFingerprint.isPresent() && !priorFingerprint.get().equals(fingerprint)) {
-                    throw new SourceRevisionConflictException(sourceId, revision,
-                            "conflicting snapshot at revision " + revision);
-                }
-                // listInstances() may have synchronously fired watch events that bumped
-                // lastRevision before applySnapshot ran; still reconcile DB rows missing
-                // from the current snapshot (e.g. instance removed from static config).
-                int draining = reconcileMissingFromSnapshot(snapshot);
-                runPostReconcileMaintenance(sourceId);
-                return ReconciliationResult.success(sourceId, revision, 0, 0, draining);
-            }
-
-            ReconciliationCounters counters = applySnapshot(snapshot);
-            repository.updateLastProcessedRevision(sourceId, revision, fingerprint);
-            repository.markSourceFresh(sourceId);
-            runPostReconcileMaintenance(sourceId);
-            return ReconciliationResult.success(sourceId, revision,
-                    counters.created(), counters.updated(), counters.draining());
+            return reconcileSnapshot(provider.listInstances());
         } catch (SourceRevisionConflictException ex) {
-            LOG.warn("source revision conflict for {} at revision {}: {}",
-                    sourceId, ex.sourceRevision(), ex.getMessage());
-            if (observability != null) {
-                observability.observeReconciliationConflict(sourceId, ex.sourceRevision());
-            }
-            markSourceStale(sourceId);
-            return ReconciliationResult.failure(
-                    sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
+            return handleRevisionConflict(ex);
         } catch (SourceRevisionGapException ex) {
             LOG.warn("source revision gap for {}: {}", sourceId, ex.getMessage());
             markSourceStale(sourceId);
@@ -135,6 +96,56 @@ public final class ReconciliationService {
             return ReconciliationResult.failure(
                     sourceId, "DEPLOYMENT_SOURCE_UNAVAILABLE", ex.getMessage(), null);
         }
+    }
+
+    private ReconciliationResult reconcileSnapshot(ListDeploymentInstancesResult snapshot) {
+        String sourceId = snapshot.sourceId();
+        long revision = snapshot.sourceRevision();
+        long lastRevision = repository.getLastProcessedRevision(sourceId);
+        String fingerprint = SnapshotFingerprint.compute(snapshot);
+
+        if (revision < lastRevision) {
+            LOG.info("skip stale snapshot source={} revision={} lastRevision={}",
+                    sourceId, revision, lastRevision);
+            return finishWithoutMutation(sourceId, revision, snapshot);
+        }
+        if (revision == lastRevision && lastRevision > 0) {
+            Optional<String> priorFingerprint = repository.getSnapshotFingerprint(sourceId);
+            if (priorFingerprint.isPresent() && !priorFingerprint.get().equals(fingerprint)) {
+                throw new SourceRevisionConflictException(sourceId, revision,
+                        "conflicting snapshot at revision " + revision);
+            }
+            // listInstances() may have synchronously fired watch events that bumped
+            // lastRevision before applySnapshot ran; still reconcile DB rows missing
+            // from the current snapshot (e.g. instance removed from static config).
+            return finishWithoutMutation(sourceId, revision, snapshot);
+        }
+
+        ReconciliationCounters counters = applySnapshot(snapshot);
+        repository.updateLastProcessedRevision(sourceId, revision, fingerprint);
+        repository.markSourceFresh(sourceId);
+        runPostReconcileMaintenance(sourceId);
+        return ReconciliationResult.success(sourceId, revision,
+                counters.created(), counters.updated(), counters.draining());
+    }
+
+    private ReconciliationResult finishWithoutMutation(String sourceId, long revision,
+                                                       ListDeploymentInstancesResult snapshot) {
+        int draining = reconcileMissingFromSnapshot(snapshot);
+        runPostReconcileMaintenance(sourceId);
+        return ReconciliationResult.success(sourceId, revision, 0, 0, draining);
+    }
+
+    private ReconciliationResult handleRevisionConflict(SourceRevisionConflictException ex) {
+        String sourceId = ex.sourceId();
+        LOG.warn("source revision conflict for {} at revision {}: {}",
+                sourceId, ex.sourceRevision(), ex.getMessage());
+        if (observability != null) {
+            observability.observeReconciliationConflict(sourceId, ex.sourceRevision());
+        }
+        markSourceStale(sourceId);
+        return ReconciliationResult.failure(
+                sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
     }
 
     /**

@@ -92,7 +92,8 @@ final class AgentCardMtlsHttpClientFactory {
                         options.getTrustPkcs12Format());
                 tmf.init(trust);
             } else {
-                tmf.init((KeyStore) null);
+                KeyStore defaultTrustStore = null;
+                tmf.init(defaultTrustStore);
             }
             TrustManager[] trustManagers = AgentCardHostnamePin.wrap(tmf.getTrustManagers());
 
