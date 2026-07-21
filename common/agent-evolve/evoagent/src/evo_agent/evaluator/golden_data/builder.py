@@ -15,7 +15,7 @@ port 自 example bundle ``golden_gen/run.py``，在 evo_agent 栈上重写（见
   持久化知识库 ``golden_data_dir/global_understanding/``。
 
 与 golden_gen 的栈差异：
-- LLM：``Model.invoke([SystemMessage, UserMessage])``（async，``_run_coroutine`` 同步包）
+- LLM：``Model.invoke([SystemMessage, UserMessage])``（async，``_get_invocation_loop().submit().result()`` 同步包）
   而非 ``common.llm_client.call_llm``。
 - 轨迹：``StandardTrajectory.messages``（list[TrajectoryMessage]，无 script_id /
   conversation_id / script.skill）——轨迹标识用索引，skill 归属信号走
@@ -41,7 +41,7 @@ from openjiuwen.core.foundation.llm import (
 from evo_agent.config import EvolveConfig
 from evo_agent.evaluator.domain.models import StandardTrajectory
 from evo_agent.evaluator.domain.scoring import EvaluationError
-from evo_agent.evaluator.evaluators.llm import _run_coroutine
+from evo_agent.llm.invocation import _get_invocation_loop
 from evo_agent.evaluator.golden_data.gu_store import (
     OUT_OF_SCOPE_SKILL,
     route_skill,
@@ -259,14 +259,14 @@ class GlobalUnderstandingBuilder:
         last_err: object = "未知错误"
         for attempt in range(1, max_retries + 1):
             try:
-                resp = _run_coroutine(
+                resp = _get_invocation_loop().submit(
                     self._model.invoke(
                         [
                             SystemMessage(content=system_prompt),
                             UserMessage(content=user_prompt),
                         ]
                     )
-                )
+                ).result()
                 raw = resp.content
             except Exception as e:  # noqa: BLE001 — 重试，全失败再抛
                 last_err = e

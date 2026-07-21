@@ -81,11 +81,16 @@ class GenerateEBRequest(BaseModel):
 
 
 class GenerateEBResponse(BaseModel):
-    """在线产 EB 响应 —— 对外口径 ``{id, inputs, expected_behavior}``。"""
+    """在线产 EB 响应 —— 对外口径 ``{id, inputs, expected_behavior}``。
+
+    ``internal`` 仅备查（result/reason/scenario/scope/score），不进 optimizer——
+    ``dataset/case.py`` 只读 ``items[*].expected_behavior``，不读 ``internal``。
+    """
 
     status: str = "generated"
     items: list[dict[str, str]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    internal: dict[str, Any] = Field(default_factory=dict)
 
 
 class BuildGUConfig(BaseModel):
@@ -299,7 +304,20 @@ async def generate_expected_behavior(
             detail=f"EB generation failed: {e}",
         ) from e
 
-    return GenerateEBResponse(items=output.to_external(), metadata=output.metadata)
+    # internal 仅备查（result/reason/scenario/scope/score），不进 optimizer 对外口径。
+    internal: dict[str, Any] = {}
+    if output.items:
+        it = output.items[0]
+        internal = {
+            "result": it.result,
+            "reason": it.reason,
+            "scenario": it.scenario,
+            "scope": it.scope,
+            "score": it.score,
+        }
+    return GenerateEBResponse(
+        items=output.to_external(), metadata=output.metadata, internal=internal
+    )
 
 
 # ---------------------------------------------------------------------------

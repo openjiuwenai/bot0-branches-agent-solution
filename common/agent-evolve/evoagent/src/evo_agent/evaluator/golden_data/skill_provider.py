@@ -4,7 +4,7 @@
   ``<skill_root>/<name>/SKILL.md``）。
 - ``AdapterSkillProvider``：包 ``adapter_client`` 的 async ``skill_list()`` /
   ``skill_content(name)``（POST /api/v1/skills，与 example adapter abc_agent 同契约），
-  用 ``evaluators.llm._run_coroutine`` 同步包装。
+  用 ``evo_agent.llm.invocation._get_invocation_loop().submit().result()`` 同步包装。
 - ``make_skill_provider``：配置切换两源。
 
 evo_agent 的 ``StandardTrajectory`` 无 ``script.skill`` 归属信号（与 example bundle 不同），
@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from evo_agent.evaluator.evaluators.llm import _run_coroutine
+from evo_agent.llm.invocation import _get_invocation_loop
 from evo_agent.skill_loader import SkillLoader
 
 __all__ = [
@@ -64,7 +64,7 @@ class LocalSkillProvider:
 class AdapterSkillProvider:
     """远程 skill 源：包 ``adapter_client``（async ``skill_list`` / ``skill_content``）。
 
-    async 方法用 ``evaluators.llm._run_coroutine`` 同步包装，与
+    async 方法用 ``_get_invocation_loop().submit().result()`` 同步包装，与
     ``TrajectoryGoalGenerator`` 一致。``adapter_client`` 需已建立（或可自建 httpx
     client 的实例）；``skill_list()`` 返回 ``[{"name": ...}, ...]``。
     """
@@ -73,11 +73,11 @@ class AdapterSkillProvider:
         self._adapter_client = adapter_client
 
     def list_skills(self) -> list[str]:
-        raw = _run_coroutine(self._adapter_client.skill_list())
+        raw = _get_invocation_loop().submit(self._adapter_client.skill_list()).result()
         return [s.get("name", "") for s in raw if isinstance(s, dict) and s.get("name")]
 
     def get_skill_content(self, name: str) -> str:
-        return _run_coroutine(self._adapter_client.skill_content(name))
+        return _get_invocation_loop().submit(self._adapter_client.skill_content(name)).result()
 
 
 def make_skill_provider(
