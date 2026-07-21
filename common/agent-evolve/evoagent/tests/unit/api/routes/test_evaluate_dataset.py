@@ -286,7 +286,7 @@ class _FakeJudgeModel:
         self._contents = contents
         self._i = 0
 
-    async def invoke(self, messages: object) -> _FakeAssistant:  # noqa: ARG002
+    async def invoke(self, _messages: object) -> _FakeAssistant:
         content = self._contents[self._i % len(self._contents)]
         self._i += 1
         return _FakeAssistant(content)
@@ -298,7 +298,7 @@ class _BoomJudgeModel:
     def __init__(self, exc: BaseException) -> None:
         self._exc = exc
 
-    async def invoke(self, messages: object) -> _FakeAssistant:  # noqa: ARG002
+    async def invoke(self, _messages: object) -> _FakeAssistant:
         raise self._exc
 
 
