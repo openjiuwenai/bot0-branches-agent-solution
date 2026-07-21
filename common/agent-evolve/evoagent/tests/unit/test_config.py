@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
 import pytest
@@ -133,9 +134,25 @@ class TestEvolveConfig:
             icbc_token="t",
             icbc_user_id="u",
             icbc_endpoint="http://icbc/mlpmodelservice/aigc/chat/completions",
+            icbc_context_window_tokens=32768,
         )
         assert config.llm_provider == "ICBC"
         assert config.icbc_token == "t"
+
+    def test_icbc_mode_requires_declared_context_window(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """服务端选模型时不得猜测 OpenAI 默认上下文窗口。"""
+        monkeypatch.delenv("EVO_ICBC_CONTEXT_WINDOW_TOKENS", raising=False)
+
+        with pytest.raises(ValueError, match="icbc_context_window_tokens"):
+            EvolveConfig(
+                _env_file=None,
+                llm_provider="ICBC",
+                icbc_token="t",
+                icbc_user_id="u",
+                icbc_endpoint="http://icbc/svc.htm",
+            )
 
     def test_openai_mode_no_icbc_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OpenAI 默认模式不校验 ICBC 字段（空也通过）——行为不回归。"""
@@ -151,6 +168,7 @@ class TestEvolveConfig:
         monkeypatch.setenv("EVO_ICBC_TOKEN", "env-token")
         monkeypatch.setenv("EVO_ICBC_USER_ID", "env-user")
         monkeypatch.setenv("EVO_ICBC_ENDPOINT", "http://env-icbc/svc.htm")
+        monkeypatch.setenv("EVO_ICBC_CONTEXT_WINDOW_TOKENS", "32768")
         config = EvolveConfig()
         assert config.llm_provider == "ICBC"
         assert config.icbc_token == "env-token"
@@ -171,6 +189,7 @@ class TestEvolveConfig:
             icbc_token="t",
             icbc_user_id="u",
             icbc_endpoint="http://icbc/svc.htm",
+            icbc_context_window_tokens=32768,
         )
         assert config.llm_provider == "ICBC"
 
@@ -182,3 +201,113 @@ class TestEvolveConfig:
             monkeypatch.delenv(key, raising=False)
         config = EvolveConfig(_env_file=None, llm_provider="azure")
         assert config.llm_provider == "azure"
+
+    # --- managed-doc 配置 DTO ---
+
+    def test_managed_doc_apply_deadline_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """managed_doc_apply_deadline 默认 600s（spec 部署契约）。"""
+        monkeypatch.delenv("EVO_MANAGED_DOC_APPLY_DEADLINE", raising=False)
+        config = EvolveConfig(_env_file=None)
+        assert config.managed_doc_apply_deadline == 600.0
+
+    def test_managed_doc_apply_deadline_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """EVO_MANAGED_DOC_APPLY_DEADLINE 环境变量注入。"""
+        monkeypatch.setenv("EVO_MANAGED_DOC_APPLY_DEADLINE", "1200.0")
+        monkeypatch.setenv("EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE", "1500.0")
+        config = EvolveConfig()
+        assert config.managed_doc_apply_deadline == 1200.0
+
+    def test_cancel_rollback_deadline_must_exceed_apply_deadline(self) -> None:
+        with pytest.raises(ValueError, match="cancel_rollback_deadline"):
+            EvolveConfig(
+                _env_file=None,
+                managed_doc_apply_deadline=120.0,
+                managed_doc_cancel_rollback_deadline=120.0,
+            )
+
+    def test_managed_doc_protected_sections_default_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """managed_doc_protected_sections 默认空 dict。"""
+        monkeypatch.delenv("EVO_MANAGED_DOC_PROTECTED_SECTIONS", raising=False)
+        config = EvolveConfig(_env_file=None)
+        assert config.managed_doc_protected_sections == {}
+
+    def test_managed_doc_protected_sections_from_env_json(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """EVO_MANAGED_DOC_PROTECTED_SECTIONS JSON 注入：dict[str, list[ProtectedSectionConfig]]，
+        key 为精确 doc_kind。"""
+        monkeypatch.setenv(
+            "EVO_MANAGED_DOC_PROTECTED_SECTIONS",
+            '{"agent_rule": [{"start_marker": "<a>", "end_marker": "</a>"}]}',
+        )
+        config = EvolveConfig()
+        sections = config.managed_doc_protected_sections["agent_rule"]
+        assert len(sections) == 1
+        assert sections[0].start_marker == "<a>"
+        assert sections[0].end_marker == "</a>"
+
+    def test_managed_doc_content_policies_default_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """managed_doc_content_policies 默认空 dict；缺省 selector 在 runner 侧默认 preserving。"""
+        monkeypatch.delenv("EVO_MANAGED_DOC_CONTENT_POLICIES", raising=False)
+        config = EvolveConfig(_env_file=None)
+        assert config.managed_doc_content_policies == {}
+
+    def test_managed_doc_content_policies_from_env_json(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """EVO_MANAGED_DOC_CONTENT_POLICIES JSON 注入：dict[str, Literal[...]]。"""
+        monkeypatch.setenv(
+            "EVO_MANAGED_DOC_CONTENT_POLICIES",
+            '{"agent_rule": "passthrough", "other": "preserving"}',
+        )
+        config = EvolveConfig()
+        assert config.managed_doc_content_policies == {
+            "agent_rule": "passthrough",
+            "other": "preserving",
+        }
+
+    def test_managed_doc_content_policies_rejects_invalid_literal(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """content_policies 值只能是 preserving/passthrough，非法值 fail-fast。"""
+        monkeypatch.setenv(
+            "EVO_MANAGED_DOC_CONTENT_POLICIES",
+            '{"agent_rule": "merge"}',
+        )
+        with pytest.raises(Exception):
+            EvolveConfig()
+
+    def test_protected_section_config_immutable(self) -> None:
+        """ProtectedSectionConfig immutable（frozen），字段不可变更。"""
+        from evo_agent.config import ProtectedSectionConfig
+
+        ps = ProtectedSectionConfig(start_marker="<a>", end_marker="</a>")
+        with pytest.raises(Exception):
+            ps.start_marker = "<b>"  # type: ignore[misc]
+
+    def test_config_does_not_import_adapter_client(self) -> None:
+        """config.py 是叶子模块，不反向依赖 adapter_client。
+
+        检查 AST 的 import 节点（而非源码子串），允许注释/docstring 提及
+        adapter_client 但不允许实际 import。
+        """
+        import ast
+
+        from evo_agent import config as config_module
+
+        tree = ast.parse(inspect.getsource(config_module))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert not alias.name.startswith("evo_agent.adapter_client"), (
+                        f"config.py 禁止 import adapter_client: {alias.name}"
+                    )
+            elif isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                assert mod != "evo_agent.adapter_client" and not mod.startswith(
+                    "evo_agent.adapter_client."
+                ), f"config.py 禁止 from-import adapter_client: {mod}"

@@ -40,24 +40,6 @@ class StandardTrajectory(BaseModel):
     messages: list[TrajectoryMessage] = Field(default_factory=list)
 
 
-class EvaluationStep(BaseModel):
-    """Prompt-only representation of one useful trajectory event."""
-
-    index: int
-    role: str
-    content: str | None = None
-    tool_name: str | None = None
-    tool_arguments: dict[str, Any] | str | None = None
-    tool_result: str | None = None
-
-
-class EvaluationTrajectory(BaseModel):
-    """Simplified conversation trajectory sent to the evaluator model."""
-
-    steps: list[EvaluationStep] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-
-
 class EvaluationInput(BaseModel):
     """Conversation-level evaluation input.
 

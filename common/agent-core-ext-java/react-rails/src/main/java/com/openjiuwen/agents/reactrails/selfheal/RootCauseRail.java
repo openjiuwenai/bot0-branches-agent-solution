@@ -4,6 +4,9 @@
 
 package com.openjiuwen.agents.reactrails.selfheal;
 
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
@@ -85,6 +88,7 @@ public class RootCauseRail extends AgentRail {
         InvocationState state = state(context);
         state.failedTool = extractToolName(context);
         state.hasPendingDegrade = true;
+        RailTelemetry.current().fire(new RailEvent.DeviceFailureEvent("RootCauseRail", state.failedTool, "MARKED"));
     }
 
     /**
@@ -96,8 +100,10 @@ public class RootCauseRail extends AgentRail {
     public void afterModelCall(AgentCallbackContext context) {
         InvocationState state = state(context);
         if (state.hasPendingDegrade) {
-            context.requestForceFinish(degradedMap(state.failedTool));
+            Map<String, Object> d = degradedMap(state.failedTool);
+            context.requestForceFinish(d);
             state.hasPendingDegrade = false;
+            RailTelemetry.current().fire(new RailEvent.DeviceFailureEvent("RootCauseRail", state.failedTool, "FIRED"));
         }
     }
 
@@ -114,6 +120,7 @@ public class RootCauseRail extends AgentRail {
 
     private static Map<String, Object> degradedMap(String tool) {
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put(ObservingRail.SOURCE_RAIL_KEY, "RootCauseRail");
         result.put(ROOT_CAUSE_DEGRADED_KEY, true);
         result.put(DEGRADED_KEY, true);
         result.put(ROOT_CAUSE_KEY, "DeviceFailure");

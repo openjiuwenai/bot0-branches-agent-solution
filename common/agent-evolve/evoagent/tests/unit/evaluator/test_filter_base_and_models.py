@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from evo_agent.evaluator.filters.base import build_patterns, bounded_evidence
+from evo_agent.evaluator.filters.base import bounded_evidence, build_patterns
 from evo_agent.evaluator.filters.models import FilterMatch
 
 _DEFAULTS = {

@@ -6,6 +6,7 @@ preset, or environment defaults. This module owns that merge policy.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -60,7 +61,20 @@ class ResolvedOptimizationConfig:
     trace_max_retries: int
     trace_retry_backoff: float
     tie_reval_eps: float
+    validation_max_case_attempts: int
+    validation_min_success_ratio: float
+    validation_require_same_case_set: bool
+    llm_context_window_tokens: int
+    llm_output_reserve_tokens: int
+    llm_safety_margin_tokens: int
+    llm_chars_per_token: float
+    llm_stage_output_reserve_tokens: dict[str, int]
     extra_hyperparams: dict[str, Any]
+    # managed-doc 模式目标 kind（精确 doc_kind）。None 走 Skill 路径。
+    # 不进入 optimizer_runtime_dependencies()——operator 在 optimizer deps
+    # 构造前已创建，该字段供 runner builder 分支直接消费。
+    managed_doc_kind: str | None = None
+    managed_doc_expected_revision: str | None = None
 
     def optimizer_runtime_dependencies(self) -> dict[str, Any]:
         """Return scalar optimizer constructor kwargs owned by runtime config."""
@@ -157,6 +171,14 @@ class OptimizationConfigResolver:
                 "trace_max_retries",
                 "trace_retry_backoff",
                 "tie_reval_eps",
+                "validation_max_case_attempts",
+                "validation_min_success_ratio",
+                "validation_require_same_case_set",
+                "llm_context_window_tokens",
+                "llm_output_reserve_tokens",
+                "llm_safety_margin_tokens",
+                "llm_chars_per_token",
+                "llm_stage_output_reserve_tokens",
             }
             and k not in _RESERVED_DEPENDENCY_KEYS
         }
@@ -167,6 +189,8 @@ class OptimizationConfigResolver:
             agent_name=request.agent_name,
             optimizer_type=request.optimizer_type,
             skills=tuple(request.skills),
+            managed_doc_kind=request.managed_doc_kind,
+            managed_doc_expected_revision=request.managed_doc_expected_revision,
             dataset_path=request.dataset_path,
             dataset_manifest_path=request.dataset_manifest_path,
             evaluator_prompt=request.evaluator_prompt,
@@ -239,6 +263,58 @@ class OptimizationConfigResolver:
                 config_value=0.0,
                 minimum=0.0,
             ),
+            validation_max_case_attempts=_resolve_int(
+                name="validation_max_case_attempts",
+                request_value=None,
+                merged_hyperparams=merged_hp,
+                config_value=self._env.validation_max_case_attempts,
+                minimum=1,
+            ),
+            validation_min_success_ratio=_resolve_float(
+                name="validation_min_success_ratio",
+                merged_hyperparams=merged_hp,
+                config_value=self._env.validation_min_success_ratio,
+                minimum=0.0,
+                maximum=1.0,
+            ),
+            validation_require_same_case_set=_resolve_bool(
+                "validation_require_same_case_set",
+                merged_hp,
+                self._env.validation_require_same_case_set,
+            ),
+            llm_context_window_tokens=_resolve_int(
+                name="llm_context_window_tokens",
+                request_value=None,
+                merged_hyperparams=merged_hp,
+                config_value=self._env.llm_context_window_tokens,
+                minimum=1,
+            ),
+            llm_output_reserve_tokens=_resolve_int(
+                name="llm_output_reserve_tokens",
+                request_value=None,
+                merged_hyperparams=merged_hp,
+                config_value=self._env.llm_output_reserve_tokens,
+                minimum=1,
+            ),
+            llm_safety_margin_tokens=_resolve_int(
+                name="llm_safety_margin_tokens",
+                request_value=None,
+                merged_hyperparams=merged_hp,
+                config_value=self._env.llm_safety_margin_tokens,
+                minimum=0,
+            ),
+            llm_chars_per_token=_resolve_float(
+                name="llm_chars_per_token",
+                merged_hyperparams=merged_hp,
+                config_value=self._env.llm_chars_per_token,
+                minimum=0.0,
+                exclusive_minimum=True,
+            ),
+            llm_stage_output_reserve_tokens=_resolve_int_mapping(
+                name="llm_stage_output_reserve_tokens",
+                merged_hyperparams=merged_hp,
+                config_value=self._env.llm_stage_output_reserve_tokens,
+            ),
             extra_hyperparams=extra_hyperparams,
         )
 
@@ -284,6 +360,7 @@ def _resolve_float(
     config_value: Any,
     minimum: float,
     maximum: float | None = None,
+    exclusive_minimum: bool = False,
 ) -> float:
     raw = merged_hyperparams.get(name, config_value)
     if isinstance(raw, bool):
@@ -292,11 +369,37 @@ def _resolve_float(
         value = float(raw)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be numeric: {exc}") from exc
-    if value < minimum:
-        raise ValueError(f"{name} must be >= {minimum}, got {value}")
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite, got {value}")
+    if value < minimum or exclusive_minimum and value == minimum:
+        comparator = ">" if exclusive_minimum else ">="
+        raise ValueError(f"{name} must be {comparator} {minimum}, got {value}")
     if maximum is not None and value > maximum:
         raise ValueError(f"{name} must be <= {maximum}, got {value}")
     return value
+
+
+def _resolve_int_mapping(
+    *,
+    name: str,
+    merged_hyperparams: dict[str, Any],
+    config_value: dict[str, int],
+) -> dict[str, int]:
+    raw = merged_hyperparams.get(name, config_value)
+    if not isinstance(raw, dict):
+        raise ValueError(f"{name} must be a dictionary, got {raw!r}")
+    resolved: dict[str, int] = {}
+    for stage, value in raw.items():
+        if not isinstance(stage, str) or not stage:
+            raise ValueError(f"{name} keys must be non-empty strings, got {stage!r}")
+        resolved[stage] = _resolve_int(
+            name=f"{name}.{stage}",
+            request_value=value,
+            merged_hyperparams={},
+            config_value=value,
+            minimum=1,
+        )
+    return resolved
 
 
 def _resolve_bool(name: str, merged_hyperparams: dict[str, Any], config_value: bool) -> bool:

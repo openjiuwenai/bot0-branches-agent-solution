@@ -12,29 +12,18 @@ from typing import TYPE_CHECKING, Any
 #   → agent_evolving → trainer → core.single_agent → core.operator
 import openjiuwen.agent_evolving  # noqa: F401
 
+from evo_agent.adapter_client.applier import ManagedDocApplier
 from evo_agent.adapter_client.client import AdapterClient
+from evo_agent.adapter_client.content_policy import (
+    ContentPolicy,
+    PassthroughPolicy,
+    split_frontmatter,
+)
 from evo_agent.operator.skill_document_operator import SkillDocumentOperator
 from evo_agent.protocols import SKILL_CONTENT_TARGET
 
 if TYPE_CHECKING:
     pass
-
-
-def split_frontmatter(content: str) -> tuple[str, str]:
-    """Split a markdown document into YAML frontmatter and body.
-
-    Returns ``(frontmatter, body)``. If the document has no leading YAML
-    frontmatter, returns ``("", content)``.
-    """
-    lines = content.splitlines(keepends=True)
-    if not lines or lines[0].strip() != "---":
-        return "", content
-
-    for index in range(1, len(lines)):
-        if lines[index].strip() == "---":
-            return "".join(lines[: index + 1]), "".join(lines[index + 1 :])
-
-    return "", content
 
 
 class FrontmatterPreservingSkillDocumentOperator(SkillDocumentOperator):
@@ -148,3 +137,121 @@ def build_skill_document_operator(
         initial_content=initial_content,
         on_parameter_updated=_on_parameter_updated,
     )
+
+
+class ManagedDocOperator(SkillDocumentOperator):
+    """managed-doc apply operator — 组合 ManagedDocApplier + ContentPolicy（不堆叠继承）。
+
+    set_parameter / load_state 使用相同顺序（ADR §4）：
+    ContentPolicy.normalize(content) → Applier.apply_and_wait() → 远程 task 成功
+    → 提交 operator 本地状态。apply 失败 → 本地状态保持旧值，向上抛
+    ManagedDocApplyError（fatal，终止 job，不跳过 candidate）。
+    """
+
+    def __init__(
+        self,
+        *,
+        skill_name: str,
+        initial_content: str,
+        applier: ManagedDocApplier,
+        content_policy: ContentPolicy,
+        on_parameter_updated: Any | None = None,
+    ) -> None:
+        self._applier = applier
+        self._policy = content_policy
+        self._external_on_parameter_updated = on_parameter_updated
+        # set_parameter / load_state 完全覆写，base 的 on_parameter_updated 不会被触发；
+        # 远程成功后由 _commit 直接 forward 给外部 callback。
+        super().__init__(
+            skill_name=skill_name,
+            initial_content=initial_content,
+            on_parameter_updated=None,
+        )
+
+    @property
+    def operator_id(self) -> str:
+        # canonical id：managed_doc:{kind} 三处一致（operators key / operator id / artifact 目录）
+        return self._skill_name
+
+    @property
+    def applier(self) -> ManagedDocApplier:
+        """暴露 applier 供 runner 读取 records / last_success_hash（baseline 初始化等）。"""
+        return self._applier
+
+    def _commit(self, content: str) -> None:
+        """远程成功后提交本地状态，并 forward 给外部 callback（optimizer cache 回填源）。"""
+        self._skill_content = content
+        if self._external_on_parameter_updated is not None:
+            self._external_on_parameter_updated(SKILL_CONTENT_TARGET, content)
+
+    def _apply_and_commit(self, raw_content: str) -> None:
+        """normalize → apply_and_wait → 成功后提交。失败抛 ManagedDocApplyError，本地不变。"""
+        normalized = self._policy.normalize(raw_content)
+        # apply 失败在此抛出，_commit 不会被调用 → 本地状态保持旧值
+        self._applier.apply_and_wait(normalized)
+        self._commit(normalized)
+
+    def set_parameter(self, target: str, value: Any) -> None:
+        if target != SKILL_CONTENT_TARGET:
+            return
+        self._apply_and_commit(str(value) if value is not None else "")
+
+    def get_state(self) -> dict[str, Any]:
+        return {"skill_content": self._skill_content}
+
+    def load_state(self, state: dict[str, Any]) -> None:
+        self._apply_and_commit(state.get("skill_content", ""))
+
+
+def build_managed_doc_operator(
+    *,
+    doc_kind: str,
+    initial_content: str,
+    adapter_client: AdapterClient,
+    content_policy: ContentPolicy | None = None,
+    deadline: float = 600.0,
+    poll_interval: float = 2.0,
+    last_success_hash: str | None = None,
+    cancellation_token: Any | None = None,
+    phase_callback: Any | None = None,
+) -> ManagedDocOperator:
+    """创建 ManagedDocOperator（组合 Applier + ContentPolicy，不堆叠继承）。
+
+    Parameters
+    ----------
+    doc_kind:
+        精确 managed-doc kind。canonical id ``managed_doc:{doc_kind}`` 三处一致。
+    initial_content:
+        job-start baseline 文档内容（用于 operator 初始本地状态）。
+    adapter_client:
+        AdapterClient（transport 三方法经其 _sync_http）。
+    content_policy:
+        ContentPolicy（PreservingContentPolicy / PassthroughPolicy）。None 默认 Passthrough。
+    deadline / poll_interval / last_success_hash:
+        Applier 参数。last_success_hash 用 baseline applied_revision 初始化，
+        使 baseline 内容首次 set_parameter 时 hash 命中 no-op。
+    """
+    applier = ManagedDocApplier(
+        adapter_client=adapter_client,
+        doc_kind=doc_kind,
+        last_success_hash=last_success_hash,
+        poll_interval=poll_interval,
+        deadline=deadline,
+        cancellation_token=cancellation_token,
+        phase_callback=phase_callback,
+    )
+    return ManagedDocOperator(
+        skill_name=f"managed_doc:{doc_kind}",
+        initial_content=initial_content,
+        applier=applier,
+        content_policy=content_policy or PassthroughPolicy(),
+    )
+
+
+__all__ = [
+    "FrontmatterPreservingSkillDocumentOperator",
+    "ManagedDocOperator",
+    "build_managed_doc_operator",
+    "build_skill_document_operator",
+    "split_frontmatter",
+]

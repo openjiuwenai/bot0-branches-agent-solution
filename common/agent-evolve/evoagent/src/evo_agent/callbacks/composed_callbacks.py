@@ -7,9 +7,12 @@ SkillDocumentCallbacks, RemoteSkillSyncCallback, and other callbacks.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from openjiuwen.agent_evolving.trainer.progress import Callbacks
+
+from evo_agent.errors import FatalOptimizationError
 
 if TYPE_CHECKING:
     from openjiuwen.agent_evolving.dataset import EvaluatedCase
@@ -22,12 +25,37 @@ logger = logging.getLogger(__name__)
 class ComposedCallbacks(Callbacks):  # type: ignore[misc]
     """Compose multiple Callbacks, calling each in registration order.
 
-    Exceptions in one callback are caught and logged so subsequent
-    callbacks still execute.
+    Ordinary callback exceptions are caught and logged so subsequent callbacks
+    still execute (best-effort). ``FatalOptimizationError`` (and subclasses like
+    ``ManagedDocApplyError``) **propagate**: the marker signals a failure that
+    must abort the optimization job — swallowing it would let training continue
+    in a diverged state. Only the ``FatalOptimizationError`` marker is recognized
+    here (no reverse dependency on ``adapter_client``).
     """
 
     def __init__(self, *callbacks: Callbacks) -> None:
         self._callbacks = list(callbacks)
+
+    def _invoke(self, cb: Callbacks, action: Callable[[], None], hook: str) -> None:
+        """Run one callback's hook: best-effort swallow ordinary exceptions,
+        re-raise ``FatalOptimizationError`` so it aborts the job."""
+        try:
+            action()
+        except FatalOptimizationError:
+            logger.error(
+                "ComposedCallbacks: %s raised FatalOptimizationError for %s — aborting",
+                hook,
+                type(cb).__name__,
+                exc_info=True,
+            )
+            raise
+        except Exception:
+            logger.warning(
+                "ComposedCallbacks: %s failed for %s",
+                hook,
+                type(cb).__name__,
+                exc_info=True,
+            )
 
     def on_train_begin(
         self,
@@ -36,14 +64,9 @@ class ComposedCallbacks(Callbacks):  # type: ignore[misc]
         eval_info: list[EvaluatedCase],
     ) -> None:
         for cb in self._callbacks:
-            try:
-                cb.on_train_begin(agent, progress, eval_info)
-            except Exception:
-                logger.warning(
-                    "ComposedCallbacks: on_train_begin failed for %s",
-                    type(cb).__name__,
-                    exc_info=True,
-                )
+            self._invoke(
+                cb, lambda: cb.on_train_begin(agent, progress, eval_info), "on_train_begin"
+            )
 
     def on_train_end(
         self,
@@ -52,14 +75,7 @@ class ComposedCallbacks(Callbacks):  # type: ignore[misc]
         eval_info: list[EvaluatedCase],
     ) -> None:
         for cb in self._callbacks:
-            try:
-                cb.on_train_end(agent, progress, eval_info)
-            except Exception:
-                logger.warning(
-                    "ComposedCallbacks: on_train_end failed for %s",
-                    type(cb).__name__,
-                    exc_info=True,
-                )
+            self._invoke(cb, lambda: cb.on_train_end(agent, progress, eval_info), "on_train_end")
 
     def on_train_epoch_begin(
         self,
@@ -67,14 +83,9 @@ class ComposedCallbacks(Callbacks):  # type: ignore[misc]
         progress: Progress,
     ) -> None:
         for cb in self._callbacks:
-            try:
-                cb.on_train_epoch_begin(agent, progress)
-            except Exception:
-                logger.warning(
-                    "ComposedCallbacks: on_train_epoch_begin failed for %s",
-                    type(cb).__name__,
-                    exc_info=True,
-                )
+            self._invoke(
+                cb, lambda: cb.on_train_epoch_begin(agent, progress), "on_train_epoch_begin"
+            )
 
     def on_train_epoch_end(
         self,
@@ -83,14 +94,9 @@ class ComposedCallbacks(Callbacks):  # type: ignore[misc]
         eval_info: list[EvaluatedCase],
     ) -> None:
         for cb in self._callbacks:
-            try:
-                cb.on_train_epoch_end(agent, progress, eval_info)
-            except Exception:
-                logger.warning(
-                    "ComposedCallbacks: on_train_epoch_end failed for %s",
-                    type(cb).__name__,
-                    exc_info=True,
-                )
+            self._invoke(
+                cb, lambda: cb.on_train_epoch_end(agent, progress, eval_info), "on_train_epoch_end"
+            )
 
     def on_gate_scored(self, payload: dict[str, Any]) -> None:
         """Forward gate scores (base/candidate/tie info) to subscribers.
@@ -104,11 +110,22 @@ class ComposedCallbacks(Callbacks):  # type: ignore[misc]
             handler = getattr(cb, "on_gate_scored", None)
             if not callable(handler):
                 continue
-            try:
-                handler(payload)
-            except Exception:
-                logger.warning(
-                    "ComposedCallbacks: on_gate_scored failed for %s",
-                    type(cb).__name__,
-                    exc_info=True,
+            self._invoke(cb, lambda: handler(payload), "on_gate_scored")
+
+    def on_gate_artifact_ready(self, artifact_input: Any) -> None:
+        """Forward the complete gate/validation artifact input."""
+        for cb in self._callbacks:
+            handler = getattr(cb, "on_gate_artifact_ready", None)
+            if callable(handler):
+                self._invoke(cb, lambda: handler(artifact_input), "on_gate_artifact_ready")
+
+    def on_validation_coverage_failed(self, error: Any) -> None:
+        """Export diagnostics synchronously before the trainer re-raises coverage failure."""
+        for cb in self._callbacks:
+            handler = getattr(cb, "on_validation_coverage_failed", None)
+            if callable(handler):
+                self._invoke(
+                    cb,
+                    lambda: handler(error),
+                    "on_validation_coverage_failed",
                 )

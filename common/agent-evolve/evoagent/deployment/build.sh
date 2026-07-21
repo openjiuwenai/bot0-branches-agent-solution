@@ -3,7 +3,7 @@
 # build.sh — EvoAgent Docker 镜像构建脚本
 #
 # 功能：
-#   1. 克隆/拉取 agent-store 仓库最新代码（可跳过）
+#   1. 克隆/拉取 agent-solution 仓库最新代码（可跳过）
 #   2. 获取 openjiuwen wheel（源码构建 / PyPI 下载 / 本地复用）
 #   3. 复制 openjiuwen wheel 到 EvoAgent vendor 目录
 #   4. 基于 deployment/Dockerfile 构建 Docker 镜像
@@ -12,7 +12,7 @@
 # 使用：
 #   ./build.sh                                          # 默认路径，从源码构建 wheel
 #   ./build.sh --local                                  # local 模式，从 PyPI 下载 wheel
-#   ./build.sh /custom/path/agent-store                  # 指定 agent-store 路径
+#   ./build.sh /custom/path/agent-solution              # 指定 agent-solution 路径
 #   EVOAGENT_IMAGE_TAG=evoagent:v1.0.0 ./build.sh       # 自定义镜像 tag
 #   ./build.sh --skip-pull                              # 跳过代码拉取，使用本地代码构建
 #   ./build.sh --local --skip-pull                      # local 模式 + 跳过代码拉取
@@ -23,12 +23,12 @@
 #
 # 环境变量：
 #   EVOAGENT_IMAGE_TAG      镜像标签（默认 evoagent:latest）
-#   EVOAGENT_STORE_REPO     agent-store 仓库地址（默认 https://gitcode.com/openJiuwen/agent-store.git）
-#   EVOAGENT_STORE_BRANCH   仓库分支（默认 main）
-#   EVOAGENT_STORE_DIR      agent-store 本地目录（默认 $HOME/EvoAgent/agent-store）
-#   EVOAGENT_REL_PATH       EvoAgent 在仓库内的相对路径（默认 community/EvoAgent）
+#   EVOAGENT_SOLUTION_REPO   agent-solution 仓库地址（默认 https://gitcode.com/openJiuwen/agent-solution.git）
+#   EVOAGENT_SOLUTION_BRANCH 仓库分支（默认 common）
+#   EVOAGENT_SOLUTION_DIR    agent-solution 本地目录（默认 $HOME/EvoAgent/agent-solution）
 #   EVOAGENT_SKIP_PULL      设置为 1 跳过代码拉取（同 --skip-pull）
-#   EVOAGENT_CORE_REPO      agent-core 仓库地址（默认自动从 agent-store 推断）
+#   EVOAGENT_CORE_REPO      agent-core 仓库地址（默认 https://gitcode.com/openJiuwen/agent-core.git）
+#   EVOAGENT_CORE_BRANCH    agent-core 仓库分支（默认 main）
 #   EVOAGENT_CORE_VERSION   local 模式下 openjiuwen 版本号（默认 0.1.13）
 #   PIP_INDEX_URL           pip 镜像源（默认华为云）
 #   PIP_TRUSTED_HOST        pip 信任主机
@@ -52,7 +52,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 # ── 参数解析 ──────────────────────────────────────────────────────────
 SKIP_PULL="${EVOAGENT_SKIP_PULL:-0}"
 LOCAL_MODE=0
-AGENT_STORE_DIR="${EVOAGENT_STORE_DIR:-$HOME/EvoAgent/agent-store}"
+AGENT_SOLUTION_DIR="${EVOAGENT_SOLUTION_DIR:-$HOME/EvoAgent/agent-solution}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            AGENT_STORE_DIR="$1"
+            AGENT_SOLUTION_DIR="$1"
             shift
             ;;
     esac
@@ -74,24 +74,16 @@ done
 # ── 配置参数 ──────────────────────────────────────────────────────────
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_TAG="${EVOAGENT_IMAGE_TAG:-evoagent:latest}"
-STORE_REPO="${EVOAGENT_STORE_REPO:-https://gitcode.com/openJiuwen/agent-store.git}"
-STORE_BRANCH="${EVOAGENT_STORE_BRANCH:-main}"
+SOLUTION_REPO="${EVOAGENT_SOLUTION_REPO:-https://gitcode.com/openJiuwen/agent-solution.git}"
+SOLUTION_BRANCH="${EVOAGENT_SOLUTION_BRANCH:-common}"
 
-# EvoAgent 在仓库内的相对路径（agent-store 用 community/EvoAgent，
-# agent-solution 用 common/agent-evolve/evoagent）—— 可通过环境变量覆盖；
-# 若未指定，克隆/拉取完成后会自动探测
-EVOAGENT_REL_PATH="${EVOAGENT_REL_PATH:-}"
+# EvoAgent 在 agent-solution 中的相对路径
+EVOAGENT_REL_PATH="common/agent-evolve/evoagent"
 
-# agent-core 配置（从 store 推断路径；若替换不命中则回退到 EVOAGENT_CORE_REPO）
-CORE_REPO="${EVOAGENT_CORE_REPO:-${STORE_REPO/agent-store/agent-core}}"
-if [ "$CORE_REPO" = "$STORE_REPO" ]; then
-    # 字符串替换未命中（仓库名不含 agent-store），保留默认让用户用 env 覆盖
-    CORE_REPO="${EVOAGENT_CORE_REPO:-$STORE_REPO}"
-fi
-AGENT_CORE_DIR="${AGENT_STORE_DIR/agent-store/agent-core}"
-if [ "$AGENT_CORE_DIR" = "$AGENT_STORE_DIR" ]; then
-    AGENT_CORE_DIR="${AGENT_STORE_DIR%/agent-store}/agent-core"
-fi
+# agent-core 是独立仓库，分支不跟随 agent-solution/common。
+CORE_REPO="${EVOAGENT_CORE_REPO:-https://gitcode.com/openJiuwen/agent-core.git}"
+CORE_BRANCH="${EVOAGENT_CORE_BRANCH:-main}"
+AGENT_CORE_DIR="$HOME/EvoAgent/agent-core"
 
 # local 模式下 openjiuwen 版本号
 CORE_VERSION="${EVOAGENT_CORE_VERSION:-0.1.13}"
@@ -105,9 +97,6 @@ require_cmd python3
 require_cmd docker
 
 # ── 模式提示 ──────────────────────────────────────────────────────────
-info "仓库: $STORE_REPO（分支: $STORE_BRANCH）"
-info "本地目录: $AGENT_STORE_DIR"
-info "EvoAgent 相对路径: $EVOAGENT_REL_PATH"
 if [ "$LOCAL_MODE" -eq 1 ]; then
     info "模式: local（从 PyPI 下载 openjiuwen==${CORE_VERSION}）"
 else
@@ -115,40 +104,25 @@ else
 fi
 
 # ── 1. 同步最新代码（可跳过）───────────────────────────────────────────
-info "=== 步骤 1/5: 同步 agent-store 代码 ==="
+info "=== 步骤 1/5: 同步 agent-solution 代码 ==="
 
 if [ "$SKIP_PULL" -eq 1 ]; then
     info "跳过代码拉取（--skip-pull 指定），使用本地代码"
-    [ -d "$AGENT_STORE_DIR" ] || error "agent-store 目录不存在: $AGENT_STORE_DIR"
+    [ -d "$AGENT_SOLUTION_DIR" ] || error "agent-solution 目录不存在: $AGENT_SOLUTION_DIR"
 else
-    if [ -d "$AGENT_STORE_DIR/.git" ]; then
-        info "agent-store 已存在，拉取最新代码（分支: $STORE_BRANCH）"
-        cd "$AGENT_STORE_DIR"
+    if [ -d "$AGENT_SOLUTION_DIR/.git" ]; then
+        info "agent-solution 已存在，拉取最新代码（分支: $SOLUTION_BRANCH）"
+        cd "$AGENT_SOLUTION_DIR"
         git fetch origin
-        git checkout "$STORE_BRANCH"
-        git pull origin "$STORE_BRANCH"
+        git checkout "$SOLUTION_BRANCH"
+        git pull origin "$SOLUTION_BRANCH"
         info "当前 commit: $(git log --oneline -1)"
     else
-        info "agent-store 不存在，克隆仓库（分支: $STORE_BRANCH）"
-        mkdir -p "$(dirname "$AGENT_STORE_DIR")"
-        git clone --branch "$STORE_BRANCH" "$STORE_REPO" "$AGENT_STORE_DIR"
-        info "克隆完成，commit: $(cd "$AGENT_STORE_DIR" && git log --oneline -1)"
+        info "agent-solution 不存在，克隆仓库（分支: $SOLUTION_BRANCH）"
+        mkdir -p "$(dirname "$AGENT_SOLUTION_DIR")"
+        git clone --branch "$SOLUTION_BRANCH" "$SOLUTION_REPO" "$AGENT_SOLUTION_DIR"
+        info "克隆完成，commit: $(cd "$AGENT_SOLUTION_DIR" && git log --oneline -1)"
     fi
-fi
-
-# ── 1.1 自动探测 EvoAgent 在仓库内的相对路径 ─────────────────────────
-if [ -z "$EVOAGENT_REL_PATH" ]; then
-    for candidate in "community/EvoAgent" "common/agent-evolve/evoagent"; do
-        if [ -f "$AGENT_STORE_DIR/$candidate/pyproject.toml" ] && \
-           [ -f "$AGENT_STORE_DIR/$candidate/deployment/Dockerfile" ]; then
-            EVOAGENT_REL_PATH="$candidate"
-            break
-        fi
-    done
-    if [ -z "$EVOAGENT_REL_PATH" ]; then
-        error "未自动探测到 EvoAgent 路径，请通过 EVOAGENT_REL_PATH 显式指定（如 community/EvoAgent 或 common/agent-evolve/evoagent）"
-    fi
-    info "自动探测 EvoAgent 相对路径: $EVOAGENT_REL_PATH"
 fi
 
 # ── 2. 获取 openjiuwen wheel ──────────────────────────────────────────
@@ -197,19 +171,19 @@ else
 
     info "agent-core 仓库: $CORE_REPO"
     info "agent-core 路径: $AGENT_CORE_DIR"
-    info "使用分支: $STORE_BRANCH"
+    info "使用分支: $CORE_BRANCH"
 
     if [ -d "$AGENT_CORE_DIR/.git" ]; then
         info "agent-core 已存在，拉取最新代码"
         cd "$AGENT_CORE_DIR"
         git fetch origin
-        git checkout "$STORE_BRANCH"
-        git pull origin "$STORE_BRANCH"
+        git checkout "$CORE_BRANCH"
+        git pull origin "$CORE_BRANCH"
         info "当前 commit: $(git log --oneline -1)"
     else
         info "agent-core 不存在，克隆仓库"
         mkdir -p "$(dirname "$AGENT_CORE_DIR")"
-        git clone --branch "$STORE_BRANCH" "$CORE_REPO" "$AGENT_CORE_DIR"
+        git clone --branch "$CORE_BRANCH" "$CORE_REPO" "$AGENT_CORE_DIR"
         info "克隆完成，commit: $(cd "$AGENT_CORE_DIR" && git log --oneline -1)"
     fi
 
@@ -232,7 +206,7 @@ fi
 # ── 3. 复制 wheel 到 EvoAgent vendor 目录 ────────────────────────────
 info "=== 步骤 3/5: 复制 wheel 到 EvoAgent vendor 目录 ==="
 
-EVOAGENT_DIR="$AGENT_STORE_DIR/$EVOAGENT_REL_PATH"
+EVOAGENT_DIR="$AGENT_SOLUTION_DIR/$EVOAGENT_REL_PATH"
 [ -d "$EVOAGENT_DIR" ] || error "EvoAgent 目录不存在: $EVOAGENT_DIR"
 [ -f "$EVOAGENT_DIR/pyproject.toml" ] || error "pyproject.toml 不存在"
 [ -f "$EVOAGENT_DIR/deployment/Dockerfile" ] || error "Dockerfile 不存在"

@@ -2,9 +2,9 @@
 
 import asyncio
 import json
+import time
 from pathlib import Path
 
-import aiofiles
 import structlog
 import yaml
 from fastapi import APIRouter, Query, Request, Response
@@ -17,6 +17,7 @@ from agent_adapter.managed_doc.validation import InvalidDocContentError
 from agent_adapter.schemas import (
     AgentCallRequest,
     ManagedDocActionRequest,
+    ManagedDocListResponse,
     SkillActionRequest,
 )
 from agent_adapter.skill_store import (
@@ -258,6 +259,25 @@ async def managed_docs_action(request: Request) -> JSONResponse:
         return _contract_error("INTERNAL_ERROR", "Failed to process managed-doc request", 500)
 
 
+@router.get(
+    "/api/v1/agents/{agent_name}/managed-docs",
+    response_model=ManagedDocListResponse,
+)
+async def list_managed_docs(agent_name: str, request: Request) -> JSONResponse:
+    """List the Agent's registered managed-document optimization capabilities."""
+    service = getattr(request.app.state, "managed_doc_service", None)
+    if service is None:
+        return _contract_error("INTERNAL_ERROR", "Managed-doc service is not initialized", 500)
+    try:
+        result = ManagedDocListResponse.model_validate(service.list_documents(agent_name))
+        return JSONResponse(content=result.model_dump())
+    except AgentNotFoundError as exc:
+        return _contract_error("AGENT_NOT_FOUND", str(exc), 404)
+    except Exception:
+        logger.exception("managed_doc_listing_error", agent_name=agent_name)
+        return _contract_error("INTERNAL_ERROR", "Failed to list managed-docs", 500)
+
+
 @router.get("/api/v1/managed-docs/tasks/{task_id}")
 async def get_managed_doc_task(task_id: str, request: Request) -> JSONResponse:
     """Poll an async managed-doc apply task (spec §7.3)."""
@@ -275,11 +295,41 @@ async def get_managed_doc_task(task_id: str, request: Request) -> JSONResponse:
 
 
 # ── Per-Agent Traces ──────────────────────────────────────────────────
+# 轨迹读取经 app.state.trace_source (log 读归档 / standard 读 PG), 不再直接读归档。
+# 三个 API 契约 (路径/响应结构) 不变; /traces/{conv} 附加 complete 信号 (设计文档 §7)。
+
+
+def _trace_source(request: Request):
+    """获取 lifespan 注入的 TraceSource (log | standard)。"""
+    return request.app.state.trace_source
+
+
+def _filter_complete(records: list[dict], complete: bool | None) -> list[dict]:
+    """按 _incomplete 标记过滤 (log 模式 trace_assembler 产出的完整性标记)。"""
+    if complete is None:
+        return records
+    return [r for r in records if r.get("_incomplete", False) != complete]
+
+
+async def _await_root_span(repo, conversation_id: str, timeout: float) -> bool:
+    """standard 模式: 轮询 repo.get_root_span 至 timeout。
+
+    根 span (kind=SERVER, parent 空) 到达且 end_time 已设 → True (会话完整)。
+    处理 5s 上报 + kafka 异步的时序差 (设计文档 §7 A+D)。
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        root = await repo.get_root_span(conversation_id)
+        if root is not None and root.get("end_time"):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(0.5)
 
 
 @router.get("/api/v1/agents/{agent_name}/traces")
 async def list_agent_traces(agent_name: str, request: Request) -> dict:
-    """List conversation IDs for a specific agent's trace archive.
+    """List conversation IDs for a specific agent's traces.
 
     Triggers an incremental poll for the specified agent pipeline before listing.
     Returns 404 if the agent name does not exist.
@@ -292,15 +342,9 @@ async def list_agent_traces(agent_name: str, request: Request) -> dict:
             content={"detail": f"Agent '{agent_name}' 不存在"},
         )
 
-    pipeline = pipelines[agent_name]
-    await pipeline.poll()
-
-    output_dir = Path(pipeline._config.output_dir)
-    if not output_dir.exists():
-        return {"conversation_ids": [], "total": 0}
-
-    conversation_ids = sorted({f.stem for f in output_dir.glob("*.jsonl") if f.is_file()})
-    return {"conversation_ids": conversation_ids, "total": len(conversation_ids)}
+    await pipelines[agent_name].poll()
+    ids = await _trace_source(request).list_conversations(agent_name)
+    return {"conversation_ids": ids, "total": len(ids)}
 
 
 @router.get("/api/v1/agents/{agent_name}/traces/{conversation_id}")
@@ -324,31 +368,9 @@ async def get_agent_traces(
             content={"detail": f"Agent '{agent_name}' 不存在"},
         )
 
-    pipeline = pipelines[agent_name]
-    await pipeline.poll()
-
-    output_dir = Path(pipeline._config.output_dir)
-    archive_path = _find_archive(output_dir, conversation_id)
-
-    if archive_path is None:
-        return {"conversation_id": conversation_id, "calls": [], "total": 0}
-
-    async with aiofiles.open(archive_path, encoding="utf-8") as f:
-        content = await f.read()
-
-    records: list[dict] = []
-    for line in content.strip().split("\n"):
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-            if isinstance(record, dict):
-                records.append(record)
-        except json.JSONDecodeError:
-            continue
-
-    if complete is not None:
-        records = [r for r in records if r.get("_incomplete", False) != complete]
+    await pipelines[agent_name].poll()
+    records = await _trace_source(request).get_records(agent_name, conversation_id)
+    records = _filter_complete(records, complete)
 
     total = len(records)
     if limit is not None:
@@ -359,36 +381,16 @@ async def get_agent_traces(
 
 @router.get("/api/v1/traces")
 async def list_traces(request: Request) -> dict:
-    """List all conversation IDs that have trace archive JSONL files.
+    """List all conversation IDs (multi-agent: 聚合全部 agent)。
 
-    In multi-agent mode, aggregates traces from all agents' output directories.
     Triggers an incremental poll for each agent pipeline before listing.
     """
-    # Poll all pipelines
     pipelines: dict = request.app.state.pipelines
     for pipeline in pipelines.values():
         await pipeline.poll()
 
-    # Aggregate conversation_ids from all pipelines' output dirs
-    conversation_ids: set[str] = set()
-    for pipeline in pipelines.values():
-        output_dir = Path(pipeline._config.output_dir)
-        if output_dir.exists():
-            conversation_ids.update(f.stem for f in output_dir.glob("*.jsonl") if f.is_file())
-
-    sorted_ids = sorted(conversation_ids)
-    return {"conversation_ids": sorted_ids, "total": len(sorted_ids)}
-
-
-def _find_archive(output_dir: Path, conversation_id: str) -> Path | None:
-    """Find the trace archive file for a given conversation_id.
-
-    Archive files are named: {conversation_id}.jsonl
-    """
-    archive_path = output_dir / f"{conversation_id}.jsonl"
-    if archive_path.is_file():
-        return archive_path
-    return None
+    ids = await _trace_source(request).list_conversations(None)
+    return {"conversation_ids": ids, "total": len(ids)}
 
 
 @router.get("/api/v1/traces/{conversation_id}")
@@ -398,51 +400,39 @@ async def get_traces(
     complete: bool | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1),
 ) -> dict:
-    """Return trace/observation records for a specific conversation.
+    """Return trace records for a conversation + complete 信号 (设计文档 §7)。
 
-    In multi-agent mode, searches all agents' output directories.
+    standard 模式: 先轮询 PG 等根 span 到达 (至 trace_wait_timeout), 再取 spans;
+    complete = 根 span 到达且 end_time 已设。log 模式: complete = 无 _incomplete 记录。
     Triggers an incremental poll for each agent pipeline before querying.
     """
-    # Poll all pipelines
     pipelines: dict = request.app.state.pipelines
     for pipeline in pipelines.values():
         await pipeline.poll()
 
-    # Search all pipelines' output dirs for the conversation
-    archive_path: Path | None = None
-    for pipeline in pipelines.values():
-        output_dir = Path(pipeline._config.output_dir)
-        found = _find_archive(output_dir, conversation_id)
-        if found is not None:
-            archive_path = found
-            break
+    config = request.app.state.config
+    repo = getattr(request.app.state, "repo", None)
+    trace_source = _trace_source(request)
 
-    if archive_path is None:
-        return {"conversation_id": conversation_id, "calls": [], "total": 0}
+    if repo is not None:  # standard: 先等根 span, 再取 spans
+        complete_signal = await _await_root_span(repo, conversation_id, config.trace_wait_timeout)
+        records = await trace_source.get_records(None, conversation_id)
+    else:  # log: 取归档, complete 按完整性标记
+        records = await trace_source.get_records(None, conversation_id)
+        complete_signal = not any(r.get("_incomplete", False) for r in records)
 
-    async with aiofiles.open(archive_path, encoding="utf-8") as f:
-        content = await f.read()
-
-    records: list[dict] = []
-    for line in content.strip().split("\n"):
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-            if isinstance(record, dict):
-                records.append(record)
-        except json.JSONDecodeError:
-            continue
-
-    # Filter by completeness: a record is incomplete if it has _incomplete=True
-    if complete is not None:
-        records = [r for r in records if r.get("_incomplete", False) != complete]
+    records = _filter_complete(records, complete)
 
     total = len(records)
     if limit is not None:
         records = records[:limit]
 
-    return {"conversation_id": conversation_id, "calls": records, "total": total}
+    return {
+        "conversation_id": conversation_id,
+        "calls": records,
+        "total": total,
+        "complete": complete_signal,
+    }
 
 
 @router.get("/api/v1/agents/{agent_name}/cleaned-traces/{conversation_id}")
@@ -453,9 +443,8 @@ async def get_cleaned_traces(
 ) -> dict:
     """Return cleaned LLM conversation for a specific agent and conversation.
 
-    Reads the JSONL trace archive, finds the last GENERATION record,
-    extracts and filters messages, and returns a structured result with
-    task_input, trajectory summary, and cleaned messages.
+    Reads records via TraceSource, finds the last GENERATION record, extracts
+    and filters messages, returns structured result with task_input/trajectory.
     """
     pipelines: dict = request.app.state.pipelines
 
@@ -465,28 +454,8 @@ async def get_cleaned_traces(
             content={"detail": f"Agent '{agent_name}' 不存在"},
         )
 
-    pipeline = pipelines[agent_name]
-    await pipeline.poll()
-
-    output_dir = Path(pipeline._config.output_dir)
-    archive_path = _find_archive(output_dir, conversation_id)
-
-    if archive_path is None:
-        return {}
-
-    async with aiofiles.open(archive_path, encoding="utf-8") as f:
-        content = await f.read()
-
-    records: list[dict] = []
-    for line in content.strip().split("\n"):
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-            if isinstance(record, dict):
-                records.append(record)
-        except json.JSONDecodeError:
-            continue
+    await pipelines[agent_name].poll()
+    records = await _trace_source(request).get_records(agent_name, conversation_id)
 
     from agent_adapter.trace_cleaner import clean_traces
 

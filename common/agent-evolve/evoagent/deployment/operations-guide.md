@@ -47,22 +47,20 @@ EvoAgent 是基于 `agent-core`（PyPI 包名 `openjiuwen`）的自进化元 Age
 | **Adapter Sidecar** | 与业务 Agent 通信、skill 同步、轨迹收集 | ✅ |
 | **LLM API** | 优化器 LLM 调用（OpenAI 兼容） | ✅ |
 
-> Adapter Sidecar 的部署请参考同仓库 `community/EvoAgentAdapter` 目录或其文档。EvoAgent 启动后通过 `EVO_ADAPTER_URL` 访问它，二者**必须同时可用**。
+> Adapter Sidecar 的部署请参考同仓库 `common/agent-evolve/evoagent-adapter` 目录或其文档。EvoAgent 启动后通过 `EVO_ADAPTER_URL` 访问它，二者**必须同时可用**。
 
 ---
 
 ## 2. 获取代码（Git Clone）
 
-EvoAgent 的代码位于仓库的子目录下，`build.sh` 会自动处理克隆与路径探测，也可以手动克隆。
-
-> 路径说明：`agent-store` 仓库内为 `community/EvoAgent`，`agent-solution` 仓库内为 `common/agent-evolve/evoagent`。`build.sh` 未设置 `EVOAGENT_REL_PATH` 时会自动探测，无需手动指定。
+EvoAgent 的代码在 `agent-solution` 仓库的 `common/agent-evolve/evoagent` 子目录下，`build.sh` 会自动处理克隆逻辑，也可以手动克隆。
 
 ### 2.1 方式 A：手动 clone（推荐用于首次了解项目结构）
 
 ```bash
-# 1) 克隆仓库（以 agent-store 为例；agent-solution 同理）
-git clone --branch main https://gitcode.com/openJiuwen/agent-store.git ~/EvoAgent/agent-store
-cd ~/EvoAgent/agent-store/community/EvoAgent
+# 1) 克隆 agent-solution 仓库
+git clone --branch common https://gitcode.com/openJiuwen/agent-solution.git ~/EvoAgent/agent-solution
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent
 
 # 2) 查看关键文件
 ls deployment/        # 部署脚本
@@ -72,12 +70,12 @@ cat README.md         # 项目简介
 
 ### 2.2 方式 B：由 `build.sh` 自动 clone
 
-`deployment/build.sh` 内部会自动 clone 到 `$HOME/EvoAgent/agent-store`，无需手动操作（详见第 3 节）。
+`deployment/build.sh` 内部会自动 clone 到 `$HOME/EvoAgent/agent-solution`，无需手动操作（详见第 3 节）。
 
 ### 2.3 目录速览
 
 ```
-agent-store/
+agent-solution/
 └── community/
     └── EvoAgent/
         ├── deployment/          # ← 本指南所在目录
@@ -90,7 +88,7 @@ agent-store/
         │   └── config/
         │       └── .env.example
         ├── src/evo_agent/       # 主源码
-        ├── scenarios/           # 业务场景（edp_agent 等）
+        ├── examples/scenarios/           # 业务场景（edp_agent 等）
         ├── skills/              # Agent Skill
         ├── pyproject.toml
         ├── Makefile
@@ -106,7 +104,7 @@ agent-store/
 ### 3.1 进入部署目录
 
 ```bash
-cd ~/EvoAgent/agent-store/community/EvoAgent/deployment
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
 ```
 
 ### 3.2 选择构建模式
@@ -128,8 +126,8 @@ cd ~/EvoAgent/agent-store/community/EvoAgent/deployment
 # 示例 2：完整源码构建（默认路径）
 ./build.sh
 
-# 示例 3：指定 agent-store 路径 + 自定义镜像 tag
-EVOAGENT_IMAGE_TAG=evoagent:v1.0.0 ./build.sh /path/to/agent-store
+# 示例 3：指定 agent-solution 路径 + 自定义镜像 tag
+EVOAGENT_IMAGE_TAG=evoagent:v1.0.0 ./build.sh /path/to/agent-solution
 
 # 示例 4：已 clone 代码，仅构建镜像
 ./build.sh --skip-pull --local
@@ -140,16 +138,14 @@ EVOAGENT_IMAGE_TAG=evoagent:v1.0.0 ./build.sh /path/to/agent-store
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `EVOAGENT_IMAGE_TAG` | `evoagent:latest` | 构建出的镜像 tag |
-| `EVOAGENT_STORE_REPO` | `https://gitcode.com/openJiuwen/agent-store.git` | 仓库地址（支持 agent-store / agent-solution） |
-| `EVOAGENT_STORE_BRANCH` | `main` | 切换分支 |
-| `EVOAGENT_STORE_DIR` | `$HOME/EvoAgent/agent-store` | 代码本地存放目录（可覆盖默认路径） |
-| `EVOAGENT_REL_PATH` | _自动探测_ | EvoAgent 在仓库内的相对路径；未设置时按 `community/EvoAgent` → `common/agent-evolve/evoagent` 顺序自动探测 |
-| `EVOAGENT_CORE_REPO` | _由 STORE_REPO 推断_ | agent-core 仓库地址（源码构建模式用，推断失败时需显式指定） |
+| `EVOAGENT_SOLUTION_REPO` | `https://gitcode.com/openJiuwen/agent-solution.git` | agent-solution 地址 |
+| `EVOAGENT_SOLUTION_BRANCH` | `common` | 切换分支 |
+| `EVOAGENT_SOLUTION_DIR` | `$HOME/EvoAgent/agent-solution` | 代码本地存放目录（也可用首个位置参数覆盖） |
+| `EVOAGENT_CORE_REPO` | `https://gitcode.com/openJiuwen/agent-core.git` | 源码构建模式使用的 agent-core 仓库 |
+| `EVOAGENT_CORE_BRANCH` | `main` | agent-core 分支（独立于 solution 分支） |
 | `EVOAGENT_SKIP_PULL` | `0` | `1` 跳过代码拉取 |
 | `EVOAGENT_CORE_VERSION` | `0.1.13` | `--local` 模式下从 PyPI 下载的 openjiuwen 版本 |
 | `PIP_INDEX_URL` | 华为云镜像 | pip 源（内网可替换为私有源） |
-
-> 💡 脚本启动前会校验 `git` / `python3` / `docker` 命令是否存在，缺失即报错退出。启动后会打印仓库地址、本地目录、EvoAgent 相对路径，便于排错。
 
 ### 3.5 验证镜像
 
@@ -218,9 +214,12 @@ EVO_DEFAULT_EPOCHS=3          # 默认训练轮数
 EVO_DEFAULT_BATCH_SIZE=4      # 默认 batch
 EVO_SCORE_THRESHOLD=0.5       # 成功/失败分界线
 EVO_PARALLELISM=4             # 并发度
+EVO_MANAGED_DOC_APPLY_DEADLINE=600 # managed-doc 模式须 ≥ Adapter max_task_seconds + 10
+EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE=900 # 必须大于 apply deadline
+EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db # 必须位于持久卷
 ```
 
-完整变量含义参见项目根目录的 `docs/develop/scenario-optimizer-guide.md` 与 `docs/api/optimization-api-reference.md`。
+完整变量含义参见项目根目录的 `docs/api/optimization-api-reference.md`。
 
 ---
 
@@ -520,7 +519,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 11.2 安装依赖
 
 ```bash
-cd ~/EvoAgent/agent-store/community/EvoAgent
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent
 
 cp .env.example .env
 # 编辑 .env 填入配置
@@ -560,7 +559,7 @@ make fix          # 自动修复 lint 问题
 
 ```bash
 # === 完整生命周期 ===
-cd ~/EvoAgent/agent-store/community/EvoAgent/deployment
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
 
 # 构建（首次）
 ./build.sh --local
@@ -590,11 +589,9 @@ docker logs -f evoagent
 ## 13. 相关文档索引
 
 - 项目根 README：[../README.md](../README.md)
-- 架构规则：[../docs/rules/architecture.md](../docs/rules/architecture.md)
 - API 参考：[../docs/api/optimization-api-reference.md](../docs/api/optimization-api-reference.md)
-- 场景开发指南：[../docs/develop/scenario-optimizer-guide.md](../docs/develop/scenario-optimizer-guide.md)
 - 配置源码：[../src/evo_agent/config.py](../src/evo_agent/config.py)
-- Adapter 部署：`community/EvoAgentAdapter/README.md`（同仓库的兄弟目录）
+- Adapter 部署：`common/agent-evolve/evoagent-adapter/README.md`（同仓库的兄弟目录）
 
 ---
 

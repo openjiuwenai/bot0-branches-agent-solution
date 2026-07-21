@@ -7,8 +7,6 @@ from pydantic import ValidationError
 
 from evo_agent.evaluator.domain.models import (
     EvaluationInput,
-    EvaluationStep,
-    EvaluationTrajectory,
     GoalGenerationInput,
     GoalGenerationOutput,
     LLMEvaluationOutput,
@@ -91,28 +89,6 @@ class TestStandardTrajectory:
     def test_extra_fields_forbidden(self) -> None:
         with pytest.raises(ValidationError, match="extra_forbidden"):
             StandardTrajectory(task_input="not allowed")  # type: ignore[call-arg]
-
-
-class TestEvaluationTrajectory:
-    """Prompt-only simplified trajectory model tests."""
-
-    def test_serializes_prompt_only_fields(self) -> None:
-        trajectory = EvaluationTrajectory(
-            steps=[
-                EvaluationStep(
-                    index=1,
-                    role="tool_call",
-                    tool_name="search",
-                    tool_arguments={"query": "topic"},
-                )
-            ],
-        )
-
-        dumped = trajectory.model_dump()
-
-        assert dumped["steps"][0]["tool_name"] == "search"
-        assert "metadata" not in dumped["steps"][0]
-        assert "reasoning_content" not in dumped["steps"][0]
 
 
 class TestEvaluationInput:

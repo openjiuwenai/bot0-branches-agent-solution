@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,14 @@ class SkillContentSnapshot:
     name: str
     content_before: str
     epoch_contents: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ManagedDocEpochContent:
+    """The exact managed-document candidate evaluated for one round."""
+
+    round: int
+    content: str
 
 
 @dataclass(frozen=True)
@@ -59,7 +67,13 @@ class OptimizeRequest:
 
     # ── Skill ──
     skills: list[str] = field(default_factory=list)
-    optimizer_type: str = "skill"
+    optimizer_type: Literal["skill", "prompt", "tool"] = "skill"
+
+    # ── managed-doc ──
+    # 单文档优化模式：精确 doc_kind（adapter 按配置值精确匹配，构造时 strip，
+    # 空白视为未提供）。与 ``skills`` 互斥（XOR）：二者必须且只能提供一种。
+    managed_doc_kind: str | None = None
+    managed_doc_expected_revision: str | None = None
 
     # ── 数据集（双轨：API 用 dataset_path，CLI 用 dataset_manifest_path）──
     dataset_path: str = ""  # 原始数据文件路径（API 模式）
@@ -87,6 +101,28 @@ class OptimizeRequest:
 
     # ── 追踪 ──
     task_name: str = ""
+
+    def __post_init__(self) -> None:
+        """managed_doc_kind strip + 与 skills 的互斥校验。
+
+        - strip ``managed_doc_kind``，空白视为未提供（置 None）。
+        - **同时**提供非空 skills 与 managed_doc_kind → 校验失败：本期不支持
+          Skill 与 managed-doc 混合优化（无歧义误用，叶子层 defense-in-depth）。
+        - 两者都缺（空 skills 且无 managed_doc_kind）→ 允许：runner 对空 skills
+          有 eval-only/baseline 路径（``test_empty_skills_uses_run_id_artifact_dir``），
+          「无目标即拒绝」的语义在入口层（F3 路由 / F9 CLI）按需收口。
+        """
+        if self.managed_doc_kind is not None:
+            stripped = self.managed_doc_kind.strip()
+            # frozen dataclass：经 object.__setattr__ 写回 strip 后的值。
+            object.__setattr__(self, "managed_doc_kind", stripped or None)
+        has_skills = bool(self.skills)
+        has_managed_doc = self.managed_doc_kind is not None
+        if has_skills and has_managed_doc:  # 二者同时存在 → 互斥违例
+            raise ValueError(
+                "OptimizeRequest 不支持 Skill 与 managed-doc 混合优化："
+                "skills 与 managed_doc_kind 互斥，请只提供一种。"
+            )
 
 
 @dataclass(frozen=True)
@@ -154,6 +190,15 @@ class OptimizeReport:
     artifact_dir: Path
     skill_scores: tuple[SkillScore, ...] = ()  # per-skill 分数（多 skill 时填充）
     skill_contents: tuple[SkillContentSnapshot, ...] = ()  # per-skill 内容快照
+
+    # ── managed-doc ──
+    # 单文档优化模式回填字段。train/val 分数继续使用现有全局结果，
+    # 不生成无意义的 per-document score。task_ids 只收集非空 task_id。
+    managed_doc_kind: str | None = None
+    managed_doc_content_before: str | None = None
+    managed_doc_content_after: str | None = None
+    managed_doc_epoch_contents: tuple[ManagedDocEpochContent, ...] = ()
+    managed_doc_task_ids: tuple[str, ...] = ()
 
 
 class TrajectoryUnavailableError(Exception):

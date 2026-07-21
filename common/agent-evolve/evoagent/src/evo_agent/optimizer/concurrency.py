@@ -1,21 +1,20 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 """Concurrency helpers for evolution pipelines.
 
-Two sanctioned patterns bound total LLM concurrency by a single semaphore:
+Two sanctioned patterns bound concurrency without double acquisition:
 
 1. ``gather_with_semaphore`` — for work whose coroutines do **not** themselves
-   acquire ``self._semaphore`` (e.g. skill-content fetch in ``_build_operators``,
+   acquire the supplied semaphore (e.g. skill-content fetch in ``_build_operators``,
    C5 / #25). The factory is invoked lazily inside the semaphore slot.
-2. Naked ``asyncio.gather`` — only when every gathered coroutine acquires
-   ``self._semaphore`` internally (e.g. via ``invoke_text_with_retry``). The
+2. Naked ``asyncio.gather`` — for LLM work, because every gathered coroutine enters
+   the run-scoped ``LLMInvocation`` internally. The
    outer gather must **not** acquire the semaphore again, or a double-acquire
    deadlock results. Used by C2 / #3, C3 / #7, C4 / #19 (cross-operator
    reflect / aggregate / select). Each such site documents the inner-semaphore
    invariant in its docstring.
 
-Under CPython's single-threaded asyncio loop, both patterns cap concurrent LLM
-calls at ``parallelism``; do not introduce a third pattern without updating
-this module.
+LLM concurrency is owned exclusively by ``LLMInvocation``; this helper remains
+for non-LLM work such as skill-content fetches.
 """
 
 from __future__ import annotations

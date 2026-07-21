@@ -67,41 +67,37 @@
 multi-deep-research-demo/
 ├── pom.xml                             ← parent (packaging=pom)
 │
-├── agent-deep-research/                ← 库层：root DeepAgent
-│   └── src/main/java/com/openjiuwen/example/deepresearch/
-│       ├── DeepResearchProperties.java     配置 POJO + system prompt
-│       ├── DeepResearchAgentFactory.java   props + sandboxOpsSupplier → DeepAgent
-│       └── rail/
-│           ├── AutoPersistMemoryRail.java  extends MemoryRail；afterInvoke 落盘
-│           ├── SandboxRail.java            render_comparison_table / render_chart
-│           ├── UrlVerifyRail.java          verify_urls
-│           ├── SandboxOps.java             库层窄接口：executeCode / downloadFile
-│           └── ExecResult.java             record: (ok, exitCode, stdout, stderr, message)
-│
-├── agent-deep-research-runtime/        ← wrapper：Spring Boot 应用
-│   ├── src/main/java/.../runtime/
-│   │   ├── DeepResearchRuntimeApplication.java  Spring 装配；SandboxClient → SandboxOps 适配
-│   │   └── DeepResearchSpringProperties.java    继承库层 Properties 加 @ConfigurationProperties
+├── agent-deep-research/                ← root DeepAgent（SDK + Spring Boot runtime 同模块，按包名分层）
+│   ├── src/main/java/com/openjiuwen/example/deepresearch/
+│   │   ├── DeepResearchProperties.java     配置 POJO + system prompt
+│   │   ├── DeepResearchAgentFactory.java   props + sandboxOpsSupplier → DeepAgent
+│   │   ├── rail/
+│   │   │   ├── AutoPersistMemoryRail.java  extends MemoryRail；afterInvoke 落盘
+│   │   │   ├── SandboxRail.java            render_comparison_table / render_chart
+│   │   │   ├── UrlVerifyRail.java          verify_urls
+│   │   │   ├── SandboxOps.java             库层窄接口：executeCode / downloadFile
+│   │   │   └── ExecResult.java             record: (ok, exitCode, stdout, stderr, message)
+│   │   └── runtime/                        ← Spring Boot 层
+│   │       ├── DeepResearchRuntimeApplication.java  Spring 装配；SandboxClient → SandboxOps 适配
+│   │       └── DeepResearchSpringProperties.java    继承库层 Properties 加 @ConfigurationProperties
 │   └── src/main/resources/
 │       ├── application.yml                        主配置
 │       └── application-redis-checkpointer.yml     可选 profile：把 checkpointer 切到 Redis
 │
-├── agent-search/                       ← 库层：search sub-agent（ReActAgent）
-│   └── src/main/java/.../search/
-│       ├── SearchAgentProperties.java
-│       ├── SearchAgentFactory.java             props → ReActAgent + web_search 工具
-│       ├── WebSearchProvider.java              pluggable 后端 SPI
-│       ├── TavilyWebSearchProvider.java        prod 走 https://api.tavily.com
-│       ├── StubWebSearchProvider.java          fixture 走本地 JSON
-│       ├── WebSearchTool.java / StubWebSearchTool.java   工具入口
-│       ├── DomainReranker.java                 official ×2, blog ×0.7
-│       ├── SourceKindClassifier.java           host → official/blog/news/forum
-│       └── WebSearchResultSerializer.java      wire 格式
-│
-└── agent-search-runtime/               ← wrapper：search agent Spring Boot 应用
-    ├── src/main/java/.../search/runtime/
-    │   ├── SearchAgentRuntimeApplication.java
-    │   └── SearchAgentSpringProperties.java
+└── agent-search/                       ← search sub-agent（ReActAgent）（SDK + Spring Boot runtime 同模块，按包名分层）
+    ├── src/main/java/com/openjiuwen/example/deepresearch/search/
+    │   ├── SearchAgentProperties.java
+    │   ├── SearchAgentFactory.java             props → ReActAgent + web_search 工具
+    │   ├── WebSearchProvider.java              pluggable 后端 SPI
+    │   ├── TavilyWebSearchProvider.java        prod 走 https://api.tavily.com
+    │   ├── StubWebSearchProvider.java          fixture 走本地 JSON
+    │   ├── WebSearchTool.java / StubWebSearchTool.java   工具入口
+    │   ├── DomainReranker.java                 official ×2, blog ×0.7
+    │   ├── SourceKindClassifier.java           host → official/blog/news/forum
+    │   ├── WebSearchResultSerializer.java      wire 格式
+    │   └── runtime/                            ← Spring Boot 层
+    │       ├── SearchAgentRuntimeApplication.java
+    │       └── SearchAgentSpringProperties.java
     └── src/main/resources/application.yml
 ```
 
@@ -173,8 +169,8 @@ mvn "-Dmaven.repo.local=.m2\repository" `
 产物（可独立运行的 Spring Boot fat jar，各约 180 MB）：
 
 ```
-agent-deep-research-runtime/target/agent-deep-research-runtime-0.1.0-SNAPSHOT.jar
-agent-search-runtime/target/agent-search-runtime-0.1.0-SNAPSHOT.jar
+agent-deep-research/target/agent-deep-research-0.1.0.jar
+agent-search/target/agent-search-0.1.0.jar
 ```
 
 ---
@@ -214,7 +210,7 @@ export SANDBOX_URL=http://127.0.0.1:8321
 
 ```bash
 # 1. 启动 search-agent（端口 18091）
-nohup java -jar agent-search-runtime-0.1.0-SNAPSHOT.jar \
+nohup java -jar agent-search-0.1.0.jar \
   > search-agent.log 2>&1 &
 echo $! > search-agent.pid
 
@@ -224,7 +220,7 @@ curl -s http://127.0.0.1:18091/.well-known/agent-card.json | head -20
 
 # 2. 启动 deep-research-agent（端口 18090）
 export SEARCH_AGENT_URL=http://127.0.0.1:18091
-nohup java -jar agent-deep-research-runtime-0.1.0-SNAPSHOT.jar \
+nohup java -jar agent-deep-research-0.1.0.jar \
   > deep-research.log 2>&1 &
 echo $! > deep-research.pid
 
@@ -250,11 +246,11 @@ export REDIS_PASSWORD=<plaintext-or-blank>
 export CHECKPOINTER_TTL_SECONDS=86400              # 1 天；yml 默认同值
 
 # search-runtime（18091）
-java -jar agent-search-runtime-*.jar \
+java -jar agent-search-*.jar \
   --spring.profiles.active=redis-checkpointer
 
 # deep-research-runtime（18090）
-java -jar agent-deep-research-runtime-0.1.0-SNAPSHOT.jar \
+java -jar agent-deep-research-0.1.0.jar \
   --spring.profiles.active=redis-checkpointer
 ```
 
@@ -264,7 +260,7 @@ Redis Cluster 部署时把 `REDIS_TYPE` 切成 `cluster`，并用 Spring Boot �
 export REDIS_TYPE=cluster
 export REDIS_PASSWORD=              # 集群无密码时留空
 
-java -jar agent-search-runtime-*.jar \
+java -jar agent-search-*.jar \
   --spring.profiles.active=redis-checkpointer \
   --openjiuwen.service.middleware.redis.default.nodes[0]=<host>:7001 \
   --openjiuwen.service.middleware.redis.default.nodes[1]=<host>:7002 \
@@ -321,14 +317,14 @@ $env:LLM_MODEL    = "deepseek-chat"
 ```powershell
 $env:SEARCH_AGENT_PORT = "18091"
 mvn "-Dmaven.repo.local=.m2\repository" `
-  -f "common\example\multi-deep-research-demo\agent-search-runtime\pom.xml" `
+  -f "common\example\multi-deep-research-demo\agent-search\pom.xml" `
   spring-boot:run "-Dspring-boot.run.profiles=stub" `
   "-Dspring-boot.run.arguments=--openjiuwen.demo.search-agent.api-key=any-dummy"
 
 # prod profile（真 Tavily）
 $env:TAVILY_API_KEY = "<your-tavily-key>"
 mvn "-Dmaven.repo.local=.m2\repository" `
-  -f "common\example\multi-deep-research-demo\agent-search-runtime\pom.xml" `
+  -f "common\example\multi-deep-research-demo\agent-search\pom.xml" `
   spring-boot:run
 ```
 
@@ -341,7 +337,7 @@ $env:DEEP_RESEARCH_PORT = "18090"
 # $env:SANDBOX_URL     = "http://127.0.0.1:8321"
 
 mvn "-Dmaven.repo.local=.m2\repository" `
-  -f "common\example\multi-deep-research-demo\agent-deep-research-runtime\pom.xml" `
+  -f "common\example\multi-deep-research-demo\agent-deep-research\pom.xml" `
   spring-boot:run
 ```
 
@@ -426,7 +422,7 @@ $reader.ReadToEnd()
 
 ## 配置字段速查
 
-`agent-deep-research-runtime/src/main/resources/application.yml` 关键字段：
+`agent-deep-research/src/main/resources/application.yml` 关键字段：
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
@@ -447,7 +443,7 @@ $reader.ReadToEnd()
 | `openjiuwen.demo.deep-research.workspace-path` | `target/deep-research-workspace` | 记忆和报告落盘根目录 |
 | `openjiuwen.demo.deep-research.system-prompt` | 内置 | 含 A2A 调用规范、memory 工具文档、sandbox 工具契约、迭代预算硬规则 |
 
-`application-redis-checkpointer.yml` 里的 Redis 字段（`openjiuwen.service.middleware.redis.default.*`、`openjiuwen.service.middleware.checkpointer.ttl-seconds`）通过 `--spring.profiles.active=redis-checkpointer` 激活。`agent-search-runtime` 有一份镜像 profile，env 变量同名，两个 runtime 共享同一个 Redis 实例（同 host/port/db/password）。
+`application-redis-checkpointer.yml` 里的 Redis 字段（`openjiuwen.service.middleware.redis.default.*`、`openjiuwen.service.middleware.checkpointer.ttl-seconds`）通过 `--spring.profiles.active=redis-checkpointer` 激活。`agent-search` 有一份镜像 profile，env 变量同名，两个 runtime 共享同一个 Redis 实例（同 host/port/db/password）。
 
 ### Redis key 命名与多 runtime 共用同一 Redis 的隔离
 

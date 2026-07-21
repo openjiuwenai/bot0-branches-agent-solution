@@ -5,6 +5,9 @@
 package com.openjiuwen.agents.reactrails.verification;
 
 import com.openjiuwen.agents.reactrails.enforcing.PromptInjectionState;
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
+import com.openjiuwen.agents.reactrails.observability.RailEvent;
+import com.openjiuwen.agents.reactrails.observability.RailTelemetry;
 import com.openjiuwen.agents.reactrails.state.RailInvocationState;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -249,6 +252,9 @@ public class StagnationDetectionRail extends AgentRail {
             String brake = "【检测到输出重复】您的回答与之前的回答高度相似（第" + state.consecutiveOutputRepeats + "次重复）。请提供全新的分析，使用不同的论据和方法。";
 
             ctx.pushSteering(brake);
+            RailTelemetry.current().fire(new RailEvent.SteeringEvent("StagnationDetectionRail",
+                    "STAGNATION_OUTPUT", brake.substring(0, Math.min(80, brake.length())),
+                    ctx.hasSteeringQueue()));
             injectionState.setPhaseOverride(
                     "BREAK_STAGNATION: You are producing repetitive output." + " Change your approach entirely.");
 
@@ -291,6 +297,9 @@ public class StagnationDetectionRail extends AgentRail {
             String brake = "【检测到工具调用循环】您正在重复使用相同的工具序列（第" + state.toolCycleRepeats + "次）。请尝试完全不同的工具或方法，不要重复已证明无效的调用路径。";
 
             ctx.pushSteering(brake);
+            RailTelemetry.current().fire(new RailEvent.SteeringEvent("StagnationDetectionRail",
+                    "STAGNATION_TOOLCYCLE", brake.substring(0, Math.min(80, brake.length())),
+                    ctx.hasSteeringQueue()));
             injectionState.setPhaseOverride("BREAK_LOOP: You are repeating the same tool-call sequence."
                     + " This loop is ineffective. Change strategy now.");
 
@@ -356,6 +365,7 @@ public class StagnationDetectionRail extends AgentRail {
 
     private static Map<String, Object> degradedResult(String reason) {
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put(ObservingRail.SOURCE_RAIL_KEY, "StagnationDetectionRail");
         result.put(DEGRADED_KEY, true);
         result.put(STAGNATION_KEY, true);
         result.put(STAGNATION_REASON_KEY, reason);

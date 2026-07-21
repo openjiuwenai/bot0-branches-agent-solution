@@ -16,7 +16,9 @@ from openjiuwen.core.foundation.llm.schema.message import AssistantMessage, User
 import evo_agent  # noqa: F401
 from evo_agent.llm.icbc_model_client import (
     ICBCModelClient,
+    ICBCProtocolProfile,
     ICBCRequestError,
+    ICBCStreamIntegrityError,
     ICBCTokenExpiredError,
 )
 
@@ -42,7 +44,7 @@ def _sse_bytes(*chunks: str, done: bool = True) -> bytes:
     return body
 
 
-def _icbc_client() -> ICBCModelClient:
+def _icbc_client(profile: ICBCProtocolProfile | None = None) -> ICBCModelClient:
     """构造一个 mock 用 ICBCModelClient（端点指向 http://mock-icbc）。"""
     return ICBCModelClient(
         model_config=ModelRequestConfig(model_name="icbc-deepseek"),
@@ -53,6 +55,7 @@ def _icbc_client() -> ICBCModelClient:
             user_id="test-user",
             verify_ssl=False,
         ),
+        profile=profile or ICBCProtocolProfile(context_window_tokens=32768),
     )
 
 
@@ -80,6 +83,36 @@ class TestICBCInvoke:
         assert msg.content == "西游记作者"
 
     @pytest.mark.asyncio
+    async def test_invoke_uses_only_declared_profile_paths(self, httpx_mock, icbc_endpoint) -> None:
+        """现场字段路径由 Profile 声明，Adapter 不猜 OpenAI 固定结构。"""
+        profile = ICBCProtocolProfile(
+            context_window_tokens=4096,
+            output_reserve_tokens=512,
+            chars_per_token=2.0,
+            content_paths=("payload.text",),
+            finish_reason_paths=("payload.finish",),
+            usage_path="stats",
+            supports_usage=True,
+            supports_finish_reason=True,
+        )
+        client = _icbc_client(profile)
+        chunk = json.dumps(
+            {
+                "payload": {"text": "profile-content", "finish": "stop"},
+                "stats": {"prompt_tokens": 7, "completion_tokens": 3},
+                "choices": [{"delta": {"content": "must-not-be-used"}}],
+            }
+        )
+        httpx_mock.add_response(url=icbc_endpoint, content=_sse_bytes(chunk))
+
+        message = await client.invoke([UserMessage(content="hi")])
+
+        assert message.content == "profile-content"
+        assert message.finish_reason == "stop"
+        assert message.usage_metadata.input_tokens == 7
+        assert message.usage_metadata.output_tokens == 3
+
+    @pytest.mark.asyncio
     async def test_invoke_done_terminates_stream(self, httpx_mock, client, icbc_endpoint) -> None:
         """``data:[DONE]`` 后续 chunk 不再被读（显式 break）。"""
         sse = (
@@ -92,15 +125,15 @@ class TestICBCInvoke:
         assert msg.content == "ok"
 
     @pytest.mark.asyncio
-    async def test_invoke_no_done_terminates_on_connection_close(
+    async def test_invoke_no_done_is_incomplete_by_default(
         self, httpx_mock, client, icbc_endpoint
     ) -> None:
-        """无 ``[DONE]`` → 靠连接关闭结束，content 仍正确累加。"""
+        """默认 Profile 要求 ``[DONE]``，EOF 不得伪装成完整响应。"""
         httpx_mock.add_response(
             url=icbc_endpoint, content=_sse_bytes(_chunk("a"), _chunk("b"), done=False)
         )
-        msg = await client.invoke([UserMessage(content="hi")])
-        assert msg.content == "ab"
+        with pytest.raises(ICBCStreamIntegrityError):
+            await client.invoke([UserMessage(content="hi")])
 
     @pytest.mark.asyncio
     async def test_invoke_empty_stream_raises(self, httpx_mock, client, icbc_endpoint) -> None:
@@ -186,16 +219,19 @@ class TestICBCInvoke:
             await client.invoke([UserMessage(content="hi")])
 
     @pytest.mark.asyncio
-    async def test_invoke_bad_json_line_skipped(self, httpx_mock, client, icbc_endpoint) -> None:
-        """半截/坏 JSON 行跳过不崩，正常 chunk 仍累加。"""
+    async def test_invoke_bad_json_line_rejects_partial_response(
+        self, httpx_mock, client, icbc_endpoint
+    ) -> None:
+        """任何 malformed data payload 都使整次响应失败。"""
         sse = (
             b"data:{bad json}\n\n"
             + _sse_bytes(_chunk("good"), done=False)
             + b"data:also broken\n\n"
         ) + _sse_bytes(done=True)
         httpx_mock.add_response(url=icbc_endpoint, content=sse)
-        msg = await client.invoke([UserMessage(content="hi")])
-        assert msg.content == "good"
+        with pytest.raises(ICBCStreamIntegrityError) as exc_info:
+            await client.invoke([UserMessage(content="hi")])
+        assert exc_info.value.chunk_index == 1
 
     @pytest.mark.asyncio
     async def test_invoke_sends_token_and_userid_headers(

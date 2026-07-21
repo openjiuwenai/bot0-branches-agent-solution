@@ -22,7 +22,7 @@ def test_cancelled_status_exists() -> None:
 
 
 def test_cancel_running_job() -> None:
-    """cancel 一个 running 状态的 job → 状态变为 cancelled，返回 True。"""
+    """running job 只锁存取消，不能强杀 in-flight task。"""
     mgr = JobManager()
     job = mgr.submit({"scenario": "test"})
     job.status = JobStatus.RUNNING
@@ -34,11 +34,11 @@ def test_cancel_running_job() -> None:
     result = mgr.cancel(job.job_id)
 
     assert result is True
-    assert job.status == JobStatus.CANCELLED
-    # cancel() 是异步请求，需要让 loop 跑一下才能真正完成
-    # 但 cancelling() 立即生效（Python 3.9+）
-    assert task.cancelling() > 0 or task.done()
-    # 清理：让 task 完成取消
+    assert job.status == JobStatus.RUNNING
+    assert job.cancellation_token.is_requested
+    assert task.cancelling() == 0
+    # 清理测试创建的 task；生产 cancel() 本身不会走这条强杀路径。
+    task.cancel()
     loop.run_until_complete(asyncio.sleep(0))
     loop.close()
 
@@ -99,28 +99,27 @@ def test_cancel_already_cancelled_job() -> None:
 
 
 def test_cancel_pushes_event() -> None:
-    """cancel 后 job 的 event_buffer 中有 cancelled 事件。"""
+    """cancel 只使用既有 log event + cancel_requested phase。"""
     mgr = JobManager()
     job = mgr.submit({"scenario": "test"})
     job.status = JobStatus.RUNNING
 
     mgr.cancel(job.job_id)
 
-    cancelled_events = [e for e in job.event_buffer if e.event == "cancelled"]
-    assert len(cancelled_events) == 1
-    assert cancelled_events[0].data["status"] == "cancelled"
+    events = [e for e in job.event_buffer if e.data.get("phase") == "cancel_requested"]
+    assert len(events) == 1
+    assert events[0].event == "log"
 
 
 def test_cancel_sets_error_message() -> None:
-    """cancel 后 job.error 包含取消信息。"""
+    """running cancel 尚未终态时不得提前写 cancelled error。"""
     mgr = JobManager()
     job = mgr.submit({"scenario": "test"})
     job.status = JobStatus.RUNNING
 
     mgr.cancel(job.job_id)
 
-    assert job.error is not None
-    assert "cancel" in job.error.lower()
+    assert job.error is None
 
 
 # ── API endpoint: POST /optimize/{job_id}/cancel ──
@@ -135,16 +134,17 @@ async def api_client() -> AsyncClient:
 
 @pytest.mark.asyncio
 async def test_cancel_endpoint_running_job(api_client: AsyncClient) -> None:
-    """POST /optimize/{job_id}/cancel → 200 + status=cancelled。"""
+    """POST /optimize/{job_id}/cancel → 202 + status=running。"""
     job = job_manager.submit({"scenario": "test"})
     job.status = JobStatus.RUNNING
 
     resp = await api_client.post(f"/optimize/{job.job_id}/cancel")
 
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     data = resp.json()
     assert data["job_id"] == job.job_id
-    assert data["status"] == "cancelled"
+    assert data["status"] == "running"
+    assert data["cancellation_requested"] is True
 
 
 @pytest.mark.asyncio
@@ -179,13 +179,13 @@ async def test_cancel_endpoint_failed_job(api_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_endpoint_queued_job(api_client: AsyncClient) -> None:
-    """POST /optimize/{job_id}/cancel queued 的 job → 200 + status=cancelled。"""
+    """POST /optimize/{job_id}/cancel queued 的 job → 202 + status=cancelled。"""
     job = job_manager.submit({"scenario": "test"})
     # status is QUEUED by default
 
     resp = await api_client.post(f"/optimize/{job.job_id}/cancel")
 
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     assert resp.json()["status"] == "cancelled"
 
 
@@ -194,45 +194,15 @@ async def test_cancel_endpoint_queued_job(api_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_run_with_progress_handles_cancellation() -> None:
-    """当 background task 被 cancel 时，_run_with_progress 正确处理 CancelledError。
-
-    CancelledError 不应被 except Exception 吞掉，也不应将状态改为 FAILED。
-    """
+    """重复 running cancel 幂等，且不产生第二个 rollback 请求事件。"""
     job = job_manager.submit({"scenario": "test"})
-
-    async def slow_optimization(*args: object, **kwargs: object) -> None:
-        await asyncio.sleep(100)  # 模拟长时间运行的优化
-
-    # 模拟一个简化的 _run_with_progress
-    async def _run_with_progress() -> None:
-        job.status = JobStatus.RUNNING
-        try:
-            await slow_optimization()
-            job.status = JobStatus.COMPLETED
-        except asyncio.CancelledError:
-            # 状态已由 JobManager.cancel() 设置，这里只做日志
-            raise
-        except Exception:
-            job.status = JobStatus.FAILED
-
-    task = asyncio.create_task(_run_with_progress())
-    job.background_task = task
     job.status = JobStatus.RUNNING
 
-    # 等 task 启动
-    await asyncio.sleep(0.01)
+    assert job_manager.cancel(job.job_id)
+    assert job_manager.cancel(job.job_id)
 
-    # 取消
-    job_manager.cancel(job.job_id)
-
-    # 等待 task 处理取消
-    with pytest.raises(asyncio.CancelledError):
-        await task
-
-    # 状态应该是 CANCELLED，不是 FAILED
-    assert job.status == JobStatus.CANCELLED
-    # 应该有 cancelled 事件
-    assert any(e.event == "cancelled" for e in job.event_buffer)
+    assert job.status == JobStatus.RUNNING
+    assert sum(e.data.get("phase") == "cancel_requested" for e in job.event_buffer) == 1
 
 
 @pytest.mark.asyncio

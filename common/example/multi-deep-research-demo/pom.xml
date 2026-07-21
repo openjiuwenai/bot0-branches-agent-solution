@@ -21,9 +21,7 @@
 
     <modules>
         <module>agent-deep-research</module>
-        <module>agent-deep-research-runtime</module>
         <module>agent-search</module>
-        <module>agent-search-runtime</module>
     </modules>
 
     <properties>

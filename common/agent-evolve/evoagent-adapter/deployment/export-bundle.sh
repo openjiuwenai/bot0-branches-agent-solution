@@ -79,7 +79,7 @@ cd agent-adapter-offline-xxxxxx
 # 2. 导入镜像
 ./import-bundle.sh agent-adapter.xxx.xxxxxx.tar
 
-# 3. 配置环境变量（至少填 HOST_LOG_DIR / HOST_SKILLS_DIR 指向业务 Agent 路径）
+# 3. 配置环境变量（填写 *_ROOT，使其指向业务 Agent 的共享父目录）
 cp config/.env.example config/.env
 vim config/.env
 
@@ -93,11 +93,34 @@ curl http://localhost:8900/api/v1/status
 ./stop.sh
 ```
 
+## AgentRule managed-doc（按需启用）
+
+1. 在 `config/.env` 设置真实 `HOST_AGENTS_ROOT`，并设置
+   `ADAPTER_ENABLE_DOCKER_RESTART=true`。
+2. 首次 `./start.sh` 会 seed `HOST_CONFIG_FILE`；编辑该宿主文件，取消模板中
+   `managed_docs` / `managed_doc_defaults` 注释并填写真实 AgentRule 路径、业务 Agent
+   容器名、`agent_url`、`health_url`。
+3. 再次执行 `./start.sh`，然后确认：
+
+```bash
+docker exec agent-adapter test -r /data/agents/edp_agent/AgentRule.md
+docker exec agent-adapter test -w /data/agents/edp_agent/AgentRule.md
+docker exec agent-adapter docker inspect edp_agent --format '{{.State.Status}}'
+docker exec agent-adapter curl -fsS http://host.docker.internal:8090/health
+```
+
+全新 AgentRule 还需调用一次 `POST /api/v1/managed-docs`（`action=update`，内容为当前
+文件全文）建立 applied revision，并轮询任务到 `SUCCEEDED`。随后复查
+`pending_apply=false` 且 `file_revision == applied_revision`，再启动 EvoAgent 优化。
+
 ## 前置条件
 
 - Docker 20.10+
-- 业务 Agent（EDPAgent）已部署，其日志目录与 skills 目录在本机可访问
-  （HOST_LOG_DIR 只读挂载、HOST_SKILLS_DIR 读写挂载）
+- 业务 Agent（EDPAgent）已部署，其日志、skills 与 AgentRule 等 managed-doc 目录在本机可访问
+- 使用 managed-doc Docker restart 时，宿主 Docker socket 可用且已了解其权限风险
+- `HOST_LOG_ROOT` 只读挂载；`HOST_SKILLS_ROOT`、`HOST_AGENTS_ROOT` 读写挂载
+- 使用 `docker restart` 时设置 `ADAPTER_ENABLE_DOCKER_RESTART=true`，并确认
+  `HOST_DOCKER_SOCKET` 指向实际 Docker socket
 
 ## 与 EvoAgent 联动
 
@@ -122,7 +145,7 @@ info "传输到目标服务器后执行："
 info "  unzip ${ARCHIVE_NAME}.zip"
 info "  cd ${ARCHIVE_NAME}"
 info "  ./import-bundle.sh <镜像tar文件>"
-info "  # 编辑 config/.env (HOST_LOG_DIR / HOST_SKILLS_DIR)"
+info "  # 编辑 config/.env (HOST_LOG_ROOT / HOST_SKILLS_ROOT / HOST_AGENTS_ROOT)"
 info "  ./start.sh"
 info ""
 info "EvoAgent 侧 .env 设 EVO_ADAPTER_URL=http://<本机IP>:8900"

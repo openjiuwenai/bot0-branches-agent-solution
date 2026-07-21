@@ -22,7 +22,7 @@ RUN for idx in \
     do \
     echo "Trying PyPI index: $idx"; \
     pip install --no-cache-dir -i "$idx" --trusted-host $(echo $idx | awk -F/ '{print $3}') \
-    aiofiles fastapi httpx pydantic-settings pyyaml rich structlog typer uvicorn && \
+    aiofiles aiokafka asyncpg cramjam fastapi httpx pydantic-settings pyyaml rich structlog typer uvicorn && \
     echo "pip install succeeded with: $idx" && \
     break; \
     done
@@ -38,8 +38,9 @@ WORKDIR /app
 
 # 安装系统依赖
 # patch：客户现场打补丁用（离线环境无网安装）
+# docker-cli：仅提供 managed-doc restart_cmd 所需客户端；未挂 socket 时无宿主权限
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates patch \
+    curl ca-certificates patch docker-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # 从 builder 复制已安装的 Python 包
@@ -54,9 +55,10 @@ COPY deployment/config/agent_adapter_config.yaml ./
 # 创建运行时数据目录 + 挂载点目录
 # /data/logs   — 业务 Agent 日志挂载点（docker-compose 只读挂载）
 # /data/skills — 业务 Agent skills 挂载点（docker-compose 读写挂载）
-RUN mkdir -p data/output data/offsets data/skills /data/logs /data/skills
+# /data/agents — AgentRule.md 等 managed-doc 挂载点（读写）
+RUN mkdir -p data/output data/offsets data/skills /data/logs /data/skills /data/agents
 
-ENV PYTHONPATH="/app/src:${PYTHONPATH}"
+ENV PYTHONPATH="/app/src"
 
 EXPOSE 8900
 
