@@ -196,6 +196,28 @@ def _build_judge_model(llm_config: LLMConfig) -> Any:
     return Model(client_config, model_config)
 
 
+async def _probe_judge_model(model: Any) -> None:
+    """提交期用最小 prompt 探测一次 LLM 调用——无效 api_key 等调用级失败 → 500。
+
+    **不触碰 judge 阶段单条降级「其他」的内在逻辑**（批内瞬时失败仍降级、不阻断整批）；
+    此探测仅把「配置级」LLM 调用失败（无效 api_key、连接失败、模型调用失败等）在提交期
+    同步暴露为 500，与 ``/evaluate`` 的「LLM 失败 → 500」契约（``docs/api/evaluate-api.md``
+    §状态码）一致，消除两路由在「无效 api_key」上的行为不一致（DEFECT-003）。
+
+    provider 无关——不区分 auth / 网络错误，任意调用异常统一 500（同 ``judge`` 降级哲学：
+    「不区分 ICBC token 错误，保持与 provider 解耦」）。
+    """
+    from openjiuwen.core.foundation.llm import UserMessage
+
+    try:
+        await model.invoke([UserMessage(content="ping")])
+    except Exception as e:  # noqa: BLE001 — 任意调用级失败统一 500，与 /evaluate 一致
+        raise HTTPException(
+            status_code=500,
+            detail=f"LLM judge config probe failed: {e}",
+        ) from e
+
+
 def _progress_from_job(job: Any) -> dict[str, Any] | None:
     """从 job 事件 buffer 取最新 progress 事件，派生 {phase, done, total}。"""
     events = job.get_events_since(0)
@@ -279,6 +301,13 @@ async def submit_dataset_eval(
                     f"labels {list(g.labels)}"
                 ),
             )
+
+    # 所有 422 数据校验通过后，提交期探测一次 LLM 调用——无效 api_key 等配置级失败
+    # 同步返回 500（与 /evaluate 的「LLM 失败→500」契约一致）；不替代 judge 阶段
+    # 单条降级逻辑。放最后以确保 422 数据/配置校验优先于 LLM 调用。
+    if has_judge:
+        assert judge_model is not None
+        await _probe_judge_model(judge_model)
 
     groups = [_to_group_config(g) for g in parsed.groups]
 

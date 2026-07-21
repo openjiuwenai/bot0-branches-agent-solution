@@ -292,6 +292,21 @@ class _FakeJudgeModel:
         return _FakeAssistant(content)
 
 
+class _BoomJudgeModel:
+    """``invoke`` 恒抛异常的假 Model——模拟无效 api_key 等调用级失败。"""
+
+    def __init__(self, exc: BaseException) -> None:
+        self._exc = exc
+
+    async def invoke(self, messages: object) -> _FakeAssistant:  # noqa: ARG002
+        raise self._exc
+
+
+async def _noop_probe(_model: Any) -> None:
+    """提交期探针的 no-op 替身——成功路径测试用，避免消耗 _FakeJudgeModel 的响应序列。"""
+    return None
+
+
 # ---------------------------------------------------------------------------
 # 模式 6：llm_judge
 # ---------------------------------------------------------------------------
@@ -322,6 +337,8 @@ def test_mode6_llm_judge(monkeypatch: pytest.MonkeyPatch) -> None:
         "_build_judge_model",
         lambda _cfg: _FakeJudgeModel(["否", "否", "否", "是"]),
     )
+    # 成功路径不跑真实探针（避免消耗 _FakeJudgeModel 的响应序列）；探针行为单独测试。
+    monkeypatch.setattr(route_mod, "_probe_judge_model", _noop_probe)
     client = TestClient(create_app())
     submit = _submit(client, cfg, data)
     body = _wait_terminal(client, submit["job_id"])
@@ -624,6 +641,79 @@ def test_llm_judge_unknown_client_provider_422() -> None:
     )
     assert resp.status_code == 422
     assert "UnknownProvider" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# 提交期探针：无效 api_key → 500（与 /evaluate 的 LLM 失败契约一致）
+# ---------------------------------------------------------------------------
+
+
+def test_llm_judge_invalid_api_key_500(monkeypatch: pytest.MonkeyPatch) -> None:
+    """llm_judge 组 + 无效 api_key：提交期探针 LLM 调用失败 → 500（不创建 job）。
+
+    与 ``/evaluate`` 的「LLM 失败→500」契约一致，消除两路由在「无效 api_key」上的
+    行为不一致（DEFECT-003）。注意：不触及 judge 阶段单条降级「其他」的内在逻辑——
+    该测试在提交期即失败，judge 阶段从未运行。
+    """
+    import evo_agent.api.routes.evaluate_dataset as route_mod
+
+    cfg = {
+        "id_field": "id",
+        "groups": [
+            {
+                "name": "g",
+                "kind": "llm_judge",
+                "pred_field": "pred",
+                "gold_field": "gold",
+                "labels": ["否", "是"],
+                "extract_key": "是否属实",
+                "batch_metrics": ["mean"],
+            }
+        ],
+        "llm_config": {
+            "api_key": "invalid-key",
+            "api_base": "http://x",
+            "client_provider": "OpenAI",
+        },
+    }
+    data = json.dumps({"id": "1", "gold": "否", "pred": "否"}, ensure_ascii=False).encode()
+    # 探针真实运行，但 _build_judge_model 替身为抛异常的假 Model——模拟无效 api_key。
+    monkeypatch.setattr(
+        route_mod,
+        "_build_judge_model",
+        lambda _cfg: _BoomJudgeModel(RuntimeError("invalid api_key")),
+    )
+    client = TestClient(create_app())
+    resp = client.post(
+        "/evaluate/dataset",
+        files={"file": ("items.json", data, "application/json")},
+        data={"config": json.dumps(cfg)},
+    )
+    assert resp.status_code == 500
+    assert "probe failed" in resp.json()["detail"].lower()
+
+
+def test_llm_judge_probe_passes_when_llm_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """探针通过时不影响后续 judge：_build_judge_model 返回正常假 Model，探针 invoke 不抛。"""
+    import evo_agent.api.routes.evaluate_dataset as route_mod
+
+    records = [{"id": "1", "gold": "否", "pred": "否"}]
+    data = json.dumps(records, ensure_ascii=False).encode()
+    cfg = {
+        "id_field": "id",
+        "groups": [_lj_group("是否属实", "gold", "pred")],
+        "llm_config": {"api_key": "k", "api_base": "http://x", "client_provider": "OpenAI"},
+    }
+    # 单元素序列：探针消费 idx0、judge 消费 idx0（循环）——均返回"否"，不抛 → 通过。
+    monkeypatch.setattr(
+        route_mod,
+        "_build_judge_model",
+        lambda _cfg: _FakeJudgeModel(["否"]),
+    )
+    client = TestClient(create_app())
+    submit = _submit(client, cfg, data)
+    body = _wait_terminal(client, submit["job_id"])
+    assert body["status"] == "completed", body
 
 
 if __name__ == "__main__":
