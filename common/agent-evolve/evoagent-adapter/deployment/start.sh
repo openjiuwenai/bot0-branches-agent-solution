@@ -104,6 +104,7 @@ set +a
 : "${ADAPTER_KAFKA_BROKERS:=kafka:9092}"
 : "${ADAPTER_KAFKA_TOPIC:=otlp_traces}"
 : "${ADAPTER_KAFKA_GROUP:=agent-adapter}"
+: "${ADAPTER_TRACE_WAIT_TIMEOUT:=10.0}"   # GET /traces/{conv} 等根 span 的服务端短等待秒数
 : "${ADAPTER_NETWORK:=}"   # 留空=默认 bridge; standard 模式设 openjiuwen-net
 
 info "配置已加载:"
@@ -230,6 +231,7 @@ docker run -d \
     -e ADAPTER_KAFKA_BROKERS="$ADAPTER_KAFKA_BROKERS" \
     -e ADAPTER_KAFKA_TOPIC="$ADAPTER_KAFKA_TOPIC" \
     -e ADAPTER_KAFKA_GROUP="$ADAPTER_KAFKA_GROUP" \
+    -e ADAPTER_TRACE_WAIT_TIMEOUT="$ADAPTER_TRACE_WAIT_TIMEOUT" \
     -v "$HOST_OUTPUT_DIR:/app/data" \
     -v "$HOST_CONFIG_FILE:/app/agent_adapter_config.yaml" \
     -v "$HOST_LOG_ROOT:/data/logs:ro" \
