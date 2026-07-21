@@ -355,6 +355,13 @@ public final class TempClientMain {
         String[] springArgs() {
             java.util.List<String> out = new java.util.ArrayList<>();
             out.add("--spring.profiles.active=" + springProfile);
+            // Disable Flyway: the relay process (started first) owns schema migration and has
+            // already applied agent-bus V1+V3. TempClientMain is a client — it must NOT run
+            // Flyway, because its test classpath also carries registry-discovery-center (test-scope),
+            // whose db/migration V3 would collide with agent-bus's V3
+            // (FlywayException: Found more than one migration with version 3). CLI arg = highest
+            // precedence, overrides application.yml's spring.flyway.enabled=true.
+            out.add("--spring.flyway.enabled=false");
             out.addAll(springArgs);
             return out.toArray(new String[0]);
         }
@@ -382,7 +389,9 @@ public final class TempClientMain {
             // silence the web server — this driver is a 1-shot CLI, not a long-running service
             p.put("spring.main.web-application-type", "NONE");
             p.put("spring.main.banner-mode", "off");
-            p.put("spring.flyway.enabled", "true");
+            // Flyway is DISABLED via springArgs() (--spring.flyway.enabled=false, highest
+            // precedence) — not set here (default properties are lowest precedence and would be
+            // overridden by application.yml's spring.flyway.enabled=true). The relay owns schema.
             return p;
         }
 

@@ -83,7 +83,7 @@ public class GatewayRuntimeConfiguration {
      * @return an empty fake discovery service (callers register cards before dispatch)
      */
     @Bean
-    AgentDiscoveryService agentDiscoveryService() {
+    FakeAgentDiscoveryService agentDiscoveryService() {
         return new FakeAgentDiscoveryService();
     }
 
@@ -92,7 +92,7 @@ public class GatewayRuntimeConfiguration {
                                          ForwardingOutboxClaimPort outboxClaim,
                                          @Qualifier("requestRelay") BrokerForwardingRelayPort relay,
                                          @Qualifier("responseConsumer") BrokerForwardingConsumerPort responseConsumer,
-                                         FakeAgentDiscoveryService discovery) {
+                                         AgentDiscoveryService discovery) {
         return new GatewayRuntimeService(outbox, outboxClaim, relay, responseConsumer,
                 discovery,
                 props.gatewayServiceId(), props.acceptTimeoutMs(), props.responseTimeoutMs(),
