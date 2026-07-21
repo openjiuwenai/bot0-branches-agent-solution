@@ -1,9 +1,9 @@
-"""ICBCModelClient — 把 openjiuwen messages 协议翻译成 ICBC OpenAI 兼容流式端点。
+"""CustomSSEModelClient — 把 openjiuwen messages 协议翻译成自定义 SSE 端点。
 
-ICBC 端点契约（见 docs/adr/0008-icbc-endpoint-openai-streaming.md）：
+自定义 SSE 端点契约：
 
-    POST <endpoint>  (例如 http://aigc.sdc.cs.icbc/mlpmodelservice/aigc/chat/completions)
-    header: token: <JWT>   userId: <固定值>   Content-Type: application/json
+    POST <endpoint>  (例如 https://llm-gateway.example.com/v1/chat/completions)
+    header: token: <TOKEN>   userId: <USER_ID>   Content-Type: application/json
     body:   { "messages": [{"role": "...", "content": "..."}], "stream": "true" }
 
     resp:   SSE 流，每行 ``data:{...}``（``data:`` 后无空格），``data:[DONE]`` 结束
@@ -38,12 +38,12 @@ from openjiuwen.core.foundation.llm.schema.message_chunk import AssistantMessage
 from openjiuwen.core.foundation.tool import ToolInfo
 
 
-class ICBCTokenExpiredError(Exception):
-    """ICBC token 过期/失效，需人工换 token。"""
+class EndpointCredentialExpiredError(Exception):
+    """端点凭证过期或失效，需要更新凭证。"""
 
 
-class ICBCRequestError(Exception):
-    """ICBC 端点返回失败（HTTP 错误、流内 error、空响应等，且非 token 过期）。"""
+class SSERequestError(Exception):
+    """自定义 SSE 端点返回失败（HTTP 错误、流内 error、空响应等）。"""
 
     def __init__(
         self,
@@ -57,20 +57,20 @@ class ICBCRequestError(Exception):
         self.retryable = retryable
 
 
-class ICBCStreamIntegrityError(ICBCRequestError):
+class SSEStreamIntegrityError(SSERequestError):
     """A declared SSE data chunk was malformed; partial text is unusable."""
 
     category = "transport_incomplete"
 
     def __init__(self, *, chunk_index: int, raw_payload: str) -> None:
-        super().__init__(f"ICBC SSE data chunk {chunk_index} is malformed", retryable=True)
+        super().__init__(f"CustomSSE SSE data chunk {chunk_index} is malformed", retryable=True)
         self.chunk_index = chunk_index
         self.raw_payload = raw_payload
 
 
 @dataclass(frozen=True)
-class ICBCProtocolProfile:
-    """Declarative contract for one verified ICBC deployment protocol."""
+class SSEProtocolProfile:
+    """Declarative contract for one verified custom SSE deployment protocol."""
 
     context_window_tokens: int = 32768
     output_reserve_tokens: int = 2048
@@ -86,14 +86,14 @@ class ICBCProtocolProfile:
     completion_signal: Literal["done", "eof", "either"] = "done"
 
 
-class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
-    """ICBC 内网大模型 client — 通过 registry 注册名 ``llm_ICBC``。
+class CustomSSEModelClient(BaseModelClient):  # type: ignore[misc]
+    """自定义 SSE 文本模型 client — 通过 registry 注册名 ``llm_CustomSSE``。
 
     注册由 ``BaseModelClient.__init_subclass__`` 在类定义（import）时自动完成，
     此处只声明 ``__client_name__`` / ``__client_type__``。
     """
 
-    __client_name__ = "ICBC"
+    __client_name__ = "CustomSSE"
     __client_type__ = "llm"
 
     def __init__(
@@ -101,10 +101,10 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         model_config: Any,
         model_client_config: Any,
         *,
-        profile: ICBCProtocolProfile | None = None,
+        profile: SSEProtocolProfile | None = None,
     ) -> None:
         super().__init__(model_config, model_client_config)
-        self._profile = profile or ICBCProtocolProfile(
+        self._profile = profile or SSEProtocolProfile(
             context_window_tokens=getattr(model_client_config, "context_window_tokens", 32768),
             output_reserve_tokens=getattr(model_client_config, "output_reserve_tokens", 2048),
             chars_per_token=getattr(model_client_config, "chars_per_token", 2.0),
@@ -119,7 +119,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         tools: list[ToolInfo] | list[dict[str, Any]] | None = None,  # noqa: ARG002
         temperature: float | None = None,  # noqa: ARG002 — 严格按 curl，不传
         top_p: float | None = None,  # noqa: ARG002
-        model: str | None = None,  # noqa: ARG002 — ICBC 不消费 model_name
+        model: str | None = None,  # noqa: ARG002 — 端点不消费 model_name
         max_tokens: int | None = None,
         stop: str | None = None,  # noqa: ARG002
         output_parser: Any | None = None,  # noqa: ARG002
@@ -157,7 +157,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
                 usage = raw_usage
         answer = "".join(parts)
         if not answer:
-            raise ICBCRequestError("ICBC 流式响应为空：未收到任何 content")
+            raise SSERequestError("CustomSSE 流式响应为空：未收到任何 content")
         usage_metadata = None
         if usage is not None:
             usage_metadata = {
@@ -168,7 +168,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
             content=answer,
             finish_reason=finish_reason or "",
             usage_metadata=usage_metadata,
-            metadata={"provider": "ICBC", **stream_metadata},
+            metadata={"provider": "CustomSSE", **stream_metadata},
         )
 
     async def stream(
@@ -195,7 +195,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
             if content:
                 yield AssistantMessageChunk(content=content)
 
-    # --- ICBC 协议无关的 abstract 方法：裸文本 LLM 不支持多模态生成 ---
+    # --- 自定义 SSE 协议无关的 abstract 方法：裸文本 LLM 不支持多模态生成 ---
 
     async def generate_image(
         self,
@@ -211,7 +211,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         **kwargs: Any,
     ) -> ImageGenerationResponse:
         raise NotImplementedError(
-            "ICBCModelClient is a text-only LLM endpoint, no image generation"
+            "CustomSSEModelClient is a text-only LLM endpoint, no image generation"
         )
 
     async def generate_speech(
@@ -224,7 +224,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         **kwargs: Any,
     ) -> AudioGenerationResponse:
         raise NotImplementedError(
-            "ICBCModelClient is a text-only LLM endpoint, no speech generation"
+            "CustomSSEModelClient is a text-only LLM endpoint, no speech generation"
         )
 
     async def generate_video(
@@ -244,7 +244,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         **kwargs: Any,
     ) -> VideoGenerationResponse:
         raise NotImplementedError(
-            "ICBCModelClient is a text-only LLM endpoint, no video generation"
+            "CustomSSEModelClient is a text-only LLM endpoint, no video generation"
         )
 
     # --- 内部 helpers ---
@@ -258,11 +258,11 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
     ) -> AsyncIterator[dict[str, Any]]:
         """发流式 POST，逐个 yield 解析后的 chunk dict。
 
-        - HTTP 4xx/5xx → 读 body 包装成 ``ICBCRequestError``（token 过期信号分流为
-          ``ICBCTokenExpiredError``）。
+        - HTTP 4xx/5xx → 读 body 包装成 ``SSERequestError``（token 过期信号分流为
+          ``EndpointCredentialExpiredError``）。
         - 按行 ``aiter_lines()``，只处理 ``data:`` 开头行；空行/心跳/``event:`` 跳过。
         - ``data:[DONE]`` → 立即 ``break``（显式结束信号，不与坏行混同）。
-        - chunk JSON 含 ``error`` 字段 → 抛 ``ICBCRequestError``/``ICBCTokenExpiredError``。
+        - chunk JSON 含 ``error`` 字段 → 抛 ``SSERequestError``/``EndpointCredentialExpiredError``。
         - 半截/坏 JSON 行 → 跳过不崩。
         """
         headers = self._build_headers()
@@ -277,8 +277,8 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
                     raw = (await resp.aread()).decode(errors="replace")[:200]
                     msg = f"HTTP {resp.status_code}: {raw}"
                     if self._is_token_expired(msg):
-                        raise ICBCTokenExpiredError(msg)
-                    raise ICBCRequestError(
+                        raise EndpointCredentialExpiredError(msg)
+                    raise SSERequestError(
                         msg,
                         status_code=resp.status_code,
                         retryable=resp.status_code == 429 or resp.status_code >= 500,
@@ -296,18 +296,18 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
                         break
                     chunk = self._parse_chunk(payload)
                     if chunk is None:
-                        raise ICBCStreamIntegrityError(
+                        raise SSEStreamIntegrityError(
                             chunk_index=chunk_index,
                             raw_payload=json.dumps(payload, ensure_ascii=False),
                         )
                     if "error" in chunk:
                         emsg = str(chunk["error"])
                         if self._is_token_expired(emsg):
-                            raise ICBCTokenExpiredError(emsg)
-                        raise ICBCRequestError(emsg)
+                            raise EndpointCredentialExpiredError(emsg)
+                        raise SSERequestError(emsg)
                     yield chunk
                 if not done_received and self._profile.completion_signal == "done":
-                    raise ICBCStreamIntegrityError(
+                    raise SSEStreamIntegrityError(
                         chunk_index=chunk_index + 1,
                         raw_payload=json.dumps("<EOF>", ensure_ascii=False),
                     )
@@ -359,7 +359,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
         return None
 
     def _build_headers(self) -> dict[str, str]:
-        """ICBC 鉴权 header：``token`` + ``userId``（非 Authorization Bearer）。"""
+        """端点鉴权 header：``token`` + ``userId``（非 Authorization Bearer）。"""
         return {
             "token": self.model_client_config.api_key,
             "userId": getattr(self.model_client_config, "user_id", ""),
@@ -384,24 +384,24 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
     def _messages_to_openai_format(
         self, messages: str | list[BaseMessage] | list[dict[str, Any]]
     ) -> list[dict[str, str]]:
-        """把 openjiuwen messages 翻译成 ICBC ``messages`` 数组。
+        """把 openjiuwen messages 翻译成端点的 ``messages`` 数组。
 
         - str → ``[{"role":"user","content":str}]``
         - list[BaseMessage] → ``[{"role":m.role,"content":<str>}]``
         - list[dict] → 透传 ``role`` / ``content``（content 归一为 str）
         - 空 messages / 全空 content → ValueError（不向端点发空 prompt）
 
-        ``BaseMessage.content`` 是 ``Union[str, List]``，ICBC 纯文本场景归一为 str：
+        ``BaseMessage.content`` 是 ``Union[str, List]``，CustomSSE 纯文本场景归一为 str：
         list 时拼接其中的 str 元素，丢弃 dict（多模态）部分。
         """
         if isinstance(messages, str):
             if not messages:
-                raise ValueError("ICBC invoke 收到空 messages，不向端点发空 prompt")
+                raise ValueError("CustomSSE invoke 收到空 messages，不向端点发空 prompt")
             return [{"role": "user", "content": messages}]
         if not isinstance(messages, list):  # pragma: no cover — 类型约束兜底
-            raise TypeError(f"ICBC invoke 不支持的 messages 类型: {type(messages)!r}")
+            raise TypeError(f"CustomSSE invoke 不支持的 messages 类型: {type(messages)!r}")
         if not messages:
-            raise ValueError("ICBC invoke 收到空 messages，不向端点发空 prompt")
+            raise ValueError("CustomSSE invoke 收到空 messages，不向端点发空 prompt")
         result: list[dict[str, str]] = []
         for m in messages:
             if isinstance(m, dict):
@@ -414,7 +414,7 @@ class ICBCModelClient(BaseModelClient):  # type: ignore[misc]
                 continue
             result.append({"role": role, "content": content})
         if not result:
-            raise ValueError("ICBC invoke 收到空 messages，不向端点发空 prompt")
+            raise ValueError("CustomSSE invoke 收到空 messages，不向端点发空 prompt")
         return result
 
     @staticmethod

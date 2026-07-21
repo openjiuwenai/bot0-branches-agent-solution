@@ -50,8 +50,8 @@ class LLMConfig(BaseModel):
     """LLM 配置——含 ``llm_judge`` 组时顶层必传。
 
     与 ``evaluate.py`` 的 ``LLMConfig`` 同构；此处本地定义以避免跨 route import
-    拉入 evaluator domain 依赖。``client_provider`` 默认 ``"OpenAI"``；用 ICBC 内网
-    端点时传 ``"ICBC"``（``import evo_agent.llm`` 已在提交路由触发注册）。
+    拉入 evaluator domain 依赖。``client_provider`` 默认 ``"OpenAI"``；用自定义 SSE
+    端点时传 ``"CustomSSE"``（``import evo_agent.llm`` 已在提交路由触发注册）。
     """
 
     model_name: str = ""
@@ -158,7 +158,7 @@ def _to_group_config(g: GroupConfigRequest) -> GroupConfig:
 def _build_judge_model(llm_config: LLMConfig) -> Any:
     """从 ``LLMConfig`` 构建 ``Model`` 实例（供 llm_judge 阶段调用）。
 
-    ``import evo_agent.llm`` 触发 ICBC provider 注册；``Model(client_config,
+    ``import evo_agent.llm`` 触发 CustomSSE provider 注册；``Model(client_config,
     model_config)`` 见 ``optimizer_runner._create_llm``。
 
     ``client_provider`` 为自由字符串，openjiuwen 在 ``ModelClientConfig`` 构造时
@@ -171,7 +171,7 @@ def _build_judge_model(llm_config: LLMConfig) -> Any:
     )
     from openjiuwen.core.foundation.llm import Model, ModelClientConfig, ModelRequestConfig
 
-    import evo_agent.llm  # noqa: F401 — 注册 ICBC provider（幂等）
+    import evo_agent.llm  # noqa: F401 — 注册 CustomSSE provider（幂等）
 
     model_config = ModelRequestConfig(
         model_name=llm_config.model_name,
@@ -205,7 +205,7 @@ async def _probe_judge_model(model: Any) -> None:
     §状态码）一致，消除两路由在「无效 api_key」上的行为不一致（DEFECT-003）。
 
     provider 无关——不区分 auth / 网络错误，任意调用异常统一 500（同 ``judge`` 降级哲学：
-    「不区分 ICBC token 错误，保持与 provider 解耦」）。
+    「不区分特定端点的凭证错误，保持与 provider 解耦」）。
     """
     from openjiuwen.core.foundation.llm import UserMessage
 

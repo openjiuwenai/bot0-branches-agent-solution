@@ -1,10 +1,10 @@
-"""registry import-time 注册时序单测（T3）。
+"""CustomSSE registry import-time 注册时序单测（T3）。
 
 验证：
-- import evo_agent 后 registry 含 ``llm_ICBC``
-- ``create_model_client`` 对 ``client_provider="ICBC"`` 返回 ICBCModelClient 实例
+- import evo_agent 后 registry 含 ``llm_CustomSSE``
+- ``create_model_client`` 对 ``client_provider="CustomSSE"`` 返回 CustomSSEModelClient 实例
 - 重复 import 不抛（register_class 幂等）
-- ``ModelClientConfig(client_provider="ICBC", ...)`` 的 validate_client_provider 通过
+- ``ModelClientConfig(client_provider="CustomSSE", ...)`` 的 validate_client_provider 通过
 """
 
 from __future__ import annotations
@@ -20,32 +20,32 @@ from openjiuwen.core.foundation.llm.schema.config import (
 )
 
 
-class TestICBCRegistry:
-    def test_registry_contains_llm_icbc_after_import(self) -> None:
-        """import evo_agent 后 registry 含 llm_ICBC。"""
+class TestCustomSSERegistry:
+    def test_registry_contains_llm_custom_sse_after_import(self) -> None:
+        """import evo_agent 后 registry 含 llm_CustomSSE。"""
         import evo_agent  # noqa: F401
 
-        assert "llm_ICBC" in get_client_registry().list_clients()
+        assert "llm_CustomSSE" in get_client_registry().list_clients()
 
-    def test_create_model_client_returns_icbc_instance(self) -> None:
-        """create_model_client 对 ICBC provider 返回 ICBCModelClient 实例。"""
+    def test_create_model_client_returns_custom_sse_instance(self) -> None:
+        """create_model_client 对 CustomSSE provider 返回 CustomSSEModelClient 实例。"""
         import evo_agent  # noqa: F401
-        from evo_agent.llm.icbc_model_client import ICBCModelClient
+        from evo_agent.llm.custom_sse_model_client import CustomSSEModelClient
 
         client = create_model_client(
             ModelClientConfig(
-                client_provider="ICBC",
+                client_provider="CustomSSE",
                 api_key="t",
-                api_base="http://icbc/svc.htm",
+                api_base="https://llm-gateway.example.com/v1/chat/completions",
                 user_id="u",
                 verify_ssl=False,
             ),
-            ModelRequestConfig(model_name="icbc-deepseek"),
+            ModelRequestConfig(model_name="example-model"),
         )
-        assert isinstance(client, ICBCModelClient)
+        assert isinstance(client, CustomSSEModelClient)
         # 凭证映射：token→api_key, endpoint→api_base, userId→extra user_id
         assert client.model_client_config.api_key == "t"
-        assert client.model_client_config.api_base == "http://icbc/svc.htm"
+        assert client.model_client_config.api_base == "https://llm-gateway.example.com/v1/chat/completions"
         assert getattr(client.model_client_config, "user_id") == "u"
 
     def test_repeated_import_does_not_raise(self) -> None:
@@ -54,49 +54,49 @@ class TestICBCRegistry:
 
         # 重新 import 模块不应抛
         importlib.reload(importlib.import_module("evo_agent.llm"))
-        assert "llm_ICBC" in get_client_registry().list_clients()
+        assert "llm_CustomSSE" in get_client_registry().list_clients()
 
-    def test_model_client_config_icbc_provider_validates(self) -> None:
-        """ModelClientConfig(client_provider="ICBC", ...) validate_client_provider 通过。"""
+    def test_model_client_config_custom_sse_provider_validates(self) -> None:
+        """ModelClientConfig(client_provider="CustomSSE", ...) validate_client_provider 通过。"""
         import evo_agent  # noqa: F401 — 注册先于校验
 
         cfg = ModelClientConfig(
-            client_provider="ICBC",
+            client_provider="CustomSSE",
             api_key="t",
-            api_base="http://icbc/svc.htm",
+            api_base="https://llm-gateway.example.com/v1/chat/completions",
             verify_ssl=False,
         )
         # validate_client_provider 在 __init__ 后已执行；非内置 provider 通过即说明 registry 命中
-        assert cfg.client_provider == "ICBC"
+        assert cfg.client_provider == "CustomSSE"
 
-    def test_icbc_provider_not_registered_raises_before_import(self) -> None:
-        """未注册 ICBC 时 ModelClientConfig 校验拒绝（验证 registry 时序必要性）。
+    def test_custom_sse_provider_not_registered_raises_before_import(self) -> None:
+        """未注册 CustomSSE 时 ModelClientConfig 校验拒绝（验证 registry 时序必要性）。
 
-        通过临时反注册 ICBC，验证 validate_client_provider 会拒绝未知 provider。
+        通过临时反注册 CustomSSE，验证 validate_client_provider 会拒绝未知 provider。
         """
         from openjiuwen.core.common.exception.errors import ValidationError
 
         import evo_agent  # noqa: F401
 
-        # 反注册 ICBC
-        get_client_registry().unregister("ICBC", "llm")
-        assert "llm_ICBC" not in get_client_registry().list_clients()
+        # 反注册 CustomSSE
+        get_client_registry().unregister("CustomSSE", "llm")
+        assert "llm_CustomSSE" not in get_client_registry().list_clients()
         try:
             with pytest.raises(ValidationError):
                 ModelClientConfig(
-                    client_provider="ICBC",
+                    client_provider="CustomSSE",
                     api_key="t",
-                    api_base="http://icbc/svc.htm",
+                    api_base="https://llm-gateway.example.com/v1/chat/completions",
                     verify_ssl=False,
                 )
         finally:
             # 恢复注册（重新 import 模块触发 __init_subclass__ 已注册过，但反注册后需重注）
-            # 重新 import icbc_model_client 模块不会重定义类；显式重注：
-            from evo_agent.llm.icbc_model_client import ICBCModelClient
+            # 重新 import custom_sse_model_client 模块不会重定义类；显式重注：
+            from evo_agent.llm.custom_sse_model_client import CustomSSEModelClient
 
-            if "llm_ICBC" not in get_client_registry().list_clients():
-                get_client_registry().register_class(ICBCModelClient)
-            assert "llm_ICBC" in get_client_registry().list_clients()
+            if "llm_CustomSSE" not in get_client_registry().list_clients():
+                get_client_registry().register_class(CustomSSEModelClient)
+            assert "llm_CustomSSE" in get_client_registry().list_clients()
 
     @pytest.mark.asyncio
     async def test_end_to_end_via_create_model_client(self, httpx_mock) -> None:
@@ -105,7 +105,7 @@ class TestICBCRegistry:
 
         import evo_agent  # noqa: F401
 
-        endpoint = "http://mock-icbc/e2e/chat/completions"
+        endpoint = "https://llm-gateway.example.com/v1/chat/completions"
         chunk = json.dumps({"choices": [{"index": 0, "delta": {"content": "e2e-answer"}}]})
         httpx_mock.add_response(
             url=endpoint,
@@ -113,13 +113,13 @@ class TestICBCRegistry:
         )
         client = create_model_client(
             ModelClientConfig(
-                client_provider="ICBC",
+                client_provider="CustomSSE",
                 api_key="e2e-token",
                 api_base=endpoint,
                 user_id="e2e-user",
                 verify_ssl=False,
             ),
-            ModelRequestConfig(model_name="icbc-deepseek"),
+            ModelRequestConfig(model_name="example-model"),
         )
         from openjiuwen.core.foundation.llm.schema.message import UserMessage
 

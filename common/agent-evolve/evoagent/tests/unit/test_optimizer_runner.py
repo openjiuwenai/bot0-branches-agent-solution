@@ -1124,13 +1124,18 @@ async def test_runner_hyperparams_injected_to_dependencies(
 
 
 class TestBuildContextModelClientConfig:
-    """_build_model_client_config 按 llm_provider 分派 OpenAI/ICBC。"""
+    """_build_model_client_config 按 llm_provider 分派 OpenAI/CustomSSE。"""
 
     def test_openai_default_returns_openai_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """默认 OpenAI → client_provider=='OpenAI'，行为不回归。"""
         from evo_agent.optimizer_runner import _build_model_client_config
 
-        for k in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+        for k in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(k, raising=False)
         config = EvolveConfig(
             _env_file=None,
@@ -1142,56 +1147,71 @@ class TestBuildContextModelClientConfig:
         assert cfg.api_key == "sk-xxx"
         assert cfg.api_base == "https://api.openai.com/v1"
 
-    def test_icbc_returns_icbc_config_with_credential_mapping(
+    def test_custom_sse_returns_custom_sse_config_with_credential_mapping(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """ICBC → client_provider=='ICBC'，凭证映射 token→api_key 等。"""
+        """CustomSSE → client_provider=='CustomSSE'，凭证映射 token→api_key 等。"""
         from evo_agent.optimizer_runner import _build_model_client_config
 
-        for k in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+        for k in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(k, raising=False)
         config = EvolveConfig(
             _env_file=None,
-            llm_provider="ICBC",
-            icbc_token="the-token",
-            icbc_user_id="the-user",
-            icbc_endpoint="http://icbc/svc.htm",
-            icbc_context_window_tokens=32768,
+            llm_provider="CustomSSE",
+            custom_sse_token="the-token",
+            custom_sse_user_id="the-user",
+            custom_sse_endpoint="https://llm-gateway.example.com/v1/chat/completions",
+            custom_sse_context_window_tokens=32768,
         )
         cfg = _build_model_client_config(config)
-        assert cfg.client_provider == "ICBC"
+        assert cfg.client_provider == "CustomSSE"
         assert cfg.api_key == "the-token"
-        assert cfg.api_base == "http://icbc/svc.htm"
+        assert cfg.api_base == "https://llm-gateway.example.com/v1/chat/completions"
         assert getattr(cfg, "user_id") == "the-user"
-        # ICBC 内网 http，verify_ssl=False（_validate_config 不要求 ssl_cert）
+        # 自定义 SSE http，verify_ssl=False（_validate_config 不要求 ssl_cert）
         assert cfg.verify_ssl is False
 
     def test_evaluator_and_optimizer_share_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """同一 config 产出同一 provider（评估器与优化器路径不割裂）。"""
         from evo_agent.optimizer_runner import _build_model_client_config
 
-        for k in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+        for k in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(k, raising=False)
         config = EvolveConfig(
             _env_file=None,
-            llm_provider="ICBC",
-            icbc_token="t",
-            icbc_user_id="u",
-            icbc_endpoint="http://icbc/svc.htm",
-            icbc_context_window_tokens=32768,
+            llm_provider="CustomSSE",
+            custom_sse_token="t",
+            custom_sse_user_id="u",
+            custom_sse_endpoint="https://llm-gateway.example.com/v1/chat/completions",
+            custom_sse_context_window_tokens=32768,
         )
         # helper 是纯函数；评估器与优化器两条路径调同一 helper → provider 一致
         cfg1 = _build_model_client_config(config)
         cfg2 = _build_model_client_config(config)
-        assert cfg1.client_provider == cfg2.client_provider == "ICBC"
+        assert cfg1.client_provider == cfg2.client_provider == "CustomSSE"
 
-    def test_openai_path_does_not_require_icbc_fields(
+    def test_openai_path_does_not_require_custom_sse_fields(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """OpenAI 路径 ICBC 字段全空也能构造（不回归）。"""
+        """OpenAI 路径 CustomSSE 字段全空也能构造（不回归）。"""
         from evo_agent.optimizer_runner import _build_model_client_config
 
-        for k in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+        for k in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(k, raising=False)
         config = EvolveConfig(_env_file=None, llm_provider="OpenAI", llm_api_key="sk")
         cfg = _build_model_client_config(config)

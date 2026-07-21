@@ -1,12 +1,12 @@
-"""ICBC provider 端到端集成单测（T5） — mock SSE 端点，走完整链路。
+"""CustomSSE provider 端到端集成单测（T5） — mock SSE 端点，走完整链路。
 
 链路：EvolveConfig → _build_model_client_config → create_model_client →
-ICBCModelClient → mock SSE 流 → invoke → AssistantMessage。
+CustomSSEModelClient → mock SSE 流 → invoke → AssistantMessage。
 
 覆盖：
-- ICBC 完整链路 mock SSE 跑通 → AssistantMessage(content="hello")
+- CustomSSE 完整链路 mock SSE 跑通 → AssistantMessage(content="hello")
 - OpenAI 路径同样跑通（默认 config → OpenAI client，mock 不触网）
-- ICBC 流内 error → ICBCRequestError
+- CustomSSE 流内 error → SSERequestError
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from openjiuwen.core.foundation.llm.model_clients.openai_model_client import Ope
 from openjiuwen.core.foundation.llm.schema.config import ModelRequestConfig
 from openjiuwen.core.foundation.llm.schema.message import UserMessage
 
-import evo_agent  # noqa: F401 — 触发 registry 注册 llm_ICBC
+import evo_agent  # noqa: F401 — 触发 registry 注册 llm_CustomSSE
 from evo_agent.config import EvolveConfig
-from evo_agent.llm.icbc_model_client import ICBCModelClient, ICBCRequestError
+from evo_agent.llm.custom_sse_model_client import CustomSSEModelClient, SSERequestError
 from evo_agent.optimizer_runner import _build_model_client_config
 
 
@@ -40,15 +40,15 @@ def _chunk(content: str = "") -> str:
     )
 
 
-def _icbc_config() -> EvolveConfig:
+def _custom_sse_config() -> EvolveConfig:
     return EvolveConfig(
         _env_file=None,
-        llm_provider="ICBC",
-        icbc_token="icbc-jwt",
-        icbc_user_id="icbc-user",
-        icbc_endpoint="http://mock-icbc/mlpmodelservice/aigc/chat/completions",
-        icbc_context_window_tokens=32768,
-        optimizer_model="icbc-deepseek",
+        llm_provider="CustomSSE",
+        custom_sse_token="test-token",
+        custom_sse_user_id="test-user",
+        custom_sse_endpoint="https://llm-gateway.example.com/v1/chat/completions",
+        custom_sse_context_window_tokens=32768,
+        optimizer_model="example-model",
     )
 
 
@@ -62,40 +62,59 @@ def _openai_config() -> EvolveConfig:
     )
 
 
-class TestICBCIntegration:
+class TestCustomSSEIntegration:
+    def test_custom_sse_provider_constructs_custom_sse_client(self) -> None:
+        """CustomSSE 配置通过公共 registry 构造自定义 SSE client。"""
+        config = EvolveConfig(
+            _env_file=None,
+            llm_provider="CustomSSE",
+            custom_sse_token="test-token",
+            custom_sse_user_id="test-user",
+            custom_sse_endpoint="https://llm-gateway.example.com/v1/chat/completions",
+            custom_sse_context_window_tokens=32768,
+            optimizer_model="example-model",
+        )
+
+        client = create_model_client(
+            _build_model_client_config(config),
+            ModelRequestConfig(model_name=config.optimizer_model),
+        )
+
+        assert isinstance(client, CustomSSEModelClient)
+
     @pytest.mark.asyncio
-    async def test_icbc_full_chain_invoke(self, httpx_mock) -> None:
-        """ICBC: config → helper → create_model_client → invoke → AssistantMessage。"""
-        endpoint = "http://mock-icbc/mlpmodelservice/aigc/chat/completions"
+    async def test_custom_sse_full_chain_invoke(self, httpx_mock) -> None:
+        """CustomSSE: config → helper → create_model_client → invoke → AssistantMessage。"""
+        endpoint = "https://llm-gateway.example.com/v1/chat/completions"
         httpx_mock.add_response(
             url=endpoint,
             content=_sse(_chunk("hello")),
         )
-        config = _icbc_config()
+        config = _custom_sse_config()
 
         client = create_model_client(
             _build_model_client_config(config),
             ModelRequestConfig(model_name=config.optimizer_model),
         )
-        assert isinstance(client, ICBCModelClient)
+        assert isinstance(client, CustomSSEModelClient)
         msg = await client.invoke([UserMessage(content="hi")])
         assert msg.content == "hello"
 
     @pytest.mark.asyncio
-    async def test_icbc_full_chain_chunk_error_raises(self, httpx_mock) -> None:
-        """ICBC 完整链路：流内 error chunk → ICBCRequestError。"""
-        endpoint = "http://mock-icbc/mlpmodelservice/aigc/chat/completions"
+    async def test_custom_sse_full_chain_chunk_error_raises(self, httpx_mock) -> None:
+        """CustomSSE 完整链路：流内 error chunk → SSERequestError。"""
+        endpoint = "https://llm-gateway.example.com/v1/chat/completions"
         httpx_mock.add_response(
             url=endpoint,
             content=_sse(json.dumps({"error": "internal error"})),
         )
-        config = _icbc_config()
+        config = _custom_sse_config()
 
         client = create_model_client(
             _build_model_client_config(config),
             ModelRequestConfig(model_name=config.optimizer_model),
         )
-        with pytest.raises(ICBCRequestError):
+        with pytest.raises(SSERequestError):
             await client.invoke([UserMessage(content="hi")])
 
     @pytest.mark.asyncio
@@ -129,11 +148,11 @@ class TestICBCIntegration:
     def test_helper_and_create_model_client_provider_consistent(self) -> None:
         """helper 产出的 config 喂给 create_model_client，provider 类型一致。"""
 
-        icbc = create_model_client(
-            _build_model_client_config(_icbc_config()),
-            ModelRequestConfig(model_name="icbc-deepseek"),
+        custom_sse = create_model_client(
+            _build_model_client_config(_custom_sse_config()),
+            ModelRequestConfig(model_name="example-model"),
         )
-        assert isinstance(icbc, ICBCModelClient)
+        assert isinstance(custom_sse, CustomSSEModelClient)
 
         openai = create_model_client(
             _build_model_client_config(_openai_config()),

@@ -134,12 +134,12 @@ def _build_model_configs(
     """构建 ``(ModelRequestConfig, ModelClientConfig)``。
 
     ``llm_config`` 非空时用请求体配置；为 ``None`` 时 fallback 读 ``EvolveConfig``
-    （``evoagent/.env`` 的 ``EVO_LLM_*``；ICBC 模式读 ``EVO_ICBC_*``）。
-    ``import evo_agent.llm`` 触发 ICBC provider 注册（幂等）。
+    （``evoagent/.env`` 的 ``EVO_LLM_*``；CustomSSE 模式读 ``EVO_CUSTOM_SSE_*``）。
+    ``import evo_agent.llm`` 触发 CustomSSE provider 注册（幂等）。
     """
     from openjiuwen.core.foundation.llm import ModelClientConfig, ModelRequestConfig
 
-    import evo_agent.llm  # noqa: F401 — 注册 ICBC provider（幂等）
+    import evo_agent.llm  # noqa: F401 — 注册 CustomSSE provider（幂等）
 
     if llm_config is not None:
         client_config = ModelClientConfig(
@@ -157,16 +157,16 @@ def _build_model_configs(
             model_config.extra_body = llm_config.extra_body
         return model_config, client_config
 
-    # fallback：读 EvolveConfig（evoagent/.env）。ICBC 模式走内网凭证，否则 OpenAI 兼容。
+    # fallback：读 EvolveConfig（evoagent/.env）。CustomSSE 模式走端点凭证，否则 OpenAI 兼容。
     cfg = EvolveConfig.get()
-    if cfg.llm_provider == "ICBC":
+    if cfg.llm_provider == "CustomSSE":
         client_config = ModelClientConfig(
-            client_provider="ICBC",
-            api_key=cfg.icbc_token,
-            api_base=cfg.icbc_endpoint,
-            user_id=cfg.icbc_user_id,
+            client_provider="CustomSSE",
+            api_key=cfg.custom_sse_token,
+            api_base=cfg.custom_sse_endpoint,
+            user_id=cfg.custom_sse_user_id,
             verify_ssl=False,
-            timeout=cfg.icbc_timeout,
+            timeout=cfg.custom_sse_timeout,
         )
     else:
         client_config = ModelClientConfig(
