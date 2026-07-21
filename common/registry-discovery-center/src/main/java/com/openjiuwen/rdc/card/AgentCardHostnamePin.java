@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.net.Socket;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Objects;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLEngine;
@@ -25,7 +26,8 @@ import javax.net.ssl.X509TrustManager;
  */
 final class AgentCardHostnamePin {
     private static final ThreadLocal<String> EXPECTED_HOSTNAME = new ThreadLocal<>();
-    private static final HostnameVerifier DEFAULT_HOSTNAME_VERIFIER = loadDefaultHostnameVerifier();
+    private static final HostnameVerifier HOSTNAME_VERIFIER = resolveHostnameVerifier();
+    private static final X509Certificate[] NO_ISSUERS = new X509Certificate[0];
 
     private AgentCardHostnamePin() {
     }
@@ -39,105 +41,131 @@ final class AgentCardHostnamePin {
     }
 
     static TrustManager[] wrap(TrustManager[] managers) {
-        TrustManager[] wrapped = new TrustManager[managers.length];
-        for (int i = 0; i < managers.length; i++) {
-            TrustManager manager = managers[i];
-            if (manager instanceof X509ExtendedTrustManager extended) {
-                wrapped[i] = new PinningTrustManager(extended);
-            } else if (manager instanceof X509TrustManager plain) {
-                wrapped[i] = new PinningTrustManager(plain);
-            } else {
-                wrapped[i] = manager;
-            }
+        Objects.requireNonNull(managers, "managers");
+        TrustManager[] out = new TrustManager[managers.length];
+        for (int index = 0; index < managers.length; index++) {
+            TrustManager current = managers[index];
+            out[index] = current instanceof X509TrustManager x509
+                    ? new HostPinnedTrust(x509)
+                    : current;
         }
-        return wrapped;
+        return out;
     }
 
-    private static HostnameVerifier loadDefaultHostnameVerifier() {
-        for (String className : new String[] {
+    private static HostnameVerifier resolveHostnameVerifier() {
+        for (String typeName : new String[] {
                 "java.net.HttpsURLConnection",
                 "javax.net.ssl.HttpsURLConnection"
         }) {
             try {
-                Class<?> type = Class.forName(className);
-                Method method = type.getMethod("getDefaultHostnameVerifier");
-                Object verifier = method.invoke(null);
-                if (verifier instanceof HostnameVerifier hostnameVerifier) {
-                    return hostnameVerifier;
+                Method getter = Class.forName(typeName).getMethod("getDefaultHostnameVerifier");
+                Object value = getter.invoke(null);
+                if (value instanceof HostnameVerifier verifier) {
+                    return verifier;
                 }
             } catch (ReflectiveOperationException ignored) {
-                // try next location (JDK builds differ on the declaring package)
+                // try alternate JDK package
             }
         }
         return (hostname, session) -> false;
     }
 
-    private static final class PinningTrustManager extends X509ExtendedTrustManager {
-        private final X509TrustManager delegate;
-        private final X509ExtendedTrustManager extendedDelegate;
+    /**
+     * Trusts the peer via the configured PKIX manager, then verifies the leaf
+     * against {@link #EXPECTED_HOSTNAME} (not against the connect IP).
+     */
+    private static final class HostPinnedTrust extends X509ExtendedTrustManager {
+        private final X509TrustManager backend;
 
-        PinningTrustManager(X509TrustManager delegate) {
-            this.delegate = delegate;
-            this.extendedDelegate = delegate instanceof X509ExtendedTrustManager ext ? ext : null;
+        HostPinnedTrust(X509TrustManager backend) {
+            this.backend = Objects.requireNonNull(backend, "backend");
         }
 
         @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            delegate.checkClientTrusted(chain, authType);
+        public X509Certificate[] getAcceptedIssuers() {
+            X509Certificate[] issuers = backend.getAcceptedIssuers();
+            return issuers == null ? NO_ISSUERS : issuers;
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-            delegate.checkServerTrusted(chain, authType);
+        public void checkClientTrusted(X509Certificate[] chain, String authType)
+                throws CertificateException {
+            backend.checkClientTrusted(requireChain(chain), authType);
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType)
+                throws CertificateException {
+            backend.checkServerTrusted(requireChain(chain), authType);
         }
 
         @Override
         public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket)
                 throws CertificateException {
-            if (extendedDelegate != null) {
-                extendedDelegate.checkClientTrusted(chain, authType, socket);
-            } else {
-                delegate.checkClientTrusted(chain, authType);
-            }
-        }
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket)
-                throws CertificateException {
-            // Two-arg path skips JSSE endpoint-ID against the IP literal; we verify the pinned host.
-            delegate.checkServerTrusted(chain, authType);
-            if (socket instanceof SSLSocket sslSocket) {
-                verifyHostname(sslSocket.getHandshakeSession() != null
-                        ? sslSocket.getHandshakeSession()
-                        : sslSocket.getSession());
-            }
+            trustClient(requireChain(chain), authType, socket);
         }
 
         @Override
         public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine)
                 throws CertificateException {
-            if (extendedDelegate != null) {
-                extendedDelegate.checkClientTrusted(chain, authType, engine);
-            } else {
-                delegate.checkClientTrusted(chain, authType);
-            }
+            trustClient(requireChain(chain), authType, engine);
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket)
+                throws CertificateException {
+            // Skip JSSE endpoint-ID against the IP literal; pin to ThreadLocal hostname.
+            backend.checkServerTrusted(requireChain(chain), authType);
+            assertExpectedHostname(handshakeSession(socket));
         }
 
         @Override
         public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine)
                 throws CertificateException {
-            delegate.checkServerTrusted(chain, authType);
-            verifyHostname(engine.getHandshakeSession() != null
-                    ? engine.getHandshakeSession()
-                    : engine.getSession());
+            backend.checkServerTrusted(requireChain(chain), authType);
+            assertExpectedHostname(handshakeSession(engine));
         }
 
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-            return delegate.getAcceptedIssuers();
+        private void trustClient(X509Certificate[] chain, String authType, Object connection)
+                throws CertificateException {
+            if (backend instanceof X509ExtendedTrustManager extended) {
+                if (connection instanceof Socket socket) {
+                    extended.checkClientTrusted(chain, authType, socket);
+                    return;
+                }
+                if (connection instanceof SSLEngine engine) {
+                    extended.checkClientTrusted(chain, authType, engine);
+                    return;
+                }
+            }
+            backend.checkClientTrusted(chain, authType);
         }
 
-        private static void verifyHostname(SSLSession session) throws CertificateException {
+        private static X509Certificate[] requireChain(X509Certificate[] chain)
+                throws CertificateException {
+            if (chain == null || chain.length == 0) {
+                throw new CertificateException("empty certificate chain");
+            }
+            return chain;
+        }
+
+        private static SSLSession handshakeSession(Socket socket) {
+            if (!(socket instanceof SSLSocket sslSocket)) {
+                return null;
+            }
+            SSLSession handshake = sslSocket.getHandshakeSession();
+            return handshake != null ? handshake : sslSocket.getSession();
+        }
+
+        private static SSLSession handshakeSession(SSLEngine engine) {
+            if (engine == null) {
+                return null;
+            }
+            SSLSession handshake = engine.getHandshakeSession();
+            return handshake != null ? handshake : engine.getSession();
+        }
+
+        private static void assertExpectedHostname(SSLSession session) throws CertificateException {
             if (session == null) {
                 throw new CertificateException("missing SSL session for hostname verification");
             }
@@ -148,7 +176,7 @@ final class AgentCardHostnamePin {
             if (expected == null || expected.isBlank()) {
                 throw new CertificateException("missing expected hostname for Agent Card TLS");
             }
-            if (!DEFAULT_HOSTNAME_VERIFIER.verify(expected, session)) {
+            if (!HOSTNAME_VERIFIER.verify(expected, session)) {
                 throw new CertificateException("hostname verification failed for " + expected);
             }
         }
