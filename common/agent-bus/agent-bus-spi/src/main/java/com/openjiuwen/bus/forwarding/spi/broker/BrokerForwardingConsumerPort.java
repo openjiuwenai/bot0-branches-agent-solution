@@ -4,8 +4,8 @@
 
 package com.openjiuwen.bus.forwarding.spi.broker;
 
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 
 import java.util.Optional;
 
@@ -16,13 +16,14 @@ import java.util.Optional;
  *
  * <p><b>Subscribe lifecycle (D4/D5).</b> {@link #subscribe} registers this
  * consumer's group ({@code consumerServiceId} — the broker consumer-group),
- * the route to consume (resolved to a topic by the adapter's
- * {@code ForwardingEndpointResolver}, never unwrapped — HD4), and the
- * {@link DeliveryFilter} (broker-agnostic named-property criteria — D3). The
- * broker consumer object lives entirely inside the adapter; callers never touch
- * {@code org.apache.rocketmq}. A real adapter may be called multiple times to
- * accumulate subscriptions across routes (one consumer-group, multiple topics);
- * {@link #poll} then returns the next message matching any subscribed filter.
+ * the event type whose topic to consume (resolved to a topic by the adapter's
+ * {@code BrokerTopicResolver}, event-type-driven and decoupled from the opaque
+ * routeHandle — Option B), and the {@link DeliveryFilter} (broker-agnostic
+ * named-property criteria — D3). The broker consumer object lives entirely
+ * inside the adapter; callers never touch {@code org.apache.rocketmq}. A real
+ * adapter may be called multiple times to accumulate subscriptions across event
+ * types (one consumer-group, multiple topics); {@link #poll} then returns the
+ * next message matching any subscribed filter.
  *
  * <p><b>Poll (param-less — D4).</b> {@link #poll} takes only the poll instant:
  * the consumer's group, route, and filter were fixed at subscribe time. The
@@ -54,15 +55,17 @@ import java.util.Optional;
 // scope: forwarding transport.broker — receiver SPI; subscribe-once + param-less poll (model B, at-least-once)
 public interface BrokerForwardingConsumerPort {
     /**
-     * Register this consumer's group, route, and delivery filter. Called once at
+     * Register this consumer's group, event type, and delivery filter. Called once at
      * startup (before any {@link #poll}); a real adapter may be called multiple
-     * times to accumulate subscriptions across routes on the one consumer-group.
+     * times to accumulate subscriptions across event types on the one consumer-group.
+     * The event type determines the topic via the adapter's {@code BrokerTopicResolver}
+     * (event-type-driven; the opaque {@code routeHandle} is not read for topic — Option B).
      *
      * @param consumerServiceId the broker consumer-group identifier (inbox dedup key)
-     * @param route             the opaque route handle (adapter resolves to a topic; HD4)
+     * @param eventType         the event type whose topic to consume (adapter derives the topic)
      * @param filter            the broker-agnostic named-property criteria (D3)
      */
-    void subscribe(String consumerServiceId, ForwardingRouteHandle route, DeliveryFilter filter);
+    void subscribe(String consumerServiceId, AgentBusEventType eventType, DeliveryFilter filter);
 
     /**
      * Poll the next uncommitted inbound message matching the subscribed filter.

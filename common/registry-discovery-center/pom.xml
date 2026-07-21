@@ -314,6 +314,14 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <!-- Publish the plain (library) jar as the main artifact so sibling modules can depend on
+               registry-discovery-center and see com.openjiuwen.rdc.* on the compile classpath
+               (FEAT-013/014 §7.5 Option A: agent-bus-relay test-scope dep on this module). The
+               executable fat jar is published with the 'exec' classifier; the plain jar remains the
+               main artifact. No source/interface change — build-packaging only. -->
+          <classifier>exec</classifier>
+        </configuration>
       </plugin>
     </plugins>
   </build>

@@ -6,12 +6,12 @@ package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
-import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerClientProperties;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -97,14 +97,14 @@ public class EventBusRelayConfiguration {
 
     @Bean(name = "forwardRelayConsumer", destroyMethod = "close")
     BrokerForwardingConsumerPort forwardRelayConsumer(BrokerClientProperties broker, AgentBusBrokerProperties props) {
-        return new RocketMqBrokerForwardingConsumer(new BrokerTopicResolver("req"),
+        return new RocketMqBrokerForwardingConsumer(new DefaultBrokerTopicResolver(), "req",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(broker.nameserverEndpoints()),
                 props.pollWaitMillis());
     }
 
     @Bean(name = "forwardRelayProducer")
     BrokerForwardingRelayPort forwardRelayProducer(DefaultMQProducer relayProducer) {
-        return new RocketMqBrokerForwardingRelay(new BrokerTopicResolver("deliver"),
+        return new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "deliver",
                 RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
     }
 
@@ -120,14 +120,14 @@ public class EventBusRelayConfiguration {
 
     @Bean(name = "responseRelayConsumer", destroyMethod = "close")
     BrokerForwardingConsumerPort responseRelayConsumer(BrokerClientProperties broker, AgentBusBrokerProperties props) {
-        return new RocketMqBrokerForwardingConsumer(new BrokerTopicResolver("resp_in"),
+        return new RocketMqBrokerForwardingConsumer(new DefaultBrokerTopicResolver(), "resp_in",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(broker.nameserverEndpoints()),
                 props.pollWaitMillis());
     }
 
     @Bean(name = "responseRelayProducer")
     BrokerForwardingRelayPort responseRelayProducer(DefaultMQProducer relayProducer) {
-        return new RocketMqBrokerForwardingRelay(new BrokerTopicResolver("resp_out"),
+        return new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_out",
                 RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
     }
 
@@ -187,12 +187,14 @@ public class EventBusRelayConfiguration {
                 String eventBus = props.eventBusServiceId();
                 String tenant = props.tenant();
                 DeliveryFilter tenantFilter = new DeliveryFilter(Map.of("tenantId", tenant));
-                // routes "invocation" + "a2a" → BrokerTopicResolver resolves to the right hop-in topic.
-                forwardConsumer.subscribe(eventBus, new ForwardingRouteHandle("invocation", tenant), tenantFilter);
-                forwardConsumer.subscribe(eventBus, new ForwardingRouteHandle("a2a", tenant), tenantFilter);
+                // event types "invocation" + "a2a" families → DefaultBrokerTopicResolver resolves each
+                // to its hop-in topic (ascend_bus_<family>_req / _resp_in). A representative request
+                // / response event type per family carries the family into the resolver.
+                forwardConsumer.subscribe(eventBus, AgentBusEventType.CLIENT_INVOCATION_REQUESTED, tenantFilter);
+                forwardConsumer.subscribe(eventBus, AgentBusEventType.A2A_CALL_REQUESTED, tenantFilter);
                 responseConsumer.subscribe(eventBus + "-resp",
-                        new ForwardingRouteHandle("invocation", tenant), tenantFilter);
-                responseConsumer.subscribe(eventBus + "-resp", new ForwardingRouteHandle("a2a", tenant), tenantFilter);
+                        AgentBusEventType.INVOCATION_RESPONSE, tenantFilter);
+                responseConsumer.subscribe(eventBus + "-resp", AgentBusEventType.A2A_CALL_RESPONSE, tenantFilter);
                 log.info("SUBSCRIBE forward relay: consumerGroup={} "
                         + "topics=[ascend_bus_invocation_req, ascend_bus_a2a_req] "
                         + "filter=tenantId={}", eventBus, tenant);

@@ -4,7 +4,7 @@
 
 package com.openjiuwen.bus.forwarding.spi.broker;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 
 /**
@@ -12,12 +12,14 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
  * T4 hybrid).
  *
  * <p>The relay worker claims a {@link ForwardingOutboxRecord} from the outbox and
- * calls {@link #produce} to publish it. The implementation resolves the opaque
- * {@code routeHandle} to a broker topic via the injected
- * {@link ForwardingEndpointResolver} (HD4 preserved — the adapter never reads
- * {@code routeHandle.value()}), wraps the record into a
+ * calls {@link #produce} to publish it. The implementation derives the broker
+ * topic from the record's {@link com.openjiuwen.bus.forwarding.spi.AgentBusEventType
+ * eventType} via the injected {@link BrokerTopicResolver} (event-type-driven,
+ * decoupled from the opaque {@code routeHandle} — Option B; the adapter never
+ * reads {@code routeHandle.value()} for the topic), wraps the record into a
  * {@link BrokerOutboundMessage} (routing descriptor body + routing metadata
- * headers + conditional payloadRef), and publishes to the broker.
+ * headers + conditional payloadRef), and publishes to the broker. The opaque
+ * {@code routeHandle} rides the record end-to-end as a passthrough field.
  *
  * <p><b>Not a {@code ForwardingDeliveryPort}.</b> {@link #produce} returns a
  * {@link BrokerProduceOutcome}, not a terminal {@code ForwardingDeliveryResult}:
@@ -44,8 +46,9 @@ public interface BrokerForwardingRelayPort {
      *
      * @param record the claimed outbox record (non-null; the adapter reads only its
      *               routing metadata — tenantId / messageId / sourceServiceId /
-     *               targetServiceId / payloadRef — and resolves routeHandle via
-     *               {@link ForwardingEndpointResolver}, never unwrapping it)
+     *               targetServiceId / payloadRef / eventType — and derives the topic
+     *               via {@link BrokerTopicResolver} from the eventType, never
+     *               unwrapping the opaque routeHandle)
      * @param nowMillisEpoch the produce instant (for adapter-internal sequencing / observability)
      * @return the produce outcome (ACCEPTED / UNAVAILABLE / ROUTE_NOT_FOUND); never
      *         a terminal delivery result

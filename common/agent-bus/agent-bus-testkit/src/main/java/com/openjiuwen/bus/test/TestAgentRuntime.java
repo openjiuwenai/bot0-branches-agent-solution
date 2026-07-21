@@ -107,11 +107,11 @@ public final class TestAgentRuntime {
         this.tenantId = requireNonBlank(tenantId, "tenantId");
         // Subscribe this runtime's consumer once at construction: receive only REQUEST events
         // targeted at this runtime (targetServiceId == consumerServiceId), within its tenant.
-        // The route is a placeholder — the in-memory double scans every topic; a real adapter
-        // (decision §7) resolves the route to the request topic(s) and may accumulate multi-route.
+        // The event type is a placeholder — the in-memory double scans every topic; a real adapter
+        // (decision §7) resolves the event type to the request topic(s) and may accumulate multi-subscriptions.
         this.consumer = broker.consumerFor(consumerServiceId);
         this.consumer.subscribe(consumerServiceId,
-                new ForwardingRouteHandle("runtime-" + consumerServiceId, tenantId),
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
                 DeliveryFilter.forRuntime(tenantId, consumerServiceId));
     }
 

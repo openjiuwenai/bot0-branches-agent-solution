@@ -4,10 +4,9 @@
 
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -32,11 +31,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * packet agent-bus-broker-filtering-spi-completion §7 slice 2).
  *
  * <p>Subscribes a {@code DefaultLitePullConsumer} (group={@code consumerServiceId},
- * topic=resolver(route), filter={@code MessageSelector.bySql(sql92Expression(filter))}) and polls
- * param-less, committing per-message (model B ack-after-consume). The broker-agnostic
+ * topic=resolver(eventType, suffix), filter={@code MessageSelector.bySql(sql92Expression(filter))})
+ * and polls param-less, committing per-message (model B ack-after-consume). The broker-agnostic
  * {@link DeliveryFilter} (D3) is translated to a RocketMQ SQL92 expression HERE — the SPI layer
  * never sees SQL (bySql confined to the adapter, mirroring how {@link RocketMqBrokerForwardingRelay}
- * owns the produce-side mapping).
+ * owns the produce-side mapping). The topic is derived from the event type via the injected
+ * {@link BrokerTopicResolver} (event-type-driven, decoupled from the opaque routeHandle — Option B).
  *
  * <p><b>Testability seam.</b> {@link MessagePollerFactory} (+ {@link MessagePoller}) isolate the
  * {@code DefaultLitePullConsumer} lifecycle so unit tests inject a fake (no live broker) — the same
@@ -58,16 +58,18 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 // scope: forwarding transport.broker — concrete RocketMQ consumer adapter (SPI-licensed, ArchUnit-confined)
 public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingConsumerPort {
-    private final ForwardingEndpointResolver resolver;
+    private final BrokerTopicResolver resolver;
+    private final String suffix;
     private final MessagePollerFactory factory;
     private final long pollWaitMillis;
     private MessagePoller poller;                  // lazily created at first subscribe (group-bound)
     private String consumerServiceId;              // the consumer-group (set at subscribe)
     private final Map<String, MessageExt> inFlight = new ConcurrentHashMap<>(); // tenantId|messageId → ext
 
-    public RocketMqBrokerForwardingConsumer(ForwardingEndpointResolver resolver,
+    public RocketMqBrokerForwardingConsumer(BrokerTopicResolver resolver, String suffix,
                                             MessagePollerFactory factory, long pollWaitMillis) {
         this.resolver = Objects.requireNonNull(resolver, "resolver is required");
+        this.suffix = requireSuffix(suffix);
         this.factory = Objects.requireNonNull(factory, "factory is required");
         this.pollWaitMillis = pollWaitMillis;
     }
@@ -138,14 +140,15 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * {@inheritDoc}
      *
      * <p>Lazily creates the poller on the first call (group={@code consumerServiceId}); subsequent
-     * calls accumulate routes on the one consumer-group (RocketMQ multi-subscribe). The route is
-     * resolved to a topic by the injected {@link ForwardingEndpointResolver} (HD4 — never unwrapped
-     * here); the filter is translated to SQL92 by {@link #sql92Expression} (D3).
+     * calls accumulate subscriptions on the one consumer-group (RocketMQ multi-subscribe). The
+     * event type is resolved to a topic by the injected {@link BrokerTopicResolver}
+     * (event-type-driven — the opaque routeHandle is never read here); the filter is translated
+     * to SQL92 by {@link #sql92Expression} (D3).
      */
     @Override
-    public void subscribe(String consumerServiceId, ForwardingRouteHandle route, DeliveryFilter filter) {
+    public void subscribe(String consumerServiceId, AgentBusEventType eventType, DeliveryFilter filter) {
         Objects.requireNonNull(consumerServiceId, "consumerServiceId is required");
-        Objects.requireNonNull(route, "route is required");
+        Objects.requireNonNull(eventType, "eventType is required");
         Objects.requireNonNull(filter, "filter is required");
         if (poller == null) {
             // §3 lazy registration: the DefaultLitePullConsumer is group-bound and the group arrives at
@@ -153,17 +156,16 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
             poller = factory.pollerFor(consumerServiceId);
             this.consumerServiceId = consumerServiceId;
         } else {
-            // multi-subscribe accumulates routes on the one consumer-group; a different group on the
+            // multi-subscribe accumulates subscriptions on the one consumer-group; a different group on the
             // same instance is a wiring error (the consumer-group is fixed at first subscribe).
             if (!this.consumerServiceId.equals(consumerServiceId)) {
                 throw new IllegalArgumentException(
                         "consumerServiceId '" + consumerServiceId + "' does not match this consumer ('"
                                 + this.consumerServiceId + "')");
             }
-            // same consumer-group — multi-subscribe accumulates routes on the one consumer (fall-through).
+            // same consumer-group — multi-subscribe accumulates subscriptions on the one consumer (fall-through).
         }
-        String topic = resolver.resolve(route)
-                .orElseThrow(() -> new IllegalStateException("unresolvable route: " + route.value()));
+        String topic = resolver.resolveTopic(eventType, suffix);
         poller.subscribe(topic, sql92Expression(filter));
     }
 
@@ -224,6 +226,20 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      */
     private static String inFlightKey(BrokerInboundMessage m) {
         return m.tenantId() + "|" + m.messageId();
+    }
+
+    /**
+     * Validate the hop suffix (non-null, non-blank) for the constructor.
+     *
+     * @param suffix the hop suffix ({@code req} / {@code deliver} / {@code resp_in} / {@code resp_out})
+     * @return the validated suffix
+     */
+    private static String requireSuffix(String suffix) {
+        Objects.requireNonNull(suffix, "suffix is required");
+        if (suffix.isBlank()) {
+            throw new IllegalArgumentException("suffix must not be blank");
+        }
+        return suffix;
     }
 
     /**

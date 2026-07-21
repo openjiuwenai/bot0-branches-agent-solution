@@ -5,13 +5,14 @@
 package com.openjiuwen.bus.gateway.runtime;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxClaimPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.spi.ingress.IngressGateway;
+import com.openjiuwen.rdc.service.AgentDiscoveryService;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.SmartLifecycle;
@@ -65,13 +66,33 @@ import java.util.Map;
 @Configuration
 @Profile("gateway")
 public class GatewayRuntimeConfiguration {
+    /**
+     * Test-scope discovery service (FEAT-013/014 §7.5 Option A). Returns a
+     * {@link FakeAgentDiscoveryService} pre-registered with a default ONLINE card so the manual
+     * E2E ({@code TempClientMain}) and any gateway-profile context boot can resolve a target
+     * without a live registry. The next-batch gateway production module replaces this with a
+     * {@code registry-discovery-center}-backed {@link AgentDiscoveryService}. The fake is mutable
+     * — a manual E2E may inject and register additional cards before dispatch.
+     *
+     * @param props the agent-bus broker properties (carries the tenant + service ids)
+     * @return a fake discovery service with one default ONLINE card
+     */
+    @Bean
+    AgentDiscoveryService agentDiscoveryService(AgentBusBrokerProperties props) {
+        return new FakeAgentDiscoveryService()
+                .register("agent-runtime", props.eventBusServiceId() + "-runtime",
+                        "v2:default-route-handle", "a2a", 100, "ONLINE", "v1");
+    }
+
     @Bean
     IngressGateway gatewayRuntimeService(ForwardingOutboxPort outbox,
                                          ForwardingOutboxClaimPort outboxClaim,
                                          @Qualifier("requestRelay") BrokerForwardingRelayPort relay,
                                          @Qualifier("responseConsumer") BrokerForwardingConsumerPort responseConsumer,
+                                         AgentDiscoveryService discovery,
                                          AgentBusBrokerProperties props) {
         return new GatewayRuntimeService(outbox, outboxClaim, relay, responseConsumer,
+                discovery,
                 props.gatewayServiceId(), props.acceptTimeoutMs(), props.responseTimeoutMs(),
                 System::currentTimeMillis);
     }
@@ -87,7 +108,7 @@ public class GatewayRuntimeConfiguration {
      *
      * <p>Unchanged by gateway-assembly-purify: this bean already took only SPI types
      * ({@link BrokerForwardingConsumerPort} + {@link DeliveryFilter} +
-     * {@link ForwardingRouteHandle}); it now receives the adapter-provided
+     * {@link AgentBusEventType}); it now receives the adapter-provided
      * {@code responseConsumer} bean (de-gateway-ified from the prior
      * {@code gatewayResponseConsumer} name) instead of a gateway-constructed one.
      *
@@ -106,10 +127,10 @@ public class GatewayRuntimeConfiguration {
             public synchronized void start() {
                 String gateway = props.gatewayServiceId();
                 DeliveryFilter filter = new DeliveryFilter(Map.of("targetServiceId", gateway));
-                // routes "invocation" + "a2a" → BrokerTopicResolver("resp_out") resolves to
-                // ascend_bus_invocation_resp_out / ascend_bus_a2a_resp_out.
-                responseConsumer.subscribe(gateway, new ForwardingRouteHandle("invocation", gateway), filter);
-                responseConsumer.subscribe(gateway, new ForwardingRouteHandle("a2a", gateway), filter);
+                // event types "invocation" + "a2a" response families → DefaultBrokerTopicResolver + "resp_out"
+                // resolves to ascend_bus_invocation_resp_out / ascend_bus_a2a_resp_out.
+                responseConsumer.subscribe(gateway, AgentBusEventType.INVOCATION_RESPONSE, filter);
+                responseConsumer.subscribe(gateway, AgentBusEventType.A2A_CALL_RESPONSE, filter);
                 started = true;
             }
 

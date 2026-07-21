@@ -20,6 +20,8 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 import com.openjiuwen.bus.spi.ingress.IngressGateway;
 import com.openjiuwen.bus.spi.ingress.IngressResponse;
+import com.openjiuwen.rdc.model.AgentCardDto;
+import com.openjiuwen.rdc.service.AgentDiscoveryService;
 
 import java.util.List;
 import java.util.Map;
@@ -71,6 +73,16 @@ import java.util.function.LongSupplier;
  * (token-streaming) are NOT in S2 — this class is the {@link IngressGateway} impl
  * with {@link #dispatchRequest} + {@link #acceptWindow} exposed as testable sub-methods.
  *
+ * <p><b>Discovery path (FEAT-013/014 registry-discovery-center integration, §7.5 Option A).</b>
+ * This test-scope class is a <b>reference implementation for the next-batch gateway production
+ * module</b>: it injects {@link AgentDiscoveryService} and resolves the target via
+ * {@code searchByServiceId} / {@code searchInstancesByAgentId} / {@code searchByCapability},
+ * selecting a candidate by weight / health, then stamps the discovered opaque {@code routeHandle}
+ * + {@code serviceId} onto the envelope. The opaque {@code routeHandle} rides the envelope
+ * end-to-end (T4 pub/sub passthrough) and is unwrapped only by the gateway's T1 SSE bridge
+ * (deferred). agent-bus main stays zero-dependency on registry-discovery-center — the
+ * {@link AgentDiscoveryService} dependency is test-scope only.
+ *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md §4.2 / §4.3 / §4.6 / §6}.
  *
@@ -85,19 +97,22 @@ public final class GatewayRuntimeService implements IngressGateway {
     private final ForwardingOutboxClaimPort claimPort;
     private final BrokerForwardingRelayPort relay;
     private final BrokerForwardingConsumerPort responseConsumer;
+    private final AgentDiscoveryService discovery;
     private final String sourceServiceId;
     private final long acceptTimeoutMs;
     private final long responseTimeoutMs;
     private final LongSupplier clock;
 
     /**
-     * Construct the gateway runtime with its outbox / relay / response-consumer substrate and the
-     * accept / response window timeouts.
+     * Construct the gateway runtime with its outbox / relay / response-consumer substrate, the
+     * discovery service (test-scope reference impl — §7.5 Option A), and the accept / response
+     * window timeouts.
      *
      * @param outbox             the gateway's durable outbox (enqueue + ack)
      * @param claimPort          the gateway's claim / lease port
      * @param relay              the broker relay (produce the request onto the broker)
      * @param responseConsumer   the broker consumer (poll responses off the broker)
+     * @param discovery          the registry discovery service (resolves the target + opaque routeHandle)
      * @param sourceServiceId    the gateway's service id (envelope sourceServiceId + claim leaseOwner)
      * @param acceptTimeoutMs    accept window: no accepted/rejected/failed within → UNKNOWN (deferred)
      * @param responseTimeoutMs  post-accepted window: no terminal within → ACCEPTED_WITH_TASK
@@ -107,6 +122,7 @@ public final class GatewayRuntimeService implements IngressGateway {
                                  ForwardingOutboxClaimPort claimPort,
                                  BrokerForwardingRelayPort relay,
                                  BrokerForwardingConsumerPort responseConsumer,
+                                 AgentDiscoveryService discovery,
                                  String sourceServiceId,
                                  long acceptTimeoutMs,
                                  long responseTimeoutMs,
@@ -115,6 +131,7 @@ public final class GatewayRuntimeService implements IngressGateway {
         this.claimPort = Objects.requireNonNull(claimPort, "claimPort is required");
         this.relay = Objects.requireNonNull(relay, "relay is required");
         this.responseConsumer = Objects.requireNonNull(responseConsumer, "responseConsumer is required");
+        this.discovery = Objects.requireNonNull(discovery, "discovery is required");
         this.sourceServiceId = requireNonBlank(sourceServiceId, "sourceServiceId");
         if (acceptTimeoutMs < 0) {
             throw new IllegalArgumentException("acceptTimeoutMs must be >= 0");
@@ -148,9 +165,12 @@ public final class GatewayRuntimeService implements IngressGateway {
     public ForwardingEnvelope dispatchRequest(IngressEnvelope env) {
         Objects.requireNonNull(env, "env is required");
         long now = clock.getAsLong();
-        ForwardingRouteHandle routeHandle = resolveRouteHandle(env);
-        AgentBusEventType eventType = mapEventType(env.requestType(), routeHandle.value());
-        String targetServiceId = resolveTargetServiceId(env);
+        // Discovery path (§7.5 Option A): resolve the target via AgentDiscoveryService — the opaque
+        // routeHandle + targetServiceId come from the selected AgentCardDto (not requestAttributes).
+        DiscoveredTarget target = resolveTarget(env);
+        ForwardingRouteHandle routeHandle = target.routeHandle();
+        AgentBusEventType eventType = mapEventType(env.requestType(), target.routeFamily());
+        String targetServiceId = target.serviceId();
         String capability = resolveCapability(env);
         long deadline = env.deadlineMillisEpoch() != null ? env.deadlineMillisEpoch() : Long.MAX_VALUE;
         String correlationId = env.requestId().toString();
@@ -364,13 +384,13 @@ public final class GatewayRuntimeService implements IngressGateway {
         };
     }
 
-    private static AgentBusEventType mapEventType(IngressEnvelope.IngressRequestType requestType, String routeHandle) {
-        // routeHandle 同时决定 topic(ascend_bus_<route>_*)与事件族:
-        //   invocation 路由 → CLIENT_INVOCATION_* 族(FEAT-013,client → gateway → event-bus → runtime);
-        //   a2a      路由 → A2A_CALL_* / A2A_STREAM_* 族(FEAT-014,runtime → runtime)。
+    private static AgentBusEventType mapEventType(IngressEnvelope.IngressRequestType requestType, String routeFamily) {
+        // routeFamily 决定事件族(topic 由 DefaultBrokerTopicResolver 按 eventType 派生,与 routeHandle 解耦):
+        //   invocation 族 → CLIENT_INVOCATION_* (FEAT-013,client → gateway → event-bus → runtime);
+        //   a2a      族 → A2A_CALL_* / A2A_STREAM_* (FEAT-014,runtime → runtime)。
         // TempRuntimeMain 按收到的 eventType 镜像响应族,relay 透传 eventType,gateway classify 两族都认,
-        // 故只需在此按 routeHandle 切换请求事件族,整条 A2A 链路即可在 in-repo E2E 跑通。
-        boolean a2a = "a2a".equals(routeHandle);
+        // 故只需在此按 routeFamily 切换请求事件族,整条 A2A 链路即可在 in-repo E2E 跑通。
+        boolean a2a = "a2a".equals(routeFamily);
         return switch (requestType) {
             case RUN_CREATE -> a2a
                     ? AgentBusEventType.A2A_CALL_REQUESTED
@@ -387,34 +407,88 @@ public final class GatewayRuntimeService implements IngressGateway {
         };
     }
 
-    private static ForwardingRouteHandle resolveRouteHandle(IngressEnvelope env) {
-        String value = requireStringAttribute(env.requestAttributes(), "routeHandle");
-        return new ForwardingRouteHandle(value, env.tenantId());
+    /**
+     * Resolve the forwarding target via {@link AgentDiscoveryService} (§7.5 Option A reference impl).
+     * Picks the discovery dimension present on the request attributes ({@code serviceId} →
+     * {@code agentId} → {@code capability}), queries the registry, selects a candidate by weight /
+     * health, and returns the discovered opaque {@code routeHandle} + {@code serviceId} + the
+     * request's {@code routeFamily}.
+     *
+     * @param env the ingress request envelope
+     * @return the discovered target (opaque routeHandle + serviceId + routeFamily)
+     */
+    private DiscoveredTarget resolveTarget(IngressEnvelope env) {
+        String tenantId = env.tenantId();
+        String routeFamily = resolveRouteFamily(env);
+        List<AgentCardDto> candidates = discoverCandidates(env, tenantId);
+        if (candidates.isEmpty()) {
+            throw new IllegalStateException("discovery found no candidate for tenant=" + tenantId
+                    + " (no matching serviceId/agentId/capability)");
+        }
+        AgentCardDto selected = selectCandidate(candidates);
+        return new DiscoveredTarget(
+                new ForwardingRouteHandle(selected.getRouteHandle(), tenantId),
+                selected.getServiceId(),
+                routeFamily);
     }
 
-    private static String resolveTargetServiceId(IngressEnvelope env) {
-        return requireStringAttribute(env.requestAttributes(), "targetServiceId");
+    private List<AgentCardDto> discoverCandidates(IngressEnvelope env, String tenantId) {
+        String serviceId = stringAttr(env, "serviceId");
+        String agentId = stringAttr(env, "agentId");
+        String capability = stringAttr(env, "capability");
+        // prefer the most specific dimension (serviceId), then agentId, then capability (default a2a)
+        if (serviceId != null) {
+            return discovery.searchByServiceId(tenantId, serviceId, null);
+        }
+        if (agentId != null) {
+            return discovery.searchInstancesByAgentId(tenantId, agentId, null);
+        }
+        String cap = capability != null ? capability : "a2a";
+        return discovery.searchByCapability(tenantId, cap, null);
+    }
+
+    private static AgentCardDto selectCandidate(List<AgentCardDto> candidates) {
+        // the registry pre-sorts weight DESC, last_heartbeat DESC; prefer the first ONLINE candidate,
+        // falling back to the head of the list (DEGRADED/DRAINING) when none is ONLINE.
+        for (AgentCardDto c : candidates) {
+            if ("ONLINE".equals(c.getHealth())) {
+                return c;
+            }
+        }
+        return candidates.get(0);
+    }
+
+    private static String resolveRouteFamily(IngressEnvelope env) {
+        String routeFamily = stringAttr(env, "routeFamily");
+        if (routeFamily == null) {
+            return "invocation"; // FEAT-013 client invocation is the default family
+        }
+        if (!"invocation".equals(routeFamily) && !"a2a".equals(routeFamily)) {
+            throw new IllegalArgumentException(
+                    "requestAttributes 'routeFamily' must be 'invocation' or 'a2a'");
+        }
+        return routeFamily;
     }
 
     private static String resolveCapability(IngressEnvelope env) {
-        Object v = env.requestAttributes().get("capability");
+        String capability = stringAttr(env, "capability");
+        return capability != null ? capability : "a2a"; // default capability when omitted
+    }
+
+    private static String stringAttr(IngressEnvelope env, String key) {
+        Object v = env.requestAttributes().get(key);
         if (v == null) {
-            return "a2a"; // default capability when omitted
+            return null;
         }
         if (!(v instanceof String s) || s.isBlank()) {
             throw new IllegalArgumentException(
-                    "requestAttributes 'capability' must be a non-blank String");
+                    "requestAttributes '" + key + "' must be a non-blank String when present");
         }
         return s;
     }
 
-    private static String requireStringAttribute(Map<String, Object> attrs, String key) {
-        Object v = attrs.get(key);
-        if (!(v instanceof String s) || s.isBlank()) {
-            throw new IllegalArgumentException(
-                    "requestAttributes must carry a non-blank String '" + key + "'");
-        }
-        return s;
+    /** Resolved forwarding target: the discovered opaque routeHandle + serviceId + the request's routeFamily. */
+    private record DiscoveredTarget(ForwardingRouteHandle routeHandle, String serviceId, String routeFamily) {
     }
 
     private static String reasonFrom(BrokerInboundMessage m, InvocationResponseStatus status) {

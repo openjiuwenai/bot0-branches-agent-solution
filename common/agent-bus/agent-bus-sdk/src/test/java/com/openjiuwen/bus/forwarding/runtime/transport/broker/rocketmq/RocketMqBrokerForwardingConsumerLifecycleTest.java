@@ -7,11 +7,9 @@ package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
-import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 
@@ -42,24 +40,24 @@ import java.util.Queue;
  */
 class RocketMqBrokerForwardingConsumerLifecycleTest {
     private static final String TENANT = "tenant-a";
-    private static final String ROUTE = "route-for-tenant-a";
     private static final String SOURCE = "source-svc";
     private static final String TARGET = "target-svc";
+    private static final String SUFFIX = "req";
 
     @Test
     void subscribe_wires_resolver_topic_sql92_filter_lazy_poller() {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-from-resolver"), factory, 1_000L);
+                resolver("topic-from-resolver"), SUFFIX, factory, 1_000L);
 
-        consumer.subscribe("consumer-a", routeHandle(ROUTE),
+        consumer.subscribe("consumer-a", AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
                 DeliveryFilter.forRuntime(TENANT, TARGET));
 
         // §3 lazy registration: the poller (DefaultLitePullConsumer, group=consumerServiceId) is
         // created at subscribe, not construction.
         assertThat(factory.createdGroups).containsExactly("consumer-a");
         RecordingPoller poller = factory.lastPoller();
-        // HD4: the route is resolved to a topic via the injected resolver (never routeHandle.value()).
+        // Option B: the topic is derived from the event type via the injected resolver.
         assertThat(poller.subscribedTopics).containsExactly("topic-from-resolver");
         // D3: the filter is translated to SQL92 HERE; the prod poller wraps it in MessageSelector.bySql.
         assertThat(poller.subscribedSqls).containsExactly(
@@ -68,18 +66,21 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     }
 
     @Test
-    void subscribe_accumulates_a_second_route_on_the_same_poller() {
+    void subscribe_accumulates_a_second_event_type_on_the_same_poller() {
         RecordingFactory factory = new RecordingFactory();
-        String routeOther = "route-other";
+        // a resolver that maps the invocation family → "topic-a" and the a2a family → "topic-b"
+        BrokerTopicResolver resolver = (et, suffix) ->
+                et.name().startsWith("A2A_") ? "topic-b" : "topic-a";
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                new MapEndpointResolver(Map.of(ROUTE, "topic-a", routeOther, "topic-b")),
-                factory, 1_000L);
+                resolver, SUFFIX, factory, 1_000L);
 
-        consumer.subscribe("consumer-a", routeHandle(ROUTE), DeliveryFilter.forRuntime(TENANT, TARGET));
-        consumer.subscribe("consumer-a", routeHandle(routeOther), DeliveryFilter.forRuntime(TENANT, "other-svc"));
+        consumer.subscribe("consumer-a", AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                DeliveryFilter.forRuntime(TENANT, TARGET));
+        consumer.subscribe("consumer-a", AgentBusEventType.A2A_CALL_REQUESTED,
+                DeliveryFilter.forRuntime(TENANT, "other-svc"));
 
-        // lazy: the poller is created ONCE (one consumer-group); the second subscribe accumulates a route
-        // (RocketMQ multi-subscribe on the one consumer-group).
+        // lazy: the poller is created ONCE (one consumer-group); the second subscribe accumulates a
+        // subscription (RocketMQ multi-subscribe on the one consumer-group).
         assertThat(factory.createdGroups).containsExactly("consumer-a");
         assertThat(factory.lastPoller().subscribedTopics).containsExactly("topic-a", "topic-b");
         assertThat(factory.lastPoller().subscribedSqls).hasSize(2);
@@ -89,8 +90,9 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     void poll_maps_polled_msg_ext_to_inbound_with_consumer_service_id() {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), factory, 1_000L);
-        consumer.subscribe("consumer-a", routeHandle(ROUTE), DeliveryFilter.forRuntime(TENANT, TARGET));
+                resolver("topic-x"), SUFFIX, factory, 1_000L);
+        consumer.subscribe("consumer-a", AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                DeliveryFilter.forRuntime(TENANT, TARGET));
         factory.lastPoller().enqueue(
                 messageExt("msg-1", "ref-1", "corr-1", "CLIENT_INVOCATION_REQUESTED"));
 
@@ -117,7 +119,7 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     @Test
     void poll_before_subscribe_throws() {
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), new RecordingFactory(), 1_000L);
+                resolver("topic-x"), SUFFIX, new RecordingFactory(), 1_000L);
 
         assertThatThrownBy(() -> consumer.poll(2_000L))
                 .isInstanceOf(IllegalStateException.class)
@@ -128,8 +130,9 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     void commit_delegates_to_poller_with_the_polled_ext_and_is_idempotent() {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), factory, 1_000L);
-        consumer.subscribe("consumer-a", routeHandle(ROUTE), DeliveryFilter.forRuntime(TENANT, TARGET));
+                resolver("topic-x"), SUFFIX, factory, 1_000L);
+        consumer.subscribe("consumer-a", AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                DeliveryFilter.forRuntime(TENANT, TARGET));
         RecordingPoller poller = factory.lastPoller();
         poller.enqueue(messageExt("msg-1", null, null, null));
         BrokerInboundMessage m = consumer.poll(2_000L).orElseThrow();
@@ -148,8 +151,9 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     void reject_delegates_to_poller_with_code_without_committing() {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), factory, 1_000L);
-        consumer.subscribe("consumer-a", routeHandle(ROUTE), DeliveryFilter.forRuntime(TENANT, TARGET));
+                resolver("topic-x"), SUFFIX, factory, 1_000L);
+        consumer.subscribe("consumer-a", AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                DeliveryFilter.forRuntime(TENANT, TARGET));
         RecordingPoller poller = factory.lastPoller();
         poller.enqueue(messageExt("msg-1", null, null, null));
         BrokerInboundMessage m = consumer.poll(2_000L).orElseThrow();
@@ -167,8 +171,9 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     void close_delegates_to_poller() {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), factory, 1_000L);
-        consumer.subscribe("consumer-a", routeHandle(ROUTE), DeliveryFilter.forRuntime(TENANT, TARGET));
+                resolver("topic-x"), SUFFIX, factory, 1_000L);
+        consumer.subscribe("consumer-a", AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                DeliveryFilter.forRuntime(TENANT, TARGET));
         RecordingPoller poller = factory.lastPoller();
 
         consumer.close();
@@ -179,7 +184,7 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     @Test
     void close_before_subscribe_is_null_safe() {
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), new RecordingFactory(), 1_000L);
+                resolver("topic-x"), SUFFIX, new RecordingFactory(), 1_000L);
         // no subscribe → the poller is null; close must not NPE (idempotent, null-safe per §3 close).
         consumer.close();
     }
@@ -187,30 +192,28 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     @Test
     void supports_broker_side_property_filter_is_true() {
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), new RecordingFactory(), 1_000L);
+                resolver("topic-x"), SUFFIX, new RecordingFactory(), 1_000L);
         // RocketMQ SQL92 filters broker-side (D8) — the receiver only ever receives filter-matching messages.
         assertThat(consumer.supportsBrokerSidePropertyFilter()).isTrue();
     }
 
-    private static ForwardingEndpointResolver resolver(String routeValue, String topic) {
-        return new MapEndpointResolver(Map.of(routeValue, topic));
-    }
-
-    private static ForwardingRouteHandle routeHandle(String routeValue) {
-        return new ForwardingRouteHandle(routeValue, TENANT);
+    /** A resolver that always returns the given topic (ignores eventType / suffix) — for controlled-topic tests. */
+    private static BrokerTopicResolver resolver(String topic) {
+        return (et, suffix) -> topic;
     }
 
     /**
-     * Wire a consumer subscribed as {@code group} on ROUTE→"topic-x" with a recording factory.
+     * Wire a consumer subscribed as {@code group} on a fixed topic with a recording factory.
      *
      * @param group the consumer group id to subscribe under
-     * @return a wired consumer subscribed on ROUTE with a recording factory
+     * @return a wired consumer subscribed with a recording factory
      */
     private static RocketMqBrokerForwardingConsumer consumerWith(String group) {
         RecordingFactory factory = new RecordingFactory();
         RocketMqBrokerForwardingConsumer consumer = new RocketMqBrokerForwardingConsumer(
-                resolver(ROUTE, "topic-x"), factory, 1_000L);
-        consumer.subscribe(group, routeHandle(ROUTE), DeliveryFilter.forRuntime(TENANT, TARGET));
+                resolver("topic-x"), SUFFIX, factory, 1_000L);
+        consumer.subscribe(group, AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                DeliveryFilter.forRuntime(TENANT, TARGET));
         return consumer;
     }
 

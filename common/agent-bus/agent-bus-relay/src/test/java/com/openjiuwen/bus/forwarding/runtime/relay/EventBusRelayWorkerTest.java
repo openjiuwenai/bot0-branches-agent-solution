@@ -12,7 +12,6 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
@@ -52,7 +51,7 @@ class EventBusRelayWorkerTest {
         final List<Map.Entry<BrokerInboundMessage, ForwardingFailureCode>> rejected = new ArrayList<>();
 
         @Override
-        public void subscribe(String consumerServiceId, ForwardingRouteHandle route,
+        public void subscribe(String consumerServiceId, AgentBusEventType eventType,
                 DeliveryFilter filter) {
             // no-op: inline fake does not track subscriptions
         }

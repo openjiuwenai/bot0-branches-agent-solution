@@ -4,10 +4,9 @@
 
 package com.openjiuwen.bus.test;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -93,7 +92,7 @@ import java.util.concurrent.atomic.AtomicLong;
 // non-production - E2E verification runtime double (mirrors G5-E IT TempRuntime)
 public final class TempRuntimeMain {
     private static final Logger log = LoggerFactory.getLogger(TempRuntimeMain.class);
-    private static final String TOPIC_PREFIX = BrokerTopicResolver.TOPIC_PREFIX; // "ascend_bus_"
+    private static final String TOPIC_PREFIX = DefaultBrokerTopicResolver.TOPIC_PREFIX; // "ascend_bus_"
     private static final long DEFAULT_POLL_WAIT_MS = 3_000L;
 
     private final String nameserver;
@@ -131,11 +130,12 @@ public final class TempRuntimeMain {
 
         // consumer: subscribe to hop2 deliver topic (ascend_bus_<route>_deliver)
         this.consumer = new RocketMqBrokerForwardingConsumer(
-                new BrokerTopicResolver("deliver"),
+                new DefaultBrokerTopicResolver(), "deliver",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver),
                 this.pollWaitMillis);
-        // producer: produce to resp_in topic (ascend_bus_<route>_resp_in)
-        this.respInTopic = TOPIC_PREFIX + route + "_resp_in";
+        // producer: produce to resp_in topic (ascend_bus_<route>_resp_in) — derived via the resolver
+        // so the resp_in topic tracks the event family (invocation|a2a) the same way the consumer does.
+        this.respInTopic = new DefaultBrokerTopicResolver().resolveTopic(representativeRequestEventType(), "resp_in");
         this.producer = new DefaultMQProducer(producerGroupResolved);
         this.producer.setNamesrvAddr(nameserver);
     }
@@ -183,7 +183,7 @@ public final class TempRuntimeMain {
         // (tenantId + targetServiceId) is the strict per-runtime filter (D2/D10) - only
         // messages targeted at THIS runtime are delivered broker-side.
         DeliveryFilter filter = DeliveryFilter.forRuntime(tenant, runtimeServiceId);
-        consumer.subscribe(consumerGroup, new ForwardingRouteHandle(route, tenant), filter);
+        consumer.subscribe(consumerGroup, representativeRequestEventType(), filter);
         log("Consumer subscribed: group=" + consumerGroup + " route=" + route
                 + " filter=" + filter.requiredProperties());
 
@@ -366,6 +366,21 @@ public final class TempRuntimeMain {
                     "streamRef=stream://stub");
             default -> log("WARN: no stub handler for eventType=" + eventType);
         }
+    }
+
+    /**
+     * Map the CLI {@code --route} flag to the representative request eventType used to derive the
+     * resp_in topic and select the subscribe eventType: {@code invocation} →
+     * {@link AgentBusEventType#CLIENT_INVOCATION_REQUESTED}, {@code a2a} →
+     * {@link AgentBusEventType#A2A_CALL_REQUESTED}. The {@code routeHandle} itself stays an opaque
+     * passthrough value; this mapping only selects the event family for broker topic derivation.
+     *
+     * @return the representative request eventType for the configured route family
+     */
+    private AgentBusEventType representativeRequestEventType() {
+        return "a2a".equals(route)
+                ? AgentBusEventType.A2A_CALL_REQUESTED
+                : AgentBusEventType.CLIENT_INVOCATION_REQUESTED;
     }
 
     private boolean isRequestType(AgentBusEventType t) {

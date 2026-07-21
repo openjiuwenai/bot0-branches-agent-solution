@@ -41,8 +41,8 @@ import java.util.Set;
  * worker, not a broker-consume→re-publish relay.
  *
  * <p><b>Routing-agnostic and direction-agnostic.</b> The worker produces via the
- * injected {@link BrokerForwardingRelayPort}, whose {@code ForwardingEndpointResolver}
- * is wired per relay role (forward relay → req / deliver topics; response relay →
+ * injected {@link BrokerForwardingRelayPort}, whose {@code BrokerTopicResolver}
+ * (+ hop suffix) is wired per relay role (forward relay → req / deliver topics; response relay →
  * resp_in / resp_out topics). The 8-topic distinctness is a wiring concern (Spring
  * profile configs, slice B), not a worker-logic concern. Which eventTypes the relay
  * re-publishes is likewise configured, not hard-coded: a forward relay is constructed

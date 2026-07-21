@@ -5,7 +5,7 @@
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
-import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerClientProperties;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
@@ -28,12 +28,12 @@ import org.springframework.context.annotation.Configuration;
  *       its OWN {@code relayProducer} (group={@code props.producerGroup() + "-relay"})
  *       because it needs a distinct group for governance traceability;</li>
  *   <li>{@code requestRelay} ({@link RocketMqBrokerForwardingRelay} with
- *       {@code BrokerTopicResolver("req")} → {@code ascend_bus_*_req}) — hop1 request
- *       produce. Used by the gateway AND by any agent-runtime acting as a caller
+ *       {@code DefaultBrokerTopicResolver} + suffix {@code "req"} → {@code ascend_bus_*_req})
+ *       — hop1 request produce. Used by the gateway AND by any agent-runtime acting as a caller
  *       (invoking another agent);</li>
  *   <li>{@code responseConsumer} ({@link RocketMqBrokerForwardingConsumer} with
- *       {@code BrokerTopicResolver("resp_out")} → {@code ascend_bus_*_resp_out}) —
- *       response consume. Used by the gateway AND by any agent-runtime awaiting a
+ *       {@code DefaultBrokerTopicResolver} + suffix {@code "resp_out"} → {@code ascend_bus_*_resp_out})
+ *       — response consume. Used by the gateway AND by any agent-runtime awaiting a
  *       response to its own outbound call.</li>
  * </ul>
  *
@@ -98,7 +98,7 @@ public class RocketMqBrokerClientConfiguration {
 
     /**
      * Hop1 request relay — produces to {@code ascend_bus_*_req} via
-     * {@code BrokerTopicResolver("req")}. Used by the gateway AND by any
+     * {@code DefaultBrokerTopicResolver} + suffix {@code "req"}. Used by the gateway AND by any
      * agent-runtime acting as a caller (invoking another agent).
      *
      * @param defaultProducer the base RocketMQ producer to send hop1 requests
@@ -106,13 +106,13 @@ public class RocketMqBrokerClientConfiguration {
      */
     @Bean(name = "requestRelay")
     BrokerForwardingRelayPort requestRelay(DefaultMQProducer defaultProducer) {
-        return new RocketMqBrokerForwardingRelay(new BrokerTopicResolver("req"),
+        return new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "req",
                 RocketMqBrokerForwardingRelay.defaultSender(defaultProducer));
     }
 
     /**
      * Response consumer — consumes from {@code ascend_bus_*_resp_out} via
-     * {@code BrokerTopicResolver("resp_out")}. Used by the gateway AND by any
+     * {@code DefaultBrokerTopicResolver} + suffix {@code "resp_out"}. Used by the gateway AND by any
      * agent-runtime awaiting a response to its own outbound call.
      *
      * @param broker the broker-neutral connection config (nameserver endpoints)
@@ -121,7 +121,7 @@ public class RocketMqBrokerClientConfiguration {
      */
     @Bean(name = "responseConsumer", destroyMethod = "close")
     BrokerForwardingConsumerPort responseConsumer(BrokerClientProperties broker, AgentBusBrokerProperties props) {
-        return new RocketMqBrokerForwardingConsumer(new BrokerTopicResolver("resp_out"),
+        return new RocketMqBrokerForwardingConsumer(new DefaultBrokerTopicResolver(), "resp_out",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(broker.nameserverEndpoints()),
                 props.pollWaitMillis());
     }

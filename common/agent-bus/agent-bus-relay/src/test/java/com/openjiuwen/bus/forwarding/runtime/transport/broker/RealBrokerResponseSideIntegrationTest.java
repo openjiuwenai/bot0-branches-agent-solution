@@ -6,18 +6,17 @@ package com.openjiuwen.bus.forwarding.runtime.transport.broker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
-import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
+import com.openjiuwen.bus.gateway.runtime.FakeAgentDiscoveryService;
 import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 import com.openjiuwen.bus.spi.ingress.IngressResponse;
@@ -133,22 +132,22 @@ class RealBrokerResponseSideIntegrationTest {
         gatewayProducer.setNamesrvAddr(nameserver);
         gatewayProducer.start();
 
-        ForwardingEndpointResolver respResolver = new MapEndpointResolver(Map.of(
-                TOPIC_INVOCATION_RESP_OUT, TOPIC_INVOCATION_RESP_OUT,
-                TOPIC_A2A_RESP_OUT, TOPIC_A2A_RESP_OUT));
+        DefaultBrokerTopicResolver respResolver = new DefaultBrokerTopicResolver();
         DeliveryFilter respFilter = DeliveryFilter.forRuntime(TENANT, GATEWAY);
 
         // A — the gateway's response consumer (acceptWindow drains this directly; model B commit).
         responseAdapter = new RocketMqBrokerForwardingConsumer(
-                respResolver, RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
-        responseAdapter.subscribe(GROUP_RESP, new ForwardingRouteHandle(TOPIC_INVOCATION_RESP_OUT, TENANT), respFilter);
-        responseAdapter.subscribe(GROUP_RESP, new ForwardingRouteHandle(TOPIC_A2A_RESP_OUT, TENANT), respFilter);
+                respResolver, "resp_out",
+                RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
+        responseAdapter.subscribe(GROUP_RESP, AgentBusEventType.INVOCATION_RESPONSE, respFilter);
+        responseAdapter.subscribe(GROUP_RESP, AgentBusEventType.A2A_CALL_RESPONSE, respFilter);
 
         // V — verifier (different consumer-group → receives every response, independently of A's drain).
         verifyAdapter = new RocketMqBrokerForwardingConsumer(
-                respResolver, RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
-        verifyAdapter.subscribe(GROUP_VERIFY, new ForwardingRouteHandle(TOPIC_INVOCATION_RESP_OUT, TENANT), respFilter);
-        verifyAdapter.subscribe(GROUP_VERIFY, new ForwardingRouteHandle(TOPIC_A2A_RESP_OUT, TENANT), respFilter);
+                respResolver, "resp_out",
+                RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
+        verifyAdapter.subscribe(GROUP_VERIFY, AgentBusEventType.INVOCATION_RESPONSE, respFilter);
+        verifyAdapter.subscribe(GROUP_VERIFY, AgentBusEventType.A2A_CALL_RESPONSE, respFilter);
 
         tempRuntime = new TempRuntime(nameserver);
         tempRuntime.start();
@@ -189,12 +188,14 @@ class RealBrokerResponseSideIntegrationTest {
      */
     private void wireGateway(long acceptTimeoutMs, long responseTimeoutMs) {
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
-        MapEndpointResolver resolver = new MapEndpointResolver(Map.of(
-                ROUTE_INVOCATION, TOPIC_INVOCATION_REQ,
-                ROUTE_A2A, TOPIC_A2A_REQ));
+        DefaultBrokerTopicResolver resolver = new DefaultBrokerTopicResolver();
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver, RocketMqBrokerForwardingRelay.defaultSender(gatewayProducer));
-        gateway = new GatewayRuntimeService(outbox, outbox, relay, responseAdapter,
+                resolver, "req", RocketMqBrokerForwardingRelay.defaultSender(gatewayProducer));
+        // Discovery fake: register the runtime card so dispatchRequest can resolve the target
+        // (serviceId=RUNTIME → routeHandle=ROUTE_INVOCATION, which the test envelopes assert).
+        FakeAgentDiscoveryService discovery = new FakeAgentDiscoveryService()
+                .register("agent-runtime", RUNTIME, ROUTE_INVOCATION, "a2a", 100, "ONLINE", "v1");
+        gateway = new GatewayRuntimeService(outbox, outbox, relay, responseAdapter, discovery,
                 GATEWAY, acceptTimeoutMs, responseTimeoutMs, System::currentTimeMillis);
     }
 
@@ -228,7 +229,7 @@ class RealBrokerResponseSideIntegrationTest {
                 requestId, TENANT, UUID.randomUUID(),
                 IngressEnvelope.IngressRequestType.RUN_CREATE,
                 "payload-body", TRACE, /* deadlineMillisEpoch */ null,
-                Map.of("routeHandle", ROUTE_INVOCATION, "targetServiceId", RUNTIME));
+                Map.of("routeFamily", "invocation", "serviceId", RUNTIME));
     }
 
     /**
@@ -376,7 +377,7 @@ class RealBrokerResponseSideIntegrationTest {
         String corrId = requestId.toString();
         IngressEnvelope env = new IngressEnvelope(requestId, TENANT, idempotencyKey,
                 IngressEnvelope.IngressRequestType.RUN_CREATE, "payload-body", TRACE, null,
-                Map.of("routeHandle", ROUTE_INVOCATION, "targetServiceId", RUNTIME));
+                Map.of("routeFamily", "invocation", "serviceId", RUNTIME));
         gateway.dispatchRequest(env);
         gateway.dispatchRequest(env); // same (tenantId, idempotencyKey) → server-side dedup
         // let the temp runtime consume both + produce responses (cross-machine)
@@ -414,11 +415,11 @@ class RealBrokerResponseSideIntegrationTest {
     @Test
     void d9_bysql_filter_is_enforced_broker_side() throws Exception {
         String nameserver = System.getenv("ROCKETMQ_NAMESERVER");
-        ForwardingEndpointResolver respResolver = new MapEndpointResolver(
-                Map.of(TOPIC_INVOCATION_RESP_OUT, TOPIC_INVOCATION_RESP_OUT));
+        DefaultBrokerTopicResolver respResolver = new DefaultBrokerTopicResolver();
         RocketMqBrokerForwardingConsumer nobody = new RocketMqBrokerForwardingConsumer(
-                respResolver, RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
-        nobody.subscribe("it-nobody", new ForwardingRouteHandle(TOPIC_INVOCATION_RESP_OUT, TENANT),
+                respResolver, "resp_out",
+                RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
+        nobody.subscribe("it-nobody", AgentBusEventType.INVOCATION_RESPONSE,
                 new DeliveryFilter(Map.of("targetServiceId", "nobody")));
         assertThat(nobody.supportsBrokerSidePropertyFilter()).isTrue();
         Thread.sleep(2_000L); // let rebalance settle before producing
@@ -506,10 +507,10 @@ class RealBrokerResponseSideIntegrationTest {
         private ThreadPoolExecutor pollExecutor;
 
         TempRuntime(String nameserver) {
-            ForwardingEndpointResolver reqResolver = new MapEndpointResolver(
-                    Map.of(ROUTE_INVOCATION, TOPIC_INVOCATION_REQ, ROUTE_A2A, TOPIC_A2A_REQ));
+            DefaultBrokerTopicResolver reqResolver = new DefaultBrokerTopicResolver();
             this.consumer = new RocketMqBrokerForwardingConsumer(
-                    reqResolver, RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
+                    reqResolver, "deliver",
+                    RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
             this.producer = new DefaultMQProducer("it-temp-runtime-producer");
             producer.setNamesrvAddr(nameserver);
         }
@@ -522,7 +523,9 @@ class RealBrokerResponseSideIntegrationTest {
 
         void start() throws Exception {
             producer.start();
-            consumer.subscribe(RUNTIME, new ForwardingRouteHandle(ROUTE_INVOCATION, TENANT),
+            consumer.subscribe(RUNTIME, AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                    DeliveryFilter.forRuntime(TENANT, RUNTIME));
+            consumer.subscribe(RUNTIME, AgentBusEventType.A2A_CALL_REQUESTED,
                     DeliveryFilter.forRuntime(TENANT, RUNTIME));
             running = true;
             // Single-thread executor mirroring StdioMcpClient §315 (G.CON.08/12): the daemon thread

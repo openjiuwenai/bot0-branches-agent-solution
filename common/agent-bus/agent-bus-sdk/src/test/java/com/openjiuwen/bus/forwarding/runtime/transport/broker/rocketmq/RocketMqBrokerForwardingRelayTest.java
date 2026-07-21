@@ -7,7 +7,7 @@ package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Unit tests for {@link RocketMqBrokerForwardingRelay} (FEAT-013/014, S3).
@@ -43,6 +42,7 @@ class RocketMqBrokerForwardingRelayTest {
     private static final String ROUTE = "route-for-tenant-a";
     private static final String SOURCE = "source-svc";
     private static final String TARGET = "target-svc";
+    private static final String SUFFIX = "req";
 
     @Test
     void buildMessage_maps_record_to_descriptor_body_and_metadata() {
@@ -91,7 +91,7 @@ class RocketMqBrokerForwardingRelayTest {
     void produce_returns_accepted_when_sender_succeeds() {
         List<Message> sent = new ArrayList<>();
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver("topic-from-resolver"), sent::add);
+                resolver("topic-from-resolver"), SUFFIX, sent::add);
 
         BrokerProduceOutcome outcome = relay.produce(record("msg-1", "ref-1", "corr-1"), 1_000L);
 
@@ -104,11 +104,13 @@ class RocketMqBrokerForwardingRelayTest {
     }
 
     @Test
-    void produce_returns_route_not_found_when_resolver_returns_empty() {
+    void produce_returns_route_not_found_when_record_has_no_event_type() {
+        // Option B: the topic is derived from the record's eventType; a record with no eventType
+        // (a JDBC-loaded back-compat row without the V3 column) cannot yield a topic → ROUTE_NOT_FOUND.
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                new MapEndpointResolver(Map.of()), msg -> {});
+                resolver("topic-x"), SUFFIX, msg -> {});
 
-        BrokerProduceOutcome outcome = relay.produce(record("msg-1", null, null), 1_000L);
+        BrokerProduceOutcome outcome = relay.produce(recordNoEventType("msg-1", null, null), 1_000L);
 
         assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ROUTE_NOT_FOUND);
         assertThat(outcome.failureCode()).isEqualTo(ForwardingFailureCode.ROUTE_NOT_FOUND);
@@ -118,7 +120,7 @@ class RocketMqBrokerForwardingRelayTest {
     @Test
     void produce_returns_unavailable_when_sender_throws() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver("topic-x"), msg -> {
+                resolver("topic-x"), SUFFIX, msg -> {
                     throw new IllegalStateException("broker down");
                 });
 
@@ -132,7 +134,7 @@ class RocketMqBrokerForwardingRelayTest {
     @Test
     void produce_returns_unavailable_on_InterruptedException() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver("topic-x"), msg -> {
+                resolver("topic-x"), SUFFIX, msg -> {
                     throw new InterruptedException();
                 });
 
@@ -146,17 +148,28 @@ class RocketMqBrokerForwardingRelayTest {
     @Test
     void produce_rejects_null_record() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver("topic-x"), msg -> {});
+                resolver("topic-x"), SUFFIX, msg -> {});
         assertThatThrownBy(() -> relay.produce(null, 1_000L))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("record");
     }
 
-    private static MapEndpointResolver resolver(String topic) {
-        return new MapEndpointResolver(Map.of(ROUTE, topic));
+    /** A resolver that always returns the given topic (ignores eventType / suffix) — for controlled-topic tests. */
+    private static BrokerTopicResolver resolver(String topic) {
+        return (et, suffix) -> topic;
     }
 
     private static ForwardingOutboxRecord record(String messageId, String payloadRef, String correlationId) {
+        return record(messageId, payloadRef, correlationId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
+    }
+
+    private static ForwardingOutboxRecord recordNoEventType(String messageId, String payloadRef,
+                                                             String correlationId) {
+        return record(messageId, payloadRef, correlationId, null);
+    }
+
+    private static ForwardingOutboxRecord record(String messageId, String payloadRef, String correlationId,
+                                                 AgentBusEventType eventType) {
         return new ForwardingOutboxRecord(
                 TENANT,
                 new ForwardingMessageId(messageId),
@@ -167,6 +180,6 @@ class RocketMqBrokerForwardingRelayTest {
                 ForwardingStatus.Outbox.PENDING,
                 0, 0L, 0L, 0L, null, null,
                 correlationId,
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
+                eventType);
     }
 }

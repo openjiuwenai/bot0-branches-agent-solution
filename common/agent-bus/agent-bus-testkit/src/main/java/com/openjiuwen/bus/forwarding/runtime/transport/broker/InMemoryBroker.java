@@ -4,10 +4,10 @@
 
 package com.openjiuwen.bus.forwarding.runtime.transport.broker;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.ForwardingEndpointResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
@@ -29,8 +29,9 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Simulates broker semantics in plain JDK, mirroring how
  * {@code InMemoryForwardingOutbox} stands in for the JDBC outbox: the injected
- * {@link ForwardingEndpointResolver} maps the opaque routeHandle to a topic
- * (topic-per-tenant is the resolver's concern, not the broker's), produce appends
+ * {@link BrokerTopicResolver} derives the topic from each record's
+ * {@link AgentBusEventType} (+ hop suffix — Option B, decoupled from the opaque
+ * routeHandle), produce appends
  * a {@link BrokerOutboundMessage} to an in-memory queue (a single ordered
  * partition per topic; a global sequence orders cross-topic poll). Consumers are
  * obtained per consumer-group via {@link #consumerFor(String)} — each is a
@@ -67,7 +68,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 // non-production — test fixture only; real broker adapter is decision §7 / Stage 28
 public final class InMemoryBroker implements BrokerForwardingRelayPort {
-    private final ForwardingEndpointResolver resolver;
+    private final BrokerTopicResolver resolver;
+    private final String suffix;
 
     // topic → append-only queue
     private final Map<String, List<QueueEntry>> queues = new LinkedHashMap<>();
@@ -83,8 +85,9 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
     private final AtomicLong sequence = new AtomicLong();
     private volatile boolean unavailable = false;
 
-    public InMemoryBroker(ForwardingEndpointResolver resolver) {
+    public InMemoryBroker(BrokerTopicResolver resolver, String suffix) {
         this.resolver = Objects.requireNonNull(resolver, "resolver is required");
+        this.suffix = requireSuffix(suffix);
     }
 
     /** A queued broker message; its index in the topic list is the consumer-group offset. */
@@ -171,15 +174,17 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
     @Override
     public synchronized BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
         Objects.requireNonNull(record, "record is required");
-        // HD4: the adapter resolves routeHandle via the injected resolver, never reading routeHandle.value().
-        Optional<String> topic = resolver.resolve(record.routeHandle());
-        if (topic.isEmpty()) {
+        // Option B: derive the topic from the record's eventType via the injected resolver
+        // (event-type-driven; the opaque routeHandle is never read for the topic — HD4 preserved).
+        // A null eventType cannot yield a topic → non-retryable ROUTE_NOT_FOUND.
+        AgentBusEventType eventType = record.eventType();
+        if (eventType == null) {
             return BrokerProduceOutcome.routeNotFound(ForwardingFailureCode.ROUTE_NOT_FOUND);
         }
         if (unavailable) {
             return BrokerProduceOutcome.unavailable(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
         }
-        String t = topic.get();
+        String t = resolver.resolveTopic(eventType, suffix);
         // §6.2②: body is a routing descriptor only — NEVER the payload body / token stream / Task state.
         // payloadRef rides as a header (conditionally), NOT in the descriptor.
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
@@ -203,7 +208,7 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
     /**
      * Per-consumer {@link BrokerForwardingConsumerPort} double backed by the shared
      * {@link InMemoryBroker}'s queues. {@code subscribe} accumulates the consumer's
-     * filters (multi-route, like RocketMQ's multi-subscribe); {@code poll} scans the
+     * filters (multi-subscription, like RocketMQ's multi-subscribe); {@code poll} scans the
      * shared queues for this consumer-group's next uncommitted message matching ANY
      * subscribed filter, picking the globally oldest for deterministic cross-topic
      * ordering. {@code consumerServiceId} is materialised into the in-flight message
@@ -221,12 +226,13 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
         }
 
         @Override
-        public void subscribe(String consumerServiceId, ForwardingRouteHandle route, DeliveryFilter filter) {
+        public void subscribe(String consumerServiceId, AgentBusEventType eventType, DeliveryFilter filter) {
             // the consumer is bound to its consumerServiceId at construction (consumerFor); the param is
-            // the same group the real adapter would set — accept + accumulate the filter. The route is
-            // resolved by the real adapter; this double scans every topic, so the route is informational here.
+            // the same group the real adapter would set — accept + accumulate the filter. The eventType
+            // is resolved to a topic by the real adapter; this double scans every topic, so the eventType
+            // is informational here.
             Objects.requireNonNull(consumerServiceId, "consumerServiceId is required");
-            Objects.requireNonNull(route, "route is required");
+            Objects.requireNonNull(eventType, "eventType is required");
             Objects.requireNonNull(filter, "filter is required");
             if (!this.consumerServiceId.equals(consumerServiceId)) {
                 throw new IllegalArgumentException(
@@ -362,6 +368,14 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
 
     private static String locationKey(String tenantId, String messageId) {
         return tenantId + "|" + messageId;
+    }
+
+    private static String requireSuffix(String suffix) {
+        Objects.requireNonNull(suffix, "suffix is required");
+        if (suffix.isBlank()) {
+            throw new IllegalArgumentException("suffix must not be blank");
+        }
+        return suffix;
     }
 
     private static void requireNonBlank(String value, String name) {

@@ -28,6 +28,15 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- FEAT-013/014 registry-discovery-center integration (§7.5 Option A): test-scope only.
+                 GatewayRuntimeService (test) injects AgentDiscoveryService to demo the discovery path;
+                 agent-bus main stays zero-dependency on registry-discovery-center. -->
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>registry-discovery-center</artifactId>
+            <version>0.1.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
             <scope>test</scope>

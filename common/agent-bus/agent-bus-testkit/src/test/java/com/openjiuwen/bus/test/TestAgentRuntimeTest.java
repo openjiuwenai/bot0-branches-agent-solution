@@ -6,6 +6,7 @@ package com.openjiuwen.bus.test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
@@ -41,7 +42,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void blocking_call_returns_final_response_sequence() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-1", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-1");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
 
@@ -76,7 +77,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void degenerate_to_task_ref_emits_accepted_only() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         runtime.setResponseMode(TestAgentRuntime.ResponseMode.ACCEPTED_ONLY);
         ForwardingEnvelope req = request("req-2", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-2");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
@@ -91,7 +92,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void unknown_then_same_key_retry_returns_same_task_id() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         // first pass: SILENT — runtime creates the task but emits nothing → gateway times out → UNKNOWN
         runtime.setResponseMode(TestAgentRuntime.ResponseMode.SILENT);
         ForwardingEnvelope req = request("req-3", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-3");
@@ -118,7 +119,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void streaming_call_emits_accepted_then_stream_ready() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         runtime.setResponseMode(TestAgentRuntime.ResponseMode.STREAMING);
         ForwardingEnvelope req = request("req-4", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-4");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
@@ -135,7 +136,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void idempotent_duplicate_returns_same_task_id_no_second_logical_call() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-5", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-5");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
         TestAgentRuntime.ProcessingOutcome first = runtime.pollAndProcess(2_000L);
@@ -156,7 +157,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void cancel_request_emits_cancelled_terminal() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-6", AgentBusEventType.CLIENT_INVOCATION_CANCEL_REQUESTED, "idem-6");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
 
@@ -168,7 +169,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void query_request_emits_task_snapshot_response() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-7", AgentBusEventType.CLIENT_INVOCATION_QUERY_REQUESTED, "idem-7");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
 
@@ -180,7 +181,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void stream_subscribe_emits_stream_ready() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-8", AgentBusEventType.CLIENT_STREAM_SUBSCRIBE_REQUESTED, "idem-8");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
 
@@ -192,7 +193,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void a2a_call_requested_emits_accepted_response_terminal() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-9", AgentBusEventType.A2A_CALL_REQUESTED, "idem-9");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
 
@@ -215,7 +216,7 @@ class TestAgentRuntimeTest {
     void descriptor_round_trip_preserves_all_control_fields() {
         // buildRequest encoded the control fields into payloadRef; the runtime decoded them and built
         // responses carrying the SAME correlationId/traceId/idempotencyKey/routeHandle/capability/deadline.
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-rt", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-rt");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
         TestAgentRuntime.ProcessingOutcome out = runtime.pollAndProcess(2_000L);
@@ -231,7 +232,7 @@ class TestAgentRuntimeTest {
 
     @Test
     void idle_when_no_request_pending() {
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         TestAgentRuntime.ProcessingOutcome out = runtime.pollAndProcess(1_000L);
         assertThat(out.outcome()).isEqualTo(TestAgentRuntime.ProcessingOutcome.Outcome.IDLE);
         assertThat(out.responses()).isEmpty();
@@ -241,7 +242,7 @@ class TestAgentRuntimeTest {
     void self_produced_responses_are_skipped_not_reprocessed() {
         // after processing a request, the responses sit on the same topic; the runtime must NOT
         // reprocess them as requests — it commits (skips) them and goes idle.
-        TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
+        TestAgentRuntime runtime = newRuntime();
         TestAgentRuntime.publishRequest(runtime.broker(),
                 request("req-10", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-10"), 1_000L);
         runtime.pollAndProcess(2_000L); // produces 3 responses
@@ -254,9 +255,12 @@ class TestAgentRuntimeTest {
                 .isEqualTo(TestAgentRuntime.ProcessingOutcome.Outcome.IDLE);
     }
 
-    private TestAgentRuntime newRuntime(Function<com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle,
-            Optional<String>> resolver) {
-        InMemoryBroker broker = new InMemoryBroker(resolver::apply);
+    private TestAgentRuntime newRuntime() {
+        // testkit depends on agent-bus-spi only (not agent-bus-sdk), so DefaultBrokerTopicResolver
+        // is not visible here — use a lambda BrokerTopicResolver. The InMemoryBroker double scans
+        // every topic, so the exact topic name is informational (not asserted).
+        BrokerTopicResolver resolver = (eventType, suffix) -> "ascend_bus_test_topic";
+        InMemoryBroker broker = new InMemoryBroker(resolver, "req");
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
         return new TestAgentRuntime(broker, outbox, RUNTIME, TENANT);
     }

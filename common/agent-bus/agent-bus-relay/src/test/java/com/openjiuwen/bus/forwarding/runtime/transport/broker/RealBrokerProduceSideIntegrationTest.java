@@ -6,7 +6,7 @@ package com.openjiuwen.bus.forwarding.runtime.transport.broker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.bus.forwarding.runtime.transport.MapEndpointResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
@@ -21,6 +21,7 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
+import com.openjiuwen.bus.gateway.runtime.FakeAgentDiscoveryService;
 import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 
@@ -144,15 +145,13 @@ class RealBrokerProduceSideIntegrationTest {
     void wireGateway() {
         captured.clear();
         outbox = new InMemoryForwardingOutbox();
-        MapEndpointResolver resolver = new MapEndpointResolver(Map.of(
-                ROUTE_INVOCATION, TOPIC_INVOCATION_REQ,
-                ROUTE_A2A, TOPIC_A2A_REQ));
+        DefaultBrokerTopicResolver resolver = new DefaultBrokerTopicResolver();
         relay = new RocketMqBrokerForwardingRelay(
-                resolver, RocketMqBrokerForwardingRelay.defaultSender(producer));
+                resolver, "req", RocketMqBrokerForwardingRelay.defaultSender(producer));
         // Produce-side tests do not poll responses; a no-op responseConsumer satisfies the ctor.
         BrokerForwardingConsumerPort noopConsumer = new BrokerForwardingConsumerPort() {
             @Override
-            public void subscribe(String consumerServiceId, ForwardingRouteHandle route, DeliveryFilter filter) {
+            public void subscribe(String consumerServiceId, AgentBusEventType eventType, DeliveryFilter filter) {
                 // produce-side IT never polls responses; no-op.
             }
             @Override
@@ -176,7 +175,11 @@ class RealBrokerProduceSideIntegrationTest {
                 return false;
             }
         };
-        gateway = new GatewayRuntimeService(outbox, outbox, relay, noopConsumer,
+        // Discovery fake: register the runtime card so dispatchRequest can resolve the target
+        // (serviceId=RUNTIME → routeHandle=ROUTE_INVOCATION, which UC-2 asserts on the descriptor).
+        FakeAgentDiscoveryService discovery = new FakeAgentDiscoveryService()
+                .register("agent-runtime", RUNTIME, ROUTE_INVOCATION, "a2a", 100, "ONLINE", "v1");
+        gateway = new GatewayRuntimeService(outbox, outbox, relay, noopConsumer, discovery,
                 GATEWAY, 5_000L, 30_000L, System::currentTimeMillis);
     }
 
@@ -194,7 +197,7 @@ class RealBrokerProduceSideIntegrationTest {
                 requestId, TENANT, UUID.randomUUID(),
                 IngressEnvelope.IngressRequestType.RUN_CREATE,
                 "payload-body", TRACE, /* deadlineMillisEpoch */ null,
-                Map.of("routeHandle", ROUTE_INVOCATION, "targetServiceId", RUNTIME));
+                Map.of("routeFamily", "invocation", "serviceId", RUNTIME));
 
         ForwardingEnvelope envelope = gateway.dispatchRequest(env);
 
