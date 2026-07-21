@@ -400,7 +400,7 @@ cp config/.env.example config/.env
     <tr><td>规模</td><td>划分后 <strong>train、val 至少各 1 条</strong> → 物理上最少 <strong>2</strong> 条；完整回归再加大</td></tr>
     <tr><td>路径</td><td>绝对路径，且落在 <code>EVO_ALLOWED_DATA_ROOTS</code> 某根之下</td></tr>
     <tr><td>切分</td><td>API 请求 <code>train_split + val_split = 1.0</code>，且均 &gt; 0</td></tr>
-    <tr><td>评估器</td><td>服务化 API 默认使用 LLM evaluator（依赖 <code>evaluator_template.prompt</code>）；与 CLI + dataset.yaml 的 metric 路径不同，对比分数时注意</td></tr>
+    <tr><td>评估器</td><td>服务化 API 默认 <code>type=metric</code>（默认 <code>exact_match</code>，可配 <code>extract</code>）；语义评估须显式 <code>type=llm</code> + <code>prompt</code>。CLI 则在 <code>dataset.yaml</code> 声明 evaluator</td></tr>
   </table>
 </section>
 
@@ -446,9 +446,10 @@ curl -s http://&lt;agent-host&gt;:&lt;port&gt;/health
       "val_split": 0.5
     },
     "evaluator_template": {
-      "name": "default",
+      "name": "exact",
       "scenario": "tf_grpo",
-      "prompt": "Compare prediction with expected label; return score 1 if match else 0."
+      "type": "metric",
+      "metric": "exact_match"
     }
   }'
 # 期望: {"job_id":"...","status":"queued",...}

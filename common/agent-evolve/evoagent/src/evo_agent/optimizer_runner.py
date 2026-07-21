@@ -590,6 +590,7 @@ async def run_optimization(
                 train_split=resolved.train_split,
                 val_split=resolved.val_split,
                 eval_runtime=eval_runtime,
+                evaluator_config=resolved.evaluator_config,
             )
 
         # 5. 构建 LLM

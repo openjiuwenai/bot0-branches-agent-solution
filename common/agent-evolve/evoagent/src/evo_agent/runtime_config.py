@@ -40,6 +40,7 @@ class ResolvedOptimizationConfig:
     dataset_path: str
     dataset_manifest_path: Path | None
     evaluator_prompt: str
+    evaluator_config: dict[str, Any]
     adapter_url: str
     task_name: str
     train_split: float
@@ -200,6 +201,7 @@ class OptimizationConfigResolver:
             dataset_path=request.dataset_path,
             dataset_manifest_path=request.dataset_manifest_path,
             evaluator_prompt=request.evaluator_prompt,
+            evaluator_config=dict(request.evaluator_config) or {"type": "metric"},
             adapter_url=request.adapter_url or scenario_config.adapter_url or self._env.adapter_url,
             task_name=request.task_name,
             train_split=request.train_split,
