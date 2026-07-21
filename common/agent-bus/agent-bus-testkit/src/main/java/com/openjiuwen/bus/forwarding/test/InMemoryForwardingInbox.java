@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
@@ -83,9 +84,8 @@ public final class InMemoryForwardingInbox implements ForwardingInboxPort {
             store.put(key, new Entry(next, System.currentTimeMillis(), 0L, code));
         } else if (existing.status() == ForwardingStatus.Inbox.RECEIVED) {
             store.put(key, new Entry(next, existing.receivedAt(), existing.consumedAt(), code));
-        } else {
-            // fall-through: already-terminal row left untouched (idempotent)
         }
+        // else: fall-through — already-terminal row left untouched (idempotent).
         return next;
     }
 

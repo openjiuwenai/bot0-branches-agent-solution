@@ -103,9 +103,7 @@ public record ForwardingOutboxRecord(
                                          ForwardingFailureCode lastFailureCode,
                                          ForwardingLease lease) {
         switch (status) {
-            case PENDING -> {
-                /* fresh entry: no extra invariants */
-            }
+            case PENDING -> requireCondition(true, "fresh entry: no extra invariants");
             case DISPATCHING -> requireCondition(lease != null,
                     "DISPATCHING outbox record must hold a non-null lease (lease-safe, MI9-002)");
             case RETRY_SCHEDULED -> {

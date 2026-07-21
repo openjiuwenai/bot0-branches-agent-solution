@@ -58,7 +58,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 // scope: forwarding transport.broker — concrete RocketMQ consumer adapter (SPI-licensed, ArchUnit-confined)
 public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingConsumerPort {
-
     private final ForwardingEndpointResolver resolver;
     private final MessagePollerFactory factory;
     private final long pollWaitMillis;
@@ -81,6 +80,13 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
          * @return a {@link MessagePoller} bound to the consumer-group
          */
         MessagePoller pollerFor(String consumerGroup);
+    }
+
+    public RocketMqBrokerForwardingConsumer(ForwardingEndpointResolver resolver,
+                                            MessagePollerFactory factory, long pollWaitMillis) {
+        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
+        this.factory = Objects.requireNonNull(factory, "factory is required");
+        this.pollWaitMillis = pollWaitMillis;
     }
 
     /**
@@ -128,13 +134,6 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
         void close();
     }
 
-    public RocketMqBrokerForwardingConsumer(ForwardingEndpointResolver resolver,
-                                            MessagePollerFactory factory, long pollWaitMillis) {
-        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
-        this.factory = Objects.requireNonNull(factory, "factory is required");
-        this.pollWaitMillis = pollWaitMillis;
-    }
-
     /**
      * {@inheritDoc}
      *
@@ -153,13 +152,14 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
             // subscribe, so the poller is created HERE (once), not at construction.
             poller = factory.pollerFor(consumerServiceId);
             this.consumerServiceId = consumerServiceId;
-        } else if (!this.consumerServiceId.equals(consumerServiceId)) {
+        } else {
             // multi-subscribe accumulates routes on the one consumer-group; a different group on the
             // same instance is a wiring error (the consumer-group is fixed at first subscribe).
-            throw new IllegalArgumentException(
-                    "consumerServiceId '" + consumerServiceId + "' does not match this consumer ('"
-                            + this.consumerServiceId + "')");
-        } else {
+            if (!this.consumerServiceId.equals(consumerServiceId)) {
+                throw new IllegalArgumentException(
+                        "consumerServiceId '" + consumerServiceId + "' does not match this consumer ('"
+                                + this.consumerServiceId + "')");
+            }
             // same consumer-group — multi-subscribe accumulates routes on the one consumer (fall-through).
         }
         String topic = resolver.resolve(route)
@@ -309,8 +309,6 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
         }
     }
 
-    // ===== pure mapping (slice 2, unit-tested) =====
-
     /**
      * Pure mapping: a broker-agnostic {@link DeliveryFilter} → RocketMQ SQL92 expression string
      * (the {@code MessageSelector.bySql} argument). Each {@code requiredProperties} entry becomes a
@@ -336,8 +334,6 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
         }
         return String.join(" AND ", clauses);
     }
-
-    // ===== prod poller (live DefaultLitePullConsumer) — §6 D4: real-broker IT verifies, not a unit =====
 
     /**
      * Production {@link MessagePollerFactory} backed by a live {@link DefaultLitePullConsumer}.

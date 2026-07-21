@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.gateway.runtime;
 
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;

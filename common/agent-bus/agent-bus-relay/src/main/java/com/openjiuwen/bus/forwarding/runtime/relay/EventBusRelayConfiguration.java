@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
@@ -80,6 +81,11 @@ public class EventBusRelayConfiguration {
     /**
      * Relay RocketMQ producer (hop2 deliver + resp_out produce). Group is suffixed
      * "-relay" to distinguish from the gateway producer.
+     *
+     * @param broker the broker client properties (nameserver endpoints)
+     * @param props the agent-bus broker properties (producer group)
+     * @return a started {@link DefaultMQProducer} suffixed with "-relay"
+     * @throws Exception if the producer fails to start
      */
     @Bean(destroyMethod = "shutdown")
     DefaultMQProducer relayProducer(BrokerClientProperties broker, AgentBusBrokerProperties props) throws Exception {
@@ -88,8 +94,6 @@ public class EventBusRelayConfiguration {
         producer.start();
         return producer;
     }
-
-    // ===== forward relay: hop1 req → hop2 deliver =====
 
     @Bean(name = "forwardRelayConsumer", destroyMethod = "close")
     BrokerForwardingConsumerPort forwardRelayConsumer(BrokerClientProperties broker, AgentBusBrokerProperties props) {
@@ -113,8 +117,6 @@ public class EventBusRelayConfiguration {
                 props.eventBusServiceId(), props.eventBusServiceId(), props.leaseDurationMs(),
                 EventBusRelayWorker.FORWARD_REQUEST_TYPES);
     }
-
-    // ===== response relay: resp_in → resp_out =====
 
     @Bean(name = "responseRelayConsumer", destroyMethod = "close")
     BrokerForwardingConsumerPort responseRelayConsumer(BrokerClientProperties broker, AgentBusBrokerProperties props) {
@@ -141,6 +143,9 @@ public class EventBusRelayConfiguration {
 
     /**
      * {@link RelayTick} seam bound to the forward relay worker (hop1 req -> hop2 deliver).
+     *
+     * @param forwardRelayWorker the forward relay worker (hop1 req -> hop2 deliver)
+     * @return a {@link RelayTick} that delegates to the forward relay worker's runOnce
      */
     @Bean(name = "forwardRelayTick")
     RelayTick forwardRelayTick(@Qualifier("forwardRelayWorker") EventBusRelayWorker forwardRelayWorker) {
@@ -149,6 +154,9 @@ public class EventBusRelayConfiguration {
 
     /**
      * {@link RelayTick} seam bound to the response relay worker (resp_in -> resp_out).
+     *
+     * @param responseRelayWorker the response relay worker (resp_in -> resp_out)
+     * @return a {@link RelayTick} that delegates to the response relay worker's runOnce
      */
     @Bean(name = "responseRelayTick")
     RelayTick responseRelayTick(@Qualifier("responseRelayWorker") EventBusRelayWorker responseRelayWorker) {

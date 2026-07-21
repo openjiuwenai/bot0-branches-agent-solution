@@ -46,8 +46,6 @@ import java.util.Set;
  * decode, correlation match, inbox dedup, plus the transient produce-failure path.
  */
 class EventBusRelayWorkerTest {
-
-    // ===== inline fakes =====
     static final class FakeConsumer implements BrokerForwardingConsumerPort {
         final Deque<BrokerInboundMessage> queue = new ArrayDeque<>();
         final List<BrokerInboundMessage> committed = new ArrayList<>();
@@ -130,12 +128,11 @@ class EventBusRelayWorkerTest {
         }
     }
 
-    // ===== helpers =====
-
     private static BrokerInboundMessage hop1Request(String tenant, String messageId, String corrId,
                                                    String route, String target) {
-        String desc = BrokerControlDescriptor.encode(AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-                "trace-" + messageId, corrId, "idem-" + messageId, route, "a2a", Long.MAX_VALUE);
+        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                "trace-" + messageId, corrId, "idem-" + messageId, route, "a2a", Long.MAX_VALUE));
         return new BrokerInboundMessage(tenant, messageId, "gateway-1", target, "event-bus",
                 desc, corrId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
     }
@@ -148,6 +145,12 @@ class EventBusRelayWorkerTest {
 
     /**
      * Response-relay worker (RESPONSE_TYPES, consumerServiceId "event-bus-resp" — distinct dedup key).
+     *
+     * @param c the inline fake consumer driving this response relay
+     * @param inbox the inline fake inbox for dedup
+     * @param outbox the real in-memory outbox + claim double
+     * @param relay the inline fake relay that records produced records
+     * @return a response-relay worker wired with the given fakes
      */
     private static EventBusRelayWorker newResponseWorker(FakeConsumer c, FakeInbox inbox,
                                                           InMemoryForwardingOutbox outbox, FakeRelay relay) {
@@ -157,17 +160,23 @@ class EventBusRelayWorkerTest {
 
     /**
      * A resp_in response message: descriptor payloadRef (symmetric to the request) + taskId/status tokens.
+     *
+     * @param tenant the tenant scope
+     * @param messageId the inbound message id
+     * @param corrId the correlation id stamped in both descriptor and native header
+     * @param eventType the response event type
+     * @param responseTokens the extra taskId/status tokens appended to the descriptor
+     * @return a resp_in inbound message carrying the symmetric descriptor + tokens
      */
     private static BrokerInboundMessage respInMessage(String tenant, String messageId, String corrId,
                                                        AgentBusEventType eventType, String responseTokens) {
-        String desc = BrokerControlDescriptor.encode(eventType, "trace-" + messageId, corrId,
-                "idem-" + messageId, "invocation", "a2a", Long.MAX_VALUE)
+        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
+                eventType, "trace-" + messageId, corrId,
+                "idem-" + messageId, "invocation", "a2a", Long.MAX_VALUE))
                 + ";" + responseTokens;
         return new BrokerInboundMessage(tenant, messageId, "runtime-1", "gateway-1", "event-bus-resp",
                 desc, corrId, eventType);
     }
-
-    // ===== tests =====
 
     @Test
     void relaysHop1ToHop2AndCommits() {
@@ -220,8 +229,9 @@ class EventBusRelayWorkerTest {
         EventBusRelayWorker w = newWorker(c, inbox, outbox, relay);
 
         // descriptor corrId "desc-corr" disagrees with the native header corrId "header-corr".
-        String desc = BrokerControlDescriptor.encode(AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-                "tr", "desc-corr", "idem", "route-1", "a2a", Long.MAX_VALUE);
+        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                "tr", "desc-corr", "idem", "route-1", "a2a", Long.MAX_VALUE));
         c.queue.add(new BrokerInboundMessage("t1", "m1", "gateway-1", "runtime-1", "event-bus",
                 desc, "header-corr", AgentBusEventType.CLIENT_INVOCATION_REQUESTED));
 
@@ -274,8 +284,6 @@ class EventBusRelayWorkerTest {
         assertEquals(ForwardingFailureCode.RECEIVER_UNAVAILABLE, c.rejected.get(0).getValue());
         assertEquals(0, inbox.consumed.size());      // not CONSUMED (not terminal)
     }
-
-    // ===== response-relay mode (RESPONSE_TYPES) =====
 
     @Test
     void responseRelayRelaysRespInToRespOutAndCommits() {
@@ -350,8 +358,9 @@ class EventBusRelayWorkerTest {
         EventBusRelayWorker w = newResponseWorker(c, inbox, outbox, relay);
 
         // descriptor corrId "desc-corr" disagrees with the native header corrId "header-corr".
-        String desc = BrokerControlDescriptor.encode(AgentBusEventType.INVOCATION_RESPONSE,
-                "tr", "desc-corr", "idem", "invocation", "a2a", Long.MAX_VALUE) + ";taskId=t1;status=snapshot";
+        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
+                AgentBusEventType.INVOCATION_RESPONSE,
+                "tr", "desc-corr", "idem", "invocation", "a2a", Long.MAX_VALUE)) + ";taskId=t1;status=snapshot";
         c.queue.add(new BrokerInboundMessage("t1", "m1", "runtime-1", "gateway-1", "event-bus-resp",
                 desc, "header-corr", AgentBusEventType.INVOCATION_RESPONSE));
 

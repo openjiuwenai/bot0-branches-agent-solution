@@ -101,26 +101,6 @@ public final class TestAgentRuntime {
         SILENT
     }
 
-    /** Outcome of a single {@link #pollAndProcess} tick. */
-    public record ProcessingOutcome(Outcome outcome, String requestMessageId, String taskId,
-            List<ForwardingEnvelope> responses) {
-        /** Result classification of a pollAndProcess tick. */
-        public enum Outcome {
-            PROCESSED, SKIPPED_NON_REQUEST, IDLE
-        }
-        public ProcessingOutcome {
-            Objects.requireNonNull(outcome, "outcome is required");
-            Objects.requireNonNull(responses, "responses is required");
-        }
-
-        /**
-         * Convenience: the event types of the produced responses, in order.
-         */
-        public List<AgentBusEventType> responseEventTypes() {
-            return responses.stream().map(ForwardingEnvelope::eventType).toList();
-        }
-    }
-
     private final InMemoryBroker broker;
     private final BrokerForwardingConsumerPort consumer;
     private final InMemoryForwardingOutbox outbox;
@@ -138,15 +118,6 @@ public final class TestAgentRuntime {
 
     private record PlannedResponse(AgentBusEventType eventType, String payloadRef) {}
 
-    private static final class TaskEntry {
-        final String taskId;
-        boolean responsesEmitted;   // has the runtime ever emitted ACCEPTED/RESPONSE/TERMINAL for this task?
-
-        TaskEntry(String taskId) {
-            this.taskId = taskId;
-        }
-    }
-
     public TestAgentRuntime(InMemoryBroker broker, InMemoryForwardingOutbox outbox,
                             String consumerServiceId, String tenantId) {
         this.broker = Objects.requireNonNull(broker, "broker is required");
@@ -161,6 +132,37 @@ public final class TestAgentRuntime {
         this.consumer.subscribe(consumerServiceId,
                 new ForwardingRouteHandle("runtime-" + consumerServiceId, tenantId),
                 DeliveryFilter.forRuntime(tenantId, consumerServiceId));
+    }
+
+    /** Outcome of a single {@link #pollAndProcess} tick. */
+    public record ProcessingOutcome(Outcome outcome, String requestMessageId, String taskId,
+            List<ForwardingEnvelope> responses) {
+        /** Result classification of a pollAndProcess tick. */
+        public enum Outcome {
+            PROCESSED, SKIPPED_NON_REQUEST, IDLE
+        }
+        public ProcessingOutcome {
+            Objects.requireNonNull(outcome, "outcome is required");
+            Objects.requireNonNull(responses, "responses is required");
+        }
+
+        /**
+         * Convenience: the event types of the produced responses, in order.
+         *
+         * @return the event types of the produced responses, in order (possibly empty)
+         */
+        public List<AgentBusEventType> responseEventTypes() {
+            return responses.stream().map(ForwardingEnvelope::eventType).toList();
+        }
+    }
+
+    private static final class TaskEntry {
+        final String taskId;
+        boolean responsesEmitted;   // has the runtime ever emitted ACCEPTED/RESPONSE/TERMINAL for this task?
+
+        TaskEntry(String taskId) {
+            this.taskId = taskId;
+        }
     }
 
     /**
@@ -234,8 +236,6 @@ public final class TestAgentRuntime {
             return new ProcessingOutcome(ProcessingOutcome.Outcome.PROCESSED, msg.messageId(), taskId, responses);
         }
     }
-
-    // ===== request processing =====
 
     private List<ForwardingEnvelope> processRequest(BrokerInboundMessage msg, RequestDescriptor req,
                                                     long nowMillisEpoch) {
@@ -353,8 +353,6 @@ public final class TestAgentRuntime {
         };
     }
 
-    // ===== response envelope construction + produce path =====
-
     private ForwardingEnvelope buildResponseEnvelope(RequestDescriptor req, BrokerInboundMessage msg,
                                                     PlannedResponse p, long nowMillisEpoch) {
         ForwardingRouteHandle route = new ForwardingRouteHandle(req.routeHandleValue(), tenantId);
@@ -395,39 +393,35 @@ public final class TestAgentRuntime {
         Objects.requireNonNull(receipt, "enqueue receipt");
     }
 
-    // ===== request publish helpers (encoding encapsulated here) =====
+    /**
+     * Bundles the arguments to {@link #buildRequest(RequestSpec)} so the builder
+     * takes a single parameter (G.MET.01). Record constructors are exempt from the
+     * parameter-count check, so callers pack their 11 values here.
+     */
+    public record RequestSpec(String messageId, AgentBusEventType eventType, String tenantId,
+                              String traceId, String correlationId, String idempotencyKey,
+                              String routeHandleValue, String capability, String sourceServiceId,
+                              String targetServiceId, long deadlineMillisEpoch) {}
 
     /**
      * Build a request envelope whose {@code payloadRef} carries the control
      * descriptor (eventType/traceId/correlationId/idempotencyKey/routeHandle/
      * capability/deadline). Use {@link #publishRequest} to put it on the broker.
      *
-     * @param messageId           the request message id (broker keys / dedup hook)
-     * @param eventType           the request event type (FEAT-013/014 family)
-     * @param tenantId            tenant scope
-     * @param traceId             W3C 32-char hex trace id
-     * @param correlationId       cross-hop correlation key (gateway = requestId)
-     * @param idempotencyKey      client retry idempotency key
-     * @param routeHandleValue    opaque route handle value (resolved via ForwardingEndpointResolver)
-     * @param capability          capability identifier
-     * @param sourceServiceId     the request source service id (the caller/gateway)
-     * @param targetServiceId     the request target service id (the runtime)
-     * @param deadlineMillisEpoch absolute deadline, or {@code Long.MAX_VALUE} for none
+     * @param spec the request specification (messageId/eventType/tenantId/traceId/
+     *             correlationId/idempotencyKey/routeHandleValue/capability/
+     *             sourceServiceId/targetServiceId/deadlineMillisEpoch)
      * @return the request envelope carrying the control descriptor in its payloadRef
      */
-    public static ForwardingEnvelope buildRequest(String messageId, AgentBusEventType eventType,
-                                                  String tenantId, String traceId, String correlationId,
-                                                  String idempotencyKey, String routeHandleValue,
-                                                  String capability, String sourceServiceId,
-                                                  String targetServiceId, long deadlineMillisEpoch) {
-        RequestDescriptor reqDescriptor = new RequestDescriptor(eventType, traceId, correlationId,
-                idempotencyKey, routeHandleValue, capability, deadlineMillisEpoch);
+    public static ForwardingEnvelope buildRequest(RequestSpec spec) {
+        RequestDescriptor reqDescriptor = new RequestDescriptor(spec.eventType(), spec.traceId(), spec.correlationId(),
+                spec.idempotencyKey(), spec.routeHandleValue(), spec.capability(), spec.deadlineMillisEpoch());
         String descriptor = encodeDescriptor(reqDescriptor);
         return new ForwardingEnvelope(
-                new ForwardingMessageId(messageId),
-                eventType, tenantId, traceId, correlationId, idempotencyKey,
-                new ForwardingRouteHandle(routeHandleValue, tenantId),
-                capability, sourceServiceId, targetServiceId, deadlineMillisEpoch,
+                new ForwardingMessageId(spec.messageId()),
+                spec.eventType(), spec.tenantId(), spec.traceId(), spec.correlationId(), spec.idempotencyKey(),
+                new ForwardingRouteHandle(spec.routeHandleValue(), spec.tenantId()),
+                spec.capability(), spec.sourceServiceId(), spec.targetServiceId(), spec.deadlineMillisEpoch(),
                 ForwardingEnvelope.PayloadPolicy.DATA_BEARING, descriptor);
     }
 
@@ -455,7 +449,6 @@ public final class TestAgentRuntime {
         broker.produce(record, nowMillisEpoch);
     }
 
-    // ===== descriptor encode / decode (delegated to the shared main utility) =====
     //
     // The codec lives in BrokerControlDescriptor (forwarding.spi.broker,
     // main) so the production GatewayRuntimeService can build a request payloadRef that
@@ -464,8 +457,8 @@ public final class TestAgentRuntime {
     // and the RequestDescriptor shape unchanged — behaviour is identical.
 
     static String encodeDescriptor(RequestDescriptor req) {
-        return BrokerControlDescriptor.encode(req.eventType(), req.traceId(), req.correlationId(),
-                req.idempotencyKey(), req.routeHandleValue(), req.capability(), req.deadlineMillisEpoch());
+        return BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(req.eventType(), req.traceId(), req.correlationId(),
+                req.idempotencyKey(), req.routeHandleValue(), req.capability(), req.deadlineMillisEpoch()));
     }
 
     /**
@@ -490,9 +483,9 @@ public final class TestAgentRuntime {
     private static boolean isRequestType(AgentBusEventType t) {
         return switch (t) {
             case CLIENT_INVOCATION_REQUESTED, CLIENT_INVOCATION_CANCEL_REQUESTED,
-                 CLIENT_INVOCATION_QUERY_REQUESTED, CLIENT_STREAM_SUBSCRIBE_REQUESTED,
-                 A2A_CALL_REQUESTED, A2A_CALL_CANCEL_REQUESTED,
-                 A2A_CALL_QUERY_REQUESTED, A2A_STREAM_SUBSCRIBE_REQUESTED -> true;
+                CLIENT_INVOCATION_QUERY_REQUESTED, CLIENT_STREAM_SUBSCRIBE_REQUESTED,
+                A2A_CALL_REQUESTED, A2A_CALL_CANCEL_REQUESTED,
+                A2A_CALL_QUERY_REQUESTED, A2A_STREAM_SUBSCRIBE_REQUESTED -> true;
             default -> false; // response / terminal types — skip (own echoes)
         };
     }

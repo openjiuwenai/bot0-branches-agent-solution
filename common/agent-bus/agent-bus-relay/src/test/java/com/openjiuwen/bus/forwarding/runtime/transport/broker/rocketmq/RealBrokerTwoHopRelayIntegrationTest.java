@@ -43,6 +43,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -287,8 +288,6 @@ class RealBrokerTwoHopRelayIntegrationTest {
         }
     }
 
-    // ===== tests =====
-
     /**
      * Happy path — the two-hop boots end-to-end (G5-B wiring boot-verification). The
      * gateway dispatches hop1 → forward relay governed-re-published hop2 → TempRuntime
@@ -398,7 +397,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
     void forwardRelayCorrelationMismatch_poisonCommittedNoRedeliver() {
         String messageId = "m-corr-" + UUID.randomUUID();
         sendHop1Poison(directProducer, messageId,
-                new CorrIds(/* native */ "c-corr-header", /* descriptor */ "c-corr-desc"),
+                new CorrIds("c-corr-header", "c-corr-desc"),
                 TENANT, RUNTIME);
 
         EventBusRelayWorker.RelayTickResult r = forwardRelayWorker.runOnce(TENANT, System.currentTimeMillis(), 1);
@@ -421,8 +420,6 @@ class RealBrokerTwoHopRelayIntegrationTest {
                 .as("poison committed (no broker redelivery) → not re-rejected on the next tick")
                 .isZero();
     }
-
-    // ===== helpers =====
 
     /** Pairs the native header corrId with the descriptor corrId so hop1 helpers stay ≤5 params (G.MET.01). */
     private record CorrIds(String nativeCorrId, String descriptorCorrId) {}
@@ -479,9 +476,9 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
     private static void sendHop1(DefaultMQProducer producer, String messageId, CorrIds corrIds,
                                  String tenant, String target) {
-        String descriptor = BrokerControlDescriptor.encode(
+        String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
                 AgentBusEventType.CLIENT_INVOCATION_REQUESTED, TRACE, corrIds.descriptorCorrId(),
-                "idem-" + messageId, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE);
+                "idem-" + messageId, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE));
         Message msg = new Message(TOPIC_REQ, /* tags */ null, messageId,
                 ("target=" + target).getBytes(StandardCharsets.UTF_8));
         msg.putUserProperty("tenantId", tenant);
@@ -528,8 +525,6 @@ class RealBrokerTwoHopRelayIntegrationTest {
                 String.class);
     }
 
-    // ===== temp agent-runtime (LitePull poll-loop, mimics the external agent-runtime-java) =====
-
     /**
      * Stands in for the EXTERNAL {@code agent-runtime-java} (S4 consumer lands there). A
      * LitePull poll-loop consumes hop2 request events from {@code ascend_bus_invocation_deliver}
@@ -541,7 +536,6 @@ class RealBrokerTwoHopRelayIntegrationTest {
      * {@code taskId}/{@code status} via {@link BrokerControlDescriptor#token}.
      */
     static final class TempRuntime {
-
         private final RocketMqBrokerForwardingConsumer consumer;
         private final DefaultMQProducer producer;
         private final AtomicLong taskSeq = new AtomicLong();
@@ -567,16 +561,8 @@ class RealBrokerTwoHopRelayIntegrationTest {
             // Single-thread executor mirroring StdioMcpClient §315 (G.CON.08/12): the daemon
             // thread carries an uncaught-exception handler; shutdown uses the executor's
             // cooperative shutdown (no Thread.interrupt — G.CON.10).
-            ThreadFactory factory = r -> {
-                Thread t = new Thread(r, "it-runtime-poll");
-                t.setDaemon(true);
-                t.setUncaughtExceptionHandler((thr, ex) -> {
-                    // no-op: pollLoop already swallows transient broker hiccups
-                });
-                return t;
-            };
             pollExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                    new LinkedBlockingQueue<>(), factory);
+                    new LinkedBlockingQueue<>(), new DaemonThreadFactory("it-runtime-poll"));
             pollExecutor.submit(this::pollLoop);
         }
 
@@ -625,9 +611,12 @@ class RealBrokerTwoHopRelayIntegrationTest {
             String idem = desc.idempotencyKey();
             String taskId = "task-" + taskSeq.incrementAndGet();
             // L2 §6.2.1 BLOCKING: ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed).
-            produceResponse(AgentBusEventType.INVOCATION_ACCEPTED, new TaskCursor(taskId, "accepted"), corrId, trace, idem);
-            produceResponse(AgentBusEventType.INVOCATION_RESPONSE, new TaskCursor(taskId, "snapshot"), corrId, trace, idem);
-            produceResponse(AgentBusEventType.INVOCATION_TERMINAL, new TaskCursor(taskId, "completed"), corrId, trace, idem);
+            produceResponse(AgentBusEventType.INVOCATION_ACCEPTED,
+                    new TaskCursor(taskId, "accepted"), corrId, trace, idem);
+            produceResponse(AgentBusEventType.INVOCATION_RESPONSE,
+                    new TaskCursor(taskId, "snapshot"), corrId, trace, idem);
+            produceResponse(AgentBusEventType.INVOCATION_TERMINAL,
+                    new TaskCursor(taskId, "completed"), corrId, trace, idem);
         }
 
         /**
@@ -642,8 +631,8 @@ class RealBrokerTwoHopRelayIntegrationTest {
          */
         private void produceResponse(AgentBusEventType eventType, TaskCursor task,
                                      String corrId, String trace, String idem) {
-            String descriptor = BrokerControlDescriptor.encode(
-                    eventType, trace, corrId, idem, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE)
+            String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
+                    eventType, trace, corrId, idem, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE))
                     + ";taskId=" + task.taskId() + ";status=" + task.status();
             String messageId = "resp-" + respSeq.incrementAndGet();
             Message msg = new Message(TOPIC_RESP_IN, /* tags */ null, messageId,
@@ -659,6 +648,27 @@ class RealBrokerTwoHopRelayIntegrationTest {
                 producer.send(msg);
             } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
                 throw new IllegalStateException("temp runtime failed to produce response " + eventType, e);
+            }
+        }
+
+        /** Pool-owned daemon thread factory (G.CON.08/12): threads from the default factory, never ad-hoc. */
+        private static final class DaemonThreadFactory implements ThreadFactory {
+            private static final ThreadFactory BASE = Executors.defaultThreadFactory();
+            private final String name;
+
+            DaemonThreadFactory(String name) {
+                this.name = name;
+            }
+
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = BASE.newThread(r);
+                t.setName(name);
+                t.setDaemon(true);
+                t.setUncaughtExceptionHandler((thr, ex) -> {
+                    // no-op: pollLoop already swallows transient broker hiccups
+                });
+                return t;
             }
         }
     }

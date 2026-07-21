@@ -53,6 +53,11 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
     private final ForwardingEndpointResolver resolver;
     private final MessageSender sender;
 
+    public RocketMqBrokerForwardingRelay(ForwardingEndpointResolver resolver, MessageSender sender) {
+        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
+        this.sender = Objects.requireNonNull(sender, "sender is required");
+    }
+
     /**
      * Seam for sending a built {@link Message} — unit tests inject a fake (no live broker);
      * prod injects a {@link DefaultMQProducer}-backed sender via {@link #defaultSender}.
@@ -66,11 +71,6 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
          * @throws Exception if the send fails (MQClientException / broker error / interrupt)
          */
         void send(Message message) throws Exception;
-    }
-
-    public RocketMqBrokerForwardingRelay(ForwardingEndpointResolver resolver, MessageSender sender) {
-        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
-        this.sender = Objects.requireNonNull(sender, "sender is required");
     }
 
     @Override

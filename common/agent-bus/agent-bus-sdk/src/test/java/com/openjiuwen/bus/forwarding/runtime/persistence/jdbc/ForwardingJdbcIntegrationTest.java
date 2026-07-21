@@ -90,8 +90,6 @@ class ForwardingJdbcIntegrationTest {
         }
     }
 
-    // ===== migration + RLS correctness (slice 3) =====
-
     @Test
     void flyway_migration_creates_tables_indexes_and_rls() {
         Boolean rlsOutbox = raw.queryForObject(
@@ -115,8 +113,6 @@ class ForwardingJdbcIntegrationTest {
         assertThat(idxCount).as("claim-due partial index present").isEqualTo(1);
     }
 
-    // ===== happy-path round trip =====
-
     @Test
     void enqueue_claim_then_ack_round_trips_status() {
         String t = tenant();
@@ -139,8 +135,6 @@ class ForwardingJdbcIntegrationTest {
         assertThat(outbox.markAcked(id("m1"), t, "owner-A")).isEqualTo(ForwardingStatus.Outbox.ACKED);
         assertThat(outbox.statusOf(id("m1"), t)).isEqualTo(ForwardingStatus.Outbox.ACKED);
     }
-
-    // ===== MI12-004 #1: concurrent claim never duplicates (SKIP LOCKED) =====
 
     @Test
     void concurrent_claim_never_duplicates_a_record() throws Exception {
@@ -182,8 +176,6 @@ class ForwardingJdbcIntegrationTest {
         }
     }
 
-    // ===== MI12-004 #2: lease-owner guard (stale/foreign ACK rejected) =====
-
     @Test
     void stale_ack_by_non_owner_is_classified_owner_mismatch() {
         String t = tenant();
@@ -208,8 +200,6 @@ class ForwardingJdbcIntegrationTest {
                         assertThat(ex.reason()).isEqualTo(ForwardingLeaseException.Reason.RECORD_NOT_FOUND));
     }
 
-    // ===== MI12-004 #3: expired lease is reclaimable (stuck-holder reclaim) =====
-
     @Test
     void expired_lease_is_reclaimed_by_another_owner() {
         String t = tenant();
@@ -233,8 +223,6 @@ class ForwardingJdbcIntegrationTest {
                 .isInstanceOf(ForwardingLeaseException.class);
         assertThat(outbox.markAcked(id("r1"), t, "owner-B")).isEqualTo(ForwardingStatus.Outbox.ACKED);
     }
-
-    // ===== MI12-004 #4: renew-or-lose-the-ack (§7.2 lease_until > now guard) =====
 
     @Test
     void renew_extends_lease_so_ack_succeeds() {
@@ -262,8 +250,6 @@ class ForwardingJdbcIntegrationTest {
         assertThat(outbox.statusOf(id("rn2"), t)).isEqualTo(ForwardingStatus.Outbox.DISPATCHING);
     }
 
-    // ===== release semantics: expiry makes a row reclaimable =====
-
     @Test
     void release_lease_expires_it_so_another_owner_can_reclaim() {
         String t = tenant();
@@ -282,8 +268,6 @@ class ForwardingJdbcIntegrationTest {
         assertThatThrownBy(() -> outbox.markAcked(id("rel1"), t, "owner-A"))
                 .isInstanceOf(ForwardingLeaseException.class);
     }
-
-    // ===== MI12-004 #5: CHECK fallback rejects illegal rows =====
 
     @Test
     void check_constraint_rejects_dispatching_without_lease() {
@@ -306,8 +290,6 @@ class ForwardingJdbcIntegrationTest {
                 + "VALUES ('" + t + "','bad2','s','tg','rh','ACKED',0,1,1,'delivery_timeout')"))
                 .hasMessageContaining("ck_outbox_failure_code");
     }
-
-    // ===== MI12-004 #6: tenant isolation =====
 
     @Test
     void cross_tenant_claim_returns_nothing() {
@@ -332,8 +314,6 @@ class ForwardingJdbcIntegrationTest {
                 .hasMessageContaining("no outbox entry");
     }
 
-    // ===== §7.3 RLS enforcement (defence-in-depth tenant isolation) =====
-
     @Test
     void rls_policy_filters_rows_by_session_tenant_setting() throws Exception {
         String a = tenant();
@@ -347,8 +327,6 @@ class ForwardingJdbcIntegrationTest {
         // fail-closed: an unset tenant session sees nothing.
         assertThat(visibleOutboxCountUnset()).isZero();
     }
-
-    // ===== inbox adapter =====
 
     @Test
     void inbox_receive_dedups_then_consumes() {
@@ -381,8 +359,6 @@ class ForwardingJdbcIntegrationTest {
                 + "VALUES ('" + t + "','ib','c','DUPLICATE_SUPPRESSED',1,'tenant_mismatch')"))
                 .hasMessageContaining("ck_inbox_dup_code");
     }
-
-    // ===== helpers =====
 
     private long visibleOutboxCount(String settingKey, String settingValue) throws Exception {
         try (Connection c = dataSource.getConnection();

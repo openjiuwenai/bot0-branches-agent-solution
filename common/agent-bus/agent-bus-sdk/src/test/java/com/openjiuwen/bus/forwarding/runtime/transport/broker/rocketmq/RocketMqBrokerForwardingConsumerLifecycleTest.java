@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,8 +46,6 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
     private static final String SOURCE = "source-svc";
     private static final String TARGET = "target-svc";
 
-    // ===== subscribe: resolver→topic + filter→SQL92, lazy poller creation =====
-
     @Test
     void subscribe_wires_resolver_topic_sql92_filter_lazy_poller() {
         RecordingFactory factory = new RecordingFactory();
@@ -85,8 +84,6 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
         assertThat(factory.lastPoller().subscribedTopics).containsExactly("topic-a", "topic-b");
         assertThat(factory.lastPoller().subscribedSqls).hasSize(2);
     }
-
-    // ===== poll: MessageExt → BrokerInboundMessage, materialised consumerServiceId, in-flight tracked =====
 
     @Test
     void poll_maps_polled_msg_ext_to_inbound_with_consumer_service_id() {
@@ -127,8 +124,6 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
                 .hasMessageContaining("subscribe");
     }
 
-    // ===== commit / reject: model B ack-after-consume, in-flight tracking =====
-
     @Test
     void commit_delegates_to_poller_with_the_polled_ext_and_is_idempotent() {
         RecordingFactory factory = new RecordingFactory();
@@ -168,8 +163,6 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
         assertThat(poller.rejected.get(0).getValue()).isEqualTo(ForwardingFailureCode.TENANT_MISMATCH);
     }
 
-    // ===== close / capability (D8 / §3 close) =====
-
     @Test
     void close_delegates_to_poller() {
         RecordingFactory factory = new RecordingFactory();
@@ -198,8 +191,6 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
         // RocketMQ SQL92 filters broker-side (D8) — the receiver only ever receives filter-matching messages.
         assertThat(consumer.supportsBrokerSidePropertyFilter()).isTrue();
     }
-
-    // ===== fixtures =====
 
     private static ForwardingEndpointResolver resolver(String routeValue, String topic) {
         return new MapEndpointResolver(Map.of(routeValue, topic));
@@ -241,8 +232,6 @@ class RocketMqBrokerForwardingConsumerLifecycleTest {
         }
         return ext;
     }
-
-    // ===== fake seam: factory + poller (no live broker) =====
 
     static final class RecordingFactory implements RocketMqBrokerForwardingConsumer.MessagePollerFactory {
         final List<String> createdGroups = new ArrayList<>();

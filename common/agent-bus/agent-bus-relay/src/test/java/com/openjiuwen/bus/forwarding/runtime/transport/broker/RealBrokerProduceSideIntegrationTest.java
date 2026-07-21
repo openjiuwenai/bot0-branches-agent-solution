@@ -233,9 +233,9 @@ class RealBrokerProduceSideIntegrationTest {
     void uc3_a2aCallRequest_producedViaRelay_landsOnA2aTopic() throws Exception {
         String correlationId = "a2a-" + UUID.randomUUID();
         String idempotencyKey = "idem-" + UUID.randomUUID();
-        String descriptor = BrokerControlDescriptor.encode(
+        String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
                 AgentBusEventType.A2A_CALL_REQUESTED, TRACE, correlationId,
-                idempotencyKey, ROUTE_A2A, "a2a", Long.MAX_VALUE);
+                idempotencyKey, ROUTE_A2A, "a2a", Long.MAX_VALUE));
         ForwardingEnvelope envelope = new ForwardingEnvelope(
                 new ForwardingMessageId("gw-" + UUID.randomUUID()),
                 AgentBusEventType.A2A_CALL_REQUESTED, TENANT, TRACE, correlationId,

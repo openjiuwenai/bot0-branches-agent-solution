@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -91,32 +92,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 // non-production - E2E verification runtime double (mirrors G5-E IT TempRuntime)
 public final class TempRuntimeMain {
-
     private static final Logger log = LoggerFactory.getLogger(TempRuntimeMain.class);
     private static final String TOPIC_PREFIX = BrokerTopicResolver.TOPIC_PREFIX; // "ascend_bus_"
     private static final long DEFAULT_POLL_WAIT_MS = 3_000L;
-
-    /** Configurable response behaviour for a REQUESTED event (FEAT-013 S6 scenarios). */
-    public enum ResponseMode {
-        /** S6.2.1 - REQUESTED then ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed). */
-        BLOCKING,
-        /** S6.2.4 - REQUESTED then ACCEPTED + STREAM_READY(streamRef). */
-        STREAMING,
-        /** S6.2.2 - REQUESTED then ACCEPTED only (degenerate to Task ref). */
-        ACCEPTED_ONLY,
-        /** S6.2.3 - REQUESTED then create task, emit nothing (gateway accept window UNKNOWN). */
-        SILENT,
-        /** S6.2.5 UC-07 - REQUESTED then REJECTED (server refuses; no Task created). */
-        REJECT,
-        /**
-         * S6.2.3 UC-03 - first REQUESTED with a given idempotencyKey creates the Task
-         * but emits nothing (gateway accept window then UNKNOWN); a second REQUESTED with
-         * the same idempotencyKey hits the server-side idempotency map and replays the
-         * BLOCKING response sequence with the same taskId. This avoids SIGSTOP/SIGCONT
-         * orchestration for the UNKNOWN-then-retry scenario.
-         */
-        DEFER_THEN_RESOLVE
-    }
 
     private final String nameserver;
     private final String runtimeServiceId;
@@ -162,7 +140,27 @@ public final class TempRuntimeMain {
         this.producer.setNamesrvAddr(nameserver);
     }
 
-    // ===== lifecycle =====
+    /** Configurable response behaviour for a REQUESTED event (FEAT-013 S6 scenarios). */
+    public enum ResponseMode {
+        /** S6.2.1 - REQUESTED then ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed). */
+        BLOCKING,
+        /** S6.2.4 - REQUESTED then ACCEPTED + STREAM_READY(streamRef). */
+        STREAMING,
+        /** S6.2.2 - REQUESTED then ACCEPTED only (degenerate to Task ref). */
+        ACCEPTED_ONLY,
+        /** S6.2.3 - REQUESTED then create task, emit nothing (gateway accept window UNKNOWN). */
+        SILENT,
+        /** S6.2.5 UC-07 - REQUESTED then REJECTED (server refuses; no Task created). */
+        REJECT,
+        /**
+         * S6.2.3 UC-03 - first REQUESTED with a given idempotencyKey creates the Task
+         * but emits nothing (gateway accept window then UNKNOWN); a second REQUESTED with
+         * the same idempotencyKey hits the server-side idempotency map and replays the
+         * BLOCKING response sequence with the same taskId. This avoids SIGSTOP/SIGCONT
+         * orchestration for the UNKNOWN-then-retry scenario.
+         */
+        DEFER_THEN_RESOLVE
+    }
 
     /**
      * Start the runtime: start the producer, subscribe the consumer with the per-runtime
@@ -189,7 +187,8 @@ public final class TempRuntimeMain {
         log("Consumer subscribed: group=" + consumerGroup + " route=" + route
                 + " filter=" + filter.requiredProperties());
 
-        Thread shutdownHook = new Thread(this::shutdown, "temp-runtime-shutdown");
+        Thread shutdownHook = Executors.defaultThreadFactory().newThread(this::shutdown);
+        shutdownHook.setName("temp-runtime-shutdown");
         shutdownHook.setUncaughtExceptionHandler((t, e) ->
                 log.error("Uncaught exception in temp-runtime shutdown hook", e));
         Runtime.getRuntime().addShutdownHook(shutdownHook);
@@ -242,8 +241,6 @@ public final class TempRuntimeMain {
         }
         log("Shutdown complete.");
     }
-
-    // ===== request processing =====
 
     private synchronized void processRequest(BrokerInboundMessage req) {
         if (req.payloadRef() == null || req.payloadRef().isBlank()) {
@@ -381,8 +378,6 @@ public final class TempRuntimeMain {
         };
     }
 
-    // ===== response produce =====
-
     private void produceResponse(AgentBusEventType eventType, String taskId, String status,
                                  RequestCtx ctx) {
         produceResponse(eventType, taskId, status, ctx, null);
@@ -408,10 +403,10 @@ public final class TempRuntimeMain {
         // descriptor originalCaller field), NOT to req.sourceServiceId() (which is the
         // event-bus relay, not the original gateway).
         String responseTarget = desc.originalCaller() != null ? desc.originalCaller() : req.sourceServiceId();
-        String descriptor = BrokerControlDescriptor.encode(
+        String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
                 eventType, desc.traceId(), desc.correlationId(), desc.idempotencyKey(),
                 desc.routeHandle(), desc.capability(), desc.deadlineMillisEpoch(),
-                desc.originalCaller());
+                desc.originalCaller()));
         if (taskId != null) {
             descriptor = descriptor + ";taskId=" + taskId;
         }
@@ -443,8 +438,6 @@ public final class TempRuntimeMain {
         }
     }
 
-    // ===== CLI =====
-
     /**
      * CLI entry point - parse args, construct the runtime, and start the poll loop.
      * Returns normally for {@code --help}; otherwise blocks in {@link #start()} until
@@ -465,15 +458,15 @@ public final class TempRuntimeMain {
         runtime.start();
     }
 
-    // ===== helpers =====
-
     private void log(String msg) {
         if (msg.startsWith("ERROR")) {
             log.error("[TempRuntime {}] {}", runtimeServiceId, msg);
         } else if (msg.startsWith("WARN")) {
             log.warn("[TempRuntime {}] {}", runtimeServiceId, msg);
-        } else if (shouldLogInfo(msg)) {
-            log.info("[TempRuntime {}] {}", runtimeServiceId, msg);
+        } else {
+            if (shouldLogInfo(msg)) {
+                log.info("[TempRuntime {}] {}", runtimeServiceId, msg);
+            }
         }
     }
 
@@ -517,55 +510,11 @@ public final class TempRuntimeMain {
             for (int i = 0; i < args.length; i++) {
                 String arg = args[i];
                 String next = (i + 1 < args.length) ? args[i + 1] : null;
-                switch (arg) {
-                    case "--nameserver" -> {
-                        a.nameserver = next;
-                        i++;
-                    }
-                    case "--runtime" -> {
-                        a.runtime = next;
-                        i++;
-                    }
-                    case "--tenant" -> {
-                        a.tenant = next;
-                        i++;
-                    }
-                    case "--mode" -> {
-                        a.mode = ResponseMode.valueOf(next);
-                        i++;
-                    }
-                    case "--poll-wait-ms" -> {
-                        a.pollWaitMs = Long.parseLong(next);
-                        i++;
-                    }
-                    case "--route" -> {
-                        a.route = next;
-                        i++;
-                    }
-                    case "--consumer-group" -> {
-                        a.consumerGroup = next;
-                        i++;
-                    }
-                    case "--producer-group" -> {
-                        a.producerGroup = next;
-                        i++;
-                    }
-                    case "--verbose" -> a.verbose = true;
-                    case "-h", "--help" -> {
-                        printHelp();
-                        a.printHelp = true;
-                        return a;
-                    }
-                    default -> {
-                        if (arg.startsWith("--") && arg.contains("=")) {
-                            int eq = arg.indexOf('=');
-                            String k = arg.substring(2, eq);
-                            String v = arg.substring(eq + 1);
-                            applyKV(a, k, v);
-                        } else {
-                            throw new IllegalArgumentException("unknown arg: " + arg);
-                        }
-                    }
+                if (applyArg(a, arg, next)) {
+                    i++;
+                }
+                if (a.printHelp) {
+                    return a;
                 }
             }
             if (a.nameserver == null || a.runtime == null || a.tenant == null) {
@@ -574,6 +523,65 @@ public final class TempRuntimeMain {
                         "--nameserver, --runtime, --tenant are required");
             }
             return a;
+        }
+
+        private static boolean applyArg(Args a, String arg, String next) {
+            return switch (arg) {
+                case "--nameserver" -> {
+                    a.nameserver = next;
+                    yield true;
+                }
+                case "--runtime" -> {
+                    a.runtime = next;
+                    yield true;
+                }
+                case "--tenant" -> {
+                    a.tenant = next;
+                    yield true;
+                }
+                case "--mode" -> {
+                    a.mode = ResponseMode.valueOf(next);
+                    yield true;
+                }
+                case "--poll-wait-ms" -> {
+                    a.pollWaitMs = Long.parseLong(next);
+                    yield true;
+                }
+                case "--route" -> {
+                    a.route = next;
+                    yield true;
+                }
+                case "--consumer-group" -> {
+                    a.consumerGroup = next;
+                    yield true;
+                }
+                case "--producer-group" -> {
+                    a.producerGroup = next;
+                    yield true;
+                }
+                case "--verbose" -> {
+                    a.verbose = true;
+                    yield false;
+                }
+                case "-h", "--help" -> {
+                    printHelp();
+                    a.printHelp = true;
+                    yield false;
+                }
+                default -> {
+                    applyDefaultArg(a, arg);
+                    yield false;
+                }
+            };
+        }
+
+        private static void applyDefaultArg(Args a, String arg) {
+            if (arg.startsWith("--") && arg.contains("=")) {
+                int eq = arg.indexOf('=');
+                applyKV(a, arg.substring(2, eq), arg.substring(eq + 1));
+            } else {
+                throw new IllegalArgumentException("unknown arg: " + arg);
+            }
         }
 
         private static void applyKV(Args a, String k, String v) {

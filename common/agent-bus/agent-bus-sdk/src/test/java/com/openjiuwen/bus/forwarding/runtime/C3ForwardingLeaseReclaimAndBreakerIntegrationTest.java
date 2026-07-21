@@ -348,8 +348,6 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
                 .isEqualTo(2);
     }
 
-    // ---- time-control infrastructure (test-only, plain JDK) ----------------
-
     /**
      * Mutable, injectable wall clock (mirrors Stage 19). Lets the worker's
      * renewal check / delivery instant / {@code nextAttemptAt} basis read a
@@ -418,8 +416,6 @@ class C3ForwardingLeaseReclaimAndBreakerIntegrationTest {
         Iterator<ForwardingDeliveryResult> results = sequence.iterator();
         return (record, now) -> results.next();
     }
-
-    // ---- persistence / envelope helpers (mirror Stage 18/19 IT) ------------
 
     private static ForwardingMessageId id(String value) {
         return new ForwardingMessageId(value);

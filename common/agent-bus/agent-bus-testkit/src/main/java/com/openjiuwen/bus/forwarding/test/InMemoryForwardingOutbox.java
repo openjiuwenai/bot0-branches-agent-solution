@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.test;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
@@ -72,8 +73,6 @@ public final class InMemoryForwardingOutbox
         }
     }
 
-    // ===== ForwardingOutboxPort =====
-
     @Override
     public synchronized ForwardingReceipt enqueue(ForwardingEnvelope envelope,
                                                   String sourceServiceId, String targetServiceId,
@@ -137,8 +136,6 @@ public final class InMemoryForwardingOutbox
     public synchronized ForwardingStatus.Outbox statusOf(ForwardingMessageId id, String tenantId) {
         return requireEntry(id, tenantId).status;
     }
-
-    // ===== ForwardingOutboxClaimPort =====
 
     @Override
     public synchronized List<ForwardingOutboxRecord> claimDue(String tenantId, long nowMillisEpoch,
@@ -221,8 +218,6 @@ public final class InMemoryForwardingOutbox
         return true;
     }
 
-    // ===== test-only introspection =====
-
     /**
      * Test-only introspection: current attempt count.
      *
@@ -254,11 +249,9 @@ public final class InMemoryForwardingOutbox
         return store.size();
     }
 
-    // ===== internals =====
-
     /** Carries the outbox mutation intent: the state-machine event, the failure code, and the next-attempt instant. */
     private record OutboxMutation(ForwardingStateMachine.OutboxEvent event,
-                                  ForwardingFailureCode failureCode, long nextAttemptAt) {}
+            ForwardingFailureCode failureCode, long nextAttemptAt) {}
 
     /**
      * Lease-owner guarded mutation (Stage 9, MI9-001). A record reaches

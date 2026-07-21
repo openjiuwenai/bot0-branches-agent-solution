@@ -32,6 +32,9 @@ class RouteCircuitBreakerTest {
 
     /**
      * Build a breaker with threshold 3, cooldown 1000ms, reading the mutable clock.
+     *
+     * @param now the mutable clock holder (a one-element array so the test can advance time)
+     * @return a fresh breaker wired to the mutable clock
      */
     private static RouteCircuitBreaker breaker(long[] now) {
         return new RouteCircuitBreaker(3, 1_000L, () -> now[0]);
@@ -43,6 +46,9 @@ class RouteCircuitBreakerTest {
 
     /**
      * Drive a fresh route to OPEN with {@code threshold} consecutive failures.
+     *
+     * @param b     the breaker to drive to OPEN
+     * @param route the route to record consecutive retryable failures for
      */
     private static void trip(RouteCircuitBreaker b, ForwardingRouteHandle route) {
         for (int i = 0; i < 3; i++) {

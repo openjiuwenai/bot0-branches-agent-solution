@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -319,8 +320,6 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
         assertRenewalPersistedRow(tenant, messageId);
     }
 
-    // ---- tick / row assertion helpers (extracted to keep scenario methods ≤50 lines) ----
-
     private static void assertExpiredTickCounts(ForwardingDispatcherWorker.DispatchTickResult tick) {
         assertThat(tick.expired())
                 .as("the single due row was driven to EXPIRED by markExpired")
@@ -388,8 +387,6 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
                 .isEqualTo(0);
     }
 
-    // ---- time-control infrastructure (test-only, plain JDK) ----------------
-
     /**
      * Mutable, injectable wall clock (mirrors Stage 19/20). Lets the worker's
      * renewal check / delivery instant read a controllable instant instead of
@@ -456,8 +453,6 @@ class C3ForwardingExpiryAndLeaseRenewalIntegrationTest {
         java.util.Iterator<ForwardingDeliveryResult> results = sequence.iterator();
         return (record, now) -> results.next();
     }
-
-    // ---- persistence / envelope helpers (mirror Stage 18/19/20 IT) ---------
 
     private static ForwardingMessageId id(String value) {
         return new ForwardingMessageId(value);

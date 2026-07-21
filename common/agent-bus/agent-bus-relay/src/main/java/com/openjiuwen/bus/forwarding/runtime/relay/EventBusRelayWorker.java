@@ -205,12 +205,13 @@ public final class EventBusRelayWorker {
             log.info("[{}] RECV messageId={} eventType={} corrId={} tenant={} source={} target={}",
                     role, msg.messageId(), msg.eventType(), msg.correlationId(),
                     msg.tenantId(), msg.sourceServiceId(), msg.targetServiceId());
+            // REDELIVERED is a no-op here: reject-for-redeliver is logged in relayOneMessage,
+            // and the agent-bus retry policy owns the re-drive (no tick counter for redeliver).
             switch (relayOneMessage(msg, tenantId, nowMillisEpoch, role)) {
                 case RELAYED -> relayed++;
                 case DEDUP_SUPPRESSED -> dedupSuppressed++;
                 case GOVERNANCE_REJECTED -> governanceRejected++;
                 case SKIPPED -> skipped++;
-                case REDELIVERED -> { /* reject-for-redeliver: no counter; retry policy owns re-drive */ }
             }
         }
         if (relayed + dedupSuppressed + governanceRejected + skipped > 0) {
@@ -319,6 +320,8 @@ public final class EventBusRelayWorker {
 
     /**
      * Human label for logs: which relay role this worker drives (forward / response / relay).
+     *
+     * @return the relay role label ("forward", "response", or "relay" for a custom type set)
      */
     private String roleLabel() {
         if (FORWARD_REQUEST_TYPES.equals(relayableTypes)) {

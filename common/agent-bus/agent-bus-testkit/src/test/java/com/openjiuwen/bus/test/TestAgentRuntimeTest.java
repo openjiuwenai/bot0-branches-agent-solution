@@ -39,8 +39,6 @@ class TestAgentRuntimeTest {
     private static final String GATEWAY = "test-gateway";
     private static final String ROUTE = "route-tenant-a";
 
-    // ===== §6.2.1 blocking call returns final response =====
-
     @Test
     void blocking_call_returns_final_response_sequence() {
         TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
@@ -76,8 +74,6 @@ class TestAgentRuntimeTest {
                 .isEqualTo(TestAgentRuntime.ProcessingOutcome.Outcome.IDLE);
     }
 
-    // ===== §6.2.2 degenerate to Task ref (ACCEPTED only) =====
-
     @Test
     void degenerate_to_task_ref_emits_accepted_only() {
         TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
@@ -92,8 +88,6 @@ class TestAgentRuntimeTest {
         assertThat(extractTaskId(out.responses().get(0))).startsWith("task-");
         assertThat(extractStatus(out.responses().get(0))).isNull();
     }
-
-    // ===== §6.2.3 UNKNOWN + same-key retry → same taskId =====
 
     @Test
     void unknown_then_same_key_retry_returns_same_task_id() {
@@ -122,8 +116,6 @@ class TestAgentRuntimeTest {
         assertThat(extractTaskId(retryOut.responses().get(0))).isEqualTo(silentTaskId.orElseThrow());
     }
 
-    // ===== §6.2.4 streaming call =====
-
     @Test
     void streaming_call_emits_accepted_then_stream_ready() {
         TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
@@ -140,8 +132,6 @@ class TestAgentRuntimeTest {
         // STREAM_READY carries a streamRef keyed on the taskId
         assertThat(out.responses().get(1).payloadRef()).contains("streamRef=stream://" + taskId);
     }
-
-    // ===== §4.4 idempotent duplicate → same taskId, no second logical call =====
 
     @Test
     void idempotent_duplicate_returns_same_task_id_no_second_logical_call() {
@@ -163,8 +153,6 @@ class TestAgentRuntimeTest {
         assertThat(second.responseEventTypes()).containsExactly(AgentBusEventType.INVOCATION_ACCEPTED);
         assertThat(extractTaskId(second.responses().get(0))).isEqualTo(firstTaskId);
     }
-
-    // ===== FEAT-001 stubs: Cancel / Query / Subscribe =====
 
     @Test
     void cancel_request_emits_cancelled_terminal() {
@@ -202,8 +190,6 @@ class TestAgentRuntimeTest {
         assertThat(out.responses().get(0).payloadRef()).startsWith("streamRef=stream://");
     }
 
-    // ===== FEAT-014 A2A family =====
-
     @Test
     void a2a_call_requested_emits_accepted_response_terminal() {
         TestAgentRuntime runtime = newRuntime(r -> Optional.of("topic-" + r.tenantScope()));
@@ -224,8 +210,6 @@ class TestAgentRuntimeTest {
         // a2a idempotency: same key → same taskId
         assertThat(runtime.taskIdFor("idem-9")).hasValue(taskId);
     }
-
-    // ===== encoding / robustness =====
 
     @Test
     void descriptor_round_trip_preserves_all_control_fields() {
@@ -270,8 +254,6 @@ class TestAgentRuntimeTest {
                 .isEqualTo(TestAgentRuntime.ProcessingOutcome.Outcome.IDLE);
     }
 
-    // ===== fixtures =====
-
     private TestAgentRuntime newRuntime(Function<com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle,
             Optional<String>> resolver) {
         InMemoryBroker broker = new InMemoryBroker(resolver::apply);
@@ -280,13 +262,16 @@ class TestAgentRuntimeTest {
     }
 
     private static ForwardingEnvelope request(String messageId, AgentBusEventType eventType, String idempotencyKey) {
-        return TestAgentRuntime.buildRequest(messageId, eventType, TENANT,
+        return TestAgentRuntime.buildRequest(new TestAgentRuntime.RequestSpec(messageId, eventType, TENANT,
                 "trace-" + idempotencyKey.replace("idem-", ""), "corr-" + idempotencyKey.replace("idem-", ""),
-                idempotencyKey, ROUTE, "cap-1", GATEWAY, RUNTIME, Long.MAX_VALUE);
+                idempotencyKey, ROUTE, "cap-1", GATEWAY, RUNTIME, Long.MAX_VALUE));
     }
 
     /**
      * Extract {@code taskId=<id>} from a response payloadRef, or null if absent.
+     *
+     * @param env the response envelope whose payloadRef to scan
+     * @return the taskId value, or {@code null} if no taskId token is present
      */
     private static String extractTaskId(ForwardingEnvelope env) {
         return token(env.payloadRef(), "taskId").orElse(null);
@@ -294,6 +279,9 @@ class TestAgentRuntimeTest {
 
     /**
      * Extract {@code status=<status>} from a response payloadRef, or null if absent.
+     *
+     * @param env the response envelope whose payloadRef to scan
+     * @return the status value, or {@code null} if no status token is present
      */
     private static String extractStatus(ForwardingEnvelope env) {
         return token(env.payloadRef(), "status").orElse(null);

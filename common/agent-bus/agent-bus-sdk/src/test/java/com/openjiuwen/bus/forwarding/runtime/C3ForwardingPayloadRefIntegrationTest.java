@@ -230,8 +230,6 @@ class C3ForwardingPayloadRefIntegrationTest {
                 .isTrue();
     }
 
-    // ---- time-control infrastructure (test-only, plain JDK) ----------------
-
     /**
      * Mutable, injectable wall clock (mirrors Stage 19/20/22). Lets the worker's
      * delivery instant read a controllable value instead of
@@ -285,8 +283,6 @@ class C3ForwardingPayloadRefIntegrationTest {
             return OptionalLong.of(instant);
         };
     }
-
-    // ---- persistence / envelope helpers (mirror Stage 22 IT) ---------------
 
     private static ForwardingMessageId id(String value) {
         return new ForwardingMessageId(value);

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +50,9 @@ class RelayDispatchLoopTest {
 
     /**
      * Queue-based TickSource: yields the given instants in order, then empty (stop).
+     *
+     * @param instants the instants to yield in order before the source goes empty
+     * @return a TickSource backed by a queue of the given instants
      */
     static RelayDispatchLoop.TickSource source(long... instants) {
         Deque<Long> q = new ArrayDeque<>();

@@ -80,6 +80,14 @@ public final class BrokerControlDescriptor {
 
         /**
          * Convenience canonical ctor without originalCaller (backward-compat for callers).
+         *
+         * @param eventType          the request event type (FEAT-013/014 family)
+         * @param traceId           W3C 32-char hex trace id
+         * @param correlationId     cross-hop correlation key (gateway = requestId)
+         * @param idempotencyKey    client retry idempotency key
+         * @param routeHandle       opaque route handle value (resolved via ForwardingEndpointResolver)
+         * @param capability        capability identifier
+         * @param deadlineMillisEpoch absolute deadline, or {@code Long.MAX_VALUE} for none
          */
         public Descriptor(AgentBusEventType eventType, String traceId, String correlationId,
                           String idempotencyKey, String routeHandle, String capability,
@@ -92,54 +100,24 @@ public final class BrokerControlDescriptor {
     /**
      * Encode the request control fields into a {@code payloadRef} descriptor token.
      *
-     * @param eventType          the request event type (FEAT-013/014 family)
-     * @param traceId           W3C 32-char hex trace id
-     * @param correlationId     cross-hop correlation key (gateway = requestId)
-     * @param idempotencyKey    client retry idempotency key
-     * @param routeHandle       opaque route handle value (resolved via ForwardingEndpointResolver)
-     * @param capability        capability identifier
-     * @param deadlineMillisEpoch absolute deadline, or {@code Long.MAX_VALUE} for none
+     * @param descriptor the request control descriptor (non-null; carries eventType/traceId/
+     *                   correlationId/idempotencyKey/routeHandle/capability/deadline and an
+     *                   optional {@code originalCaller}). Field validation is performed by the
+     *                   {@link Descriptor} compact constructor, so this method only checks the
+     *                   descriptor itself is non-null.
      * @return the compact {@code k=v;k=v;...} descriptor
      */
-    public static String encode(AgentBusEventType eventType, String traceId, String correlationId,
-                                String idempotencyKey, String routeHandle, String capability,
-                                long deadlineMillisEpoch) {
-        return encode(eventType, traceId, correlationId, idempotencyKey, routeHandle, capability,
-                deadlineMillisEpoch, null);
-    }
-
-    /**
-     * Encode the request control fields (incl. {@code originalCaller}) into a {@code payloadRef}.
-     *
-     * @param eventType          the request event type (FEAT-013/014 family)
-     * @param traceId           W3C 32-char hex trace id
-     * @param correlationId     cross-hop correlation key (gateway = requestId)
-     * @param idempotencyKey    client retry idempotency key
-     * @param routeHandle       opaque route handle value (resolved via ForwardingEndpointResolver)
-     * @param capability        capability identifier
-     * @param deadlineMillisEpoch absolute deadline, or {@code Long.MAX_VALUE} for none
-     * @param originalCaller the original gateway serviceId that initiated the request —
-     *                       carried end-to-end so responses can route back across the relay;
-     *                       {@code null} for descriptors that don't carry it (legacy callers).
-     * @return the compact {@code k=v;k=v;...} descriptor
-     */
-    public static String encode(AgentBusEventType eventType, String traceId, String correlationId,
-                                String idempotencyKey, String routeHandle, String capability,
-                                long deadlineMillisEpoch, String originalCaller) {
-        Objects.requireNonNull(eventType, "eventType is required");
-        requireNonBlank(traceId, "traceId");
-        requireNonBlank(correlationId, "correlationId");
-        requireNonBlank(idempotencyKey, "idempotencyKey");
-        requireNonBlank(routeHandle, "routeHandle");
-        requireNonBlank(capability, "capability");
+    public static String encode(Descriptor descriptor) {
+        Objects.requireNonNull(descriptor, "descriptor is required");
         StringBuilder sb = new StringBuilder()
-                .append("eventType=").append(eventType.name())
-                .append(";traceId=").append(traceId)
-                .append(";correlationId=").append(correlationId)
-                .append(";idempotencyKey=").append(idempotencyKey)
-                .append(";routeHandle=").append(routeHandle)
-                .append(";capability=").append(capability)
-                .append(";deadline=").append(deadlineMillisEpoch);
+                .append("eventType=").append(descriptor.eventType().name())
+                .append(";traceId=").append(descriptor.traceId())
+                .append(";correlationId=").append(descriptor.correlationId())
+                .append(";idempotencyKey=").append(descriptor.idempotencyKey())
+                .append(";routeHandle=").append(descriptor.routeHandle())
+                .append(";capability=").append(descriptor.capability())
+                .append(";deadline=").append(descriptor.deadlineMillisEpoch());
+        String originalCaller = descriptor.originalCaller();
         if (originalCaller != null && !originalCaller.isBlank()) {
             sb.append(";originalCaller=").append(originalCaller);
         }

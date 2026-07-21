@@ -45,8 +45,6 @@ import java.util.Optional;
  * {@code consumerFor} instances backed by the same shared broker.
  */
 class BrokerForwardingPortsContractTest {
-
-    // ===== produce: payloadRef in header, never in body (§6.2②) =====
     @Test
     void produce_data_bearing_carries_payload_ref_in_header_not_body() {
         InMemoryBroker broker = broker(route -> Optional.of("topic-" + route.tenantScope()));
@@ -75,8 +73,6 @@ class BrokerForwardingPortsContractTest {
         assertThat(stored.headers().payloadRef()).isNull();
         assertThat(stored.headers().carriesPayloadRef()).isFalse();
     }
-
-    // ===== produce: routeHandle resolved via resolver, never unwrapped (HD4) =====
 
     @Test
     void produce_resolves_topic_via_resolver_no_unwrapping() {
@@ -114,8 +110,6 @@ class BrokerForwardingPortsContractTest {
         assertThat(outcome.failureCode()).isEqualTo(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
         assertThat(outcome.failureCode().retryable()).isTrue();
     }
-
-    // ===== subscribe / poll: §3 "after" SPI — subscribe once, poll param-less =====
 
     @Test
     void subscribe_then_poll_returns_next_message_matching_the_filter() {
@@ -210,8 +204,6 @@ class BrokerForwardingPortsContractTest {
         assertThat(broker.lastRejectCode("msg-1")).isEqualTo(ForwardingFailureCode.TENANT_MISMATCH);
     }
 
-    // ===== consumer-group isolation (L3) — separate consumerFor instances, shared broker =====
-
     @Test
     void consumer_groups_maintain_independent_offsets() {
         InMemoryBroker broker = broker(route -> Optional.of("topic-" + route.tenantScope()));
@@ -235,8 +227,6 @@ class BrokerForwardingPortsContractTest {
         assertThat(forB.orElseThrow().consumerServiceId()).isEqualTo("consumer-b");
     }
 
-    // ===== capability bit + lifecycle (D8 / §3 close) =====
-
     @Test
     void in_memory_consumer_supports_broker_side_property_filter() {
         // the in-memory "broker" filters by the subscribed properties itself — the broker-side
@@ -252,8 +242,6 @@ class BrokerForwardingPortsContractTest {
         consumer.close();
         consumer.close();
     }
-
-    // ===== record / outcome invariants =====
 
     @Test
     void produce_outcome_accepted_must_not_carry_a_failure_code() {
@@ -305,8 +293,6 @@ class BrokerForwardingPortsContractTest {
                 .hasMessageContaining("correlationId");
     }
 
-    // ===== correlationId propagation (FEAT-013 §4.2: gateway matches responses by correlationId) =====
-
     @Test
     void produce_then_poll_propagates_corr_id_to_headers_to_inbound() {
         InMemoryBroker broker = broker(route -> Optional.of("topic-" + route.tenantScope()));
@@ -339,8 +325,6 @@ class BrokerForwardingPortsContractTest {
         assertThat(stored.headers().correlationId()).isEqualTo("corr-msg-corr-ctrl");
         assertThat(stored.headers().eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
     }
-
-    // ===== fixtures =====
 
     private InMemoryBroker broker(ForwardingEndpointResolver resolver) {
         return new InMemoryBroker(resolver);

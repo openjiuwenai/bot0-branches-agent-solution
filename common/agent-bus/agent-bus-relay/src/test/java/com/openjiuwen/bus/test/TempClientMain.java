@@ -90,7 +90,6 @@ import java.util.UUID;
  */
 // non-production — E2E verification client driver (in-process gateway + 1-shot dispatch)
 public final class TempClientMain {
-
     private static final Logger log = LoggerFactory.getLogger(TempClientMain.class);
 
     /**
@@ -196,8 +195,6 @@ public final class TempClientMain {
     public static class ClientApp {
         // intentionally empty — component scan picks up AgentBusApplication's config
     }
-
-    // ===== CLI arg parsing =====
 
     static final class ClientArgs {
         // spring-side
@@ -334,7 +331,10 @@ public final class TempClientMain {
                 case "spring.datasource.url" -> a.datasourceUrl = v;
                 case "spring.datasource.username" -> a.datasourceUser = v;
                 case "spring.datasource.password" -> a.datasourcePassword = v;
-                default -> { /* no-op: already in springArgs via the --key=value path */ }
+                default -> {
+                    // no-op: already in springArgs via the --key=value path
+                    break;
+                }
             }
         }
 
@@ -399,7 +399,9 @@ public final class TempClientMain {
                     attrs);
         }
 
-        /** Print the usage/help banner via the SLF4J logger. */
+        /**
+         * Print the usage/help banner via the SLF4J logger.
+         */
         static void printHelp() {
             log.info("""
                     TempClientMain — standalone E2E client driver for FEAT-013/014 verification.

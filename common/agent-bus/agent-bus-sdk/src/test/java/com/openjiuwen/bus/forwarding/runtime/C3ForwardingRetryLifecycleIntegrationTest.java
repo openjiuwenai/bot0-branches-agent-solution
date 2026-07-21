@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -304,8 +305,6 @@ class C3ForwardingRetryLifecycleIntegrationTest {
                 .isEqualTo(2);
     }
 
-    // ---- time-control infrastructure (test-only, plain JDK) ----------------
-
     /**
      * Mutable, injectable wall clock. Lets the worker's renewal check / delivery
      * instant / {@code nextAttemptAt} basis read a controllable instant instead of
@@ -378,8 +377,6 @@ class C3ForwardingRetryLifecycleIntegrationTest {
         Iterator<ForwardingDeliveryResult> results = sequence.iterator();
         return (record, now) -> results.next();
     }
-
-    // ---- persistence / envelope helpers (mirror Stage 18 IT) ----------------
 
     private static ForwardingMessageId id(String value) {
         return new ForwardingMessageId(value);

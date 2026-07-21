@@ -240,8 +240,8 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
                 new LinkedBlockingQueue<>());
         List<Future<long[]>> futures = new ArrayList<>();
         for (int w = 0; w < workers; w++) {
-            futures.add(submitClaimWorker(pool, startGate, delivery, clock, tenant, t0,
-                    "worker-claim-" + w, leaseUntil));
+            futures.add(submitClaimWorker(new WorkerSubmitCtx(pool, startGate, delivery, clock,
+                    tenant, t0, "worker-claim-" + w, leaseUntil)));
         }
 
         startGate.countDown();
@@ -318,8 +318,8 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
                 new LinkedBlockingQueue<>());
         List<Future<long[]>> futures = new ArrayList<>();
         for (int w = 0; w < workers; w++) {
-            futures.add(submitBreakerWorker(pool, startGate, delivery, clock, breaker,
-                    tenant, t0, "worker-breaker-" + w, leaseUntil));
+            futures.add(submitBreakerWorker(new WorkerSubmitCtx(pool, startGate, delivery, clock,
+                    tenant, t0, "worker-breaker-" + w, leaseUntil), breaker));
         }
 
         startGate.countDown();
@@ -332,23 +332,27 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
         assertBreakerResults(breaker, routeHandle, totals, messages, tenant);
     }
 
-    // ---- worker submission helpers ----
+    /**
+     * Pack of shared worker-submit parameters (count over 5 → packed for G.MET.01).
+     */
+    private record WorkerSubmitCtx(ExecutorService pool, CountDownLatch startGate,
+            ForwardingDeliveryPort delivery, MutableEpochClock clock,
+            String tenant, long t0, String leaseOwner, long leaseUntil) {
+    }
 
-    private Future<long[]> submitClaimWorker(ExecutorService pool, CountDownLatch startGate,
-            ForwardingDeliveryPort delivery, MutableEpochClock clock, String tenant, long t0,
-            String leaseOwner, long leaseUntil) {
+    private Future<long[]> submitClaimWorker(WorkerSubmitCtx ctx) {
         ForwardingDispatcherWorker worker = new ForwardingDispatcherWorker(
-                outbox, outbox, delivery,
+                outbox, outbox, ctx.delivery(),
                 ForwardingDispatcherWorker.DispatchLeasePolicy.DISABLED,
-                clock, ForwardingRetryPolicy.DEFAULT,
+                ctx.clock(), ForwardingRetryPolicy.DEFAULT,
                 ForwardingCircuitBreaker.ALWAYS_CLOSED);
-        return pool.submit(() -> {
-            startGate.await();
+        return ctx.pool().submit(() -> {
+            ctx.startGate().await();
             long claimed = 0L;
             long acked = 0L;
             while (true) {
                 ForwardingDispatcherWorker.DispatchTickResult tick =
-                        worker.runOnce(tenant, t0, 5, leaseOwner, leaseUntil);
+                        worker.runOnce(ctx.tenant(), ctx.t0(), 5, ctx.leaseOwner(), ctx.leaseUntil());
                 claimed += tick.claimed();
                 acked += tick.acked();
                 if (tick.claimed() == 0) {
@@ -359,15 +363,13 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
         });
     }
 
-    private Future<long[]> submitBreakerWorker(ExecutorService pool, CountDownLatch startGate,
-            ForwardingDeliveryPort delivery, MutableEpochClock clock, RouteCircuitBreaker breaker,
-            String tenant, long t0, String leaseOwner, long leaseUntil) {
+    private Future<long[]> submitBreakerWorker(WorkerSubmitCtx ctx, RouteCircuitBreaker breaker) {
         ForwardingDispatcherWorker worker = new ForwardingDispatcherWorker(
-                outbox, outbox, delivery,
+                outbox, outbox, ctx.delivery(),
                 ForwardingDispatcherWorker.DispatchLeasePolicy.DISABLED,
-                clock, ForwardingRetryPolicy.DEFAULT, breaker);
-        return pool.submit(() -> {
-            startGate.await();
+                ctx.clock(), ForwardingRetryPolicy.DEFAULT, breaker);
+        return ctx.pool().submit(() -> {
+            ctx.startGate().await();
             long claimed = 0L;
             long acked = 0L;
             long retried = 0L;
@@ -376,7 +378,7 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
             long skipped = 0L;
             while (true) {
                 ForwardingDispatcherWorker.DispatchTickResult tick =
-                        worker.runOnce(tenant, t0, 5, leaseOwner, leaseUntil);
+                        worker.runOnce(ctx.tenant(), ctx.t0(), 5, ctx.leaseOwner(), ctx.leaseUntil());
                 claimed += tick.claimed();
                 acked += tick.acked();
                 retried += tick.retried();
@@ -390,8 +392,6 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
             return new long[]{claimed, acked, retried, dlqd, expired, skipped};
         });
     }
-
-    // ---- result collection helpers ----
 
     private static long[] collectTotals(List<Future<long[]>> futures) throws Exception {
         long totalClaimed = 0L;
@@ -422,8 +422,6 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
         }
         return new long[]{totalClaimed, totalAcked, totalRetried, totalDlqd, totalExpired, totalSkipped};
     }
-
-    // ---- assertion helpers ----
 
     private void assertConcurrentClaimResults(long deliveryCountValue, long totalClaimed,
             long totalAcked, int messages, String tenant) {
@@ -485,8 +483,6 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
         }
     }
 
-    // ---- time-control infrastructure (test-only, plain JDK, mirror Stage 20) -
-
     /**
      * Mutable, injectable wall clock (mirrors Stage 19/20). Frozen at {@code t0}
      * here &mdash; no thread advances it (scenario B's HALF_OPEN probe lifecycle
@@ -506,8 +502,6 @@ class C3ForwardingMultiWorkerConcurrencyIntegrationTest {
             return current;
         }
     }
-
-    // ---- persistence / envelope helpers (mirror Stage 18/19/20 IT) ----------
 
     private static ForwardingMessageId id(String value) {
         return new ForwardingMessageId(value);

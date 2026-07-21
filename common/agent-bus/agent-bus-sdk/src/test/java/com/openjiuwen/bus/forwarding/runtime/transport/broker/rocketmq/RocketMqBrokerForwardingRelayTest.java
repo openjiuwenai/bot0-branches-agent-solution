@@ -44,8 +44,6 @@ class RocketMqBrokerForwardingRelayTest {
     private static final String SOURCE = "source-svc";
     private static final String TARGET = "target-svc";
 
-    // ===== buildMessage: record → RocketMQ Message (pure mapping) =====
-
     @Test
     void buildMessage_maps_record_to_descriptor_body_and_metadata() {
         ForwardingOutboxRecord record = record("msg-1", "payload-ref-1", "corr-1");
@@ -88,8 +86,6 @@ class RocketMqBrokerForwardingRelayTest {
         Message msg = RocketMqBrokerForwardingRelay.buildMessage(record, "topic-x");
         assertThat(new String(msg.getBody(), StandardCharsets.UTF_8)).doesNotContain("ref-secret-payload");
     }
-
-    // ===== produce: outcome mapping =====
 
     @Test
     void produce_returns_accepted_when_sender_succeeds() {
@@ -155,8 +151,6 @@ class RocketMqBrokerForwardingRelayTest {
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("record");
     }
-
-    // ===== fixtures =====
 
     private static MapEndpointResolver resolver(String topic) {
         return new MapEndpointResolver(Map.of(ROUTE, topic));

@@ -258,6 +258,13 @@ public final class ForwardingDispatcherWorker {
      * gate, delivery, and outcome mutation. A lease-guard rejection or a delivery fault
      * is swallowed as a SKIPPED record (left DISPATCHING, reclaimed on lease expiry)
      * so the tick continues.
+     *
+     * @param record                the claimed outbox record to drive to a terminal state
+     * @param clockNow              the live clock instant read for the renewal check and delivery
+     * @param tenantId              the tenant scope of the record (Rule R-C.c)
+     * @param leaseOwner            identity of this worker instance holding the record's lease
+     * @param leaseUntilMillisEpoch instant until which the claimed lease is exclusive
+     * @return the record outcome (ACKED / RETRIED / DLQ / EXPIRED / SKIPPED)
      */
     private RecordOutcome processRecord(ForwardingOutboxRecord record, long clockNow,
                                         String tenantId, String leaseOwner, long leaseUntilMillisEpoch) {
@@ -312,6 +319,14 @@ public final class ForwardingDispatcherWorker {
     /**
      * Check whether the lease needs renewal and, if so, whether the renewal failed
      * (record reclaimed / not DISPATCHING).
+     *
+     * @param record                the claimed outbox record whose lease is checked
+     * @param clockNow              the live clock instant the renewal check reads
+     * @param tenantId              the tenant scope of the record (Rule R-C.c)
+     * @param leaseOwner            identity of this worker instance holding the record's lease
+     * @param leaseUntilMillisEpoch instant until which the claimed lease is exclusive
+     * @return {@code true} if the record must be skipped (renewal needed but failed);
+     *         {@code false} if no renewal is needed or the renewal succeeded
      */
     private boolean leaseRenewalFailed(ForwardingOutboxRecord record, long clockNow,
                                       String tenantId, String leaseOwner, long leaseUntilMillisEpoch) {
@@ -329,6 +344,13 @@ public final class ForwardingDispatcherWorker {
     /**
      * Apply the delivery outcome to the outbox state machine and return the
      * corresponding record outcome.
+     *
+     * @param record     the claimed outbox record being mutated
+     * @param result     the delivery result mapping to the outbox state transition
+     * @param clockNow   the live clock instant passed to the retry scheduling path
+     * @param tenantId   the tenant scope of the record (Rule R-C.c)
+     * @param leaseOwner identity of this worker instance holding the record's lease
+     * @return the record outcome (ACKED / RETRIED / DLQ / EXPIRED / SKIPPED)
      */
     private RecordOutcome applyOutcome(ForwardingOutboxRecord record, ForwardingDeliveryResult result,
                                       long clockNow, String tenantId, String leaseOwner) {
@@ -361,6 +383,13 @@ public final class ForwardingDispatcherWorker {
      * is a legal DLQ code); otherwise the policy picks the next-attempt instant
      * (record.attemptCount() is the retries already recorded — scheduleRetry
      * increments it).
+     *
+     * @param record     the claimed outbox record being retried or moved to DLQ
+     * @param result     the retryable delivery result carrying the failure code
+     * @param clockNow   the live clock instant used to compute the next-attempt time
+     * @param tenantId   the tenant scope of the record (Rule R-C.c)
+     * @param leaseOwner identity of this worker instance holding the record's lease
+     * @return RETRIED if the record was re-scheduled for another attempt, or DLQ if retries are exhausted
      */
     private RecordOutcome applyRetry(ForwardingOutboxRecord record, ForwardingDeliveryResult result,
                                     long clockNow, String tenantId, String leaseOwner) {

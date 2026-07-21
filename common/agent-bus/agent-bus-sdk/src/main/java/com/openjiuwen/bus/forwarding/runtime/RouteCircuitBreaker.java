@@ -134,28 +134,36 @@ public final class RouteCircuitBreaker implements ForwardingCircuitBreaker {
         }
         long now = clock.epochMillis();
         synchronized (s) {
-            if (s.state == State.HALF_OPEN) {
-                s.probeInFlight = false; // the probe resolved either way
-                if (success) {
-                    s.state = State.CLOSED;
-                    s.consecutiveFailures = 0;
-                } else {
-                    s.state = State.OPEN;
-                    s.openedAtMillisEpoch = now;
-                }
-            } else if (s.state == State.CLOSED) {
-                if (success) {
-                    s.consecutiveFailures = 0;
-                } else if (++s.consecutiveFailures >= failureThreshold) {
-                    s.state = State.OPEN;
-                    s.openedAtMillisEpoch = now;
-                } else {
-                    // under threshold — the count is incremented, breaker stays CLOSED
-                }
-            } else {
-                // OPEN: allowsDelivery returned false, so no delivery should record an
-                // outcome here; ignore defensively (a straggler outcome from before the
-                // open cannot flip state on its own).
+            switch (s.state) {
+                case HALF_OPEN:
+                    s.probeInFlight = false; // the probe resolved either way
+                    if (success) {
+                        s.state = State.CLOSED;
+                        s.consecutiveFailures = 0;
+                    } else {
+                        s.state = State.OPEN;
+                        s.openedAtMillisEpoch = now;
+                    }
+                    break;
+                case CLOSED:
+                    if (success) {
+                        s.consecutiveFailures = 0;
+                    } else {
+                        ++s.consecutiveFailures;
+                        if (s.consecutiveFailures >= failureThreshold) {
+                            s.state = State.OPEN;
+                            s.openedAtMillisEpoch = now;
+                        }
+                        // else: under threshold — the count is incremented, breaker stays CLOSED.
+                    }
+                    break;
+                case OPEN:
+                    // OPEN: allowsDelivery returned false, so no delivery should record an
+                    // outcome here; ignore defensively (a straggler outcome from before the
+                    // open cannot flip state on its own).
+                    break;
+                default:
+                    throw new IllegalStateException("unexpected state: " + s.state);
             }
         }
     }

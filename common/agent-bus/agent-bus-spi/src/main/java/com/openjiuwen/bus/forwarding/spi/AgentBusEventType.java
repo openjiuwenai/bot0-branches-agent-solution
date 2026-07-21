@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 /**
@@ -38,7 +39,6 @@ package com.openjiuwen.bus.forwarding.spi;
  */
 // scope: forwarding SPI — pure Java event-type discriminator; no payload body
 public enum AgentBusEventType {
-    // ---- FEAT-013: client -> server (gateway -> event-bus -> agent-runtime) ----
     /** Client initiates an Agent call / Task creation. */
     CLIENT_INVOCATION_REQUESTED,
     /** Client cancels an existing Task (→ A2A CancelTask). */
@@ -47,7 +47,6 @@ public enum AgentBusEventType {
     CLIENT_INVOCATION_QUERY_REQUESTED,
     /** Client subscribes to an existing Task's A2A SSE (based on taskId). */
     CLIENT_STREAM_SUBSCRIBE_REQUESTED,
-    // ---- FEAT-013: server -> gateway (agent-runtime -> event-bus -> gateway) ----
     /** Server accepted and created/reused a Task (carries taskId). */
     INVOCATION_ACCEPTED,
     /** Server explicitly rejected; no Task was created. */
@@ -60,7 +59,6 @@ public enum AgentBusEventType {
     INVOCATION_STREAM_READY,
     /** Task terminal state (completed/failed/cancelled); carries no token stream. */
     INVOCATION_TERMINAL,
-    // ---- FEAT-014: source runtime -> target runtime (caller -> event-bus -> target) ----
     /** Caller initiates a remote A2A call / advances a remote Task (→ A2A message/send). */
     A2A_CALL_REQUESTED,
     /** Caller cancels a remote Task (→ A2A CancelTask). */
@@ -69,7 +67,6 @@ public enum AgentBusEventType {
     A2A_CALL_QUERY_REQUESTED,
     /** Caller subscribes to a remote Task's A2A SSE (based on remote taskId). */
     A2A_STREAM_SUBSCRIBE_REQUESTED,
-    // ---- FEAT-014: target runtime -> source runtime (target -> event-bus -> caller) ----
     /** Target accepted and created/reused a remote Task (carries remote taskId). */
     A2A_CALL_ACCEPTED,
     /** Target explicitly rejected; no remote Task was created. */

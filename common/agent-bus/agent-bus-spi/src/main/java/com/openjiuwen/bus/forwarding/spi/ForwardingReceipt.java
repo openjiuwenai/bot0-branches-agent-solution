@@ -43,6 +43,11 @@ public record ForwardingReceipt(
 
     /**
      * Accepted receipt factory (no failure code).
+     *
+     * @param messageId the id of the message acknowledged by the substrate
+     * @param tenantId the tenant scope of the message
+     * @param acceptedAtMillisEpoch the epoch millis at which the substrate accepted the message
+     * @return an accepted receipt carrying no failure code
      */
     public static ForwardingReceipt accepted(ForwardingMessageId messageId,
                                              String tenantId, long acceptedAtMillisEpoch) {
@@ -51,6 +56,12 @@ public record ForwardingReceipt(
 
     /**
      * Rejected receipt factory (failure code required).
+     *
+     * @param messageId the id of the message rejected by the substrate
+     * @param tenantId the tenant scope of the message
+     * @param failureCode the reason the message was rejected (required)
+     * @param acceptedAtMillisEpoch the epoch millis at which the substrate rejected the message
+     * @return a rejected receipt carrying the failure code
      */
     public static ForwardingReceipt rejected(ForwardingMessageId messageId,
                                              String tenantId, ForwardingFailureCode failureCode,

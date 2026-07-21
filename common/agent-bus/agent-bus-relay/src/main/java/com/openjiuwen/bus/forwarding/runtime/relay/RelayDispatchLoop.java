@@ -28,6 +28,10 @@ public final class RelayDispatchLoop {
     /** No-op idle strategy: never backs off. For fixed-delay drivers / tests. */
     public static final RelayIdleStrategy NO_BACKOFF = tick -> {};
 
+    private final RelayTick worker;
+    private final TickSource tickSource;
+    private final RelayIdleStrategy idleStrategy;
+
     /** Supplies the instant of the next tick, or empty to stop the loop. Injected (no clock in the loop). */
     @FunctionalInterface
     public interface TickSource {
@@ -49,10 +53,6 @@ public final class RelayDispatchLoop {
          */
         void onIdle(EventBusRelayWorker.RelayTickResult lastTick);
     }
-
-    private final RelayTick worker;
-    private final TickSource tickSource;
-    private final RelayIdleStrategy idleStrategy;
 
     public RelayDispatchLoop(RelayTick worker, TickSource tickSource, RelayIdleStrategy idleStrategy) {
         this.worker = Objects.requireNonNull(worker, "worker is required");
@@ -101,6 +101,9 @@ public final class RelayDispatchLoop {
 
     /**
      * A tick that polled nothing — all four counts zero.
+     *
+     * @param tick the tick result to test
+     * @return {@code true} if all four counts of the tick are zero
      */
     private static boolean isIdle(EventBusRelayWorker.RelayTickResult tick) {
         return tick.relayed() == 0 && tick.dedupSuppressed() == 0

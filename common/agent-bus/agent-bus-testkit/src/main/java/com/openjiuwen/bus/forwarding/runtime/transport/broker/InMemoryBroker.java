@@ -68,12 +68,16 @@ import java.util.concurrent.atomic.AtomicLong;
 // non-production — test fixture only; real broker adapter is decision §7 / Stage 28
 public final class InMemoryBroker implements BrokerForwardingRelayPort {
     private final ForwardingEndpointResolver resolver;
+
     // topic → append-only queue
     private final Map<String, List<QueueEntry>> queues = new LinkedHashMap<>();
+
     // consumerServiceId@topic → next read index
     private final Map<String, Integer> offsets = new LinkedHashMap<>();
+
     // tenantId|messageId → location
     private final Map<String, Location> locations = new LinkedHashMap<>();
+
     // messageId → last reject code (observability)
     private final Map<String, ForwardingFailureCode> rejections = new LinkedHashMap<>();
     private final AtomicLong sequence = new AtomicLong();
@@ -90,12 +94,12 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
         }
     }
 
-    /** Locates a polled message for commit / reject without leaking topic/offset on the message. */
-    private record Location(String topic, int index) {}
-
     public InMemoryBroker(ForwardingEndpointResolver resolver) {
         this.resolver = Objects.requireNonNull(resolver, "resolver is required");
     }
+
+    /** Locates a polled message for commit / reject without leaking topic/offset on the message. */
+    private record Location(String topic, int index) {}
 
     /**
      * Test-only: force the broker into a transiently-unavailable state (simulates UNAVAILABLE produce).
@@ -164,8 +168,6 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
         return new InMemoryBrokerConsumer(this, consumerServiceId);
     }
 
-    // ===== BrokerForwardingRelayPort =====
-
     @Override
     public synchronized BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
         Objects.requireNonNull(record, "record is required");
@@ -197,8 +199,6 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
         locations.put(locationKey(record.tenantId(), record.messageId().value()), new Location(t, index));
         return BrokerProduceOutcome.accepted();
     }
-
-    // ===== per-consumer double (nested so it can touch the shared broker's private state) =====
 
     /**
      * Per-consumer {@link BrokerForwardingConsumerPort} double backed by the shared
@@ -355,8 +355,6 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             };
         }
     }
-
-    // ===== internals =====
 
     private static String consumerGroupKey(String consumerServiceId, String topic) {
         return consumerServiceId + "@" + topic;

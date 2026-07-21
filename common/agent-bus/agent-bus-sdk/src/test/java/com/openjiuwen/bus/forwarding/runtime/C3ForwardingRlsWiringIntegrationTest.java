@@ -226,8 +226,6 @@ class C3ForwardingRlsWiringIntegrationTest {
                 .isEqualTo(ForwardingStatus.Inbox.CONSUMED);
     }
 
-    // ---- visibility probes (raw SQL under app_role, bypassing the app WHERE) ----
-
     private static long visibleOutboxCount(String settingKey, String settingValue) throws Exception {
         try (Connection c = superuser.getConnection();
              Statement st = c.createStatement()) {
@@ -251,8 +249,6 @@ class C3ForwardingRlsWiringIntegrationTest {
             }
         }
     }
-
-    // ---- helpers -----------------------------------------------------------
 
     private static ForwardingMessageId id(String value) {
         return new ForwardingMessageId(value);

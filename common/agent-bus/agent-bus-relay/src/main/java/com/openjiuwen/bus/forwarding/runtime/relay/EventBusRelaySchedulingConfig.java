@@ -27,7 +27,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @Configuration
 @Profile("eventbus")
 public class EventBusRelaySchedulingConfig {
-
     /**
      * Build the dedicated relay-scheduler slice (pool size 2, {@code relay-} thread prefix)
      * that drives the two-hop relay ticks programmatically.

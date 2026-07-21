@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.runtime.persistence.jdbc;
 
 import com.openjiuwen.bus.forwarding.runtime.ForwardingStateMachine;
@@ -173,8 +174,6 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
         });
     }
 
-    // ===== internals =====
-
     /**
      * Stage 24 RLS wiring: run {@code work} inside a short transaction after setting
      * the transaction-scoped {@code app.tenant_id} (PostgreSQL
@@ -213,7 +212,7 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
      * @param code  the failure code (non-null only for {@link ForwardingStateMachine.InboxEvent#REJECT})
      */
     private record InboxTransition(ForwardingStateMachine.InboxEvent event,
-                                   ForwardingFailureCode code) {
+            ForwardingFailureCode code) {
     }
 
     /**
@@ -245,11 +244,12 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
         if (next == ForwardingStatus.Inbox.CONSUMED) {
             set.append(", consumed_at = :now, failure_code = NULL");
             params.addValue("now", now);
-        } else if (next == ForwardingStatus.Inbox.REJECTED) {
-            set.append(", failure_code = :failureCode");
-            params.addValue("failureCode", transition.code().wireCode());
         } else {
-            // no extra columns for this transition (fall-through, never hit by the inbox state machine)
+            if (next == ForwardingStatus.Inbox.REJECTED) {
+                set.append(", failure_code = :failureCode");
+                params.addValue("failureCode", transition.code().wireCode());
+            }
+            // no extra columns for other transitions (fall-through, never hit by the inbox state machine)
         }
         String sql = "UPDATE " + TABLE + " SET " + set
                 + " WHERE tenant_id = :tenantId AND message_id = :messageId"

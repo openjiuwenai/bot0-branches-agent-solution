@@ -127,16 +127,12 @@ public final class GatewayRuntimeService implements IngressGateway {
         this.clock = Objects.requireNonNull(clock, "clock is required");
     }
 
-    // ===== IngressGateway =====
-
     @Override
     public IngressResponse routeClientRequest(IngressEnvelope envelope) {
         Objects.requireNonNull(envelope, "envelope is required");
         dispatchRequest(envelope);
         return acceptWindow(envelope.requestId(), envelope.tenantId());
     }
-
-    // ===== dispatch (request → outbox → broker) =====
 
     /**
      * Build the request {@link ForwardingEnvelope} and synchronously dispatch it:
@@ -160,9 +156,9 @@ public final class GatewayRuntimeService implements IngressGateway {
         String correlationId = env.requestId().toString();
         String idempotencyKey = env.idempotencyKey().toString();
 
-        String descriptor = BrokerControlDescriptor.encode(
+        String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
                 eventType, env.traceId(), correlationId, idempotencyKey,
-                routeHandle.value(), capability, deadline, sourceServiceId);
+                routeHandle.value(), capability, deadline, sourceServiceId));
         ForwardingEnvelope envelope = new ForwardingEnvelope(
                 new ForwardingMessageId("gw-" + UUID.randomUUID()),
                 eventType,
@@ -189,8 +185,6 @@ public final class GatewayRuntimeService implements IngressGateway {
         }
         return envelope;
     }
-
-    // ===== accept window (poll responses, classify, return IngressResponse) =====
 
     /**
      * Poll the response consumer within the accept window, classify each matching
@@ -305,9 +299,6 @@ public final class GatewayRuntimeService implements IngressGateway {
     /** Carrier for a matched-response outcome: a response to return, or the next taskId to keep polling. */
     private record MatchResult(IngressResponse response, String nextTaskId) {}
 
-
-    // ===== classification (by NATIVE eventType — no descriptor decoding) =====
-
     /**
      * Classify a polled response by its NATIVE {@link BrokerInboundMessage#eventType()}
      * (FEAT-013/014 family). The {@code INVOCATION_TERMINAL} / {@code A2A_CALL_TERMINAL}
@@ -350,8 +341,6 @@ public final class GatewayRuntimeService implements IngressGateway {
         };
     }
 
-    // ===== IngressResponse mapping =====
-
     /**
      * Map an observed invocation status to an {@link IngressResponse}.
      *
@@ -375,8 +364,6 @@ public final class GatewayRuntimeService implements IngressGateway {
         };
     }
 
-    // ===== requestType → eventType mapping (§4.2 envelope encapsulation) =====
-
     private static AgentBusEventType mapEventType(IngressEnvelope.IngressRequestType requestType, String routeHandle) {
         // routeHandle 同时决定 topic(ascend_bus_<route>_*)与事件族:
         //   invocation 路由 → CLIENT_INVOCATION_* 族(FEAT-013,client → gateway → event-bus → runtime);
@@ -399,8 +386,6 @@ public final class GatewayRuntimeService implements IngressGateway {
                     : AgentBusEventType.CLIENT_STREAM_SUBSCRIBE_REQUESTED;
         };
     }
-
-    // ===== request attribute resolution (S2 seam; S4 controller resolves via registry) =====
 
     private static ForwardingRouteHandle resolveRouteHandle(IngressEnvelope env) {
         String value = requireStringAttribute(env.requestAttributes(), "routeHandle");
@@ -431,8 +416,6 @@ public final class GatewayRuntimeService implements IngressGateway {
         }
         return s;
     }
-
-    // ===== helpers =====
 
     private static String reasonFrom(BrokerInboundMessage m, InvocationResponseStatus status) {
         String reason = BrokerControlDescriptor.token(m.payloadRef(), "reason").orElse(null);

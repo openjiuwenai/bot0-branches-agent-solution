@@ -128,8 +128,6 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
         this.txTemplate = new TransactionTemplate(txManager);
     }
 
-    // ===== ForwardingOutboxPort =====
-
     @Override
     public ForwardingReceipt enqueue(ForwardingEnvelope envelope, String sourceServiceId,
                                      String targetServiceId, long nowMillisEpoch) {
@@ -238,8 +236,6 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
         });
     }
 
-    // ===== ForwardingOutboxClaimPort =====
-
     @Override
     public List<ForwardingOutboxRecord> claimDue(String tenantId, long nowMillisEpoch, int limit,
                                                   String leaseOwner, long leaseUntilMillisEpoch) {
@@ -323,8 +319,6 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
             return jdbc.update(sql, params) > 0;
         });
     }
-
-    // ===== internals =====
 
     /**
      * Stage 24 RLS wiring: run {@code work} inside a short transaction after setting

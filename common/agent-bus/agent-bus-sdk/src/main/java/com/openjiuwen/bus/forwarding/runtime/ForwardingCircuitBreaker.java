@@ -51,7 +51,6 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
  * @since 0.1.0
  */
 public interface ForwardingCircuitBreaker {
-
     /**
      * No-op breaker: the circuit is always closed, so delivery is never blocked
      * and outcomes are ignored. The default the worker uses when no per-route

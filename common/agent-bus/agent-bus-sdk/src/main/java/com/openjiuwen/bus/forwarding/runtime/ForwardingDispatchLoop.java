@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.runtime;
 
 import java.util.Objects;
@@ -36,6 +37,10 @@ public final class ForwardingDispatchLoop {
     /** No-op idle strategy: a busy loop that never backs off. For tests / tight loops. */
     public static final IdleStrategy NO_BACKOFF = tick -> {};
 
+    private final ForwardingDispatcherWorker worker;
+    private final TickSource tickSource;
+    private final IdleStrategy idleStrategy;
+
     /**
      * Supplies the instant of the next tick, or empty to stop the loop. Injected
      * so the loop holds no clock of its own (deterministic / testable).
@@ -65,10 +70,6 @@ public final class ForwardingDispatchLoop {
          */
         void onIdle(ForwardingDispatcherWorker.DispatchTickResult lastTick);
     }
-
-    private final ForwardingDispatcherWorker worker;
-    private final TickSource tickSource;
-    private final IdleStrategy idleStrategy;
 
     public ForwardingDispatchLoop(ForwardingDispatcherWorker worker, TickSource tickSource,
                                   IdleStrategy idleStrategy) {

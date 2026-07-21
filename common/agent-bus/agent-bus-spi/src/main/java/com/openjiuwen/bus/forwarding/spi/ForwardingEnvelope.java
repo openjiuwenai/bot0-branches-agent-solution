@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.bus.forwarding.spi;
 
 import java.util.Objects;
@@ -105,6 +106,8 @@ public record ForwardingEnvelope(
 
     /**
      * Whether this envelope carries a payload reference (data-bearing message).
+     *
+     * @return {@code true} if this envelope carries a payload reference; {@code false} otherwise
      */
     public boolean carriesPayloadRef() {
         return payloadRef != null;
