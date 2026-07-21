@@ -3,26 +3,14 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <parent>
         <groupId>com.openjiuwen.example</groupId>
-        <artifactId>multi-deep-research-demo</artifactId>
+        <artifactId>agentscope-a2a-interrupt-demo</artifactId>
         <version>0.1.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-
-    <artifactId>agent-deep-research</artifactId>
-    <packaging>jar</packaging>
-
-    <name>agent-deep-research</name>
-    <description>Deep research agent — SDK (com.openjiuwen.example.deepresearch.*) + Spring Boot runtime (com.openjiuwen.example.deepresearch.runtime.*)</description>
-
+    <artifactId>harness-runtime</artifactId>
     <dependencies>
-        <dependency>
-            <groupId>com.openjiuwen</groupId>
-            <artifactId>agent-core-java</artifactId>
-            <version>${agent-core-java.version}</version>
-        </dependency>
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-app</artifactId>
@@ -30,13 +18,20 @@
         </dependency>
         <dependency>
             <groupId>com.openjiuwen</groupId>
-            <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+            <artifactId>agent-service-adapters-agentscope</artifactId>
             <version>${agent-runtime-ext-java.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>4.33.2</version>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-harness</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-model-openai</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -48,27 +43,14 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <release>17</release>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.openjiuwen.example.deepresearch.runtime.DeepResearchRuntimeApplication</mainClass>
+                    <mainClass>com.openjiuwen.example.agentscope.harness.HarnessRuntimeApplication</mainClass>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.5.0</version>
             </plugin>
         </plugins>
     </build>
