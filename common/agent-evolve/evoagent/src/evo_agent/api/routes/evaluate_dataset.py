@@ -128,8 +128,7 @@ def _validate_group(g: GroupConfigRequest) -> None:
             raise ValueError(f"Group {g.name!r} (llm_judge) requires non-empty labels")
         if "其他" in g.labels:
             raise ValueError(
-                f"Group {g.name!r} (llm_judge): '其他' is a reserved label, "
-                "cannot be declared"
+                f"Group {g.name!r} (llm_judge): '其他' is a reserved label, cannot be declared"
             )
         if not g.extract_key:
             raise ValueError(f"Group {g.name!r} (llm_judge) requires extract_key")
@@ -137,8 +136,7 @@ def _validate_group(g: GroupConfigRequest) -> None:
     for name in dict.fromkeys(g.batch_metrics):
         if name not in valid:
             raise ValueError(
-                f"Group {g.name!r}: unknown batch metric {name!r}; "
-                f"valid: {sorted(valid)}"
+                f"Group {g.name!r}: unknown batch metric {name!r}; valid: {sorted(valid)}"
             )
 
 
@@ -162,26 +160,62 @@ def _build_judge_model(llm_config: LLMConfig) -> Any:
 
     ``import evo_agent.llm`` 触发 ICBC provider 注册；``Model(client_config,
     model_config)`` 见 ``optimizer_runner._create_llm``。
+
+    ``client_provider`` 为自由字符串，openjiuwen 在 ``ModelClientConfig`` 构造时
+    校验 provider 是否已注册；未知 provider 抛
+    :class:`openjiuwen.core.common.exception.errors.ValidationError`（非 pydantic
+    ``ValidationError``），此处捕获并转为 422，避免冒泡为 500。
     """
+    from openjiuwen.core.common.exception.errors import (
+        ValidationError as ProviderValidationError,
+    )
     from openjiuwen.core.foundation.llm import Model, ModelClientConfig, ModelRequestConfig
 
     import evo_agent.llm  # noqa: F401 — 注册 ICBC provider（幂等）
 
-    client_config = ModelClientConfig(
-        client_provider=llm_config.client_provider,
-        api_key=llm_config.api_key,
-        api_base=llm_config.api_base,
-        verify_ssl=llm_config.verify_ssl,
-    )
     model_config = ModelRequestConfig(
         model_name=llm_config.model_name,
         temperature=llm_config.temperature,
         max_tokens=llm_config.max_tokens,
     )
+    try:
+        client_config = ModelClientConfig(
+            client_provider=llm_config.client_provider,
+            api_key=llm_config.api_key,
+            api_base=llm_config.api_base,
+            verify_ssl=llm_config.verify_ssl,
+        )
+    except ProviderValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid llm_config: {e}",
+        ) from e
     if llm_config.extra_body:
         # extra="allow" → model_dump 后进 chat.completions.create(extra_body=...)
         model_config.extra_body = llm_config.extra_body
     return Model(client_config, model_config)
+
+
+async def _probe_judge_model(model: Any) -> None:
+    """提交期用最小 prompt 探测一次 LLM 调用——无效 api_key 等调用级失败 → 500。
+
+    **不触碰 judge 阶段单条降级「其他」的内在逻辑**（批内瞬时失败仍降级、不阻断整批）；
+    此探测仅把「配置级」LLM 调用失败（无效 api_key、连接失败、模型调用失败等）在提交期
+    同步暴露为 500，与 ``/evaluate`` 的「LLM 失败 → 500」契约（``docs/api/evaluate-api.md``
+    §状态码）一致，消除两路由在「无效 api_key」上的行为不一致（DEFECT-003）。
+
+    provider 无关——不区分 auth / 网络错误，任意调用异常统一 500（同 ``judge`` 降级哲学：
+    「不区分 ICBC token 错误，保持与 provider 解耦」）。
+    """
+    from openjiuwen.core.foundation.llm import UserMessage
+
+    try:
+        await model.invoke([UserMessage(content="ping")])
+    except Exception as e:  # noqa: BLE001 — 任意调用级失败统一 500，与 /evaluate 一致
+        raise HTTPException(
+            status_code=500,
+            detail=f"LLM judge config probe failed: {e}",
+        ) from e
 
 
 def _progress_from_job(job: Any) -> dict[str, Any] | None:
@@ -267,6 +301,13 @@ async def submit_dataset_eval(
                     f"labels {list(g.labels)}"
                 ),
             )
+
+    # 所有 422 数据校验通过后，提交期探测一次 LLM 调用——无效 api_key 等配置级失败
+    # 同步返回 500（与 /evaluate 的「LLM 失败→500」契约一致）；不替代 judge 阶段
+    # 单条降级逻辑。放最后以确保 422 数据/配置校验优先于 LLM 调用。
+    if has_judge:
+        assert judge_model is not None
+        await _probe_judge_model(judge_model)
 
     groups = [_to_group_config(g) for g in parsed.groups]
 
