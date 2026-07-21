@@ -128,8 +128,7 @@ def _validate_group(g: GroupConfigRequest) -> None:
             raise ValueError(f"Group {g.name!r} (llm_judge) requires non-empty labels")
         if "其他" in g.labels:
             raise ValueError(
-                f"Group {g.name!r} (llm_judge): '其他' is a reserved label, "
-                "cannot be declared"
+                f"Group {g.name!r} (llm_judge): '其他' is a reserved label, cannot be declared"
             )
         if not g.extract_key:
             raise ValueError(f"Group {g.name!r} (llm_judge) requires extract_key")
@@ -137,8 +136,7 @@ def _validate_group(g: GroupConfigRequest) -> None:
     for name in dict.fromkeys(g.batch_metrics):
         if name not in valid:
             raise ValueError(
-                f"Group {g.name!r}: unknown batch metric {name!r}; "
-                f"valid: {sorted(valid)}"
+                f"Group {g.name!r}: unknown batch metric {name!r}; valid: {sorted(valid)}"
             )
 
 
@@ -162,22 +160,36 @@ def _build_judge_model(llm_config: LLMConfig) -> Any:
 
     ``import evo_agent.llm`` 触发 ICBC provider 注册；``Model(client_config,
     model_config)`` 见 ``optimizer_runner._create_llm``。
+
+    ``client_provider`` 为自由字符串，openjiuwen 在 ``ModelClientConfig`` 构造时
+    校验 provider 是否已注册；未知 provider 抛
+    :class:`openjiuwen.core.common.exception.errors.ValidationError`（非 pydantic
+    ``ValidationError``），此处捕获并转为 422，避免冒泡为 500。
     """
+    from openjiuwen.core.common.exception.errors import (
+        ValidationError as ProviderValidationError,
+    )
     from openjiuwen.core.foundation.llm import Model, ModelClientConfig, ModelRequestConfig
 
     import evo_agent.llm  # noqa: F401 — 注册 ICBC provider（幂等）
 
-    client_config = ModelClientConfig(
-        client_provider=llm_config.client_provider,
-        api_key=llm_config.api_key,
-        api_base=llm_config.api_base,
-        verify_ssl=llm_config.verify_ssl,
-    )
     model_config = ModelRequestConfig(
         model_name=llm_config.model_name,
         temperature=llm_config.temperature,
         max_tokens=llm_config.max_tokens,
     )
+    try:
+        client_config = ModelClientConfig(
+            client_provider=llm_config.client_provider,
+            api_key=llm_config.api_key,
+            api_base=llm_config.api_base,
+            verify_ssl=llm_config.verify_ssl,
+        )
+    except ProviderValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid llm_config: {e}",
+        ) from e
     if llm_config.extra_body:
         # extra="allow" → model_dump 后进 chat.completions.create(extra_body=...)
         model_config.extra_body = llm_config.extra_body

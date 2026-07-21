@@ -256,7 +256,11 @@ def test_mode5_json_column_extraction() -> None:
 
 
 def _lj_group(
-    name: str, gold: str, pred: str, *, labels: list[str] | None = None,
+    name: str,
+    gold: str,
+    pred: str,
+    *,
+    labels: list[str] | None = None,
     extract_key: str = "是否属实",
 ) -> dict[str, Any]:
     return {
@@ -588,6 +592,38 @@ def test_llm_judge_gold_not_in_labels_422() -> None:
     )
     assert resp.status_code == 422
     assert "not in declared labels" in resp.text
+
+
+def test_llm_judge_unknown_client_provider_422() -> None:
+    """未知 client_provider → 422（openjiuwen 在 ModelClientConfig 构造时拒绝），非 500。"""
+    client = TestClient(create_app())
+    cfg = {
+        "id_field": "id",
+        "groups": [
+            {
+                "name": "g",
+                "kind": "llm_judge",
+                "pred_field": "pred",
+                "gold_field": "gold",
+                "labels": ["否", "是"],
+                "extract_key": "是否属实",
+                "batch_metrics": ["mean"],
+            }
+        ],
+        "llm_config": {
+            "api_key": "k",
+            "api_base": "http://x",
+            "client_provider": "UnknownProvider",
+        },
+    }
+    data = json.dumps({"id": "1", "gold": "否", "pred": "否"}, ensure_ascii=False).encode()
+    resp = client.post(
+        "/evaluate/dataset",
+        files={"file": ("items.json", data, "application/json")},
+        data={"config": json.dumps(cfg)},
+    )
+    assert resp.status_code == 422
+    assert "UnknownProvider" in resp.text
 
 
 if __name__ == "__main__":

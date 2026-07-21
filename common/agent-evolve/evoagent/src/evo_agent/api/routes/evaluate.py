@@ -145,6 +145,41 @@ def _load_trajectory(path: Path) -> StandardTrajectory:
     return StandardTrajectory.model_validate(data)
 
 
+def _build_llm_configs(
+    llm_config: LLMConfig,
+) -> tuple[Any, Any]:
+    """从 ``LLMConfig`` 构建 ``(ModelRequestConfig, ModelClientConfig)``。
+
+    ``client_provider`` 为自由字符串，openjiuwen 在 ``ModelClientConfig`` 构造时
+    校验 provider 是否已注册；未知 provider 抛
+    :class:`openjiuwen.core.common.exception.errors.ValidationError`（非 pydantic
+    ``ValidationError``），此处捕获并转为 422，避免冒泡为 500。
+    """
+    from openjiuwen.core.common.exception.errors import (
+        ValidationError as ProviderValidationError,
+    )
+    from openjiuwen.core.foundation.llm import ModelClientConfig, ModelRequestConfig
+
+    model_config = ModelRequestConfig(
+        model_name=llm_config.model_name,
+        temperature=llm_config.temperature,
+        max_tokens=llm_config.max_tokens,
+    )
+    try:
+        model_client_config = ModelClientConfig(
+            client_provider=llm_config.client_provider,
+            api_key=llm_config.api_key,
+            api_base=llm_config.api_base,
+            verify_ssl=llm_config.verify_ssl,
+        )
+    except ProviderValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid llm_config: {e}",
+        ) from e
+    return model_config, model_client_config
+
+
 def _build_filters(config: FilterConfig) -> list[TrajectoryFilter]:
     """从 FilterConfig 构建过滤器列表。"""
     filters: list[TrajectoryFilter] = []
@@ -238,21 +273,9 @@ def _to_goal_response(result: GoalGenerationOutput) -> GenerateGoalResponse:
 @router.post("/generate-goal", response_model=GenerateGoalResponse)
 async def generate_goal(request: GenerateGoalRequest) -> GenerateGoalResponse:
     """基于内联轨迹 messages 生成优化器使用的用户目标。"""
-    from openjiuwen.core.foundation.llm import ModelClientConfig, ModelRequestConfig
-
     goal_input = _build_goal_generation_input(request.messages)
 
-    model_config = ModelRequestConfig(
-        model_name=request.llm_config.model_name,
-        temperature=request.llm_config.temperature,
-        max_tokens=request.llm_config.max_tokens,
-    )
-    model_client_config = ModelClientConfig(
-        client_provider=request.llm_config.client_provider,
-        api_key=request.llm_config.api_key,
-        api_base=request.llm_config.api_base,
-        verify_ssl=request.llm_config.verify_ssl,
-    )
+    model_config, model_client_config = _build_llm_configs(request.llm_config)
     generator = TrajectoryGoalGenerator(
         model_config=model_config,
         model_client_config=model_client_config,
@@ -279,8 +302,6 @@ async def evaluate_trajectory(request: EvaluateRequest) -> EvaluateResponse:
     - 匹配到过滤规则的轨迹直接返回 ``status="filtered"``、``score=0.0``
     - 未匹配的轨迹正常委托给 LLM 评估器
     """
-    from openjiuwen.core.foundation.llm import ModelClientConfig, ModelRequestConfig
-
     # 1. 加载轨迹
     traj_path = Path(request.trajectory_path)
     if not traj_path.exists():
@@ -305,17 +326,7 @@ async def evaluate_trajectory(request: EvaluateRequest) -> EvaluateResponse:
     )
 
     # 3. 构建评估器
-    model_config = ModelRequestConfig(
-        model_name=request.llm_config.model_name,
-        temperature=request.llm_config.temperature,
-        max_tokens=request.llm_config.max_tokens,
-    )
-    model_client_config = ModelClientConfig(
-        client_provider=request.llm_config.client_provider,
-        api_key=request.llm_config.api_key,
-        api_base=request.llm_config.api_base,
-        verify_ssl=request.llm_config.verify_ssl,
-    )
+    model_config, model_client_config = _build_llm_configs(request.llm_config)
     llm_evaluator = LLMEvaluator(
         model_config=model_config,
         model_client_config=model_client_config,
