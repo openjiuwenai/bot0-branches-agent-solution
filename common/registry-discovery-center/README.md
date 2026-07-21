@@ -64,7 +64,7 @@ mvn package
 java -jar target/agent-rdc-0.1.0.jar
 ```
 
-启动成功标志：日志含 `Started AgentRdcApplication` + Flyway 应用迁移（干净库为 **V2–V11**）+ `Tomcat started on port 8092`。开启 deployment-discovery 时另有 reconcile 日志（抓 Card / 跳过旧 snapshot 等）。
+启动成功标志：日志含 `Started AgentRdcApplication` + Flyway 应用迁移（干净库为 **V2–V12**）+ `Tomcat started on port 8092`。开启 deployment-discovery 时另有 reconcile 日志（抓 Card / 跳过旧 snapshot 等）。
 
 进程监听 `http://localhost:8092`。端口冲突时用 `--server.port=NNNN` 覆盖。
 
@@ -209,7 +209,49 @@ rdc:
 
 响应：`200 OK`（无 body）。
 
-> **Feat-015：** 当 `rdc.deployment-discovery.enabled=true`（默认开启）时，本端点返回 **410 Gone**（`push_registration_disabled`）。正式注册走 provider 全量/增量对账 + 主动抓取 Agent Card，不再接受 HTTP push。
+> **Feat-015：** 当 `rdc.deployment-discovery.enabled=true` 时，本端点返回 **410 Gone**（`push_registration_disabled`）。正式注册走 provider 全量/增量对账 + 主动抓取 Agent Card，不再接受 HTTP push。属性类默认与非 `dev` 配置为 `false`（兼容旧 push）；本仓库 `spring.profiles.active=dev` 下会开启 demo instances。
+
+### 从 `pull-registration` 迁移到 `deployment-discovery`（方案 B）
+
+`rdc.pull-registration.*`（REQ-2026-004）已 `@Deprecated(forRemoval=true)`，保留 1–2 个 release 供迁移：
+
+| 规则 | 行为 |
+|------|------|
+| 两路同时 `enabled=true` | **启动失败**（`RegistrationPathGuard` → `IllegalStateException`），避免双写与 PK 分裂 |
+| 仅 pull `enabled=true` | 允许启动，打 **WARN** 要求迁到 `deployment-discovery` |
+| 仅 deployment / 都关 | 正常 |
+
+**为何不能直接删 pull：** `agentId` / `serviceId` / `instanceId` 身份模型不同，硬切会产生孤儿行（resolve 仍命中旧 agentId，discover 走新逻辑键）。
+
+#### 字段映射
+
+| pull-registration | deployment-discovery | 差异 |
+|---|---|---|
+| `base-url` | `base-url` | 同 |
+| `tenant-id` | `tenant-id` | 同 |
+| `agent-id`（必填，手填） | ❌ | **改为** `AgentIdCodec.derive(tenantId, serviceId)`（当前实现等于 `service-id`） |
+| ❌ | `service-id`（必填） | **新增** |
+| ❌ | `instance-id`（必填） | **新增**（pull 侧由 endpointUrl 经 `InstanceIdCodec` 派生） |
+| ❌ | `deployment-version` / `readiness` | 新增 |
+| `framework-type` 等 | 同名或 `binding-defaults` | 放宽 |
+
+#### 迁移步骤（建议）
+
+1. 把每个 `runtimes[]` 改写成 `deployment-discovery.instances[]`：补 `service-id` / `instance-id`；确认派生后的 `agentId` 是否等于你原先手填的 `agent-id`。
+2. 设 `pull-registration.enabled=false`，`deployment-discovery.enabled=true`（勿同时为 true）。
+3. 若旧 `agentId` ≠ 新派生值，清理或迁移存量行后再切流量，例如：
+
+```sql
+-- 审慎执行：仅示例。先备份。确认无 caller 再 pin 旧 agentId 后再删。
+-- SELECT tenant_id, agent_id, service_id, instance_id FROM agent_registry_mvp WHERE ...;
+-- DELETE FROM agent_registry_mvp WHERE agent_id = '<legacy-hand-pinned-id>';
+```
+
+4. 大版本再移除 `pull` 包（方案 A）。
+
+**安全差异（迁移收益）：** deployment-discovery 走 `AgentCardFetcher`（schema / 签名 / CIDR / mTLS / 大小限制）；pull 路径仍为遗留旁路，仅在互斥下短暂保留。
+
+---
 
 ### GET `/api/registry/instances/{tenantId}/{agentId}`
 
