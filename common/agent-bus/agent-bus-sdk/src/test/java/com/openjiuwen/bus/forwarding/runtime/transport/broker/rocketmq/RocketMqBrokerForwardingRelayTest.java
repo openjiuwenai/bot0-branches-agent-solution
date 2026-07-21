@@ -154,7 +154,12 @@ class RocketMqBrokerForwardingRelayTest {
                 .hasMessageContaining("record");
     }
 
-    /** A resolver that always returns the given topic (ignores eventType / suffix) — for controlled-topic tests. */
+    /**
+     * A resolver that always returns the given topic (ignores eventType / suffix) — for controlled-topic tests.
+     *
+     * @param topic the fixed topic to return for every event type / suffix
+     * @return a resolver that ignores its arguments and returns {@code topic}
+     */
     private static BrokerTopicResolver resolver(String topic) {
         return (et, suffix) -> topic;
     }

@@ -63,27 +63,24 @@ public final class FakeAgentDiscoveryService implements AgentDiscoveryService {
     }
 
     /**
-     * Convenience: register a card from its scalar routing fields (builds the {@link AgentCardDto}).
+     * Convenience: register a card from its scalar routing fields (builds the {@link AgentCardDto}
+     * with test-default {@code weight=100}/{@code health=ONLINE}/{@code contractVersion=v1}).
      *
-     * @param agentId         the agentId the card is registered under
-     * @param serviceId       the logical service identifier (searchByServiceId dimension)
-     * @param routeHandle     the opaque route handle the gateway carries end-to-end
-     * @param capability      a single capability tag (searchByCapability dimension)
-     * @param weight          selection weight (higher = preferred)
-     * @param health          lifecycle health ({@code ONLINE}/{@code DEGRADED}/{@code DRAINING})
-     * @param contractVersion contract version pinned at registration
+     * @param agentId     the agentId the card is registered under
+     * @param serviceId   the logical service identifier (searchByServiceId dimension)
+     * @param routeHandle the opaque route handle the gateway carries end-to-end
+     * @param capability  a single capability tag (searchByCapability dimension)
      * @return this fake (for fluent registration)
      */
     public FakeAgentDiscoveryService register(String agentId, String serviceId, String routeHandle,
-                                              String capability, int weight, String health,
-                                              String contractVersion) {
+                                              String capability) {
         AgentCardDto card = AgentCardDto.builder()
                 .serviceId(requireNonBlank(serviceId, "serviceId"))
                 .routeHandle(requireNonBlank(routeHandle, "routeHandle"))
-                .health(requireNonBlank(health, "health"))
-                .contractVersion(requireNonBlank(contractVersion, "contractVersion"))
+                .health("ONLINE")
+                .contractVersion("v1")
                 .capabilityVersion("v1")
-                .weight(weight)
+                .weight(100)
                 .region("local")
                 .maxConcurrency(100)
                 .build();

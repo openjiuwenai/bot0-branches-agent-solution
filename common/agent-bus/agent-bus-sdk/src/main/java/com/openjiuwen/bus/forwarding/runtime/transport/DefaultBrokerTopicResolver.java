@@ -42,6 +42,7 @@ import java.util.Objects;
 public final class DefaultBrokerTopicResolver implements BrokerTopicResolver {
     /** FEAT-013 client-invocation route family ({@code CLIENT_*} / {@code INVOCATION_*} event types). */
     public static final String FAMILY_INVOCATION = "invocation";
+
     /** FEAT-014 service-to-service route family ({@code A2A_*} event types). */
     public static final String FAMILY_A2A = "a2a";
 

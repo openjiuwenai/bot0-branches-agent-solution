@@ -178,7 +178,7 @@ class RealBrokerProduceSideIntegrationTest {
         // Discovery fake: register the runtime card so dispatchRequest can resolve the target
         // (serviceId=RUNTIME → routeHandle=ROUTE_INVOCATION, which UC-2 asserts on the descriptor).
         FakeAgentDiscoveryService discovery = new FakeAgentDiscoveryService()
-                .register("agent-runtime", RUNTIME, ROUTE_INVOCATION, "a2a", 100, "ONLINE", "v1");
+                .register("agent-runtime", RUNTIME, ROUTE_INVOCATION, "a2a");
         gateway = new GatewayRuntimeService(outbox, outbox, relay, noopConsumer, discovery,
                 GATEWAY, 5_000L, 30_000L, System::currentTimeMillis);
     }

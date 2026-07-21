@@ -66,31 +66,18 @@ import java.util.Map;
 @Configuration
 @Profile("gateway")
 public class GatewayRuntimeConfiguration {
-    /**
-     * Test-scope discovery service (FEAT-013/014 §7.5 Option A). Returns a
-     * {@link FakeAgentDiscoveryService} pre-registered with a default ONLINE card so the manual
-     * E2E ({@code TempClientMain}) and any gateway-profile context boot can resolve a target
-     * without a live registry. The next-batch gateway production module replaces this with a
-     * {@code registry-discovery-center}-backed {@link AgentDiscoveryService}. The fake is mutable
-     * — a manual E2E may inject and register additional cards before dispatch.
-     *
-     * @param props the agent-bus broker properties (carries the tenant + service ids)
-     * @return a fake discovery service with one default ONLINE card
-     */
-    @Bean
-    AgentDiscoveryService agentDiscoveryService(AgentBusBrokerProperties props) {
-        return new FakeAgentDiscoveryService()
-                .register("agent-runtime", props.eventBusServiceId() + "-runtime",
-                        "v2:default-route-handle", "a2a", 100, "ONLINE", "v1");
-    }
-
     @Bean
     IngressGateway gatewayRuntimeService(ForwardingOutboxPort outbox,
                                          ForwardingOutboxClaimPort outboxClaim,
                                          @Qualifier("requestRelay") BrokerForwardingRelayPort relay,
                                          @Qualifier("responseConsumer") BrokerForwardingConsumerPort responseConsumer,
-                                         AgentDiscoveryService discovery,
                                          AgentBusBrokerProperties props) {
+        // §7.5 Option A: test-scope discovery reference impl. The next-batch gateway production
+        // module replaces this inline FakeAgentDiscoveryService with a registry-discovery-center
+        // -backed AgentDiscoveryService bean. agent-bus main stays zero-dependency on registry.
+        AgentDiscoveryService discovery = new FakeAgentDiscoveryService()
+                .register("agent-runtime", props.eventBusServiceId() + "-runtime",
+                        "v2:default-route-handle", "a2a");
         return new GatewayRuntimeService(outbox, outboxClaim, relay, responseConsumer,
                 discovery,
                 props.gatewayServiceId(), props.acceptTimeoutMs(), props.responseTimeoutMs(),

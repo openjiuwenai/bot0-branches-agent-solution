@@ -24,8 +24,8 @@ import com.openjiuwen.rdc.model.AgentCardDto;
 import com.openjiuwen.rdc.service.AgentDiscoveryService;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -433,17 +433,16 @@ public final class GatewayRuntimeService implements IngressGateway {
     }
 
     private List<AgentCardDto> discoverCandidates(IngressEnvelope env, String tenantId) {
-        String serviceId = stringAttr(env, "serviceId");
-        String agentId = stringAttr(env, "agentId");
-        String capability = stringAttr(env, "capability");
+        Optional<String> serviceId = stringAttr(env, "serviceId");
+        Optional<String> agentId = stringAttr(env, "agentId");
         // prefer the most specific dimension (serviceId), then agentId, then capability (default a2a)
-        if (serviceId != null) {
-            return discovery.searchByServiceId(tenantId, serviceId, null);
+        if (serviceId.isPresent()) {
+            return discovery.searchByServiceId(tenantId, serviceId.get(), null);
         }
-        if (agentId != null) {
-            return discovery.searchInstancesByAgentId(tenantId, agentId, null);
+        if (agentId.isPresent()) {
+            return discovery.searchInstancesByAgentId(tenantId, agentId.get(), null);
         }
-        String cap = capability != null ? capability : "a2a";
+        String cap = stringAttr(env, "capability").orElse("a2a");
         return discovery.searchByCapability(tenantId, cap, null);
     }
 
@@ -459,32 +458,32 @@ public final class GatewayRuntimeService implements IngressGateway {
     }
 
     private static String resolveRouteFamily(IngressEnvelope env) {
-        String routeFamily = stringAttr(env, "routeFamily");
-        if (routeFamily == null) {
+        Optional<String> routeFamily = stringAttr(env, "routeFamily");
+        if (routeFamily.isEmpty()) {
             return "invocation"; // FEAT-013 client invocation is the default family
         }
-        if (!"invocation".equals(routeFamily) && !"a2a".equals(routeFamily)) {
+        String value = routeFamily.get();
+        if (!"invocation".equals(value) && !"a2a".equals(value)) {
             throw new IllegalArgumentException(
                     "requestAttributes 'routeFamily' must be 'invocation' or 'a2a'");
         }
-        return routeFamily;
+        return value;
     }
 
     private static String resolveCapability(IngressEnvelope env) {
-        String capability = stringAttr(env, "capability");
-        return capability != null ? capability : "a2a"; // default capability when omitted
+        return stringAttr(env, "capability").orElse("a2a"); // default capability when omitted
     }
 
-    private static String stringAttr(IngressEnvelope env, String key) {
+    private static Optional<String> stringAttr(IngressEnvelope env, String key) {
         Object v = env.requestAttributes().get(key);
         if (v == null) {
-            return null;
+            return Optional.empty();
         }
         if (!(v instanceof String s) || s.isBlank()) {
             throw new IllegalArgumentException(
                     "requestAttributes '" + key + "' must be a non-blank String when present");
         }
-        return s;
+        return Optional.of(s);
     }
 
     /** Resolved forwarding target: the discovered opaque routeHandle + serviceId + the request's routeFamily. */

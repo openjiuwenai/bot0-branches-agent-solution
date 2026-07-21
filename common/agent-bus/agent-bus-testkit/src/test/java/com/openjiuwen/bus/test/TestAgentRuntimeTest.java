@@ -15,7 +15,6 @@ import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
-import java.util.function.Function;
 
 /**
  * Contract tests for {@link TestAgentRuntime} — the in-repo test double that

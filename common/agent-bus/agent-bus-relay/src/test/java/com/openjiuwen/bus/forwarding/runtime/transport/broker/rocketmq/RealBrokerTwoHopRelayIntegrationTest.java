@@ -186,67 +186,73 @@ class RealBrokerTwoHopRelayIntegrationTest {
         DataSource dataSource = pg.getPostgresDatabase();
         Flyway.configure().dataSource(dataSource).load().migrate();
         raw = new NamedParameterJdbcTemplate(dataSource);
-
         gatewayOutbox = new JdbcForwardingOutbox(dataSource);
         relayOutbox = new JdbcForwardingOutbox(dataSource);
         relayInbox = new JdbcForwardingInbox(dataSource);
 
+        startProducers(nameserver);
+        wireGateway(nameserver, runId);
+        wireEventBusRelay(nameserver, runId);
+
+        tempRuntime = new TempRuntime(nameserver, runId);
+        tempRuntime.start();
+        // CONSUME_FROM_LAST_OFFSET: consumers only see messages produced AFTER queue
+        // assignment; let rebalance settle (forward + response + gateway + runtime) before any test.
+        Thread.sleep(3_000L);
+    }
+
+    private static void startProducers(String nameserver) throws Exception {
         gatewayProducer = new DefaultMQProducer("it-gateway-producer-2hop");
         gatewayProducer.setNamesrvAddr(nameserver);
         gatewayProducer.start();
-
         relayProducer = new DefaultMQProducer("it-relay-producer-2hop");
         relayProducer.setNamesrvAddr(nameserver);
         relayProducer.start();
-
         directProducer = new DefaultMQProducer("it-direct-2hop");
         directProducer.setNamesrvAddr(nameserver);
         directProducer.start();
+    }
 
+    private static void wireGateway(String nameserver, String runId) {
         // gateway form: hop1 produce (req) + response consume (resp_out, targetServiceId-only D13 filter).
         RocketMqBrokerForwardingRelay gatewayRelay = new RocketMqBrokerForwardingRelay(
-                new DefaultBrokerTopicResolver(), "req", RocketMqBrokerForwardingRelay.defaultSender(gatewayProducer));
+                new DefaultBrokerTopicResolver(), "req",
+                RocketMqBrokerForwardingRelay.defaultSender(gatewayProducer));
         gatewayResponseConsumer = new RocketMqBrokerForwardingConsumer(
                 new DefaultBrokerTopicResolver(), "resp_out",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
-        DeliveryFilter gatewayRespFilter = new DeliveryFilter(Map.of("targetServiceId", GATEWAY));
         gatewayResponseConsumer.subscribe(GROUP_GW_RESP + runId,
-                AgentBusEventType.INVOCATION_RESPONSE, gatewayRespFilter);
+                AgentBusEventType.INVOCATION_RESPONSE, new DeliveryFilter(Map.of("targetServiceId", GATEWAY)));
         FakeAgentDiscoveryService discovery = new FakeAgentDiscoveryService()
-                .register("agent-runtime", RUNTIME, ROUTE_INVOCATION, "a2a", 100, "ONLINE", "v1");
+                .register("agent-runtime", RUNTIME, ROUTE_INVOCATION, "a2a");
         gateway = new GatewayRuntimeService(gatewayOutbox, gatewayOutbox, gatewayRelay, gatewayResponseConsumer,
                 discovery, GATEWAY, ACCEPT_TIMEOUT_MS, RESPONSE_TIMEOUT_MS, System::currentTimeMillis);
+    }
 
+    private static void wireEventBusRelay(String nameserver, String runId) {
         // event-bus form: forward relay (req→deliver) + response relay (resp_in→resp_out),
         // each consumer tenant-only (the intermediary consumes every in-tenant hop-in message).
         DeliveryFilter tenantFilter = new DeliveryFilter(Map.of("tenantId", TENANT));
-
         forwardRelayConsumer = new RocketMqBrokerForwardingConsumer(
                 new DefaultBrokerTopicResolver(), "req",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
         forwardRelayProducer = new RocketMqBrokerForwardingRelay(
-                new DefaultBrokerTopicResolver(), "deliver", RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
+                new DefaultBrokerTopicResolver(), "deliver",
+                RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
         forwardRelayConsumer.subscribe(GROUP_FWD + runId,
                 AgentBusEventType.CLIENT_INVOCATION_REQUESTED, tenantFilter);
         forwardRelayWorker = new EventBusRelayWorker(forwardRelayConsumer, relayInbox, relayOutbox, relayOutbox,
                 forwardRelayProducer, EVENTBUS, EVENTBUS, LEASE_MS, EventBusRelayWorker.FORWARD_REQUEST_TYPES);
-
         responseRelayConsumer = new RocketMqBrokerForwardingConsumer(
                 new DefaultBrokerTopicResolver(), "resp_in",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
         responseRelayProducer = new RocketMqBrokerForwardingRelay(
-                new DefaultBrokerTopicResolver(), "resp_out", RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
+                new DefaultBrokerTopicResolver(), "resp_out",
+                RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
         responseRelayConsumer.subscribe(GROUP_RESP + runId,
                 AgentBusEventType.INVOCATION_RESPONSE, tenantFilter);
         responseRelayWorker = new EventBusRelayWorker(responseRelayConsumer, relayInbox, relayOutbox, relayOutbox,
                 responseRelayProducer, EVENTBUS + "-resp", EVENTBUS, LEASE_MS, EventBusRelayWorker.RESPONSE_TYPES);
-
-        tempRuntime = new TempRuntime(nameserver, runId);
-        tempRuntime.start();
-
-        // CONSUME_FROM_LAST_OFFSET: consumers only see messages produced AFTER queue
-        // assignment; let rebalance settle (forward + response + gateway + runtime) before any test.
-        Thread.sleep(3_000L);
     }
 
     @BeforeEach
