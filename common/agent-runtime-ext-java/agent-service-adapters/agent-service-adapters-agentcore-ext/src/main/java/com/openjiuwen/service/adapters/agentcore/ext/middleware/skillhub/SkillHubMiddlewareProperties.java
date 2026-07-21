@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub;
 
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**

@@ -66,8 +66,10 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         if (skillHubManager != null) {
             try {
                 skillHubManager.download();
-            } catch (RuntimeException ex) {
-                // start() phase download failures are degraded + retried in background (PR #415)
+            } catch (IllegalStateException ex) {
+                // start() phase download failures are degraded + retried in background (PR #415).
+                // SkillHubManager signals config/auth/lookup/handover failures via
+                // IllegalStateException (JDK general exception, no custom exceptions per project rule).
                 log.warn("SkillHub download failed at start, will retry in background reason={}",
                         ex.getMessage());
             }

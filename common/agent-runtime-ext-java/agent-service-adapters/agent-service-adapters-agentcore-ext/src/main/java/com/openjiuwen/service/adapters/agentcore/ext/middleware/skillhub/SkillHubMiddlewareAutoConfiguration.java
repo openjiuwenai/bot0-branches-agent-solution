@@ -8,6 +8,7 @@ import com.openjiuwen.service.adapters.common.credential.CredentialDecryptor;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.openjiuwen.OpenJiuwenSkillHubProvider;
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;

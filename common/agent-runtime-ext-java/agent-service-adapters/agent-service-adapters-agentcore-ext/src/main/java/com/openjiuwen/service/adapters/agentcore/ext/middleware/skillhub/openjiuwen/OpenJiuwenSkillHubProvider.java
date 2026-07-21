@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory;
 import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,9 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -95,14 +99,22 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 .connectTimeout(CONNECT_TIMEOUT)
                 .build();
         // Reuse the pool across download() calls to avoid thread churn during
-        // background retry (issue #5).
-        this.downloadPool = java.util.concurrent.Executors.newFixedThreadPool(
-                DOWNLOAD_CONCURRENCY,
-                r -> {
-                    Thread t = new Thread(r, "skillhub-download");
-                    t.setDaemon(true);
-                    return t;
-                });
+        // background retry (issue #5). Use ThreadPoolExecutor directly with a
+        // daemon thread factory that installs an uncaught-exception handler
+        // (G.CON.08 / G.CON.12).
+        ThreadFactory downloadFactory = r -> {
+            Thread t = new Thread(r, "skillhub-download");
+            t.setDaemon(true);
+            t.setUncaughtExceptionHandler((thr, ex) ->
+                    log.error("SkillHub download thread uncaught exception thread={} reason={}",
+                            thr.getName(), ex.toString()));
+            return t;
+        };
+        this.downloadPool = new ThreadPoolExecutor(
+                DOWNLOAD_CONCURRENCY, DOWNLOAD_CONCURRENCY,
+                0L, TimeUnit.MILLISECONDS,
+                new java.util.concurrent.LinkedBlockingQueue<>(),
+                downloadFactory);
         log.info("SkillHub provider started endpoint={} authType={} credential={}",
                 sanitizeEndpoint(this.endpoint), this.authType,
                 this.token.isEmpty() ? "absent" : "provided");
@@ -150,8 +162,10 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             try {
                 f.get();
             } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
+                // Per G.CON.10: do not call Thread.interrupt(); record the interrupt
+                // via the shared success flag and continue draining remaining futures.
                 allSucceeded.set(false);
+                log.warn("SkillHub skill download wait interrupted reason={}", ie.getMessage());
             } catch (java.util.concurrent.ExecutionException ee) {
                 allSucceeded.set(false);
                 log.warn("SkillHub skill download task aborted reason={}",
@@ -236,6 +250,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
 
     /**
      * Find {@code SKILL.md} or {@code Skill.md} directly under the extracted dir.
+     *
      * @return the path, or null if not found.
      */
     private static Path resolveSkillMd(Path dir) {
@@ -433,7 +448,11 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             int status = resp.statusCode();
             if (status < 200 || status >= 300) {
                 // Body handler may have created an empty/partial file on failure.
-                try { Files.deleteIfExists(target); } catch (IOException ignored) { }
+                try {
+                    Files.deleteIfExists(target);
+                } catch (IOException ignored) {
+                    // Ignore cleanup failure as file may not exist
+                }
                 throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
                         "download status=" + status, null);
             }
@@ -446,7 +465,11 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 size = -1L;
             }
             if (size <= 0) {
-                try { Files.deleteIfExists(target); } catch (IOException ignored) { }
+                try {
+                    Files.deleteIfExists(target);
+                } catch (IOException ignored) {
+                    // Ignore cleanup failure as file may not exist
+                }
                 throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
                         "download empty body", null);
             }

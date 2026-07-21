@@ -4,8 +4,12 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -14,9 +18,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Unit tests for {@link SkillHubManager} covering PR #415 test matrix T2/T3/T4/T8/T11/T15/T16.
@@ -320,6 +321,8 @@ class SkillHubManagerTest {
                     // expected: installer no-ops for non-BaseAgent
                 }
             });
+            t.setUncaughtExceptionHandler((thr, ex) ->
+                    System.err.println("test worker uncaught: " + thr.getName() + " " + ex));
             workers.add(t);
             t.start();
         }
@@ -551,7 +554,7 @@ class SkillHubManagerTest {
 
     /** Function that may throw any checked exception. */
     @FunctionalInterface
-    interface ThrowingFunction<T, R> {
+    interface ThrowingFunction<T extends Object, R extends Object> {
         R apply(T t) throws Exception;
     }
 }

@@ -4,8 +4,11 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.openjiuwen.OpenJiuwenSkillHubProvider;
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -18,8 +21,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end test for {@link OpenJiuwenSkillHubProvider} against the real

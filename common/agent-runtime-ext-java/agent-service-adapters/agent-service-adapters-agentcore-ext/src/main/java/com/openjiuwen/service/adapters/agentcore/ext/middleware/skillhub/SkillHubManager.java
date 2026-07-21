@@ -6,6 +6,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub;
 
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -458,6 +459,9 @@ public class SkillHubManager {
             backgroundExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "skillhub-retry");
                 t.setDaemon(true);
+                t.setUncaughtExceptionHandler((thr, ex) ->
+                        log.error("SkillHub background retry thread uncaught exception thread={} reason={}",
+                                thr.getName(), ex.toString()));
                 return t;
             });
             backgroundExecutor.scheduleWithFixedDelay(this::retryOnce,
