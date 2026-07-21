@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -30,6 +30,14 @@
         <module>agent-service-adapters/agent-service-adapters-agentscope</module>
     </modules>
 
+    <!--
+        NOTE: agent-service-spec-ext is a sibling project under common/ that extends
+        the runtime agent-service-spec contract layer. It is NOT declared as a
+        <module> of agent-runtime-ext-java because it lives outside this aggregator
+        pom's directory tree. Build it independently or add it to a higher-level
+        aggregator if needed.
+    -->
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -48,6 +56,11 @@
                 <groupId>com.openjiuwen</groupId>
                 <artifactId>agent-service-adapters-agentcore</artifactId>
                 <version>${agent-runtime-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-spec-ext</artifactId>
+                <version>0.1.0</version>
             </dependency>
             <dependency>
                 <groupId>com.openjiuwen</groupId>
