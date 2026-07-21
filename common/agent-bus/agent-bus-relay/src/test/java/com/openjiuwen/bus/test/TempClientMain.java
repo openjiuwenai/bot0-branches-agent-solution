@@ -5,6 +5,7 @@
 package com.openjiuwen.bus.test;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
+import com.openjiuwen.bus.gateway.runtime.FakeAgentDiscoveryService;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 import com.openjiuwen.bus.spi.ingress.IngressGateway;
 import com.openjiuwen.bus.spi.ingress.IngressResponse;
@@ -60,7 +61,7 @@ import java.util.UUID;
  *        --agent-bus.response-timeout-ms=30000 \
  *        --request-type    RUN_CREATE|RUN_GET|RUN_CANCEL|RUN_RESUME \
  *        --target-service  runtime-01 \
- *        --route-handle    invocation|a2a \
+ *        --route-family    invocation|a2a \
  *        --capability      a2a \
  *        --payload         "hello" \
  *        [--idempotency-key <UUID>]  \
@@ -120,7 +121,7 @@ public final class TempClientMain {
         // also run the standalone gateway jar). A startup failure propagates as-is.
         ConfigurableApplicationContext ctx = startSpringContext(parsed);
         try {
-            dispatchAndPrint(ctx, envelope);
+            dispatchAndPrint(ctx, envelope, parsed);
         } finally {
             ctx.close();
         }
@@ -154,7 +155,7 @@ public final class TempClientMain {
         log.info("traceId          = {}", envelope.traceId());
         log.info("deadline         = {}", envelope.deadlineMillisEpoch());
         log.info("targetServiceId  = {}", parsed.targetService);
-        log.info("routeHandle      = {}", parsed.routeHandle);
+        log.info("routeFamily      = {}", parsed.routeFamily);
         log.info("capability       = {}", parsed.capability);
         log.info("payload          = {}", parsed.payload);
     }
@@ -167,7 +168,14 @@ public final class TempClientMain {
         return app.run(parsed.springArgs());
     }
 
-    private static void dispatchAndPrint(ConfigurableApplicationContext ctx, IngressEnvelope envelope) {
+    private static void dispatchAndPrint(ConfigurableApplicationContext ctx, IngressEnvelope envelope,
+                                         ClientArgs parsed) {
+        // §7.5 Option B: register a discovery card for the target runtime so the gateway's
+        // AgentDiscoveryService resolves targetServiceId=<targetService> + an opaque routeHandle.
+        // (The production gateway queries the real registry; this fake registration stands in.)
+        ctx.getBean(FakeAgentDiscoveryService.class)
+                .register("agent-runtime", parsed.targetService,
+                        "v2:route-" + parsed.targetService, parsed.capability);
         IngressGateway gateway = ctx.getBean(IngressGateway.class);
         log.info("---- dispatching routeClientRequest ----");
         long t0 = System.currentTimeMillis();
@@ -215,7 +223,7 @@ public final class TempClientMain {
         // request-side
         IngressEnvelope.IngressRequestType requestType = IngressEnvelope.IngressRequestType.RUN_CREATE;
         String targetService = "runtime-01";
-        String routeHandle = "invocation";
+        String routeFamily = "invocation";
         String capability = "a2a";
         String payload = "hello";
         UUID idempotencyKey = UUID.randomUUID();
@@ -263,8 +271,8 @@ public final class TempClientMain {
                     a.targetService = next;
                     return i + 1;
                 }
-                case "--route-handle" -> {
-                    a.routeHandle = next;
+                case "--route-family" -> {
+                    a.routeFamily = next;
                     return i + 1;
                 }
                 case "--capability" -> {
@@ -385,8 +393,11 @@ public final class TempClientMain {
          */
         IngressEnvelope toEnvelope() {
             Map<String, Object> attrs = new LinkedHashMap<>();
-            attrs.put("targetServiceId", Objects.requireNonNull(targetService, "targetService is required"));
-            attrs.put("routeHandle", Objects.requireNonNull(routeHandle, "routeHandle is required"));
+            // §7.5 Option B: the gateway resolves the target via AgentDiscoveryService.
+            // requestAttributes carry routeFamily (event family) + serviceId (discovery key);
+            // the opaque routeHandle + targetServiceId are discovery OUTPUTS (not inputs).
+            attrs.put("routeFamily", Objects.requireNonNull(routeFamily, "routeFamily is required"));
+            attrs.put("serviceId", Objects.requireNonNull(targetService, "targetService is required"));
             attrs.put("capability", Objects.requireNonNull(capability, "capability is required"));
             return new IngressEnvelope(
                     UUID.randomUUID(),
@@ -425,7 +436,7 @@ public final class TempClientMain {
                         --spring.datasource.password=agentbus \\
                         --request-type    RUN_CREATE|RUN_GET|RUN_CANCEL|RUN_RESUME  (default: RUN_CREATE) \\
                         --target-service  runtime-01                               (default: runtime-01) \\
-                        --route-handle    invocation|a2a                            (default: invocation) \\
+                        --route-family    invocation|a2a                            (default: invocation) \\
                         --capability      a2a                                       (default: a2a) \\
                         --payload         "hello"                                   (default: hello) \\
                         --idempotency-key <UUID>                                    (default: random) \\

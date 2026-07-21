@@ -66,18 +66,33 @@ import java.util.Map;
 @Configuration
 @Profile("gateway")
 public class GatewayRuntimeConfiguration {
+    private final AgentBusBrokerProperties props;
+
+    public GatewayRuntimeConfiguration(AgentBusBrokerProperties props) {
+        this.props = props;
+    }
+
+    /**
+     * Test-scope discovery service (FEAT-013/014 §7.5 Option A) — an empty
+     * {@link FakeAgentDiscoveryService}. Drivers that exercise the gateway (e.g.
+     * {@code TempClientMain}) register cards matching their target runtime before dispatch;
+     * the gateway then resolves the opaque {@code routeHandle} + {@code targetServiceId}
+     * from the selected card. The next-batch gateway production module replaces this with a
+     * {@code registry-discovery-center}-backed {@link AgentDiscoveryService}.
+     *
+     * @return an empty fake discovery service (callers register cards before dispatch)
+     */
+    @Bean
+    AgentDiscoveryService agentDiscoveryService() {
+        return new FakeAgentDiscoveryService();
+    }
+
     @Bean
     IngressGateway gatewayRuntimeService(ForwardingOutboxPort outbox,
                                          ForwardingOutboxClaimPort outboxClaim,
                                          @Qualifier("requestRelay") BrokerForwardingRelayPort relay,
                                          @Qualifier("responseConsumer") BrokerForwardingConsumerPort responseConsumer,
-                                         AgentBusBrokerProperties props) {
-        // §7.5 Option A: test-scope discovery reference impl. The next-batch gateway production
-        // module replaces this inline FakeAgentDiscoveryService with a registry-discovery-center
-        // -backed AgentDiscoveryService bean. agent-bus main stays zero-dependency on registry.
-        AgentDiscoveryService discovery = new FakeAgentDiscoveryService()
-                .register("agent-runtime", props.eventBusServiceId() + "-runtime",
-                        "v2:default-route-handle", "a2a");
+                                         FakeAgentDiscoveryService discovery) {
         return new GatewayRuntimeService(outbox, outboxClaim, relay, responseConsumer,
                 discovery,
                 props.gatewayServiceId(), props.acceptTimeoutMs(), props.responseTimeoutMs(),
