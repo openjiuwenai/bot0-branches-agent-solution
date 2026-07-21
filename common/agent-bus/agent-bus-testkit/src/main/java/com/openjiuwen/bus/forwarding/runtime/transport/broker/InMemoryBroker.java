@@ -83,6 +83,10 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
     private final AtomicLong sequence = new AtomicLong();
     private volatile boolean unavailable = false;
 
+    public InMemoryBroker(ForwardingEndpointResolver resolver) {
+        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
+    }
+
     /** A queued broker message; its index in the topic list is the consumer-group offset. */
     private static final class QueueEntry {
         final long sequence;              // global append order, for cross-topic poll ordering
@@ -92,10 +96,6 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             this.sequence = sequence;
             this.message = message;
         }
-    }
-
-    public InMemoryBroker(ForwardingEndpointResolver resolver) {
-        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
     }
 
     /** Locates a polled message for commit / reject without leaking topic/offset on the message. */

@@ -65,6 +65,13 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
     private String consumerServiceId;              // the consumer-group (set at subscribe)
     private final Map<String, MessageExt> inFlight = new ConcurrentHashMap<>(); // tenantId|messageId → ext
 
+    public RocketMqBrokerForwardingConsumer(ForwardingEndpointResolver resolver,
+                                            MessagePollerFactory factory, long pollWaitMillis) {
+        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
+        this.factory = Objects.requireNonNull(factory, "factory is required");
+        this.pollWaitMillis = pollWaitMillis;
+    }
+
     /**
      * Seam that constructs the broker poller for a consumer-group (known at subscribe, not
      * construction — §3 lazy registration). Unit tests inject a fake returning a recording poller;
@@ -80,13 +87,6 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
          * @return a {@link MessagePoller} bound to the consumer-group
          */
         MessagePoller pollerFor(String consumerGroup);
-    }
-
-    public RocketMqBrokerForwardingConsumer(ForwardingEndpointResolver resolver,
-                                            MessagePollerFactory factory, long pollWaitMillis) {
-        this.resolver = Objects.requireNonNull(resolver, "resolver is required");
-        this.factory = Objects.requireNonNull(factory, "factory is required");
-        this.pollWaitMillis = pollWaitMillis;
     }
 
     /**

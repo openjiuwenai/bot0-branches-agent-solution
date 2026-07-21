@@ -32,6 +32,12 @@ public final class RelayDispatchLoop {
     private final TickSource tickSource;
     private final RelayIdleStrategy idleStrategy;
 
+    public RelayDispatchLoop(RelayTick worker, TickSource tickSource, RelayIdleStrategy idleStrategy) {
+        this.worker = Objects.requireNonNull(worker, "worker is required");
+        this.tickSource = Objects.requireNonNull(tickSource, "tickSource is required");
+        this.idleStrategy = Objects.requireNonNull(idleStrategy, "idleStrategy is required");
+    }
+
     /** Supplies the instant of the next tick, or empty to stop the loop. Injected (no clock in the loop). */
     @FunctionalInterface
     public interface TickSource {
@@ -52,12 +58,6 @@ public final class RelayDispatchLoop {
          * @param lastTick the result of the idle tick
          */
         void onIdle(EventBusRelayWorker.RelayTickResult lastTick);
-    }
-
-    public RelayDispatchLoop(RelayTick worker, TickSource tickSource, RelayIdleStrategy idleStrategy) {
-        this.worker = Objects.requireNonNull(worker, "worker is required");
-        this.tickSource = Objects.requireNonNull(tickSource, "tickSource is required");
-        this.idleStrategy = Objects.requireNonNull(idleStrategy, "idleStrategy is required");
     }
 
     /**

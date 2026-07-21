@@ -82,10 +82,12 @@ public final class InMemoryForwardingInbox implements ForwardingInboxPort {
         Entry existing = store.get(key);
         if (existing == null) {
             store.put(key, new Entry(next, System.currentTimeMillis(), 0L, code));
-        } else if (existing.status() == ForwardingStatus.Inbox.RECEIVED) {
-            store.put(key, new Entry(next, existing.receivedAt(), existing.consumedAt(), code));
+        } else {
+            if (existing.status() == ForwardingStatus.Inbox.RECEIVED) {
+                store.put(key, new Entry(next, existing.receivedAt(), existing.consumedAt(), code));
+            }
+            // else: fall-through — already-terminal row left untouched (idempotent).
         }
-        // else: fall-through — already-terminal row left untouched (idempotent).
         return next;
     }
 

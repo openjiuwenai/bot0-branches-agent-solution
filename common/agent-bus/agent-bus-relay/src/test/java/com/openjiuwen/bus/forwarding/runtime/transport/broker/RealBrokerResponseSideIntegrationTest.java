@@ -577,6 +577,7 @@ class RealBrokerResponseSideIntegrationTest {
         /** Pool-owned daemon thread factory (G.CON.08/12): threads from the default factory, never ad-hoc. */
         private static final class DaemonThreadFactory implements ThreadFactory {
             private static final ThreadFactory BASE = Executors.defaultThreadFactory();
+
             private final String name;
 
             DaemonThreadFactory(String name) {

@@ -89,18 +89,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 // non-production — test fixture only; stands in for external agent-runtime-java
 public final class TestAgentRuntime {
-    /** Configurable response behaviour for a REQUESTED event (FEAT-013 §6 scenarios). */
-    public enum ResponseMode {
-        /** REQUESTED → ACCEPTED + RESPONSE + TERMINAL(completed) — §6.2.1 blocking final response. */
-        BLOCKING,
-        /** REQUESTED → ACCEPTED + STREAM_READY — §6.2.4 streaming call. */
-        STREAMING,
-        /** REQUESTED → ACCEPTED only — §6.2.2 degenerate to Task ref (gateway → ACCEPTED_WITH_TASK). */
-        ACCEPTED_ONLY,
-        /** REQUESTED → create task, emit nothing — §6.2.3 accept-window UNKNOWN (gateway times out). */
-        SILENT
-    }
-
     private final InMemoryBroker broker;
     private final BrokerForwardingConsumerPort consumer;
     private final InMemoryForwardingOutbox outbox;
@@ -110,13 +98,6 @@ public final class TestAgentRuntime {
     private final AtomicLong respIdSeq = new AtomicLong();
     private final Map<String, TaskEntry> taskByIdempotencyKey = new LinkedHashMap<>();
     private ResponseMode responseMode = ResponseMode.BLOCKING;
-
-    private record RequestDescriptor(
-            AgentBusEventType eventType, String traceId, String correlationId,
-            String idempotencyKey, String routeHandleValue, String capability,
-            long deadlineMillisEpoch) {}
-
-    private record PlannedResponse(AgentBusEventType eventType, String payloadRef) {}
 
     public TestAgentRuntime(InMemoryBroker broker, InMemoryForwardingOutbox outbox,
                             String consumerServiceId, String tenantId) {
@@ -133,6 +114,25 @@ public final class TestAgentRuntime {
                 new ForwardingRouteHandle("runtime-" + consumerServiceId, tenantId),
                 DeliveryFilter.forRuntime(tenantId, consumerServiceId));
     }
+
+    /** Configurable response behaviour for a REQUESTED event (FEAT-013 §6 scenarios). */
+    public enum ResponseMode {
+        /** REQUESTED → ACCEPTED + RESPONSE + TERMINAL(completed) — §6.2.1 blocking final response. */
+        BLOCKING,
+        /** REQUESTED → ACCEPTED + STREAM_READY — §6.2.4 streaming call. */
+        STREAMING,
+        /** REQUESTED → ACCEPTED only — §6.2.2 degenerate to Task ref (gateway → ACCEPTED_WITH_TASK). */
+        ACCEPTED_ONLY,
+        /** REQUESTED → create task, emit nothing — §6.2.3 accept-window UNKNOWN (gateway times out). */
+        SILENT
+    }
+
+    private record RequestDescriptor(
+            AgentBusEventType eventType, String traceId, String correlationId,
+            String idempotencyKey, String routeHandleValue, String capability,
+            long deadlineMillisEpoch) {}
+
+    private record PlannedResponse(AgentBusEventType eventType, String payloadRef) {}
 
     /** Outcome of a single {@link #pollAndProcess} tick. */
     public record ProcessingOutcome(Outcome outcome, String requestMessageId, String taskId,
@@ -399,9 +399,9 @@ public final class TestAgentRuntime {
      * parameter-count check, so callers pack their 11 values here.
      */
     public record RequestSpec(String messageId, AgentBusEventType eventType, String tenantId,
-                              String traceId, String correlationId, String idempotencyKey,
-                              String routeHandleValue, String capability, String sourceServiceId,
-                              String targetServiceId, long deadlineMillisEpoch) {}
+            String traceId, String correlationId, String idempotencyKey,
+            String routeHandleValue, String capability, String sourceServiceId,
+            String targetServiceId, long deadlineMillisEpoch) {}
 
     /**
      * Build a request envelope whose {@code payloadRef} carries the control
@@ -457,8 +457,10 @@ public final class TestAgentRuntime {
     // and the RequestDescriptor shape unchanged — behaviour is identical.
 
     static String encodeDescriptor(RequestDescriptor req) {
-        return BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(req.eventType(), req.traceId(), req.correlationId(),
-                req.idempotencyKey(), req.routeHandleValue(), req.capability(), req.deadlineMillisEpoch()));
+        return BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
+                req.eventType(), req.traceId(), req.correlationId(),
+                req.idempotencyKey(), req.routeHandleValue(), req.capability(),
+                req.deadlineMillisEpoch()));
     }
 
     /**

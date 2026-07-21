@@ -41,6 +41,13 @@ public final class ForwardingDispatchLoop {
     private final TickSource tickSource;
     private final IdleStrategy idleStrategy;
 
+    public ForwardingDispatchLoop(ForwardingDispatcherWorker worker, TickSource tickSource,
+                                  IdleStrategy idleStrategy) {
+        this.worker = Objects.requireNonNull(worker, "worker is required");
+        this.tickSource = Objects.requireNonNull(tickSource, "tickSource is required");
+        this.idleStrategy = Objects.requireNonNull(idleStrategy, "idleStrategy is required");
+    }
+
     /**
      * Supplies the instant of the next tick, or empty to stop the loop. Injected
      * so the loop holds no clock of its own (deterministic / testable).
@@ -69,13 +76,6 @@ public final class ForwardingDispatchLoop {
          * @param lastTick the result of the idle tick
          */
         void onIdle(ForwardingDispatcherWorker.DispatchTickResult lastTick);
-    }
-
-    public ForwardingDispatchLoop(ForwardingDispatcherWorker worker, TickSource tickSource,
-                                  IdleStrategy idleStrategy) {
-        this.worker = Objects.requireNonNull(worker, "worker is required");
-        this.tickSource = Objects.requireNonNull(tickSource, "tickSource is required");
-        this.idleStrategy = Objects.requireNonNull(idleStrategy, "idleStrategy is required");
     }
 
     /**
