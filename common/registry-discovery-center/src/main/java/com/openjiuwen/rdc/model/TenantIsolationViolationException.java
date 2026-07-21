@@ -6,43 +6,49 @@ package com.openjiuwen.rdc.model;
 
 /**
  * Raised when a discovery / resolve caller's tenant context does not match
- * the tenant id encoded in the request or route handle (HD3-003 tenant
- * isolation). The MVP implementation
- * {@code PgMvpDiscoveryServiceImpl} throws this exception BEFORE issuing any
- * query so cross-tenant data never reaches the result set.
+ * the tenant id encoded in the request or route handle (0711
+ * {@code TENANT_SCOPE_DENIED}).
  *
- * <p>Authority: ADR-0160 (Stage 4 Registry SPI Runtime Promotion) + HD3-003.
- * The exception is a {@link RuntimeException} so it crosses the SPI boundary
- * without forcing callers to declare checked exceptions; the
- * {@code MvpRegistryController} maps it to HTTP 400
- * {@code tenant_isolation_violation}.
+ * <p>Authority: ADR-0160 + HD3-003. Kept as a distinct type for backward
+ * compatibility with existing audit outcome labels.
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
  */
-public class TenantIsolationViolationException extends RuntimeException {
+public class TenantIsolationViolationException extends RegistryFailureException {
     private static final long serialVersionUID = 1L;
 
     private final String requestedTenant;
     private final String currentTenant;
 
-    /**
-     * Construct a tenant-isolation violation carrying both the requested and
-     * current tenant ids for diagnostics.
-     *
-     * @param requestedTenant tenant id appearing in the request path / route handle
-     * @param currentTenant   tenant id bound to the caller's {@link TenantContext}
-     */
     public TenantIsolationViolationException(String requestedTenant, String currentTenant) {
-        super("tenant_isolation_violation: requested=" + requestedTenant
-                + ", current=" + currentTenant);
+        this(requestedTenant, currentTenant, null);
+    }
+    public TenantIsolationViolationException(String requestedTenant, String currentTenant, String traceId) {
+        super(RegistryFailure.of(
+                "TENANT_SCOPE_DENIED",
+                "tenant scope denied: requested=" + requestedTenant + ", current=" + currentTenant,
+                false,
+                traceId != null ? traceId : ""));
         this.requestedTenant = requestedTenant;
         this.currentTenant = currentTenant;
     }
 
+    /**
+     * requestedTenant.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public String requestedTenant() {
         return requestedTenant;
     }
 
+    /**
+     * currentTenant.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     public String currentTenant() {
         return currentTenant;
     }

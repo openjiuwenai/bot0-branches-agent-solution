@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.repository.AgentRegistryRepositoryStub;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
@@ -19,9 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
 
 /**
  * Feedback-loop tests for PR #389 review issue #2 — the probe scheduler
@@ -54,7 +54,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * findEndpoint(serviceId) + updateStatus(serviceId) + delete(serviceId)
  * overload).
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
  */
 class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
     private static MockWebServer agentServer;
@@ -81,7 +81,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
         if (agentServer != null) {
             try {
                 agentServer.shutdown();
-            } catch (IOException | IllegalStateException ignored) {
+            } catch (IOException ignored) {
                 // best-effort — in-process server is reclaimed at JVM exit
             }
         }
@@ -91,7 +91,6 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
     void resetCounters() {
         scanCallCount.set(0);
     }
-
     // ---- timeout: hung endpoint must not block the sweep ------------------
 
     /**
@@ -99,6 +98,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
      * sends response headers) MUST NOT block the probe sweep for other
      * targets. The fix configures connect + read timeouts on the
      * {@link RestClient}; without it, this test hangs for the JDK default
+     * socket timeout (which can be infinite, this test hangs for the JDK default
      * socket timeout (which can be infinite) and the second target is never
      * probed.
      *
@@ -107,11 +107,11 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
      * asserted window. GREEN once the RestClient has a bounded read timeout
      * (e.g. 2s) and both targets are processed.
      *
-     * @throws Exception if the mock server fails to enqueue responses or the
-     *                   probe sweep is interrupted unexpectedly
+     * @since 0.1.0
+     * @throws Exception Exception
      */
     @Test
-    void hung_endpoint_does_not_block_probe_sweep_for_other_targets() throws Exception {
+    void hung_endpoint_does_not_block_probe_sweep() throws Exception {
         // First target: delay HEADERS by 30s — simulates a hung endpoint
         // that accepts the connection but never responds. setBodyDelay does
         // NOT work for toBodilessEntity() because OkHttp returns as soon as
@@ -126,9 +126,9 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
 
         CountingRepository repo = new CountingRepository(List.of(
                 new AgentRegistryRepository.ProbeTarget(
-                        "tenant-A", "agent-slow", "slow-host-svc", "slow-host-8080", slowUrl),
+                        "tenant-A", "agent-slow", "slow-host-8080", "slow-host-8080", slowUrl),
                 new AgentRegistryRepository.ProbeTarget(
-                        "tenant-A", "agent-fast", "fast-host-svc", "fast-host-8080", fastUrl)));
+                        "tenant-A", "agent-fast", "fast-host-8080", "fast-host-8080", fastUrl)));
 
         MvpHealthProbeScheduler scheduler = new MvpHealthProbeScheduler(
                 repo, observability, 1_000L, 100);
@@ -163,9 +163,11 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
      * the assertion is not at the mercy of HTTP-client path normalisation
      * (OkHttp / RestClient canonicalise {@code //x} to {@code /x} silently,
      * which masks the bug at the wire level).
+     *
+     * @since 0.1.0
      */
     @Test
-    void compose_probe_url_strips_trailing_slash_before_health_path() {
+    void compose_probe_url_strips_trailing_slash() {
         assertThat(MvpHealthProbeScheduler.composeProbeUrl("https://agent.example/agent"))
                 .isEqualTo("https://agent.example/agent/health");
         assertThat(MvpHealthProbeScheduler.composeProbeUrl("https://agent.example/agent/"))
@@ -180,7 +182,7 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
      * counts {@code updateStatus} calls so the test can assert both targets
      * were processed.
      */
-    private static final class CountingRepository implements AgentRegistryRepository {
+    private static final class CountingRepository extends AgentRegistryRepositoryStub {
         private final List<ProbeTarget> targets;
         private final AtomicInteger updateStatusCalls = new AtomicInteger();
 
@@ -189,57 +191,17 @@ class Pr389ProbeSchedulerHardeningFeedbackLoopTest {
         }
 
         @Override
-        public void upsert(com.openjiuwen.rdc.model.AgentRegistryEntry card, String a2aAgentCardJson) {
-        }
-
-        @Override
-        public boolean delete(String tenantId, String agentId) {
-            return false;
-        }
-
-        @Override
-        public boolean delete(String tenantId, String agentId, String serviceId) {
-            return false;
-        }
-
-        @Override
-        public boolean delete(String tenantId, String agentId, String serviceId, String instanceId) {
-            return false;
-        }
-
-        @Override
         public List<ProbeTarget> scanDueForProbe(long staleBeforeMillis, int limit) {
             return targets;
         }
-
         @Override
-        public boolean updateStatus(AgentRegistryRepository.StatusUpdate update) {
+        public boolean updateStatus(StatusUpdate update) {
             updateStatusCalls.incrementAndGet();
             return true;
         }
-
         @Override
-        public List<RegistryRow> listByAgentId(String tenantId, String agentId,
-                                               String contractVersion) {
+        public List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter) {
             return List.of();
-        }
-
-        @Override
-        public List<RegistryRow> listByServiceId(String tenantId, String serviceId,
-                                                 String contractVersion) {
-            return List.of();
-        }
-
-        @Override
-        public List<RegistryRow> listByCapability(String tenantId, String capability,
-                                                  String contractVersion) {
-            return List.of();
-        }
-
-        @Override
-        public Optional<EndpointEntry> findEndpoint(String tenantId, String agentId,
-                                                    String serviceId, String instanceId) {
-            return Optional.empty();
         }
     }
 }

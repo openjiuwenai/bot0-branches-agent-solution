@@ -24,15 +24,35 @@ package com.openjiuwen.rdc.model;
  * Jackson (in {@code registry.runtime.api}) deserialises via enum name by
  * default, no annotation needed (ADR-0160 decision 3/5).
  *
- * @since 2026-07-10
+ * @since 0.1.0
  */
 public enum FrameworkType {
-    /** Jiuwen agent runtime. */
+    /**
+     * Jiuwen agent runtime.
+     *
+     * @param endpoint endpoint
+     * @return result
+     * @since 0.1.0
+     */
     JIUWEN,
-    /** AgentScope runtime. */
+    /**
+     * AgentScope runtime.
+     *
+     * @param endpoint endpoint
+     * @return result
+     * @since 0.1.0
+     */
     AGENTSCOPE,
-    /** Versatile runtime. */
+    /**
+     * Versatile runtime.
+     *
+     * @param endpoint endpoint
+     * @return result
+     * @since 0.1.0
+     */
     VERSATILE,
-    /** Generic proxy service (no agent runtime behind the endpoint). */
+    /**
+     * Generic proxy service (no agent runtime behind the endpoint).
+     */
     PROXY_SERVICE
 }

@@ -49,8 +49,10 @@
     <springdoc.version>3.0.3</springdoc.version>
 
 
-    <!-- Test parallelization toggle. -DjunitParallel=false reverts to sequential. -->
-    <junitParallel>true</junitParallel>
+    <!-- Default off: macOS kern.sysv.shmmni is often 32; parallel class init of
+         EmbeddedPostgres races orphan SHM even with a shared DataSource helper.
+         Opt in with -DjunitParallel=true when SHM headroom is ample. -->
+    <junitParallel>false</junitParallel>
   </properties>
 
   <dependencyManagement>
@@ -229,9 +231,9 @@
 
   <build>
     <!--
-      finalName kept as `agent-rdc-${project.version}` for deployment
-      continuity: artifactId renamed to registry-discovery-center, but
-      existing deployment scripts reference agent-rdc-0.1.0.jar.
+      Legacy jar basename: artifactId is registry-discovery-center, but
+      finalName stays agent-rdc-${project.version} so existing deployment
+      scripts that reference agent-rdc-0.1.0.jar keep working.
     -->
     <finalName>agent-rdc-${project.version}</finalName>
     <pluginManagement>
@@ -314,6 +316,10 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
       </plugin>
     </plugins>
   </build>

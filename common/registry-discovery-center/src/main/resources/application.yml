@@ -2,20 +2,24 @@
 #
 # 让 AgentRdcApplication.main() 调用 SpringApplication.run() 时能拉起进程：
 #   - spring.datasource.*  → spring-boot-starter-jdbc 自动配置 DataSource
-#   - spring.flyway.*      → Flyway 启动时跑 V2/V3 migration 建表
+#   - spring.flyway.*      → Flyway 启动时跑 migration 建表
 #   - server.port          → Tomcat 监听 8092（避开 8080 与其他模块冲突）
-#   - spring.profiles.active=dev → 默认 dev profile（连本地 PG）
 #
-# 部署侧覆盖：通过环境变量 SPRING_DATASOURCE_URL / USERNAME / PASSWORD 指向生产 PG，
-# 无需独立 application-prod.yml。dev 默认值仅用于本地开发。
+# 本文件为上线/部署模板：deployment-discovery 默认开启，instances 为空。
+# 部署侧：SPRING_DATASOURCE_* 指向生产 PG；注入 DeploymentDiscoveryProvider，
+# 或取消注释下方 localhost/真实 URL 示例填入 instances。
+# 本地手工 E2E：取消注释 8090/8091 example，并先启动 mock runtime。
+# 若需兼容 push /register：设 rdc.deployment-discovery.enabled=false。
 #
 # 测试不读本文件：src/test/java/** 用 EmbeddedPostgres.builder().start() + 手工构造 beans。
 #
-# Authority: REQ-2026-002 + ADR-0160 decision 7 (registry-discovery-center 是 runnable Spring Boot application)
+# Authority: REQ-2026-002 + ADR-0160 decision 7
+# (registry-discovery-center 是 runnable Spring Boot application；
+#  DB 库名/账号 agent_rdc 与 jar finalName agent-rdc-* 为部署兼容保留)
 
 spring:
-  profiles:
-    active: dev
+  application:
+    name: registry-discovery-center
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agent_rdc}
     username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
@@ -28,37 +32,110 @@ spring:
 server:
   port: 8092
 
-# rdc.pull-registration — pull-based agent registration (REQ-2026-004)
-# opt-in: default disabled. When enabled, PullRegistrationBootstrap listens
-# for ApplicationReadyEvent and serially HTTP GETs each runtime's
-# /.well-known/agent-card.json, constructing AgentRegistryEntry upserts.
-# Single runtime failure is logged + skipped, never blocks startup.
+# rdc.pull-registration — DEPRECATED (REQ-2026-004 legacy).
+# Prefer rdc.deployment-discovery (Feat-015). Mutually exclusive: enabling both
+# fails startup (RegistrationPathGuard). Enabling pull alone logs WARN.
+# Identity rules differ (agentId hand-pinned vs AgentIdCodec.derive) — see README.
 rdc:
   pull-registration:
     enabled: false
     runtimes: []
-      # Example (copy + edit per environment):
+      # Example (legacy only — migrate to deployment-discovery.instances):
       # - base-url: http://localhost:8090
       #   tenant-id: tenant-A
-      #   agent-id: demo-runtime-8090      # required — A2A AgentCard has no agentId field, operator pins it
-      #   framework-type: JIUWEN            # required — JIUWEN | AGENTSCOPE | VERSATILE | PROXY_SERVICE
+      #   agent-id: demo-runtime-8090
+      #   framework-type: JIUWEN
       #   card-path: /.well-known/agent-card.json
       #   route-key: /v1/query
       #   region: cn-east-1
-      #   max-concurrency: 10               # optional, default 10 (NOT NULL column — default applied when omitted)
-      #   weight: 100                       # optional, default 100
+      #   max-concurrency: 10
+      #   weight: 100
       #   headers:
       #     Authorization: Bearer ${RUNTIME_TOKEN:placeholder}
 
----
-# dev profile 段
-# 与默认段一致——默认段已含 dev 值，本段作为覆盖练习入口。
-# 开发者本机 PG 配置不同时，可在此覆盖，或直接用环境变量 SPRING_DATASOURCE_URL 等。
-spring:
-  config:
-    activate:
-      on-profile: dev
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agent_rdc}
-    username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
-    password: ${SPRING_DATASOURCE_PASSWORD:agent_rdc}
+  # Feat-015 — provider snapshot + active card fetch + reconciliation.
+  # When enabled: ReconciliationScheduler runs on startup + periodic interval;
+  # POST /api/registry/register (push) returns 410 Gone.
+  # Extra DeploymentDiscoveryProvider Spring beans are also reconciled (pluggable).
+  # Observations without a matching instances[] row use binding-defaults.
+  # Mutually exclusive with rdc.pull-registration.enabled=true.
+  deployment-discovery:
+    enabled: true
+    reconcile-interval: 30s
+    draining-grace-period: 30s
+    binding-defaults:
+      framework-type: JIUWEN
+      route-key: /v1/query
+      contract-version: "1.0.0"
+      capability-version: "1.0.0"
+      card-path: /.well-known/agent-card.json
+      max-concurrency: 10
+      weight: 100
+    # Empty by default (production template). Prefer a real DeploymentDiscoveryProvider
+    # Bean in prod. For local Feat-015 E2E, uncomment the example entries below and
+    # start mock runtimes on 8090/8091 (see README / test plan).
+    instances: []
+      # Example (local manual E2E — do not ship localhost URLs to production):
+      # - tenant-id: tenant-A
+      #   service-id: billing-svc
+      #   instance-id: billing-svc-pod-0
+      #   base-url: http://localhost:8090
+      #   deployment-version: "1.0.0"
+      #   readiness: READY
+      #   framework-type: JIUWEN
+      #   route-key: /v1/query
+      #   contract-version: "1.0.0"
+      #   capability-version: "1.0.0"
+      #   card-path: /.well-known/agent-card.json
+      #   region: cn-east-1
+      #   max-concurrency: 10
+      #   weight: 100
+      # - tenant-id: tenant-A
+      #   service-id: billing-svc
+      #   instance-id: billing-svc-pod-1
+      #   base-url: http://localhost:8091
+      #   deployment-version: "1.0.0"
+      #   readiness: READY
+      #   framework-type: JIUWEN
+      #   route-key: /v1/query
+      #   contract-version: "1.0.0"
+      #   capability-version: "1.0.0"
+      #   card-path: /.well-known/agent-card.json
+      #   region: cn-east-1
+      #   max-concurrency: 10
+      #   weight: 100
+  registry:
+    security:
+      # Optional tenant-scoped caller allowlist for discover/resolve (0711 callerRef).
+      # Empty = permissive (non-blank callerRef required only). Production: fill per tenant.
+      caller-allowlist: {}
+      # Example:
+      # caller-allowlist:
+      #   tenant-A:
+      #     - gateway
+      #     - event-bus
+    card-fetch:
+      # mTLS + Agent Card signature verification — disabled by default (0711 §5.1.3).
+      mutual-tls: false
+      verify-signatures: false
+      signer-pems-by-kid: {}
+      # Empty = permissive (startup WARN). Production: restrict to internal ranges.
+      target-cidrs: []
+      # Example:
+      # target-cidrs:
+      #   - "10.0.0.0/8"
+      #   - "172.16.0.0/12"
+      #   - "192.168.0.0/16"
+      #   - "127.0.0.0/8"
+      # Example when mTLS / signatures enabled:
+      # mutual-tls: true
+      # client-pkcs12-location: /etc/rdc/card-fetch/client.p12
+      # client-pkcs12-secret: ${CARD_FETCH_CLIENT_PKCS12_SECRET}
+      # trust-pkcs12-location: /etc/rdc/card-fetch/trust.p12
+      # trust-pkcs12-secret: ${CARD_FETCH_TRUST_PKCS12_SECRET}
+      # verify-signatures: true
+      # signer-pems-by-kid:
+      #   platform-key-1: |
+      #     -----BEGIN PUBLIC KEY-----
+      #     ...
+      #     -----END PUBLIC KEY-----
