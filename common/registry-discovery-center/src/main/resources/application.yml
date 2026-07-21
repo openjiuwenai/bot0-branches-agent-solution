@@ -2,12 +2,13 @@
 #
 # 让 AgentRdcApplication.main() 调用 SpringApplication.run() 时能拉起进程：
 #   - spring.datasource.*  → spring-boot-starter-jdbc 自动配置 DataSource
-#   - spring.flyway.*      → Flyway 启动时跑 V2/V3 migration 建表
+#   - spring.flyway.*      → Flyway 启动时跑 migration 建表
 #   - server.port          → Tomcat 监听 8092（避开 8080 与其他模块冲突）
-#   - spring.profiles.active=dev → 默认 dev profile（连本地 PG）
 #
-# 部署侧覆盖：通过环境变量 SPRING_DATASOURCE_URL / USERNAME / PASSWORD 指向生产 PG，
-# 无需独立 application-prod.yml。dev 默认值仅用于本地开发。
+# 仓库默认：deployment-discovery 开启 + localhost 8090/8091 demo instances（本地手工 E2E）。
+# 部署侧：用环境变量 SPRING_DATASOURCE_* 指向生产 PG；生产实例清单请改 instances
+# 或注入 DeploymentDiscoveryProvider（勿把本机 demo URL 带上线）。
+# 若需兼容 push /register：设 rdc.deployment-discovery.enabled=false 并清空/注释 instances。
 #
 # 测试不读本文件：src/test/java/** 用 EmbeddedPostgres.builder().start() + 手工构造 beans。
 #
@@ -18,8 +19,6 @@
 spring:
   application:
     name: registry-discovery-center
-  profiles:
-    active: dev
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agent_rdc}
     username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
@@ -53,16 +52,14 @@ rdc:
       #   headers:
       #     Authorization: Bearer ${RUNTIME_TOKEN:placeholder}
 
-  # Feat-015 P1 — provider snapshot + active card fetch + reconciliation.
-  # Default disabled for backward compatibility (push /register stays available).
-  # Enable under spring.profiles=dev (see bottom of this file) or explicitly in prod.
+  # Feat-015 — provider snapshot + active card fetch + reconciliation.
   # When enabled: ReconciliationScheduler runs on startup + periodic interval;
   # POST /api/registry/register (push) returns 410 Gone.
   # Extra DeploymentDiscoveryProvider Spring beans are also reconciled (pluggable).
   # Observations without a matching instances[] row use binding-defaults.
   # Mutually exclusive with rdc.pull-registration.enabled=true.
   deployment-discovery:
-    enabled: false
+    enabled: true
     reconcile-interval: 30s
     draining-grace-period: 30s
     binding-defaults:
@@ -73,67 +70,6 @@ rdc:
       card-path: /.well-known/agent-card.json
       max-concurrency: 10
       weight: 100
-    instances: []
-  registry:
-    security:
-      # Optional tenant-scoped caller allowlist for discover/resolve (0711 callerRef).
-      # Empty = permissive (non-blank callerRef required only).
-      caller-allowlist: {}
-    card-fetch:
-      # mTLS + Agent Card signature verification — disabled by default (0711 §5.1.3).
-      mutual-tls: false
-      verify-signatures: false
-      signer-pems-by-kid: {}
-      # Empty = permissive. Example: 10.0.0.0/8, 172.16.0.0/12
-      target-cidrs: []
-      # Example when enabled:
-      # mutual-tls: true
-      # client-pkcs12-location: /etc/rdc/card-fetch/client.p12
-      # client-pkcs12-secret: ${CARD_FETCH_CLIENT_PKCS12_SECRET}
-      # trust-pkcs12-location: /etc/rdc/card-fetch/trust.p12
-      # trust-pkcs12-secret: ${CARD_FETCH_TRUST_PKCS12_SECRET}
-      # verify-signatures: true
-      # signer-pems-by-kid:
-      #   platform-key-1: |
-      #     -----BEGIN PUBLIC KEY-----
-      #     ...
-      #     -----END PUBLIC KEY-----
-      # Example:
-      # caller-allowlist:
-      #   tenant-A:
-      #     - gateway
-      #     - event-bus
-      # Example static provider entry (dev / MVP):
-      # - tenant-id: tenant-A
-      #   service-id: billing-svc          # stable Agent Service identity → agentId
-      #   instance-id: billing-svc-pod-0   # PK service_id dimension
-      #   base-url: http://localhost:8090
-      #   deployment-version: "1.0.0"
-      #   readiness: READY                 # READY | TERMINATING
-      #   framework-type: JIUWEN
-      #   route-key: /v1/query
-      #   contract-version: "1.0.0"
-      #   capability-version: "1.0.0"
-      #   card-path: /.well-known/agent-card.json
-      #   region: cn-east-1
-      #   max-concurrency: 10
-      #   weight: 100
-
----
-# dev profile — local mock runtimes on 8090/8091 (Feat-015 manual E2E).
-# spring.profiles.active=dev is the application default above.
-spring:
-  config:
-    activate:
-      on-profile: dev
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agent_rdc}
-    username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
-    password: ${SPRING_DATASOURCE_PASSWORD:agent_rdc}
-
-rdc:
-  deployment-discovery:
-    enabled: true
     instances:
       - tenant-id: tenant-A
         service-id: billing-svc
@@ -163,3 +99,32 @@ rdc:
         region: cn-east-1
         max-concurrency: 10
         weight: 100
+  registry:
+    security:
+      # Optional tenant-scoped caller allowlist for discover/resolve (0711 callerRef).
+      # Empty = permissive (non-blank callerRef required only).
+      caller-allowlist: {}
+    card-fetch:
+      # mTLS + Agent Card signature verification — disabled by default (0711 §5.1.3).
+      mutual-tls: false
+      verify-signatures: false
+      signer-pems-by-kid: {}
+      # Empty = permissive. Example: 10.0.0.0/8, 172.16.0.0/12
+      target-cidrs: []
+      # Example when enabled:
+      # mutual-tls: true
+      # client-pkcs12-location: /etc/rdc/card-fetch/client.p12
+      # client-pkcs12-secret: ${CARD_FETCH_CLIENT_PKCS12_SECRET}
+      # trust-pkcs12-location: /etc/rdc/card-fetch/trust.p12
+      # trust-pkcs12-secret: ${CARD_FETCH_TRUST_PKCS12_SECRET}
+      # verify-signatures: true
+      # signer-pems-by-kid:
+      #   platform-key-1: |
+      #     -----BEGIN PUBLIC KEY-----
+      #     ...
+      #     -----END PUBLIC KEY-----
+      # Example:
+      # caller-allowlist:
+      #   tenant-A:
+      #     - gateway
+      #     - event-bus
