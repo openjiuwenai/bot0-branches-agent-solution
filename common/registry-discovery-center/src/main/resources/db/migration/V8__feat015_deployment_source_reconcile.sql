@@ -1,4 +1,4 @@
--- V7: Feat-015 P1 — deployment source tracking + route target + draining grace
+-- V8: Feat-015 P1 — deployment source tracking + route target + draining grace
 
 ALTER TABLE agent_registry_mvp ADD COLUMN IF NOT EXISTS source_id VARCHAR(64);
 ALTER TABLE agent_registry_mvp ADD COLUMN IF NOT EXISTS source_revision BIGINT;

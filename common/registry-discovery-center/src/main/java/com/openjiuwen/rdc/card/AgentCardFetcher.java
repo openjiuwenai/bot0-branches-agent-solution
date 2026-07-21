@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
@@ -123,25 +124,47 @@ public final class AgentCardFetcher {
                     builder.header(h.getKey(), h.getValue());
                 }
             }
-            HttpResponse<String> response = httpClient.send(builder.build(),
-                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<byte[]> response = httpClient.send(builder.build(), limitingByteArrayHandler());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 return FetchResult.failure("AGENT_CARD_FETCH_FAILED",
                         "HTTP " + response.statusCode() + " from " + cardUrl);
             }
-            String body = response.body();
-            if (body == null || body.isBlank()) {
+            byte[] bodyBytes = response.body();
+            if (bodyBytes == null || bodyBytes.length == 0) {
                 return FetchResult.failure("AGENT_CARD_FETCH_FAILED", "empty card body from " + cardUrl);
             }
-            if (body.length() > MAX_RESPONSE_BYTES) {
+            if (bodyBytes.length > MAX_RESPONSE_BYTES) {
                 return FetchResult.failure("AGENT_CARD_INVALID", "card exceeds size limit");
             }
-            return FetchResult.success(body);
+            return FetchResult.success(new String(bodyBytes, StandardCharsets.UTF_8));
         } catch (InterruptedException ex) {
             return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            String message = ex.getMessage() != null ? ex.getMessage() : "invalid card fetch";
+            if (message.contains("size limit")) {
+                return FetchResult.failure("AGENT_CARD_INVALID", message);
+            }
+            return FetchResult.failure("AGENT_CARD_FETCH_FAILED", message);
         } catch (IOException ex) {
             return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
         }
+    }
+
+    private static HttpResponse.BodyHandler<byte[]> limitingByteArrayHandler() {
+        return responseInfo -> {
+            long contentLength = responseInfo.headers().firstValueAsLong("Content-Length").orElse(-1L);
+            if (contentLength > MAX_RESPONSE_BYTES) {
+                throw new IllegalArgumentException("card exceeds size limit");
+            }
+            return HttpResponse.BodySubscribers.mapping(
+                    HttpResponse.BodySubscribers.ofByteArray(),
+                    bytes -> {
+                        if (bytes != null && bytes.length > MAX_RESPONSE_BYTES) {
+                            throw new IllegalArgumentException("card exceeds size limit");
+                        }
+                        return bytes;
+                    });
+        };
     }
 
     /**

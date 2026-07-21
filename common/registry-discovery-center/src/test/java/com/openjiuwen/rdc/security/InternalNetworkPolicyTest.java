@@ -61,4 +61,24 @@ class InternalNetworkPolicyTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("invalid CIDR");
     }
+
+    @Test
+    void invalid_cidr_prefix_throws() {
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("10.0.0.0/40");
+
+        assertThatThrownBy(() -> InternalNetworkPolicy.from(props))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid CIDR prefix length");
+    }
+
+    @Test
+    void negative_cidr_prefix_throws() {
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("10.0.0.0/-1");
+
+        assertThatThrownBy(() -> InternalNetworkPolicy.from(props))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid CIDR prefix length");
+    }
 }

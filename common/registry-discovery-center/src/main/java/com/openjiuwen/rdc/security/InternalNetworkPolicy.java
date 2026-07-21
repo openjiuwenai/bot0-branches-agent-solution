@@ -66,17 +66,28 @@ public final class InternalNetworkPolicy {
         }
         try {
             InetAddress[] addresses = InetAddress.getAllByName(host);
+            if (addresses.length == 0) {
+                return false;
+            }
+            // All resolved addresses must fall in the allowlist (reject mixed public+private).
             for (InetAddress address : addresses) {
-                for (CidrBlock block : allowedCidrs) {
-                    if (block.contains(address)) {
-                        return true;
-                    }
+                if (!isAddressAllowed(address)) {
+                    return false;
                 }
             }
-            return false;
+            return true;
         } catch (UnknownHostException ex) {
             return false;
         }
+    }
+
+    private boolean isAddressAllowed(InetAddress address) {
+        for (CidrBlock block : allowedCidrs) {
+            if (block.contains(address)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private record CidrBlock(InetAddress network, int prefixLength) {
@@ -93,7 +104,13 @@ public final class InternalNetworkPolicy {
                 throw new IllegalArgumentException("invalid CIDR prefix: " + cidr, ex);
             }
             try {
-                return new CidrBlock(InetAddress.getByName(ip), prefix);
+                InetAddress network = InetAddress.getByName(ip);
+                int maxPrefix = network.getAddress().length * 8;
+                if (prefix < 0 || prefix > maxPrefix) {
+                    throw new IllegalArgumentException(
+                            "invalid CIDR prefix length: " + cidr + " (expected 0.." + maxPrefix + ")");
+                }
+                return new CidrBlock(network, prefix);
             } catch (UnknownHostException ex) {
                 throw new IllegalArgumentException("invalid CIDR address: " + cidr, ex);
             }

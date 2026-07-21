@@ -121,16 +121,16 @@ public final class ReconciliationService {
             return ReconciliationResult.failure(
                     sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
         } catch (SourceRevisionGapException ex) {
-                LOG.warn("source revision gap for {}: {}", sourceId, ex.getMessage());
-                markSourceStale(sourceId);
-                return ReconciliationResult.failure(
-                sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
-                } catch (RuntimeException ex) {
-                LOG.warn("reconciliation source {} unavailable: {}", sourceId, ex.getMessage());
-                markSourceStale(sourceId);
-                return ReconciliationResult.failure(
-                sourceId, "DEPLOYMENT_SOURCE_UNAVAILABLE", ex.getMessage(), null);
-            }
+            LOG.warn("source revision gap for {}: {}", sourceId, ex.getMessage());
+            markSourceStale(sourceId);
+            return ReconciliationResult.failure(
+                    sourceId, "SOURCE_REVISION_GAP", ex.getMessage(), null);
+        } catch (RuntimeException ex) {
+            LOG.warn("reconciliation source {} unavailable: {}", sourceId, ex.getMessage());
+            markSourceStale(sourceId);
+            return ReconciliationResult.failure(
+                    sourceId, "DEPLOYMENT_SOURCE_UNAVAILABLE", ex.getMessage(), null);
+        }
     }
 
     /**
@@ -140,20 +140,26 @@ public final class ReconciliationService {
      * @since 0.1.0
      */
     public void reconcileEvent(DeploymentInstanceEvent event) {
-        DeploymentInstanceObservation obs = event.observation();
-        if (obs.sourceRevision() < repository.getLastProcessedRevision(obs.sourceId())) {
-            return;
-        }
-        if (event.type() == DeploymentInstanceEventType.DELETED
-                || event.type() == DeploymentInstanceEventType.TERMINATING) {
-            String agentId = AgentIdCodec.derive(obs.tenantId(), obs.serviceId());
-            repository.markDraining(obs.tenantId(), agentId, obs.instanceId());
-            emitDraining(obs.sourceId(), obs.tenantId(), agentId);
+        try {
+            DeploymentInstanceObservation obs = event.observation();
+            if (obs.sourceRevision() < repository.getLastProcessedRevision(obs.sourceId())) {
+                return;
+            }
+            if (event.type() == DeploymentInstanceEventType.DELETED
+                    || event.type() == DeploymentInstanceEventType.TERMINATING) {
+                String agentId = AgentIdCodec.derive(obs.tenantId(), obs.serviceId());
+                repository.markDraining(obs.tenantId(), agentId, obs.instanceId());
+                emitDraining(obs.sourceId(), obs.tenantId(), agentId);
+                repository.updateLastProcessedRevision(obs.sourceId(), obs.sourceRevision());
+                return;
+            }
+            reconcileObservation(obs);
             repository.updateLastProcessedRevision(obs.sourceId(), obs.sourceRevision());
-            return;
+        } catch (RuntimeException ex) {
+            LOG.warn("reconcileEvent failed for source {}: {}",
+                    event != null && event.observation() != null ? event.observation().sourceId() : "?",
+                    ex.getMessage(), ex);
         }
-        reconcileObservation(obs);
-        repository.updateLastProcessedRevision(obs.sourceId(), obs.sourceRevision());
     }
 
     private int reconcileMissingFromSnapshot(ListDeploymentInstancesResult snapshot) {

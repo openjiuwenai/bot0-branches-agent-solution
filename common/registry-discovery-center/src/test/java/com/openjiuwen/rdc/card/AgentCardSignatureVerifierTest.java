@@ -72,6 +72,28 @@ class AgentCardSignatureVerifierTest {
         assertThat(verifier.verify(signedCard).ok()).isFalse();
     }
 
+    @Test
+    void enabled_verifier_rejects_unsupported_algorithm_without_throwing() throws Exception {
+        KeyPair keyPair = testKeyPair();
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.setVerifySignatures(true);
+        props.setSignerPemsByKid(Map.of("test-key", publicKeyPem(keyPair)));
+
+        if (!(MAPPER.readTree(unsignedCardJson()) instanceof ObjectNode root)) {
+            throw new IllegalStateException("expected object node");
+        }
+        ArrayNode signatures = MAPPER.createArrayNode();
+        ObjectNode signatureNode = MAPPER.createObjectNode();
+        signatureNode.put("protectedHeader", Base64.getUrlEncoder().withoutPadding().encodeToString(
+                "{\"alg\":\"ES256\",\"kid\":\"test-key\"}".getBytes(StandardCharsets.UTF_8)));
+        signatureNode.put("signature", "dGVzdA");
+        signatures.add(signatureNode);
+        root.set("signatures", signatures);
+
+        AgentCardSignatureVerifier verifier = AgentCardSignatureVerifier.from(props);
+        assertThat(verifier.verify(MAPPER.writeValueAsString(root)).ok()).isFalse();
+    }
+
     private static KeyPair testKeyPair() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);

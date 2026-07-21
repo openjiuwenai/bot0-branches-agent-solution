@@ -31,6 +31,10 @@ import java.util.UUID;
 /**
  * Pull-based agent registration bootstrap (REQ-2026-004).
  *
+ * <p><strong>Deprecated.</strong> Prefer {@code rdc.deployment-discovery.*}
+ * (Feat-015). Cannot be enabled together with deployment-discovery
+ * ({@link com.openjiuwen.rdc.config.RegistrationPathGuard}).
+ *
  * <p>Listens for {@link ApplicationReadyEvent} and serially HTTP GETs each
  * configured runtime's A2A AgentCard, constructs an
  * {@link AgentRegistryEntry}, and upserts it via
@@ -52,7 +56,9 @@ import java.util.UUID;
  * (ADR-0160 decision 4 unchanged).
  *
  * @since 0.1.0 (2026)
+ * @deprecated Use {@code rdc.deployment-discovery} instead; forRemoval planned.
  */
+@Deprecated(forRemoval = true, since = "0.1.0")
 @Component
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
         prefix = "rdc.pull-registration",

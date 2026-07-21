@@ -155,17 +155,24 @@ java -jar agent-rdc-0.1.0.jar
 
 ```yaml
 rdc:
+  # 正式路径（Feat-015）。默认 false；本仓库 application.yml 在 spring.profiles=dev 下开启并带 localhost demo instances。
+  # 与 rdc.pull-registration.enabled 互斥（同时为 true 启动失败）。
   deployment-discovery:
-    enabled: true              # 正式注册路径；true 时 push /register → 410
+    enabled: true              # true 时 push /register → 410
     reconcile-interval: 30s
     instances: [...]           # 静态 provider（dev）；生产可换真实 DeploymentDiscoveryProvider
+  # 遗留路径（REQ-2026-004）— 已 @Deprecated；勿与 deployment-discovery 同时开启。
+  # agentId 为 yml 手填；deployment-discovery 则用 AgentIdCodec.derive(tenantId, serviceId)。
+  pull-registration:
+    enabled: false
   registry:
     security:
       caller-allowlist: {}     # 非空则按 tenant → callerRef 白名单校验 discover/resolve
     card-fetch:
       mutual-tls: false
       verify-signatures: false
-      target-cidrs: []         # 非空则限制 Card 抓取目标 IP（与 caller 鉴权无关）
+      # 空 = 不限制（启动打 WARN）。生产建议：127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+      target-cidrs: []
 ```
 
 手工/自动化验收见仓库根目录 `Feat-015-agent-card-registration-and-discovery0713-test-plan.md`。

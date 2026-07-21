@@ -1,4 +1,4 @@
--- V10: Feat-015 logical AgentCardRegistration catalog + source references
+-- V11: Feat-015 logical AgentCardRegistration catalog + source references
 --
 -- Separates FEAT-015 logical Card directory from FEAT-016 instance route index
 -- (agent_registry_mvp remains the instance-level route store).

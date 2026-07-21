@@ -101,7 +101,8 @@ public final class AgentCardSignatureVerifier {
                 }
             }
             return VerificationResult.invalid("no trusted signature matched");
-        } catch (JsonProcessingException | InvalidKeyException | NoSuchAlgorithmException | SignatureException ex) {
+        } catch (JsonProcessingException | InvalidKeyException | NoSuchAlgorithmException
+                 | SignatureException | IllegalArgumentException ex) {
             return VerificationResult.invalid(ex.getMessage());
         }
     }

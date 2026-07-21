@@ -52,12 +52,15 @@ rdc:
       #     Authorization: Bearer ${RUNTIME_TOKEN:placeholder}
 
   # Feat-015 P1 — provider snapshot + active card fetch + reconciliation.
+  # Default disabled for backward compatibility (push /register stays available).
+  # Enable under spring.profiles=dev (see bottom of this file) or explicitly in prod.
   # When enabled: ReconciliationScheduler runs on startup + periodic interval;
   # POST /api/registry/register (push) returns 410 Gone.
   # Extra DeploymentDiscoveryProvider Spring beans are also reconciled (pluggable).
   # Observations without a matching instances[] row use binding-defaults.
+  # Mutually exclusive with rdc.pull-registration.enabled=true.
   deployment-discovery:
-    enabled: true
+    enabled: false
     reconcile-interval: 30s
     draining-grace-period: 30s
     binding-defaults:
@@ -68,35 +71,7 @@ rdc:
       card-path: /.well-known/agent-card.json
       max-concurrency: 10
       weight: 100
-    instances:
-      - tenant-id: tenant-A
-        service-id: billing-svc
-        instance-id: billing-svc-pod-0
-        base-url: http://localhost:8090
-        deployment-version: "1.0.0"
-        readiness: READY
-        framework-type: JIUWEN
-        route-key: /v1/query
-        contract-version: "1.0.0"
-        capability-version: "1.0.0"
-        card-path: /.well-known/agent-card.json
-        region: cn-east-1
-        max-concurrency: 10
-        weight: 100
-      - tenant-id: tenant-A
-        service-id: billing-svc
-        instance-id: billing-svc-pod-1
-        base-url: http://localhost:8091
-        deployment-version: "1.0.0"
-        readiness: READY
-        framework-type: JIUWEN
-        route-key: /v1/query
-        contract-version: "1.0.0"
-        capability-version: "2.0.0"
-        card-path: /.well-known/agent-card.json
-        region: cn-east-1
-        max-concurrency: 10
-        weight: 100
+    instances: []
   registry:
     security:
       # Optional tenant-scoped caller allowlist for discover/resolve (0711 callerRef).
@@ -143,9 +118,8 @@ rdc:
       #   weight: 100
 
 ---
-# dev profile 段
-# 与默认段一致——默认段已含 dev 值，本段作为覆盖练习入口。
-# 开发者本机 PG 配置不同时，可在此覆盖，或直接用环境变量 SPRING_DATASOURCE_URL 等。
+# dev profile — local mock runtimes on 8090/8091 (Feat-015 manual E2E).
+# spring.profiles.active=dev is the application default above.
 spring:
   config:
     activate:
@@ -154,3 +128,36 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agent_rdc}
     username: ${SPRING_DATASOURCE_USERNAME:agent_rdc}
     password: ${SPRING_DATASOURCE_PASSWORD:agent_rdc}
+
+rdc:
+  deployment-discovery:
+    enabled: true
+    instances:
+      - tenant-id: tenant-A
+        service-id: billing-svc
+        instance-id: billing-svc-pod-0
+        base-url: http://localhost:8090
+        deployment-version: "1.0.0"
+        readiness: READY
+        framework-type: JIUWEN
+        route-key: /v1/query
+        contract-version: "1.0.0"
+        capability-version: "1.0.0"
+        card-path: /.well-known/agent-card.json
+        region: cn-east-1
+        max-concurrency: 10
+        weight: 100
+      - tenant-id: tenant-A
+        service-id: billing-svc
+        instance-id: billing-svc-pod-1
+        base-url: http://localhost:8091
+        deployment-version: "1.0.0"
+        readiness: READY
+        framework-type: JIUWEN
+        route-key: /v1/query
+        contract-version: "1.0.0"
+        capability-version: "1.0.0"
+        card-path: /.well-known/agent-card.json
+        region: cn-east-1
+        max-concurrency: 10
+        weight: 100

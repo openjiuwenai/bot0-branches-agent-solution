@@ -17,7 +17,8 @@ import java.util.Map;
 /**
  * Configuration for pull-based agent registration (REQ-2026-004).
  *
- * <p>Bound to the {@code rdc.pull-registration.*} config tree. Default
+ * <p><strong>Deprecated.</strong> Prefer {@code rdc.deployment-discovery.*}.
+ * Bound to the {@code rdc.pull-registration.*} config tree. Default
  * {@code enabled=false} — pull registration is opt-in. When enabled,
  * {@link PullRegistrationBootstrap} serially pulls each runtime's A2A
  * AgentCard on {@code ApplicationReadyEvent} and upserts it.
@@ -27,7 +28,9 @@ import java.util.Map;
  * connect 5s, read 10s (OQ-3 H2 resolution).
  *
  * @since 0.1.0
+ * @deprecated Use {@code rdc.deployment-discovery} instead; forRemoval planned.
  */
+@Deprecated(forRemoval = true, since = "0.1.0")
 @Component
 @ConfigurationProperties(prefix = "rdc.pull-registration")
 public class PullRegistrationProperties {

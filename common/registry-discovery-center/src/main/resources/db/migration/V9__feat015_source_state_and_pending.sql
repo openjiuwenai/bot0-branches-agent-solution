@@ -1,4 +1,4 @@
--- V8: source revision tracking + deployment service id for discovery queries
+-- V9: source revision tracking + deployment service id for discovery queries
 
 CREATE TABLE IF NOT EXISTS registry_source_state (
     source_id              VARCHAR(64) PRIMARY KEY,
