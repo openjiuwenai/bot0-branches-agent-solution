@@ -596,29 +596,31 @@ async def run_optimization(
         # 5. 构建 LLM
         llm = _create_llm(config)
         context_window_tokens = (
-            config.icbc_context_window_tokens
-            if config.llm_provider == "ICBC"
+            config.custom_sse_context_window_tokens
+            if config.llm_provider == "CustomSSE"
             else resolved.llm_context_window_tokens
         )
         if context_window_tokens is None:
-            raise ValueError("ICBC context window must be explicitly configured")
+            raise ValueError("CustomSSE context window must be explicitly configured")
         llm_invocation = LLMInvocation(
             llm,
             capabilities=LLMProviderCapabilities(
                 context_window_tokens=context_window_tokens,
-                supports_max_output_tokens=config.llm_provider != "ICBC",
-                supports_finish_reason=config.llm_provider != "ICBC",
-                supports_usage=config.llm_provider != "ICBC",
-                supports_json_mode=config.llm_provider != "ICBC",
+                supports_max_output_tokens=config.llm_provider != "CustomSSE",
+                supports_finish_reason=config.llm_provider != "CustomSSE",
+                supports_usage=config.llm_provider != "CustomSSE",
+                supports_json_mode=config.llm_provider != "CustomSSE",
                 completion_signal=(
-                    config.icbc_completion_signal if config.llm_provider == "ICBC" else "either"
+                    config.custom_sse_completion_signal
+                    if config.llm_provider == "CustomSSE"
+                    else "either"
                 ),
             ),
             parallelism=resolved.parallelism,
             safety_margin_tokens=resolved.llm_safety_margin_tokens,
             chars_per_token=(
-                config.icbc_chars_per_token
-                if config.llm_provider == "ICBC"
+                config.custom_sse_chars_per_token
+                if config.llm_provider == "CustomSSE"
                 else resolved.llm_chars_per_token
             ),
             default_output_reserve_tokens=resolved.llm_output_reserve_tokens,
@@ -1026,24 +1028,24 @@ def _build_model_client_config(config: EvolveConfig) -> ModelClientConfig:
     """按 ``llm_provider`` 分派 LLM client 配置（评估器与优化器共用）。
 
     - ``OpenAI``（默认）：走公网 OpenAI 兼容端点，行为零回归。
-    - ``ICBC``：走客户内网 chat/completions 流式端点，凭证映射
+    - ``CustomSSE``：走自定义 chat/completions 流式端点，凭证映射
       token→api_key、endpoint→api_base、userId→extra user_id、
-      icbc_timeout→timeout（流式 read 超时）；
+      custom_sse_timeout→timeout（流式 read 超时）；
 
     两条路径读同一 ``llm_provider``，永不割裂。
     """
-    if config.llm_provider == "ICBC":
+    if config.llm_provider == "CustomSSE":
         return ModelClientConfig(
-            client_provider="ICBC",
-            api_key=config.icbc_token,
-            api_base=config.icbc_endpoint,
-            user_id=config.icbc_user_id,  # extra: allow
-            verify_ssl=False,  # ICBC 内网 http
-            timeout=config.icbc_timeout,  # 流式 read 超时
-            context_window_tokens=config.icbc_context_window_tokens,
-            output_reserve_tokens=config.icbc_output_reserve_tokens,
-            chars_per_token=config.icbc_chars_per_token,
-            completion_signal=config.icbc_completion_signal,
+            client_provider="CustomSSE",
+            api_key=config.custom_sse_token,
+            api_base=config.custom_sse_endpoint,
+            user_id=config.custom_sse_user_id,  # extra: allow
+            verify_ssl=False,  # 兼容使用 HTTP 或自签名证书的私有端点
+            timeout=config.custom_sse_timeout,  # 流式 read 超时
+            context_window_tokens=config.custom_sse_context_window_tokens,
+            output_reserve_tokens=config.custom_sse_output_reserve_tokens,
+            chars_per_token=config.custom_sse_chars_per_token,
+            completion_signal=config.custom_sse_completion_signal,
         )
     return ModelClientConfig(
         client_provider="OpenAI",
