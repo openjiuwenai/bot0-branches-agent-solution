@@ -9,7 +9,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.net.URI;
+import java.util.Optional;
 
 /**
  * InternalNetworkPolicyTest coverage.
@@ -50,6 +52,23 @@ class InternalNetworkPolicyTest {
         InternalNetworkPolicy policy = InternalNetworkPolicy.from(props);
 
         assertThat(policy.isAllowed(URI.create("http:///path"))).isFalse();
+    }
+
+    @Test
+    void resolve_pins_localhost_to_loopback_literal() throws Exception {
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("127.0.0.0/8");
+        InternalNetworkPolicy policy = InternalNetworkPolicy.from(props);
+
+        Optional<InternalNetworkPolicy.PinnedTarget> pinned =
+                policy.resolve(URI.create("http://localhost:8090"));
+
+        assertThat(pinned).isPresent();
+        assertThat(pinned.get().originalHost()).isEqualTo("localhost");
+        assertThat(pinned.get().address().isLoopbackAddress()).isTrue();
+        assertThat(pinned.get().hostHeaderValue()).isEqualTo("localhost:8090");
+        assertThat(pinned.get().requestUri("/.well-known/agent-card.json").getHost())
+                .isEqualTo(InetAddress.getByName(pinned.get().address().getHostAddress()).getHostAddress());
     }
 
     @Test

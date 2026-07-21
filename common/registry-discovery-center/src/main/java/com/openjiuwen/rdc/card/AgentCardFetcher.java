@@ -12,10 +12,17 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 
 /**
  * Fetches {@code /.well-known/agent-card.json} with security boundaries (0711 §5.1.3).
@@ -43,7 +50,7 @@ public final class AgentCardFetcher {
      * @since 0.1.0
      */
     public static final String DEFAULT_CARD_PATH = "/.well-known/agent-card.json";
-    private static final int MAX_RESPONSE_BYTES = 256 * 1024;
+    static final int MAX_RESPONSE_BYTES = 256 * 1024;
 
     private final HttpClient httpClient;
     private final Duration readTimeout;
@@ -108,21 +115,35 @@ public final class AgentCardFetcher {
         if (scheme == null || (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https"))) {
             return FetchResult.failure("AGENT_CARD_SOURCE_REJECTED", "unsupported scheme: " + scheme);
         }
-        if (!networkPolicy.isAllowed(baseUrl)) {
+        Optional<InternalNetworkPolicy.PinnedTarget> pinned = networkPolicy.resolve(baseUrl);
+        if (pinned.isEmpty()) {
             return FetchResult.failure("AGENT_CARD_SOURCE_REJECTED",
                     "target host not in allowed CIDR ranges: " + baseUrl.getHost());
         }
         String path = cardPath == null || cardPath.isBlank() ? DEFAULT_CARD_PATH : cardPath;
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        InternalNetworkPolicy.PinnedTarget target = pinned.get();
+        URI requestUri = target.requestUri(path);
         String cardUrl = baseUrl.toString().replaceAll("/$", "") + path;
         try {
+            AgentCardHostnamePin.setExpectedHostname(target.originalHost());
             HttpRequest.Builder builder = HttpRequest.newBuilder()
-                    .uri(URI.create(cardUrl))
+                    .uri(requestUri)
                     .timeout(readTimeout)
                     .GET();
+            boolean hostHeaderSet = false;
             if (headers != null) {
                 for (Map.Entry<String, String> h : headers.entrySet()) {
+                    if ("host".equalsIgnoreCase(h.getKey())) {
+                        hostHeaderSet = true;
+                    }
                     builder.header(h.getKey(), h.getValue());
                 }
+            }
+            if (!hostHeaderSet) {
+                builder.header("Host", target.hostHeaderValue());
             }
             HttpResponse<byte[]> response = httpClient.send(builder.build(), limitingByteArrayHandler());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -138,6 +159,7 @@ public final class AgentCardFetcher {
             }
             return FetchResult.success(new String(bodyBytes, StandardCharsets.UTF_8));
         } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
             return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
         } catch (IllegalArgumentException ex) {
             String message = ex.getMessage() != null ? ex.getMessage() : "invalid card fetch";
@@ -146,7 +168,15 @@ public final class AgentCardFetcher {
             }
             return FetchResult.failure("AGENT_CARD_FETCH_FAILED", message);
         } catch (IOException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof IllegalArgumentException iae
+                    && iae.getMessage() != null
+                    && iae.getMessage().contains("size limit")) {
+                return FetchResult.failure("AGENT_CARD_INVALID", iae.getMessage());
+            }
             return FetchResult.failure("AGENT_CARD_FETCH_FAILED", ex.getMessage());
+        } finally {
+            AgentCardHostnamePin.clear();
         }
     }
 
@@ -156,15 +186,92 @@ public final class AgentCardFetcher {
             if (contentLength > MAX_RESPONSE_BYTES) {
                 throw new IllegalArgumentException("card exceeds size limit");
             }
-            return HttpResponse.BodySubscribers.mapping(
-                    HttpResponse.BodySubscribers.ofByteArray(),
-                    bytes -> {
-                        if (bytes != null && bytes.length > MAX_RESPONSE_BYTES) {
-                            throw new IllegalArgumentException("card exceeds size limit");
-                        }
-                        return bytes;
-                    });
+            return new LimitingByteArraySubscriber(MAX_RESPONSE_BYTES);
         };
+    }
+
+    /**
+     * Accumulates response bytes and aborts as soon as {@code maxBytes} is exceeded
+     * (covers chunked responses without Content-Length).
+     */
+    static final class LimitingByteArraySubscriber implements HttpResponse.BodySubscriber<byte[]> {
+        private final int maxBytes;
+        private final CompletableFuture<byte[]> result = new CompletableFuture<>();
+        private final List<ByteBuffer> buffers = new ArrayList<>();
+        private Flow.Subscription subscription;
+        private int received;
+        private boolean done;
+
+        LimitingByteArraySubscriber(int maxBytes) {
+            this.maxBytes = maxBytes;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            this.subscription = subscription;
+            subscription.request(Long.MAX_VALUE);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> items) {
+            if (done) {
+                return;
+            }
+            for (ByteBuffer buffer : items) {
+                int remaining = buffer.remaining();
+                if (remaining == 0) {
+                    continue;
+                }
+                if ((long) received + remaining > maxBytes) {
+                    abortOversized();
+                    return;
+                }
+                ByteBuffer copy = ByteBuffer.allocate(remaining);
+                copy.put(buffer);
+                copy.flip();
+                buffers.add(copy);
+                received += remaining;
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            if (done) {
+                return;
+            }
+            done = true;
+            result.completeExceptionally(throwable);
+        }
+
+        @Override
+        public void onComplete() {
+            if (done) {
+                return;
+            }
+            done = true;
+            byte[] body = new byte[received];
+            int offset = 0;
+            for (ByteBuffer buffer : buffers) {
+                int remaining = buffer.remaining();
+                buffer.get(body, offset, remaining);
+                offset += remaining;
+            }
+            result.complete(body);
+        }
+
+        @Override
+        public CompletionStage<byte[]> getBody() {
+            return result;
+        }
+
+        private void abortOversized() {
+            done = true;
+            if (subscription != null) {
+                subscription.cancel();
+            }
+            buffers.clear();
+            result.completeExceptionally(new IllegalArgumentException("card exceeds size limit"));
+        }
     }
 
     /**

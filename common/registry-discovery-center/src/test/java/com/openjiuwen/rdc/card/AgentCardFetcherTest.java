@@ -10,6 +10,7 @@ import com.openjiuwen.rdc.security.RdcCardFetchOptions;
 
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * AgentCardFetcherTest coverage.
@@ -90,6 +92,42 @@ class AgentCardFetcherTest {
         assertThat(result.success()).isFalse();
         assertThat(result.failureCode()).isEqualTo("AGENT_CARD_SOURCE_REJECTED");
         assertThat(result.message()).contains("allowed CIDR");
+    }
+
+    @Test
+    void fetch_pins_dns_to_loopback_and_sends_original_host_header() throws Exception {
+        server.enqueue(new MockResponse()
+                .setBody(validCard())
+                .setHeader("Content-Type", "application/json"));
+
+        RdcCardFetchOptions props = new RdcCardFetchOptions();
+        props.getTargetCidrs().add("127.0.0.0/8");
+        AgentCardFetcher fetcher = AgentCardFetcher.fromSecurity(props);
+
+        URI baseUrl = URI.create("http://localhost:" + server.getPort());
+        AgentCardFetcher.FetchResult result = fetcher.fetch(
+                baseUrl, "/.well-known/agent-card.json", Map.of());
+
+        assertThat(result.success()).isTrue();
+        RecordedRequest request = server.takeRequest(2, TimeUnit.SECONDS);
+        assertThat(request).isNotNull();
+        assertThat(request.getHeader("Host")).startsWith("localhost:");
+        assertThat(request.getPath()).isEqualTo("/.well-known/agent-card.json");
+    }
+
+    @Test
+    void fetch_rejects_oversized_chunked_body_without_content_length() {
+        String oversized = "x".repeat(AgentCardFetcher.MAX_RESPONSE_BYTES + 1);
+        server.enqueue(new MockResponse().setChunkedBody(oversized, 8 * 1024));
+
+        AgentCardFetcher fetcher = new AgentCardFetcher();
+        String baseUrl = server.url("/").toString().replaceAll("/$", "");
+        AgentCardFetcher.FetchResult result = fetcher.fetch(
+                URI.create(baseUrl), "/.well-known/agent-card.json", Map.of());
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.failureCode()).isEqualTo("AGENT_CARD_INVALID");
+        assertThat(result.message()).contains("size limit");
     }
 
     @Test
