@@ -118,12 +118,12 @@ public final class InternalNetworkPolicy {
         boolean hasIpv4Policy = false;
         boolean hasIpv6Policy = false;
         for (CidrBlock block : allowedCidrs) {
-            if (block.network() instanceof Inet4Address) {
+            InetAddress network = block.network();
+            if (network instanceof Inet4Address) {
                 hasIpv4Policy = true;
-            } else if (block.network() instanceof Inet6Address) {
+            }
+            if (network instanceof Inet6Address) {
                 hasIpv6Policy = true;
-            } else {
-                // Non IPv4/IPv6 network entries are ignored for family selection.
             }
         }
         List<InetAddress> candidates = new ArrayList<>();

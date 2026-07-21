@@ -2,7 +2,7 @@
 
 registry-discovery-center 是 Agent 解决方案的 registry/discovery 子平面，从 spring-ai-ascend/agent-bus stage 4 抽取。模块定位为可独立启动的 Spring Boot 应用，提供 agent 注册、发现、健康探活能力，基于 PostgreSQL 持久化 + Row-Level Security 实现多租户隔离。
 
-> 模块目录与 Maven artifactId 已从 `agent-rdc` 重命名为 `registry-discovery-center`；Java 包名 `com.openjiuwen.rdc`、DB 名 `agent_rdc`、jar 名 `agent-rdc-0.1.0.jar`（通过 `finalName` 保留）维持不变以保持部署兼容。
+> 模块目录与 Maven artifactId 为 `registry-discovery-center`（曾用名 `agent-rdc`）。为部署兼容，Java 包名仍为 `com.openjiuwen.rdc`、入口类仍为 `AgentRdcApplication`、DB 名/账号仍为 `agent_rdc`、打包 jar 仍为 `agent-rdc-0.1.0.jar`（`finalName`）。对人展示的配置/OpenAPI 文案统一用模块现名。
 
 架构权威：[ADR-0160](docs/adr/0160-stage4-registry-spi-runtime-promotion.yaml)（stage4 registry SPI/runtime promotion，7 条决策）。
 
@@ -34,7 +34,7 @@ registry-discovery-center 是 Agent 解决方案的 registry/discovery 子平面
 dev profile 默认连 `localhost:5432/agent_rdc`，账密 `agent_rdc/agent_rdc`。起一个 PG 容器（需为 `agent_rdc` 库 owner 以创建 RLS policy）：
 
 ```bash
-docker run -d --name agent-rdc-pg \
+docker run -d --name registry-discovery-center-pg \
   -p 5432:5432 \
   -e POSTGRES_DB=agent_rdc \
   -e POSTGRES_USER=agent_rdc \

@@ -14,7 +14,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 
 /**
- * SPI-purity harness for {@code agent-bus} (Stage 1, Slice 1).
+ * SPI-purity harness for registry-discovery-center (Stage 1, Slice 1).
  *
  * <p>Asserts that the {@code com.openjiuwen.rdc.model..} packages stay pure Java:
  * no Spring, no Reactor, no Jackson, no observability SDK, no broker runtime.

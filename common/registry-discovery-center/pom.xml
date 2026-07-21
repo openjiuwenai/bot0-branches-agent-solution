@@ -231,9 +231,9 @@
 
   <build>
     <!--
-      finalName kept as `agent-rdc-${project.version}` for deployment
-      continuity: artifactId renamed to registry-discovery-center, but
-      existing deployment scripts reference agent-rdc-0.1.0.jar.
+      Legacy jar basename: artifactId is registry-discovery-center, but
+      finalName stays agent-rdc-${project.version} so existing deployment
+      scripts that reference agent-rdc-0.1.0.jar keep working.
     -->
     <finalName>agent-rdc-${project.version}</finalName>
     <pluginManagement>

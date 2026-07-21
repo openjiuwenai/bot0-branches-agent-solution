@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * OpenAPI metadata for the agent-rdc standalone Spring Boot application
+ * OpenAPI metadata for the registry-discovery-center standalone Spring Boot application
  * (REQ-2026-007). {@code springdoc-openapi-starter-webmvc-ui} 3.0.x
  * autoconfigure picks up this bean and exposes:
  * <ul>
@@ -27,9 +27,9 @@ import org.springframework.context.annotation.Configuration;
  * decision 1, and {@code MvpRegistryController} stays annotation-free).
  *
  * <p>{@code servers} / {@code contact} / {@code license} are intentionally
- * omitted: agent-rdc is an internal service consumed by sibling planes, so
- * springdoc's default server derivation (current request URL) and the absence
- * of external consumers make them noise rather than signal (api-metadata
+ * omitted: registry-discovery-center is an internal service consumed by sibling
+ * planes, so springdoc's default server derivation (current request URL) and the
+ * absence of external consumers make them noise rather than signal (api-metadata
  * decision, VR-2).
  *
  * <p>Authority: REQ-2026-007 step-1 decisions (library-choice / doc-scope /
@@ -52,7 +52,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Agent Registry API")
                         .version("0.1.0")
-                        .description("agent-rdc — Agent Registry & Discovery Center："
+                        .description("registry-discovery-center — Agent Registry & Discovery Center："
                                 + "agent 注册/注销/发现/路由句柄解析，多租户隔离。"));
     }
 }

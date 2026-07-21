@@ -8,10 +8,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.SpringApplication;
 
 /**
- * Standalone entry point for the agent-bus plane (PR #389 review issue #6).
+ * Standalone entry point for registry-discovery-center (PR #389 review issue #6).
  *
- * <p>agent-bus is a runnable Spring Boot application — it ships its own
- * {@code @SpringBootApplication} so the registry / discovery runtime
+ * <p>registry-discovery-center is a runnable Spring Boot application — it ships
+ * its own {@code @SpringBootApplication} so the registry / discovery runtime
  * (controller + scheduler + JDBC adapter + Flyway migration) boots in-process
  * without depending on agent-runtime's {@code LocalA2aRuntimeHost}. The
  * previously documented "library jar" positioning (KF-1) was a stage-1
@@ -27,7 +27,7 @@ import org.springframework.boot.SpringApplication;
  * are picked up automatically. The {@code @RestController} /
  * {@code @Scheduled} / {@code @Service} / {@code @Configuration} annotations
  * are visible at compile time because {@code spring-boot-starter-web} is at
- * compile scope in {@code agent-bus/pom.xml} (no longer {@code provided}).
+ * compile scope (no longer {@code provided}).
  *
  * <p>Run with {@code ./mvnw -pl agent-bus spring-boot:run} or build the
  * runnable jar with {@code ./mvnw -pl agent-bus package} and execute
