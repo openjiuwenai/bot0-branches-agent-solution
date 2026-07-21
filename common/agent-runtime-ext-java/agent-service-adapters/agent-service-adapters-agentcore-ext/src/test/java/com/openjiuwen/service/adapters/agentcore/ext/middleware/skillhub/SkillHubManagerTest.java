@@ -14,6 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -317,12 +318,13 @@ class SkillHubManagerTest {
             Thread t = new Thread(() -> {
                 try {
                     manager.register(new Object());
-                } catch (RuntimeException ignored) {
+                } catch (IllegalStateException ignored) {
                     // expected: installer no-ops for non-BaseAgent
                 }
             });
             t.setUncaughtExceptionHandler((thr, ex) ->
-                    System.err.println("test worker uncaught: " + thr.getName() + " " + ex));
+                    java.util.logging.Logger.getLogger("test")
+                            .warning("test worker uncaught: " + thr.getName() + " " + ex));
             workers.add(t);
             t.start();
         }
@@ -493,8 +495,12 @@ class SkillHubManagerTest {
     /**
      * Create a fake extracted skill dir (with SKILL.md) under localDir, matching
      * the real Provider's post-download layout: {@code localDir/<name>/SKILL.md}.
+     *
+     * @param localDir the local skill dir root
+     * @param name the skill sub-directory name
+     * @throws IOException if directory creation or SKILL.md write fails
      */
-    private static void createFakeSkillDir(Path localDir, String name) throws Exception {
+    private static void createFakeSkillDir(Path localDir, String name) throws IOException {
         Path dir = localDir.resolve(name);
         Files.createDirectories(dir);
         Files.writeString(dir.resolve("SKILL.md"), "# " + name);
@@ -526,23 +532,24 @@ class SkillHubManagerTest {
         @Override
         public boolean download(SkillHubConfig config, String decryptedToken) {
             downloadCount++;
+            // ThrowingFunction.apply declares 'throws Exception' because test
+            // lambdas call Files.* (IOException). Wrap the checked IOException
+            // specifically (NOT catch-all Exception, per G.ERR.02); unchecked
+            // IllegalStateException from stub bodies propagates on its own.
             try {
                 return downloadBehavior.apply(config);
-            } catch (RuntimeException ex) {
-                throw ex;
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
+            } catch (IOException ex) {
+                throw new IllegalStateException(ex);
             }
         }
 
         @Override
         public boolean verify(Path skillPath) {
+            // See download() above: wrap checked IOException only (G.ERR.02).
             try {
                 return verifyBehavior.apply(skillPath);
-            } catch (RuntimeException ex) {
-                throw ex;
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
+            } catch (IOException ex) {
+                throw new IllegalStateException(ex);
             }
         }
 
@@ -552,9 +559,18 @@ class SkillHubManagerTest {
         }
     }
 
-    /** Function that may throw any checked exception. */
+    /**
+     * Function whose body may throw {@link IOException} (e.g. from filesystem
+     * calls inside test stubs). Narrowed to {@code IOException} (instead of
+     * {@code Exception}) so that stubs can catch the specific checked type
+     * and wrap it into {@link IllegalStateException} without catching
+     * {@code Exception} broadly (G.ERR.02).
+     *
+     * @param <T> input type
+     * @param <R> return type
+     */
     @FunctionalInterface
-    interface ThrowingFunction<T extends Object, R extends Object> {
-        R apply(T t) throws Exception;
+    interface ThrowingFunction<T, R> {
+        R apply(T t) throws IOException;
     }
 }

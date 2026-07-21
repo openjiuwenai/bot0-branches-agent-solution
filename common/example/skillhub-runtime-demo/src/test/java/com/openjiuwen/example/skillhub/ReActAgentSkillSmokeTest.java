@@ -93,7 +93,9 @@ class ReActAgentSkillSmokeTest {
                 .as("agent.getConfig() should return a ReActAgentConfig")
                 .isInstanceOf(ReActAgentConfig.class);
         ReActAgentConfig reactConfig = (ReActAgentConfig) config;
-        reactConfig.setSysOperationId("smoke-agent");
+        if (reactConfig instanceof ReActAgentConfig) {
+            reactConfig.setSysOperationId("smoke-agent");
+        }
 
         // 4. Register the skill BEFORE query (must happen on the request thread,
         //    SkillManager is not thread-safe; here the test thread IS the request thread)

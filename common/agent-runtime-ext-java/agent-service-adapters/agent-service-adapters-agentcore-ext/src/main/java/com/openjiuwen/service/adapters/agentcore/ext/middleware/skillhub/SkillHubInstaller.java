@@ -76,13 +76,14 @@ public class SkillHubInstaller {
             // BaseAgent.registerSkill(Object) → SkillUtil.registerSkills only accepts
             // String or List<String>; passing Path silently no-ops. Pass String form.
             baseAgent.registerSkill(skillPath.toString());
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             throw error(SkillHubErrorCategory.INSTALL_FAILED,
                     "registerSkill threw path=" + sanitize(skillPath), ex);
         }
         int after = currentSkillCount(baseAgent);
         if (before < 0 || after < 0) {
-            log.warn("SkillHub skill register skipped count-verify skillPath={} reason=skill-util-or-manager-null before={} after={}",
+            log.warn("SkillHub skill register skipped count-verify skillPath={} reason=skill-util-or-manager-null"
+                    + " before={} after={}",
                     sanitize(skillPath), before, after);
             return;
         }
@@ -94,7 +95,8 @@ public class SkillHubInstaller {
             // because a duplicate skill name was encountered. (PR #415: handover
             // failure blocks ready, but duplicate-name is not a handover failure,
             // it is an idempotent re-registration that agent-core already handled.)
-            log.info("SkillHub skill register idempotent-skip skillPath={} reason=skill-already-registered before={} after={}",
+            log.info("SkillHub skill register idempotent-skip skillPath={}"
+                    + " reason=skill-already-registered before={} after={}",
                     sanitize(skillPath), before, after);
             return;
         }
@@ -113,7 +115,7 @@ public class SkillHubInstaller {
                 return -1;
             }
             return manager.count();
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             return -1;
         }
     }

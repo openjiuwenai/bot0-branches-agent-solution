@@ -31,6 +31,8 @@ import org.springframework.context.annotation.Bean;
  *
  * <p>Slice 1 tests run without LLM config and only assert SkillHub wiring.
  * Slice 2 (full lifecycle) supplies a real DeepSeek LLM via {@code @DynamicPropertySource}.
+ *
+ * @since 2026-07-15
  */
 @SpringBootApplication(scanBasePackages = "com.openjiuwen.service.app")
 @EnableConfigurationProperties({MiddlewareProperties.class, LlmProperties.class})
@@ -69,7 +71,9 @@ public class SkillHubRuntimeDemoApplication {
         // when it is null, which makes registerSkill() a silent no-op (SkillUtil stays null,
         // hasSkill() returns false). Set it here so the SkillHub chain can actually register
         // downloaded skills into this agent's SkillManager.
-        ((ReActAgentConfig) agent.getConfig()).setSysOperationId(AGENT_ID);
+        if (agent.getConfig() instanceof ReActAgentConfig) {
+            ((ReActAgentConfig) agent.getConfig()).setSysOperationId(AGENT_ID);
+        }
         // JiuwenCoreAgentExtHandler.setSkillHubManager is @Autowired(required=false);
         // Spring injects the SkillHubManager bean created by SkillHubMiddlewareAutoConfiguration.
         return new JiuwenCoreAgentExtHandler(agent);

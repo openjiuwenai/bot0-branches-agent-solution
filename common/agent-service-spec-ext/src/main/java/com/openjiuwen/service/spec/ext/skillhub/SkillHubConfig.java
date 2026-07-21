@@ -21,25 +21,53 @@ package com.openjiuwen.service.spec.ext.skillhub;
 public class SkillHubConfig {
     private boolean enabled = false;
     private String endpoint = "";
+
     /** bearer | system-token */
     private String authType = "bearer";
+
     /** Encrypted token; decrypted by CredentialDecryptor at use site. */
     private String encryptedToken = "";
+
     /** Local directory for downloaded skill packages. */
     private String localDir = "";
 
-    public boolean isEnabled() { return enabled; }
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isEnabled() {
+        return enabled;
+    }
 
-    public String getEndpoint() { return endpoint; }
-    public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
 
-    public String getAuthType() { return authType; }
-    public void setAuthType(String authType) { this.authType = authType; }
+    public String getEndpoint() {
+        return endpoint;
+    }
 
-    public String getEncryptedToken() { return encryptedToken; }
-    public void setEncryptedToken(String encryptedToken) { this.encryptedToken = encryptedToken; }
+    public void setEndpoint(String endpoint) {
+        this.endpoint = endpoint;
+    }
 
-    public String getLocalDir() { return localDir; }
-    public void setLocalDir(String localDir) { this.localDir = localDir; }
+    public String getAuthType() {
+        return authType;
+    }
+
+    public void setAuthType(String authType) {
+        this.authType = authType;
+    }
+
+    public String getEncryptedToken() {
+        return encryptedToken;
+    }
+
+    public void setEncryptedToken(String encryptedToken) {
+        this.encryptedToken = encryptedToken;
+    }
+
+    public String getLocalDir() {
+        return localDir;
+    }
+
+    public void setLocalDir(String localDir) {
+        this.localDir = localDir;
+    }
 }

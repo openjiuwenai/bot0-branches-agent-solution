@@ -50,6 +50,10 @@ public class SkillHubMiddlewareAutoConfiguration {
      * {@code https://swarmskills.openjiuwen.com} (or the configured endpoint).
      *
      * <p>Businesses can override by registering their own {@code @Bean SkillHubProvider}.
+     *
+     * @param properties the SkillHub middleware properties (endpoint, authType, encryptedToken)
+     * @param decryptorProvider the credential decryptor provider (optional)
+     * @return the default SkillHubProvider bean
      */
     @Bean
     @ConditionalOnMissingBean(SkillHubProvider.class)
@@ -65,6 +69,8 @@ public class SkillHubMiddlewareAutoConfiguration {
 
     /**
      * Default SkillHubInstaller.
+     *
+     * @return the default SkillHubInstaller bean
      */
     @Bean
     @ConditionalOnMissingBean(SkillHubInstaller.class)
@@ -76,6 +82,12 @@ public class SkillHubMiddlewareAutoConfiguration {
      * SkillHubManager: orchestrates download/verify/register.
      *
      * <p>The constructor starts the provider and triggers the first download.
+     *
+     * @param provider the SkillHub provider SPI
+     * @param installer the skill path installer
+     * @param properties the SkillHub middleware properties
+     * @param decryptorProvider the credential decryptor provider (optional)
+     * @return the SkillHubManager singleton bean
      */
     @Bean
     @ConditionalOnMissingBean(SkillHubManager.class)
@@ -90,13 +102,17 @@ public class SkillHubMiddlewareAutoConfiguration {
     /**
      * Decrypt the encryptedToken using runtime CredentialDecryptor (aligned with redis).
      *
-     * <p>Issue #12: the "no decryptor → treat as plaintext" fallback is removed
+     * <p>Issue #12: the "no decryptor -> treat as plaintext" fallback is removed
      * because runtime's {@code CredentialDecryptorAutoConfiguration} always
      * registers a {@code PassthroughCredentialDecryptor} bean. If the bean is
      * genuinely absent (misconfiguration), we return empty token and the provider
-     * will operate in anonymous mode — but we never silently treat ciphertext
+     * will operate in anonymous mode - but we never silently treat ciphertext
      * as plaintext, which would encourage deployments to put raw tokens in
      * the {@code encryptedToken} field.
+     *
+     * @param properties the SkillHub middleware properties containing encryptedToken
+     * @param decryptorProvider the credential decryptor provider (optional)
+     * @return the decrypted token, or empty string when no token or no decryptor
      */
     private static String decrypt(SkillHubMiddlewareProperties properties,
                                   ObjectProvider<CredentialDecryptor> decryptorProvider) {
@@ -108,26 +124,28 @@ public class SkillHubMiddlewareAutoConfiguration {
         if (decryptor == null) {
             // No decryptor bean = misconfiguration. Refuse to ship the encrypted
             // blob as plaintext; treat as anonymous access instead.
-            log.warn("SkillHub no CredentialDecryptor bean — encryptedToken will be treated as empty (anonymous access)");
+            log.warn("SkillHub no CredentialDecryptor bean - encryptedToken will be treated as empty (anonymous access)");
             return "";
         }
         try {
             return decryptor.decrypt(encrypted);
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             log.warn("SkillHub CredentialDecryptor.decrypt failed, reason={}", ex.getMessage());
             return "";
         }
     }
 
     /**
-     * Fail fast when endpoint is blank — otherwise the provider would only blow
+     * Fail fast when endpoint is blank - otherwise the provider would only blow
      * up later inside {@code download()} with an unfriendly {@code URI.create}.
      * (Issue #13.)
+     *
+     * @param endpoint the SkillHub endpoint URL to validate
      */
     private static void validateEndpoint(String endpoint) {
         if (endpoint == null || endpoint.isBlank()) {
             throw new IllegalArgumentException(
-                    "SkillHub endpoint is not configured — set openjiuwen.service.middleware.skillhub.endpoint");
+                    "SkillHub endpoint is not configured - set openjiuwen.service.middleware.skillhub.endpoint");
         }
     }
 

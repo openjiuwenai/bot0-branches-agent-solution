@@ -10,6 +10,7 @@ import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,7 +22,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -146,6 +146,11 @@ public class SkillHubManager {
     /**
      * Construct the manager. The provider is started and the first download is
      * triggered here per design doc §3.2 / §4.7.
+     *
+     * @param provider the SkillHub provider SPI implementation
+     * @param installer the skill path installer used to register into agents
+     * @param config the SkillHub connection config
+     * @param decryptedToken the already-decrypted bearer/system token (empty for anonymous)
      */
     public SkillHubManager(SkillHubProvider provider,
                            SkillHubInstaller installer,
@@ -188,7 +193,7 @@ public class SkillHubManager {
             if (!ok) {
                 startBackgroundRetry();
             }
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             log.warn("SkillHub first download failed, will retry in background reason={}",
                     ex.getMessage());
             startBackgroundRetry();
@@ -231,8 +236,9 @@ public class SkillHubManager {
      * request thread; holding listLock during install would also let
      * background retry starve request registration).
      *
+     * @param agent the agent instance to install skills into (typically a BaseAgent)
      * @throws IllegalStateException when installer reports INSTALL_FAILED
-     *         (required skill handover failure) — thrown AFTER the failing
+     *         (required skill handover failure) - thrown AFTER the failing
      *         path has been marked processed-for-this-agent so a subsequent
      *         request from the same agent doesn't re-throw
      */
@@ -259,10 +265,10 @@ public class SkillHubManager {
         }
         // install() may throw INSTALL_FAILED — we still mark these paths as
         // processed-for-this-agent below so the same agent isn't retried.
-        RuntimeException installError = null;
+        IllegalStateException installError = null;
         try {
             installer.install(agent, toInstall);
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             installError = ex;
         }
         synchronized (listLock) {
@@ -320,7 +326,7 @@ public class SkillHubManager {
         }
         try {
             provider.stop();
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             log.warn("SkillHub provider.stop() failed reason={}", ex.getMessage());
         }
     }
@@ -364,12 +370,14 @@ public class SkillHubManager {
     /**
      * Execute provider.download + verify cycle. Returns true if download fully
      * succeeded and at least one path was verified.
+     *
+     * @return true if download succeeded and at least one skill verified, false otherwise
      */
     private boolean doDownloadAndVerify() {
         boolean downloadOk;
         try {
             downloadOk = provider.download(config, decryptedToken);
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             log.warn("SkillHub download threw category={} reason={}",
                     categoryOf(ex), ex.getMessage());
             return false;
@@ -413,7 +421,7 @@ public class SkillHubManager {
                     .filter(p -> Files.isReadable(p.resolve("SKILL.md"))
                             || Files.isReadable(p.resolve("Skill.md")))
                     .toList();
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             // Don't abort the whole downloadAndVerify cycle just because the
             // local walk hit an unreadable subdir; log and proceed with an
             // empty candidate list. Other paths already in verifiedSkillPaths
@@ -435,7 +443,7 @@ public class SkillHubManager {
             boolean verified;
             try {
                 verified = provider.verify(candidate);
-            } catch (RuntimeException ex) {
+            } catch (IllegalStateException ex) {
                 log.warn("SkillHub verify threw skillPath={} category={} reason={}",
                         sanitize(candidate), categoryOf(ex), ex.getMessage());
                 continue;
@@ -456,7 +464,7 @@ public class SkillHubManager {
             if (backgroundExecutor != null) {
                 return;
             }
-            backgroundExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            backgroundExecutor = new java.util.concurrent.ScheduledThreadPoolExecutor(1, r -> {
                 Thread t = new Thread(r, "skillhub-retry");
                 t.setDaemon(true);
                 t.setUncaughtExceptionHandler((thr, ex) ->
@@ -487,15 +495,16 @@ public class SkillHubManager {
                     backgroundRetryStarted.set(false);
                 }
             }
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             log.warn("SkillHub background retry failed reason={}", ex.getMessage());
         }
     }
 
-    /** Best-effort category extraction from a SkillHub[CATEGORY] message. */
-    private static String categoryOf(RuntimeException ex) {
-        if (ex instanceof IllegalStateException
-                && ex.getMessage() != null
+    /**
+     * Best-effort category extraction from a SkillHub[CATEGORY] message.
+     */
+    private static String categoryOf(IllegalStateException ex) {
+        if (ex.getMessage() != null
                 && ex.getMessage().startsWith("SkillHub[")) {
             try {
                 int start = "SkillHub[".length();

@@ -54,7 +54,9 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     /**
      * Inject the SkillHubManager when the SkillHub chain is active (enabled=true
-     * and provider present). Null when inactive — handler runs without skills.
+     * and provider present). Null when inactive - handler runs without skills.
+     *
+     * @param skillHubManager the SkillHub manager bean, or null when middleware is inactive
      */
     @Autowired(required = false)
     void setSkillHubManager(SkillHubManager skillHubManager) {
@@ -82,7 +84,7 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         if (skillHubManager != null) {
             try {
                 skillHubManager.stop();
-            } catch (RuntimeException ex) {
+            } catch (IllegalStateException ex) {
                 log.warn("SkillHub stop failed reason={}", ex.getMessage());
             }
         }

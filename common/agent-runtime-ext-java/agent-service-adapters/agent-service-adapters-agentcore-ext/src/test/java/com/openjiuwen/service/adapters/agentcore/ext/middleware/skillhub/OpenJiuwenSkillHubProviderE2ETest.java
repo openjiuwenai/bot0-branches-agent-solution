@@ -134,8 +134,8 @@ class OpenJiuwenSkillHubProviderE2ETest {
                 .isGreaterThan(0);
         // Record both counts for diagnostics; no hard assertion on failed count
         // because the upstream skill package composition is outside our control.
-        System.out.println("[e2e] verify passed=" + passed + " failed=" + failed
-                + " total=" + extracted.size());
+        java.util.logging.Logger.getLogger("e2e").info(
+                "verify passed=" + passed + " failed=" + failed + " total=" + extracted.size());
     }
 
     @Test

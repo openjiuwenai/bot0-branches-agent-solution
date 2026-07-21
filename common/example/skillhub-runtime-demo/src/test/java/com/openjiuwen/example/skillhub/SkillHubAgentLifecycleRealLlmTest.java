@@ -144,10 +144,10 @@ class SkillHubAgentLifecycleRealLlmTest {
 
         // Lowercase both sides for case-insensitive matching; skill names from
         // swarmskills are typically lowercase (dev-coder, pptx-craft, kami, ...).
-        String lowerContent = content.toLowerCase();
+        String lowerContent = content.toLowerCase(java.util.Locale.ROOT);
         boolean anyReferenced = realSkillNames.stream()
             .anyMatch(name -> name != null && !name.isBlank()
-                && lowerContent.contains(name.toLowerCase()));
+                && lowerContent.contains(name.toLowerCase(java.util.Locale.ROOT)));
 
         assertThat(anyReferenced)
             .as("LLM response should reference at least one real registered skill name "
@@ -185,6 +185,10 @@ class SkillHubAgentLifecycleRealLlmTest {
      * paths via a WeakHashMap; {@code getRegisteredList()} returns the union
      * of all paths processed for any agent. The previous reflection target
      * {@code registeredList} no longer exists.
+     *
+     * @param manager the SkillHubManager bean to reflect into
+     * @return the list of registered skill names parsed from SKILL.md front matter
+     * @throws Exception if reflection or file parsing fails
      */
     private static List<String> collectRegisteredSkillNames(SkillHubManager manager) throws Exception {
         java.lang.reflect.Method m = SkillHubManager.class.getDeclaredMethod("getRegisteredList");

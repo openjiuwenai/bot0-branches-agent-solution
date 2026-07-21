@@ -71,6 +71,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     private final String token;
 
     private HttpClient httpClient;
+
     /**
      * Bounded pool for parallel skill downloads. Created in {@link #start} and
      * shut down in {@link #stop} so repeated {@code download()} calls (e.g. the
@@ -151,7 +152,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             futures.add(downloadPool.submit(() -> {
                 try {
                     downloadOne(summary, localRoot);
-                } catch (RuntimeException ex) {
+                } catch (IllegalStateException ex) {
                     allSucceeded.set(false);
                     log.warn("SkillHub skill download failed skillId={} required=true category={} reason={}",
                             summary.assetId(), categoryOf(ex), ex.getMessage(), ex);
@@ -188,12 +189,13 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                     sanitizePath(skillPath));
             return false;
         }
-        Path skillMd = resolveSkillMd(skillPath);
-        if (skillMd == null || !Files.isReadable(skillMd)) {
+        java.util.Optional<Path> skillMdOpt = resolveSkillMd(skillPath);
+        if (skillMdOpt.isEmpty() || !Files.isReadable(skillMdOpt.get())) {
             log.warn("SkillHub skill verify failed skillPath={} category=CHECKSUM_MISMATCH reason=no-skill-md",
                     sanitizePath(skillPath));
             return false;
         }
+        Path skillMd = skillMdOpt.get();
         try {
             long size = Files.size(skillMd);
             if (size <= 0) {
@@ -225,6 +227,9 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     /**
      * Validate that SKILL.md content starts with a YAML front matter block and
      * contains a {@code description:} line (agent-core's loadDescription contract).
+     *
+     * @param content the SKILL.md file content
+     * @return true if content has a valid YAML front matter with a description line
      */
     private static boolean hasFrontMatter(String content) {
         if (content == null) {
@@ -251,16 +256,17 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     /**
      * Find {@code SKILL.md} or {@code Skill.md} directly under the extracted dir.
      *
-     * @return the path, or null if not found.
+     * @param dir the extracted skill package directory
+     * @return the path wrapped in Optional, empty if not found.
      */
-    private static Path resolveSkillMd(Path dir) {
+    private static java.util.Optional<Path> resolveSkillMd(Path dir) {
         for (String name : new String[]{"SKILL.md", "Skill.md"}) {
             Path candidate = dir.resolve(name);
             if (Files.isReadable(candidate)) {
-                return candidate;
+                return java.util.Optional.of(candidate);
             }
         }
-        return null;
+        return java.util.Optional.empty();
     }
 
     @Override
@@ -288,12 +294,13 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         List<SkillSummary> all = new ArrayList<>();
         int page = 1;
         while (true) {
-            String path = String.format("/api/v1/plugins?plugin_type=skill&page=%d&page_size=%d",
+            String path = String.format(java.util.Locale.ROOT,
+                    "/api/v1/plugins?plugin_type=skill&page=%d&page_size=%d",
                     page, DEFAULT_PAGE_SIZE);
             JsonNode data;
             try {
                 data = sendJson(buildGet(path));
-            } catch (RuntimeException ex) {
+            } catch (IllegalStateException ex) {
                 throw error(SkillHubErrorCategory.CONNECT_FAILED,
                         "list skills page=" + page, ex);
             }
@@ -302,9 +309,9 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 break;
             }
             for (JsonNode item : items) {
-                String assetId = textOrNull(item, "asset_id");
-                String name = textOrNull(item, "name");
-                String latestVersion = textOrNull(item, "latest_version");
+                String assetId = textOrEmpty(item, "asset_id");
+                String name = textOrEmpty(item, "name");
+                String latestVersion = textOrEmpty(item, "latest_version");
                 if (assetId == null || assetId.isBlank()) {
                     continue;
                 }
@@ -348,7 +355,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         // Verify SHA-256 immediately against server-provided checksum (if present).
         // A mismatch means the downloaded bytes are corrupt — do NOT extract.
         if (info.checksumSha256() != null && !info.checksumSha256().isBlank()) {
-            String expected = info.checksumSha256().toLowerCase();
+            String expected = info.checksumSha256().toLowerCase(java.util.Locale.ROOT);
             String actual = sha256OfFile(zipPath);
             if (!expected.equalsIgnoreCase(actual)) {
                 try {
@@ -368,9 +375,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         Path extractDir = skillDir.resolve(zipName.replace(".zip", ""));
         try {
             extractZip(zipPath, extractDir);
-        } catch (RuntimeException ex) {
-            throw ex;
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
                     "extract zip failed assetId=" + assetId, ex);
         }
@@ -389,8 +394,12 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     /**
      * Extract a zip into a target directory. The directory is created if absent.
      * Entries are validated to prevent path traversal (../ and absolute paths).
+     *
+     * @param zip the zip file path
+     * @param targetDir the directory to extract into; created if absent
+     * @throws IOException if the zip cannot be read or files cannot be written
      */
-    private static void extractZip(Path zip, Path targetDir) throws Exception {
+    private static void extractZip(Path zip, Path targetDir) throws IOException {
         Files.createDirectories(targetDir);
         try (ZipFile zipFile = new ZipFile(zip.toFile())) {
             java.util.Enumeration<? extends ZipEntry> entries = zipFile.entries();
@@ -421,16 +430,16 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         JsonNode data;
         try {
             data = sendJson(buildGet(path));
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             throw error(SkillHubErrorCategory.NOT_FOUND,
                     "artifacts lookup assetId=" + assetId, ex);
         }
         return new ArtifactInfo(
-                textOrNull(data, "download_url"),
-                textOrNull(data, "checksum_sha256"),
+                textOrEmpty(data, "download_url"),
+                textOrEmpty(data, "checksum_sha256"),
                 data.path("file_size").asLong(0L),
-                textOrNull(data, "name"),
-                textOrNull(data, "version"));
+                textOrEmpty(data, "name"),
+                textOrEmpty(data, "version"));
     }
 
     private void httpDownloadFile(String downloadUrl, Path target) {
@@ -473,9 +482,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
                         "download empty body", null);
             }
-        } catch (RuntimeException ex) {
-            throw ex;
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
             throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
                     "download io error", ex);
         }
@@ -531,9 +538,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw error(SkillHubErrorCategory.CONNECT_FAILED,
                     "json parse error", ex);
-        } catch (RuntimeException ex) {
-            throw ex;
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
             throw error(SkillHubErrorCategory.CONNECT_FAILED,
                     "http error", ex);
         }
@@ -552,7 +557,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 }
             }
             return toHex(md.digest());
-        } catch (Exception ex) {
+        } catch (IOException | java.security.NoSuchAlgorithmException ex) {
             throw error(SkillHubErrorCategory.CHECKSUM_MISMATCH,
                     "sha256 compute failed path=" + sanitizePath(path), ex);
         }
@@ -579,9 +584,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         return ex;
     }
 
-    private static SkillHubErrorCategory categoryOf(RuntimeException ex) {
-        if (ex instanceof IllegalStateException
-                && ex.getMessage() != null
+    private static SkillHubErrorCategory categoryOf(IllegalStateException ex) {
+        if (ex.getMessage() != null
                 && ex.getMessage().startsWith("SkillHub[")) {
             try {
                 int start = "SkillHub[".length();
@@ -596,12 +600,14 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         return SkillHubErrorCategory.UNKNOWN;
     }
 
-    private static String textOrNull(JsonNode node, String field) {
+    private static String textOrEmpty(JsonNode node, String field) {
         JsonNode v = node.path(field);
-        return v.isMissingNode() || v.isNull() ? null : v.asText();
+        return v.isMissingNode() || v.isNull() ? "" : v.asText();
     }
 
-    /** Strip path after host to avoid leaking query/credentials in logs. */
+    /**
+     * Strip path after host to avoid leaking query/credentials in logs.
+     */
     private static String sanitizeEndpoint(String endpoint) {
         if (endpoint == null || endpoint.isEmpty()) {
             return "";
