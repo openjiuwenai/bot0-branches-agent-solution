@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.controller;
+package com.openjiuwen.rdc.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.openjiuwen.rdc.model.Freshness;
@@ -16,7 +16,7 @@ import java.time.Instant;
  * {@link com.openjiuwen.rdc.model.AgentCardCandidate}).
  */
 
-abstract class DiscoveryCandidateJacksonMixin {
+public abstract class DiscoveryCandidateJacksonMixin {
     @JsonProperty
     abstract String agentCardJson();
 

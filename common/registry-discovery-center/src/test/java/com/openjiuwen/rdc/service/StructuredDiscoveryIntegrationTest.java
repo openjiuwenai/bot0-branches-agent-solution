@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.controller.MvpRegistryController;
-import com.openjiuwen.rdc.controller.RegistryObjectMapper;
+import com.openjiuwen.rdc.config.RegistryObjectMapper;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;

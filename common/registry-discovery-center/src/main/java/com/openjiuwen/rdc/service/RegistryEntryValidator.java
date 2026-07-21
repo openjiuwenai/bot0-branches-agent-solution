@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.rdc.controller;
+package com.openjiuwen.rdc.service;
 
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.RegistryEntryInvalidException;
@@ -14,11 +14,11 @@ import java.net.URI;
  *
  * @since 0.1.0 (2026)
  */
-final class RegistryEntryValidator {
+public final class RegistryEntryValidator {
     private RegistryEntryValidator() {
     }
 
-    static void validate(AgentRegistryEntry entry, String traceId) {
+    public static void validate(AgentRegistryEntry entry, String traceId) {
         if (entry == null || !entry.hasRegistryKey()) {
             throw new RegistryEntryInvalidException(
                     "AgentRegistryEntry must carry tenantId + agentId (registry key)", traceId);

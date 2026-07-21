@@ -6,7 +6,7 @@ package com.openjiuwen.rdc.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.card.AgentCardFetcher;
-import com.openjiuwen.rdc.controller.RegistryObjectMapper;
+import com.openjiuwen.rdc.config.RegistryObjectMapper;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;

@@ -6,8 +6,7 @@
  * agent-bus registry-discovery-center — Spring configuration &amp; wiring
  * (FEAT-016 §3.1).
  *
- * <p>Holds the five cross-cutting configuration / operational-context types
- * previously at the {@code registry.runtime} root:
+ * <p>Holds cross-cutting configuration / operational-context types:
  * <ul>
  *   <li>{@link com.openjiuwen.rdc.config.RegistryRuntimeBeanConfig} —
  *       {@code DataSource} / {@code JdbcTemplate} / {@code Flyway} /
@@ -20,6 +19,12 @@
  *   <li>{@link com.openjiuwen.rdc.config.OpenApiConfig} — OpenAPI surface.</li>
  *   <li>{@link com.openjiuwen.rdc.config.RegistryOpContext} — operational
  *       context holder.</li>
+ *   <li>{@link com.openjiuwen.rdc.config.RegistryJacksonConfig} /
+ *       {@link com.openjiuwen.rdc.config.RegistryObjectMapper} /
+ *       {@link com.openjiuwen.rdc.config.DiscoveryCandidateJacksonMixin} —
+ *       discovery JSON serialization.</li>
+ *   <li>{@link com.openjiuwen.rdc.config.RegistrationPathGuard} — pull vs
+ *       deployment-discovery mutual exclusion.</li>
  * </ul>
  *
  * <p>Licensed for {@code javax.sql.DataSource} (bean construction),

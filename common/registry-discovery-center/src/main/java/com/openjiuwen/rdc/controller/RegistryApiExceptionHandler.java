@@ -4,6 +4,7 @@
 
 package com.openjiuwen.rdc.controller;
 
+import com.openjiuwen.rdc.model.PushRegistrationDisabledException;
 import com.openjiuwen.rdc.model.RegistryFailure;
 import com.openjiuwen.rdc.model.RegistryFailureException;
 

@@ -16,12 +16,14 @@ import com.openjiuwen.rdc.model.DiscoveryConstraints;
 import com.openjiuwen.rdc.model.HealthRequirement;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
+import com.openjiuwen.rdc.model.PushRegistrationDisabledException;
 import com.openjiuwen.rdc.model.RegistryEntryInvalidException;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
 import com.openjiuwen.rdc.model.ServiceIdCodec;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.RegistryPersistenceGuard;
 import com.openjiuwen.rdc.service.AgentDiscoveryService;
+import com.openjiuwen.rdc.service.RegistryEntryValidator;
 
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;

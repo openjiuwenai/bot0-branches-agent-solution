@@ -8,6 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.openjiuwen.rdc.config.DiscoveryCandidateJacksonMixin;
+import com.openjiuwen.rdc.config.RegistryObjectMapper;
 import com.openjiuwen.rdc.model.AgentCardCandidate;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
 import com.openjiuwen.rdc.model.DiscoveryCandidate;

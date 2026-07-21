@@ -6,12 +6,19 @@
  * agent-bus registry-discovery-center — MVC Controller layer, HTTP entry
  * point (FEAT-016 + Feat-015).
  *
- * <p>{@link com.openjiuwen.rdc.controller.MvpRegistryController} exposes
- * Feat-015 {@code POST /api/registry/discover}, push
- * {@code POST /api/registry/register} (returns 410 when deployment-discovery
- * is enabled), and deregister variants.
- * {@link com.openjiuwen.rdc.controller.InstanceRouteController} exposes
- * FEAT-016 instance list + {@code POST /route-handle/resolve}.
+ * <p>HTTP entry points only:
+ * <ul>
+ *   <li>{@link com.openjiuwen.rdc.controller.MvpRegistryController} — Feat-015
+ *       {@code POST /api/registry/discover}, push register (410 when
+ *       deployment-discovery enabled), deregister</li>
+ *   <li>{@link com.openjiuwen.rdc.controller.InstanceRouteController} — FEAT-016
+ *       instance list + {@code POST /route-handle/resolve}</li>
+ *   <li>{@link com.openjiuwen.rdc.controller.RegistryApiExceptionHandler} —
+ *       shared {@code @RestControllerAdvice}</li>
+ * </ul>
+ *
+ * <p>Validators, Jackson wiring, and domain exceptions live in
+ * {@code service} / {@code config} / {@code model} respectively.
  *
  * <p>All endpoints take {@code tenantId} explicitly — no {@code TenantFilter}
  * (ADR-0160 decision 6). JDBC is forbidden; controllers call
