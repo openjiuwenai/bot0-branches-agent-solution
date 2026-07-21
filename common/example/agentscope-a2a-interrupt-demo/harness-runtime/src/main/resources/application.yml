@@ -1,0 +1,37 @@
+server:
+  port: ${HARNESS_AGENT_PORT:18111}
+
+spring:
+  application:
+    name: agentscope-harness-a2a-demo
+
+logging:
+  level:
+    io.agentscope.extensions.model.openai.OpenAIClient: DEBUG
+
+agentscope:
+  demo:
+    api-key: ${DEEPSEEK_API_KEY:}
+    base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+    model: ${DEEPSEEK_MODEL:deepseek-chat}
+    workspace: ${AGENTSCOPE_HARNESS_WORKSPACE:target/agentscope-harness-workspace}
+
+openjiuwen:
+  service:
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "AgentScopeHarnessAgent"
+      agent-description: "AgentScope HarnessAgent with A2A external-tool result resume"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "external_lookup"
+          name: "External Lookup"
+          description: "Request an external lookup result and continue after it is supplied"
+          tags: ["agentscope", "harness", "interrupt", "external-tool"]
+          examples: ["Look up the profile for customer C001"]
