@@ -145,6 +145,11 @@ public final class RegistryOpContext {
     /**
      * Fluent builder for {@link RegistryOpContext}.
      */
+    /**
+     * Builder.
+     *
+     * @since 0.1.0
+     */
     public static final class Builder {
         private final String traceId;
         private final String tenantId;

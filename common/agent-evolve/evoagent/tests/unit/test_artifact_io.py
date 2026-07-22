@@ -100,6 +100,32 @@ def test_atomic_write_marker_and_bytes_publish_exact_payloads(tmp_path: Path) ->
     assert payload.read_bytes() == b"\x00complete\xff"
 
 
+def test_atomic_write_succeeds_when_directory_fsync_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Directory open/fsync failure must not abort after the file is published.
+
+    Reproduces Windows PermissionError on os.open(dir, O_RDONLY).
+    """
+    target = tmp_path / "gate_result.json"
+    real_open = os.open
+
+    def open_dir_denied(path: str | bytes | os.PathLike[str], flags: int, *args: object, **kwargs: object) -> int:
+        if Path(path) == tmp_path and flags == os.O_RDONLY:
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", open_dir_denied)
+
+    atomic_write_json(target, {"decision": "base", "status": "valid"})
+
+    assert json.loads(target.read_text(encoding="utf-8")) == {
+        "decision": "base",
+        "status": "valid",
+    }
+    assert list(tmp_path.iterdir()) == [target]
+
+
 def test_sha256_file_returns_digest_for_complete_file(tmp_path: Path) -> None:
     target = tmp_path / "results.json"
     payload = b'{"status":"valid"}'

@@ -27,7 +27,6 @@ class ServiceIdCodecTest {
     void derive_lowercases_host() {
         assertThat(ServiceIdCodec.derive("http://HOST.Example.COM:8080")).isEqualTo("host.example.com");
     }
-
     @Test
     void derive_omits_port_when_url_has_no_explicit_port() {
         assertThat(ServiceIdCodec.derive("http://host")).isEqualTo("host");

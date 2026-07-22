@@ -1,4 +1,8 @@
-"""Deterministic MetricEvaluator — inherits openjiuwen MetricEvaluator."""
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+"""Deterministic MetricEvaluator — extends openjiuwen ``MetricEvaluator``.
+
+Adds batch-level aggregation while reusing upstream score aggregation helpers.
+"""
 
 from __future__ import annotations
 
@@ -81,6 +85,22 @@ class MetricEvaluator(_UpstreamMetricEvaluator):  # type: ignore[misc]
     def batch_score(self) -> str:
         """The configured batch-score key (empty = batch aggregation disabled)."""
         return self._batch_score
+
+    def batch_evaluate(
+        self,
+        cases: Any,
+        predicts: list[dict[str, Any]],
+        num_parallel: int = 1,
+        **kwargs: Any,
+    ) -> list[EvaluatedCase]:
+        """Accept ``enable_attribution`` for API parity with LLMEvaluator (ignored)."""
+        kwargs.pop("enable_attribution", None)
+        if kwargs:
+            raise TypeError(
+                f"MetricEvaluator.batch_evaluate() got unexpected keyword arguments: "
+                f"{sorted(kwargs)!r}"
+            )
+        return super().batch_evaluate(cases, predicts, num_parallel=num_parallel)
 
     def evaluate(self, case: Case, predict: dict[str, Any]) -> EvaluatedCase:
         """Evaluate a single case.

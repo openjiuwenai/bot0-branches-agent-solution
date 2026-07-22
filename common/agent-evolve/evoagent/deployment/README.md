@@ -146,20 +146,20 @@ vim config/.env
 | `EVO_OPTIMIZER_MODEL` | `qwen3-max` | optimizer 用的模型 |
 | `EVO_TARGET_MODEL` | `qwen3-max` | 目标 Agent 用的模型 |
 
-#### 3.2.1 客户内网 ICBC 模式
+#### 3.2.1 自定义 SSE 模式
 
-客户内网工行 ICBC 大模型（OpenAI 兼容流式 `chat/completions` 端点，仅服务评估器/反思器/优化器，不影响 ReActAgent→Adapter 链）：
+自定义 SSE 模型端点（OpenAI 兼容流式 `chat/completions` 端点，仅服务评估器/反思器/优化器，不影响 ReActAgent→Adapter 链）：
 
 ```env
-EVO_LLM_PROVIDER=ICBC                # 切到 ICBC 模式（大小写不敏感）
-EVO_ICBC_TOKEN=<JWT>                 # 工行鉴权 token（Secret 注入）
-EVO_ICBC_USER_ID=<固定 userId>       # 工行分配的 userId
-EVO_ICBC_ENDPOINT=http://aigc.sdc.cs.icbc/mlpmodelservice/aigc/chat/completions
-EVO_ICBC_CONTEXT_WINDOW_TOKENS=32768 # 必填，按现场模型规格填写
-EVO_ICBC_TIMEOUT=120.0               # 可选，流式 read 超时（秒），默认 120
+EVO_LLM_PROVIDER=CustomSSE                # 切到 CustomSSE 模式（大小写不敏感）
+EVO_CUSTOM_SSE_TOKEN=<TOKEN>                 # 私有部署鉴权 token（Secret 注入）
+EVO_CUSTOM_SSE_USER_ID=<固定 userId>       # 私有部署分配的 userId
+EVO_CUSTOM_SSE_ENDPOINT=https://llm-gateway.example.com/v1/chat/completions
+EVO_CUSTOM_SSE_CONTEXT_WINDOW_TOKENS=32768 # 必填，按现场模型规格填写
+EVO_CUSTOM_SSE_TIMEOUT=120.0               # 可选，流式 read 超时（秒），默认 120
 ```
 
-设为 `ICBC` 后，`EVO_LLM_API_KEY` / `EVO_LLM_BASE_URL` 被忽略；token、userId、endpoint、context window 四项必填（启动时 fail-fast 校验）。
+设为 `CustomSSE` 后，`EVO_LLM_API_KEY` / `EVO_LLM_BASE_URL` 被忽略；token、userId、endpoint、context window 四项必填（启动时 fail-fast 校验）。
 
 ### 3.3 数据路径白名单（重要）
 

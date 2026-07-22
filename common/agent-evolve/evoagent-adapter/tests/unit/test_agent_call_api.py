@@ -84,6 +84,7 @@ class TestAgentCallEndpointRouting:
             json={"query": "hello"},
         )
         assert response.status_code == 404
+        assert response.json()["error"]["code"] == "AGENT_NOT_FOUND"
 
     def test_call_agent_without_url_returns_400(self, tmp_path):
         """Call an agent that has no agent_url returns 400."""
@@ -104,9 +105,69 @@ class TestAgentCallEndpointRouting:
             json={"query": "hello"},
         )
         assert response.status_code == 400
-        assert "未配置" in response.json()["detail"] or "agent_url" in response.json()["detail"]
+        data = response.json()
+        assert data["error"]["code"] == "INVALID_ACTION"
+        assert "未配置" in data["error"]["message"] or "agent_url" in data["error"]["message"]
+        # Legacy field for older clients
+        assert "detail" in data
 
-    def test_call_agent_with_extra_data(self, tmp_path):
+    def test_call_agent_missing_query_returns_400(self, tmp_path):
+        """Missing query is a client error (400), not an internal 500."""
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir()
+
+        app = _make_app_with_agents(tmp_path, textwrap.dedent(f"""\
+            agents:
+              - name: edp_agent
+                log_dir: {log_dir}
+                agent_url: http://localhost:8090
+                project_id: proj_001
+                agent_id: edp_agent
+        """))
+
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/v1/agents/edp_agent/conversations/conv_missing_query",
+            json={},
+        )
+        assert response.status_code == 400
+        data = response.json()
+        assert data["error"]["code"] == "INVALID_ACTION"
+        assert "query" in data["error"]["message"].lower() or "query" in data.get("detail", "").lower()
+
+    def test_call_agent_error_format_matches_skills_api(self, tmp_path):
+        """Conversations and Skills AGENT_NOT_FOUND share {error:{code,message}}."""
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir()
+
+        app = _make_app_with_agents(tmp_path, textwrap.dedent(f"""\
+            agents:
+              - name: edp_agent
+                log_dir: {log_dir}
+                skills_dir: {tmp_path / "skills"}
+                agent_url: http://localhost:8090
+                project_id: proj_001
+                agent_id: edp_agent
+        """))
+
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+
+        r_skills = client.post(
+            "/api/v1/skills",
+            json={"agent_name": "nonexistent_agent_xyz", "action": "skill_list"},
+        )
+        r_conv = client.post(
+            "/api/v1/agents/nonexistent_agent_xyz/conversations/conv_format_test",
+            json={"query": "test"},
+        )
+        assert r_skills.status_code == 404
+        assert r_conv.status_code == 404
+        assert r_skills.json()["error"]["code"] == r_conv.json()["error"]["code"] == "AGENT_NOT_FOUND"
+
+    def test_call_agent_forwards_extra_data(self, tmp_path):
         """extra_data is forwarded to AgentClient.call()."""
         log_dir = tmp_path / "logs"
         log_dir.mkdir()

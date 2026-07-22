@@ -6,18 +6,16 @@ package com.openjiuwen.rdc.pull;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.model.FrameworkType;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
+import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
+import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,10 +39,9 @@ import javax.sql.DataSource;
  * upsert SQL bound those columns as null, and the NOT NULL constraint on
  * {@code agent_registry_mvp} rejected the insert.
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
  */
 class PullRegistrationBootstrapPgIntegrationTest {
-    private static EmbeddedPostgres pg;
     private static DataSource dataSource;
     private static MockWebServer runtimeServer;
 
@@ -54,9 +51,7 @@ class PullRegistrationBootstrapPgIntegrationTest {
 
     @BeforeAll
     static void bootStack() throws Exception {
-        pg = EmbeddedPostgres.builder().start();
-        dataSource = pg.getPostgresDatabase();
-        Flyway.configure().dataSource(dataSource).load().migrate();
+        dataSource = EmbeddedPostgresTestSupport.sharedDataSource();
 
         runtimeServer = new MockWebServer();
         runtimeServer.start();
@@ -71,18 +66,15 @@ class PullRegistrationBootstrapPgIntegrationTest {
         if (runtimeServer != null) {
             runtimeServer.shutdown();
         }
-        if (pg != null) {
-            pg.close();
-        }
     }
 
     @BeforeEach
     void cleanTable() {
-        new JdbcTemplate(dataSource).execute("DELETE FROM agent_registry_mvp");
-    }
-
+            new JdbcTemplate(dataSource).execute("DELETE FROM agent_registry_mvp");
+        }
     @Test
-    void pull_upserts_defaults_when_maxconcurrency_weight_omitted() throws Exception {
+    void pull_upserts_defaults_when_omits_limits() throws Exception {
+        String baseUrl = runtimeServer.url("/").toString().replaceAll("/$", "");
         String cardJson = "{\"name\":\"财务助手\",\"description\":\"billing\","
                 + "\"version\":\"1.0.0\",\"capabilities\":{\"streaming\":false,"
                 + "\"pushNotifications\":false,\"stateTransitionHistory\":false},"
@@ -95,7 +87,7 @@ class PullRegistrationBootstrapPgIntegrationTest {
         PullRegistrationProperties props = new PullRegistrationProperties();
         props.setEnabled(true);
         PullRegistrationProperties.RuntimeEntry runtime = new PullRegistrationProperties.RuntimeEntry();
-        runtime.setBaseUrl(runtimeServer.url("/").toString().replaceAll("/$", ""));
+        runtime.setBaseUrl(baseUrl);
         runtime.setTenantId("tenant-pull");
         runtime.setAgentId("agent-pull");
         runtime.setFrameworkType(FrameworkType.JIUWEN);
@@ -120,6 +112,7 @@ class PullRegistrationBootstrapPgIntegrationTest {
 
     @Test
     void pull_honors_operator_pinned_max_concurrency_and_weight() throws Exception {
+        String baseUrl = runtimeServer.url("/").toString().replaceAll("/$", "");
         String cardJson = "{\"name\":\"财务助手\",\"description\":\"billing\","
                 + "\"version\":\"1.0.0\",\"capabilities\":{\"streaming\":false,"
                 + "\"pushNotifications\":false,\"stateTransitionHistory\":false},"
@@ -132,7 +125,7 @@ class PullRegistrationBootstrapPgIntegrationTest {
         PullRegistrationProperties props = new PullRegistrationProperties();
         props.setEnabled(true);
         PullRegistrationProperties.RuntimeEntry runtime = new PullRegistrationProperties.RuntimeEntry();
-        runtime.setBaseUrl(runtimeServer.url("/").toString().replaceAll("/$", ""));
+        runtime.setBaseUrl(baseUrl);
         runtime.setTenantId("tenant-pull");
         runtime.setAgentId("agent-pull-2");
         runtime.setFrameworkType(FrameworkType.JIUWEN);

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openjiuwen.agent_evolving.trainer.progress import Callbacks
@@ -32,6 +32,8 @@ def _make_trainer(
     evaluator: Any = None,
     trace_max_retries: int = 1,
     trace_retry_backoff: float = 0.0,
+    empty_extract_max_attempts: int = 3,
+    empty_extract_retry_backoff: float = 0.0,
     num_parallel: int = 2,
     validation_min_success_ratio: float = 1.0,
     validation_require_same_case_set: bool = True,
@@ -45,6 +47,8 @@ def _make_trainer(
         num_parallel=num_parallel,
         trace_max_retries=trace_max_retries,
         trace_retry_backoff=trace_retry_backoff,
+        empty_extract_max_attempts=empty_extract_max_attempts,
+        empty_extract_retry_backoff=empty_extract_retry_backoff,
         validation_min_success_ratio=validation_min_success_ratio,
         validation_require_same_case_set=validation_require_same_case_set,
     )
@@ -66,6 +70,54 @@ def test_evaluate_none_cases_returns_zero() -> None:
     score, evaluated = trainer.evaluate(MagicMock(), None)
     assert score == 0.0
     assert evaluated == []
+
+
+def test_evaluate_retries_when_extract_field_empty() -> None:
+    """配置了 extract 时，字段为空会换 conversation_id 重试 invoke。"""
+    from evo_agent.evaluator.factory import create_evaluator
+
+    calls: list[str] = []
+
+    async def mock_invoke(payload: dict[str, Any], **kwargs: Any) -> dict[str, str]:
+        calls.append(payload["conversation_id"])
+        if len(calls) == 1:
+            return {"answer": "incomplete"}
+        return {"answer": '<answer>{"responsibility": "无责"}</answer>'}
+
+    agent = AsyncMock()
+    agent.invoke = AsyncMock(side_effect=mock_invoke)
+
+    messages = [{"role": "user", "content": "hi"}]
+    adapter = AsyncMock()
+    adapter.get_traces = AsyncMock(return_value={"messages": messages, "summary": "s"})
+
+    evaluator = create_evaluator(
+        {
+            "type": "metric",
+            "metric": "exact_match",
+            "extract": {
+                "strategy": "answer_tag_json_field",
+                "fields": ["responsibility"],
+                "prefer_values": ["无责", "有责"],
+            },
+        }
+    )
+
+    trainer = _make_trainer(
+        adapter_client=adapter,
+        evaluator=evaluator,
+        empty_extract_max_attempts=3,
+    )
+    mock_cases = MagicMock()
+    mock_cases.get_cases.return_value = [_make_case("c1")]
+    with patch.object(evaluator, "batch_evaluate", MagicMock(return_value=[])):
+        trainer.evaluate(agent, mock_cases)
+
+    assert len(calls) == 2
+    assert calls[0] != calls[1]
+    # traces should be fetched for the successful conversation
+    adapter.get_traces.assert_awaited()
+    assert adapter.get_traces.await_args.kwargs["case_id"] == calls[-1]
 
 
 def test_evaluate_uses_unique_conversation_ids() -> None:

@@ -21,12 +21,14 @@ from evo_agent.cancellation import CancellationToken
 from evo_agent.dataset.case import merge_extra_data
 from evo_agent.errors import ValidationCoverageError
 from evo_agent.evaluator.batch_result import EvaluationBatchResult, EvaluationOutcome
+from evo_agent.evaluator.metrics.extract import extract_config_from_evaluator
 from evo_agent.evaluator.trajectory.normalize import normalize_trace_to_trajectory
 from evo_agent.optimizer.skill_document.types import (
     GateEpochArtifactInput,
     GateEvaluationRecord,
     ValidationCoverageFailureInput,
 )
+from evo_agent.rollout_invoke import invoke_with_empty_extract_retry
 from evo_agent.types import TrajectoryUnavailableError
 
 # Type aliases for _select_best_candidate_on_val override
@@ -71,6 +73,8 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         rollout_extra_data: dict[str, Any] | None = None,
         trace_max_retries: int = 3,
         trace_retry_backoff: float = 1.0,
+        empty_extract_max_attempts: int = 3,
+        empty_extract_retry_backoff: float = 1.0,
         tie_reval_eps: float = 0.0,
         validation_max_case_attempts: int = 2,
         validation_min_success_ratio: float = 1.0,
@@ -85,6 +89,8 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         self._rollout_extra_data = rollout_extra_data or {}
         self._trace_max_retries = trace_max_retries
         self._trace_retry_backoff = trace_retry_backoff
+        self._empty_extract_max_attempts = max(int(empty_extract_max_attempts), 1)
+        self._empty_extract_retry_backoff = float(empty_extract_retry_backoff)
         # 平局重 eval 阈值：|cand - base| <= eps 触发 1 次候选重 eval（均值降噪）。
         # 默认 0.0 = 仅精确平局触发；负值可禁用。
         self._tie_reval_eps = tie_reval_eps
@@ -432,29 +438,44 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         """
         sem = asyncio.Semaphore(min(self._num_parallel, len(cases)))
 
+        extract_cfg = extract_config_from_evaluator(self._evaluator)
+
         async def _rollout_one(case: Any) -> tuple[dict[str, Any], Any]:
             async with sem:
                 self._cancellation_token.raise_if_requested()
-                conversation_id = self._conversation_id_factory.new(
-                    phase="val", case_id=case.case_id
+                case_extra = case.inputs.get("extra_data", {})
+                extra = merge_extra_data(self._rollout_extra_data, case_extra)
+
+                async def _invoke_once(conversation_id: str) -> dict[str, Any]:
+                    try:
+                        result = await agent.invoke(
+                            {
+                                **case.inputs,
+                                "conversation_id": conversation_id,
+                                "extra_data": extra,
+                            },
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Validation invoke failed for case=%s conversation_id=%s: %s",
+                            case.case_id,
+                            conversation_id,
+                            exc,
+                        )
+                        return {"answer": "", "error": str(exc)}
+                    return result if isinstance(result, dict) else {"answer": str(result)}
+
+                answer, conversation_id = await invoke_with_empty_extract_retry(
+                    invoke_once=_invoke_once,
+                    new_conversation_id=lambda: self._conversation_id_factory.new(
+                        phase="val", case_id=case.case_id
+                    ),
+                    extract_cfg=extract_cfg,
+                    max_attempts=self._empty_extract_max_attempts,
+                    backoff_secs=self._empty_extract_retry_backoff,
+                    case_id=case.case_id,
+                    phase="val",
                 )
-
-                try:
-                    case_extra = case.inputs.get("extra_data", {})
-                    extra = merge_extra_data(self._rollout_extra_data, case_extra)
-                    result = await agent.invoke(
-                        {**case.inputs, "conversation_id": conversation_id, "extra_data": extra},
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Validation invoke failed for case=%s conversation_id=%s: %s",
-                        case.case_id,
-                        conversation_id,
-                        exc,
-                    )
-                    result = {"answer": "", "error": str(exc)}
-
-                answer = result if isinstance(result, dict) else {"answer": str(result)}
 
                 # Do not interrupt an already-started Agent call. Once it has
                 # reached a terminal response, stop before scheduling trace work.

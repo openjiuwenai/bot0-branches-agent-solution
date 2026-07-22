@@ -40,11 +40,18 @@ def atomic_write_bytes(path: Path, payload: bytes) -> None:
             os.fsync(stream.fileno())
         os.replace(temporary, path)
         temporary = None
-        directory_fd = os.open(path.parent, os.O_RDONLY)
+        # Best-effort directory fsync so rename is durable on POSIX. Windows (and
+        # some network FS) cannot os.open() a directory — PermissionError — so
+        # skip rather than failing after the file is already published.
         try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+            directory_fd = os.open(path.parent, os.O_RDONLY)
+        except OSError:
+            directory_fd = -1
+        if directory_fd >= 0:
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
     except BaseException as exc:
         if temporary is not None:
             try:

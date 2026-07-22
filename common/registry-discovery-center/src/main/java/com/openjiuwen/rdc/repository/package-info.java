@@ -35,4 +35,5 @@
  * {@code req-2026-003-consul-forbidden-mvp} regex-check gate rule and the
  * {@code AgentRdcRegistryJdbcPurityTest} Consul-forbidden assertion.
  */
+
 package com.openjiuwen.rdc.repository;

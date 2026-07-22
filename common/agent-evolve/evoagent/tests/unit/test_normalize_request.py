@@ -58,7 +58,7 @@ def _make_config(**overrides: object) -> EvolveConfig:
 
 
 def test_normalize_basic_mapping() -> None:
-    """optimizer_template.scenario → scenario，evaluator_template.prompt → evaluator_prompt。"""
+    """optimizer_template.scenario → scenario；默认评估 type=metric。"""
     req = _make_api_request()
     config = _make_config()
     result = _normalize(req, config)
@@ -66,6 +66,63 @@ def test_normalize_basic_mapping() -> None:
     assert result.evaluator_prompt == "test prompt"
     assert result.agent_name == "test_agent"
     assert result.skills == ["skill_a"]
+    assert result.evaluator_config == {
+        "type": "metric",
+        "metric": "exact_match",
+        "aggregate": "mean",
+    }
+
+
+def test_normalize_metric_evaluator_config() -> None:
+    """type=metric 时组装 metric/extract evaluator_config。"""
+    req = _make_api_request()
+    req.evaluator_template = EvaluatorTemplateRequest(
+        name="exact",
+        scenario="audit",
+        type="metric",
+        metric="exact_match",
+        extract={
+            "strategy": "answer_tag_json_field",
+            "fields": ["responsibility", "responsibility_type"],
+            "prefer_values": ["无责", "有责"],
+        },
+    )
+    result = _normalize(req, _make_config())
+    assert result.evaluator_config["type"] == "metric"
+    assert result.evaluator_config["metric"] == "exact_match"
+    assert result.evaluator_config["extract"]["fields"] == [
+        "responsibility",
+        "responsibility_type",
+    ]
+    assert "prompt_template" not in result.evaluator_config
+
+
+def test_normalize_llm_evaluator_config() -> None:
+    """显式 type=llm 时组装 prompt_template。"""
+    req = _make_api_request()
+    req.evaluator_template = EvaluatorTemplateRequest(
+        name="sem",
+        scenario="audit",
+        type="llm",
+        prompt="custom rubric",
+    )
+    result = _normalize(req, _make_config())
+    assert result.evaluator_config == {
+        "type": "llm",
+        "prompt_template": "custom rubric",
+    }
+
+
+def test_normalize_llm_empty_prompt_omits_template() -> None:
+    req = _make_api_request(evaluator_prompt="")
+    req.evaluator_template = EvaluatorTemplateRequest(
+        name="sem",
+        scenario="audit",
+        type="llm",
+        prompt="",
+    )
+    result = _normalize(req, _make_config())
+    assert result.evaluator_config == {"type": "llm"}
 
 
 def test_tool_request_does_not_enter_managed_doc_branch() -> None:

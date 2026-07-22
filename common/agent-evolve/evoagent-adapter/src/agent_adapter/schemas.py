@@ -25,7 +25,11 @@ class AgentCallRequest(BaseModel):
     query: str = Field(description="User natural language query")
     extra_data: dict | None = Field(
         default=None,
-        description="Extra key-value pairs forwarded to EDPAgent custom_data.inputs",
+        description=(
+            "Extra key-value pairs forwarded to EDPAgent custom_data.inputs. "
+            "Sampling knobs such as temperature should be placed here "
+            '(e.g. {"temperature": 0.7}) when the downstream Agent consumes them.'
+        ),
     )
 
 
@@ -96,6 +100,7 @@ class SkillContentResponse(BaseModel):
 class SkillUpdateResponse(BaseModel):
     success: bool
     skill_name: str
+    revision: str
     message: str | None = None
 
 

@@ -5,7 +5,7 @@
     examples/scenarios/<name>/
     ├── scenario.yaml       # optimizer_class + hyperparams
     ├── optimizer.py        # SkillDocumentOptimizer 子类
-    ├── prompts/            # 可选 prompt 覆盖
+    ├── prompts/            # 可选 prompt 覆盖（TF-GRPO: variant_*/rollout_summary/...）
     └── skills/             # 可选初始 skill
 """
 
@@ -112,6 +112,8 @@ class ScenarioRegistry:
 
         # 合并：hyperparams + dependencies（dependencies 优先）
         merged_kwargs = {**hyperparams, **dependencies}
+        merged_kwargs.setdefault("scenario_name", scenario_name)
+        merged_kwargs.setdefault("scenarios_dir", self._scenarios_dir)
         filtered = self._filter_kwargs(cls, merged_kwargs)
 
         return cls(**filtered)

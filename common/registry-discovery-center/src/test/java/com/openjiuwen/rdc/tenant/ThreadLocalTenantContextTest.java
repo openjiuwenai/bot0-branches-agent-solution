@@ -7,15 +7,17 @@ package com.openjiuwen.rdc.tenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.rdc.tenant.TenantContext;
+import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Unit tests for {@link ThreadLocalTenantContext} (HD3-003 tenant isolation,
@@ -50,6 +52,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li><b>RB-TC6</b> — {@link TenantContext#current()} returns null when
  *       no tenant is bound (unbound scope).</li>
  * </ul>
+ *
+ * @since 0.1.0 (2026)
  */
 class ThreadLocalTenantContextTest {
     private final ThreadLocalTenantContext context = new ThreadLocalTenantContext();
@@ -133,7 +137,7 @@ class ThreadLocalTenantContextTest {
     }
 
     @Test
-    void nested_bind_for_scope_restores_outer_tenant_even_if_inner_throws() {
+    void nested_bind_restores_outer_if_inner_throws() {
         ThreadLocalTenantContext.bindForScope("tenant-outer", () -> {
             assertThatThrownBy(() ->
                     ThreadLocalTenantContext.bindForScope("tenant-inner", () -> {
@@ -177,11 +181,17 @@ class ThreadLocalTenantContextTest {
 
     @Test
     void tenant_bound_on_one_thread_is_not_visible_on_another() throws Exception {
-        // Use a raw ThreadPoolExecutor (G.CON.12) instead of Executors factory;
-        // cooperative cancellation via the 'release' CountDownLatch avoids
-        // Thread.interrupt() (G.CON.10).
-        ExecutorService pool = new ThreadPoolExecutor(
-                1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(),
+                r -> {
+                    Thread worker = new Thread(r);
+                    worker.setDaemon(true);
+                    worker.setUncaughtExceptionHandler((t, e) -> {
+                        // best-effort test worker cleanup
+                    });
+                    return worker;
+                });
         CountDownLatch bound = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         AtomicReference<String> otherThreadSees = new AtomicReference<>("unset");
@@ -193,8 +203,7 @@ class ThreadLocalTenantContextTest {
                     try {
                         release.await(2, TimeUnit.SECONDS);
                     } catch (InterruptedException e) {
-                        // Cooperative cancellation: the 'release' latch is the
-                        // shutdown signal; interrupt status is not relied upon.
+                        // await interrupted — exit scope without re-interrupting test thread
                     }
                 });
                 return null;
@@ -220,9 +229,8 @@ class ThreadLocalTenantContextTest {
     void current_returns_null_when_no_tenant_bound() {
         assertThat(context.current()).isNull();
     }
-
     @Test
     void current_implements_tenant_context_interface() {
-        assertThat(context).isInstanceOf(com.openjiuwen.rdc.tenant.TenantContext.class);
+        assertThat(context instanceof TenantContext).isTrue();
     }
 }
