@@ -116,6 +116,58 @@ class VersatileResponseExtractorTest {
         assertThat(chunks.get(0).getData()).asString().contains("\"node_type\":\"End\"");
     }
 
+    @Test
+    void extractsThreeFieldResultWhenConfigured() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props);
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"酒店预订\","
+                + "\"intent_id\":\"intent_L1_hotel\",\"agent_id\":\"agent_card_L2_hotel\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_CHUNK);
+        QueryChunk answer = chunks.stream()
+                .filter(c -> c.getData() instanceof Map<?, ?> m && "answer".equals(m.get("type")))
+                .findFirst().orElseThrow();
+        Map<?, ?> envelope = (Map<?, ?>) answer.getData();
+        assertThat(envelope.get("response_content")).isEqualTo("酒店预订");
+        assertThat(envelope.get("intent_id")).isEqualTo("intent_L1_hotel");
+        assertThat(envelope.get("agent_id")).isEqualTo("agent_card_L2_hotel");
+    }
+
+    @Test
+    void emitsErrorWhenResponseContentMissing() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props);
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"intent_id\":\"intent_L1_hotel\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = extractor.finish();
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_ERROR);
+        assertThat(String.valueOf(chunks.get(0).getData()))
+                .contains("VERSATILE_INTENT_RESULT_CONTRACT");
+    }
+
+    private static void addExtraction(VersatileProperties props, String match, String get) {
+        VersatileProperties.ResultExtraction extraction = new VersatileProperties.ResultExtraction();
+        extraction.setMatch(match);
+        extraction.setGet(get);
+        props.getResultExtractions().add(extraction);
+    }
+
     private static void assertAnswerEnvelope(QueryChunk chunk, String expectedOutput) {
         assertThat(chunk.getData()).isInstanceOf(Map.class);
         Map<?, ?> envelope = (Map<?, ?>) chunk.getData();
