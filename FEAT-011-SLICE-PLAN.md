@@ -99,12 +99,12 @@ common/agent-gateway/
 | T-G2-2 | S1-G2 | TenantResolverTest#unboundCredentialReturns403TenantUnresolved + A2aControllerWebMvcTest#unboundCredentialReturns403TenantUnresolved | unit+it | ✅ |
 | T-G2-3 | S1-G2 | TenantResolverTest#conflictingSelfReportIsIgnored + A2aControllerWebMvcTest#conflictingSelfReportStillPasses | unit+it | ✅ |
 | T-G2-4 | S1-G2 | TenantResolverTest#matchingSelfReportStillYieldsAuthoritative | unit | ✅ |
-| T-G3-1 | S1-G3 | ParamValidatorTest.createWithAgentId | unit | 待写 |
-| T-G3-2 | S1-G3 | ParamValidatorTest.createWithoutAgentId | unit | 待写 |
-| T-G3-3 | S1-G3 | ParamValidatorTest.emptyAgentIdReturns400 | unit+it | 待写 |
-| T-G3-4 | S1-G3 | ParamValidatorTest.resumeWithTaskId | unit | 待写 |
-| T-G3-5 | S1-G3 | ParamValidatorTest.resumeMissingTaskIdTreatedAsCreate | unit | 待写 |
-| T-G3-6 | S1-G3 | ParamValidatorTest.badMethodOrBody | unit+it | 待写 |
+| T-G3-1 | S1-G3 | ParamValidatorTest#createWithNonEmptyAgentIdPopulatesContext | unit | ✅ |
+| T-G3-2 | S1-G3 | ParamValidatorTest#createWithoutAgentIdIsAccepted | unit | ✅ |
+| T-G3-3 | S1-G3 | ParamValidatorTest#createWithEmptyAgentIdReturns400ValidationAgentId + A2aControllerWebMvcTest#emptyAgentIdReturns400ValidationAgentId | unit+it | ✅ |
+| T-G3-4 | S1-G3 | ParamValidatorTest#resumeWithTaskIdPopulatesTaskId | unit | ✅ |
+| T-G3-5 | S1-G3 | ParamValidatorTest#resumeMissingTaskIdIsTreatedAsCreate | unit | ✅ |
+| T-G3-6 | S1-G3 | ParamValidatorTest#malformedBodyReturns400ValidationJsonrpc / #methodNotInWhitelistReturns400ValidationMethod + A2aControllerWebMvcTest#badMethodReturns400ValidationMethod / #malformedBodyReturns400ValidationJsonrpc | unit+it | ✅ |
 | T-G4-1 | S1-G4 | IdempotencyStoreTest.firstCreateRecords | unit+it | 待写 |
 | T-G4-2 | S1-G4 | IdempotencyStoreTest.sameKeyShortCircuits | unit+it | 待写 |
 | T-G4-3 | S1-G4 | IdempotencyStoreTest.sameKeyDiffBodyReturns409 | unit+it | 待写 |
@@ -165,7 +165,8 @@ common/agent-gateway/
 | S0 骨架 | ✅ GREEN（11 测全过） | — | feat(gateway): FEAT-011 S0 |
 | S1-G1 鉴权 | ✅ GREEN | T-G1-1..5（见 §5） | feat(gateway): FEAT-011 S1-G1 |
 | S1-G2 租户 | ✅ GREEN（17 测全过） | T-G2-1..4（见 §5） | feat(gateway): FEAT-011 S1-G2 |
-| S1-G3 校验 | ⏳ 下一片 | T-G3-1..6 | — |
-| S1-G4 幂等 … S4 | 待办 | 见 §5 | — |
+| S1-G3 校验 | ✅ GREEN（28 测全过） | T-G3-1..6（见 §5） | feat(gateway): FEAT-011 S1-G3 |
+| S1-G4 幂等 | ⏳ 下一片 | T-G4-1..5 | — |
+| S1-G5 审计 … S4 | 待办 | 见 §5 | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）；G5 前错误体 traceId 为 advice 内临时 UUID（G5 切片挪到入口捕获 traceparent）。
