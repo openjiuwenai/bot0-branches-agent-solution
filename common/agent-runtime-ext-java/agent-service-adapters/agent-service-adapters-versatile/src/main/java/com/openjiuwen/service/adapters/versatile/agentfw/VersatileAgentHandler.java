@@ -59,7 +59,7 @@ public class VersatileAgentHandler implements AgentHandler {
     private List<QueryChunk> invokeForQuery(ServeRequest request) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
         logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
-        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
+        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties);
         List<QueryChunk> chunks = new ArrayList<>();
         try {
             client.postStream(remoteRequest, line -> {
@@ -148,7 +148,7 @@ public class VersatileAgentHandler implements AgentHandler {
     private List<QueryChunk> execute(ServeRequest request, QueryStreamObserver observer) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
         logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
-        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
+        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties);
         try {
             client.postStream(remoteRequest, line -> {
                 if (observer != null && observer.isCancelled()) {

@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
+import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -20,9 +21,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @since 2026-06-30
  */
 class VersatileResponseExtractorTest {
+    private static VersatileProperties props(String resultNodeName) {
+        VersatileProperties p = new VersatileProperties();
+        p.setResultNodeName(resultNodeName);
+        return p;
+    }
+
     @Test
     void emitsInterruptWhenStreamEndsBeforeEndSignal() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
 
         List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine("data: {\"event\":\"message\"}"));
         chunks.addAll(extractor.finish());
@@ -36,7 +43,7 @@ class VersatileResponseExtractorTest {
     @Tag("smoke")
     @Test
     void extractsResultNodeAndEmitsAnswerOnEnd() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
@@ -52,7 +59,7 @@ class VersatileResponseExtractorTest {
 
     @Test
     void emitsInterruptWhenResultNodeArrivesWithoutEndSignal() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
@@ -66,7 +73,7 @@ class VersatileResponseExtractorTest {
 
     @Test
     void extractsResultFromCustomResponseData() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
 
         assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
                 + "\"data\":{\"node_type\":\"QA\",\"text\":\"custom final\"}}}"))
@@ -82,7 +89,7 @@ class VersatileResponseExtractorTest {
 
     @Test
     void marksExceptionAsFailed() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
 
         List<QueryChunk> chunks = new ArrayList<>(
                 extractor.consumeLine("data: {\"event\":\"exception\",\"data\":{\"message\":\"boom\"}}"));
@@ -95,7 +102,7 @@ class VersatileResponseExtractorTest {
 
     @Test
     void emitsNoFinalChunkWhenCompletedWithoutResult() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"\",\"summary\":\"final\"}}"))
