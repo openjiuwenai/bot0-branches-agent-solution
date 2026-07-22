@@ -116,7 +116,7 @@ common/agent-gateway/
 | T-G5-4 | S1-G5 | A2aControllerWebMvcTest#passedRequestIsAuditedPassedWithSelfGeneratedTraceId（无 traceparent → 自生成 traceId，主路径不失败） | it | ✅ |
 | T-S2-1 | S2-sync | RouterTest#explicitAgentRoutesToFirstCandidateAndWritesSticky + A2aControllerWebMvcTest#createWithAgentForwardsAndReturnsTaskBody | unit+it | ✅ |
 | T-S2-2 | S2-sync | RouterTest#noAgentIdFallsBackToDefaultAgent + A2aControllerWebMvcTest#createWithoutAgentUsesDefaultAgent | unit+it | ✅ |
-| T-S2-3 | S2-SSE | SseBridgeTest（流式桥接） | unit+it | 待写 |
+| T-S2-3 | S2-SSE | SseBridgeTest + RouterTest#routeStreamBridgesFramesAndWritesStickyOnFirstTaskId + A2aControllerWebMvcTest#streamingCreateBridgesRuntimeFramesAsSse | unit+it | ✅ |
 | T-S2-4 | S5 | RouterTest#emptyCandidatesReturnsRouteNoCandidates + A2aControllerWebMvcTest#emptyCandidatesReturnsRouteNoCandidates（S5 切片补 T-S5-* 专测） | unit+it | ✅ |
 | T-S2-5 | S2-sync | RouterTest#multiInstancePicksFirstCandidate | unit | ✅ |
 | T-S2-6 | S2-sync | RouterTest#reentryWithExplicitAgentDoesNotUseDefault | unit | ✅ |
@@ -135,7 +135,7 @@ common/agent-gateway/
 | T-S5-4 | S5 | StickyIndexTest.stickyMissIsS3NotS5 | unit | 待写 |
 | T-S5-5 | S2-sync | RouterTest.defaultConfigMissingConfigError | unit+it | 待写 |
 | SC-1 | S2-sync/S5 | （聚合）合法创建到达 runtime / 失败明确 | — | 待写 |
-| SC-2 | S2-SSE | SseBridgeTest（桥接/release/不缓存 token） | — | 待写 |
+| SC-2 | S2-SSE | SseBridgeTest（逐帧桥接/释放流/空流；Gateway 不生成 token——结构透传） | — | ✅ |
 | SC-3 | S2-sync | RouterTest（默认/指定 Agent） | — | 待写 |
 | SC-4 | S1/S5 | （聚合）拒绝/选路失败明确、无拓扑泄漏 | — | 待写 |
 | SC-5 | S3 | StickyIndexTest + 关联失败 | — | 待写 |
@@ -170,7 +170,8 @@ common/agent-gateway/
 | S1-G5 审计 | ✅ GREEN（43 测全过） | T-G5-1..4（见 §5；顺带解决 TD-2 traceId 入口贯穿） | feat(gateway): FEAT-011 S1-G5 |
 | RDC-PORT | ✅ GREEN（48 测全过） | 支撑 T-S2-*/T-S5-*（HttpRdcRouteClient + MockWebServer + FakeRdcRouteClient） | feat(gateway): FEAT-011 RDC-PORT |
 | S2-sync | ✅ GREEN（60 测全过） | T-S2-1/2/4/5/6/7（见 §5；T-S2-4 S5 专测后续补） | feat(gateway): FEAT-011 S2-sync |
-| S2-SSE | ⏳ 下一片 | T-S2-3、SC-2 | — |
-| S5 … S4 | 待办 | 见 §5 | — |
+| S2-SSE | ✅ GREEN（65 测全过） | T-S2-3、SC-2（见 §5） | feat(gateway): FEAT-011 S2-SSE |
+| S5 | ⏳ 下一片 | T-S5-1..5 | — |
+| S3 / S4 | 待办 | 见 §5 | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）。（TD-2 traceId 入口贯穿已在 S1-G5 解决。）

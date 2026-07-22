@@ -4,6 +4,10 @@
 
 package com.openjiuwen.gateway.direct;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
 /**
  * Test double for {@link AgentRuntimeClient}. Returns a canned response body and
  * records the endpoint + body it was invoked with, so tests can assert the
@@ -13,6 +17,7 @@ package com.openjiuwen.gateway.direct;
  */
 public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     private String response = "{}";
+    private List<String> frames = new ArrayList<>();
     private String lastEndpoint;
     private String lastBody;
 
@@ -23,6 +28,15 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
      */
     public void setResponse(String response) {
         this.response = response;
+    }
+
+    /**
+     * Configure the frames returned by openStream.
+     *
+     * @param frames SSE data payloads to stream
+     */
+    public void setFrames(List<String> frames) {
+        this.frames = frames;
     }
 
     /** @return the endpoint of the last invokeSync */
@@ -40,5 +54,12 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
         this.lastEndpoint = endpointUrl;
         this.lastBody = jsonRpcBody;
         return response;
+    }
+
+    @Override
+    public Stream<String> openStream(String endpointUrl, String jsonRpcBody) {
+        this.lastEndpoint = endpointUrl;
+        this.lastBody = jsonRpcBody;
+        return new ArrayList<>(frames).stream();
     }
 }

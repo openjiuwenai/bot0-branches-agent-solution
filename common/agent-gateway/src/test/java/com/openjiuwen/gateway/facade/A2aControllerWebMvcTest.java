@@ -41,6 +41,7 @@ import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.routing.StickyIndex;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
 import com.openjiuwen.gateway.routing.ResolvedRoute;
+import com.openjiuwen.gateway.sse.SseBridge;
 
 /**
  * Module-integration test for the A2A facade: governance G1–G5 + the create
@@ -51,7 +52,7 @@ import com.openjiuwen.gateway.routing.ResolvedRoute;
 @WebMvcTest(controllers = A2aController.class)
 @Import({AuthRule.class, TenantResolver.class, ParamValidator.class, IdempotencyRule.class,
         GovernanceAuditor.class, GovernanceErrorHandler.class, Router.class, StickyIndex.class,
-        DefaultAgentResolver.class})
+        DefaultAgentResolver.class, SseBridge.class})
 @TestPropertySource(properties = "gateway.default-agent-id=default-agent-1")
 class A2aControllerWebMvcTest {
     @Autowired
@@ -94,6 +95,9 @@ class A2aControllerWebMvcTest {
                     + "\"params\":{\"message\":{\"messageId\":\"m-res\",\"taskId\":\"task-1\",\"parts\":[]}}}";
     private static final String TASK_RESPONSE =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-9\"}}";
+    private static final String STREAM_CREATE =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
+                    + "\"params\":{\"message\":{\"messageId\":\"ms\",\"parts\":[{\"text\":\"hi\"}]}}}";
 
     @TestConfiguration
     static class TestConfig {
@@ -295,5 +299,18 @@ class A2aControllerWebMvcTest {
                         .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value("ROUTE_NO_CANDIDATES"));
+    }
+
+    @Test
+    void streamingCreateBridgesRuntimeFramesAsSse() throws Exception {
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-s\"}}", "{\"result\":{\"status\":\"working\"}}"));
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(STREAM_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .contains("event: jsonrpc", "data: {\"result\":{\"id\":\"task-s\"}}"));
+        // sticky bound from the first streaming frame carrying a taskId
+        assertThat(sticky.find("task-s")).contains("h1");
     }
 }

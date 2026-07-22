@@ -15,6 +15,8 @@ import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 /**
  * Routes a create call over the direct path (FEAT-011 L2 §4): resolve the
@@ -78,6 +80,44 @@ public class Router {
             stickyIndex.put(taskId, chosen.routeHandle());
         }
         return response;
+    }
+
+    /**
+     * Route a streaming create and return the runtime's frame stream (L2 §4 P3b).
+     * Routing (search/resolve/inject) happens synchronously here so failures
+     * surface as clean errors; frame consumption is lazy. The first frame carrying
+     * a taskId binds the sticky index. Closing the returned stream releases the
+     * downstream connection.
+     *
+     * @param ctx governance context (tenantId, agentId, rawBody)
+     * @return lazy stream of SSE data payloads (sticky-write hooked)
+     */
+    public Stream<String> routeStream(GovernanceContext ctx) {
+        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();
+        List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        if (candidates.isEmpty()) {
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
+                    "No routable instance for agent " + effectiveAgentId);
+        }
+        AgentCardRoute chosen = candidates.get(0);
+        ResolvedRoute resolved;
+        try {
+            resolved = rdc.resolveRouteHandle(chosen.routeHandle(), ctx.tenantId());
+        } catch (RouteResolutionException ex) {
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_RESOLVE_FAILED",
+                    "Cannot resolve route handle", ex);
+        }
+        String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
+        Stream<String> frames = runtime.openStream(resolved.endpointUrl(), outbound);
+        AtomicBoolean stickyWritten = new AtomicBoolean();
+        return frames.peek(frame -> {
+            if (!stickyWritten.get()) {
+                String taskId = extractTaskId(frame);
+                if (taskId != null && !taskId.isBlank() && stickyWritten.compareAndSet(false, true)) {
+                    stickyIndex.put(taskId, chosen.routeHandle());
+                }
+            }
+        });
     }
 
     /** Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10). */

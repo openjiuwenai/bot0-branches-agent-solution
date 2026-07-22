@@ -118,4 +118,19 @@ class RouterTest {
         router.routeCreate(createCtx("agent-9"));
         assertThat(sticky.find("task-7")).isEmpty();
     }
+
+    @Test
+    void routeStreamBridgesFramesAndWritesStickyOnFirstTaskId() {
+        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
+        rdc.setResolved(new ResolvedRoute(ENDPOINT));
+        runtime.setFrames(java.util.List.of(
+                "{\"result\":{\"id\":\"task-stream\"}}",
+                "{\"result\":{\"status\":\"working\"}}"));
+        java.util.List<String> collected = router.routeStream(createCtx("agent-9")).toList();
+        assertThat(collected).containsExactly(
+                "{\"result\":{\"id\":\"task-stream\"}}",
+                "{\"result\":{\"status\":\"working\"}}");
+        // sticky bound from the first frame carrying a taskId
+        assertThat(sticky.find("task-stream")).contains("h1");
+    }
 }

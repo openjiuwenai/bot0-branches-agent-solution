@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.stream.Stream;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -47,6 +48,27 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
         } catch (Exception ex) {
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                     "Cannot reach runtime at " + endpointUrl, ex);
+        }
+    }
+
+    @Override
+    public Stream<String> openStream(String endpointUrl, String jsonRpcBody) {
+        String url = (endpointUrl.endsWith("/") ? endpointUrl : endpointUrl + "/") + "a2a";
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .timeout(TIMEOUT)
+                .POST(HttpRequest.BodyPublishers.ofString(jsonRpcBody, StandardCharsets.UTF_8)).build();
+        try {
+            HttpResponse<Stream<String>> resp = http.send(req, HttpResponse.BodyHandlers.ofLines());
+            return resp.body()
+                    .filter(line -> line.startsWith("data:"))
+                    .map(line -> line.substring("data:".length()).strip())
+                    .filter(data -> !data.isEmpty());
+        } catch (Exception ex) {
+            throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
+                    "Cannot open runtime stream at " + endpointUrl, ex);
         }
     }
 }

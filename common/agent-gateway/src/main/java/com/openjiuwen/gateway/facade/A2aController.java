@@ -4,7 +4,12 @@
 
 package com.openjiuwen.gateway.facade;
 
+import java.io.IOException;
+import java.util.UUID;
+import java.util.stream.Stream;
+
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,16 +25,18 @@ import com.openjiuwen.gateway.governance.tenant.TenantResolver;
 import com.openjiuwen.gateway.governance.validate.ParamValidator;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
 import com.openjiuwen.gateway.routing.Router;
+import com.openjiuwen.gateway.sse.SseBridge;
 
-import java.util.UUID;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * A2A JSON-RPC facade entry — {@code POST /a2a} (FEAT-011 L2 §1.1 / §4.9 GW-1).
  *
- * <p>Governance (G1–G4) runs first, audited (G5); then the create path routes
- * directly to the resolved runtime (§4) and returns its response. Resume
- * ({@code taskId} present) uses the sticky path, wired in a later slice.
- * {@link GovernanceException} maps to the stable HTTP error body via the advice.
+ * <p>Governance (G1–G4) runs first and is audited (G5); then the create path
+ * either forwards synchronously ({@code SendMessage}) or writes an SSE stream
+ * ({@code SendStreamingMessage}) to the resolved runtime. Resume (taskId present)
+ * uses the sticky path (later slice). {@link GovernanceException} maps to the
+ * stable HTTP error body via the advice.
  *
  * @since 0.1.0
  */
@@ -41,6 +48,7 @@ public class A2aController {
     private final IdempotencyRule idempotencyRule;
     private final GovernanceAuditor auditor;
     private final Router router;
+    private final SseBridge sseBridge;
 
     /**
      * Construct.
@@ -50,16 +58,19 @@ public class A2aController {
      * @param paramValidator  G3 parameter validator
      * @param idempotencyRule G4 create idempotency
      * @param auditor         G5 governance auditor
-     * @param router          direct-route router (create path)
+     * @param router          direct-route router
+     * @param sseBridge       SSE stream bridge
      */
     public A2aController(AuthRule authRule, TenantResolver tenantResolver, ParamValidator paramValidator,
-                         IdempotencyRule idempotencyRule, GovernanceAuditor auditor, Router router) {
+                         IdempotencyRule idempotencyRule, GovernanceAuditor auditor, Router router,
+                         SseBridge sseBridge) {
         this.authRule = authRule;
         this.tenantResolver = tenantResolver;
         this.paramValidator = paramValidator;
         this.idempotencyRule = idempotencyRule;
         this.auditor = auditor;
         this.router = router;
+        this.sseBridge = sseBridge;
     }
 
     /**
@@ -69,14 +80,17 @@ public class A2aController {
      * @param traceparent       W3C {@code traceparent} header (may be absent)
      * @param selfReportedTenant raw {@code X-Tenant-Id} header (may be absent; discarded by G2)
      * @param jsonRpcBody       raw JSON-RPC envelope (parsed by G3)
-     * @return runtime response (create) or placeholder (resume, until S3)
+     * @param response          servlet response (used to write the SSE stream)
+     * @return sync response body, or {@code null} once an SSE stream has been written
+     * @throws IOException if writing the SSE stream to the client fails (disconnect)
      */
     @PostMapping("/a2a")
-    public ResponseEntity<String> postA2a(
+    public Object postA2a(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "traceparent", required = false) String traceparent,
             @RequestHeader(value = "X-Tenant-Id", required = false) String selfReportedTenant,
-            @RequestBody String jsonRpcBody) {
+            @RequestBody String jsonRpcBody,
+            HttpServletResponse response) throws IOException {
         GovernanceContext context = new GovernanceContext();
         context.setRawBody(jsonRpcBody);
         context.setTraceId(resolveTraceId(traceparent));
@@ -111,9 +125,23 @@ public class A2aController {
         auditor.auditPassed(context);
 
         if (context.taskId() == null) {
-            // create path — route directly to the resolved runtime.
+            if ("SendStreamingMessage".equals(context.method())) {
+                Stream<String> frames;
+                try {
+                    frames = router.routeStream(context);
+                } catch (GovernanceException ex) {
+                    ex.setTraceId(context.traceId());
+                    throw ex;
+                }
+                // Stream frames synchronously to the client; release happens when the
+                // stream is consumed or the client disconnects (writeSse throws IOException).
+                response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+                response.setCharacterEncoding("UTF-8");
+                sseBridge.writeSse(response.getOutputStream(), frames);
+                return null;
+            }
             try {
-                return ResponseEntity.ok(router.routeCreate(context));
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(router.routeCreate(context));
             } catch (GovernanceException ex) {
                 ex.setTraceId(context.traceId());
                 throw ex;
