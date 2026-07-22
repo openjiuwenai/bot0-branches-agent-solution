@@ -31,8 +31,9 @@ public class GovernanceErrorHandler {
      */
     @ExceptionHandler(GovernanceException.class)
     public ResponseEntity<GatewayError> handle(GovernanceException ex) {
-        // TODO(G5): use the request-scoped traceId (traceparent or self-gen at entry).
-        String traceId = UUID.randomUUID().toString();
+        // Use the request-scoped traceId captured at entry (G5); fall back to a
+        // generated id only if none was attached.
+        String traceId = ex.traceId() != null ? ex.traceId() : UUID.randomUUID().toString();
         GatewayError body = new GatewayError(ex.code(), ex.getMessage(), traceId);
         return ResponseEntity.status(ex.httpStatus()).body(body);
     }

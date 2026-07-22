@@ -4,10 +4,13 @@
 
 package com.openjiuwen.gateway.facade;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -27,21 +30,25 @@ import com.openjiuwen.gateway.governance.auth.Principal;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.governance.tenant.TenantResolver;
 import com.openjiuwen.gateway.governance.validate.ParamValidator;
+import com.openjiuwen.gateway.obs.AuditEvent;
+import com.openjiuwen.gateway.obs.AuditSink;
+import com.openjiuwen.gateway.obs.GovernanceAuditor;
 
 /**
- * Module-integration test for the A2A facade through G1–G4
- * (FEAT-011 L2 §3.3 / §3.4 / §3.5 / §3.6). Real governance components; only the
- * credential directory is faked. The idempotency store is cleared before each
- * test so the cached Spring context doesn't leak state across methods.
+ * Module-integration test for the A2A facade through G1–G5
+ * (FEAT-011 L2 §3.3–§3.7). Real governance components; credential directory and
+ * audit sink are faked. Idempotency + audit state are cleared before each test.
  */
 @WebMvcTest(controllers = A2aController.class)
 @Import({AuthRule.class, TenantResolver.class, ParamValidator.class, IdempotencyRule.class,
-        GovernanceErrorHandler.class})
+        GovernanceAuditor.class, GovernanceErrorHandler.class})
 class A2aControllerWebMvcTest {
     @Autowired
     private MockMvc mvc;
     @Autowired
     private IdempotencyRule idempotencyRule;
+    @Autowired
+    private CapturingAuditSink auditSink;
 
     private static final String VALID_CREATE =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
@@ -66,7 +73,7 @@ class A2aControllerWebMvcTest {
                     + "\"params\":{\"message\":{\"messageId\":\"m-res\",\"taskId\":\"task-1\",\"parts\":[]}}}";
 
     @TestConfiguration
-    static class TestCredentials {
+    static class TestConfig {
         @Bean
         CredentialDirectory credentialDirectory() {
             return token -> switch (token) {
@@ -75,11 +82,27 @@ class A2aControllerWebMvcTest {
                 default -> Optional.empty();
             };
         }
+
+        @Bean
+        CapturingAuditSink auditSink() {
+            return new CapturingAuditSink();
+        }
+    }
+
+    /** Capturing AuditSink so tests can assert recorded governance events. */
+    static class CapturingAuditSink implements AuditSink {
+        final List<AuditEvent> events = new ArrayList<>();
+
+        @Override
+        public void record(AuditEvent event) {
+            events.add(event);
+        }
     }
 
     @BeforeEach
-    void clearIdempotency() {
+    void resetState() {
         idempotencyRule.clear();
+        auditSink.events.clear();
     }
 
     // --- G1 ---
@@ -184,12 +207,36 @@ class A2aControllerWebMvcTest {
 
     @Test
     void resumeWithTaskIdSkipsIdempotency() throws Exception {
-        // Resume carries taskId -> G4 skipped; same messageId twice does not conflict.
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
                 .andExpect(status().isNotImplemented());
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
                 .andExpect(status().isNotImplemented());
+    }
+
+    // --- G5 ---
+
+    @Test
+    void passedRequestIsAuditedPassedWithSelfGeneratedTraceId() throws Exception {
+        // No traceparent -> self-generated traceId; main path does not fail.
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isNotImplemented());
+        AuditEvent passed = auditSink.events.stream()
+                .filter(e -> e.outcome() == AuditEvent.Outcome.PASSED).findFirst().orElseThrow();
+        assertThat(passed.tenantId()).isEqualTo("tenant-1");
+        assertThat(passed.method()).isEqualTo("SendMessage");
+        assertThat(passed.traceId()).isNotBlank();
+    }
+
+    @Test
+    void g1FailureAuditedAsRejectedWithStage() throws Exception {
+        mvc.perform(post("/a2a").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        AuditEvent rejected = auditSink.events.stream()
+                .filter(e -> e.outcome() == AuditEvent.Outcome.REJECTED).findFirst().orElseThrow();
+        assertThat(rejected.rejectStage()).isEqualTo("G1");
+        assertThat(rejected.code()).isEqualTo("AUTH_MISSING");
     }
 }

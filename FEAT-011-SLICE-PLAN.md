@@ -110,10 +110,10 @@ common/agent-gateway/
 | T-G4-3 | S1-G4 | IdempotencyRuleTest#sameKeyDifferentBodyReturnsConflict + A2aControllerWebMvcTest#sameMessageIdDifferentBodyReturns409Conflict | unit+it | ✅ |
 | T-G4-4 | S1-G4 | IdempotencyRuleTest#noMessageIdSkipsDedup + A2aControllerWebMvcTest#createWithoutMessageIdProceedsTwice | unit+it | ✅ |
 | T-G4-5 | S1-G4 | A2aControllerWebMvcTest#resumeWithTaskIdSkipsIdempotency | it | ✅ |
-| T-G5-1 | S1-G5 | AuditSinkTest.passedRecord | unit+it | 待写 |
-| T-G5-2 | S1-G5 | AuditSinkTest.rejectedRecordStageAndCode | unit+it | 待写 |
-| T-G5-3 | S1-G5 | AuditSinkTest.noSecretOrPromptBody | unit | 待写 |
-| T-G5-4 | S1-G5 | AuditSinkTest.selfGenTraceId | unit | 待写 |
+| T-G5-1 | S1-G5 | GovernanceAuditorTest#passedRecordCarriesTenantMethodTrace + A2aControllerWebMvcTest#passedRequestIsAuditedPassedWithSelfGeneratedTraceId | unit+it | ✅ |
+| T-G5-2 | S1-G5 | GovernanceAuditorTest#rejectedRecordCarriesStageAndCode / #rejectedStageInferredForAllGovernanceCodes + A2aControllerWebMvcTest#g1FailureAuditedAsRejectedWithStage | unit+it | ✅ |
+| T-G5-3 | S1-G5 | GovernanceAuditorTest#recordsNeverCarryCredentialOrBody（AuditEvent 结构上无 token/body 字段） | unit | ✅ |
+| T-G5-4 | S1-G5 | A2aControllerWebMvcTest#passedRequestIsAuditedPassedWithSelfGeneratedTraceId（无 traceparent → 自生成 traceId，主路径不失败） | it | ✅ |
 | T-S2-1 | S2-sync | RouterTest.explicitAgentReachesRuntime / A2aFacadeSyncTest | unit+it | 待写 |
 | T-S2-2 | S2-sync | RouterTest.defaultAgentFallback | unit+it | 待写 |
 | T-S2-3 | S2-SSE | SseBridgeTest.streamingCreate / A2aFacadeStreamTest | unit+it | 待写 |
@@ -167,7 +167,8 @@ common/agent-gateway/
 | S1-G2 租户 | ✅ GREEN（17 测全过） | T-G2-1..4（见 §5） | feat(gateway): FEAT-011 S1-G2 |
 | S1-G3 校验 | ✅ GREEN（28 测全过） | T-G3-1..6（见 §5） | feat(gateway): FEAT-011 S1-G3 |
 | S1-G4 幂等 | ✅ GREEN（37 测全过） | T-G4-1..5（见 §5；T-G4-2 REPLAY e2e 待 S2） | feat(gateway): FEAT-011 S1-G4 |
-| S1-G5 审计 | ⏳ 下一片 | T-G5-1..4 | — |
-| RDC-PORT … S4 | 待办 | 见 §5 | — |
+| S1-G5 审计 | ✅ GREEN（43 测全过） | T-G5-1..4（见 §5；顺带解决 TD-2 traceId 入口贯穿） | feat(gateway): FEAT-011 S1-G5 |
+| RDC-PORT | ⏳ 下一片 | 支撑 T-S2-*/T-S5-* | — |
+| S2-sync … S4 | 待办 | 见 §5 | — |
 
-已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）；G5 前错误体 traceId 为 advice 内临时 UUID（G5 切片挪到入口捕获 traceparent）。
+已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）。（TD-2 traceId 入口贯穿已在 S1-G5 解决。）

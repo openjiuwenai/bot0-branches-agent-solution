@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatusCode;
 public class GovernanceException extends RuntimeException {
     private final HttpStatusCode httpStatus;
     private final String code;
+    private String traceId;
 
     /**
      * Construct.
@@ -42,5 +43,15 @@ public class GovernanceException extends RuntimeException {
     /** @return stable error code */
     public String code() {
         return code;
+    }
+
+    /** @return request trace id (set by the audit wrapper; null until then) */
+    public String traceId() {
+        return traceId;
+    }
+
+    /** Attach the request trace id so the error body and audit share it. */
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
     }
 }
