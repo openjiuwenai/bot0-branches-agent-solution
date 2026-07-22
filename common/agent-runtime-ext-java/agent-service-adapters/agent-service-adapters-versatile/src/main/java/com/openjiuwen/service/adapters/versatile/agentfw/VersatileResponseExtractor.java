@@ -7,12 +7,14 @@ package com.openjiuwen.service.adapters.versatile.agentfw;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -23,14 +25,14 @@ import java.util.Optional;
 final class VersatileResponseExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private final String resultNodeName;
+    private final VersatileProperties properties;
     private boolean isCompleted;
     private boolean hasFailed;
     private String result;
     private String error;
 
-    VersatileResponseExtractor(String resultNodeName) {
-        this.resultNodeName = resultNodeName;
+    VersatileResponseExtractor(VersatileProperties properties) {
+        this.properties = Objects.requireNonNull(properties, "properties");
     }
 
     List<QueryChunk> consumeLine(String line) {
@@ -95,6 +97,7 @@ final class VersatileResponseExtractor {
     }
 
     private boolean shouldExtractResult(String rawData, Optional<JsonNode> json) {
+        String resultNodeName = properties.getResultNodeName();
         return resultNodeName != null
                 && !resultNodeName.trim().isEmpty()
                 && rawData.contains("\"node_name\":\"" + resultNodeName + "\"")
