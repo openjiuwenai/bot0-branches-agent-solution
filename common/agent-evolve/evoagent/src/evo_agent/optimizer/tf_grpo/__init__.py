@@ -5,6 +5,7 @@ from evo_agent.optimizer.tf_grpo.experience_library import (
     ExperienceLibrary,
     LibraryOperation,
 )
+from evo_agent.optimizer.tf_grpo.prompts import load_tf_grpo_prompt, render_prompt
 from evo_agent.optimizer.tf_grpo.tf_grpo_optimizer import TfGrpoOptimizer
 
 __all__ = [
@@ -12,4 +13,6 @@ __all__ = [
     "ExperienceLibrary",
     "LibraryOperation",
     "TfGrpoOptimizer",
+    "load_tf_grpo_prompt",
+    "render_prompt",
 ]

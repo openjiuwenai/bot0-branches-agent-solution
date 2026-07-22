@@ -63,8 +63,12 @@ def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
     opt._group_size = group_size
     opt._cases_per_variant = 2
     opt._variant_temperature = 1.5
+    opt._semantic_advantage_temperature = 0.95
     opt._validate_variant_completeness = False
+    opt._learn_without_score_variance = False
     opt._rollout_temperature = None
+    opt._scenario_name = None
+    opt._scenarios_dir = None
     opt._preserve_frontmatter = True
     opt._experience_libs = {
         "demo_skill": ExperienceLibrary(domain="markdown", max_experiences=10)
