@@ -77,6 +77,236 @@ public class VersatileProperties {
         this.endpoints = endpoints != null ? new ArrayList<>(endpoints) : new ArrayList<>();
     }
 
+    private List<Intent> intents = new ArrayList<>();
+    private Messages messages = new Messages();
+    private Map<String, List<MappingCandidate>> intentAgentMapping = new LinkedHashMap<>();
+    private IntentAgentMappingStrategy intentAgentMappingStrategy = IntentAgentMappingStrategy.FIRST;
+    private List<ResultExtraction> resultExtractions = new ArrayList<>();
+    private Interrupt interrupt = new Interrupt();
+
+    public List<Intent> getIntents() {
+        return intents;
+    }
+
+    public void setIntents(List<Intent> intents) {
+        this.intents = intents != null ? new ArrayList<>(intents) : new ArrayList<>();
+    }
+
+    public Messages getMessages() {
+        return messages;
+    }
+
+    public void setMessages(Messages messages) {
+        this.messages = messages != null ? messages : new Messages();
+    }
+
+    public Map<String, List<MappingCandidate>> getIntentAgentMapping() {
+        return intentAgentMapping;
+    }
+
+    public void setIntentAgentMapping(Map<String, List<MappingCandidate>> intentAgentMapping) {
+        this.intentAgentMapping = intentAgentMapping != null
+                ? new LinkedHashMap<>(intentAgentMapping) : new LinkedHashMap<>();
+    }
+
+    public IntentAgentMappingStrategy getIntentAgentMappingStrategy() {
+        return intentAgentMappingStrategy;
+    }
+
+    public void setIntentAgentMappingStrategy(IntentAgentMappingStrategy intentAgentMappingStrategy) {
+        this.intentAgentMappingStrategy = intentAgentMappingStrategy != null
+                ? intentAgentMappingStrategy : IntentAgentMappingStrategy.FIRST;
+    }
+
+    public List<ResultExtraction> getResultExtractions() {
+        return resultExtractions;
+    }
+
+    public void setResultExtractions(List<ResultExtraction> resultExtractions) {
+        this.resultExtractions = resultExtractions != null ? new ArrayList<>(resultExtractions) : new ArrayList<>();
+    }
+
+    public Interrupt getInterrupt() {
+        return interrupt;
+    }
+
+    public void setInterrupt(Interrupt interrupt) {
+        this.interrupt = interrupt != null ? interrupt : new Interrupt();
+    }
+
+    /**
+     * Candidate intent for the workflow input {@code intents} array.
+     */
+    public static class Intent {
+        private String id;
+        private String name;
+
+        public String getId() {
+            return id;
+        }
+
+        public void setId(String id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+    }
+
+    /**
+     * Controls how the {@code messages} input array is sourced from the serve request.
+     */
+    public static class Messages {
+        private String source = "serve_request_messages";
+        private boolean required = true;
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
+        }
+
+        public boolean isRequired() {
+            return required;
+        }
+
+        public void setRequired(boolean required) {
+            this.required = required;
+        }
+    }
+
+    /**
+     * One candidate agentCard entry in the {@code intent-agent-mapping} list.
+     */
+    public static class MappingCandidate {
+        private String agentCard;
+        private int priority = 0;
+
+        public String getAgentCard() {
+            return agentCard;
+        }
+
+        public void setAgentCard(String agentCard) {
+            this.agentCard = agentCard;
+        }
+
+        public int getPriority() {
+            return priority;
+        }
+
+        public void setPriority(int priority) {
+            this.priority = priority;
+        }
+    }
+
+    /**
+     * Strategy for selecting one agentCard from a 1:N candidate list.
+     */
+    public enum IntentAgentMappingStrategy {
+        FIRST,
+        PRIORITY,
+        ROUND_ROBIN
+    }
+
+    /**
+     * One three-field result extraction rule: extract value at {@code get} JSON path
+     * and store under {@code match} key.
+     */
+    public static class ResultExtraction {
+        private String match;
+        private String get;
+
+        public String getMatch() {
+            return match;
+        }
+
+        public void setMatch(String match) {
+            this.match = match;
+        }
+
+        public String getGet() {
+            return get;
+        }
+
+        public void setGet(String get) {
+            this.get = get;
+        }
+    }
+
+    /**
+     * Explicit user-interaction interrupt detection and resume mapping.
+     */
+    public static class Interrupt {
+        private String signalMatch;
+        private String promptGet;
+        private String inputRequirementGet;
+        private String resumeTokenGet;
+        private ResumeRequestTemplate resumeRequestTemplate;
+
+        public String getSignalMatch() {
+            return signalMatch;
+        }
+
+        public void setSignalMatch(String signalMatch) {
+            this.signalMatch = signalMatch;
+        }
+
+        public String getPromptGet() {
+            return promptGet;
+        }
+
+        public void setPromptGet(String promptGet) {
+            this.promptGet = promptGet;
+        }
+
+        public String getInputRequirementGet() {
+            return inputRequirementGet;
+        }
+
+        public void setInputRequirementGet(String inputRequirementGet) {
+            this.inputRequirementGet = inputRequirementGet;
+        }
+
+        public String getResumeTokenGet() {
+            return resumeTokenGet;
+        }
+
+        public void setResumeTokenGet(String resumeTokenGet) {
+            this.resumeTokenGet = resumeTokenGet;
+        }
+
+        public ResumeRequestTemplate getResumeRequestTemplate() {
+            return resumeRequestTemplate;
+        }
+
+        public void setResumeRequestTemplate(ResumeRequestTemplate resumeRequestTemplate) {
+            this.resumeRequestTemplate = resumeRequestTemplate;
+        }
+    }
+
+    /**
+     * Optional template for building the resume request body when the workflow's
+     * resume endpoint differs from the new-call endpoint.
+     */
+    public static class ResumeRequestTemplate {
+        private Map<String, Object> body = new LinkedHashMap<>();
+
+        public Map<String, Object> getBody() {
+            return body;
+        }
+
+        public void setBody(Map<String, Object> body) {
+            this.body = body != null ? new LinkedHashMap<>(body) : new LinkedHashMap<>();
+        }
+    }
+
     /**
      * Endpoint override for intent-specific Versatile routing.
      *
