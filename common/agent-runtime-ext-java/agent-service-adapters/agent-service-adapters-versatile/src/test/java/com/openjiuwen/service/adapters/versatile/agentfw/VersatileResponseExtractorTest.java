@@ -27,9 +27,14 @@ class VersatileResponseExtractorTest {
         return p;
     }
 
+    private static IntentAgentResolver resolver(VersatileProperties props) {
+        return new IntentAgentResolver(props);
+    }
+
     @Test
     void emitsInterruptWhenStreamEndsBeforeEndSignal() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
+        VersatileProperties props = props("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine("data: {\"event\":\"message\"}"));
         chunks.addAll(extractor.finish());
@@ -43,7 +48,8 @@ class VersatileResponseExtractorTest {
     @Tag("smoke")
     @Test
     void extractsResultNodeAndEmitsAnswerOnEnd() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
+        VersatileProperties props = props("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
@@ -59,7 +65,8 @@ class VersatileResponseExtractorTest {
 
     @Test
     void emitsInterruptWhenResultNodeArrivesWithoutEndSignal() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
+        VersatileProperties props = props("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
@@ -73,7 +80,8 @@ class VersatileResponseExtractorTest {
 
     @Test
     void extractsResultFromCustomResponseData() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
+        VersatileProperties props = props("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
                 + "\"data\":{\"node_type\":\"QA\",\"text\":\"custom final\"}}}"))
@@ -89,7 +97,8 @@ class VersatileResponseExtractorTest {
 
     @Test
     void marksExceptionAsFailed() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
+        VersatileProperties props = props("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         List<QueryChunk> chunks = new ArrayList<>(
                 extractor.consumeLine("data: {\"event\":\"exception\",\"data\":{\"message\":\"boom\"}}"));
@@ -102,7 +111,8 @@ class VersatileResponseExtractorTest {
 
     @Test
     void emitsNoFinalChunkWhenCompletedWithoutResult() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"));
+        VersatileProperties props = props("AnswerNode");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"\",\"summary\":\"final\"}}"))
@@ -122,7 +132,7 @@ class VersatileResponseExtractorTest {
         addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
         addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
         addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props);
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
                 + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"酒店预订\","
@@ -148,7 +158,7 @@ class VersatileResponseExtractorTest {
         VersatileProperties props = props("AnswerNode");
         addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
         addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props);
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
 
         assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
                 + "\"data\":{\"node_type\":\"QA\",\"intent_id\":\"intent_L1_hotel\"}}}"))
