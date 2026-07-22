@@ -177,6 +177,38 @@ class VersatileAgentHandlerTest {
                 .containsEntry("agent_id", "agent_card_L2_hotel");
     }
 
+    @Test
+    void resolvesAgentIdViaIntentAgentMappingWhenWorkflowOmitsIt() throws Exception {
+        VersatileProperties properties = propertiesWithServer(List.of(
+                "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":{\"node_type\":\"QA\","
+                        + "\"response_content\":\"酒店预订\","
+                        + "\"intent_id\":\"intent_L1_hotel\"}}}",
+                "{\"data\":{\"node_type\":\"End\"}}"
+        ));
+        properties.setResultNodeName("AnswerNode");
+        VersatileProperties.ResultExtraction rc = new VersatileProperties.ResultExtraction();
+        rc.setMatch("response_content");
+        rc.setGet("/custom_rsp_data/data/response_content");
+        properties.getResultExtractions().add(rc);
+        VersatileProperties.ResultExtraction ii = new VersatileProperties.ResultExtraction();
+        ii.setMatch("intent_id");
+        ii.setGet("/custom_rsp_data/data/intent_id");
+        properties.getResultExtractions().add(ii);
+        // No agent_id extraction — mapping must resolve
+        VersatileProperties.MappingCandidate candidate = new VersatileProperties.MappingCandidate();
+        candidate.setAgentCard("agent_card_L2_hotel");
+        properties.getIntentAgentMapping().put("intent_L1_hotel", List.of(candidate));
+
+        VersatileAgentHandler handler = new VersatileAgentHandler(properties);
+
+        QueryResponse response = handler.query(request());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertThat(result).containsEntry("agent_id", "agent_card_L2_hotel")
+                .containsEntry("intent_id", "intent_L1_hotel");
+    }
+
     private static ServeRequest request() {
         ServeRequest request = new ServeRequest();
         request.setConversationId("c-1");
