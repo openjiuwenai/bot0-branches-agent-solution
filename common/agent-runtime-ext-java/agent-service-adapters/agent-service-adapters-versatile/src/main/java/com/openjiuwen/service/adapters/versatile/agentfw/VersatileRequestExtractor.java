@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -113,8 +114,48 @@ final class VersatileRequestExtractor {
     }
 
     private String serializeMessages(ServeRequest request) {
-        // Stub — full implementation in Task 3.
-        return null;
+        List<Map<String, Object>> messages = request.getMessages();
+        boolean required = properties.getMessages() != null && properties.getMessages().isRequired();
+        if (messages == null || messages.isEmpty()) {
+            if (required) {
+                throw new IllegalArgumentException(
+                        "VERSATILE_INTENT_INPUT_MISSING: ServeRequest.messages must be non-empty");
+            }
+            return null;
+        }
+        List<Map<String, String>> serialized = new ArrayList<>();
+        for (int i = 0; i < messages.size(); i++) {
+            Map<String, Object> message = messages.get(i);
+            if (message == null) {
+                continue;
+            }
+            Object role = message.get("role");
+            Object content = message.get("content");
+            if (role == null || String.valueOf(role).isBlank()
+                    || content == null || String.valueOf(content).isBlank()) {
+                if (required) {
+                    throw new IllegalArgumentException(
+                            "VERSATILE_INTENT_INPUT_MISSING: messages[" + i + "] role/content must be non-blank");
+                }
+                continue;
+            }
+            Map<String, String> entry = new LinkedHashMap<>();
+            entry.put("role", String.valueOf(role));
+            entry.put("content", String.valueOf(content));
+            serialized.add(entry);
+        }
+        if (serialized.isEmpty()) {
+            if (required) {
+                throw new IllegalArgumentException(
+                        "VERSATILE_INTENT_INPUT_MISSING: ServeRequest.messages has no valid role/content entries");
+            }
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.writeValueAsString(serialized);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("VERSATILE_INTENT_INPUT_MISSING: failed to serialize messages", ex);
+        }
     }
 
     private Optional<Object> latestUserContent(ServeRequest request) {
