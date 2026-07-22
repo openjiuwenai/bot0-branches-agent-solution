@@ -42,11 +42,14 @@ final class CustomRestSseTransport {
         emitter.onCompletion(subscriber::downstreamClosed);
         emitter.onTimeout(subscriber::downstreamClosed);
         emitter.onError(error -> subscriber.downstreamClosed());
+        boolean subscribed = false;
         try {
             publisher.subscribe(subscriber);
-        } catch (IllegalStateException exception) {
-            subscriber.writeError(new CustomRestFailure(500, "adapter_execution_failed",
-                    "The A2A stream could not be subscribed"));
+            subscribed = true;
+        } finally {
+            if (!subscribed) {
+                subscriber.abort();
+            }
         }
         return emitter;
     }
@@ -128,6 +131,14 @@ final class CustomRestSseTransport {
         private void downstreamClosed() {
             downstreamClosed = true;
             if (reservationReleased.get() && subscription != null) {
+                subscription.cancel();
+            }
+        }
+
+        private void abort() {
+            releaseReservation();
+            terminated.set(true);
+            if (subscription != null) {
                 subscription.cancel();
             }
         }

@@ -4,7 +4,9 @@
 
 package com.openjiuwen.service.app.custom.rest;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -22,6 +24,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.concurrent.Flow;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Verifies SSE subscription, projection, termination, and reservation lifecycle behavior.
@@ -30,22 +34,31 @@ import java.util.concurrent.Flow;
  */
 class CustomRestSseTransportTest {
     @Test
-    void subscribeFailureWritesOneErrorAndReleasesReservationOnce() {
+    void subscribeFailurePropagatesAndAbortsSubscription() {
         CustomRestA2ABridge bridge = mock(CustomRestA2ABridge.class);
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
-        when(prepared.httpContext()).thenReturn(new CustomRestProtocolAdapter.Context(
-                Map.of(), Map.of(), Map.of(), Map.of()));
-        when(bridge.projectStreamError(any(), any())).thenReturn(
-                new CustomRestProtocolAdapter.SseEvent("error", Map.of("error", "safe")));
+        RejectedExecutionException failure = new RejectedExecutionException("subscribe failed");
+        AtomicBoolean cancelled = new AtomicBoolean();
         Flow.Publisher<StreamingEventKind> publisher = subscriber -> {
-            throw new IllegalStateException("subscribe failed");
+            subscriber.onSubscribe(new Flow.Subscription() {
+                @Override
+                public void request(long count) {
+                }
+
+                @Override
+                public void cancel() {
+                    cancelled.set(true);
+                }
+            });
+            throw failure;
         };
 
-        assertThatCode(() -> new CustomRestSseTransport(bridge, new ObjectMapper()).connect(publisher, prepared))
-                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> new CustomRestSseTransport(bridge, new ObjectMapper()).connect(publisher, prepared))
+                .isSameAs(failure);
 
         verify(bridge, times(1)).release(prepared);
-        verify(bridge).projectStreamError(any(), any());
+        verify(bridge, never()).projectStreamError(any(), any());
+        assertThat(cancelled).isTrue();
     }
 
     @Test
