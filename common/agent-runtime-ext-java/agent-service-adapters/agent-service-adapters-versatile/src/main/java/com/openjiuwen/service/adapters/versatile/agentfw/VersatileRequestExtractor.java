@@ -159,7 +159,6 @@ final class VersatileRequestExtractor {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void fillResumeRequestTemplate(Map<String, Object> remoteBody, ServeRequest request) {
         VersatileProperties.Interrupt interrupt = properties.getInterrupt();
         if (interrupt == null || interrupt.getResumeRequestTemplate() == null) {
@@ -174,7 +173,6 @@ final class VersatileRequestExtractor {
         remoteBody.putAll(filled);
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> deepFill(Map<String, Object> template, Map<String, Object> source) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : template.entrySet()) {
@@ -183,7 +181,6 @@ final class VersatileRequestExtractor {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     private static Object resolveTemplateValue(Object value, Map<String, Object> source) {
         if (value instanceof String text) {
             return resolvePlaceholders(text, source);
