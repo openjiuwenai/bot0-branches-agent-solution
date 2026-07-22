@@ -88,6 +88,34 @@ class IntentAgentResolverTest {
                 .hasMessageContaining("VERSATILE_INTENT_AGENT_ID_UNMAPPED");
     }
 
+    @Test
+    void roundRobinCursorIsIsolatedPerIntentId() {
+        VersatileProperties props = new VersatileProperties();
+        props.setIntentAgentMapping(Map.of(
+                "intent_A", List.of(candidate("a1", 0), candidate("a2", 0)),
+                "intent_B", List.of(candidate("b1", 0), candidate("b2", 0))
+        ));
+        props.setIntentAgentMappingStrategy(VersatileProperties.IntentAgentMappingStrategy.ROUND_ROBIN);
+        IntentAgentResolver resolver = new IntentAgentResolver(props);
+
+        assertThat(resolver.resolve("intent_A", null)).hasValue("a1");
+        assertThat(resolver.resolve("intent_B", null)).hasValue("b1");
+        assertThat(resolver.resolve("intent_A", null)).hasValue("a2");
+        assertThat(resolver.resolve("intent_B", null)).hasValue("b2");
+    }
+
+    @Test
+    void firstStrategySkipsCandidatesWithBlankAgentCard() {
+        VersatileProperties props = new VersatileProperties();
+        props.setIntentAgentMapping(Map.of(
+                "intent_L1_flight", List.of(candidate(null, 0), candidate("", 0), candidate("valid", 0))
+        ));
+        props.setIntentAgentMappingStrategy(VersatileProperties.IntentAgentMappingStrategy.FIRST);
+        IntentAgentResolver resolver = new IntentAgentResolver(props);
+
+        assertThat(resolver.resolve("intent_L1_flight", null)).hasValue("valid");
+    }
+
     private static VersatileProperties.MappingCandidate candidate(String agentCard, int priority) {
         VersatileProperties.MappingCandidate c = new VersatileProperties.MappingCandidate();
         c.setAgentCard(agentCard);
