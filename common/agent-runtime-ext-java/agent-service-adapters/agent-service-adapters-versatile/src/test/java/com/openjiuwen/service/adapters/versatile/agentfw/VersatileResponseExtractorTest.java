@@ -32,17 +32,17 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void emitsInterruptWhenStreamEndsBeforeEndSignal() {
-        VersatileProperties props = props("AnswerNode");
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+    void emitsErrorWhenStreamEndsBeforeEndSignal() {
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"), resolver(props("AnswerNode")));
 
         List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine("data: {\"event\":\"message\"}"));
         chunks.addAll(extractor.finish());
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_INTERRUPT);
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ERROR);
         assertThat(chunks.get(0).getData()).isEqualTo("{\"event\":\"message\"}");
-        assertThat(chunks.get(1).getData()).isNull();
+        assertThat(String.valueOf(chunks.get(1).getData()))
+                .contains("stream_closed_without_terminal");
     }
 
     @Tag("smoke")
@@ -64,9 +64,8 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void emitsInterruptWhenResultNodeArrivesWithoutEndSignal() {
-        VersatileProperties props = props("AnswerNode");
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+    void emitsErrorWhenResultNodeArrivesWithoutEndSignal() {
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"), resolver(props("AnswerNode")));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
@@ -74,8 +73,9 @@ class VersatileResponseExtractorTest {
         List<QueryChunk> chunks = extractor.finish();
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_INTERRUPT);
-        assertThat(chunks.get(0).getData()).isNull();
+                .containsExactly(QueryChunk.TYPE_ERROR);
+        assertThat(String.valueOf(chunks.get(0).getData()))
+                .contains("stream_closed_without_terminal");
     }
 
     @Test
