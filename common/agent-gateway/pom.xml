@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  agent-gateway — client-facing A2A governance + direct route-forwarding entry (FEAT-011).
+
+  Independently deployable Spring Boot unit (L2 §1.6). Downstream RDC and
+  agent-runtime are reached over HTTP/SSE via hexagonal ports (RdcRouteClient /
+  AgentRuntimeClient); the gateway MUST NOT depend on them as in-process
+  artifacts (decision D2 — no "must be co-process with RDC" coupling).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.openjiuwen</groupId>
+  <artifactId>agent-gateway</artifactId>
+  <version>0.1.0</version>
+  <name>agent-gateway</name>
+  <description>Agent Gateway — A2A ingress governance + direct route forwarding (FEAT-011). Independently deployable; RDC and runtime reached over HTTP/SSE via ports.</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- A2A facade: @RestController POST /a2a (L2 §1.1 / §4.9 GW-1). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Spring Boot 4 split WebMvcTest (and its MockMvc autoconfig) into a
+         standalone starter; spring-boot-starter-test no longer pulls it. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- MockWebServer for HttpRdcRouteClient / HttpAgentRuntimeClient tests
+         (RDC-PORT / S2 slices). Declared early; unused until those slices. -->
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>mockwebserver</artifactId>
+      <version>4.12.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>agent-gateway-${project.version}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

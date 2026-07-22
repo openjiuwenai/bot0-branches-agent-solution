@@ -1,0 +1,26 @@
+# Module metadata for agent-gateway.
+#
+# Mirrors the registry-discovery-center convention (independent Maven module,
+# no reactor aggregation). The gateway is an independently deployable domain
+# unit (FEAT-011 L2 §1.6).
+
+module: agent-gateway
+kind: domain             # platform | domain | starter | bom | sample
+version: 0.1.0
+semver_compatibility: experimental
+description: "Agent Gateway — client-facing A2A ingress governance (auth/tenant/validate/idempotency/audit) + direct route forwarding to agent-runtime over HTTP/SSE (FEAT-011). RDC and runtime are hexagonal ports with HTTP default implementations; no in-process coupling."
+architecture_doc: src/main/java/com/openjiuwen/gateway/package-info.java
+spi_packages:
+  - com.openjiuwen.gateway.routing   # RdcRouteClient port (searchInstancesByAgentId + resolveRouteHandle) — gateway's outbound contract to RDC over HTTP
+  - com.openjiuwen.gateway.direct    # AgentRuntimeClient port (invokeSync / streaming) — gateway's outbound contract to runtime /a2a over HTTP/SSE
+# No in-process dependency on peer artifacts — RDC and runtime are reached over
+# HTTP via the ports above (decision D2). This keeps the gateway independently
+# deployable / replaceable and testable with stubs (L2 §1.6, dev-loop D6).
+allowed_dependencies:
+  - org.springframework.boot:spring-boot-starter-web
+forbidden_dependencies:
+  - registry-discovery-center        # RDC is HTTP-only, not a compile dep
+  - agent-bus                        # no in-process bus coupling (FEAT-012 scope)
+  - agent-runtime
+  - agent-core
+deployment_plane: gateway   # Gateway plane (peer to bus_state / runtime)
