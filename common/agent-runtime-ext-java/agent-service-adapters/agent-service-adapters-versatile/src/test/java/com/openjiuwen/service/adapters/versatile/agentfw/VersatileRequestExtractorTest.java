@@ -292,4 +292,39 @@ class VersatileRequestExtractorTest {
         Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
         assertThat(inputs).doesNotContainKey("messages");
     }
+
+    @Test
+    void fillsResumeRequestTemplateFromMetadataWhenConfigured() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+
+        VersatileProperties.ResumeRequestTemplate template = new VersatileProperties.ResumeRequestTemplate();
+        Map<String, Object> inputs = new LinkedHashMap<>();
+        inputs.put("resume_token", "{resume_token}");
+        inputs.put("user_response", "{user_response}");
+        template.getBody().put("inputs", inputs);
+        properties.getInterrupt().setResumeRequestTemplate(template);
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "上海 今晚")));
+        request.setMetadata(Map.of(
+                "body", Map.of(
+                        "resume_token", "tok-123",
+                        "user_response", "上海 今晚"
+                )
+        ));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> bodyInputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(bodyInputs).containsEntry("resume_token", "tok-123")
+                .containsEntry("user_response", "上海 今晚");
+    }
 }
