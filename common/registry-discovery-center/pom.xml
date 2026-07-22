@@ -314,14 +314,34 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
-        <configuration>
-          <!-- Publish the plain (library) jar as the main artifact so sibling modules can depend on
-               registry-discovery-center and see com.openjiuwen.rdc.* on the compile classpath
-               (FEAT-013/014 §7.5 Option A: agent-bus-relay test-scope dep on this module). The
-               executable fat jar is published with the 'exec' classifier; the plain jar remains the
-               main artifact. No source/interface change — build-packaging only. -->
-          <classifier>exec</classifier>
-        </configuration>
+        <!-- default repackage: the executable fat-jar REPLACES the main artifact
+             (registry-discovery-center-0.1.0.jar) — deployment jar name unchanged. -->
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <!-- Publish a plain (library) jar with the 'lib' classifier so sibling modules
+                 (FEAT-013/014 §7.5 Option A: agent-bus-relay test-scope dep) can depend on
+                 registry-discovery-center and see com.openjiuwen.rdc.* on the compile classpath.
+                 The main artifact stays the executable fat-jar; this lib jar is attached separately.
+                 db/migration + application config are EXCLUDED so the registry's Flyway scripts and
+                 app config do not leak onto a sibling's classpath (avoids Flyway V3 collisions and
+                 stray application.yml). No source/interface change — build-packaging only. -->
+            <id>lib-jar</id>
+            <phase>package</phase>
+            <goals><goal>jar</goal></goals>
+            <configuration>
+              <classifier>lib</classifier>
+              <excludes>
+                <exclude>db/migration/**</exclude>
+                <exclude>application*.yml</exclude>
+                <exclude>application*.properties</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

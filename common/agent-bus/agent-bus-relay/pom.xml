@@ -30,10 +30,14 @@
         <dependency>
             <!-- FEAT-013/014 registry-discovery-center integration (§7.5 Option A): test-scope only.
                  GatewayRuntimeService (test) injects AgentDiscoveryService to demo the discovery path;
-                 agent-bus main stays zero-dependency on registry-discovery-center. -->
+                 agent-bus main stays zero-dependency on registry-discovery-center.
+                 classifier=lib: registry-discovery-center is a Spring Boot fat-jar app; the 'lib'
+                 classifier is the plain library jar (classes only, db/migration + app config excluded)
+                 so com.openjiuwen.rdc.* is on the test classpath without leaking Flyway scripts. -->
             <groupId>com.openjiuwen</groupId>
             <artifactId>registry-discovery-center</artifactId>
             <version>0.1.0</version>
+            <classifier>lib</classifier>
             <scope>test</scope>
         </dependency>
         <dependency>
