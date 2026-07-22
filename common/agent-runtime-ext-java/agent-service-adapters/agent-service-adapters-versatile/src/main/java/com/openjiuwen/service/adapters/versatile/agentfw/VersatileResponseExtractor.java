@@ -122,7 +122,7 @@ final class VersatileResponseExtractor {
             return List.of();
         }
         return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
-                "{\"stage\":\"stream_closed_without_terminal\","
+                "{\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\","
                         + "\"reason\":\"no End/exception event\"}"));
     }
 
