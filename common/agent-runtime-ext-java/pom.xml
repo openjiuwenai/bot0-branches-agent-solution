@@ -26,19 +26,12 @@
     </properties>
 
     <modules>
+        <module>../agent-service-spec-ext</module>
         <module>agent-service-app/agent-service-app-custom-rest</module>
         <module>agent-service-adapters/agent-service-adapters-versatile</module>
         <module>agent-service-adapters/agent-service-adapters-agentcore-ext</module>
         <module>agent-service-adapters/agent-service-adapters-agentscope</module>
     </modules>
-
-    <!--
-        NOTE: agent-service-spec-ext is a sibling project under common/ that extends
-        the runtime agent-service-spec contract layer. It is NOT declared as a
-        <module> of agent-runtime-ext-java because it lives outside this aggregator
-        pom's directory tree. Build it independently or add it to a higher-level
-        aggregator if needed.
-    -->
 
     <dependencyManagement>
         <dependencies>
