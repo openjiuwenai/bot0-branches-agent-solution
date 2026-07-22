@@ -35,6 +35,20 @@ public class GovernanceException extends RuntimeException {
         this.code = code;
     }
 
+    /**
+     * Construct with an underlying cause.
+     *
+     * @param httpStatus HTTP status to return
+     * @param code stable error code
+     * @param message human-readable message
+     * @param cause underlying cause
+     */
+    public GovernanceException(HttpStatusCode httpStatus, String code, String message, Throwable cause) {
+        super(message, cause);
+        this.httpStatus = httpStatus;
+        this.code = code;
+    }
+
     /** @return HTTP status to return */
     public HttpStatusCode httpStatus() {
         return httpStatus;

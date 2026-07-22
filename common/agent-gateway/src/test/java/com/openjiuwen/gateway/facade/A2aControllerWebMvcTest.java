@@ -5,11 +5,11 @@
 package com.openjiuwen.gateway.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,8 +21,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.openjiuwen.gateway.direct.FakeAgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceErrorHandler;
 import com.openjiuwen.gateway.governance.auth.AuthRule;
 import com.openjiuwen.gateway.governance.auth.CredentialDirectory;
@@ -33,15 +35,24 @@ import com.openjiuwen.gateway.governance.validate.ParamValidator;
 import com.openjiuwen.gateway.obs.AuditEvent;
 import com.openjiuwen.gateway.obs.AuditSink;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
+import com.openjiuwen.gateway.routing.DefaultAgentResolver;
+import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
+import com.openjiuwen.gateway.routing.Router;
+import com.openjiuwen.gateway.routing.StickyIndex;
+import com.openjiuwen.gateway.routing.AgentCardRoute;
+import com.openjiuwen.gateway.routing.ResolvedRoute;
 
 /**
- * Module-integration test for the A2A facade through G1–G5
- * (FEAT-011 L2 §3.3–§3.7). Real governance components; credential directory and
- * audit sink are faked. Idempotency + audit state are cleared before each test.
+ * Module-integration test for the A2A facade: governance G1–G5 + the create
+ * direct-route path (FEAT-011 L2 §3, §4). Real governance + routing components;
+ * credential directory, audit sink, RDC and runtime are faked. State is cleared
+ * before each test.
  */
 @WebMvcTest(controllers = A2aController.class)
 @Import({AuthRule.class, TenantResolver.class, ParamValidator.class, IdempotencyRule.class,
-        GovernanceAuditor.class, GovernanceErrorHandler.class})
+        GovernanceAuditor.class, GovernanceErrorHandler.class, Router.class, StickyIndex.class,
+        DefaultAgentResolver.class})
+@TestPropertySource(properties = "gateway.default-agent-id=default-agent-1")
 class A2aControllerWebMvcTest {
     @Autowired
     private MockMvc mvc;
@@ -49,10 +60,20 @@ class A2aControllerWebMvcTest {
     private IdempotencyRule idempotencyRule;
     @Autowired
     private CapturingAuditSink auditSink;
+    @Autowired
+    private FakeRdcRouteClient rdc;
+    @Autowired
+    private FakeAgentRuntimeClient runtime;
+    @Autowired
+    private StickyIndex sticky;
 
     private static final String VALID_CREATE =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+    private static final String CREATE_WITH_AGENT =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                    + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                    + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
     private static final String EMPTY_AGENT_ID =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
@@ -71,6 +92,8 @@ class A2aControllerWebMvcTest {
     private static final String RESUME_BODY =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m-res\",\"taskId\":\"task-1\",\"parts\":[]}}}";
+    private static final String TASK_RESPONSE =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-9\"}}";
 
     @TestConfiguration
     static class TestConfig {
@@ -87,11 +110,20 @@ class A2aControllerWebMvcTest {
         CapturingAuditSink auditSink() {
             return new CapturingAuditSink();
         }
+
+        @Bean
+        FakeRdcRouteClient rdcRouteClient() {
+            return new FakeRdcRouteClient();
+        }
+
+        @Bean
+        FakeAgentRuntimeClient agentRuntimeClient() {
+            return new FakeAgentRuntimeClient();
+        }
     }
 
-    /** Capturing AuditSink so tests can assert recorded governance events. */
     static class CapturingAuditSink implements AuditSink {
-        final List<AuditEvent> events = new ArrayList<>();
+        final java.util.List<AuditEvent> events = new java.util.ArrayList<>();
 
         @Override
         public void record(AuditEvent event) {
@@ -103,6 +135,10 @@ class A2aControllerWebMvcTest {
     void resetState() {
         idempotencyRule.clear();
         auditSink.events.clear();
+        sticky.clear();
+        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        runtime.setResponse(TASK_RESPONSE);
     }
 
     // --- G1 ---
@@ -146,14 +182,7 @@ class A2aControllerWebMvcTest {
                         .header("Authorization", "Bearer bound-token")
                         .header("X-Tenant-Id", "tenant-other")
                         .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
-                .andExpect(status().isNotImplemented());
-    }
-
-    @Test
-    void boundCredentialPassesGovernance() throws Exception {
-        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
-                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk());
     }
 
     // --- G3 ---
@@ -188,7 +217,7 @@ class A2aControllerWebMvcTest {
     void sameMessageIdDifferentBodyReturns409Conflict() throws Exception {
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(BODY_A))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk());
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(BODY_B))
                 .andExpect(status().isConflict())
@@ -199,17 +228,15 @@ class A2aControllerWebMvcTest {
     void createWithoutMessageIdProceedsTwice() throws Exception {
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(NO_MESSAGE_ID))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk());
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(NO_MESSAGE_ID))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void resumeWithTaskIdSkipsIdempotency() throws Exception {
-        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
-                        .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
-                .andExpect(status().isNotImplemented());
+    void resumeWithTaskIdIsNotCreateRoute() throws Exception {
+        // resume carries taskId -> not the create route (placeholder until S3).
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
                 .andExpect(status().isNotImplemented());
@@ -219,10 +246,9 @@ class A2aControllerWebMvcTest {
 
     @Test
     void passedRequestIsAuditedPassedWithSelfGeneratedTraceId() throws Exception {
-        // No traceparent -> self-generated traceId; main path does not fail.
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk());
         AuditEvent passed = auditSink.events.stream()
                 .filter(e -> e.outcome() == AuditEvent.Outcome.PASSED).findFirst().orElseThrow();
         assertThat(passed.tenantId()).isEqualTo("tenant-1");
@@ -238,5 +264,36 @@ class A2aControllerWebMvcTest {
                 .filter(e -> e.outcome() == AuditEvent.Outcome.REJECTED).findFirst().orElseThrow();
         assertThat(rejected.rejectStage()).isEqualTo("G1");
         assertThat(rejected.code()).isEqualTo("AUTH_MISSING");
+    }
+
+    // --- S2 create direct route ---
+
+    @Test
+    void createWithAgentForwardsAndReturnsTaskBody() throws Exception {
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(CREATE_WITH_AGENT))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value("task-9"));
+        // authoritative tenant injected into the forwarded body
+        assertThat(runtime.lastBody()).contains("\"tenantId\":\"tenant-1\"");
+        // sticky bound; no routeHandle leaked to the client response
+        assertThat(sticky.find("task-9")).contains("h1");
+    }
+
+    @Test
+    void createWithoutAgentUsesDefaultAgent() throws Exception {
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isOk());
+        assertThat(rdc.lastAgentId()).isEqualTo("default-agent-1");
+    }
+
+    @Test
+    void emptyCandidatesReturnsRouteNoCandidates() throws Exception {
+        rdc.setCandidates(List.of());
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("ROUTE_NO_CANDIDATES"));
     }
 }

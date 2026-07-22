@@ -114,13 +114,13 @@ common/agent-gateway/
 | T-G5-2 | S1-G5 | GovernanceAuditorTest#rejectedRecordCarriesStageAndCode / #rejectedStageInferredForAllGovernanceCodes + A2aControllerWebMvcTest#g1FailureAuditedAsRejectedWithStage | unit+it | ✅ |
 | T-G5-3 | S1-G5 | GovernanceAuditorTest#recordsNeverCarryCredentialOrBody（AuditEvent 结构上无 token/body 字段） | unit | ✅ |
 | T-G5-4 | S1-G5 | A2aControllerWebMvcTest#passedRequestIsAuditedPassedWithSelfGeneratedTraceId（无 traceparent → 自生成 traceId，主路径不失败） | it | ✅ |
-| T-S2-1 | S2-sync | RouterTest.explicitAgentReachesRuntime / A2aFacadeSyncTest | unit+it | 待写 |
-| T-S2-2 | S2-sync | RouterTest.defaultAgentFallback | unit+it | 待写 |
-| T-S2-3 | S2-SSE | SseBridgeTest.streamingCreate / A2aFacadeStreamTest | unit+it | 待写 |
-| T-S2-4 | S5 | RouteFailureTest.emptyList / A2aFacadeRouteFailTest | unit+it | 待写 |
-| T-S2-5 | S2-sync | RouterTest.multiInstancePickFirst | unit | 待写 |
-| T-S2-6 | S2-sync | RouterTest.reentryExplicitAgent | unit | 待写 |
-| T-S2-7 | S2-sync | RouterTest.stickyIndexWrittenOnTaskId / A2aFacadeSyncTest.noRouteHandleInResponse | unit+it | 待写 |
+| T-S2-1 | S2-sync | RouterTest#explicitAgentRoutesToFirstCandidateAndWritesSticky + A2aControllerWebMvcTest#createWithAgentForwardsAndReturnsTaskBody | unit+it | ✅ |
+| T-S2-2 | S2-sync | RouterTest#noAgentIdFallsBackToDefaultAgent + A2aControllerWebMvcTest#createWithoutAgentUsesDefaultAgent | unit+it | ✅ |
+| T-S2-3 | S2-SSE | SseBridgeTest（流式桥接） | unit+it | 待写 |
+| T-S2-4 | S5 | RouterTest#emptyCandidatesReturnsRouteNoCandidates + A2aControllerWebMvcTest#emptyCandidatesReturnsRouteNoCandidates（S5 切片补 T-S5-* 专测） | unit+it | ✅ |
+| T-S2-5 | S2-sync | RouterTest#multiInstancePicksFirstCandidate | unit | ✅ |
+| T-S2-6 | S2-sync | RouterTest#reentryWithExplicitAgentDoesNotUseDefault | unit | ✅ |
+| T-S2-7 | S2-sync | RouterTest#explicitAgentRoutesToFirstCandidateAndWritesSticky（sticky 写入）+ A2aControllerWebMvcTest#createWithAgentForwardsAndReturnsTaskBody（响应无 routeHandle） | unit+it | ✅ |
 | T-S3-1 | S3 | StickyIndexTest.resumeReachesOriginal / A2aFacadeResumeTest | unit+it | 待写 |
 | T-S3-2 | S3 | StickyIndexTest.missReturnsFailNoNewTask | unit+it | 待写 |
 | T-S3-3 | S3 | StickyIndexTest.resumeMissingTaskIdNotSticky | unit | 待写 |
@@ -169,7 +169,8 @@ common/agent-gateway/
 | S1-G4 幂等 | ✅ GREEN（37 测全过） | T-G4-1..5（见 §5；T-G4-2 REPLAY e2e 待 S2） | feat(gateway): FEAT-011 S1-G4 |
 | S1-G5 审计 | ✅ GREEN（43 测全过） | T-G5-1..4（见 §5；顺带解决 TD-2 traceId 入口贯穿） | feat(gateway): FEAT-011 S1-G5 |
 | RDC-PORT | ✅ GREEN（48 测全过） | 支撑 T-S2-*/T-S5-*（HttpRdcRouteClient + MockWebServer + FakeRdcRouteClient） | feat(gateway): FEAT-011 RDC-PORT |
-| S2-sync | ⏳ 下一片 | T-S2-1/2/5/6/7 | — |
-| S2-SSE … S4 | 待办 | 见 §5 | — |
+| S2-sync | ✅ GREEN（60 测全过） | T-S2-1/2/4/5/6/7（见 §5；T-S2-4 S5 专测后续补） | feat(gateway): FEAT-011 S2-sync |
+| S2-SSE | ⏳ 下一片 | T-S2-3、SC-2 | — |
+| S5 … S4 | 待办 | 见 §5 | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）。（TD-2 traceId 入口贯穿已在 S1-G5 解决。）

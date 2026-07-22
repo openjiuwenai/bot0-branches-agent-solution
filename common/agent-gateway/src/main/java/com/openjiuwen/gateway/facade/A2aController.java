@@ -19,18 +19,17 @@ import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.governance.tenant.TenantResolver;
 import com.openjiuwen.gateway.governance.validate.ParamValidator;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
+import com.openjiuwen.gateway.routing.Router;
 
 import java.util.UUID;
 
 /**
  * A2A JSON-RPC facade entry — {@code POST /a2a} (FEAT-011 L2 §1.1 / §4.9 GW-1).
  *
- * <p>Governance runs in fixed order G1→G2→G3→G4, with G5 audit covering both the
- * pass and reject paths. A request-scoped traceId is resolved at entry (from
- * {@code traceparent}, else self-generated) and threaded into the context, the
- * audit records, and the error body. {@link GovernanceException} maps to the
- * stable HTTP error body via the advice. Routing / forwarding are wired in later
- * slices — this method currently returns a placeholder past G4.
+ * <p>Governance (G1–G4) runs first, audited (G5); then the create path routes
+ * directly to the resolved runtime (§4) and returns its response. Resume
+ * ({@code taskId} present) uses the sticky path, wired in a later slice.
+ * {@link GovernanceException} maps to the stable HTTP error body via the advice.
  *
  * @since 0.1.0
  */
@@ -41,6 +40,7 @@ public class A2aController {
     private final ParamValidator paramValidator;
     private final IdempotencyRule idempotencyRule;
     private final GovernanceAuditor auditor;
+    private final Router router;
 
     /**
      * Construct.
@@ -50,14 +50,16 @@ public class A2aController {
      * @param paramValidator  G3 parameter validator
      * @param idempotencyRule G4 create idempotency
      * @param auditor         G5 governance auditor
+     * @param router          direct-route router (create path)
      */
     public A2aController(AuthRule authRule, TenantResolver tenantResolver, ParamValidator paramValidator,
-                         IdempotencyRule idempotencyRule, GovernanceAuditor auditor) {
+                         IdempotencyRule idempotencyRule, GovernanceAuditor auditor, Router router) {
         this.authRule = authRule;
         this.tenantResolver = tenantResolver;
         this.paramValidator = paramValidator;
         this.idempotencyRule = idempotencyRule;
         this.auditor = auditor;
+        this.router = router;
     }
 
     /**
@@ -67,7 +69,7 @@ public class A2aController {
      * @param traceparent       W3C {@code traceparent} header (may be absent)
      * @param selfReportedTenant raw {@code X-Tenant-Id} header (may be absent; discarded by G2)
      * @param jsonRpcBody       raw JSON-RPC envelope (parsed by G3)
-     * @return response (placeholder until routing/forwarding are wired)
+     * @return runtime response (create) or placeholder (resume, until S3)
      */
     @PostMapping("/a2a")
     public ResponseEntity<String> postA2a(
@@ -80,21 +82,15 @@ public class A2aController {
         context.setTraceId(resolveTraceId(traceparent));
 
         try {
-            // G1 — authentication.
             Principal principal = authRule.authenticate(authorization);
-            // G2 — authoritative tenant resolution; self-report discarded.
             String tenantId = tenantResolver.resolve(principal, selfReportedTenant);
-            // G3 — parameter validation + create/resume classification.
             paramValidator.validate(jsonRpcBody, context);
-
             context.setPrincipalId(principal.principalId());
             context.setTenantId(tenantId);
-
-            // G4 — create idempotency (resume skips).
             if (context.taskId() == null) {
                 IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(), jsonRpcBody);
                 switch (idem.outcome()) {
-                    case NEW, SKIP -> { /* proceed to later stages */ }
+                    case NEW, SKIP -> { /* proceed */ }
                     case REPLAY -> {
                         return ResponseEntity.ok(idem.result());
                     }
@@ -112,19 +108,23 @@ public class A2aController {
             throw ex;
         }
 
-        // G5 — audit the governance pass.
         auditor.auditPassed(context);
 
-        // Routing / forwarding are wired in later slices.
+        if (context.taskId() == null) {
+            // create path — route directly to the resolved runtime.
+            try {
+                return ResponseEntity.ok(router.routeCreate(context));
+            } catch (GovernanceException ex) {
+                ex.setTraceId(context.traceId());
+                throw ex;
+            }
+        }
+        // resume path (sticky) is wired in a later slice (S3).
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
                 .body("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32601,"
-                        + "\"message\":\"agent-gateway governance complete; forwarding not wired (FEAT-011 WIP)\"}}");
+                        + "\"message\":\"resume forwarding not wired (FEAT-011 WIP)\"}}");
     }
 
-    /**
-     * Resolve the request trace id from W3C {@code traceparent} (segment 1), or
-     * self-generate one (L2 §3.7 P5 — missing traceparent does not fail).
-     */
     private static String resolveTraceId(String traceparent) {
         if (traceparent != null && !traceparent.isBlank()) {
             String[] parts = traceparent.split("-");

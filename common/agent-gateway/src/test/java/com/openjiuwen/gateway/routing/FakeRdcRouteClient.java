@@ -8,14 +8,16 @@ import java.util.List;
 
 /**
  * Test double for {@link RdcRouteClient} used by module-integration tests
- * (S2 / S5). Configurable: the candidates a search returns and the endpoint a
- * resolve returns (or a resolve failure). No network.
+ * (S2 / S5). Configurable candidates + resolve endpoint (or resolve failure),
+ * and records the last queried tenant/agent for assertions.
  *
  * @since 0.1.0
  */
 public class FakeRdcRouteClient implements RdcRouteClient {
     private List<AgentCardRoute> candidates = List.of();
     private ResolvedRoute resolved = null;
+    private String lastTenantId;
+    private String lastAgentId;
 
     /**
      * Configure the candidates returned by the next search.
@@ -35,8 +37,20 @@ public class FakeRdcRouteClient implements RdcRouteClient {
         this.resolved = resolved;
     }
 
+    /** @return the tenant id of the last search */
+    public String lastTenantId() {
+        return lastTenantId;
+    }
+
+    /** @return the agent id of the last search */
+    public String lastAgentId() {
+        return lastAgentId;
+    }
+
     @Override
     public List<AgentCardRoute> searchInstancesByAgentId(String tenantId, String agentId) {
+        this.lastTenantId = tenantId;
+        this.lastAgentId = agentId;
         return candidates;
     }
 
