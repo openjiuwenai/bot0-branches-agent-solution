@@ -49,6 +49,12 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
         return lastBody;
     }
 
+    /** Clear recorded invocations (so tests asserting "no call" start clean). */
+    public void reset() {
+        this.lastEndpoint = null;
+        this.lastBody = null;
+    }
+
     @Override
     public String invokeSync(String endpointUrl, String jsonRpcBody) {
         this.lastEndpoint = endpointUrl;

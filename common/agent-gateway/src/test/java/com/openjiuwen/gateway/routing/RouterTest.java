@@ -86,20 +86,25 @@ class RouterTest {
     }
 
     @Test
-    void emptyCandidatesReturnsRouteNoCandidates() {
+    void emptyCandidatesReturnsRouteNoCandidatesAndDoesNotCallRuntime() {
         rdc.setCandidates(List.of());
         GovernanceException ge = (GovernanceException) catchThrowable(() -> router.routeCreate(createCtx("agent-9")));
         assertThat(ge).isNotNull();
         assertThat(ge.code()).isEqualTo("ROUTE_NO_CANDIDATES");
+        // S5 invariant: no runtime call, no topology in the failure message.
+        assertThat(runtime.lastEndpoint()).isNull();
+        assertThat(ge.getMessage()).doesNotContain("http");
     }
 
     @Test
-    void resolveFailureReturnsRouteResolveFailed() {
+    void resolveFailureReturnsRouteResolveFailedAndDoesNotCallRuntime() {
         rdc.setCandidates(List.of(new AgentCardRoute("h1")));
         rdc.setResolved(null); // resolve throws
         GovernanceException ge = (GovernanceException) catchThrowable(() -> router.routeCreate(createCtx("agent-9")));
         assertThat(ge).isNotNull();
         assertThat(ge.code()).isEqualTo("ROUTE_RESOLVE_FAILED");
+        assertThat(runtime.lastEndpoint()).isNull();
+        assertThat(ge.getMessage()).doesNotContain("http");
     }
 
     @Test

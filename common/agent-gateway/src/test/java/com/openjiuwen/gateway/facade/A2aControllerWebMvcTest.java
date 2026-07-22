@@ -143,6 +143,7 @@ class A2aControllerWebMvcTest {
         rdc.setCandidates(List.of(new AgentCardRoute("h1")));
         rdc.setResolved(new ResolvedRoute("http://rt:8000"));
         runtime.setResponse(TASK_RESPONSE);
+        runtime.reset();
     }
 
     // --- G1 ---
@@ -299,6 +300,18 @@ class A2aControllerWebMvcTest {
                         .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value("ROUTE_NO_CANDIDATES"));
+        // S5: routing failure must not call the runtime.
+        assertThat(runtime.lastEndpoint()).isNull();
+    }
+
+    @Test
+    void resolveFailureReturnsRouteResolveFailedAndSkipsRuntime() throws Exception {
+        rdc.setResolved(null); // resolve throws
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("ROUTE_RESOLVE_FAILED"));
+        assertThat(runtime.lastEndpoint()).isNull();
     }
 
     @Test
