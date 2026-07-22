@@ -418,3 +418,259 @@ Agent A /v1/query
   -> Agent B calls VERSATILE_URL
   -> remote result resumes Agent A as tool result
 ```
+
+## 验证 Agent A 自定义 REST 入口
+
+这个入口复用 Agent A，不新增 Agent C，也不新增监听端口。Agent A 仍监听 `18090`，原有
+`/a2a/` 和 `/v1/query` 保持不变；新增入口为：
+
+```text
+POST /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
+```
+
+自定义 adapter 将 `input` 序列化成 Agent A 的 user message，并保留以下数据：
+
+| 自定义请求数据 | `ServeRequest.metadata` | Agent B 用途 |
+| --- | --- | --- |
+| `custom_data` | `body.custom_data` | 构造发往 `VERSATILE_URL` 的 body |
+| HTTP headers | `headers` | 完整保留；白名单字段继续转发 |
+| URL query params | `query` | 作为 query string 转发到 `VERSATILE_URL` |
+| URL path variables | `path_variables` | 保留项目、Agent 和会话标识 |
+
+### 1. 构建并安装扩展
+
+```powershell
+mvn -f common\agent-runtime-ext-java\pom.xml `
+  -pl agent-service-app/agent-service-app-custom-rest -am clean install
+
+mvn -f common\agent-runtime-ext-java\pom.xml `
+  -pl agent-service-adapters/agent-service-adapters-agentcore-ext install -DskipTests
+
+mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml clean package
+```
+
+### 2. 启动 Agent B
+
+在第一个 PowerShell 中进入仓库根目录。`VERSATILE_URL` 应指向实际可用的下游工作流服务：
+
+```powershell
+chcp.com 65001 > $null
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
+$env:JAVA_TOOL_OPTIONS = "-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8"
+
+$env:AGENT_B_PORT = "18091"
+$env:VERSATILE_URL = "http://127.0.0.1:31113/v1/0/agents/main_planner/conversations/{conversation_id}"
+
+java -jar "common\example\agentcore-ext-remote-a2a-tool-demo\agent-b-versatile-runtime\target\agent-b-versatile-runtime-0.1.0.jar"
+```
+
+确认 Agent B card 可访问：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:18091/.well-known/agent-card.json
+```
+
+### 3. 启动 Agent A
+
+在第二个 PowerShell 中配置模型。API Key 只通过环境变量传入，不要写入配置或日志：
+
+```powershell
+chcp.com 65001 > $null
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
+$env:JAVA_TOOL_OPTIONS = "-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8"
+
+$env:AGENT_A_PORT = "18090"
+$env:REMOTE_A2A_CARD_URL = "http://127.0.0.1:18091"
+$env:DEEPSEEK_API_KEY = "替换为真实 API Key"
+$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+$env:DEEPSEEK_MODEL = "deepseek-chat"
+$env:DEEP_AGENT_COMPLETION_TIMEOUT = "600s"
+$env:DEEP_AGENT_SKILLS_DIR = "common/example/agentcore-ext-remote-a2a-tool-demo/skills"
+
+java -jar "common\example\agentcore-ext-remote-a2a-tool-demo\agent-a-deepagent-runtime\target\agent-a-deepagent-runtime-0.1.0.jar"
+```
+
+启动日志中不应出现 mapping 冲突。以下三个入口共同使用 `18090`：
+
+```text
+http://127.0.0.1:18090/a2a/
+http://127.0.0.1:18090/v1/query
+http://127.0.0.1:18090/v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
+```
+
+### 4. 定义自定义请求函数
+
+在第三个 PowerShell 中执行：
+
+```powershell
+chcp.com 65001 > $null
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
+
+$projectId = "0"
+$agentId = "main_planner"
+$conversationId = "test-session-001"
+$customRestUrl = "http://127.0.0.1:18090/v1/${projectId}/agents/${agentId}/conversations/${conversationId}?workspace_id=11&type=controller"
+
+function New-CustomRestRequestJson {
+  param(
+    [Parameter(Mandatory = $true)] [string] $Query,
+    [Parameter(Mandatory = $true)] [string] $Intent,
+    [bool] $Stream = $true
+  )
+
+  $body = [ordered]@{
+    agent_id = $agentId
+    input = [ordered]@{
+      query = $Query
+      intent = $Intent
+      wap_userName = "张三"
+    }
+    conversation_id = $conversationId
+    timeout = "300"
+    role_id = "1"
+    role_name = "手机银行"
+    stream = $Stream
+    custom_data = [ordered]@{
+      inputs = [ordered]@{
+        query = $Query
+        intent = $Intent
+        wap_userName = "张三"
+      }
+      memory_inputs = [ordered]@{}
+      globals = [ordered]@{}
+      plugin_configs = @()
+      long_term_memory = [ordered]@{
+        enable_retrieve = $true
+        enable_extract = $true
+      }
+    }
+  }
+
+  return ($body | ConvertTo-Json -Depth 100)
+}
+
+function Send-CustomRestRequestJson {
+  param([Parameter(Mandatory = $true)] [string] $RequestJson)
+
+  $requestBody = $RequestJson | ConvertFrom-Json
+  $accept = if ([bool] $requestBody.stream) { "text/event-stream" } else { "application/json" }
+  try {
+    $response = Invoke-WebRequest `
+      -UseBasicParsing `
+      -Uri $customRestUrl `
+      -Method Post `
+      -ContentType "application/json; charset=utf-8" `
+      -Headers @{
+        Accept = $accept
+        stream = ([bool] $requestBody.stream).ToString().ToLowerInvariant()
+        "x-invoke-mode" = "DEBUG"
+        "x-language" = "zh-cn"
+      } `
+      -Body ([System.Text.Encoding]::UTF8.GetBytes($RequestJson))
+    $stream = $response.RawContentStream
+  } catch [System.Net.WebException] {
+    $response = $_.Exception.Response
+    if ($null -eq $response) {
+      throw
+    }
+    $stream = $response.GetResponseStream()
+  }
+
+  Write-Host "HTTP $([int]$response.StatusCode)"
+  if ($stream.CanSeek) {
+    $stream.Position = 0
+  }
+  $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::UTF8)
+  try {
+    $reader.ReadToEnd()
+  } finally {
+    $reader.Dispose()
+    $stream.Dispose()
+  }
+}
+```
+
+### 5. 发送三轮流式报文
+
+第一轮进入 Agent A DeepAgent，再由远端工具进入 Agent B：
+
+```powershell
+$requestJson1 = New-CustomRestRequestJson `
+  -Query "先查询尾号为4241的银行卡余额，再转账5元给李四" `
+  -Intent "查询账户余额"
+Send-CustomRestRequestJson $requestJson1
+```
+
+第二轮命中 pending shadow task，跳过 DeepAgent，直接转发给 Agent B：
+
+```powershell
+$requestJson2 = New-CustomRestRequestJson `
+  -Query '[{"cardNum":"6222021816044054241","regAcctType":"011","cardAlias":""}]' `
+  -Intent "LATEST"
+Send-CustomRestRequestJson $requestJson2
+```
+
+第三轮由 Agent B 返回最终结果，Agent A 把结果恢复到 DeepAgent 并结束：
+
+```powershell
+$round3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044054241","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"1500.92"}]}],"queryStatus":"成功","failCause":""}
+'@
+$requestJson3 = New-CustomRestRequestJson -Query $round3Query -Intent "LATEST"
+Send-CustomRestRequestJson $requestJson3
+```
+
+预期路由：
+
+```text
+第一轮：Custom REST -> Agent A DeepAgent -> Agent B -> input required
+第二轮：Custom REST -> Agent A orchestrator -> Agent B -> input required
+第三轮：Custom REST -> Agent A orchestrator -> Agent B -> Agent A DeepAgent -> completed
+```
+
+Agent B 日志应显示 `workspace_id=11`、`type=controller`，白名单 headers 为
+`stream=true`、`x-invoke-mode=DEBUG`、`x-language=zh-cn`，远端 body 来自当前轮
+`custom_data`。
+
+### 6. 验证同步分支和原入口回归
+
+同步分支使用新的 conversation id，避免续接上面的流式会话：
+
+```powershell
+$conversationId = "sync-test-session-001"
+$customRestUrl = "http://127.0.0.1:18090/v1/${projectId}/agents/${agentId}/conversations/${conversationId}?workspace_id=11&type=controller"
+$syncRequestJson = New-CustomRestRequestJson `
+  -Query "请介绍一下你自己" `
+  -Intent "普通问答" `
+  -Stream $false
+Send-CustomRestRequestJson $syncRequestJson
+```
+
+同步响应应为普通 JSON；流式响应的 event 名称由 adapter 给出，data 信封包含：
+
+```json
+{
+  "success": true,
+  "agent_id": "main_planner",
+  "conversation_id": "test-session-001",
+  "output": "",
+  "error": "",
+  "execution_time": "",
+  "custom_rsp_data": {
+    "type": "chunk",
+    "data": {}
+  }
+}
+```
+
+最后继续执行本文前面的 A2A 三轮请求和 `/v1/query` REST 三轮请求。三组入口应同时可用，
+Agent A/Agent B 端口仍分别是 `18090`、`18091`。

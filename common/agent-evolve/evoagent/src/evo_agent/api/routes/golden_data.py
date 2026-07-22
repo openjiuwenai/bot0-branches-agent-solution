@@ -34,7 +34,11 @@ from evo_agent.evaluator.domain.models import StandardTrajectory, TrajectoryMess
 from evo_agent.evaluator.golden_data.builder import GlobalUnderstandingBuilder
 from evo_agent.evaluator.golden_data.generator import ExpectedBehaviorGenerator
 from evo_agent.evaluator.golden_data.models import EBInput, GUSlice
-from evo_agent.evaluator.golden_data.skill_provider import LocalSkillProvider
+from evo_agent.adapter_client.client import AdapterClient
+from evo_agent.evaluator.golden_data.skill_provider import (
+    AdapterSkillProvider,
+    LocalSkillProvider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +85,16 @@ class GenerateEBRequest(BaseModel):
 
 
 class GenerateEBResponse(BaseModel):
-    """在线产 EB 响应 —— 对外口径 ``{id, inputs, expected_behavior}``。"""
+    """在线产 EB 响应 —— 对外口径 ``{id, inputs, expected_behavior}``。
+
+    ``internal`` 仅备查（result/reason/scenario/scope/score），不进 optimizer——
+    ``dataset/case.py`` 只读 ``items[*].expected_behavior``，不读 ``internal``。
+    """
 
     status: str = "generated"
     items: list[dict[str, str]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    internal: dict[str, Any] = Field(default_factory=dict)
 
 
 class BuildGUConfig(BaseModel):
@@ -240,7 +249,7 @@ def _load_trajectories(data: bytes, filename: str | None) -> list[StandardTrajec
 
 
 def _build_skill_provider(config: BuildGUConfig) -> Any:
-    """按 source 构建 SkillProvider；adapter 源暂不支持（async with 生命周期，下一步）。"""
+    """按 source 构建 SkillProvider：local 读本地目录；adapter 调 AdapterClient 取 skills。"""
     if config.source == "local":
         if not config.skill_root:
             raise HTTPException(
@@ -248,9 +257,24 @@ def _build_skill_provider(config: BuildGUConfig) -> Any:
                 detail="local skill source requires skill_root",
             )
         return LocalSkillProvider(skill_root=Path(config.skill_root))
+    if config.source == "adapter":
+        if not config.adapter_url:
+            raise HTTPException(
+                status_code=422,
+                detail="adapter skill source requires adapter_url",
+            )
+        if not config.agent_name:
+            raise HTTPException(
+                status_code=422,
+                detail="adapter skill source requires agent_name",
+            )
+        adapter_client = AdapterClient(
+            config.adapter_url, agent_name=config.agent_name
+        )
+        return AdapterSkillProvider(adapter_client)
     raise HTTPException(
-        status_code=501,
-        detail="adapter skill source not implemented yet (async with AdapterClient lifecycle)",
+        status_code=422,
+        detail=f"unknown skill source: {config.source} (use 'local' or 'adapter')",
     )
 
 
@@ -299,7 +323,20 @@ async def generate_expected_behavior(
             detail=f"EB generation failed: {e}",
         ) from e
 
-    return GenerateEBResponse(items=output.to_external(), metadata=output.metadata)
+    # internal 仅备查（result/reason/scenario/scope/score），不进 optimizer 对外口径。
+    internal: dict[str, Any] = {}
+    if output.items:
+        it = output.items[0]
+        internal = {
+            "result": it.result,
+            "reason": it.reason,
+            "scenario": it.scenario,
+            "scope": it.scope,
+            "score": it.score,
+        }
+    return GenerateEBResponse(
+        items=output.to_external(), metadata=output.metadata, internal=internal
+    )
 
 
 # ---------------------------------------------------------------------------

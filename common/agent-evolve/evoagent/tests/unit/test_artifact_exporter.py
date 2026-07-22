@@ -33,6 +33,49 @@ def test_write_json_preserves_chinese(tmp_path: Path) -> None:
     assert json.loads(raw)["reason"] == "失败原因：产品推荐错误"
 
 
+def test_export_experience_library_writes_epoch_snapshot(tmp_path: Path) -> None:
+    """TF-GRPO 经验库按 epoch 落盘，中文可读。"""
+    exporter = ArtifactExporter(str(tmp_path), score_threshold=0.5)
+    exporter.export_experience_library(
+        epoch=1,
+        library={
+            "domain": "markdown",
+            "max_experiences": 10,
+            "experiences": [
+                {
+                    "content": "优先校验期间冲突再调工具",
+                    "domain": "markdown",
+                    "confidence": 0.9,
+                    "created_at": "2026-07-21T00:00:00+00:00",
+                    "last_used": "2026-07-21T00:00:00+00:00",
+                    "success_count": 1,
+                    "failure_count": 0,
+                }
+            ],
+        },
+    )
+
+    path = tmp_path / "epoch_1" / "experience_library.json"
+    raw = path.read_text(encoding="utf-8")
+    assert "期间冲突" in raw
+    data = json.loads(raw)
+    assert data["schema_version"] == 1
+    assert data["epoch"] == 1
+    assert data["operator_id"] is None
+    assert len(data["experiences"]) == 1
+    assert data["experiences"][0]["content"] == "优先校验期间冲突再调工具"
+
+
+def test_export_experience_library_multi_operator_filename(tmp_path: Path) -> None:
+    exporter = ArtifactExporter(str(tmp_path), score_threshold=0.5)
+    exporter.export_experience_library(
+        epoch=0,
+        library={"domain": "markdown", "max_experiences": 5, "experiences": []},
+        operator_id="demo_skill",
+    )
+    assert (tmp_path / "epoch_0" / "experience_library_demo_skill.json").is_file()
+
+
 def test_export_eval_results_preserves_chinese(tmp_path: Path) -> None:
     """eval_results.json 中文可读。"""
     exporter = ArtifactExporter(str(tmp_path), score_threshold=0.5)

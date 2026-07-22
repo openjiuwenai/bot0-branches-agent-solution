@@ -36,7 +36,7 @@ from openjiuwen.core.foundation.llm import (
 
 from evo_agent.config import EvolveConfig
 from evo_agent.evaluator.domain.scoring import EvaluationError
-from evo_agent.evaluator.evaluators.llm import _run_coroutine
+from evo_agent.llm.invocation import _get_invocation_loop
 from evo_agent.evaluator.golden_data.gu_store import (
     OUT_OF_SCOPE_SKILL,
     load_flat,
@@ -179,14 +179,14 @@ class ExpectedBehaviorGenerator:
         last_err: object = "未知错误"
         for attempt in range(1, max_retries + 1):
             try:
-                resp = _run_coroutine(
+                resp = _get_invocation_loop().submit(
                     self._model.invoke(
                         [
                             SystemMessage(content=system_prompt),
                             UserMessage(content=user_prompt),
                         ]
                     )
-                )
+                ).result()
                 raw = resp.content
             except Exception as e:  # noqa: BLE001 — 重试，全失败再抛
                 last_err = e

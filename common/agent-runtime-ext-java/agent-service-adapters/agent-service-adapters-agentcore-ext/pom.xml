@@ -24,6 +24,10 @@
         </dependency>
         <dependency>
             <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-spec-ext</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-adapters-agentcore</artifactId>
         </dependency>
         <dependency>
