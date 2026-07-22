@@ -105,13 +105,17 @@ final class VersatileResponseExtractor {
         }
         if (isCompleted && !extractedFields.isEmpty()) {
             if (properties.getResultExtractions() != null && !properties.getResultExtractions().isEmpty()) {
-                Optional<Map<String, Object>> envelope = buildThreeFieldEnvelope();
-                if (envelope.isPresent()) {
-                    return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope.get()));
+                try {
+                    Optional<Map<String, Object>> envelope = buildThreeFieldEnvelope();
+                    if (envelope.isPresent()) {
+                        return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope.get()));
+                    }
+                    return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                            "{\"code\":\"VERSATILE_INTENT_RESULT_CONTRACT\","
+                                    + "\"reason\":\"missing or invalid three-field result\"}"));
+                } catch (IllegalStateException ex) {
+                    return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, ex.getMessage()));
                 }
-                return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
-                        "{\"code\":\"VERSATILE_INTENT_RESULT_CONTRACT\","
-                                + "\"reason\":\"missing or invalid three-field result\"}"));
             }
             Map<String, Object> legacy = new LinkedHashMap<>();
             legacy.put("type", "answer");
@@ -124,17 +128,6 @@ final class VersatileResponseExtractor {
         return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
                 "{\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\","
                         + "\"reason\":\"no End/exception event\"}"));
-    }
-
-    static Optional<String> answerText(Object data) {
-        if (!(data instanceof Map<?, ?> envelope) || !"answer".equals(envelope.get("type"))) {
-            return Optional.empty();
-        }
-        Object output = envelope.get("output");
-        if (output != null && !String.valueOf(output).isBlank()) {
-            return Optional.of(String.valueOf(output));
-        }
-        return Optional.empty();
     }
 
     private static boolean hasText(String value) {
@@ -221,13 +214,8 @@ final class VersatileResponseExtractor {
         if (!hasText(responseContent) || !hasText(intentId)) {
             return Optional.empty();
         }
-        String agentId;
-        try {
-            agentId = agentResolver.resolve(intentId, workflowAgentId)
-                    .orElseThrow(() -> new IllegalStateException("VERSATILE_INTENT_AGENT_ID_UNMAPPED"));
-        } catch (IllegalStateException ex) {
-            return Optional.empty();
-        }
+        String agentId = agentResolver.resolve(intentId, workflowAgentId)
+                .orElseThrow(() -> new IllegalStateException("VERSATILE_INTENT_AGENT_ID_UNMAPPED"));
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("type", "answer");
         envelope.put("output", responseContent);

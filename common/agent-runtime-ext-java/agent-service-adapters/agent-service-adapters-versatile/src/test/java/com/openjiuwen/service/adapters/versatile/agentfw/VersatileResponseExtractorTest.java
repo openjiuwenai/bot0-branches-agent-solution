@@ -260,6 +260,29 @@ class VersatileResponseExtractorTest {
                 .containsEntry("resume_token", "tok-2");
     }
 
+    @Test
+    void emitsAgentIdUnmappedErrorWhenIntentNotInMapping() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        // No agent_id extraction, no intent-agent-mapping → resolver throws UNMAPPED
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"酒店预订\","
+                + "\"intent_id\":\"intent_unmapped\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_ERROR);
+        assertThat(String.valueOf(chunks.get(chunks.size() - 1).getData()))
+                .contains("VERSATILE_INTENT_AGENT_ID_UNMAPPED")
+                .contains("intent_unmapped");
+    }
+
     private static void addExtraction(VersatileProperties props, String match, String get) {
         VersatileProperties.ResultExtraction extraction = new VersatileProperties.ResultExtraction();
         extraction.setMatch(match);
