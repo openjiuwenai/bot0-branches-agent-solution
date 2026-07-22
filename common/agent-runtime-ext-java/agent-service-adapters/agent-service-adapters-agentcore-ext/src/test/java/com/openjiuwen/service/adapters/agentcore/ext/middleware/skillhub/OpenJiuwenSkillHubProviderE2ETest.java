@@ -128,7 +128,8 @@ class OpenJiuwenSkillHubProviderE2ETest {
             }
         }
         assertThat(passed)
-                .as("at least one extracted dir should pass verify() (top-level skills have front matter); extracted=%s",
+                .as("at least one extracted dir should pass verify()"
+                        + " (top-level skills have front matter); extracted=%s",
                         extracted)
                 .isGreaterThan(0);
         // Record both counts for diagnostics; no hard assertion on failed count

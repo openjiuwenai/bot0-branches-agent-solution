@@ -123,7 +123,8 @@ public class SkillHubMiddlewareAutoConfiguration {
         if (decryptor == null) {
             // No decryptor bean = misconfiguration. Refuse to ship the encrypted
             // blob as plaintext; treat as anonymous access instead.
-            log.warn("SkillHub no CredentialDecryptor bean - encryptedToken will be treated as empty (anonymous access)");
+            log.warn("SkillHub no CredentialDecryptor bean -"
+                    + " encryptedToken will be treated as empty (anonymous access)");
             return "";
         }
         try {

@@ -291,6 +291,8 @@ public class SkillHubManager {
     /**
      * Re-register all skills (clear per-agent processed set and register everything again).
      * Used for hot-reload scenarios.
+     *
+     * @param agent the agent instance to re-register skills for
      */
     public void reregister(Object agent) {
         List<Path> all;

@@ -114,7 +114,8 @@ class ReActAgentSkillSmokeTest {
 
         // 7. Assert the unique marker from SKILL.md appears in the response
         assertThat(responseText)
-                .as("LLM response should contain the skill marker '%s' (proves SKILL.md reached the prompt). Response: %s",
+                .as("LLM response should contain the skill marker '%s'"
+                        + " (proves SKILL.md reached the prompt). Response: %s",
                         UNIQUE_MARKER, responseText)
                 .contains(UNIQUE_MARKER);
     }
