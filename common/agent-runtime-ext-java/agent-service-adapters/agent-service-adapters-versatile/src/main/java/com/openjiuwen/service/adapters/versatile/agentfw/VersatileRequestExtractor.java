@@ -12,6 +12,7 @@ import com.openjiuwen.service.spec.dto.ServeRequest;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -35,15 +36,23 @@ final class VersatileRequestExtractor {
     }
 
     RemoteRequest extract(ServeRequest request) {
-        SemanticInput semanticInput = extractSemanticInput(request);
         Map<String, Object> sourceBody = mapValue(request.getMetadata().get("body"));
         Map<String, Object> remoteBody = new LinkedHashMap<>(mapValue(sourceBody.get("custom_data")));
         Map<String, Object> inputs = new LinkedHashMap<>(mapValue(remoteBody.get("inputs")));
+        SemanticInput semanticInput = extractSemanticInput(request);
         if (hasText(semanticInput.query())) {
             inputs.put("query", semanticInput.query());
         }
         if (hasText(semanticInput.intent())) {
             inputs.put("intent", semanticInput.intent());
+        }
+        String intentsJson = serializeIntents();
+        if (intentsJson != null) {
+            inputs.put("intents", intentsJson);
+        }
+        String messagesJson = serializeMessages(request);
+        if (messagesJson != null) {
+            inputs.put("messages", messagesJson);
         }
         if (!inputs.isEmpty()) {
             remoteBody.put("inputs", inputs);
@@ -81,6 +90,31 @@ final class VersatileRequestExtractor {
         }
         String intent = stringValue(structuredContent.get("intent")).orElse(null);
         return new SemanticInput(query, intent);
+    }
+
+    private String serializeIntents() {
+        List<VersatileProperties.Intent> intents = properties.getIntents();
+        if (intents == null || intents.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "VERSATILE_INTENT_CONFIG_MISSING: openjiuwen.service.versatile.intents must be a non-empty list");
+        }
+        for (int i = 0; i < intents.size(); i++) {
+            VersatileProperties.Intent intent = intents.get(i);
+            if (intent == null || !hasText(intent.getId()) || !hasText(intent.getName())) {
+                throw new IllegalArgumentException(
+                        "VERSATILE_INTENT_CONFIG_MISSING: intents[" + i + "] id/name must be non-blank");
+            }
+        }
+        try {
+            return OBJECT_MAPPER.writeValueAsString(intents);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("VERSATILE_INTENT_CONFIG_MISSING: failed to serialize intents", ex);
+        }
+    }
+
+    private String serializeMessages(ServeRequest request) {
+        // Stub — full implementation in Task 3.
+        return null;
     }
 
     private Optional<Object> latestUserContent(ServeRequest request) {

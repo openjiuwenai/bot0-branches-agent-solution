@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests Versatile request extraction rules.
@@ -137,5 +138,67 @@ class VersatileRequestExtractorTest {
 
         assertThat(remote.headers()).containsEntry("x-user-id", "static-user")
                 .containsEntry("Accept", "text/event-stream");
+    }
+
+    @Test
+    void serializesConfiguredIntentsAsJsonArrayString() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent hotel = new VersatileProperties.Intent();
+        hotel.setId("intent_L1_hotel");
+        hotel.setName("酒店");
+        VersatileProperties.Intent flight = new VersatileProperties.Intent();
+        flight.setId("intent_L1_flight");
+        flight.setName("机票");
+        properties.setIntents(List.of(hotel, flight));
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsKey("intents");
+        assertThat(inputs.get("intents")).asString()
+                .contains("\"id\":\"intent_L1_hotel\"")
+                .contains("\"name\":\"酒店\"")
+                .contains("\"id\":\"intent_L1_flight\"")
+                .contains("\"name\":\"机票\"");
+    }
+
+    @Test
+    void rejectsBlankIntentsList() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        properties.setIntents(List.of());
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+
+        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VERSATILE_INTENT_CONFIG_MISSING");
+    }
+
+    @Test
+    void rejectsIntentWithBlankIdOrName() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent bad = new VersatileProperties.Intent();
+        bad.setId("");
+        bad.setName("酒店");
+        properties.setIntents(List.of(bad));
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+
+        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VERSATILE_INTENT_CONFIG_MISSING");
     }
 }
