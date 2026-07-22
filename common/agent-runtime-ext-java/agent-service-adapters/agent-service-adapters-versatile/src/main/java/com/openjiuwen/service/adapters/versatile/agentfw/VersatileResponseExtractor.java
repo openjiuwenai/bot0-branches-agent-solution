@@ -26,13 +26,15 @@ final class VersatileResponseExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final VersatileProperties properties;
+    private final IntentAgentResolver agentResolver;
     private boolean isCompleted;
     private boolean hasFailed;
     private final Map<String, String> extractedFields = new LinkedHashMap<>();
     private String error;
 
-    VersatileResponseExtractor(VersatileProperties properties) {
+    VersatileResponseExtractor(VersatileProperties properties, IntentAgentResolver agentResolver) {
         this.properties = Objects.requireNonNull(properties, "properties");
+        this.agentResolver = Objects.requireNonNull(agentResolver, "agentResolver");
     }
 
     List<QueryChunk> consumeLine(String line) {
@@ -161,10 +163,9 @@ final class VersatileResponseExtractor {
         if (!hasText(responseContent) || !hasText(intentId)) {
             return Optional.empty();
         }
-        IntentAgentResolver resolver = new IntentAgentResolver(properties);
         String agentId;
         try {
-            agentId = resolver.resolve(intentId, workflowAgentId)
+            agentId = agentResolver.resolve(intentId, workflowAgentId)
                     .orElseThrow(() -> new IllegalStateException("VERSATILE_INTENT_AGENT_ID_UNMAPPED"));
         } catch (IllegalStateException ex) {
             return Optional.empty();

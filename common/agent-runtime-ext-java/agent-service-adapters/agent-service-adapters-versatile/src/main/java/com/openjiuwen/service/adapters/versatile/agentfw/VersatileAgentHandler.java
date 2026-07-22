@@ -34,11 +34,13 @@ public class VersatileAgentHandler implements AgentHandler {
     private final VersatileHttpClient client;
     private final VersatileRequestExtractor extractor;
     private final VersatileProperties properties;
+    private final IntentAgentResolver agentResolver;
 
     public VersatileAgentHandler(VersatileProperties properties) {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.client = new VersatileHttpClient(this.properties);
         this.extractor = new VersatileRequestExtractor(this.properties);
+        this.agentResolver = new IntentAgentResolver(properties);
     }
 
     @Override
@@ -59,7 +61,7 @@ public class VersatileAgentHandler implements AgentHandler {
     private List<QueryChunk> invokeForQuery(ServeRequest request) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
         logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
-        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties);
+        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties, agentResolver);
         List<QueryChunk> chunks = new ArrayList<>();
         try {
             client.postStream(remoteRequest, line -> {
@@ -148,7 +150,7 @@ public class VersatileAgentHandler implements AgentHandler {
     private List<QueryChunk> execute(ServeRequest request, QueryStreamObserver observer) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
         logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
-        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties);
+        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties, agentResolver);
         try {
             client.postStream(remoteRequest, line -> {
                 if (observer != null && observer.isCancelled()) {
