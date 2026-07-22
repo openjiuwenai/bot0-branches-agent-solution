@@ -186,15 +186,24 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
         }
         String t = resolver.resolveTopic(eventType, suffix);
         // §6.2②: body is a routing descriptor only — NEVER the payload body / token stream / Task state.
-        // payloadRef rides as a header (conditionally), NOT in the descriptor.
+        // payloadRef rides as a header (conditionally), NOT in the descriptor. P-06: the control plane
+        // (traceId/idempotencyKey/routeHandle/capability/deadline) + inlinePayload ride FIRST-CLASS header
+        // fields — payloadRef is the A2A data reference only, never a control-descriptor token.
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
                 record.tenantId(),
                 record.messageId().value(),
                 record.sourceServiceId(),
                 record.targetServiceId(),
-                record.payloadRef(),              // null for CONTROL_ONLY, non-null for DATA_BEARING
+                record.payloadRef(),              // A2A data reference (null for CONTROL_ONLY)
                 record.correlationId(),           // FEAT-013 cross-hop correlation (mirrored from envelope)
-                record.eventType());              // FEAT-013/014 event-type (mirrored from envelope)
+                record.eventType(),               // FEAT-013/014 event-type (mirrored from envelope)
+                record.traceId(),                 // P-06: control plane first-class, not in payloadRef
+                record.idempotencyKey(),
+                record.routeHandle().value(),     // opaque routeHandle value (tenantScope == tenantId)
+                record.capability(),
+                record.deadlineMillisEpoch(),
+                record.inlinePayload(),          // bounded small body (2b); passthrough, never resolved here
+                record.originalCaller());        // P-06: original caller serviceId (response routing)
         BrokerOutboundMessage outbound = new BrokerOutboundMessage(
                 "target=" + record.targetServiceId(),   // routing descriptor only
                 headers);
@@ -270,7 +279,8 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             }
             BrokerMessageHeaders h = picked.message.headers();
             // consumerServiceId is materialised into the in-flight message at poll time
-            // (ownership until commit/reject).
+            // (ownership until commit/reject). P-06: control plane + inlinePayload mirrored headers→inbound
+            // as first-class fields — the receiver reconstructs control directly, no descriptor decode.
             return Optional.of(new BrokerInboundMessage(
                     h.tenantId(),
                     h.messageId(),
@@ -279,7 +289,14 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
                     consumerServiceId,
                     h.payloadRef(),
                     h.correlationId(),               // FEAT-013 cross-hop correlation (mirrored from headers)
-                    h.eventType()));                  // FEAT-013/014 event-type (mirrored from headers)
+                    h.eventType(),                   // FEAT-013/014 event-type (mirrored from headers)
+                    h.traceId(),                     // P-06: control plane first-class
+                    h.idempotencyKey(),
+                    h.routeHandle(),
+                    h.capability(),
+                    h.deadlineMillisEpoch(),
+                    h.inlinePayload(),             // bounded small body (2b); passthrough
+                    h.originalCaller()));          // P-06: original caller serviceId (response routing)
         }
 
         @Override

@@ -195,6 +195,18 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * @return the broker-agnostic inbound message with the dedup/inbox key fields materialised
      */
     private BrokerInboundMessage toInbound(MessageExt m) {
+        // P-06: control plane + inlinePayload read back from first-class user properties — the receiver
+        // reconstructs control directly, no descriptor decode from payloadRef. payloadRef stays
+        // the A2A data reference. Mirrors InMemoryBroker's consume-side mapping.
+        String deadlineProp = m.getProperty("deadlineMillisEpoch");
+        long deadline = Long.MAX_VALUE; // no deadline / absent (control-only / back-compat)
+        if (deadlineProp != null && !deadlineProp.isBlank()) {
+            try {
+                deadline = Long.parseLong(deadlineProp);
+            } catch (NumberFormatException ignored) {
+                // a malformed value leaves the no-deadline default; the relay never writes one malformed
+            }
+        }
         return new BrokerInboundMessage(
                 m.getProperty("tenantId"),
                 m.getProperty("messageId"),
@@ -203,7 +215,14 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
                 consumerServiceId,
                 m.getProperty("payloadRef"),
                 m.getProperty("correlationId"),
-                softEventType(m.getProperty("eventType")).orElse(null));
+                softEventType(m.getProperty("eventType")).orElse(null),
+                m.getProperty("traceId"),
+                m.getProperty("idempotencyKey"),
+                m.getProperty("routeHandle"),
+                m.getProperty("capability"),
+                deadline,
+                m.getProperty("inlinePayload"),
+                m.getProperty("originalCaller"));
     }
 
     /**

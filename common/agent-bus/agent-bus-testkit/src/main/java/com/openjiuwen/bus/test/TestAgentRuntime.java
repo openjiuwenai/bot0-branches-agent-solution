@@ -4,7 +4,6 @@
 
 package com.openjiuwen.bus.test;
 
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
@@ -220,16 +219,17 @@ public final class TestAgentRuntime {
                 return new ProcessingOutcome(ProcessingOutcome.Outcome.IDLE, null, null, List.of());
             }
             BrokerInboundMessage msg = polled.get();
-            // soft-check the eventType BEFORE full decode: self-produced responses carry a
-            // response payloadRef (taskId=...;status=...) with no eventType= token, so the
-            // full decoder would throw. Skip+commit anything that is not a request descriptor.
-            AgentBusEventType eventType = softEventType(msg.payloadRef()).orElse(null);
+            // P-06: eventType is a first-class inbound field (mirrored from headers at poll), so the
+            // request/response discriminator no longer peeks a payloadRef descriptor. Skip+commit
+            // anything that is not a request (own responses / control echoes carry a response eventType
+            // or none). A request's control plane is read from msg's first-class fields (no decode).
+            AgentBusEventType eventType = msg.eventType();
             if (eventType == null || !isRequestType(eventType)) {
                 // own responses / control echoes — commit (advance our offset) and keep polling
                 consumer.commit(msg);
                 continue;
             }
-            RequestDescriptor desc = decodeDescriptor(msg.payloadRef());
+            RequestDescriptor desc = descriptorFrom(msg);
             List<ForwardingEnvelope> responses = processRequest(msg, desc, nowMillisEpoch);
             consumer.commit(msg);
             String taskId = taskIdFor(desc.idempotencyKey()).orElse(null);
@@ -357,6 +357,11 @@ public final class TestAgentRuntime {
                                                     PlannedResponse p, long nowMillisEpoch) {
         ForwardingRouteHandle route = new ForwardingRouteHandle(req.routeHandleValue(), tenantId);
         // response: source=this runtime, target=original source (gateway/caller). Swap source↔target.
+        // P-06 / FEAT-014:68: the response content (taskId / status / streamRef / reason) rides
+        // inlinePayload (the A2A response envelope as DATA), NOT a control-descriptor payloadRef. The
+        // gateway interprets the inline content; payloadRef is the data reference (absent for these
+        // small responses). This is symmetric with the request path (the body rides inlinePayload).
+        String inline = p.payloadRef(); // planned response content, e.g. "taskId=task-1;status=completed"
         return new ForwardingEnvelope(
                 new ForwardingMessageId("resp-" + respIdSeq.incrementAndGet()),
                 p.eventType(),
@@ -369,8 +374,10 @@ public final class TestAgentRuntime {
                 consumerServiceId,             // sourceServiceId = this runtime
                 msg.sourceServiceId(),         // targetServiceId = original caller
                 req.deadlineMillisEpoch(),
-                ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY,
-                p.payloadRef());               // small control descriptor; not a payload body
+                inline != null ? ForwardingEnvelope.PayloadPolicy.DATA_BEARING
+                               : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY,
+                null,                          // payloadRef: data reference — absent for these small responses
+                inline);                        // inlinePayload: the A2A response envelope content
     }
 
     /**
@@ -414,15 +421,16 @@ public final class TestAgentRuntime {
      * @return the request envelope carrying the control descriptor in its payloadRef
      */
     public static ForwardingEnvelope buildRequest(RequestSpec spec) {
-        RequestDescriptor reqDescriptor = new RequestDescriptor(spec.eventType(), spec.traceId(), spec.correlationId(),
-                spec.idempotencyKey(), spec.routeHandleValue(), spec.capability(), spec.deadlineMillisEpoch());
-        String descriptor = encodeDescriptor(reqDescriptor);
+        // P-06: the control plane rides the envelope's FIRST-CLASS control fields — payloadRef is NO
+        // LONGER a control-descriptor token. This test double carries no data body (it processes
+        // requests by eventType); a data-bearing request would set payloadRef (caller store, 2a) or
+        // inlinePayload (2b). CONTROL_ONLY here is fine for the double's response-generation purpose.
         return new ForwardingEnvelope(
                 new ForwardingMessageId(spec.messageId()),
                 spec.eventType(), spec.tenantId(), spec.traceId(), spec.correlationId(), spec.idempotencyKey(),
                 new ForwardingRouteHandle(spec.routeHandleValue(), spec.tenantId()),
                 spec.capability(), spec.sourceServiceId(), spec.targetServiceId(), spec.deadlineMillisEpoch(),
-                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, descriptor);
+                ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY, null, null);
     }
 
     /**
@@ -445,41 +453,24 @@ public final class TestAgentRuntime {
                 ForwardingStatus.Outbox.PENDING,
                 0, 0L, nowMillisEpoch, nowMillisEpoch, null, null,
                 request.correlationId(),        // FEAT-013 cross-hop correlation (mirrored from request envelope)
-                request.eventType());           // FEAT-013/014 event-type (mirrored from request envelope)
+                request.eventType(),            // FEAT-013/014 event-type (mirrored from request envelope)
+                request.traceId(),              // P-06: control plane mirrored envelope→record (first-class)
+                request.idempotencyKey(),
+                request.capability(),
+                request.deadlineMillisEpoch(),
+                request.inlinePayload(),       // P-06 (2b): bounded small body mirrored
+                request.originalCaller());     // P-06: original caller serviceId mirrored (response routing)
         broker.produce(record, nowMillisEpoch);
     }
 
     //
-    // The codec lives in BrokerControlDescriptor (forwarding.spi.broker,
-    // main) so the production GatewayRuntimeService can build a request payloadRef that
-    // this test double decodes, without main depending on a test fixture. These
-    // package-private delegates keep the call sites (buildRequest / pollAndProcess)
-    // and the RequestDescriptor shape unchanged — behaviour is identical.
+    // P-06: the control plane now rides first-class broker fields, so this double no longer
+    // encodes/decodes a control-descriptor token in payloadRef. descriptorFrom reads the
+    // request's control plane directly off the polled inbound message's first-class fields.
 
-    static String encodeDescriptor(RequestDescriptor req) {
-        return BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                req.eventType(), req.traceId(), req.correlationId(),
-                req.idempotencyKey(), req.routeHandleValue(), req.capability(),
-                req.deadlineMillisEpoch()));
-    }
-
-    /**
-     * Soft-extract the {@code eventType} token from a payloadRef without throwing —
-     * returns an empty Optional if the descriptor has no {@code eventType=} token or the value is
-     * not a known {@link AgentBusEventType}. Used to skip self-produced responses
-     * (which carry {@code taskId=...;status=...}) before the full, validating decode.
-     *
-     * @param payloadRef the descriptor (nullable; null/blank → empty)
-     * @return the event type, or an empty Optional if absent / unknown
-     */
-    static Optional<AgentBusEventType> softEventType(String payloadRef) {
-        return BrokerControlDescriptor.softEventType(payloadRef);
-    }
-
-    static RequestDescriptor decodeDescriptor(String payloadRef) {
-        BrokerControlDescriptor.Descriptor d = BrokerControlDescriptor.decode(payloadRef);
-        return new RequestDescriptor(d.eventType(), d.traceId(), d.correlationId(),
-                d.idempotencyKey(), d.routeHandle(), d.capability(), d.deadlineMillisEpoch());
+    static RequestDescriptor descriptorFrom(BrokerInboundMessage msg) {
+        return new RequestDescriptor(msg.eventType(), msg.traceId(), msg.correlationId(),
+                msg.idempotencyKey(), msg.routeHandle(), msg.capability(), msg.deadlineMillisEpoch());
     }
 
     private static boolean isRequestType(AgentBusEventType t) {

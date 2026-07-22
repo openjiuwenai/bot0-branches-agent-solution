@@ -13,7 +13,6 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
@@ -41,8 +40,9 @@ import java.util.Set;
  * two-hop topic routing (req vs deliver) is not exercised here — that lands with the
  * real 8-topic broker in the two-hop IT (slice E).
  *
- * <p>Covers the four between-hops governance acts: skip-non-request, descriptor
- * decode, correlation match, inbox dedup, plus the transient produce-failure path.
+ * <p>Covers the between-hops governance acts (P-06): skip-non-request (eventType
+ * discriminator), control-plane presence (reject poison with absent control), inbox
+ * dedup, plus the transient produce-failure path.
  */
 class EventBusRelayWorkerTest {
     static final class FakeConsumer implements BrokerForwardingConsumerPort {
@@ -129,11 +129,11 @@ class EventBusRelayWorkerTest {
 
     private static BrokerInboundMessage hop1Request(String tenant, String messageId, String corrId,
                                                    String route, String target) {
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-                "trace-" + messageId, corrId, "idem-" + messageId, route, "a2a", Long.MAX_VALUE));
+        // P-06: the control plane rides FIRST-CLASS fields (no descriptor token in payloadRef).
+        // payloadRef is the A2A data reference; control fields are populated for a valid relayable request.
         return new BrokerInboundMessage(tenant, messageId, "gateway-1", target, "event-bus",
-                desc, corrId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
+                "ref://payload/" + messageId, corrId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                "trace-" + messageId, "idem-" + messageId, route, "a2a", Long.MAX_VALUE, null, null);
     }
 
     private static EventBusRelayWorker newWorker(FakeConsumer c, FakeInbox inbox, InMemoryForwardingOutbox outbox,
@@ -158,23 +158,22 @@ class EventBusRelayWorkerTest {
     }
 
     /**
-     * A resp_in response message: descriptor payloadRef (symmetric to the request) + taskId/status tokens.
+     * A resp_in response message: first-class control plane + response content (taskId/status) in
+     * inlinePayload (P-06: A2A response envelope as DATA; the gateway reads it via responseToken).
      *
      * @param tenant the tenant scope
      * @param messageId the inbound message id
-     * @param corrId the correlation id stamped in both descriptor and native header
+     * @param corrId the correlation id (first-class, mirrors the request)
      * @param eventType the response event type
-     * @param responseTokens the extra taskId/status tokens appended to the descriptor
-     * @return a resp_in inbound message carrying the symmetric descriptor + tokens
+     * @param responseTokens the taskId/status content carried in inlinePayload
+     * @return a resp_in inbound message carrying first-class control + response content
      */
     private static BrokerInboundMessage respInMessage(String tenant, String messageId, String corrId,
                                                        AgentBusEventType eventType, String responseTokens) {
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                eventType, "trace-" + messageId, corrId,
-                "idem-" + messageId, "invocation", "a2a", Long.MAX_VALUE))
-                + ";" + responseTokens;
         return new BrokerInboundMessage(tenant, messageId, "runtime-1", "gateway-1", "event-bus-resp",
-                desc, corrId, eventType);
+                null, corrId, eventType,
+                "trace-" + messageId, "idem-" + messageId, "invocation", "a2a", Long.MAX_VALUE,
+                responseTokens, null);
     }
 
     @Test
@@ -220,19 +219,19 @@ class EventBusRelayWorkerTest {
     }
 
     @Test
-    void rejectsCorrelationMismatchPoison() {
+    void rejectsControlPlaneIncompletePoison() {
         FakeConsumer c = new FakeConsumer();
         FakeInbox inbox = new FakeInbox();
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
         FakeRelay relay = new FakeRelay();
         EventBusRelayWorker w = newWorker(c, inbox, outbox, relay);
 
-        // descriptor corrId "desc-corr" disagrees with the native header corrId "header-corr".
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-                "tr", "desc-corr", "idem", "route-1", "a2a", Long.MAX_VALUE));
+        // P-06: a relayable request whose control plane is absent (traceId/idempotencyKey/routeHandle/
+        // capability null — back-compat 8-arg form) is poison — governance rejects without redelivery (a
+        // broker redelivery cannot fix a missing control field). Replaces the pre-P-06 corrId-mismatch
+        // poison: there is now a single first-class correlationId, so no header/descriptor mismatch exists.
         c.queue.add(new BrokerInboundMessage("t1", "m1", "gateway-1", "runtime-1", "event-bus",
-                desc, "header-corr", AgentBusEventType.CLIENT_INVOCATION_REQUESTED));
+                "ref://x", "c1", AgentBusEventType.CLIENT_INVOCATION_REQUESTED));
 
         EventBusRelayWorker.RelayTickResult r = w.runOnce("t1", 100L, 5);
 
@@ -349,19 +348,17 @@ class EventBusRelayWorkerTest {
     }
 
     @Test
-    void responseRelayRejectsCorrelationMismatchPoison() {
+    void responseRelayRejectsControlPlaneIncompletePoison() {
         FakeConsumer c = new FakeConsumer();
         FakeInbox inbox = new FakeInbox();
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
         FakeRelay relay = new FakeRelay();
         EventBusRelayWorker w = newResponseWorker(c, inbox, outbox, relay);
 
-        // descriptor corrId "desc-corr" disagrees with the native header corrId "header-corr".
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.INVOCATION_RESPONSE,
-                "tr", "desc-corr", "idem", "invocation", "a2a", Long.MAX_VALUE)) + ";taskId=t1;status=snapshot";
+        // P-06: a relayable response whose control plane is absent is poison — governance rejects.
+        // (Replaces the pre-P-06 corrId-mismatch poison; single first-class correlationId → no mismatch.)
         c.queue.add(new BrokerInboundMessage("t1", "m1", "runtime-1", "gateway-1", "event-bus-resp",
-                desc, "header-corr", AgentBusEventType.INVOCATION_RESPONSE));
+                "taskId=t1;status=snapshot", "c1", AgentBusEventType.INVOCATION_RESPONSE));
 
         EventBusRelayWorker.RelayTickResult r = w.runOnce("t1", 100L, 5);
 

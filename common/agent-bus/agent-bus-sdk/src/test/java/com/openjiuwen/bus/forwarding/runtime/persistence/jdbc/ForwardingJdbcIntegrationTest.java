@@ -137,6 +137,39 @@ class ForwardingJdbcIntegrationTest {
     }
 
     @Test
+    void enqueue_claim_round_trips_first_class_control_plane() {
+        // P-06: the control plane (traceId / idempotencyKey / capability / deadline) + inlinePayload +
+        // originalCaller ride FIRST-CLASS outbox columns — they must survive enqueue→claim through the
+        // JDBC adapter. Pre-P-06 they rode payloadRef (a persisted column); P-06 moved them off payloadRef,
+        // so the JDBC layer must persist them as columns or they are lost at the enqueue boundary (and the
+        // relay's control-plane-presence governance then rejects every request).
+        String t = tenant();
+        ForwardingEnvelope env = new ForwardingEnvelope(
+                new ForwardingMessageId("m-ctrl"), AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                t, "trace-ctrl", "corr-ctrl", "idem-ctrl",
+                new ForwardingRouteHandle("route-ctrl", t), "cap-ctrl",
+                "src", "tgt", 1_700_000_000_000L,
+                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, "ref://body/ctrl", "inline-ctrl", "caller-ctrl");
+        assertThat(outbox.enqueue(env, "src", "tgt", System.currentTimeMillis()).accepted()).isTrue();
+
+        long now = System.currentTimeMillis();
+        List<ForwardingOutboxRecord> claimed = outbox.claimDue(t, now, 5, "owner-A", now + 60_000);
+        assertThat(claimed).hasSize(1);
+        ForwardingOutboxRecord rec = claimed.get(0);
+        // control plane round-trips via first-class columns
+        assertThat(rec.traceId()).isEqualTo("trace-ctrl");
+        assertThat(rec.idempotencyKey()).isEqualTo("idem-ctrl");
+        assertThat(rec.capability()).isEqualTo("cap-ctrl");
+        assertThat(rec.deadlineMillisEpoch()).isEqualTo(1_700_000_000_000L);
+        assertThat(rec.correlationId()).isEqualTo("corr-ctrl");
+        assertThat(rec.eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
+        // data: payloadRef (large body reference) + inlinePayload (small body) + originalCaller (routing)
+        assertThat(rec.payloadRef()).isEqualTo("ref://body/ctrl");
+        assertThat(rec.inlinePayload()).isEqualTo("inline-ctrl");
+        assertThat(rec.originalCaller()).isEqualTo("caller-ctrl");
+    }
+
+    @Test
     void concurrent_claim_never_duplicates_a_record() throws Exception {
         String t = tenant();
         for (int i = 0; i < 20; i++) {

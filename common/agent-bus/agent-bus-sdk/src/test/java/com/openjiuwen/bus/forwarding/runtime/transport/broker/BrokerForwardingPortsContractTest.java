@@ -331,6 +331,67 @@ class BrokerForwardingPortsContractTest {
         assertThat(stored.headers().eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
     }
 
+    @Test
+    void produce_then_poll_propagates_control_fields_and_data_as_first_class() {
+        // P-06 contract: the broker hop must NOT overload payloadRef as a control-descriptor token.
+        // The request's control plane (traceId / idempotencyKey / routeHandle / capability / deadline)
+        // rides its OWN first-class header fields; the A2A data reference (payloadRef) and the bounded
+        // inline body (inlinePayload) each ride their OWN fields. A polled inbound therefore exposes
+        // control + data directly — NO descriptor decode from payloadRef is needed to recover
+        // the control plane, and payloadRef stays the data reference it was set to (not a control token).
+        InMemoryBroker broker = broker();
+        ForwardingOutboxRecord record = new ForwardingOutboxRecord(
+                "tenant-a",
+                new ForwardingMessageId("msg-sep"),
+                "source-svc",
+                "target-svc",
+                routeHandle("tenant-a"),          // typed routeHandle (value = "route-for-tenant-a")
+                "data-ref-abc",                   // payloadRef = A2A data reference (NOT a control token)
+                ForwardingStatus.Outbox.PENDING,
+                0,
+                0L,
+                0L,
+                0L,
+                null,
+                null,
+                "corr-msg-sep",                   // correlationId (first-class, FEAT-013)
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED, // eventType (first-class, FEAT-013)
+                "trace-sep",                      // traceId (first-class control plane)
+                "idem-sep",                       // idempotencyKey (first-class control plane)
+                "capability-sep",                 // capability (first-class control plane)
+                1_700_000_000_000L,               // deadlineMillisEpoch (first-class control plane)
+                "inline-body-bytes",             // inlinePayload (bounded small body, 2b)
+                "caller-sep");                   // originalCaller (P-06: response-routing field, first-class)
+
+        broker.produce(record, 1_000L);
+        BrokerForwardingConsumerPort consumer = broker.consumerFor("consumer-a");
+        consumer.subscribe("consumer-a", AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                DeliveryFilter.forRuntime("tenant-a", "target-svc"));
+        BrokerInboundMessage m = consumer.poll(2_000L).orElseThrow();
+
+        // control plane arrives as first-class fields — no descriptor decode from payloadRef needed
+        assertThat(m.traceId()).isEqualTo("trace-sep");
+        assertThat(m.idempotencyKey()).isEqualTo("idem-sep");
+        assertThat(m.routeHandle()).isEqualTo("route-for-tenant-a");
+        assertThat(m.capability()).isEqualTo("capability-sep");
+        assertThat(m.deadlineMillisEpoch()).isEqualTo(1_700_000_000_000L);
+        // data reference + inline body each survive on their own fields (payloadRef is NOT a control token)
+        assertThat(m.payloadRef()).isEqualTo("data-ref-abc");
+        assertThat(m.inlinePayload()).isEqualTo("inline-body-bytes");
+        // P-06: originalCaller (response-routing field) survives the hop as a first-class field
+        assertThat(m.originalCaller()).isEqualTo("caller-sep");
+        // the stored outbound headers carry the same first-class control + data
+        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-sep").orElseThrow();
+        assertThat(stored.headers().traceId()).isEqualTo("trace-sep");
+        assertThat(stored.headers().idempotencyKey()).isEqualTo("idem-sep");
+        assertThat(stored.headers().routeHandle()).isEqualTo("route-for-tenant-a");
+        assertThat(stored.headers().capability()).isEqualTo("capability-sep");
+        assertThat(stored.headers().deadlineMillisEpoch()).isEqualTo(1_700_000_000_000L);
+        assertThat(stored.headers().payloadRef()).isEqualTo("data-ref-abc");
+        assertThat(stored.headers().inlinePayload()).isEqualTo("inline-body-bytes");
+        assertThat(stored.headers().originalCaller()).isEqualTo("caller-sep");
+    }
+
     private InMemoryBroker broker() {
         return new InMemoryBroker(new DefaultBrokerTopicResolver(), "req");
     }

@@ -134,6 +134,29 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
         if (record.payloadRef() != null) {
             message.putUserProperty("payloadRef", record.payloadRef());
         }
+        // P-06: the control plane rides FIRST-CLASS user properties — never overloaded into payloadRef
+        // (payloadRef stays the A2A data reference). Mirrors InMemoryBroker's produce-side mapping.
+        if (record.traceId() != null) {
+            message.putUserProperty("traceId", record.traceId());
+        }
+        if (record.idempotencyKey() != null) {
+            message.putUserProperty("idempotencyKey", record.idempotencyKey());
+        }
+        if (record.routeHandle() != null) {
+            message.putUserProperty("routeHandle", record.routeHandle().value());
+        }
+        if (record.capability() != null) {
+            message.putUserProperty("capability", record.capability());
+        }
+        if (record.deadlineMillisEpoch() != Long.MAX_VALUE) {
+            message.putUserProperty("deadlineMillisEpoch", Long.toString(record.deadlineMillisEpoch()));
+        }
+        if (record.inlinePayload() != null) {
+            message.putUserProperty("inlinePayload", record.inlinePayload());
+        }
+        if (record.originalCaller() != null) {
+            message.putUserProperty("originalCaller", record.originalCaller());
+        }
         return message;
     }
 
