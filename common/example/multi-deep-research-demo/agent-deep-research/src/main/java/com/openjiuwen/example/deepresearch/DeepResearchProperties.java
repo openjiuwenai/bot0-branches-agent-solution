@@ -79,13 +79,28 @@ public class DeepResearchProperties {
               be silently dropped. If you need data from multiple sources, call the tool sequentially
               across multiple turns, not in parallel within one turn.
 
-            Available sub-agent (when injected):
+            Available sub-agents (when injected):
               - search-agent: runs one web search and returns a JSON object
                   {"results": [{"url","title","snippet","source_kind","score"}, ...]}
                 source_kind is one of official | blog | news | forum. Prefer "official" rows.
                 Example call (forward user text verbatim; do NOT rewrite):
                   user text : "豆包 Pro 4K 模型输入价格"
                   tool call : search-agent({"remoteInput": "豆包 Pro 4K 模型输入价格"})
+              - verify-agent: LLM judge that reads a draft comparison report and
+                returns a coverage verdict against three required anchors —
+                对比矩阵 / 引用来源 / 置信度. Emits one summary line
+                ("判定通过" or "判定不通过") plus per-anchor lines of the form
+                "<anchor>已覆盖" (present) or "<anchor>缺失" (missing).
+                When to call: COMPARISON mode ONLY, exactly ONCE, AFTER
+                render_comparison_table has returned and BEFORE writing the
+                final answer. Skip entirely in SINGLE mode — a single value
+                has no draft report to judge.
+                remoteInput MUST be the draft comparison report markdown
+                (comparison matrix + citations + per-field confidence). Do
+                NOT forward the original user query here — that would defeat
+                the judgement.
+                Example call:
+                  tool call : verify-agent({"remoteInput": "# 国内 LLM 对比 (2026 Q2)\\n\\n对比矩阵:\\n| vendor | ... |\\n\\n引用来源:\\n- https://... \\n\\n置信度: ..."})
 
             Long-term memory tools (auto-provided by the memory rail):
               - write_memory({"path": "<file>", "content": "<text>", "append": <bool>}):
@@ -215,6 +230,17 @@ public class DeepResearchProperties {
                 labelled "URL verification (best-effort; sandbox network may be restricted)"
                 and immediately proceed to the final answer. DO NOT retry verify_urls, DO
                 NOT re-search failed URLs, DO NOT wait for a "better" verification pass.
+              - Verification pass via verify-agent (COMPARISON mode; MANDATORY when the
+                verify-agent tool is in your tool list): after render_comparison_table
+                returns and BEFORE writing the natural-language final answer, call
+                verify-agent EXACTLY ONCE with the draft report markdown as remoteInput.
+                Capture whatever it returns verbatim under an appendix labelled
+                "Report verification (best-effort judge; see verify-agent output)". If
+                verify-agent is unreachable / errors / times out, record
+                "verify-agent unavailable — proceeding without external judgement" in
+                that appendix and immediately continue to the final answer. This is a
+                quality gate, NOT a delivery gate — a failed verify-agent call MUST
+                NEVER block the final answer.
               - Hard budget rule 1 (render): if remaining ReAct iterations ≤ 2 and
                 render_comparison_table has not yet been called, STOP searching immediately
                 and render with the data already collected — unknown numeric cells become
