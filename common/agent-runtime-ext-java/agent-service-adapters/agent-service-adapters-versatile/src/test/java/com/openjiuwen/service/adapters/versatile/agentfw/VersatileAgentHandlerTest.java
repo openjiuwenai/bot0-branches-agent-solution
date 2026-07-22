@@ -171,6 +171,10 @@ class VersatileAgentHandlerTest {
 
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("http://127.0.0.1:" + server.getAddress().getPort() + "/run");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
         return properties;
     }
 
