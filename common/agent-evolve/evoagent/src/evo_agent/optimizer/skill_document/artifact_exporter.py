@@ -317,6 +317,7 @@ class ArtifactExporter:
         data = {
             "schema_version": 2,
             "status": "valid",
+            "kind": gate.kind if gate else "inferred",
             "epoch": epoch,
             "base_score": base_score,
             "candidate_score": candidate_score,
@@ -326,6 +327,7 @@ class ArtifactExporter:
                 else None
             ),
             "decision": decision or "unknown",
+            "reason": gate.reason if gate else None,
             "score_threshold": self._score_threshold,
             "selected_failure_rate": (
                 sum(score < self._score_threshold for score in selected_scores)
@@ -413,7 +415,9 @@ class ArtifactExporter:
         result_data = {
             "schema_version": 1,
             "epoch": artifact_epoch,
+            "kind": gate.kind,
             "decision": gate.decision,
+            "reason": gate.reason,
             "score_threshold": self._score_threshold,
             "attempted_count": batch.attempted_count,
             "evaluated_count": batch.evaluated_count,
@@ -447,7 +451,9 @@ class ArtifactExporter:
                 "schema_version": 1,
                 "complete": True,
                 "generated_at": datetime.now(UTC).isoformat(),
+                "kind": gate.kind,
                 "decision": gate.decision,
+                "reason": gate.reason,
                 "coverage": batch.coverage,
                 "result_count": len(results),
                 "failure_count": len(failures),
