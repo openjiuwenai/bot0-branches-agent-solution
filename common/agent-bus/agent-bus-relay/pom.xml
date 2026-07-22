@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.openjiuwen</groupId>
+        <artifactId>agent-bus</artifactId>
+        <version>0.1.0</version>
+    </parent>
+    <artifactId>agent-bus-relay</artifactId>
+    <packaging>jar</packaging>
+    <name>agent-bus-relay</name>
+    <description>Standalone event-bus two-hop governance relay (Spring Boot app, eventbus profile)</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-bus-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-bus-testkit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- FEAT-013/014 registry-discovery-center integration (§7.5 Option A): test-scope only.
+                 GatewayRuntimeService (test) injects AgentDiscoveryService to demo the discovery path;
+                 agent-bus main stays zero-dependency on registry-discovery-center.
+                 classifier=lib: registry-discovery-center is a Spring Boot fat-jar app; the 'lib'
+                 classifier is the plain library jar (classes only, db/migration + app config excluded)
+                 so com.openjiuwen.rdc.* is on the test classpath without leaking Flyway scripts. -->
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>registry-discovery-center</artifactId>
+            <version>0.1.0</version>
+            <classifier>lib</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.zonky.test</groupId>
+            <artifactId>embedded-postgres</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -569,8 +569,9 @@ async def run_optimization(
         )
 
         # 4. 构建 eval_runtime 并读取 dataset manifest
+        evaluator_model_name = (config.evaluator_model or "").strip() or config.optimizer_model
         eval_runtime: dict[str, Any] = {
-            "model_config": ModelRequestConfig(model_name=config.optimizer_model),
+            "model_config": ModelRequestConfig(model_name=evaluator_model_name),
             "model_client_config": _build_model_client_config(config),
         }
         if resolved.evaluator_prompt:
@@ -593,40 +594,23 @@ async def run_optimization(
                 evaluator_config=resolved.evaluator_config,
             )
 
-        # 5. 构建 LLM
+        # 5. 构建 LLM（优化器）与评估器独立 invocation（可使用不同 model_name）
         llm = _create_llm(config)
-        context_window_tokens = (
-            config.custom_sse_context_window_tokens
-            if config.llm_provider == "CustomSSE"
-            else resolved.llm_context_window_tokens
+        llm_invocation = _create_llm_invocation(config, resolved, llm)
+        evaluator_llm = (
+            llm
+            if evaluator_model_name == config.optimizer_model
+            else Model(
+                _build_model_client_config(config),
+                ModelRequestConfig(model_name=evaluator_model_name),
+            )
         )
-        if context_window_tokens is None:
-            raise ValueError("CustomSSE context window must be explicitly configured")
-        llm_invocation = LLMInvocation(
-            llm,
-            capabilities=LLMProviderCapabilities(
-                context_window_tokens=context_window_tokens,
-                supports_max_output_tokens=config.llm_provider != "CustomSSE",
-                supports_finish_reason=config.llm_provider != "CustomSSE",
-                supports_usage=config.llm_provider != "CustomSSE",
-                supports_json_mode=config.llm_provider != "CustomSSE",
-                completion_signal=(
-                    config.custom_sse_completion_signal
-                    if config.llm_provider == "CustomSSE"
-                    else "either"
-                ),
-            ),
-            parallelism=resolved.parallelism,
-            safety_margin_tokens=resolved.llm_safety_margin_tokens,
-            chars_per_token=(
-                config.custom_sse_chars_per_token
-                if config.llm_provider == "CustomSSE"
-                else resolved.llm_chars_per_token
-            ),
-            default_output_reserve_tokens=resolved.llm_output_reserve_tokens,
-            stage_output_reserve_tokens=resolved.llm_stage_output_reserve_tokens,
+        evaluator_invocation = (
+            llm_invocation
+            if evaluator_llm is llm
+            else _create_llm_invocation(config, resolved, evaluator_llm)
         )
-        _bind_evaluator_invocation(dataset.evaluator, llm_invocation)
+        _bind_evaluator_invocation(dataset.evaluator, evaluator_invocation)
 
         # 6. 构建依赖（run_artifact_dir 在进入 AdapterClient 前按模式计算：
         # managed-doc 用 canonical id 作目录名，Skill 用 run_id）。
@@ -1004,10 +988,49 @@ async def _build_operators(
 
 
 def _create_llm(config: EvolveConfig) -> Model:
-    """根据 EvolveConfig 创建 LLM Model 实例。"""
+    """根据 EvolveConfig 创建优化器 LLM Model 实例。"""
     client_config = _build_model_client_config(config)
     model_config = ModelRequestConfig(model_name=config.optimizer_model)
     return Model(client_config, model_config)
+
+
+def _create_llm_invocation(
+    config: EvolveConfig,
+    resolved: Any,
+    llm: Model,
+) -> LLMInvocation:
+    """为给定 Model 构建 run-scoped LLMInvocation（评估器/优化器可各用一份）。"""
+    context_window_tokens = (
+        config.custom_sse_context_window_tokens
+        if config.llm_provider == "CustomSSE"
+        else resolved.llm_context_window_tokens
+    )
+    if context_window_tokens is None:
+        raise ValueError("CustomSSE context window must be explicitly configured")
+    return LLMInvocation(
+        llm,
+        capabilities=LLMProviderCapabilities(
+            context_window_tokens=context_window_tokens,
+            supports_max_output_tokens=config.llm_provider != "CustomSSE",
+            supports_finish_reason=config.llm_provider != "CustomSSE",
+            supports_usage=config.llm_provider != "CustomSSE",
+            supports_json_mode=config.llm_provider != "CustomSSE",
+            completion_signal=(
+                config.custom_sse_completion_signal
+                if config.llm_provider == "CustomSSE"
+                else "either"
+            ),
+        ),
+        parallelism=resolved.parallelism,
+        safety_margin_tokens=resolved.llm_safety_margin_tokens,
+        chars_per_token=(
+            config.custom_sse_chars_per_token
+            if config.llm_provider == "CustomSSE"
+            else resolved.llm_chars_per_token
+        ),
+        default_output_reserve_tokens=resolved.llm_output_reserve_tokens,
+        stage_output_reserve_tokens=resolved.llm_stage_output_reserve_tokens,
+    )
 
 
 def _bind_evaluator_invocation(evaluator: Any, invocation: LLMInvocation) -> None:

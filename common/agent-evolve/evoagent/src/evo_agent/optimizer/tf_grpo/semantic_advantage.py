@@ -5,11 +5,21 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from evo_agent.optimizer.tf_grpo.experience_library import (
     ExperienceLibrary,
     LibraryOperation,
+)
+from evo_agent.optimizer.tf_grpo.prompts import (
+    LIBRARY_UPDATE,
+    ROLLOUT_SUMMARY,
+    SEMANTIC_ADVANTAGE,
+    SEMANTIC_ADVANTAGE_NOTE_NO_VARIANCE,
+    SEMANTIC_ADVANTAGE_NOTE_WITH_VARIANCE,
+    load_tf_grpo_prompt,
+    render_prompt,
 )
 
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
@@ -107,6 +117,8 @@ def build_rollout_summary_prompt(
     case_briefs: list[CaseOutcomeBrief],
     mean_score: float,
     max_skill_chars: int = 20000,
+    scenario_name: str | None = None,
+    scenarios_dir: Path | str | None = None,
 ) -> str:
     """为后续组内语义优势抽取生成单变体 rollout 摘要提示词。"""
     skill = _clip(skill_content or "", max_skill_chars)
@@ -119,32 +131,17 @@ def build_rollout_summary_prompt(
             f"- 预测/输出: {brief.prediction or '（空）'}{reason_line}"
         )
     cases_text = "\n\n".join(case_blocks) if case_blocks else "（无已评分用例。）"
-    return f"""请总结该技能文档变体的一次 rollout，供后续组内相对比较使用。
-
-**变体 id：** {variant_id}
-**平均分：** {mean_score:.4f}（共 {len(case_briefs)} 条用例）
-
-**技能变体（SKILL.md）：**
-{skill}
-
-**各用例结果：**
-{cases_text}
-
-请写一份约 8–12 条要点的简洁摘要，便于后续跨变体对比。
-摘要必须包含：
-1. 总体结果：平均分；按 case id 列出成功与失败用例
-2. 技能侧重：本 SKILL.md 强调的具体规则/章节/示例（不要空泛称赞）
-3. 错误模式：期望标签与预测之间的反复偏差；有关键错误字段时请引用
-4. 可能的技能缺口：导致失败的具体缺失说明 / 边界情况 / 输出契约问题
-5. 高分用例上应保留的优势：看似有效的具体指导
-
-约束：
-- 不得编造所给输出之外的 case 事实
-- 不要重写或整篇粘贴 SKILL.md
-- 只输出摘要正文（不要前言）
-
-Rollout 摘要：
-"""
+    load_kw = {"scenario_name": scenario_name, "scenarios_dir": scenarios_dir}
+    return render_prompt(
+        load_tf_grpo_prompt(ROLLOUT_SUMMARY, **load_kw),
+        {
+            "variant_id": variant_id,
+            "mean_score": f"{mean_score:.4f}",
+            "n_cases": len(case_briefs),
+            "skill_content": skill,
+            "cases_text": cases_text,
+        },
+    )
 
 
 def build_semantic_advantage_prompt(
@@ -152,6 +149,9 @@ def build_semantic_advantage_prompt(
     experience_library: ExperienceLibrary,
     *,
     domain: str = "markdown",
+    has_score_variance: bool = True,
+    scenario_name: str | None = None,
+    scenarios_dir: Path | str | None = None,
 ) -> str:
     existing = experience_library.to_prompt_context(domain)
     parts = []
@@ -161,60 +161,41 @@ def build_semantic_advantage_prompt(
             f"{r.summary or '（无摘要）'}"
         )
     summaries_text = "\n\n".join(parts)
-    return f"""请分析多次技能优化尝试，提炼关键洞察。
-
-{existing if existing else "（经验库为空。）"}
-
-**当前 Rollout 组：**
-{summaries_text}
-
-请提炼 2–3 条关于「何种变体更成功」的关键洞察，重点关注：
-- 与更高分数相关的模式
-- 低分变体中的常见错误
-- 需要**补充**的具体缺失要素
-- 对后续优化可执行的指导
-
-以简洁要点形式输出，并给出具体建议。
-
-关键洞察：
-"""
+    load_kw = {"scenario_name": scenario_name, "scenarios_dir": scenarios_dir}
+    note_name = (
+        SEMANTIC_ADVANTAGE_NOTE_WITH_VARIANCE
+        if has_score_variance
+        else SEMANTIC_ADVANTAGE_NOTE_NO_VARIANCE
+    )
+    variance_note = load_tf_grpo_prompt(note_name, **load_kw)
+    return render_prompt(
+        load_tf_grpo_prompt(SEMANTIC_ADVANTAGE, **load_kw),
+        {
+            "experience_context": existing if existing else "（经验库为空。）",
+            "summaries_text": summaries_text,
+            "variance_note": variance_note,
+        },
+    )
 
 
 def build_library_update_prompt(
     semantic_advantage: str,
     experience_library: ExperienceLibrary,
+    *,
+    scenario_name: str | None = None,
+    scenarios_dir: Path | str | None = None,
 ) -> str:
     current = "\n".join(
         f"{i + 1}. {e.content}" for i, e in enumerate(experience_library.experiences)
     )
-    return f"""请管理技能优化用的经验库。
-
-**当前经验库：**
-{current if current else "（空）"}
-
-**新洞察：**
-{semantic_advantage}
-
-决定如何更新经验库。聚焦**可执行、具体**的指导。
-
-操作类型（operation 字段保持英文）：
-- Add：新增带具体建议的经验
-- Delete：删除空泛或无用的经验（0-based 下标）
-- Modify：把某条经验改得更具体（0-based 下标）
-- Keep：不做变更
-
-仅输出 JSON 列表：
-```json
-[
-  {{"operation": "Add", "content": "补充带输入/输出的具体用法示例"}},
-  {{"operation": "Modify", "index": 0, "content": "补充非法输入等边界情况说明"}},
-  {{"operation": "Delete", "index": 1}},
-  {{"operation": "Keep"}}
-]
-```
-
-操作：
-"""
+    load_kw = {"scenario_name": scenario_name, "scenarios_dir": scenarios_dir}
+    return render_prompt(
+        load_tf_grpo_prompt(LIBRARY_UPDATE, **load_kw),
+        {
+            "current_library": current if current else "（空）",
+            "semantic_advantage": semantic_advantage,
+        },
+    )
 
 
 def parse_library_operations(raw: str) -> list[LibraryOperation]:

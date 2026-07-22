@@ -107,6 +107,47 @@ def test_build_rollout_summary_prompt_includes_skill_and_cases() -> None:
     assert "输出契约" in prompt
     assert "case-1" in prompt
     assert "case-2" in prompt
-    assert "可能的技能缺口" in prompt
+    assert "期望结果" in prompt
+    assert "3–5 条" in prompt
+    assert "期望 vs 实际" in prompt
     assert "平均分" in prompt
     assert "各用例结果" in prompt
+    assert "8–12" not in prompt
+    assert "6–10" not in prompt
+
+
+def test_build_semantic_advantage_prompt_limits_insight_count() -> None:
+    from evo_agent.optimizer.tf_grpo.semantic_advantage import build_semantic_advantage_prompt
+
+    lib = ExperienceLibrary()
+    prompt = build_semantic_advantage_prompt(
+        [
+            RolloutSummary("a", "# a", 0.2, summary="低分"),
+            RolloutSummary("b", "# b", 0.8, summary="高分"),
+        ],
+        lib,
+    )
+    assert "1–2 条" in prompt
+    assert "共性执行洞察" in prompt
+    assert "组内差异" in prompt
+    assert "下一步" in prompt
+    assert "宁少勿滥" in prompt
+    assert "2–3 条" not in prompt
+
+
+def test_build_semantic_advantage_prompt_no_variance_mode() -> None:
+    from evo_agent.optimizer.tf_grpo.semantic_advantage import build_semantic_advantage_prompt
+
+    lib = ExperienceLibrary()
+    prompt = build_semantic_advantage_prompt(
+        [
+            RolloutSummary("a", "# a", 0.0, summary="弱"),
+            RolloutSummary("b", "# b", 0.0, summary="稍好"),
+        ],
+        lib,
+        has_score_variance=False,
+    )
+    assert "无分数方差" in prompt
+    assert "共性执行洞察" in prompt
+    assert "组内差异" in prompt
+    assert "质性差异" in prompt

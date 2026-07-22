@@ -36,11 +36,25 @@ class _FakeOperator:
 
 
 class _Exporter:
+    def __init__(self) -> None:
+        self.experience_exports: list[tuple[int, dict[str, Any], str]] = []
+
     def export_skill_snapshot(self, *args: Any, **kwargs: Any) -> None:
         return None
 
+    def export_experience_library(
+        self,
+        epoch: int,
+        library: dict[str, Any],
+        *,
+        operator_id: str = "",
+    ) -> None:
+        self.experience_exports.append((epoch, library, operator_id))
+
 
 def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
+    from evo_agent.optimizer.tf_grpo.experience_library import ExperienceLibrary
+
     op = _FakeOperator("---\nname: demo\n---\n\n# Base Skill\n")
     opt = TfGrpoOptimizer.__new__(TfGrpoOptimizer)
 
@@ -49,10 +63,16 @@ def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
     opt._group_size = group_size
     opt._cases_per_variant = 2
     opt._variant_temperature = 1.5
+    opt._semantic_advantage_temperature = 0.95
     opt._validate_variant_completeness = False
+    opt._learn_without_score_variance = False
     opt._rollout_temperature = None
+    opt._scenario_name = None
+    opt._scenarios_dir = None
     opt._preserve_frontmatter = True
-    opt._experience_libs = {}
+    opt._experience_libs = {
+        "demo_skill": ExperienceLibrary(domain="markdown", max_experiences=10)
+    }
     opt._artifact_epoch = -1
     opt._current_epoch = -1
     opt._global_step = 0
@@ -73,6 +93,9 @@ def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
     opt._sample_cases = TfGrpoOptimizer._sample_cases.__get__(opt, TfGrpoOptimizer)
     opt._push_phase = TfGrpoOptimizer._push_phase.__get__(opt, TfGrpoOptimizer)
     opt._on_step_apply = TfGrpoOptimizer._on_step_apply.__get__(opt, TfGrpoOptimizer)
+    opt._export_experience_libraries = TfGrpoOptimizer._export_experience_libraries.__get__(
+        opt, TfGrpoOptimizer
+    )
     setattr(
         opt,
         "_read_skills_from_operators",
@@ -129,6 +152,12 @@ async def test_backward_generates_variants_hot_updates_and_keeps_best() -> None:
     assert len(op.updates) >= 2
     assert "better" in op.get_state()["skill_content"]
     assert "better" in opt._last_candidate_skill_by_operator["demo_skill"]
+    exporter = cast(_Exporter, opt._artifact_exporter)
+    assert len(exporter.experience_exports) == 1
+    epoch, library, operator_id = exporter.experience_exports[0]
+    assert epoch == 0
+    assert operator_id == ""  # single-operator → unprefixed filename
+    assert "experiences" in library
 
 
 @pytest.mark.asyncio

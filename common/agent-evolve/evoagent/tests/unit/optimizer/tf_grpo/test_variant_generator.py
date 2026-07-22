@@ -36,7 +36,11 @@ def test_build_variant_prompt_includes_experience() -> None:
     assert "禁止截断" in prompt
     assert "第 2 轮" in prompt
     assert "已学习经验" in prompt
+    assert "严格遵循" in prompt
+    assert "禁止偏离" in prompt
+    assert "另选无关改进轴" in prompt
     assert "自由探索" not in prompt
+    assert "不同改进轴" not in prompt
 
 
 def test_build_variant_prompt_empty_experience_allows_exploration() -> None:
@@ -50,6 +54,8 @@ def test_build_variant_prompt_empty_experience_allows_exploration() -> None:
     assert "新增条款" in prompt
     assert "删除/收紧" in prompt
     assert "多样性要求" in prompt
+    assert "不同改进轴" in prompt
+    assert "严格遵循" not in prompt
 
 
 def test_reject_truncated_skill_with_unclosed_fence() -> None:
