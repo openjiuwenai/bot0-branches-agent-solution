@@ -325,6 +325,10 @@ class VersatileRequestExtractorTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> bodyInputs = (Map<String, Object>) remote.body().get("inputs");
         assertThat(bodyInputs).containsEntry("resume_token", "tok-123")
-                .containsEntry("user_response", "上海 今晚");
+                .containsEntry("user_response", "上海 今晚")
+                .doesNotContainKey("query")
+                .doesNotContainKey("intent")
+                .doesNotContainKey("intents")
+                .doesNotContainKey("messages");
     }
 }
