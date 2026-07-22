@@ -120,6 +120,31 @@ public class Router {
         });
     }
 
+    /**
+     * Route a resume to its original Task owner via the sticky index (L2 §5).
+     * Read-only: does NOT call {@code searchInstancesByAgentId} (no re-selection).
+     * A sticky miss is a definite failure (never a new create / fallback search).
+     * Runtime association errors (-32001/-32004) are passed through in the body.
+     *
+     * @param ctx governance context (tenantId, taskId, rawBody)
+     * @return the runtime response body (passed through as-is)
+     */
+    public String routeResume(GovernanceContext ctx) {
+        String taskId = ctx.taskId();
+        String routeHandle = stickyIndex.find(taskId)
+                .orElseThrow(() -> new GovernanceException(HttpStatus.NOT_FOUND, "RESUME_OWNER_UNKNOWN",
+                        "No sticky owner for task " + taskId));
+        ResolvedRoute resolved;
+        try {
+            resolved = rdc.resolveRouteHandle(routeHandle, ctx.tenantId());
+        } catch (RouteResolutionException ex) {
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_RESOLVE_FAILED",
+                    "Cannot resolve route handle", ex);
+        }
+        String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
+        return runtime.invokeSync(resolved.endpointUrl(), outbound);
+    }
+
     /** Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10). */
     String injectTenantId(String rawBody, String tenantId) {
         try {

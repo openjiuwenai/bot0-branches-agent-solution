@@ -138,4 +138,42 @@ class RouterTest {
         // sticky bound from the first frame carrying a taskId
         assertThat(sticky.find("task-stream")).contains("h1");
     }
+
+    private static GovernanceContext resumeCtx(String taskId) {
+        GovernanceContext ctx = new GovernanceContext();
+        ctx.setTenantId("tenant-1");
+        ctx.setTaskId(taskId);
+        ctx.setRawBody("{\"jsonrpc\":\"2.0\",\"params\":{\"message\":{\"taskId\":\"" + taskId + "\",\"parts\":[]}}}");
+        return ctx;
+    }
+
+    @Test
+    void resumeReachesStickyOwnerWithoutSearch() {
+        sticky.put("task-7", "h1");
+        rdc.setResolved(new ResolvedRoute(ENDPOINT));
+        runtime.setResponse(TASK_BODY);
+        String resp = router.routeResume(resumeCtx("task-7"));
+        assertThat(resp).isEqualTo(TASK_BODY);
+        assertThat(runtime.lastEndpoint()).isEqualTo(ENDPOINT);
+        assertThat(runtime.lastBody()).contains("\"tenantId\":\"tenant-1\"");
+        // resume must NOT re-select via search (S3 invariant)
+        assertThat(rdc.lastAgentId()).isNull();
+    }
+
+    @Test
+    void stickyMissReturnsResumeOwnerUnknown() {
+        GovernanceException ge = (GovernanceException) catchThrowable(() -> router.routeResume(resumeCtx("ghost")));
+        assertThat(ge).isNotNull();
+        assertThat(ge.code()).isEqualTo("RESUME_OWNER_UNKNOWN");
+    }
+
+    @Test
+    void resumePassesThroughRuntimeAssociationError() {
+        sticky.put("task-7", "h1");
+        rdc.setResolved(new ResolvedRoute(ENDPOINT));
+        runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"error\":{\"code\":-32001,\"message\":\"Task not found\"}}");
+        String resp = router.routeResume(resumeCtx("task-7"));
+        // association error passed through as-is, not transformed into a new create
+        assertThat(resp).contains("-32001");
+    }
 }

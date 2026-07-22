@@ -147,10 +147,13 @@ public class A2aController {
                 throw ex;
             }
         }
-        // resume path (sticky) is wired in a later slice (S3).
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-                .body("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32601,"
-                        + "\"message\":\"resume forwarding not wired (FEAT-011 WIP)\"}}");
+        // resume path — route to the original owner via the sticky index.
+        try {
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(router.routeResume(context));
+        } catch (GovernanceException ex) {
+            ex.setTraceId(context.traceId());
+            throw ex;
+        }
     }
 
     private static String resolveTraceId(String traceparent) {

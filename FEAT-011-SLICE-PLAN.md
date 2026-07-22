@@ -121,10 +121,10 @@ common/agent-gateway/
 | T-S2-5 | S2-sync | RouterTest#multiInstancePicksFirstCandidate | unit | ✅ |
 | T-S2-6 | S2-sync | RouterTest#reentryWithExplicitAgentDoesNotUseDefault | unit | ✅ |
 | T-S2-7 | S2-sync | RouterTest#explicitAgentRoutesToFirstCandidateAndWritesSticky（sticky 写入）+ A2aControllerWebMvcTest#createWithAgentForwardsAndReturnsTaskBody（响应无 routeHandle） | unit+it | ✅ |
-| T-S3-1 | S3 | StickyIndexTest.resumeReachesOriginal / A2aFacadeResumeTest | unit+it | 待写 |
-| T-S3-2 | S3 | StickyIndexTest.missReturnsFailNoNewTask | unit+it | 待写 |
-| T-S3-3 | S3 | StickyIndexTest.resumeMissingTaskIdNotSticky | unit | 待写 |
-| T-S3-4 | S3 | StickyIndexTest.sameTaskIdTwoResumesSameOwner | unit | 待写 |
+| T-S3-1 | S3 | RouterTest#resumeReachesStickyOwnerWithoutSearch + A2aControllerWebMvcTest#resumeReachesStickyOwnerWithoutSearch（不调 search） | unit+it | ✅ |
+| T-S3-2 | S3 | RouterTest#stickyMissReturnsResumeOwnerUnknown + A2aControllerWebMvcTest#stickyMissReturnsResumeOwnerUnknown | unit+it | ✅ |
+| T-S3-3 | S3 | ParamValidatorTest#resumeMissingTaskIdIsTreatedAsCreate（缺 taskId → 创建类，非 sticky） | unit | ✅ |
+| T-S3-4 | S3 | RouterTest#resumeReachesStickyOwnerWithoutSearch + 关联错误透传 #resumePassesThroughRuntimeAssociationError（同 taskId 同 owner；StickyIndex 返回稳定 handle） | unit | ✅ |
 | T-S4-1 | S4 | A2aFacadeContinueInputTest.reachesOriginalOwner | it | 待写 |
 | T-S4-2 | S4 | A2aFacadeContinueInputTest.associationFailExplicit | it | 待写 |
 | T-S4-3 | S4 | A2aFacadeContinueInputTest.noTaskIdNotS4 | it | 待写 |
@@ -132,7 +132,7 @@ common/agent-gateway/
 | T-S5-1 | S5 | RouterTest#emptyCandidatesReturnsRouteNoCandidatesAndDoesNotCallRuntime + A2aControllerWebMvcTest#emptyCandidatesReturnsRouteNoCandidates | unit+it | ✅ |
 | T-S5-2 | S5 | RouterTest#resolveFailureReturnsRouteResolveFailedAndDoesNotCallRuntime + A2aControllerWebMvcTest#resolveFailureReturnsRouteResolveFailedAndSkipsRuntime | unit+it | ✅ |
 | T-S5-3 | S5 | A2aControllerWebMvcTest#noAuthorizationReturns401AuthMissing（治理拒绝 AUTH_*，非 ROUTE_*） | it | ✅ |
-| T-S5-4 | S3 | sticky 未命中 → S3 失败（非 S5）；S3 切片覆盖 | unit+it | S3 |
+| T-S5-4 | S3 | RouterTest#stickyMissReturnsResumeOwnerUnknown（sticky 未命中 → RESUME_OWNER_UNKNOWN，非 ROUTE_* S5） | unit | ✅ |
 | T-S5-5 | S2-sync | RouterTest#defaultAgentUnconfiguredIsConfigError | unit | ✅ |
 | SC-1 | S2-sync/S5 | （聚合）合法创建到达 runtime / 失败明确 | — | 待写 |
 | SC-2 | S2-SSE | SseBridgeTest（逐帧桥接/释放流/空流；Gateway 不生成 token——结构透传） | — | ✅ |
@@ -172,7 +172,7 @@ common/agent-gateway/
 | S2-sync | ✅ GREEN（60 测全过） | T-S2-1/2/4/5/6/7（见 §5；T-S2-4 S5 专测后续补） | feat(gateway): FEAT-011 S2-sync |
 | S2-SSE | ✅ GREEN（65 测全过） | T-S2-3、SC-2（见 §5） | feat(gateway): FEAT-011 S2-SSE |
 | S5 | ✅ GREEN（66 测全过） | T-S5-1/2/3/5（见 §5；T-S5-4 归 S3） | feat(gateway): FEAT-011 S5 |
-| S3 | ⏳ 下一片 | T-S3-1..4 | — |
-| S4 | 待办（可选） | T-S4-1..4 | — |
+| S3 | ✅ GREEN（70 测全过） | T-S3-1..4、T-S5-4（见 §5） | feat(gateway): FEAT-011 S3 |
+| S4 | ⏳ 下一片（可选） | T-S4-1..4 | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）。（TD-2 traceId 入口贯穿已在 S1-G5 解决。）

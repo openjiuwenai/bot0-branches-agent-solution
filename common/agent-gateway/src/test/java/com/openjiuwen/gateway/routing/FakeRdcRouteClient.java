@@ -47,6 +47,12 @@ public class FakeRdcRouteClient implements RdcRouteClient {
         return lastAgentId;
     }
 
+    /** Clear recorded search arguments (so tests asserting "no search" start clean). */
+    public void reset() {
+        this.lastTenantId = null;
+        this.lastAgentId = null;
+    }
+
     @Override
     public List<AgentCardRoute> searchInstancesByAgentId(String tenantId, String agentId) {
         this.lastTenantId = tenantId;

@@ -144,6 +144,7 @@ class A2aControllerWebMvcTest {
         rdc.setResolved(new ResolvedRoute("http://rt:8000"));
         runtime.setResponse(TASK_RESPONSE);
         runtime.reset();
+        rdc.reset();
     }
 
     // --- G1 ---
@@ -239,14 +240,6 @@ class A2aControllerWebMvcTest {
                 .andExpect(status().isOk());
     }
 
-    @Test
-    void resumeWithTaskIdIsNotCreateRoute() throws Exception {
-        // resume carries taskId -> not the create route (placeholder until S3).
-        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
-                        .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
-                .andExpect(status().isNotImplemented());
-    }
-
     // --- G5 ---
 
     @Test
@@ -325,5 +318,28 @@ class A2aControllerWebMvcTest {
                         .contains("event: jsonrpc", "data: {\"result\":{\"id\":\"task-s\"}}"));
         // sticky bound from the first streaming frame carrying a taskId
         assertThat(sticky.find("task-s")).contains("h1");
+    }
+
+    // --- S3 resume (sticky) ---
+
+    @Test
+    void resumeReachesStickyOwnerWithoutSearch() throws Exception {
+        sticky.put("task-1", "h1");
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value("task-9"));
+        // resume routed to the resolved owner; no RDC search performed
+        assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
+        assertThat(rdc.lastAgentId()).isNull();
+    }
+
+    @Test
+    void stickyMissReturnsResumeOwnerUnknown() throws Exception {
+        // sticky cleared in @BeforeEach -> task-1 has no owner
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESUME_OWNER_UNKNOWN"));
     }
 }
