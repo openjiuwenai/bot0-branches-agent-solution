@@ -58,6 +58,7 @@ final class VersatileRequestExtractor {
         if (!inputs.isEmpty()) {
             remoteBody.put("inputs", inputs);
         }
+        fillResumeRequestTemplate(remoteBody, request);
 
         Map<String, String> headers = new LinkedHashMap<>();
         Map<String, Object> sourceHeaders = mapValue(request.getMetadata().get("headers"));
@@ -156,6 +157,59 @@ final class VersatileRequestExtractor {
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("VERSATILE_INTENT_INPUT_MISSING: failed to serialize messages", ex);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void fillResumeRequestTemplate(Map<String, Object> remoteBody, ServeRequest request) {
+        VersatileProperties.Interrupt interrupt = properties.getInterrupt();
+        if (interrupt == null || interrupt.getResumeRequestTemplate() == null) {
+            return;
+        }
+        Map<String, Object> template = interrupt.getResumeRequestTemplate().getBody();
+        if (template == null || template.isEmpty()) {
+            return;
+        }
+        Map<String, Object> source = mapValue(request.getMetadata().get("body"));
+        Map<String, Object> filled = deepFill(template, source);
+        remoteBody.putAll(filled);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> deepFill(Map<String, Object> template, Map<String, Object> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : template.entrySet()) {
+            result.put(entry.getKey(), resolveTemplateValue(entry.getValue(), source));
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object resolveTemplateValue(Object value, Map<String, Object> source) {
+        if (value instanceof String text) {
+            return resolvePlaceholders(text, source);
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> nested = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    nested.put(String.valueOf(entry.getKey()),
+                            resolveTemplateValue(entry.getValue(), source));
+                }
+            }
+            return nested;
+        }
+        return value;
+    }
+
+    private static String resolvePlaceholders(String text, Map<String, Object> source) {
+        String result = text;
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (entry.getValue() == null) {
+                continue;
+            }
+            result = result.replace("{" + entry.getKey() + "}", String.valueOf(entry.getValue()));
+        }
+        return result;
     }
 
     private Optional<Object> latestUserContent(ServeRequest request) {
