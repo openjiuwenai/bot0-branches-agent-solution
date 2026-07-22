@@ -76,37 +76,86 @@ public class VersatileAgentHandler implements AgentHandler {
     }
 
     private Map<String, Object> resolveQueryResult(ServeRequest request, List<QueryChunk> chunks) {
-        Optional<String> answer = Optional.empty();
         boolean isInterrupted = false;
+        Map<String, Object> interruptPayload = null;
         List<String> interruptMessages = new ArrayList<>();
+        Map<String, Object> threeFieldEnvelope = null;
         for (QueryChunk chunk : chunks) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
                         request.getConversationId(), chunk.getData());
                 throw new IllegalStateException(String.valueOf(chunk.getData()));
             }
-            Optional<String> answerText = VersatileResponseExtractor.answerText(chunk.getData());
-            if (answerText.isPresent()) {
-                answer = Optional.of(answerText.get());
+            Optional<Map<String, Object>> envelope = answerEnvelope(chunk.getData());
+            if (envelope.isPresent()) {
+                threeFieldEnvelope = envelope.get();
                 continue;
             }
             if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType())) {
                 isInterrupted = true;
+                interruptPayload = chunk.getData() instanceof Map<?, ?> m
+                        ? copyToStringMap(m) : null;
             } else {
                 interruptMessages.add(String.valueOf(chunk.getData()));
             }
         }
-        if (answer.isPresent()) {
-            return assistantResult(answer.get());
+        if (threeFieldEnvelope != null) {
+            return threeFieldResult(threeFieldEnvelope);
         }
         if (isInterrupted) {
-            String message = interruptMessage(interruptMessages);
-            Map<String, Object> result = assistantResult(message);
-            result.put("_interrupt", Map.of("message", message));
+            Map<String, Object> result = assistantResult(
+                    interruptPayload != null && interruptPayload.get("message") != null
+                            ? String.valueOf(interruptPayload.get("message"))
+                            : interruptMessage(interruptMessages));
+            if (interruptPayload != null) {
+                result.put("_interrupt", interruptPayload);
+            }
             log.info("Versatile query returned interrupt conversation_id={}", request.getConversationId());
             return result;
         }
         return assistantResult(interruptMessage(interruptMessages));
+    }
+
+    private static Optional<Map<String, Object>> answerEnvelope(Object data) {
+        if (!(data instanceof Map<?, ?> envelope) || !"answer".equals(envelope.get("type"))) {
+            return Optional.empty();
+        }
+        if (envelope.get("response_content") == null && envelope.get("output") == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> typed = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : envelope.entrySet()) {
+            typed.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return Optional.of(typed);
+    }
+
+    private static Map<String, Object> threeFieldResult(Map<String, Object> envelope) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("role", "assistant");
+        Object responseContent = envelope.get("response_content");
+        Object contentText = responseContent != null ? responseContent : envelope.get("output");
+        result.put("content", String.valueOf(contentText));
+        if (responseContent != null) {
+            result.put("response_content", responseContent);
+        }
+        if (envelope.get("intent_id") != null) {
+            result.put("intent_id", envelope.get("intent_id"));
+        }
+        if (envelope.get("agent_id") != null) {
+            result.put("agent_id", envelope.get("agent_id"));
+        }
+        return result;
+    }
+
+    private static Map<String, Object> copyToStringMap(Map<?, ?> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry.getKey() != null) {
+                result.put(String.valueOf(entry.getKey()), entry.getValue());
+            }
+        }
+        return result;
     }
 
     private static String interruptMessage(List<String> messages) {
