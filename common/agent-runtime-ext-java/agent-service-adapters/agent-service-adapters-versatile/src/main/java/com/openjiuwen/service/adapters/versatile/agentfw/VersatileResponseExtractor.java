@@ -28,7 +28,7 @@ final class VersatileResponseExtractor {
     private final VersatileProperties properties;
     private boolean isCompleted;
     private boolean hasFailed;
-    private String result;
+    private final Map<String, String> extractedFields = new LinkedHashMap<>();
     private String error;
 
     VersatileResponseExtractor(VersatileProperties properties) {
@@ -46,9 +46,18 @@ final class VersatileResponseExtractor {
 
         Optional<JsonNode> json = readTree(data.get());
         if (shouldExtractResult(data.get(), json)) {
-            Optional<String> extracted = extractResult(json.get());
-            if (extracted.isPresent()) {
-                result = extracted.get();
+            if (properties.getResultExtractions() == null || properties.getResultExtractions().isEmpty()) {
+                Optional<String> extracted = extractLegacyText(json.get());
+                if (extracted.isPresent()) {
+                    extractedFields.put("response_content", extracted.get());
+                }
+            } else {
+                extractResultFields(json.get());
+                if (!hasText(extractedFields.get("response_content"))) {
+                    hasFailed = true;
+                    error = "{\"code\":\"VERSATILE_INTENT_RESULT_CONTRACT\","
+                            + "\"reason\":\"missing response_content in three-field result\"}";
+                }
             }
             return new ArrayList<>();
         }
@@ -69,8 +78,20 @@ final class VersatileResponseExtractor {
         if (hasFailed) {
             return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, error));
         }
-        if (isCompleted && result != null) {
-            return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, answerEnvelope(result)));
+        if (isCompleted && !extractedFields.isEmpty()) {
+            if (properties.getResultExtractions() != null && !properties.getResultExtractions().isEmpty()) {
+                Optional<Map<String, Object>> envelope = buildThreeFieldEnvelope();
+                if (envelope.isPresent()) {
+                    return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope.get()));
+                }
+                return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                        "{\"code\":\"VERSATILE_INTENT_RESULT_CONTRACT\","
+                                + "\"reason\":\"missing or invalid three-field result\"}"));
+            }
+            Map<String, Object> legacy = new LinkedHashMap<>();
+            legacy.put("type", "answer");
+            legacy.put("output", extractedFields.get("response_content"));
+            return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, legacy));
         }
         if (isCompleted) {
             return List.of();
@@ -89,11 +110,8 @@ final class VersatileResponseExtractor {
         return Optional.empty();
     }
 
-    private static Map<String, Object> answerEnvelope(String output) {
-        Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("type", "answer");
-        envelope.put("output", output);
-        return envelope;
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private boolean shouldExtractResult(String rawData, Optional<JsonNode> json) {
@@ -104,7 +122,7 @@ final class VersatileResponseExtractor {
                 && json.filter(JsonNode::isObject).isPresent();
     }
 
-    private Optional<String> extractResult(JsonNode json) {
+    private Optional<String> extractLegacyText(JsonNode json) {
         JsonNode resultData = json.at("/custom_rsp_data/data");
         if (resultData.isMissingNode() || resultData.isNull()) {
             resultData = json.get("data");
@@ -118,6 +136,46 @@ final class VersatileResponseExtractor {
             return Optional.of(text.asText());
         }
         return Optional.empty();
+    }
+
+    private void extractResultFields(JsonNode json) {
+        for (VersatileProperties.ResultExtraction rule : properties.getResultExtractions()) {
+            if (rule == null || !hasText(rule.getMatch()) || !hasText(rule.getGet())) {
+                continue;
+            }
+            JsonNode node = json.at(rule.getGet());
+            if (node == null || node.isMissingNode() || node.isNull()) {
+                continue;
+            }
+            String value = node.isTextual() ? node.asText() : node.toString();
+            if (hasText(value)) {
+                extractedFields.put(rule.getMatch(), value);
+            }
+        }
+    }
+
+    private Optional<Map<String, Object>> buildThreeFieldEnvelope() {
+        String responseContent = extractedFields.get("response_content");
+        String intentId = extractedFields.get("intent_id");
+        String workflowAgentId = extractedFields.get("agent_id");
+        if (!hasText(responseContent) || !hasText(intentId)) {
+            return Optional.empty();
+        }
+        IntentAgentResolver resolver = new IntentAgentResolver(properties);
+        String agentId;
+        try {
+            agentId = resolver.resolve(intentId, workflowAgentId)
+                    .orElseThrow(() -> new IllegalStateException("VERSATILE_INTENT_AGENT_ID_UNMAPPED"));
+        } catch (IllegalStateException ex) {
+            return Optional.empty();
+        }
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("output", responseContent);
+        envelope.put("response_content", responseContent);
+        envelope.put("intent_id", intentId);
+        envelope.put("agent_id", agentId);
+        return Optional.of(envelope);
     }
 
     private boolean containsNodeTypeEnd(JsonNode json) {
