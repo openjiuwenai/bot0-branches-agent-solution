@@ -121,7 +121,9 @@ final class VersatileResponseExtractor {
         if (isCompleted) {
             return List.of();
         }
-        return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, null));
+        return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                "{\"stage\":\"stream_closed_without_terminal\","
+                        + "\"reason\":\"no End/exception event\"}"));
     }
 
     static Optional<String> answerText(Object data) {
