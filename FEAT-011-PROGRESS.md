@@ -1,7 +1,7 @@
 # FEAT-011 开发进展报告（最终，审核用）
 
-> **状态：全部 12 个切片完成，72/72 测试 GREEN，未 push。** 请审核。
-> 分支：`feat/feat-011-direct-route`（base `origin/common` `8770d87`，ahead 13）。
+> **状态：全部 12 个切片完成，73/73 测试 GREEN（审核必修项 #1/#2 已修），未 push。** 请审核。
+> 分支：`feat/feat-011-direct-route`（base `origin/common` `8770d87`）。
 > 真源：`/Users/kevin/Work/temp/spring-ai-ascend-claude-011/.../Feat-Func-011-...md`（L2，#440）。
 > 实现仓：`/Users/kevin/Work/agent-solution/common/agent-gateway`（新建模块）。
 > 日期：2026-07-22。
@@ -75,6 +75,7 @@
 | 7 | `GovernanceException` 缺带 cause 的构造器 | 补 4 参构造器 |
 | 8 | `ResponseEntity<StreamingResponseBody>` 在 `Object` 返回类型下不被流式 handler 识别（走 converter→500） | 流式改用直接写 `HttpServletResponse`（同步、可测、断开即释放） |
 | 9 | Fake 下游 bean 在缓存上下文里跨测试方法泄漏状态 | 给 `FakeAgentRuntimeClient`/`FakeRdcRouteClient` 加 `reset()`，`@BeforeEach` 调用 |
+| 10 | **G4 `complete()` 未接线**（审核发现）：创建成功后从不 complete，同键重试不走 REPLAY、卡 IN_FLIGHT 409；与"T-G4 全 ✅"矛盾 | controller 同步创建成功路径补 `complete(tenantId, messageId, response)`；补 facade 级 T-G4-2 测试 `sameKeySameBodyReplaysWithoutSecondRuntimeCall`（同键同文重放、不二次调 runtime） |
 
 ## 6. 技术债（已记录，非阻塞）
 
@@ -87,11 +88,13 @@
 | TD-5 | 无 ArchUnit 模块边界/纯度测试 | 收尾期可参考 registry 加 ports 纯度守护 |
 | TD-6 | 模块集成测手工 `@Import` 装配治理/routing 组件 | 切片已多，可引入共享 test 切片配置收敛 |
 | TD-7 | G4 in-flight 重复命中返回 409 `IDEMPOTENCY_IN_FLIGHT`（L2 允许"实现选定"） | 后续可细化为 200+进行中语义 |
-| TD-8 | SSE 流式 sticky 仅从"首帧 taskId"写一次；G4 REPLAY 的 e2e 待真实联调（需 S2 产生结果） | 单测已覆盖逻辑；联调期补 e2e |
+| TD-8 | 流式创建不调 `complete()`（流式无单一可重放结果）→ 同键重试会 IN_FLIGHT 409；流式幂等短路 730 未支持 | 后续设计；**同步路径已完整**（`complete()` 已接线 + facade REPLAY 测试通过）。注：SSE sticky 从首帧 taskId 写入仍正常工作 |
 
 ## 7. 730 交付边界确认
 
-**已交付（IN-1~IN-8）**：入口治理 G1~G5；按逻辑目标选路（含默认 Agent）；同步直连；流式 SSE 桥接；选路失败明确失败；端侧工具续跑透传（粘滞）；continueInput 关联转发；统一 A2A 入口。出站注入权威 `params.metadata.tenantId`；拓扑清洗（响应/错误不含 endpoint/routeHandle）。
+**已交付（IN-1~IN-8）**：入口治理 G1~G5；按逻辑目标选路（含默认 Agent）；同步直连（含创建幂等 `complete()`→REPLAY 短路）；流式 SSE 桥接；选路失败明确失败；端侧工具续跑透传（粘滞）；continueInput 关联转发；统一 A2A 入口。出站注入权威 `params.metadata.tenantId`。
+
+**拓扑清洗口径（730，option B，已与审核对齐）**：Gateway **不向响应/错误体添加** routeHandle/endpoint；Gateway 自控错误体（`GatewayError` + `FORWARD_FAILED`）已去拓扑（`FORWARD_FAILED` 不再带 endpointUrl，有测）；成功响应透传 runtime body，依赖 runtime（FEAT-001）不回物理拓扑（gateway 不做正文 strip，避免与 runtime 契约重复建）。已加"成功响应不含 routeHandle/endpoint"断言。
 
 **未交付（IN-9/IN-10 + S6~S9，按 L2）**：GetTask / CancelTask / SubscribeToTask 转发、UNKNOWN 同键恢复。method 白名单不含它们 → `VALIDATION_METHOD`(400) 拒绝，**不假成功**（SC-7 已验证）。
 
@@ -103,8 +106,8 @@
 - runtime `/a2a` 真实地址 + Gateway→runtime 凭据形态（L2 §4.10 不强制；联调定）。
 - version-scope 与 L2 的已知漂移（GetTask 等列为 MUST 但 L2 730 缓做）— 按 L2，已记。
 
-## 9. 下一步（等你审核后）
+## 9. 下一步
 
-- 审核代码 + 本报告 + SLICE-PLAN 追溯表。
-- 是否 push / 开 MR（按你指示；当前未 push）。
-- 联调期补 TD-8（REPLAY/SSE sticky e2e）、按需处理 TD-1/5/6。
+- 审核已通过（必修项 #1/#2 已落地，复审 73/73 GREEN）。
+- push + 开 MR（gitcode）。
+- 联调期补真实 RDC/runtime e2e（见 §8，不在本仓单测范围）；流式幂等短路（TD-8）730 未支持、已记录，**不必再等一轮复审**；按需处理 TD-1/5/6。

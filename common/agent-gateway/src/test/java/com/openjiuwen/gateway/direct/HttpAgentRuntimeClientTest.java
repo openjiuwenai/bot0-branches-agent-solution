@@ -61,6 +61,9 @@ class HttpAgentRuntimeClientTest {
         server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START));
         Throwable thrown = catchThrowable(() -> client.invokeSync(endpoint, "{}"));
         assertThat(thrown).isInstanceOf(GovernanceException.class);
-        assertThat(((GovernanceException) thrown).code()).isEqualTo("FORWARD_FAILED");
+        GovernanceException ge = (GovernanceException) thrown;
+        assertThat(ge.code()).isEqualTo("FORWARD_FAILED");
+        // topology must not leak in the gateway-controlled error message
+        assertThat(ge.getMessage()).doesNotContain(endpoint);
     }
 }

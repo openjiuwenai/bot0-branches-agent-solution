@@ -140,12 +140,17 @@ public class A2aController {
                 sseBridge.writeSse(response.getOutputStream(), frames);
                 return null;
             }
+            String runtimeResponse;
             try {
-                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(router.routeCreate(context));
+                runtimeResponse = router.routeCreate(context);
             } catch (GovernanceException ex) {
                 ex.setTraceId(context.traceId());
                 throw ex;
             }
+            // Mark the create idempotency record completed so a same-key retry
+            // REPLAYs this response instead of re-forwarding (T-G4-2).
+            idempotencyRule.complete(context.tenantId(), context.messageId(), runtimeResponse);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(runtimeResponse);
         }
         // resume path — route to the original owner via the sticky index.
         try {

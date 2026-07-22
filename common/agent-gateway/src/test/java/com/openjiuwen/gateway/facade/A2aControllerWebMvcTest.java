@@ -244,6 +244,23 @@ class A2aControllerWebMvcTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void sameKeySameBodyReplaysWithoutSecondRuntimeCall() throws Exception {
+        // first create registers + completes the idempotency record
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value("task-9"));
+        assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
+        runtime.reset();
+        // same messageId + same body -> REPLAY; runtime NOT called a second time
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value("task-9"));
+        assertThat(runtime.lastEndpoint()).isNull();
+    }
+
     // --- G5 ---
 
     @Test
@@ -275,7 +292,9 @@ class A2aControllerWebMvcTest {
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(CREATE_WITH_AGENT))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.id").value("task-9"));
+                .andExpect(jsonPath("$.result.id").value("task-9"))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .doesNotContain("routeHandle", "http://rt:8000"));
         // authoritative tenant injected into the forwarded body
         assertThat(runtime.lastBody()).contains("\"tenantId\":\"tenant-1\"");
         // sticky bound; no routeHandle leaked to the client response

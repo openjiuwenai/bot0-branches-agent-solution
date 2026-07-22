@@ -56,7 +56,8 @@ public class Router {
      * Route a create request synchronously and return the runtime's JSON-RPC body.
      *
      * @param ctx governance context (tenantId, agentId, rawBody)
-     * @return the runtime response body (topology left as-is; no routeHandle added)
+     * @return the runtime response body (forwarded without adding routeHandle/endpoint;
+     *         the runtime (FEAT-001) is responsible for not returning physical topology)
      */
     public String routeCreate(GovernanceContext ctx) {
         String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();

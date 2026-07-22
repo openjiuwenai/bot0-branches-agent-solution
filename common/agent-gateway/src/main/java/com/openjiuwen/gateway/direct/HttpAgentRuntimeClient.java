@@ -47,7 +47,7 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
             return resp.body();
         } catch (Exception ex) {
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
-                    "Cannot reach runtime at " + endpointUrl, ex);
+                    "Cannot reach runtime", ex);
         }
     }
 
@@ -68,7 +68,7 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                     .filter(data -> !data.isEmpty());
         } catch (Exception ex) {
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
-                    "Cannot open runtime stream at " + endpointUrl, ex);
+                    "Cannot open runtime stream", ex);
         }
     }
 }

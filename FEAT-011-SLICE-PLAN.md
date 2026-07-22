@@ -106,7 +106,7 @@ common/agent-gateway/
 | T-G3-5 | S1-G3 | ParamValidatorTest#resumeMissingTaskIdIsTreatedAsCreate | unit | ✅ |
 | T-G3-6 | S1-G3 | ParamValidatorTest#malformedBodyReturns400ValidationJsonrpc / #methodNotInWhitelistReturns400ValidationMethod + A2aControllerWebMvcTest#badMethodReturns400ValidationMethod / #malformedBodyReturns400ValidationJsonrpc | unit+it | ✅ |
 | T-G4-1 | S1-G4 | IdempotencyRuleTest#firstCreateRegistersInFlightAndProceeds | unit | ✅ |
-| T-G4-2 | S1-G4 | IdempotencyRuleTest#sameKeySameBodyCompletedReplaysPriorResult（seeded completed；REPLAY 的 e2e 待 S2 产生结果） | unit | ✅ |
+| T-G4-2 | S1-G4 | IdempotencyRuleTest#sameKeySameBodyCompletedReplaysPriorResult + A2aControllerWebMvcTest#sameKeySameBodyReplaysWithoutSecondRuntimeCall（complete() 已在 create 成功路径接线） | unit+it | ✅ |
 | T-G4-3 | S1-G4 | IdempotencyRuleTest#sameKeyDifferentBodyReturnsConflict + A2aControllerWebMvcTest#sameMessageIdDifferentBodyReturns409Conflict | unit+it | ✅ |
 | T-G4-4 | S1-G4 | IdempotencyRuleTest#noMessageIdSkipsDedup + A2aControllerWebMvcTest#createWithoutMessageIdProceedsTwice | unit+it | ✅ |
 | T-G4-5 | S1-G4 | A2aControllerWebMvcTest#resumeWithTaskIdSkipsIdempotency | it | ✅ |
@@ -166,7 +166,7 @@ common/agent-gateway/
 | S1-G1 鉴权 | ✅ GREEN | T-G1-1..5（见 §5） | feat(gateway): FEAT-011 S1-G1 |
 | S1-G2 租户 | ✅ GREEN（17 测全过） | T-G2-1..4（见 §5） | feat(gateway): FEAT-011 S1-G2 |
 | S1-G3 校验 | ✅ GREEN（28 测全过） | T-G3-1..6（见 §5） | feat(gateway): FEAT-011 S1-G3 |
-| S1-G4 幂等 | ✅ GREEN（37 测全过） | T-G4-1..5（见 §5；T-G4-2 REPLAY e2e 待 S2） | feat(gateway): FEAT-011 S1-G4 |
+| S1-G4 幂等 | ✅ GREEN（37 测全过） | T-G4-1..5（见 §5） | feat(gateway): FEAT-011 S1-G4 |
 | S1-G5 审计 | ✅ GREEN（43 测全过） | T-G5-1..4（见 §5；顺带解决 TD-2 traceId 入口贯穿） | feat(gateway): FEAT-011 S1-G5 |
 | RDC-PORT | ✅ GREEN（48 测全过） | 支撑 T-S2-*/T-S5-*（HttpRdcRouteClient + MockWebServer + FakeRdcRouteClient） | feat(gateway): FEAT-011 RDC-PORT |
 | S2-sync | ✅ GREEN（60 测全过） | T-S2-1/2/4/5/6/7（见 §5；T-S2-4 S5 专测后续补） | feat(gateway): FEAT-011 S2-sync |
@@ -177,3 +177,5 @@ common/agent-gateway/
 | — | 🎉 全部 12 切片完成；SC-1~7 已勾选（见 §5） | — | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）。（TD-2 traceId 入口贯穿已在 S1-G5 解决。）
+
+拓扑清洗口径（730，option B）：Gateway **不向响应/错误体添加** routeHandle/endpoint；Gateway 自控的错误体（GatewayError + FORWARD_FAILED）已去拓扑（FORWARD_FAILED 不带 endpointUrl，有测）。成功响应透传 runtime body，依赖 runtime（FEAT-001）不回物理拓扑（gateway 不做正文 strip，避免与 runtime 契约重复）。已加"成功响应不含 routeHandle/endpoint"断言。
