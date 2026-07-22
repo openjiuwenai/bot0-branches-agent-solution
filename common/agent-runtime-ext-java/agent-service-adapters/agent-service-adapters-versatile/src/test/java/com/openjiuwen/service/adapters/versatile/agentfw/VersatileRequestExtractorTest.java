@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests Versatile request extraction rules.
@@ -24,6 +25,10 @@ class VersatileRequestExtractorTest {
     void buildsRemoteRequestFromMessagesAndMetadata() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/conversations/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
         properties.getHeadersTemplate().put("Accept", "text/event-stream");
         properties.getForwardHeaderWhitelist().add("x-user-id");
 
@@ -52,11 +57,13 @@ class VersatileRequestExtractorTest {
                 .doesNotContainKey("authorization");
         assertThat(remote.params()).containsEntry("workspace_id", "override")
                 .containsEntry("type", "controller");
-        assertThat(remote.body()).containsEntry("inputs", Map.of(
-                        "query", "new question",
-                        "intent", "knowledge_qa"
-                ))
-                .containsEntry("query", "old question")
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsEntry("query", "new question")
+                .containsEntry("intent", "knowledge_qa")
+                .containsKey("intents")
+                .containsKey("messages");
+        assertThat(remote.body()).containsEntry("query", "old question")
                 .containsEntry("intent", "old_intent")
                 .containsEntry("city", "Shenzhen");
         assertThat(remote.body()).doesNotContainKey("custom_data");
@@ -70,6 +77,10 @@ class VersatileRequestExtractorTest {
         endpoint.setIntent("booking");
         endpoint.setUrlTemplate("https://example.test/booking/{conversation_id}");
         properties.getEndpoints().add(endpoint);
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c-2");
@@ -83,11 +94,13 @@ class VersatileRequestExtractorTest {
                 new VersatileRequestExtractor(properties).extract(request);
 
         assertThat(remote.url()).isEqualTo("https://example.test/booking/c-2");
-        assertThat(remote.body()).containsEntry("inputs", Map.of(
-                        "query", "book hotel",
-                        "intent", "booking"
-                ))
-                .containsEntry("city", "Shanghai");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsEntry("query", "book hotel")
+                .containsEntry("intent", "booking")
+                .containsKey("intents")
+                .containsKey("messages");
+        assertThat(remote.body()).containsEntry("city", "Shanghai");
         assertThat(remote.body()).doesNotContainKeys("query", "intent", "custom_data");
     }
 
@@ -95,6 +108,10 @@ class VersatileRequestExtractorTest {
     void usesLastUserQueryFallbackWithoutReadingQueryFromCustomData() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/default/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c-3");
@@ -107,10 +124,12 @@ class VersatileRequestExtractorTest {
         VersatileRequestExtractor.RemoteRequest remote =
                 new VersatileRequestExtractor(properties).extract(request);
 
-        assertThat(remote.body()).containsEntry("inputs", Map.of(
-                        "query", "plain question"
-                ))
-                .containsEntry("query", "custom query")
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsEntry("query", "plain question")
+                .containsKey("intents")
+                .containsKey("messages");
+        assertThat(remote.body()).containsEntry("query", "custom query")
                 .containsEntry("city", "Beijing")
                 .doesNotContainKeys("intent", "custom_data");
         assertThat(remote.params()).containsEntry("channel", "web");
@@ -120,6 +139,10 @@ class VersatileRequestExtractorTest {
     void headersTemplateOverridesForwardedHeadersWithSameName() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/default/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
         properties.getHeadersTemplate().put("x-user-id", "static-user");
         properties.getHeadersTemplate().put("Accept", "text/event-stream");
         properties.getForwardHeaderWhitelist().add("x-user-id");
@@ -137,5 +160,175 @@ class VersatileRequestExtractorTest {
 
         assertThat(remote.headers()).containsEntry("x-user-id", "static-user")
                 .containsEntry("Accept", "text/event-stream");
+    }
+
+    @Test
+    void serializesConfiguredIntentsAsJsonArrayString() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent hotel = new VersatileProperties.Intent();
+        hotel.setId("intent_L1_hotel");
+        hotel.setName("酒店");
+        VersatileProperties.Intent flight = new VersatileProperties.Intent();
+        flight.setId("intent_L1_flight");
+        flight.setName("机票");
+        properties.setIntents(List.of(hotel, flight));
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsKey("intents");
+        assertThat(inputs.get("intents")).asString()
+                .contains("\"id\":\"intent_L1_hotel\"")
+                .contains("\"name\":\"酒店\"")
+                .contains("\"id\":\"intent_L1_flight\"")
+                .contains("\"name\":\"机票\"");
+    }
+
+    @Test
+    void rejectsBlankIntentsList() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        properties.setIntents(List.of());
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+
+        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VERSATILE_INTENT_CONFIG_MISSING");
+    }
+
+    @Test
+    void rejectsIntentWithBlankIdOrName() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent bad = new VersatileProperties.Intent();
+        bad.setId("");
+        bad.setName("酒店");
+        properties.setIntents(List.of(bad));
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+
+        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VERSATILE_INTENT_CONFIG_MISSING");
+    }
+
+    @Test
+    void serializesServeRequestMessagesAsJsonArrayString() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(
+                Map.of("role", "user", "content", "订酒店"),
+                Map.of("role", "assistant", "content", "好的")
+        ));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs.get("messages")).asString()
+                .contains("\"role\":\"user\"")
+                .contains("\"content\":\"订酒店\"")
+                .contains("\"role\":\"assistant\"")
+                .contains("\"content\":\"好的\"");
+    }
+
+    @Test
+    void rejectsEmptyMessagesWhenRequired() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+        properties.getMessages().setRequired(true);
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of());
+
+        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VERSATILE_INTENT_INPUT_MISSING");
+    }
+
+    @Test
+    void skipsMessagesArrayWhenNotRequiredAndAbsent() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+        properties.getMessages().setRequired(false);
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of());
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).doesNotContainKey("messages");
+    }
+
+    @Test
+    void fillsResumeRequestTemplateFromMetadataWhenConfigured() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+
+        VersatileProperties.ResumeRequestTemplate template = new VersatileProperties.ResumeRequestTemplate();
+        Map<String, Object> inputs = new LinkedHashMap<>();
+        inputs.put("resume_token", "{resume_token}");
+        inputs.put("user_response", "{user_response}");
+        template.getBody().put("inputs", inputs);
+        properties.getInterrupt().setResumeRequestTemplate(template);
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(Map.of("role", "user", "content", "上海 今晚")));
+        request.setMetadata(Map.of(
+                "body", Map.of(
+                        "resume_token", "tok-123",
+                        "user_response", "上海 今晚"
+                )
+        ));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> bodyInputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(bodyInputs).containsEntry("resume_token", "tok-123")
+                .containsEntry("user_response", "上海 今晚")
+                .doesNotContainKey("query")
+                .doesNotContainKey("intent")
+                .doesNotContainKey("intents")
+                .doesNotContainKey("messages");
     }
 }

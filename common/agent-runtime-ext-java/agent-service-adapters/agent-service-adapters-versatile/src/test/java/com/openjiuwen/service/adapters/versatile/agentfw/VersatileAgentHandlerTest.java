@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests Versatile agent handler request and response adaptation.
@@ -119,36 +120,93 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
-    void queryReturnsInterruptWhenResultArrivesWithoutEndSignal() throws Exception {
+    void throwsWhenResultNodeArrivesWithoutEndSignal() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"
         ));
         properties.setResultNodeName("AnswerNode");
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
 
-        QueryResponse response = handler.query(request());
-
-        assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isInstanceOf(Map.class);
-        Map<?, ?> result = (Map<?, ?>) response.getResult();
-        assertThat(result.get("role")).isEqualTo("assistant");
-        assertThat(result.get("content")).isEqualTo("Remote agent requires input");
-        assertThat(result.get("_interrupt")).isEqualTo(Map.of("message", "Remote agent requires input"));
+        assertThatThrownBy(() -> handler.query(request()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STREAM_CLOSED_WITHOUT_TERMINAL");
     }
 
     @Test
-    void queryReturnsInterruptWhenRemoteReturnsNoEvents() throws Exception {
+    void throwsWhenRemoteReturnsNoEvents() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of());
+        VersatileAgentHandler handler = new VersatileAgentHandler(properties);
+
+        assertThatThrownBy(() -> handler.query(request()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("STREAM_CLOSED_WITHOUT_TERMINAL");
+    }
+
+    @Test
+    void writesThreeFieldResultIntoQueryResponseResultMap() throws Exception {
+        VersatileProperties properties = propertiesWithServer(List.of(
+                "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":{\"node_type\":\"QA\","
+                        + "\"response_content\":\"酒店预订\","
+                        + "\"intent_id\":\"intent_L1_hotel\","
+                        + "\"agent_id\":\"agent_card_L2_hotel\"}}}",
+                "{\"data\":{\"node_type\":\"End\"}}"
+        ));
+        properties.setResultNodeName("AnswerNode");
+        VersatileProperties.ResultExtraction rc = new VersatileProperties.ResultExtraction();
+        rc.setMatch("response_content");
+        rc.setGet("/custom_rsp_data/data/response_content");
+        properties.getResultExtractions().add(rc);
+        VersatileProperties.ResultExtraction ii = new VersatileProperties.ResultExtraction();
+        ii.setMatch("intent_id");
+        ii.setGet("/custom_rsp_data/data/intent_id");
+        properties.getResultExtractions().add(ii);
+        VersatileProperties.ResultExtraction ai = new VersatileProperties.ResultExtraction();
+        ai.setMatch("agent_id");
+        ai.setGet("/custom_rsp_data/data/agent_id");
+        properties.getResultExtractions().add(ai);
+
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
 
         QueryResponse response = handler.query(request());
 
-        assertThat(response.getConversationId()).isEqualTo("c-1");
         assertThat(response.getResult()).isInstanceOf(Map.class);
-        Map<?, ?> result = (Map<?, ?>) response.getResult();
-        assertThat(result.get("role")).isEqualTo("assistant");
-        assertThat(result.get("content")).isEqualTo("Remote agent requires input");
-        assertThat(result.get("_interrupt")).isEqualTo(Map.of("message", "Remote agent requires input"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertThat(result).containsEntry("response_content", "酒店预订")
+                .containsEntry("intent_id", "intent_L1_hotel")
+                .containsEntry("agent_id", "agent_card_L2_hotel");
+    }
+
+    @Test
+    void resolvesAgentIdViaIntentAgentMappingWhenWorkflowOmitsIt() throws Exception {
+        VersatileProperties properties = propertiesWithServer(List.of(
+                "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":{\"node_type\":\"QA\","
+                        + "\"response_content\":\"酒店预订\","
+                        + "\"intent_id\":\"intent_L1_hotel\"}}}",
+                "{\"data\":{\"node_type\":\"End\"}}"
+        ));
+        properties.setResultNodeName("AnswerNode");
+        VersatileProperties.ResultExtraction rc = new VersatileProperties.ResultExtraction();
+        rc.setMatch("response_content");
+        rc.setGet("/custom_rsp_data/data/response_content");
+        properties.getResultExtractions().add(rc);
+        VersatileProperties.ResultExtraction ii = new VersatileProperties.ResultExtraction();
+        ii.setMatch("intent_id");
+        ii.setGet("/custom_rsp_data/data/intent_id");
+        properties.getResultExtractions().add(ii);
+        // No agent_id extraction — mapping must resolve
+        VersatileProperties.MappingCandidate candidate = new VersatileProperties.MappingCandidate();
+        candidate.setAgentCard("agent_card_L2_hotel");
+        properties.getIntentAgentMapping().put("intent_L1_hotel", List.of(candidate));
+
+        VersatileAgentHandler handler = new VersatileAgentHandler(properties);
+
+        QueryResponse response = handler.query(request());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertThat(result).containsEntry("agent_id", "agent_card_L2_hotel")
+                .containsEntry("intent_id", "intent_L1_hotel");
     }
 
     private static ServeRequest request() {
@@ -171,6 +229,10 @@ class VersatileAgentHandlerTest {
 
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("http://127.0.0.1:" + server.getAddress().getPort() + "/run");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
         return properties;
     }
 
