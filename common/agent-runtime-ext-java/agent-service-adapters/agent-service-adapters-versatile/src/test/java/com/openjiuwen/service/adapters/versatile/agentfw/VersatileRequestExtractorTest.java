@@ -201,4 +201,73 @@ class VersatileRequestExtractorTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("VERSATILE_INTENT_CONFIG_MISSING");
     }
+
+    @Test
+    void serializesServeRequestMessagesAsJsonArrayString() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of(
+                Map.of("role", "user", "content", "订酒店"),
+                Map.of("role", "assistant", "content", "好的")
+        ));
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs.get("messages")).asString()
+                .contains("\"role\":\"user\"")
+                .contains("\"content\":\"订酒店\"")
+                .contains("\"role\":\"assistant\"")
+                .contains("\"content\":\"好的\"");
+    }
+
+    @Test
+    void rejectsEmptyMessagesWhenRequired() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+        properties.getMessages().setRequired(true);
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of());
+
+        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VERSATILE_INTENT_INPUT_MISSING");
+    }
+
+    @Test
+    void skipsMessagesArrayWhenNotRequiredAndAbsent() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.setUrlTemplate("https://example.test/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
+        properties.getMessages().setRequired(false);
+
+        ServeRequest request = new ServeRequest();
+        request.setConversationId("c-1");
+        request.setMessages(List.of());
+
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).doesNotContainKey("messages");
+    }
 }
