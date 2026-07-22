@@ -9,7 +9,7 @@ import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Spring binding for {@link SkillHubConfig} (FEAT-005 §5.2).
+ * Spring binding for {@link SkillHubConfig}.
  *
  * <p>Extends the pure-POJO contract from {@code agent-service-spec-ext} and adds
  * the {@link ConfigurationProperties} annotation so Spring binds it to the

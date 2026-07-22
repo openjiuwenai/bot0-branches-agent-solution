@@ -9,11 +9,12 @@ import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import java.nio.file.Path;
 
 /**
- * SkillHub Provider: the access boundary to an external Skill Hub (FEAT-005 §2.3).
+ * SkillHub Provider: the access boundary to an external Skill Hub.
  *
  * <p>Declares four methods: {@code start} / {@code download} / {@code verify} / {@code stop}.
- * {@code start}/{@code stop} are called by {@code SkillHubManager} during construction
- * and shutdown; {@code download}/{@code verify} are orchestrated by the manager.
+ * {@code start}/{@code stop} are called by {@code SkillHubManager} during its own
+ * {@code start()} and {@code stop()} lifecycle; {@code download}/{@code verify}
+ * are orchestrated by the manager.
  *
  * <p>The caller (SkillHubManager) passes deployment-stable config and a
  * <b>already-decrypted</b> plaintext token. Credential decryption is the
@@ -32,7 +33,7 @@ import java.nio.file.Path;
 public interface SkillHubProvider {
     /**
      * Start the provider (build connection pool, warm up auth, etc.).
-     * Called by {@code SkillHubManager}'s constructor.
+     * Called by {@code SkillHubManager.start()}.
      *
      * @param config        SkillHub connection config (endpoint, authType, localDir, etc.)
      * @param decryptedToken already-decrypted plaintext token; empty/null means anonymous access.

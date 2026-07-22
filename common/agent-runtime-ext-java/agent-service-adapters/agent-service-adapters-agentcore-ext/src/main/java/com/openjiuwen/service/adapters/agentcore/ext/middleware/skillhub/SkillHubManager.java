@@ -28,11 +28,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Orchestrates skill download / verify / register with background retry and
- * uninstalled/installed list maintenance (FEAT-005 §2.3, §4.1).
+ * uninstalled/installed list maintenance.
  *
  * <p>Lifecycle:
  * <ul>
- *   <li>Constructor → {@code provider.start(config, token)} + trigger first download</li>
+ *   <li>Constructor → assemble dependencies only (no side effects)</li>
+ *   <li>{@link #start()} → {@code provider.start(config, token)} + trigger first download</li>
  *   <li>download() success → verify each downloaded path → add verified paths to
  *       the "uninstalled list"</li>
  *   <li>download() failure → start background thread that retries download on a
@@ -53,7 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *       non-thread-safe SkillManager.</li>
  * </ul>
  *
- * <p>Failure semantics (PR #415):
+ * <p>Failure semantics:
  * <ul>
  *   <li>start() phase download/verify failures are degraded (agent ready, skill
  *       unavailable) and retried in background; start() is never blocked</li>
@@ -66,7 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SkillHubManager {
     private static final Logger log = LoggerFactory.getLogger(SkillHubManager.class);
 
-    /** Fixed retry interval; FEAT-005 does not fix a strategy, this is a simple default. */
+    /** Fixed retry interval; this is a simple default. */
     private static final long RETRY_INITIAL_DELAY_MS = 5000L;
     private static final long RETRY_PERIOD_MS = 30000L;
 
@@ -112,7 +113,7 @@ public class SkillHubManager {
      * EVERY agent that will ever ask — which is unknowable in general. So we
      * instead keep the path here permanently and rely on per-agent bookkeeping
      * ({@link #processedForAgent}) to avoid re-installing into the same agent
-     * twice. See issue #10.
+     * twice.
      */
     private final CopyOnWriteArrayList<Path> verifiedSkillPaths = new CopyOnWriteArrayList<>();
 
@@ -126,9 +127,8 @@ public class SkillHubManager {
      * a skill registered into agent A is invisible to agent B. So the Manager
      * must hand the same path to each agent that asks, and per-agent tracking
      * is exactly what prevents duplicate registration into the same agent.
-     * See issue #10.
      *
-     * <p>Why this also covers INSTALL_FAILED (#1): a failed handover is still
+     * <p>Why this also covers INSTALL_FAILED: a failed handover is still
      * "processed for this agent" — re-attempting it on every subsequent request
      * would just re-throw the same exception forever. The path stays in
      * {@link #verifiedSkillPaths} so other agents can still try, but this agent
@@ -136,15 +136,16 @@ public class SkillHubManager {
      */
     private final WeakHashMap<Object, Set<Path>> processedForAgent = new WeakHashMap<>();
 
-    private final AtomicBoolean firstDownloadTriggered = new AtomicBoolean(false);
+    private final AtomicBoolean started = new AtomicBoolean(false);
     private final AtomicBoolean backgroundRetryStarted = new AtomicBoolean(false);
 
     private final Object bgLock = new Object();
     private ScheduledExecutorService backgroundExecutor;
 
     /**
-     * Construct the manager. The provider is started and the first download is
-     * triggered here per design doc §3.2 / §4.7.
+     * Construct the manager. Only assembles dependencies — does NOT call
+     * {@code provider.start()} or trigger download. Use {@link #start()} to
+     * start the provider and trigger the first download.
      *
      * @param provider the SkillHub provider SPI implementation
      * @param installer the skill path installer used to register into agents
@@ -159,34 +160,34 @@ public class SkillHubManager {
         this.installer = Objects.requireNonNull(installer, "installer");
         this.config = Objects.requireNonNull(config, "config");
         this.decryptedToken = decryptedToken == null ? "" : decryptedToken;
-        this.provider.start(this.config, this.decryptedToken);
-        log.info("SkillHub manager initialized credential={}",
-                this.decryptedToken.isEmpty() ? "absent" : "provided");
     }
 
     /**
-     * Trigger download (synchronous, used from Handler.start()).
+     * Start the manager: call {@code provider.start(config, token)} and trigger
+     * the first download. Idempotent — only the first call starts the provider
+     * and triggers download; subsequent calls are no-ops.
      *
-     * <p>Idempotent: only the first call triggers a real download; subsequent
-     * calls are no-ops (background retry handles ongoing failures).
+     * <p>Failure semantics: {@code provider.start()} failure (config/auth) is
+     * thrown (fail fast). Download/integrity-check failure is degraded — the
+     * exception is swallowed and a background retry is started.
      *
-     * <p><b>Singleton caveat (issue #4):</b> SkillHubManager is a Spring
-     * singleton bean, so {@code firstDownloadTriggered} is process-global.
-     * If the handler is re-created or {@code start()} is invoked again after
-     * a reload, this method will silently no-op — the download cycle started
-     * at construction time is the only one. Callers must not assume
-     * {@code download()} re-triggers on every {@code handler.start()}.
+     * <p>Singleton caveat: SkillHubManager is a Spring singleton bean, so
+     * {@code started} is process-global. If the handler is re-created or
+     * {@code start()} is invoked again after a reload, this method will
+     * silently no-op.
      *
-     * <p><b>Blocking (issue #8):</b> the first call is synchronous and may
-     * take up to {@code REQUEST_TIMEOUT} per skill (plus download time).
-     * Call {@code handler.start()} during container startup, NOT on the
-     * first request path, otherwise the request thread will block on
-     * download. Failures are swallowed and retried in background per PR #415.
+     * <p>Blocking: the first call is synchronous and may take up to
+     * {@code REQUEST_TIMEOUT} per skill (plus download time). Call during
+     * container startup, NOT on the first request path, otherwise the request
+     * thread will block on download.
      */
-    public void download() {
-        if (!firstDownloadTriggered.compareAndSet(false, true)) {
+    public void start() {
+        if (!started.compareAndSet(false, true)) {
             return;
         }
+        this.provider.start(this.config, this.decryptedToken);
+        log.info("SkillHub manager started credential={}",
+                this.decryptedToken.isEmpty() ? "absent" : "provided");
         try {
             boolean ok = doDownloadAndVerify();
             if (!ok) {
@@ -209,7 +210,7 @@ public class SkillHubManager {
      * processed-for-this-agent (regardless of success or INSTALL_FAILED).
      *
      * <p>Why paths stay in {@code verifiedSkillPaths} after a successful install
-     * (issue #10): agent-core's SkillManager is agent-private; a skill
+     * (agent-core's SkillManager is agent-private): a skill
      * registered into agent A is invisible to agent B. Since SkillHubManager
      * is a singleton bean shared across agents, the same downloaded skill
      * directory must be handed to every agent that asks. We track
@@ -218,7 +219,7 @@ public class SkillHubManager {
      * while different agents can still pick the skill up.
      *
      * <p>Why INSTALL_FAILED paths are still marked processed-for-this-agent
-     * (issue #1): a failed handover (e.g. SkillManager rejected the skill)
+     * (a failed handover, e.g. SkillManager rejected the skill,
      * won't fix itself by retrying on every subsequent request from the same
      * agent — re-attempting would just re-throw the same exception forever,
      * turning a single-skill failure into a permanent agent outage. Marking
@@ -410,11 +411,11 @@ public class SkillHubManager {
         if (!Files.isDirectory(root)) {
             return;
         }
-        // After PR #xxx, Provider downloads a zip, sha256-checks it, then extracts it
+        // Provider downloads a zip, sha256-checks it, then extracts it
         // into a directory containing SKILL.md. We scan for directories containing
         // SKILL.md (the agent-core registerRoot contract).
         //
-        // Bounded depth (issue #2): the real layout is
+        // Bounded depth: the real layout is
         //   localDir/<asset_id>/<extracted_name>/SKILL.md
         // so 4 levels is more than enough. Unbounded Files.walk would otherwise
         // traverse deep dependency trees (e.g. node_modules shipped inside a
@@ -439,7 +440,7 @@ public class SkillHubManager {
             // available for every agent to pick up. (No per-agent check here:
             // "already processed for some agent" is not a reason to skip
             // re-adding to the unregistered list, since other agents may still
-            // need it. See issue #10.)
+            // need it.)
             synchronized (listLock) {
                 if (verifiedSkillPaths.contains(candidate)) {
                     continue;
@@ -496,7 +497,7 @@ public class SkillHubManager {
                     }
                     // Reset the guard so a LATER download failure can start a
                     // fresh retry loop. Without this, the first successful retry
-                    // permanently disables background retry (issue #3).
+                    // permanently disables background retry.
                     backgroundRetryStarted.set(false);
                 }
             }

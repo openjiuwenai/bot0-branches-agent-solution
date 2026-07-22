@@ -41,7 +41,7 @@ import java.util.Optional;
  * real DeepSeek LLM. Proves the full SkillHub middleware chain works via the
  * runtime {@link AgentHandler} boundary:
  * <ol>
- *   <li>SkillHubManager.download() fetches skills from swarmskills.openjiuwen.com</li>
+ *   <li>SkillHubManager.start() fetches skills from swarmskills.openjiuwen.com</li>
  *   <li>Provider downloads zip → SHA-256 → extracts to dirs with SKILL.md</li>
  *   <li>On first query, JiuwenCoreAgentExtHandler triggers manager.register(agent)</li>
  *   <li>SkillHubInstaller calls BaseAgent.registerSkill(dir.toString())</li>
@@ -180,7 +180,7 @@ class SkillHubAgentLifecycleRealLlmTest {
      * visible from this test's package) and parse the {@code name:} field
      * from each registered skill's SKILL.md front matter.
      *
-     * <p>Note: after issue #10, SkillHubManager tracks per-agent processed
+     * <p>Note: SkillHubManager tracks per-agent processed
      * paths via a WeakHashMap; {@code getRegisteredList()} returns the union
      * of all paths processed for any agent. The previous reflection target
      * {@code registeredList} no longer exists.

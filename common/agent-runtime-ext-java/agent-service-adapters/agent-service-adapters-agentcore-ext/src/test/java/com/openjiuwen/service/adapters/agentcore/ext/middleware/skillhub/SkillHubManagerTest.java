@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Unit tests for {@link SkillHubManager} covering PR #415 test matrix T2/T3/T4/T8/T11/T15/T16.
+ * Unit tests for {@link SkillHubManager} covering the test matrix T2/T3/T4/T8/T11/T15/T16.
  *
  * @since 2026-07-15
  */
@@ -37,7 +37,7 @@ class SkillHubManagerTest {
 
     @Test
     void downloadFailureDegradesAndDoesNotBlockStart_T1(@TempDir Path tempDir) throws Exception {
-        // Provider download throws — Manager.download() should NOT throw (degrade + background retry)
+        // Provider download throws — Manager.start() should NOT throw (degrade + background retry)
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> {
             throw new IllegalStateException("SkillHub[CONNECT_FAILED] endpoint unreachable");
@@ -45,11 +45,28 @@ class SkillHubManagerTest {
         SkillHubConfig config = newConfig(tempDir);
         manager = new SkillHubManager(provider, new SkillHubInstaller(), config, "");
 
-        manager.download(); // must not throw
+        manager.start(); // must not throw
 
         assertThat(provider.startCount).isEqualTo(1);
         assertThat(provider.downloadCount).isEqualTo(1);
         assertThat(manager.getVerifiedSkillPaths()).isEmpty();
+    }
+
+    @Test
+    void providerStartFailureFailsFast(@TempDir Path tempDir) {
+        // Provider.start() throws (config/auth failure) — Manager.start() must propagate, NOT swallow
+        CapturingProvider provider = new CapturingProvider();
+        provider.startBehavior = () -> {
+            throw new IllegalStateException("SkillHub[AUTH_FAILED] invalid token");
+        };
+        manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
+
+        assertThatThrownBy(() -> manager.start())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("SkillHub[AUTH_FAILED]");
+
+        // download must NOT have been called — start failed before reaching download
+        assertThat(provider.downloadCount).isEqualTo(0);
     }
 
     @Test
@@ -63,7 +80,7 @@ class SkillHubManagerTest {
         provider.verifyBehavior = path -> true;
         SkillHubConfig config = newConfig(tempDir);
         manager = new SkillHubManager(provider, new SkillHubInstaller(), config, "");
-        manager.download();
+        manager.start();
 
         List<Path> uninstalled = manager.getVerifiedSkillPaths();
         assertThat(uninstalled).hasSize(1);
@@ -80,7 +97,7 @@ class SkillHubManagerTest {
         };
         provider.verifyBehavior = path -> path.getFileName().toString().startsWith("good");
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
 
         List<Path> uninstalled = manager.getVerifiedSkillPaths();
         assertThat(uninstalled).hasSize(1);
@@ -98,7 +115,7 @@ class SkillHubManagerTest {
             throw new IllegalStateException("SkillHub[CHECKSUM_MISMATCH] path=" + path);
         };
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
 
         assertThat(manager.getVerifiedSkillPaths()).isEmpty();
     }
@@ -111,9 +128,9 @@ class SkillHubManagerTest {
             return true;
         };
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
         int first = provider.downloadCount;
-        manager.download(); // second call should be no-op
+        manager.start(); // second call should be no-op
         assertThat(provider.downloadCount).isEqualTo(first);
     }
 
@@ -121,7 +138,7 @@ class SkillHubManagerTest {
     void registerWithEmptyUninstalledListIsNoop_T15(@TempDir Path tempDir) {
         CapturingProvider provider = new CapturingProvider();
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
 
         // No skills installed; register should be a no-op (not throw)
         manager.register(new Object());
@@ -137,12 +154,12 @@ class SkillHubManagerTest {
         };
         provider.verifyBehavior = path -> true;
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
 
         // Plain Object is not BaseAgent/DeepAgent — installer should skip without throwing
         Object agent = new Object();
         manager.register(agent);
-        // Per-agent semantics (issue #10): the path stays in verifiedSkillPaths
+        // Per-agent semantics: the path stays in verifiedSkillPaths
         // (other agents may still need it), but is marked processed-for-this-agent
         // so the same agent won't be re-attempted.
         assertThat(manager.getRegisteredList()).hasSize(1);
@@ -171,7 +188,7 @@ class SkillHubManagerTest {
         };
         provider.verifyBehavior = path -> true;
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
         assertThat(manager.getVerifiedSkillPaths()).isEmpty();
 
         // Wait for background retry to succeed (timeout 10s)
@@ -198,7 +215,7 @@ class SkillHubManagerTest {
             }
         };
         manager = new SkillHubManager(provider, throwingInstaller, newConfig(tempDir), "");
-        manager.download();
+        manager.start();
 
         assertThatThrownBy(() -> manager.register(new Object()))
                 .isInstanceOf(IllegalStateException.class)
@@ -207,17 +224,17 @@ class SkillHubManagerTest {
 
     @Test
     void downloadReturnsFalseDegradesWithoutThrowing_T2(@TempDir Path tempDir) {
-        // Provider download returns false (partial failure) — Manager.download() should not throw
+        // Provider download returns false (partial failure) — Manager.start() should not throw
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> false;
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download(); // must not throw
+        manager.start(); // must not throw
         assertThat(manager.getVerifiedSkillPaths()).isEmpty();
     }
 
     @Test
     void sha256VerifyPasses_T5(@TempDir Path tempDir) throws Exception {
-        // After PR #xxx, verify() checks for an extracted dir containing SKILL.md.
+        // verify() checks for an extracted dir containing SKILL.md.
         // SHA-256 check now happens inside download() (not verify), so this test
         // simulates the post-extract state and confirms verify passes.
         CapturingProvider provider = new CapturingProvider();
@@ -227,7 +244,7 @@ class SkillHubManagerTest {
         };
         provider.verifyBehavior = path -> Files.isReadable(path.resolve("SKILL.md"));
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
     }
 
@@ -242,7 +259,7 @@ class SkillHubManagerTest {
         provider.verifyBehavior = path -> Files.isDirectory(path)
                 && Files.isReadable(path.resolve("SKILL.md"));
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
     }
 
@@ -256,11 +273,11 @@ class SkillHubManagerTest {
         provider.verifyBehavior = path -> true;
         // Installer is a no-op (agent not BaseAgent) — manager still marks as processed
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
         assertThat(manager.getRegisteredList()).isEmpty();
 
-        // Per-agent semantics (issue #10): the path stays in verifiedSkillPaths
+        // Per-agent semantics: the path stays in verifiedSkillPaths
         // (other agents may still need it), but is marked processed-for-this-agent
         // so the same agent won't be re-attempted.
         manager.register(new Object());
@@ -277,11 +294,11 @@ class SkillHubManagerTest {
         };
         provider.verifyBehavior = path -> true;
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
         Object agent = new Object();
         manager.register(agent);
         assertThat(manager.getRegisteredList()).hasSize(1);
-        // Per-agent semantics (issue #10): path stays in verifiedSkillPaths so
+        // Per-agent semantics: path stays in verifiedSkillPaths so
         // other agents can pick it up.
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
 
@@ -309,7 +326,7 @@ class SkillHubManagerTest {
         };
         provider.verifyBehavior = path -> true;
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download();
+        manager.start();
 
         int threads = 4;
         List<Thread> workers = new ArrayList<>();
@@ -335,10 +352,10 @@ class SkillHubManagerTest {
         assertThat(total).isGreaterThan(0);
     }
 
-    // ----- Regression tests for issues #1, #3, #10 -----
+    // ----- Regression tests -----
 
     /**
-     * Issue #1: INSTALL_FAILED must not cause every subsequent request from
+     * INSTALL_FAILED must not cause every subsequent request from
      * the SAME agent to re-throw the same exception forever.
      *
      * <p>Expected: after the first register() throws INSTALL_FAILED, the
@@ -364,7 +381,7 @@ class SkillHubManagerTest {
             }
         };
         manager = new SkillHubManager(provider, throwingInstaller, newConfig(tempDir), "");
-        manager.download();
+        manager.start();
 
         // First register on agent A throws INSTALL_FAILED
         Object agentA = new Object();
@@ -379,14 +396,14 @@ class SkillHubManagerTest {
                 .doesNotThrowAnyException();
 
         // The failing path STAYS in verifiedSkillPaths so a DIFFERENT agent can
-        // still try its own handover (per-agent semantics, issue #10).
+        // still try its own handover (per-agent semantics).
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
         // But it's been recorded as processed for agentA.
         assertThat(manager.getRegisteredList()).hasSize(1);
     }
 
     /**
-     * Issue #3: backgroundRetryStarted must be reset when the retry loop
+     * backgroundRetryStarted must be reset when the retry loop
      * succeeds and shuts down, so a LATER download failure can start the
      * retry loop again.
      *
@@ -413,7 +430,7 @@ class SkillHubManagerTest {
         };
         provider.verifyBehavior = path -> true;
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
-        manager.download(); // first fails, starts background retry
+        manager.start(); // first fails, starts background retry
         assertThat(manager.getVerifiedSkillPaths()).isEmpty();
 
         // Wait for background retry to succeed once
@@ -437,7 +454,7 @@ class SkillHubManagerTest {
     }
 
     /**
-     * Issue #10: when SkillHubManager is shared by multiple agents (singleton
+     * When SkillHubManager is shared by multiple agents (singleton
      * bean), registering skills for agent A must NOT consume the
      * verifiedSkillPaths so that agent B also receives the skills.
      *
@@ -469,7 +486,7 @@ class SkillHubManagerTest {
             }
         };
         manager = new SkillHubManager(provider, recordingInstaller, newConfig(tempDir), "");
-        manager.download();
+        manager.start();
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
 
         Object agentA = new Object();
@@ -529,12 +546,14 @@ class SkillHubManagerTest {
         int startCount = 0;
         int stopCount = 0;
         int downloadCount = 0;
+        Runnable startBehavior = () -> { };
         ThrowingFunction<SkillHubConfig, Boolean> downloadBehavior = cfg -> true;
         ThrowingFunction<Path, Boolean> verifyBehavior = path -> true;
 
         @Override
         public void start(SkillHubConfig config, String decryptedToken) {
             startCount++;
+            startBehavior.run();
         }
 
         @Override
@@ -542,7 +561,7 @@ class SkillHubManagerTest {
             downloadCount++;
             // ThrowingFunction.apply declares 'throws Exception' because test
             // lambdas call Files.* (IOException). Wrap the checked IOException
-            // specifically (NOT catch-all Exception, per G.ERR.02); unchecked
+            // specifically (NOT catch-all Exception); unchecked
             // IllegalStateException from stub bodies propagates on its own.
             try {
                 return downloadBehavior.apply(config);
@@ -553,7 +572,7 @@ class SkillHubManagerTest {
 
         @Override
         public boolean verify(Path skillPath) {
-            // See download() above: wrap checked IOException only (G.ERR.02).
+            // See download() above: wrap checked IOException only.
             try {
                 return verifyBehavior.apply(skillPath);
             } catch (IOException ex) {
@@ -572,7 +591,7 @@ class SkillHubManagerTest {
      * calls inside test stubs). Narrowed to {@code IOException} (instead of
      * {@code Exception}) so that stubs can catch the specific checked type
      * and wrap it into {@link IllegalStateException} without catching
-     * {@code Exception} broadly (G.ERR.02).
+     * {@code Exception} broadly.
      *
      * @param <T> input type
      * @param <R> return type

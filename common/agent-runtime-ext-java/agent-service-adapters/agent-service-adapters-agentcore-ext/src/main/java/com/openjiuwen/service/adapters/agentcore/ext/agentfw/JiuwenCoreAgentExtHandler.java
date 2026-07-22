@@ -20,7 +20,7 @@ import java.util.Objects;
 
 /**
  * AgentCore handler extension that installs remote A2A tools and SkillHub
- * skills before execution (FEAT-005 §6).
+ * skills before execution.
  *
  * @since 2026-06-30
  */
@@ -66,15 +66,10 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Override
     public void start() {
         if (skillHubManager != null) {
-            try {
-                skillHubManager.download();
-            } catch (IllegalStateException ex) {
-                // start() phase download failures are degraded + retried in background (PR #415).
-                // SkillHubManager signals config/auth/lookup/handover failures via
-                // IllegalStateException (JDK general exception, no custom exceptions per project rule).
-                log.warn("SkillHub download failed at start, will retry in background reason={}",
-                        ex.getMessage());
-            }
+            // provider.start() config/auth failures propagate (fail fast).
+            // download/integrity-check failures are degraded + retried in background
+            // inside Manager.start() and never reach here.
+            skillHubManager.start();
         }
         super.start();
     }

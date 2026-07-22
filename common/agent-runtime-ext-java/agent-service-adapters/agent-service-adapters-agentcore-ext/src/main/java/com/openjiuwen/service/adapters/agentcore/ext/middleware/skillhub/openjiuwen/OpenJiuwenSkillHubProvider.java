@@ -35,7 +35,7 @@ import java.util.zip.ZipFile;
 
 /**
  * Default {@link SkillHubProvider} implementation that talks to the
- * {@code openJiuwen/skillhub} service API (FEAT-005 §7.6).
+ * {@code openJiuwen/skillhub} service API.
  *
  * <p>API mapping:
  * <ul>
@@ -74,7 +74,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     /**
      * Bounded pool for parallel skill downloads. Created in {@link #start} and
      * shut down in {@link #stop} so repeated {@code download()} calls (e.g. the
-     * Manager's background retry every 30s) don't churn threads (issue #5).
+     * Manager's background retry every 30s) don't churn threads.
      */
     private java.util.concurrent.ExecutorService downloadPool;
 
@@ -99,9 +99,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 .connectTimeout(CONNECT_TIMEOUT)
                 .build();
         // Reuse the pool across download() calls to avoid thread churn during
-        // background retry (issue #5). Use ThreadPoolExecutor directly with a
-        // daemon thread factory that installs an uncaught-exception handler
-        // (G.CON.08 / G.CON.12).
+        // background retry. Use ThreadPoolExecutor directly with a
+        // daemon thread factory that installs an uncaught-exception handler.
         ThreadFactory downloadFactory = r -> {
             Thread t = new Thread(r, "skillhub-download");
             t.setDaemon(true);
@@ -145,7 +144,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         // 4-way bounded parallel download. Single-skill failure is isolated:
         // downloadOne throws → caught per-task → allSucceeded flips false → other tasks continue.
         // Pool is owned by the Provider (created in start(), closed in stop()) so
-        // repeated background-retry calls don't churn threads (issue #5).
+        // repeated background-retry calls don't churn threads.
         java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
         for (SkillSummary summary : skills) {
             futures.add(downloadPool.submit(() -> {
@@ -162,7 +161,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             try {
                 f.get();
             } catch (InterruptedException ie) {
-                // Per G.CON.10: do not call Thread.interrupt(); record the interrupt
+                // Do not call Thread.interrupt(); record the interrupt
                 // via the shared success flag and continue draining remaining futures.
                 allSucceeded.set(false);
                 log.warn("SkillHub skill download wait interrupted reason={}", ie.getMessage());
@@ -177,7 +176,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
 
     @Override
     public boolean verify(Path skillPath) {
-        // After PR #xxx, download() extracts the zip into a directory and deletes the zip.
+        // download() extracts the zip into a directory and deletes the zip.
         // verify() now checks that the extracted directory contains a SKILL.md (the
         // contract required by agent-core's SkillManager.registerRoot).
         if (skillPath == null) {
@@ -273,7 +272,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
 
     @Override
     public void stop() {
-        // NOTE on issue #7: ideally we'd call httpClient.close() to release the
+        // Ideally we'd call httpClient.close() to release the
         // connection pool / event-loop threads explicitly, but HttpClient.close()
         // is only available from JDK 21+. This project targets JDK 17
         // (agent-runtime-ext.java.release=17), so we cannot call it directly.
@@ -452,7 +451,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                     .GET()
                     .build();
             // Stream directly to file to avoid loading the entire zip into the
-            // JVM heap (issue #6). Large skill packages under DOWNLOAD_TIMEOUT=10min
+            // JVM heap. Large skill packages under DOWNLOAD_TIMEOUT=10min
             // could otherwise OOM.
             HttpResponse<Path> resp = httpClient.send(req,
                     HttpResponse.BodyHandlers.ofFile(target));

@@ -5,7 +5,7 @@
 package com.openjiuwen.service.spec.ext.skillhub;
 
 /**
- * Stable deployment-time SkillHub connection config (FEAT-005 §4.2, §5.2).
+ * Stable deployment-time SkillHub connection config.
  *
  * <p>Pure POJO contract without Spring annotations so the spec-ext module stays
  * free of Spring dependencies. The implementation module
@@ -14,7 +14,7 @@ package com.openjiuwen.service.spec.ext.skillhub;
  * {@code openjiuwen.service.middleware.skillhub}.
  *
  * <p>SPI methods receive this contract type as input; runtime request-level
- * user/session/task context is intentionally excluded (FEAT-005 §5.2).
+ * user/session/task context is intentionally excluded.
  *
  * @since 2026-07-15
  */

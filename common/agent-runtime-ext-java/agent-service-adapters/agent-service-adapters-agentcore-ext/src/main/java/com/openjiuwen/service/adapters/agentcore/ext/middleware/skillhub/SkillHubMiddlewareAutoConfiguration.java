@@ -20,7 +20,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * Auto-configuration for the SkillHub middleware chain (FEAT-005 §4.7).
+ * Auto-configuration for the SkillHub middleware chain.
  *
  * <p>Aligns with runtime {@code RedisMiddlewareAutoConfiguration}: uses
  * {@code @ConditionalOnProperty} + {@code @ConditionalOnMissingBean} and injects
@@ -101,7 +101,7 @@ public class SkillHubMiddlewareAutoConfiguration {
     /**
      * Decrypt the encryptedToken using runtime CredentialDecryptor (aligned with redis).
      *
-     * <p>Issue #12: the "no decryptor -> treat as plaintext" fallback is removed
+     * <p>The "no decryptor -> treat as plaintext" fallback is removed
      * because runtime's {@code CredentialDecryptorAutoConfiguration} always
      * registers a {@code PassthroughCredentialDecryptor} bean. If the bean is
      * genuinely absent (misconfiguration), we return empty token and the provider
@@ -138,7 +138,6 @@ public class SkillHubMiddlewareAutoConfiguration {
     /**
      * Fail fast when endpoint is blank - otherwise the provider would only blow
      * up later inside {@code download()} with an unfriendly {@code URI.create}.
-     * (Issue #13.)
      *
      * @param endpoint the SkillHub endpoint URL to validate
      */

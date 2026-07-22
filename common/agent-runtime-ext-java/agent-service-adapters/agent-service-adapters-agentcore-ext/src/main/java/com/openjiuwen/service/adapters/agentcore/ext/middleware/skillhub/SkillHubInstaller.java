@@ -21,15 +21,15 @@ import java.util.Optional;
  * Installs local skill paths into a {@link BaseAgent} (or the inner agent of a
  * {@link DeepAgent}) via {@link BaseAgent#registerSkill(Object)}.
  *
- * <p>Design doc §2.3 SkillHubInstaller contract + §4.5 安装结果验证.
+ * <p>SkillHubInstaller contract + 安装结果验证.
  *
- * <p>Handover semantics (PR #415): a required skill whose {@code registerSkill}
+ * <p>Handover semantics: a required skill whose {@code registerSkill}
  * call does not grow {@link SkillManager#count()} throws
  * {@code IllegalStateException} with prefix {@code SkillHub[INSTALL_FAILED]} so
  * the request thread can observe the failure. Optional skills warn and skip.
  *
  * <p>First-version simplification: {@code LocalSkillEntry} has no required flag
- * yet (FEAT-005 §2.1), so this installer treats every path as required. When
+ * yet, so this installer treats every path as required. When
  * the Provider later exposes required/optional markers, this class will branch
  * per entry.
  *
@@ -91,7 +91,7 @@ public class SkillHubInstaller {
             // without growing the count when a skill with the same name was already
             // registered (e.g. two upstream zips ship the same skill dir). Treat this
             // as idempotent success and skip — do NOT fail the whole request just
-            // because a duplicate skill name was encountered. (PR #415: handover
+            // because a duplicate skill name was encountered. (handover
             // failure blocks ready, but duplicate-name is not a handover failure,
             // it is an idempotent re-registration that agent-core already handled.)
             log.info("SkillHub skill register idempotent-skip skillPath={}"

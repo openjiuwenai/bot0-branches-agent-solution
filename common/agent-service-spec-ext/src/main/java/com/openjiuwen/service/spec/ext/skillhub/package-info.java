@@ -3,7 +3,7 @@
  */
 
 /**
- * SkillHub extension contracts (FEAT-005).
+ * SkillHub extension contracts.
  *
  * <p>Pure contract layer (SPI + DTO + config POJO) extending the runtime
  * {@code agent-service-spec} baseline. No Spring dependencies.

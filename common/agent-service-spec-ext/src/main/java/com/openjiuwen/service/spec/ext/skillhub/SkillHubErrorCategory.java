@@ -5,7 +5,7 @@
 package com.openjiuwen.service.spec.ext.skillhub;
 
 /**
- * Error categories for SkillHub access failures (FEAT-005 §4.10).
+ * Error categories for SkillHub access failures.
  *
  * <p>Used by {@code SkillHubProvider} implementations to classify failures via
  * exception message prefix {@code SkillHub[CATEGORY]}. The {@code SkillHubManager}
