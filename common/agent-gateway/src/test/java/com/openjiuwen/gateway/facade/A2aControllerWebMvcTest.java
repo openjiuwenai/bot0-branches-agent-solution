@@ -23,16 +23,17 @@ import com.openjiuwen.gateway.governance.GovernanceErrorHandler;
 import com.openjiuwen.gateway.governance.auth.AuthRule;
 import com.openjiuwen.gateway.governance.auth.CredentialDirectory;
 import com.openjiuwen.gateway.governance.auth.Principal;
+import com.openjiuwen.gateway.governance.tenant.TenantResolver;
 
 /**
- * Module-integration test for the A2A facade at the G1 (authentication) slice
- * (FEAT-011 L2 §3.3 — T-G1-1..T-G1-4). Loads the real controller, real G1
- * {@link AuthRule}, and the real {@link GovernanceErrorHandler}; only the
- * credential directory is faked (a test token). Asserts the HTTP-layer error
- * shape (status + stable {@code code}) and that a valid token passes G1.
+ * Module-integration test for the A2A facade through G1 (auth) + G2 (tenant)
+ * (FEAT-011 L2 §3.3 / §3.4). Real controller, real AuthRule, real TenantResolver,
+ * real GovernanceErrorHandler; only the credential directory is faked (a bound
+ * token and an unbound token). Asserts the HTTP-layer error shape and that a
+ * bound credential passes governance.
  */
 @WebMvcTest(controllers = A2aController.class)
-@Import({AuthRule.class, GovernanceErrorHandler.class})
+@Import({AuthRule.class, TenantResolver.class, GovernanceErrorHandler.class})
 class A2aControllerWebMvcTest {
     @Autowired
     private MockMvc mvc;
@@ -41,49 +42,63 @@ class A2aControllerWebMvcTest {
     static class TestCredentials {
         @Bean
         CredentialDirectory credentialDirectory() {
-            return token -> "good-token".equals(token)
-                    ? Optional.of(new Principal("principal-1", "tenant-1"))
-                    : Optional.empty();
+            return token -> switch (token) {
+                case "bound-token" -> Optional.of(new Principal("principal-1", "tenant-1"));
+                case "unbound-token" -> Optional.of(new Principal("principal-2", null));
+                default -> Optional.empty();
+            };
         }
     }
 
+    // --- G1 ---
+
     @Test
     void noAuthorizationReturns401AuthMissing() throws Exception {
-        mvc.perform(post("/a2a")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mvc.perform(post("/a2a").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_MISSING"));
     }
 
     @Test
     void nonBearerSchemeReturns401AuthInvalid() throws Exception {
-        mvc.perform(post("/a2a")
-                        .header("Authorization", "Basic abc")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mvc.perform(post("/a2a").header("Authorization", "Basic abc")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_INVALID"));
     }
 
     @Test
     void unknownTokenReturns401AuthInvalid() throws Exception {
-        mvc.perform(post("/a2a")
-                        .header("Authorization", "Bearer nope")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mvc.perform(post("/a2a").header("Authorization", "Bearer nope")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_INVALID"));
     }
 
+    // --- G2 ---
+
     @Test
-    void validTokenPassesG1() throws Exception {
-        // Auth passes ⇒ not 401; returns the post-G1 placeholder (501) until
-        // G2+/routing/forwarding are wired.
+    void unboundCredentialReturns403TenantUnresolved() throws Exception {
+        mvc.perform(post("/a2a").header("Authorization", "Bearer unbound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TENANT_UNRESOLVED"));
+    }
+
+    @Test
+    void conflictingSelfReportStillPasses() throws Exception {
+        // X-Tenant-Id differs from authoritative -> G2 discards it, request passes.
         mvc.perform(post("/a2a")
-                        .header("Authorization", "Bearer good-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                        .header("Authorization", "Bearer bound-token")
+                        .header("X-Tenant-Id", "tenant-other")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotImplemented());
+    }
+
+    @Test
+    void boundCredentialPassesGovernance() throws Exception {
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isNotImplemented());
     }
 }

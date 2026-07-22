@@ -95,10 +95,10 @@ common/agent-gateway/
 | T-G1-3 | S1-G1 | AuthRuleTest#unknownTokenReturnsAuthInvalid + A2aControllerWebMvcTest#unknownTokenReturns401AuthInvalid | unit+it | ✅ |
 | T-G1-4 | S1-G1 | AuthRuleTest#validTokenReturnsPrincipal + A2aControllerWebMvcTest#validTokenPassesG1 | unit+it | ✅ |
 | T-G1-5 | S1-G1 | A2aControllerWebMvcTest#noAuthorizationReturns401AuthMissing（失败在 HTTP 治理层，非已接受 Task） | it | ✅ |
-| T-G2-1 | S1-G2 | TenantResolverTest.boundTenant | unit+it | 待写 |
-| T-G2-2 | S1-G2 | TenantResolverTest.unresolvedReturns403 | unit+it | 待写 |
-| T-G2-3 | S1-G2 | TenantResolverTest.selfReportOverridden | unit+it | 待写 |
-| T-G2-4 | S1-G2 | TenantResolverTest.selfReportSameStillAuthoritative | unit+it | 待写 |
+| T-G2-1 | S1-G2 | TenantResolverTest#boundCredentialResolvesAuthoritativeTenant + A2aControllerWebMvcTest#boundCredentialPassesGovernance | unit+it | ✅ |
+| T-G2-2 | S1-G2 | TenantResolverTest#unboundCredentialReturns403TenantUnresolved + A2aControllerWebMvcTest#unboundCredentialReturns403TenantUnresolved | unit+it | ✅ |
+| T-G2-3 | S1-G2 | TenantResolverTest#conflictingSelfReportIsIgnored + A2aControllerWebMvcTest#conflictingSelfReportStillPasses | unit+it | ✅ |
+| T-G2-4 | S1-G2 | TenantResolverTest#matchingSelfReportStillYieldsAuthoritative | unit | ✅ |
 | T-G3-1 | S1-G3 | ParamValidatorTest.createWithAgentId | unit | 待写 |
 | T-G3-2 | S1-G3 | ParamValidatorTest.createWithoutAgentId | unit | 待写 |
 | T-G3-3 | S1-G3 | ParamValidatorTest.emptyAgentIdReturns400 | unit+it | 待写 |
@@ -164,7 +164,8 @@ common/agent-gateway/
 |---|---|---|---|
 | S0 骨架 | ✅ GREEN（11 测全过） | — | feat(gateway): FEAT-011 S0 |
 | S1-G1 鉴权 | ✅ GREEN | T-G1-1..5（见 §5） | feat(gateway): FEAT-011 S1-G1 |
-| S1-G2 租户 | ⏳ 下一片 | T-G2-1..4 | — |
-| S1-G3 校验 … S4 | 待办 | 见 §5 | — |
+| S1-G2 租户 | ✅ GREEN（17 测全过） | T-G2-1..4（见 §5） | feat(gateway): FEAT-011 S1-G2 |
+| S1-G3 校验 | ⏳ 下一片 | T-G3-1..6 | — |
+| S1-G4 幂等 … S4 | 待办 | 见 §5 | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）；G5 前错误体 traceId 为 advice 内临时 UUID（G5 切片挪到入口捕获 traceparent）。
