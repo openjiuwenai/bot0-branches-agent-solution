@@ -4,12 +4,10 @@
 
 package com.openjiuwen.service.app.custom.rest;
 
-import java.io.IOException;
-import java.util.concurrent.Flow;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.servlet.ServletResponse;
+
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskArtifactUpdateEvent;
@@ -19,6 +17,16 @@ import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
+import java.util.Optional;
+import java.util.concurrent.Flow;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * Streams A2A events through the host-defined SSE projection while managing request reservations.
+ *
+ * @since 0.1.0
+ */
 final class CustomRestSseTransport {
     private final CustomRestA2ABridge bridge;
     private final ObjectMapper objectMapper;
@@ -36,7 +44,7 @@ final class CustomRestSseTransport {
         emitter.onError(error -> subscriber.downstreamClosed());
         try {
             publisher.subscribe(subscriber);
-        } catch (RuntimeException exception) {
+        } catch (IllegalStateException exception) {
             subscriber.writeError(new CustomRestFailure(500, "adapter_execution_failed",
                     "The A2A stream could not be subscribed"));
         }
@@ -125,8 +133,10 @@ final class CustomRestSseTransport {
         }
 
         private void tryReleaseReservation(StreamingEventKind event) {
-            String taskId = taskId(event);
-            if (!reservationReleased.get() && taskId != null && bridge.confirmObservable(taskId, prepared)) {
+            boolean observable = !reservationReleased.get() && taskId(event)
+                    .filter(id -> bridge.confirmObservable(id, prepared))
+                    .isPresent();
+            if (observable) {
                 releaseReservation();
             }
         }
@@ -201,17 +211,17 @@ final class CustomRestSseTransport {
             return builder.data(event.data());
         }
 
-        private static String taskId(StreamingEventKind event) {
+        private static Optional<String> taskId(StreamingEventKind event) {
             if (event instanceof Task task) {
-                return task.id();
+                return Optional.ofNullable(task.id());
             }
             if (event instanceof TaskStatusUpdateEvent status) {
-                return status.taskId();
+                return Optional.ofNullable(status.taskId());
             }
             if (event instanceof TaskArtifactUpdateEvent artifact) {
-                return artifact.taskId();
+                return Optional.ofNullable(artifact.taskId());
             }
-            return null;
+            return Optional.empty();
         }
 
         private static boolean isTerminal(StreamingEventKind event) {

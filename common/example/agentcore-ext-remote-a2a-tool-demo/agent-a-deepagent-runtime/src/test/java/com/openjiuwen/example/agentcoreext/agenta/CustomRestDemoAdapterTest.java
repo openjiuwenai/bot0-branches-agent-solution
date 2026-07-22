@@ -6,11 +6,9 @@ package com.openjiuwen.example.agentcoreext.agenta;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.List;
-import java.util.Map;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
+
 import org.a2aproject.sdk.spec.TextPart;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskState;
@@ -18,6 +16,14 @@ import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Verifies the example protocol adapter request mapping and external context projection.
+ *
+ * @since 0.1.0
+ */
 class CustomRestDemoAdapterTest {
     @Test
     void mapsInputConversationAndTransportMetadata() {
@@ -35,8 +41,9 @@ class CustomRestDemoAdapterTest {
         assertThat(command.conversationId()).isEqualTo("session-1");
         assertThat(command.params().tenant()).isNull();
         assertThat(command.stream()).isTrue();
-        assertThat(((TextPart) command.params().message().parts().get(0)).text())
-                .contains("\"query\":\"hello\"").contains("\"intent\":\"test\"");
+        assertThat(command.params().message().parts()).first()
+                .isInstanceOfSatisfying(TextPart.class, part -> assertThat(part.text())
+                        .contains("\"query\":\"hello\"").contains("\"intent\":\"test\""));
         assertThat(command.params().metadata()).containsEntry("path_variables", context.pathVariables());
         assertThat(map(command.params().metadata().get("query")))
                 .containsEntry("workspace_id", "11");
@@ -56,10 +63,10 @@ class CustomRestDemoAdapterTest {
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).history(List.of()).build();
 
         Map<String, Object> response = map(adapter.fromA2ATask(task, context));
-        Task externalTask = (Task) response.get("custom_rsp_data");
 
         assertThat(response).containsEntry("conversation_id", "external-conversation");
-        assertThat(externalTask.contextId()).isEqualTo("external-conversation");
+        assertThat(response.get("custom_rsp_data")).isInstanceOfSatisfying(Task.class,
+                externalTask -> assertThat(externalTask.contextId()).isEqualTo("external-conversation"));
     }
 
     @Test
@@ -79,16 +86,19 @@ class CustomRestDemoAdapterTest {
         var statusEvent = new TaskStatusUpdateEvent("task", status,
                 "custom-rest:v1:internal-secret", Map.of());
 
-        Task externalTask = (Task) map(adapter.fromA2ATask(task, context)).get("custom_rsp_data");
+        Object externalTask = map(adapter.fromA2ATask(task, context)).get("custom_rsp_data");
         var streamEnvelope = map(adapter.fromA2AStreamEvent(statusEvent, context).data());
         var streamData = map(streamEnvelope.get("custom_rsp_data"));
-        var externalStatusEvent = (TaskStatusUpdateEvent) streamData.get("data");
 
-        assertThat(externalTask.status().message().contextId()).isEqualTo("external-conversation");
-        assertThat(externalTask.history()).allSatisfy(message ->
-                assertThat(message.contextId()).isEqualTo("external-conversation"));
-        assertThat(externalStatusEvent.contextId()).isEqualTo("external-conversation");
-        assertThat(externalStatusEvent.status().message().contextId()).isEqualTo("external-conversation");
+        assertThat(externalTask).isInstanceOfSatisfying(Task.class, value -> {
+            assertThat(value.status().message().contextId()).isEqualTo("external-conversation");
+            assertThat(value.history()).allSatisfy(message ->
+                    assertThat(message.contextId()).isEqualTo("external-conversation"));
+        });
+        assertThat(streamData.get("data")).isInstanceOfSatisfying(TaskStatusUpdateEvent.class, value -> {
+            assertThat(value.contextId()).isEqualTo("external-conversation");
+            assertThat(value.status().message().contextId()).isEqualTo("external-conversation");
+        });
     }
 
     @SuppressWarnings("unchecked")

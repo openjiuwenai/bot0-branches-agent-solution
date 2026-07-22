@@ -7,13 +7,18 @@ package com.openjiuwen.service.app.custom.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.Test;
-
+/**
+ * Verifies defensive request context copies and public request exception validation.
+ *
+ * @since 0.1.0
+ */
 class CustomRestProtocolAdapterTest {
     @Test
     void contextDefensivelyCopiesTopLevelCollectionsAndValues() {

@@ -13,6 +13,13 @@ import static org.a2aproject.sdk.spec.TaskState.TASK_STATE_REJECTED;
 import static org.a2aproject.sdk.spec.TaskState.TASK_STATE_SUBMITTED;
 import static org.a2aproject.sdk.spec.TaskState.TASK_STATE_WORKING;
 
+import org.a2aproject.sdk.jsonrpc.common.wrappers.ListTasksResult;
+import org.a2aproject.sdk.server.tasks.TaskStore;
+import org.a2aproject.sdk.server.tasks.TaskStoreException;
+import org.a2aproject.sdk.spec.ListTasksParams;
+import org.a2aproject.sdk.spec.Task;
+import org.a2aproject.sdk.spec.TaskState;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -23,14 +30,14 @@ import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
-import org.a2aproject.sdk.jsonrpc.common.wrappers.ListTasksResult;
-import org.a2aproject.sdk.server.tasks.TaskStore;
-import org.a2aproject.sdk.spec.ListTasksParams;
-import org.a2aproject.sdk.spec.Task;
-import org.a2aproject.sdk.spec.TaskState;
-
+/**
+ * Resolves resumable formal A2A tasks within an isolated Custom REST conversation context.
+ *
+ * @since 0.1.0
+ */
 final class CustomRestA2ATaskResolver {
     private static final String CONTEXT_PREFIX = "custom-rest:v1:";
     private static final int PAGE_SIZE = 100;
@@ -59,7 +66,7 @@ final class CustomRestA2ATaskResolver {
         }
     }
 
-    String resolveTaskId(String tenantId, String internalContextId) {
+    Optional<String> resolveTaskId(String tenantId, String internalContextId) {
         List<Task> tasks = loadTasks(tenantId, internalContextId);
         List<Task> activeFormalTasks = new ArrayList<>();
         for (Task task : tasks) {
@@ -78,7 +85,7 @@ final class CustomRestA2ATaskResolver {
         }
 
         if (activeFormalTasks.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         if (activeFormalTasks.size() > 1) {
             throw new CustomRestFailure(409, "conversation_task_ambiguous",
@@ -87,7 +94,7 @@ final class CustomRestA2ATaskResolver {
         Task task = activeFormalTasks.get(0);
         TaskState state = stateOf(task);
         if (state == TASK_STATE_INPUT_REQUIRED) {
-            return task.id();
+            return Optional.of(task.id());
         }
         if (state == TASK_STATE_SUBMITTED || state == TASK_STATE_WORKING) {
             throw new CustomRestFailure(409, "conversation_busy",
@@ -108,7 +115,7 @@ final class CustomRestA2ATaskResolver {
         try {
             Task task = taskStore.get(taskId);
             return task != null && internalContextId.equals(task.contextId()) && isFormal(task);
-        } catch (RuntimeException exception) {
+        } catch (TaskStoreException | IllegalStateException exception) {
             throw new CustomRestFailure(503, "task_store_unavailable", "The task store is unavailable");
         }
     }
@@ -134,6 +141,9 @@ final class CustomRestA2ATaskResolver {
                 if (page == null) {
                     throw new IllegalStateException("TaskStore returned a null page");
                 }
+                if (page.tasks() == null) {
+                    throw new IllegalStateException("TaskStore returned a page without tasks");
+                }
                 for (Task summary : page.tasks()) {
                     if (summary == null || summary.id() == null) {
                         continue;
@@ -147,7 +157,7 @@ final class CustomRestA2ATaskResolver {
                 pageToken = nextPageToken == null || nextPageToken.isBlank() ? null : nextPageToken;
             } while (pageToken != null);
             return tasks;
-        } catch (RuntimeException exception) {
+        } catch (TaskStoreException | IllegalStateException exception) {
             throw new CustomRestFailure(503, "task_store_unavailable", "The task store is unavailable");
         }
     }
@@ -162,7 +172,8 @@ final class CustomRestA2ATaskResolver {
     }
 
     private static TaskState stateOf(Task task) {
-        return task.status() == null ? null : task.status().state();
+        return task.status() == null || task.status().state() == null ? TaskState.UNRECOGNIZED
+                : task.status().state();
     }
 
     private static boolean isKnownTerminal(TaskState state) {

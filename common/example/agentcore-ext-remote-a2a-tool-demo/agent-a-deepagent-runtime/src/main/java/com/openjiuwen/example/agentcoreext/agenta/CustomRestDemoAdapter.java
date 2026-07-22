@@ -4,15 +4,11 @@
 
 package com.openjiuwen.example.agentcoreext.agenta;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 import com.openjiuwen.service.app.custom.rest.CustomRestRequestException;
+
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.StreamingEventKind;
@@ -21,6 +17,11 @@ import org.a2aproject.sdk.spec.TaskArtifactUpdateEvent;
 import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.TextPart;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Example customer protocol used to verify the configurable Custom REST entrypoint.
@@ -76,12 +77,14 @@ public final class CustomRestDemoAdapter implements CustomRestProtocolAdapter {
     @Override
     public SseEvent fromA2AStreamEvent(StreamingEventKind event, Context context) {
         StreamingEventKind externalEvent = externalize(event, context);
-        String type = "chunk";
+        String type;
         if (externalEvent instanceof TaskStatusUpdateEvent status && status.isFinalOrInterrupted()) {
             type = status.status().state().isInterrupted() ? "interrupt" : "final";
         } else if (externalEvent instanceof Task task && task.status() != null && task.status().state() != null
                 && (task.status().state().isFinal() || task.status().state().isInterrupted())) {
             type = task.status().state().isInterrupted() ? "interrupt" : "final";
+        } else {
+            type = "chunk";
         }
         return new SseEvent(type, envelope(true, "", Map.of("type", type, "data", externalEvent), context));
     }

@@ -15,9 +15,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
-import java.util.Map;
-
 import org.a2aproject.sdk.jsonrpc.common.wrappers.ListTasksResult;
 import org.a2aproject.sdk.server.tasks.TaskStore;
 import org.a2aproject.sdk.spec.ListTasksParams;
@@ -29,6 +26,14 @@ import org.a2aproject.sdk.spec.TextPart;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Verifies isolated context generation and resumable A2A task selection.
+ *
+ * @since 0.1.0
+ */
 class CustomRestA2ATaskResolverTest {
     @Test
     void contextIdIsStableIsolatedAndOpaque() {
@@ -54,9 +59,9 @@ class CustomRestA2ATaskResolverTest {
         when(store.get("formal")).thenReturn(formal);
         when(store.get("shadow:remote:session")).thenReturn(shadow);
 
-        String taskId = new CustomRestA2ATaskResolver(store).resolveTaskId(null, contextId);
+        var taskId = new CustomRestA2ATaskResolver(store).resolveTaskId(null, contextId);
 
-        assertThat(taskId).isEqualTo("formal");
+        assertThat(taskId).contains("formal");
         ArgumentCaptor<ListTasksParams> captor = ArgumentCaptor.forClass(ListTasksParams.class);
         verify(store, org.mockito.Mockito.times(2)).list(captor.capture());
         assertThat(captor.getAllValues()).extracting(ListTasksParams::pageToken).containsExactly(null, "next");
@@ -77,7 +82,7 @@ class CustomRestA2ATaskResolverTest {
         TaskStore store = storeWith(task("formal", contextId, TASK_STATE_INPUT_REQUIRED, List.of()));
         CustomRestA2ATaskResolver resolver = new CustomRestA2ATaskResolver(store);
 
-        assertThat(resolver.resolveTaskId(null, contextId)).isEqualTo("formal");
+        assertThat(resolver.resolveTaskId(null, contextId)).contains("formal");
         assertThat(resolver.isObservableFormalParent("formal", contextId)).isTrue();
     }
 
@@ -86,7 +91,7 @@ class CustomRestA2ATaskResolverTest {
         Task terminal = task("done", "ctx", TASK_STATE_COMPLETED, List.of(message("ctx")));
         TaskStore store = storeWith(terminal);
 
-        assertThat(new CustomRestA2ATaskResolver(store).resolveTaskId("tenant", "ctx")).isNull();
+        assertThat(new CustomRestA2ATaskResolver(store).resolveTaskId("tenant", "ctx")).isEmpty();
     }
 
     @Test

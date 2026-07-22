@@ -8,20 +8,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Map;
-import java.util.concurrent.Flow;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import java.util.Map;
+import java.util.concurrent.Flow;
+
+/**
+ * Verifies HTTP parsing, content negotiation, and stable Custom REST responses.
+ *
+ * @since 0.1.0
+ */
 class CustomRestHandlerTest {
     @Test
     void nonSerializableBlockingProjectionUsesStableAdapterErrorResponse() throws Exception {
@@ -156,6 +162,11 @@ class CustomRestHandlerTest {
     }
 
     private static final class SelfReference {
+        /**
+         * Returns this object to create a serialization cycle for the test.
+         *
+         * @return this object
+         */
         public SelfReference getSelf() {
             return this;
         }

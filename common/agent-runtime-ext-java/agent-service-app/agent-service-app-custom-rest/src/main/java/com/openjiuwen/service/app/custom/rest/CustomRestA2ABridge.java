@@ -4,15 +4,10 @@
 
 package com.openjiuwen.service.app.custom.rest;
 
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Flow;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.lifecycle.AgentReadiness;
+
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.auth.UnauthenticatedUser;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
@@ -25,6 +20,17 @@ import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
 
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Flow;
+
+/**
+ * Bridges a host-defined REST request to the runtime A2A request handler and response projections.
+ *
+ * @since 0.1.0
+ */
 final class CustomRestA2ABridge {
     static final String STREAM_STATE_KEY = "_a2a_stream";
 
@@ -62,11 +68,12 @@ final class CustomRestA2ABridge {
         String tenantId = command.params().tenant();
         String internalContextId = CustomRestA2ATaskResolver.internalContextId(tenantId, command.conversationId());
         Object token = acquire(internalContextId);
+        boolean preparedSuccessfully = false;
         try {
             Message original = command.params().message();
             String taskId = original.taskId();
             if (taskId == null) {
-                taskId = resolver.resolveTaskId(tenantId, internalContextId);
+                taskId = resolver.resolveTaskId(tenantId, internalContextId).orElse(null);
             }
             Message rebuiltMessage = Message.builder(original)
                     .contextId(internalContextId)
@@ -80,10 +87,12 @@ final class CustomRestA2ABridge {
                     .build();
             ServerCallContext callContext = new ServerCallContext(
                     UnauthenticatedUser.INSTANCE, Map.of(STREAM_STATE_KEY, command.stream()), Set.of());
+            preparedSuccessfully = true;
             return new Prepared(command, context, rebuiltParams, callContext, internalContextId, token);
-        } catch (RuntimeException exception) {
-            release(internalContextId, token);
-            throw exception;
+        } finally {
+            if (!preparedSuccessfully) {
+                release(internalContextId, token);
+            }
         }
     }
 

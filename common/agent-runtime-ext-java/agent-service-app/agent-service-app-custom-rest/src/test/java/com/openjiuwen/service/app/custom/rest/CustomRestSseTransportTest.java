@@ -8,20 +8,26 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.times;
-
-import java.util.Map;
-import java.util.concurrent.Flow;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.TaskState;
 import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+import java.util.concurrent.Flow;
+
+/**
+ * Verifies SSE subscription, projection, termination, and reservation lifecycle behavior.
+ *
+ * @since 0.1.0
+ */
 class CustomRestSseTransportTest {
     @Test
     void subscribeFailureWritesOneErrorAndReleasesReservationOnce() {
@@ -43,7 +49,7 @@ class CustomRestSseTransportTest {
     }
 
     @Test
-    void taskStoreFailureDuringFirstEventBecomesOneStreamErrorAndReleasesReservation() {
+    void taskStoreFailureBecomesOneStreamErrorAndReleasesReservation() {
         CustomRestA2ABridge bridge = mock(CustomRestA2ABridge.class);
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
         when(prepared.httpContext()).thenReturn(new CustomRestProtocolAdapter.Context(
@@ -188,6 +194,11 @@ class CustomRestSseTransportTest {
     }
 
     private static final class SelfReference {
+        /**
+         * Returns this object to create a serialization cycle for the test.
+         *
+         * @return this object
+         */
         public SelfReference getSelf() {
             return this;
         }
