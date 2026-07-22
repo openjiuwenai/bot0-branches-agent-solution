@@ -4,10 +4,8 @@
 
 package com.openjiuwen.example.agentcoreext.agenta;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
-import com.openjiuwen.service.app.custom.rest.CustomRestRequestException;
 
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
@@ -38,19 +36,15 @@ public final class CustomRestDemoAdapter implements CustomRestProtocolAdapter {
     @Override
     public A2ASendCommand toA2ARequest(Context context) {
         String conversationId = context.pathVariables().get("conversation_id");
-        if (conversationId == null || conversationId.isBlank()) {
-            throw new CustomRestRequestException(400, "invalid_custom_request", "conversation_id is required");
-        }
         Object input = context.body().get("input");
-        if (input == null) {
-            throw new CustomRestRequestException(400, "invalid_custom_request", "input is required");
-        }
 
         String inputText;
-        try {
-            inputText = input instanceof String text ? text : objectMapper.writeValueAsString(input);
-        } catch (JsonProcessingException exception) {
-            throw new CustomRestRequestException(400, "invalid_custom_request", "input cannot be serialized");
+        if (input == null) {
+            inputText = "";
+        } else if (input instanceof String text) {
+            inputText = text;
+        } else {
+            inputText = objectMapper.valueToTree(input).toString();
         }
 
         Message message = Message.builder()
@@ -65,7 +59,8 @@ public final class CustomRestDemoAdapter implements CustomRestProtocolAdapter {
         metadata.put("path_variables", context.pathVariables());
         MessageSendParams params = MessageSendParams.builder().message(message).metadata(metadata).build();
         Object stream = context.body().get("stream");
-        boolean streaming = stream instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(stream));
+        boolean streaming = stream == null
+                || (stream instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(stream)));
         return new A2ASendCommand(params, conversationId, streaming);
     }
 

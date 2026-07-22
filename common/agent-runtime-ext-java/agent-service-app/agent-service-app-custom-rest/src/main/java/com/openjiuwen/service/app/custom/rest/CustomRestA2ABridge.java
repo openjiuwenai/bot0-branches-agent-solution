@@ -49,14 +49,7 @@ final class CustomRestA2ABridge {
     }
 
     Prepared prepare(CustomRestProtocolAdapter.Context context, boolean acceptsSse) {
-        CustomRestProtocolAdapter.A2ASendCommand command;
-        try {
-            command = adapter.toA2ARequest(context);
-        } catch (CustomRestRequestException exception) {
-            throw new CustomRestFailure(exception.getHttpStatus(), exception.getCode(), exception.getMessage());
-        } catch (RuntimeException exception) {
-            throw new CustomRestFailure(500, "adapter_execution_failed", "The custom protocol adapter failed");
-        }
+        CustomRestProtocolAdapter.A2ASendCommand command = adapter.toA2ARequest(context);
         validateCommand(command);
         if (command.stream() && !acceptsSse) {
             throw new CustomRestFailure(406, "stream_not_acceptable", "The request does not accept an SSE response");
@@ -132,36 +125,24 @@ final class CustomRestA2ABridge {
     }
 
     Object projectError(CustomRestFailure failure, CustomRestProtocolAdapter.Context context) {
-        try {
-            Object projected = adapter.fromError(failure.toError(), context);
-            return projected != null ? projected : fallbackError(failure);
-        } catch (RuntimeException exception) {
-            return fallbackError(failure);
-        }
+        Object projected = adapter.fromError(failure.toError(), context);
+        return projected != null ? projected : fallbackError(failure);
     }
 
     CustomRestProtocolAdapter.SseEvent projectStreamError(CustomRestFailure failure,
                                                            CustomRestProtocolAdapter.Context context) {
-        try {
-            CustomRestProtocolAdapter.SseEvent projected = adapter.fromStreamError(failure.toError(), context);
-            return projected != null ? projected : fallbackSseError(failure);
-        } catch (RuntimeException exception) {
-            return fallbackSseError(failure);
-        }
+        CustomRestProtocolAdapter.SseEvent projected = adapter.fromStreamError(failure.toError(), context);
+        return projected != null ? projected : fallbackSseError(failure);
     }
 
     CustomRestProtocolAdapter.SseEvent projectEvent(StreamingEventKind event,
                                                      CustomRestProtocolAdapter.Context context) {
-        try {
-            CustomRestProtocolAdapter.SseEvent projected = adapter.fromA2AStreamEvent(event, context);
-            if (projected == null) {
-                throw new IllegalStateException("Adapter returned a null SSE event");
-            }
-            return projected;
-        } catch (RuntimeException exception) {
+        CustomRestProtocolAdapter.SseEvent projected = adapter.fromA2AStreamEvent(event, context);
+        if (projected == null) {
             throw new CustomRestFailure(500, "adapter_execution_failed",
                     "The custom stream event could not be projected");
         }
+        return projected;
     }
 
     CustomRestFailure streamFailure(Throwable throwable) {
@@ -187,16 +168,12 @@ final class CustomRestA2ABridge {
     }
 
     private Object projectTask(Task task, CustomRestProtocolAdapter.Context context) {
-        try {
-            Object projected = adapter.fromA2ATask(task, context);
-            if (projected == null) {
-                throw new IllegalStateException("Adapter returned a null response");
-            }
-            return projected;
-        } catch (RuntimeException exception) {
+        Object projected = adapter.fromA2ATask(task, context);
+        if (projected == null) {
             throw new CustomRestFailure(500, "adapter_execution_failed",
                     "The custom response could not be projected");
         }
+        return projected;
     }
 
     private Object acquire(String internalContextId) {

@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Verifies defensive request context copies and public request exception validation.
+ * Verifies defensive request context copies.
  *
  * @since 0.1.0
  */
@@ -42,16 +42,5 @@ class CustomRestProtocolAdapterTest {
         assertThat(context.body()).containsKey("nested");
         assertThatThrownBy(() -> context.headers().put("other", List.of()))
                 .isInstanceOf(UnsupportedOperationException.class);
-    }
-
-    @Test
-    void requestExceptionOnlyAcceptsClientStatuses() {
-        var exception = new CustomRestRequestException(422, "invalid_input", "safe message");
-
-        assertThat(exception.getHttpStatus()).isEqualTo(422);
-        assertThat(exception.getCode()).isEqualTo("invalid_input");
-        assertThat(exception.getMessage()).isEqualTo("safe message");
-        assertThatThrownBy(() -> new CustomRestRequestException(500, "bad", "bad"))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 }

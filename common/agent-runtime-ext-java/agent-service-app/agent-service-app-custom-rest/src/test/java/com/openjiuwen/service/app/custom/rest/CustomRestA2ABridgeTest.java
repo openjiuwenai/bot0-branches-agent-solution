@@ -81,6 +81,17 @@ class CustomRestA2ABridgeTest {
     }
 
     @Test
+    void doesNotWrapUnexpectedRequestMappingFailure() {
+        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
+        IllegalStateException failure = new IllegalStateException("adapter bug");
+        when(adapter.toA2ARequest(any())).thenThrow(failure);
+        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, mock(RequestHandler.class),
+                mock(TaskStore.class), null);
+
+        assertThatThrownBy(() -> bridge.prepare(context(), true)).isSameAs(failure);
+    }
+
+    @Test
     void releasesBlockingReservationBeforeProjectingTheResponse() {
         CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
         RequestHandler handler = mock(RequestHandler.class);
@@ -134,6 +145,62 @@ class CustomRestA2ABridgeTest {
         assertThat(failure.getHttpStatus()).isEqualTo(422);
         assertThat(failure.getCode()).isEqualTo("a2a_-32602");
         assertThat(failure.getMessage()).doesNotContain("sensitive detail");
+    }
+
+    @Test
+    void doesNotSwallowUnexpectedErrorProjectionFailure() {
+        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
+        IllegalStateException failure = new IllegalStateException("adapter bug");
+        when(adapter.fromError(any(), any())).thenThrow(failure);
+        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, mock(RequestHandler.class),
+                mock(TaskStore.class), null);
+
+        assertThatThrownBy(() -> bridge.projectError(
+                new CustomRestFailure(500, "error", "message"), context())).isSameAs(failure);
+    }
+
+    @Test
+    void doesNotSwallowUnexpectedStreamErrorProjectionFailure() {
+        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
+        IllegalStateException failure = new IllegalStateException("adapter bug");
+        when(adapter.fromStreamError(any(), any())).thenThrow(failure);
+        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, mock(RequestHandler.class),
+                mock(TaskStore.class), null);
+
+        assertThatThrownBy(() -> bridge.projectStreamError(
+                new CustomRestFailure(500, "error", "message"), context())).isSameAs(failure);
+    }
+
+    @Test
+    void doesNotWrapUnexpectedStreamEventProjectionFailure() {
+        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
+        IllegalStateException failure = new IllegalStateException("adapter bug");
+        Task event = Task.builder().id("task").contextId("context")
+                .status(new TaskStatus(TaskState.TASK_STATE_WORKING)).history(List.of()).build();
+        when(adapter.fromA2AStreamEvent(event, context())).thenThrow(failure);
+        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, mock(RequestHandler.class),
+                mock(TaskStore.class), null);
+
+        assertThatThrownBy(() -> bridge.projectEvent(event, context())).isSameAs(failure);
+    }
+
+    @Test
+    void doesNotWrapUnexpectedTaskProjectionFailure() {
+        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
+        RequestHandler handler = mock(RequestHandler.class);
+        TaskStore store = mock(TaskStore.class);
+        when(store.list(any())).thenReturn(new ListTasksResult(List.of()));
+        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello")).build();
+        when(adapter.toA2ARequest(any())).thenReturn(new CustomRestProtocolAdapter.A2ASendCommand(
+                MessageSendParams.builder().message(message).build(), "conversation", false));
+        Task task = Task.builder().id("task").contextId("context")
+                .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).history(List.of()).build();
+        when(handler.onMessageSend(any(), any())).thenReturn(task);
+        IllegalStateException failure = new IllegalStateException("adapter bug");
+        when(adapter.fromA2ATask(task, context())).thenThrow(failure);
+        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, handler, store, null);
+
+        assertThatThrownBy(() -> bridge.executeBlocking(bridge.prepare(context(), true))).isSameAs(failure);
     }
 
     private static CustomRestProtocolAdapter.Context context() {

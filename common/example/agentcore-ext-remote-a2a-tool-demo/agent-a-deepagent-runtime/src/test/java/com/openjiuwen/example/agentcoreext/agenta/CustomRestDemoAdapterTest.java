@@ -54,6 +54,40 @@ class CustomRestDemoAdapterTest {
     }
 
     @Test
+    void defaultsToStreamingWhenStreamIsMissing() {
+        CustomRestDemoAdapter adapter = new CustomRestDemoAdapter(new ObjectMapper());
+        var context = new CustomRestProtocolAdapter.Context(Map.of(),
+                Map.of("conversation_id", "session-1"), Map.of(), Map.of("input", "hello"));
+
+        var command = adapter.toA2ARequest(context);
+
+        assertThat(command.stream()).isTrue();
+    }
+
+    @Test
+    void leavesMissingConversationForFrameworkValidation() {
+        CustomRestDemoAdapter adapter = new CustomRestDemoAdapter(new ObjectMapper());
+        var context = new CustomRestProtocolAdapter.Context(
+                Map.of(), Map.of(), Map.of(), Map.of("input", "hello"));
+
+        var command = adapter.toA2ARequest(context);
+
+        assertThat(command.conversationId()).isNull();
+    }
+
+    @Test
+    void mapsMissingInputToEmptyText() {
+        CustomRestDemoAdapter adapter = new CustomRestDemoAdapter(new ObjectMapper());
+        var context = new CustomRestProtocolAdapter.Context(
+                Map.of(), Map.of("conversation_id", "session-1"), Map.of(), Map.of());
+
+        var command = adapter.toA2ARequest(context);
+
+        assertThat(command.params().message().parts()).first()
+                .isInstanceOfSatisfying(TextPart.class, part -> assertThat(part.text()).isEmpty());
+    }
+
+    @Test
     void responseDoesNotExposeInternalA2AContextId() {
         ObjectMapper objectMapper = new ObjectMapper();
         CustomRestDemoAdapter adapter = new CustomRestDemoAdapter(objectMapper);
