@@ -32,6 +32,7 @@ final class VersatileResponseExtractor {
     private final Map<String, String> extractedFields = new LinkedHashMap<>();
     private String error;
     private boolean pendingInterrupt;
+    private boolean interruptSignalSeen;
     private String interruptPrompt;
     private String interruptInputRequirement;
     private String interruptResumeToken;
@@ -52,6 +53,7 @@ final class VersatileResponseExtractor {
 
         Optional<JsonNode> json = readTree(data.get());
         if (matchesInterruptSignal(data.get(), json)) {
+            interruptSignalSeen = true;
             extractInterruptFields(json.orElse(null));
             return new ArrayList<>();
         }
@@ -150,7 +152,7 @@ final class VersatileResponseExtractor {
         if (interrupt == null || !hasText(interrupt.getSignalMatch())) {
             return false;
         }
-        return rawData.contains(interrupt.getSignalMatch());
+        return rawData.contains("\"event\":\"" + interrupt.getSignalMatch() + "\"");
     }
 
     private void extractInterruptFields(JsonNode json) {
@@ -164,7 +166,7 @@ final class VersatileResponseExtractor {
     }
 
     private boolean interruptSignalSeenButIncomplete() {
-        return interruptPrompt != null || interruptInputRequirement != null || interruptResumeToken != null;
+        return interruptSignalSeen && !pendingInterrupt;
     }
 
     private static String readPath(JsonNode json, String path) {
