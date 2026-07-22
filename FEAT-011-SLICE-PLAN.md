@@ -168,7 +168,8 @@ common/agent-gateway/
 | S1-G3 校验 | ✅ GREEN（28 测全过） | T-G3-1..6（见 §5） | feat(gateway): FEAT-011 S1-G3 |
 | S1-G4 幂等 | ✅ GREEN（37 测全过） | T-G4-1..5（见 §5；T-G4-2 REPLAY e2e 待 S2） | feat(gateway): FEAT-011 S1-G4 |
 | S1-G5 审计 | ✅ GREEN（43 测全过） | T-G5-1..4（见 §5；顺带解决 TD-2 traceId 入口贯穿） | feat(gateway): FEAT-011 S1-G5 |
-| RDC-PORT | ⏳ 下一片 | 支撑 T-S2-*/T-S5-* | — |
-| S2-sync … S4 | 待办 | 见 §5 | — |
+| RDC-PORT | ✅ GREEN（48 测全过） | 支撑 T-S2-*/T-S5-*（HttpRdcRouteClient + MockWebServer + FakeRdcRouteClient） | feat(gateway): FEAT-011 RDC-PORT |
+| S2-sync | ⏳ 下一片 | T-S2-1/2/5/6/7 | — |
+| S2-SSE … S4 | 待办 | 见 §5 | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）。（TD-2 traceId 入口贯穿已在 S1-G5 解决。）
