@@ -93,6 +93,10 @@ class A2aControllerWebMvcTest {
     private static final String RESUME_BODY =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m-res\",\"taskId\":\"task-1\",\"parts\":[]}}}";
+    private static final String CONTINUE_INPUT_BODY =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                    + "\"params\":{\"message\":{\"messageId\":\"ci-1\",\"taskId\":\"task-ci\","
+                    + "\"contextId\":\"conv-1\",\"parts\":[{\"text\":\"补充：138xxxx\"}]}}}";
     private static final String TASK_RESPONSE =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-9\"}}";
     private static final String STREAM_CREATE =
@@ -341,5 +345,28 @@ class A2aControllerWebMvcTest {
                         .contentType(MediaType.APPLICATION_JSON).content(RESUME_BODY))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESUME_OWNER_UNKNOWN"));
+    }
+
+    // --- S4 continueInput (same wire as S3; reuses the sticky path) ---
+
+    @Test
+    void continueInputReachesOriginalOwner() throws Exception {
+        sticky.put("task-ci", "h1");
+        runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"id\":\"task-ci\",\"status\":\"working\"}}");
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(CONTINUE_INPUT_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value("task-ci"));
+        assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
+    }
+
+    @Test
+    void continueInputTerminalStateIsPassedThroughNotNewCreate() throws Exception {
+        sticky.put("task-ci", "h1");
+        runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"error\":{\"code\":-32004,\"message\":\"terminal\"}}");
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(CONTINUE_INPUT_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error.code").value(-32004));
     }
 }
