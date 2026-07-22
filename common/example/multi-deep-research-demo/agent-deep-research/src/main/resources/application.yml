@@ -30,11 +30,11 @@ openjiuwen:
       remote-agents:
         - name: search-agent
           url: ${SEARCH_AGENT_URL:http://127.0.0.1:18091}
-        # read-agent / verify-agent — uncomment when the respective runtime is up:
+        - name: verify-agent
+          url: ${VERIFY_AGENT_URL:http://127.0.0.1:18093}
+        # read-agent — uncomment when the respective runtime is up:
         # - name: read-agent
         #   url: ${READ_AGENT_URL:http://127.0.0.1:18092}
-        # - name: verify-agent
-        #   url: ${VERIFY_AGENT_URL:http://127.0.0.1:18093}
     external:
       sandbox:
         enabled: ${SANDBOX_ENABLED:false}
