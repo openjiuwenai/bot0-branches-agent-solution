@@ -78,7 +78,13 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
         variant_temperature: float = 1.5,
         max_experiences: int = 10,
         validate_variant_completeness: bool = False,
+        # True（默认）：无组内分差仍做语义对比学习并写回经验库。
+        # False：组内得分无方差时跳过语义优势与经验库更新。
+        learn_without_score_variance: bool = True,
+        semantic_advantage_temperature: float = 0.95,
         rollout_temperature: float | None = None,
+        scenario_name: str | None = None,
+        scenarios_dir: Any = None,
         **kwargs: Any,
     ) -> None:
         kwargs.setdefault("use_slow_update", False)
@@ -105,7 +111,11 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
         )
         self._variant_temperature = float(variant_temperature)
         self._validate_variant_completeness = bool(validate_variant_completeness)
+        self._learn_without_score_variance = bool(learn_without_score_variance)
+        self._semantic_advantage_temperature = float(semantic_advantage_temperature)
         self._rollout_temperature = rollout_temperature
+        self._scenario_name = scenario_name
+        self._scenarios_dir = scenarios_dir
         self._experience_libs: dict[str, ExperienceLibrary] = {
             op_id: ExperienceLibrary(domain="markdown", max_experiences=max_experiences)
             for op_id in self._operators
@@ -141,6 +151,12 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             f"for conversation_id={conversation_id}"
         )
 
+    def _prompt_load_kwargs(self) -> dict[str, Any]:
+        return {
+            "scenario_name": self._scenario_name,
+            "scenarios_dir": self._scenarios_dir,
+        }
+
     async def _generate_variant(
         self,
         *,
@@ -155,22 +171,11 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             current_best=current_best,
             experience_context=experience_context,
             epoch=epoch,
+            variant_index=variant_index,
+            group_size=self._group_size,
+            **self._prompt_load_kwargs(),
         )
-        axes = (
-            "判定/决策门槛与例外条款（可增删改）",
-            "流程步骤与易错点前置",
-            "输出契约自检与文档结构重组",
-        )
-        axis = axes[(max(variant_index, 1) - 1) % len(axes)]
-        explore_hint = (
-            "经验库为空：请大胆增删改条款做差异化探索；"
-            if not (experience_context or "").strip()
-            else "在吸收经验的前提下仍须与其它变体拉开差异；"
-        )
-        prompt += (
-            f"\n**Rollout 侧重点提示：** 变体 {variant_index}/{self._group_size} "
-            f"——{explore_hint}本变体主改进轴优先围绕「{axis}」。\n"
-        )
+
         usable = None
         if self._validate_variant_completeness:
 
@@ -212,25 +217,41 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
         epoch: int,
     ) -> list[str]:
         del operator_id, epoch
-        if not scores_have_variance(rollouts):
+        has_variance = scores_have_variance(rollouts)
+        if not has_variance and not self._learn_without_score_variance:
             logger.info(
-                "[tf_grpo] skip experience update: no score variance"
+                "[tf_grpo] skip experience update: no score variance "
+                "(learn_without_score_variance=false)"
             )
             return []
+        if not has_variance:
+            logger.info(
+                "[tf_grpo] proceed experience update without score variance "
+                "(qualitative semantic advantage)"
+            )
 
-        advantage_prompt = build_semantic_advantage_prompt(rollouts, library)
+        advantage_prompt = build_semantic_advantage_prompt(
+            rollouts,
+            library,
+            has_score_variance=has_variance,
+            **self._prompt_load_kwargs(),
+        )
         advantage = await invoke_text_with_retry(
             self._llm,
             self._model,
             advantage_prompt,
             policy=self._llm_policy,
-            temperature=self._variant_temperature,
+            temperature=self._semantic_advantage_temperature,
             is_result_usable=lambda text: bool((text or "").strip()),
         )
         if not (advantage or "").strip():
             return []
 
-        ops_prompt = build_library_update_prompt(advantage, library)
+        ops_prompt = build_library_update_prompt(
+            advantage,
+            library,
+            **self._prompt_load_kwargs(),
+        )
         ops_raw = await invoke_text_with_retry(
             self._llm,
             self._model,
@@ -385,6 +406,7 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             skill_content=skill_content,
             case_briefs=briefs,
             mean_score=mean_score,
+            **self._prompt_load_kwargs(),
         )
         try:
             summary = await invoke_text_with_retry(
@@ -578,6 +600,8 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             )
             self._current_skill_by_operator[op_id] = candidate
 
+        self._export_experience_libraries(artifact_epoch)
+
         self._current_skill_content = next(
             iter(self._current_skill_by_operator.values()),
             self._epoch_base_skill_content,
@@ -600,6 +624,36 @@ class TfGrpoOptimizer(DictSkillDocumentOptimizer):
             ),
             n_operators=len(self._operators),
         )
+
+    def _export_experience_libraries(self, artifact_epoch: int) -> None:
+        """Persist each operator's experience library for this artifact epoch."""
+        exporter = getattr(self, "_artifact_exporter", None)
+        export_fn = getattr(exporter, "export_experience_library", None)
+        if not callable(export_fn):
+            return
+        multi = len(self._experience_libs) > 1
+        for op_id, library in self._experience_libs.items():
+            export_fn(
+                artifact_epoch,
+                library.to_dict(),
+                operator_id=op_id if multi else "",
+            )
+            self._push_phase(
+                "log",
+                {
+                    "level": "info",
+                    "message": (
+                        f"TF-GRPO 已导出经验库 epoch={artifact_epoch} "
+                        f"op={op_id} n={len(library.experiences)}"
+                    ),
+                    "phase": "tf_grpo_experience_export",
+                    "epoch": artifact_epoch,
+                    "data": {
+                        "operator_id": op_id,
+                        "n_experiences": len(library.experiences),
+                    },
+                },
+            )
 
     def _on_step_apply(self, step: int, n_edits: int, n_operators: int) -> None:
         self._push_phase(

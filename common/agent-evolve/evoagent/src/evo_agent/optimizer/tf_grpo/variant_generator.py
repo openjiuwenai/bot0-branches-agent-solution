@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
+
+from evo_agent.optimizer.tf_grpo.prompts import (
+    VARIANT_EMPTY,
+    VARIANT_FOCUS_EMPTY,
+    VARIANT_FOCUS_WITH_EXPERIENCE,
+    VARIANT_WITH_EXPERIENCE,
+    load_tf_grpo_prompt,
+    render_prompt,
+)
 
 _FENCE_RE = re.compile(
     r"^```(?:markdown|md)?\s*\n(?P<body>.*?)\n```\s*$",
@@ -10,6 +20,17 @@ _FENCE_RE = re.compile(
 )
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n?", re.DOTALL)
 _ABRUPT_LINE_RE = re.compile(r"""(?:":\s*|,\s*|[\{\[\(]|:\s*)$""")
+
+_EMPTY_AXES = (
+    "判定/决策门槛与例外条款（可增删改）",
+    "流程步骤与易错点前置",
+    "输出契约自检与文档结构重组",
+)
+_EXPERIENCE_LANDINGS = (
+    "把经验落成更前置的判定/澄清步骤",
+    "把经验落成更明确的自检清单与失败分支",
+    "把经验落成更具体的边界示例与反例",
+)
 
 
 def skill_document_incompleteness_reason(
@@ -87,6 +108,10 @@ def build_variant_prompt(
     current_best: str,
     experience_context: str,
     epoch: int,
+    variant_index: int = 1,
+    group_size: int = 1,
+    scenario_name: str | None = None,
+    scenarios_dir: Path | str | None = None,
     max_content_chars: int = 15000,
 ) -> str:
     content = current_best
@@ -95,48 +120,43 @@ def build_variant_prompt(
 
     experience_raw = (experience_context or "").strip()
     experience_empty = not experience_raw
+    idx = max(variant_index, 1)
 
+    load_kw = {"scenario_name": scenario_name, "scenarios_dir": scenarios_dir}
     if experience_empty:
-        experience_block = """**经验库状态：** 空（尚无历史经验）。
+        axis = _EMPTY_AXES[(idx - 1) % len(_EMPTY_AXES)]
+        focus_hint = render_prompt(
+            load_tf_grpo_prompt(VARIANT_FOCUS_EMPTY, **load_kw),
+            {
+                "variant_index": idx,
+                "group_size": max(group_size, 1),
+                "axis": axis,
+            },
+        )
+        return render_prompt(
+            load_tf_grpo_prompt(VARIANT_EMPTY, **load_kw),
+            {
+                "current_best": content,
+                "epoch": epoch,
+                "focus_hint": focus_hint,
+            },
+        )
 
-**本轮探索策略（经验为空时强制执行）：**
-- 允许**自由探索**：不必保守微调，可对规则/条款做增、删、改、重排。
-- 鼓励与当前版本形成**可辨识差异**（不要只改措辞或同义改写）。
-- 可尝试的改动类型（本变体至少落实一类，最好两类）：
-  1. **新增条款**：补判定门槛、例外、反例、自检步骤、速查表行等
-  2. **删除/收紧**：去掉空泛套话、互相打架的规则、易诱发误判的表述
-  3. **改写关键路径**：调整责任判定优先级、超时与有责的耦合方式、证据门槛
-  4. **结构调整**：合并重复节、把易错点提前、改输出自检清单
-- 探索仍须保持文档可执行：保留输出契约与依赖；不要把文档改成空壳或不可用。"""
-    else:
-        experience_block = f"""**已学习经验（请优先吸收，但仍须产出与其它变体不同的改法）：**
-
-{experience_raw}
-
-**在有经验时：**
-- 落实经验中的可执行建议，同时允许补充、删改冲突条款以消除歧义。
-- 禁止仅做同义改写；每个变体应有独立的主改进轴。"""
-
-    return f"""请对这份技能文档（SKILL.md）生成一个**多样化**的改进变体。
-
-{experience_block}
-
-**当前最优版本：**
-{content}
-
-**多样性要求（所有变体必须遵守）：**
-- 相对当前版本，必须有**实质性**差异（规则内容或判定流程变化），禁止原样复制。
-- 同一轮多个变体应走**不同改进轴**（例如：判定门槛、流程易错点、输出自检/结构）。
-- 允许增、删、改条款；不要只做同义改写或重复堆叠口号式原则。
-- 优先写可执行规则与步骤，少写空泛原则。
-
-**其它要求：**
-1. **Frontmatter**：若文档以 YAML frontmatter（--- ... ---）开头，**保持其内容不变**
-2. 需要时补充清晰示例或边界情况，但不要无谓灌水把全文拉长
-3. 只输出完整的 SKILL.md 正文（不要前言、不要解释）
-4. 不要用 markdown 代码围栏包裹整份文档
-5. 禁止截断：闭合所有代码围栏 / JSON 块 / `<answer>` 标签；若当前版本含「输出契约」「依赖」等章节，必须保留
-6. 轮次提示：第 {epoch} 轮
-
-优化后的 SKILL.md：
-"""
+    landing = _EXPERIENCE_LANDINGS[(idx - 1) % len(_EXPERIENCE_LANDINGS)]
+    focus_hint = render_prompt(
+        load_tf_grpo_prompt(VARIANT_FOCUS_WITH_EXPERIENCE, **load_kw),
+        {
+            "variant_index": idx,
+            "group_size": max(group_size, 1),
+            "landing": landing,
+        },
+    )
+    return render_prompt(
+        load_tf_grpo_prompt(VARIANT_WITH_EXPERIENCE, **load_kw),
+        {
+            "experience_context": experience_raw,
+            "current_best": content,
+            "epoch": epoch,
+            "focus_hint": focus_hint,
+        },
+    )

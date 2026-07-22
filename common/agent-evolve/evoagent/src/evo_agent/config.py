@@ -32,6 +32,8 @@ class EvolveConfig(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"
     optimizer_model: str = "gpt-4o"
+    # LLM 评估器模型；空字符串时回退到 optimizer_model（保持旧行为）。
+    evaluator_model: str = ""
     target_model: str = "gpt-4o"
     # LLM HTTP 调用超时（秒）。大 prompt / 慢模型需调大（对齐 bank 150 / 建议 300）。
     # openjiuwen Model 默认 60s 易 408。EVO_LLM_TIMEOUT。
