@@ -375,7 +375,7 @@ public final class TestAgentRuntime {
                 msg.sourceServiceId(),         // targetServiceId = original caller
                 req.deadlineMillisEpoch(),
                 inline != null ? ForwardingEnvelope.PayloadPolicy.DATA_BEARING
-                               : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY,
+                        : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY,
                 null,                          // payloadRef: data reference — absent for these small responses
                 inline);                        // inlinePayload: the A2A response envelope content
     }

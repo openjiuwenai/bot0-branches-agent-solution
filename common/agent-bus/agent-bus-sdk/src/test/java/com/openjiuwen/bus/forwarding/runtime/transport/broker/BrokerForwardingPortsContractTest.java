@@ -332,7 +332,7 @@ class BrokerForwardingPortsContractTest {
     }
 
     @Test
-    void produce_then_poll_propagates_control_fields_and_data_as_first_class() {
+    void control_and_data_survive_broker_hop_as_first_class() {
         // P-06 contract: the broker hop must NOT overload payloadRef as a control-descriptor token.
         // The request's control plane (traceId / idempotencyKey / routeHandle / capability / deadline)
         // rides its OWN first-class header fields; the A2A data reference (payloadRef) and the bounded

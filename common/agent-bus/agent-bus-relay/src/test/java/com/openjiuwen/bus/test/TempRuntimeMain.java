@@ -485,7 +485,9 @@ public final class TempRuntimeMain {
                 || msg.startsWith("Poll loop");
     }
 
-    /** Truncate a (possibly null) body for logging so a large inline payload doesn't flood the log. */
+    /**
+     * Truncate a (possibly null) body for logging so a large inline payload doesn't flood the log.
+     */
     private static String abbreviate(String body, int max) {
         if (body == null) {
             return "null";

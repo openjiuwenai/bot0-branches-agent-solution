@@ -520,17 +520,18 @@ public final class GatewayRuntimeService implements IngressGateway {
         // A2A-aware caller — interprets the inline response content here; the bus carries it opaquely.
         // Pre-P-06 this peeked a token from payloadRef (the retired descriptor codec), conflating the
         // data reference with response content.
+        String result = null;
         String body = m.inlinePayload();
-        if (body == null || body.isBlank()) {
-            return null;
-        }
-        for (String pair : body.split(";")) {
-            int eq = pair.indexOf('=');
-            if (eq > 0 && pair.substring(0, eq).equals(key)) {
-                return pair.substring(eq + 1);
+        if (body != null && !body.isBlank()) {
+            for (String pair : body.split(";")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0 && pair.substring(0, eq).equals(key)) {
+                    result = pair.substring(eq + 1);
+                    break;
+                }
             }
         }
-        return null;
+        return result;
     }
 
     private static String requireNonBlank(String value, String name) {

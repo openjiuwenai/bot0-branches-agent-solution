@@ -190,7 +190,7 @@ class RealBrokerProduceSideIntegrationTest {
      * @throws Exception if the gateway dispatch, broker produce, or capture fails
      */
     @Test
-    void uc2_clientInvocationRequest_landsOnBrokerWithControlAndInlinedBody() throws Exception {
+    void uc2_request_landsWithControlAndInlineBody() throws Exception {
         UUID requestId = UUID.randomUUID();
         IngressEnvelope env = new IngressEnvelope(
                 requestId, TENANT, UUID.randomUUID(),

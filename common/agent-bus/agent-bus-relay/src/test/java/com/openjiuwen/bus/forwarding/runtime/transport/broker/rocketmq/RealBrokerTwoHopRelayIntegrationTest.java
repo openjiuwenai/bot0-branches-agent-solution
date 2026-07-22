@@ -564,6 +564,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
      */
     static final class TempRuntime {
         private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("it-TempRuntime");
+
         private final RocketMqBrokerForwardingConsumer consumer;
         private final DefaultMQProducer producer;
         private final AtomicLong taskSeq = new AtomicLong();

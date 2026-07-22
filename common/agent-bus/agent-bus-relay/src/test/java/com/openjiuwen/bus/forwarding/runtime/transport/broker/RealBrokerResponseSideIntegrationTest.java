@@ -96,20 +96,6 @@ class RealBrokerResponseSideIntegrationTest {
     private static final String GATEWAY = "it-gateway";
     private static final String RUNTIME = "it-agent-runtime";
 
-    /** P-06: extract a {@code key=value} token from a response inlinePayload (A2A response content). */
-    private static String inlineToken(String body, String key) {
-        if (body == null || body.isBlank()) {
-            return null;
-        }
-        for (String pair : body.split(";")) {
-            int eq = pair.indexOf('=');
-            if (eq > 0 && pair.substring(0, eq).equals(key)) {
-                return pair.substring(eq + 1);
-            }
-        }
-        return null;
-    }
-
     // distinct consumer-GROUPS so A (acceptWindow) and V (verifier) each receive every response
     // (same group would load-balance queues → each misses what the other got).
     private static final String GROUP_RESP = "it-gateway-resp";
@@ -136,6 +122,23 @@ class RealBrokerResponseSideIntegrationTest {
     private static TempRuntime tempRuntime; // T: LitePull poll-loop consuming requests
 
     private GatewayRuntimeService gateway;
+
+    /**
+     * P-06: extract a {@code key=value} token from a response inlinePayload (A2A response content).
+     */
+    private static String inlineToken(String body, String key) {
+        String result = null;
+        if (body != null && !body.isBlank()) {
+            for (String pair : body.split(";")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0 && pair.substring(0, eq).equals(key)) {
+                    result = pair.substring(eq + 1);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
 
     @BeforeAll
     static void startBrokerClients() throws Exception {
@@ -347,7 +350,8 @@ class RealBrokerResponseSideIntegrationTest {
         // self-source (matching corrId, source=GATEWAY) → skip-own
         tempRuntime.produceResponse(AgentBusEventType.INVOCATION_RESPONSE,
                 "taskId=self-1;status=snapshot", matched,
-                new TempRuntime.ResponseRouting(TENANT, GATEWAY, GATEWAY, TRACE, "idem-self", ROUTE_INVOCATION, "a2a"));
+                new TempRuntime.ResponseRouting(TENANT, GATEWAY, GATEWAY, TRACE,
+                        "idem-self", ROUTE_INVOCATION, "a2a"));
         // non-matching corrId → corrId-filter skip
         tempRuntime.produceResponse(AgentBusEventType.INVOCATION_RESPONSE,
                 "taskId=other-1;status=snapshot", UUID.randomUUID().toString());
@@ -370,7 +374,8 @@ class RealBrokerResponseSideIntegrationTest {
         // cross-tenant (tenant-b) RESPONSE with MATCHING corrId → filtered by acceptWindow's tenant guard
         tempRuntime.produceResponse(AgentBusEventType.INVOCATION_RESPONSE,
                 "taskId=B-1;status=snapshot", matched,
-                new TempRuntime.ResponseRouting("tenant-b", RUNTIME, GATEWAY, TRACE, "idem-b", ROUTE_INVOCATION, "a2a"));
+                new TempRuntime.ResponseRouting("tenant-b", RUNTIME, GATEWAY, TRACE,
+                        "idem-b", ROUTE_INVOCATION, "a2a"));
 
         IngressResponse resp = gateway.acceptWindow(requestId, TENANT);
         assertThat(resp.status()).isEqualTo(IngressResponse.IngressStatus.DEFERRED);
@@ -539,8 +544,10 @@ class RealBrokerResponseSideIntegrationTest {
          * P-06: the response carries control first-class (the response relay's governance requires it).
          */
         record ResponseRouting(String tenantId, String source, String target,
-                               String traceId, String idempotencyKey, String routeHandle, String capability) {
-            /** Direct-injection defaults (UC-6/D9): source=RUNTIME, target=GATEWAY, standard control. */
+                String traceId, String idempotencyKey, String routeHandle, String capability) {
+            /**
+             * Direct-injection defaults (UC-6/D9): source=RUNTIME, target=GATEWAY, standard control.
+             */
             static ResponseRouting defaults() {
                 return new ResponseRouting(TENANT, RUNTIME, GATEWAY, TRACE, "idem-stub", ROUTE_INVOCATION, "a2a");
             }
@@ -624,6 +631,15 @@ class RealBrokerResponseSideIntegrationTest {
             }
         }
 
+        /**
+         * P-06: build a response routing triple (source=RUNTIME, target=the request's source) carrying
+         * the request's first-class control, so produceResponse call sites stay short (G.FMT.10).
+         */
+        private ResponseRouting routing(String tenant, String target, BrokerInboundMessage req) {
+            return new ResponseRouting(tenant, RUNTIME, target, req.traceId(), req.idempotencyKey(),
+                    req.routeHandle(), req.capability());
+        }
+
         private synchronized void processRequest(BrokerInboundMessage req) {
             // P-06: request control plane is FIRST-CLASS on the inbound (eventType / correlationId /
             // idempotencyKey / ...). Skip non-request echoes by eventType (own responses carry a response
@@ -647,24 +663,24 @@ class RealBrokerResponseSideIntegrationTest {
             if (entry.emitted) {
                 // §4.4 repeat REQUESTED → re-emit only ACCEPTED (same taskId, no second logical call)
                 produceResponse(AgentBusEventType.INVOCATION_ACCEPTED, "taskId=" + taskId, corrId,
-                        new ResponseRouting(reqTenant, RUNTIME, reqSource, req.traceId(), req.idempotencyKey(), req.routeHandle(), req.capability()));
+                        routing(reqTenant, reqSource, req));
                 return;
             }
             entry.emitted = true;
             // L2 §6.2.1 BLOCKING: ACCEPTED + RESPONSE + TERMINAL(completed).
             produceResponse(AgentBusEventType.INVOCATION_ACCEPTED, "taskId=" + taskId, corrId,
-                    new ResponseRouting(reqTenant, RUNTIME, reqSource, req.traceId(), req.idempotencyKey(), req.routeHandle(), req.capability()));
+                    routing(reqTenant, reqSource, req));
             if (mode == ResponseMode.STREAMING) {
                 // L2 §6.2.4 STREAMING: ACCEPTED + STREAM_READY (cursor=streamRef).
                 produceResponse(AgentBusEventType.INVOCATION_STREAM_READY,
                         "taskId=" + taskId + ";streamRef=stream://" + taskId, corrId,
-                        new ResponseRouting(reqTenant, RUNTIME, reqSource, req.traceId(), req.idempotencyKey(), req.routeHandle(), req.capability()));
+                        routing(reqTenant, reqSource, req));
                 return;
             }
             produceResponse(AgentBusEventType.INVOCATION_RESPONSE, "taskId=" + taskId + ";status=snapshot",
-                    corrId, new ResponseRouting(reqTenant, RUNTIME, reqSource, req.traceId(), req.idempotencyKey(), req.routeHandle(), req.capability()));
+                    corrId, routing(reqTenant, reqSource, req));
             produceResponse(AgentBusEventType.INVOCATION_TERMINAL, "taskId=" + taskId + ";status=completed",
-                    corrId, new ResponseRouting(reqTenant, RUNTIME, reqSource, req.traceId(), req.idempotencyKey(), req.routeHandle(), req.capability()));
+                    corrId, routing(reqTenant, reqSource, req));
         }
 
         /**

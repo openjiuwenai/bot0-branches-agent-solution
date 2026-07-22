@@ -20,14 +20,15 @@ import org.junit.jupiter.api.Test;
  */
 class GatewayRuntimeServiceResponseTest {
     @Test
-    void responseToken_reads_taskId_status_streamRef_reason_from_inline_payload() {
+    void responseToken_reads_response_content_from_inline_payload() {
         BrokerInboundMessage accepted = response(AgentBusEventType.INVOCATION_ACCEPTED, "taskId=task-1", null);
         assertThat(GatewayRuntimeService.responseToken(accepted, "taskId")).isEqualTo("task-1");
 
         BrokerInboundMessage terminal = response(AgentBusEventType.INVOCATION_TERMINAL, "status=completed", null);
         assertThat(GatewayRuntimeService.responseToken(terminal, "status")).isEqualTo("completed");
 
-        BrokerInboundMessage stream = response(AgentBusEventType.INVOCATION_STREAM_READY, "streamRef=stream://t1", null);
+        BrokerInboundMessage stream = response(AgentBusEventType.INVOCATION_STREAM_READY,
+                "streamRef=stream://t1", null);
         assertThat(GatewayRuntimeService.responseToken(stream, "streamRef")).isEqualTo("stream://t1");
 
         BrokerInboundMessage rejected = response(AgentBusEventType.INVOCATION_REJECTED, "reason=denied", null);

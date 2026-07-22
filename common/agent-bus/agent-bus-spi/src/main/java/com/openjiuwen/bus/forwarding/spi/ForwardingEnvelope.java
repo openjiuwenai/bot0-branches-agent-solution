@@ -94,6 +94,14 @@ public record ForwardingEnvelope(
             throw new IllegalArgumentException("targetServiceId must not be blank");
         }
         Objects.requireNonNull(payloadPolicy, "payloadPolicy is required");
+        // P-06: tenant continuity + data-channel invariants (payloadRef / inlinePayload / originalCaller)
+        // — extracted so the compact constructor stays under the 50-line method limit (G.MET.01).
+        validatePayloadAndRouting(tenantId, routeHandle, payloadPolicy, payloadRef, inlinePayload,
+                originalCaller);
+    }
+
+    private static void validatePayloadAndRouting(String tenantId, ForwardingRouteHandle routeHandle,
+            PayloadPolicy payloadPolicy, String payloadRef, String inlinePayload, String originalCaller) {
         // tenant isolation: envelope tenant must equal the route's tenant scope (R-C.c)
         if (!tenantId.equals(routeHandle.tenantScope())) {
             throw new IllegalArgumentException(
