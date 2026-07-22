@@ -40,6 +40,7 @@ class ResolvedOptimizationConfig:
     dataset_path: str
     dataset_manifest_path: Path | None
     evaluator_prompt: str
+    evaluator_config: dict[str, Any]
     adapter_url: str
     task_name: str
     train_split: float
@@ -60,6 +61,8 @@ class ResolvedOptimizationConfig:
     rollout_extra_data: dict[str, Any]
     trace_max_retries: int
     trace_retry_backoff: float
+    empty_extract_max_attempts: int
+    empty_extract_retry_backoff: float
     tie_reval_eps: float
     validation_max_case_attempts: int
     validation_min_success_ratio: float
@@ -94,6 +97,8 @@ class ResolvedOptimizationConfig:
             "rollout_extra_data": dict(self.rollout_extra_data),
             "trace_max_retries": self.trace_max_retries,
             "trace_retry_backoff": self.trace_retry_backoff,
+            "empty_extract_max_attempts": self.empty_extract_max_attempts,
+            "empty_extract_retry_backoff": self.empty_extract_retry_backoff,
         }
         deps.update(self.extra_hyperparams)
         return deps
@@ -170,6 +175,8 @@ class OptimizationConfigResolver:
                 "preserve_frontmatter",
                 "trace_max_retries",
                 "trace_retry_backoff",
+                "empty_extract_max_attempts",
+                "empty_extract_retry_backoff",
                 "tie_reval_eps",
                 "validation_max_case_attempts",
                 "validation_min_success_ratio",
@@ -194,6 +201,7 @@ class OptimizationConfigResolver:
             dataset_path=request.dataset_path,
             dataset_manifest_path=request.dataset_manifest_path,
             evaluator_prompt=request.evaluator_prompt,
+            evaluator_config=dict(request.evaluator_config) or {"type": "metric"},
             adapter_url=request.adapter_url or scenario_config.adapter_url or self._env.adapter_url,
             task_name=request.task_name,
             train_split=request.train_split,
@@ -255,6 +263,19 @@ class OptimizationConfigResolver:
                 name="trace_retry_backoff",
                 merged_hyperparams=merged_hp,
                 config_value=5.0,
+                minimum=0.0,
+            ),
+            empty_extract_max_attempts=_resolve_int(
+                name="empty_extract_max_attempts",
+                request_value=None,
+                merged_hyperparams=merged_hp,
+                config_value=3,
+                minimum=1,
+            ),
+            empty_extract_retry_backoff=_resolve_float(
+                name="empty_extract_retry_backoff",
+                merged_hyperparams=merged_hp,
+                config_value=1.0,
                 minimum=0.0,
             ),
             tie_reval_eps=_resolve_float(

@@ -47,11 +47,47 @@ class OptimizerTemplateRequest(BaseModel):
 
 
 class EvaluatorTemplateRequest(BaseModel):
-    """平台评估器模板 — 外部 API 请求结构。"""
+    """平台评估器模板 — 外部 API 请求结构。
+
+    ``type`` 默认 ``metric``（确定性 exact_match）。语义评估显式传 ``type: llm``
+    并配置 ``prompt``。``metric`` 模式对齐 CLI ``dataset.yaml``：支持
+    ``metric`` / ``extract`` / ``batch_metrics`` + ``batch_score``。
+    """
 
     name: str  # 模板显示名（仅元数据）
     scenario: str  # 业务场景标签（仅元数据）
-    prompt: str = ""  # 评估 prompt
+    type: Literal["llm", "metric"] = "metric"
+    prompt: str = ""  # llm 评估 prompt；metric 模式忽略
+    metric: str | list[str] = "exact_match"
+    extract: dict[str, Any] | None = None
+    aggregate: str = "mean"
+    batch_metrics: list[str] = Field(default_factory=list)
+    batch_score: str = ""
+
+    @model_validator(mode="after")
+    def validate_metric_fields(self) -> EvaluatorTemplateRequest:
+        has_batch_metrics = bool(self.batch_metrics)
+        has_batch_score = bool(self.batch_score)
+        if has_batch_metrics != has_batch_score:
+            raise ValueError(
+                "batch_metrics and batch_score must be configured together "
+                "(both set, or both empty)."
+            )
+        if self.extract is not None:
+            if self.type != "metric":
+                raise ValueError("extract is only valid when type='metric'")
+            names = (
+                [self.metric]
+                if isinstance(self.metric, str)
+                else [str(m) for m in self.metric]
+            )
+            allowed = {"exact_match", "normalized_exact_match"}
+            if not names or any(n not in allowed for n in names):
+                raise ValueError(
+                    "extract is only supported for exact_match / "
+                    "normalized_exact_match"
+                )
+        return self
 
 
 class OptimizeAPIRequest(BaseModel):
@@ -157,6 +193,26 @@ class SubmissionResponse(BaseModel):
     cancellation_requested: bool
 
 
+def _evaluator_config_from_template(tpl: EvaluatorTemplateRequest) -> dict[str, Any]:
+    """把平台 evaluator_template 归一为 runner 可用的 evaluator_config。"""
+    if tpl.type == "metric":
+        cfg: dict[str, Any] = {
+            "type": "metric",
+            "metric": tpl.metric,
+            "aggregate": tpl.aggregate,
+        }
+        if tpl.extract is not None:
+            cfg["extract"] = dict(tpl.extract)
+        if tpl.batch_metrics:
+            cfg["batch_metrics"] = list(tpl.batch_metrics)
+            cfg["batch_score"] = tpl.batch_score
+        return cfg
+    cfg = {"type": "llm"}
+    if tpl.prompt:
+        cfg["prompt_template"] = tpl.prompt
+    return cfg
+
+
 def _normalize(api_req: OptimizeAPIRequest, config: EvolveConfig) -> InternalOptimizeRequest:
     """将平台模板请求归一化为内部运行参数。
 
@@ -188,11 +244,13 @@ def _normalize(api_req: OptimizeAPIRequest, config: EvolveConfig) -> InternalOpt
         max_value=64,
     )
 
-    eval_prompt = api_req.evaluator_template.prompt
+    eval_tpl = api_req.evaluator_template
+    eval_prompt = eval_tpl.prompt
     stripped_prompt = eval_prompt.strip()
     logger.debug(
-        "evaluator_prompt: len=%s stripped_len=%s "
+        "evaluator_prompt: type=%s len=%s stripped_len=%s "
         "markers: strict=%s compliance=%s weighted=%s safety=%s",
+        eval_tpl.type,
         len(eval_prompt),
         len(stripped_prompt),
         "严格评估" in stripped_prompt,
@@ -200,6 +258,7 @@ def _normalize(api_req: OptimizeAPIRequest, config: EvolveConfig) -> InternalOpt
         "× 0.5" in stripped_prompt,
         "safety" in stripped_prompt,
     )
+    evaluator_config = _evaluator_config_from_template(eval_tpl)
 
     # managed_doc_kind：strip + 空白→None（不小写化，adapter 精确匹配）。
     # XOR 由路由层 _validate_xor 双保险收口（both-present / both-absent 均拒绝）；
@@ -216,6 +275,7 @@ def _normalize(api_req: OptimizeAPIRequest, config: EvolveConfig) -> InternalOpt
         dataset_path=api_req.dataset_path,
         dataset_manifest_path=None,
         evaluator_prompt=api_req.evaluator_template.prompt,
+        evaluator_config=evaluator_config,
         adapter_url=config.adapter_url,
         num_epochs=num_epochs,
         batch_size=batch_size,

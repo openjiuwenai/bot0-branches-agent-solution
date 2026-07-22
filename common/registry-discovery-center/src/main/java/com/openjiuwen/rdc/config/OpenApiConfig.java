@@ -4,8 +4,8 @@
 
 package com.openjiuwen.rdc.config;
 
-import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.OpenAPI;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,26 +27,24 @@ import org.springframework.context.annotation.Configuration;
  * decision 1, and {@code MvpRegistryController} stays annotation-free).
  *
  * <p>{@code servers} / {@code contact} / {@code license} are intentionally
- * omitted: registry-discovery-center is an internal service consumed by sibling planes, so
- * springdoc's default server derivation (current request URL) and the absence
- * of external consumers make them noise rather than signal (api-metadata
+ * omitted: registry-discovery-center is an internal service consumed by sibling
+ * planes, so springdoc's default server derivation (current request URL) and the
+ * absence of external consumers make them noise rather than signal (api-metadata
  * decision, VR-2).
  *
  * <p>Authority: REQ-2026-007 step-1 decisions (library-choice / doc-scope /
  * ui-exposure / prod-exposure / api-metadata / openapi-version /
  * external-types-coverage).
  *
- * @since 2026-07-10
+ * @since 0.1.0
  */
 @Configuration
 public class OpenApiConfig {
     /**
-     * Build the programmatic {@link OpenAPI} metadata bean picked up by
-     * springdoc-openapi-starter-webmvc-ui to expose the Swagger UI and
-     * OpenAPI 3.1 JSON/YAML endpoints (REQ-2026-007).
+     * openAPI.
      *
-     * @return the configured {@link OpenAPI} bean (title / version / description only;
-     *         servers / contact / license are intentionally omitted — see class Javadoc)
+     * @return result
+     * @since 0.1.0
      */
     @Bean
     public OpenAPI openAPI() {

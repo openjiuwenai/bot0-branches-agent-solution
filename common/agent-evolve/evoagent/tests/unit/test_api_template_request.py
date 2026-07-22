@@ -59,9 +59,63 @@ def test_optimizer_template_request_defaults() -> None:
 
 
 def test_evaluator_template_request_defaults() -> None:
-    """默认 prompt=''。"""
+    """默认 type=metric、prompt=''、metric=exact_match。"""
     tpl = EvaluatorTemplateRequest(name="test", scenario="场景")
     assert tpl.prompt == ""
+    assert tpl.type == "metric"
+    assert tpl.metric == "exact_match"
+    assert tpl.extract is None
+
+
+def test_evaluator_template_metric_with_extract() -> None:
+    tpl = EvaluatorTemplateRequest(
+        name="exact",
+        scenario="audit",
+        type="metric",
+        metric="exact_match",
+        extract={
+            "strategy": "answer_tag_json_field",
+            "fields": ["responsibility"],
+        },
+    )
+    assert tpl.type == "metric"
+    assert tpl.extract is not None
+
+
+def test_evaluator_template_rejects_unknown_type() -> None:
+    with pytest.raises(ValidationError):
+        EvaluatorTemplateRequest(name="t", scenario="s", type="filtered")  # type: ignore[arg-type]
+
+
+def test_evaluator_template_rejects_batch_metrics_without_score() -> None:
+    with pytest.raises(ValidationError, match="batch_metrics and batch_score"):
+        EvaluatorTemplateRequest(
+            name="t",
+            scenario="s",
+            type="metric",
+            batch_metrics=["set_overlap"],
+        )
+
+
+def test_evaluator_template_rejects_extract_on_llm() -> None:
+    with pytest.raises(ValidationError, match="extract is only valid"):
+        EvaluatorTemplateRequest(
+            name="t",
+            scenario="s",
+            type="llm",
+            extract={"strategy": "answer_tag_json_field", "fields": ["x"]},
+        )
+
+
+def test_evaluator_template_rejects_extract_with_contains() -> None:
+    with pytest.raises(ValidationError, match="exact_match"):
+        EvaluatorTemplateRequest(
+            name="t",
+            scenario="s",
+            type="metric",
+            metric="contains",
+            extract={"strategy": "answer_tag_json_field", "fields": ["x"]},
+        )
 
 
 # ── OptimizeAPIRequest — split validation ──

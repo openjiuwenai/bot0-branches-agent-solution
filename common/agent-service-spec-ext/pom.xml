@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.openjiuwen</groupId>
+        <artifactId>agent-runtime-ext-java</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../agent-runtime-ext-java/pom.xml</relativePath>
+    </parent>
+
+    <artifactId>agent-service-spec-ext</artifactId>
+    <packaging>jar</packaging>
+    <version>0.1.0</version>
+
+    <name>agent-service-spec-ext</name>
+    <description>OpenJiuwen Agent Service spec extension contracts (SPI + DTO, no Spring)</description>
+
+    <properties>
+        <agent-runtime-ext.java.release>17</agent-runtime-ext.java.release>
+    </properties>
+
+    <dependencies>
+        <!-- Pure contract: depends on runtime agent-service-spec (SPI + DTO baseline) -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-spec</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${agent-runtime-ext.java.release}</release>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

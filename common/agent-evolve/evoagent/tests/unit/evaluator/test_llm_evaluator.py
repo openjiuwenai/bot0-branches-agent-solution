@@ -513,7 +513,7 @@ class TestLLMErrorHandling:
             transport_complete=True,
             metadata=MappingProxyType(
                 {
-                    "provider": "ICBC",
+                    "provider": "CustomSSE",
                     "estimated_input_tokens": 321,
                     "output_reserve_tokens": 1200,
                     "compacted": True,
@@ -538,7 +538,7 @@ class TestLLMErrorHandling:
         for expected in (
             "invocation_id=inv-123",
             "stage=evaluator",
-            "provider=ICBC",
+            "provider=CustomSSE",
             "prompt_estimated_tokens=321",
             "output_reserve_tokens=1200",
             "compacted=True",

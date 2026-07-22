@@ -63,6 +63,7 @@ class TestOptimizeRequest:
         assert req.dataset_path == ""
         assert req.dataset_manifest_path is None
         assert req.evaluator_prompt == ""
+        assert req.evaluator_config == {"type": "metric"}
         assert req.adapter_url == ""
         assert req.num_epochs is None
         assert req.batch_size is None

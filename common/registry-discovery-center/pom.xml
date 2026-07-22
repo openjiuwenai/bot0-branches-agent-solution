@@ -49,8 +49,10 @@
     <springdoc.version>3.0.3</springdoc.version>
 
 
-    <!-- Test parallelization toggle. -DjunitParallel=false reverts to sequential. -->
-    <junitParallel>true</junitParallel>
+    <!-- Default off: macOS kern.sysv.shmmni is often 32; parallel class init of
+         EmbeddedPostgres races orphan SHM even with a shared DataSource helper.
+         Opt in with -DjunitParallel=true when SHM headroom is ample. -->
+    <junitParallel>false</junitParallel>
   </properties>
 
   <dependencyManagement>
@@ -229,9 +231,9 @@
 
   <build>
     <!--
-      finalName kept as `agent-rdc-${project.version}` for deployment
-      continuity: artifactId renamed to registry-discovery-center, but
-      existing deployment scripts reference agent-rdc-0.1.0.jar.
+      Legacy jar basename: artifactId is registry-discovery-center, but
+      finalName stays agent-rdc-${project.version} so existing deployment
+      scripts that reference agent-rdc-0.1.0.jar keep working.
     -->
     <finalName>agent-rdc-${project.version}</finalName>
     <pluginManagement>
@@ -314,6 +316,38 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <!-- default repackage: the executable fat-jar REPLACES the main artifact
+             (registry-discovery-center-0.1.0.jar) — deployment jar name unchanged. -->
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <!-- Publish a plain (library) jar with the 'lib' classifier so sibling modules
+                 (FEAT-013/014 §7.5 Option A: agent-bus-relay test-scope dep) can depend on
+                 registry-discovery-center and see com.openjiuwen.rdc.* on the compile classpath.
+                 The main artifact stays the executable fat-jar; this lib jar is attached separately.
+                 db/migration + application config are EXCLUDED so the registry's Flyway scripts and
+                 app config do not leak onto a sibling's classpath (avoids Flyway V3 collisions and
+                 stray application.yml). No source/interface change — build-packaging only. -->
+            <id>lib-jar</id>
+            <phase>package</phase>
+            <goals><goal>jar</goal></goals>
+            <configuration>
+              <classifier>lib</classifier>
+              <excludes>
+                <exclude>db/migration/**</exclude>
+                <exclude>application*.yml</exclude>
+                <exclude>application*.properties</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
       </plugin>
     </plugins>
   </build>

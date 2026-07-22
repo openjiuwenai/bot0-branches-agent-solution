@@ -86,118 +86,155 @@ class TestEvolveConfig:
             Path("/other/path"),
         ]
 
-    # --- ICBC provider 配置 ---
+    # --- CustomSSE provider 配置 ---
 
     def test_llm_provider_default_openai(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """llm_provider 默认 OpenAI，ICBC 字段默认空。"""
-        for key in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+        """llm_provider 默认 OpenAI，CustomSSE 字段默认空。"""
+        for key in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(key, raising=False)
         config = EvolveConfig(_env_file=None)
         assert config.llm_provider == "OpenAI"
-        assert config.icbc_token == ""
-        assert config.icbc_user_id == ""
-        assert config.icbc_endpoint == ""
+        assert config.custom_sse_token == ""
+        assert config.custom_sse_user_id == ""
+        assert config.custom_sse_endpoint == ""
 
-    def test_icbc_mode_missing_fields_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """ICBC 模式下三凭证字段任一缺失 → ValueError，消息列缺失字段。"""
-        for key in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+    def test_custom_sse_mode_missing_fields_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """CustomSSE 模式下三凭证字段任一缺失 → ValueError，消息列缺失字段。"""
+        for key in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(key, raising=False)
         with pytest.raises(ValueError) as exc_info:
-            EvolveConfig(_env_file=None, llm_provider="ICBC", icbc_token="")
+            EvolveConfig(_env_file=None, llm_provider="CustomSSE", custom_sse_token="")
         msg = str(exc_info.value)
         # 三字段都缺失，均应列名
-        assert "icbc_token" in msg
-        assert "icbc_user_id" in msg
-        assert "icbc_endpoint" in msg
+        assert "custom_sse_token" in msg
+        assert "custom_sse_user_id" in msg
+        assert "custom_sse_endpoint" in msg
 
-    def test_icbc_mode_partial_missing_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """ICBC 模式下仅缺 user_id → ValueError 只列 user_id。"""
-        for key in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+    def test_custom_sse_mode_partial_missing_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """CustomSSE 模式下仅缺 user_id → ValueError 只列 user_id。"""
+        for key in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(key, raising=False)
         with pytest.raises(ValueError) as exc_info:
             EvolveConfig(
                 _env_file=None,
-                llm_provider="ICBC",
-                icbc_token="t",
-                icbc_endpoint="e",
+                llm_provider="CustomSSE",
+                custom_sse_token="t",
+                custom_sse_endpoint="e",
             )
-        assert "icbc_user_id" in str(exc_info.value)
-        assert "icbc_token" not in str(exc_info.value)
+        assert "custom_sse_user_id" in str(exc_info.value)
+        assert "custom_sse_token" not in str(exc_info.value)
 
-    def test_icbc_mode_all_fields_present_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """ICBC 模式三字段齐备 → 构造成功。"""
-        for key in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+    def test_custom_sse_mode_all_fields_present_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """CustomSSE 模式三字段齐备 → 构造成功。"""
+        for key in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(key, raising=False)
         config = EvolveConfig(
             _env_file=None,
-            llm_provider="ICBC",
-            icbc_token="t",
-            icbc_user_id="u",
-            icbc_endpoint="http://icbc/mlpmodelservice/aigc/chat/completions",
-            icbc_context_window_tokens=32768,
+            llm_provider="CustomSSE",
+            custom_sse_token="t",
+            custom_sse_user_id="u",
+            custom_sse_endpoint="https://llm-gateway.example.com/v1/chat/completions",
+            custom_sse_context_window_tokens=32768,
         )
-        assert config.llm_provider == "ICBC"
-        assert config.icbc_token == "t"
+        assert config.llm_provider == "CustomSSE"
+        assert config.custom_sse_token == "t"
 
-    def test_icbc_mode_requires_declared_context_window(
+    def test_custom_sse_mode_requires_declared_context_window(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """服务端选模型时不得猜测 OpenAI 默认上下文窗口。"""
-        monkeypatch.delenv("EVO_ICBC_CONTEXT_WINDOW_TOKENS", raising=False)
+        monkeypatch.delenv("EVO_CUSTOM_SSE_CONTEXT_WINDOW_TOKENS", raising=False)
 
-        with pytest.raises(ValueError, match="icbc_context_window_tokens"):
+        with pytest.raises(ValueError, match="custom_sse_context_window_tokens"):
             EvolveConfig(
                 _env_file=None,
-                llm_provider="ICBC",
-                icbc_token="t",
-                icbc_user_id="u",
-                icbc_endpoint="http://icbc/svc.htm",
+                llm_provider="CustomSSE",
+                custom_sse_token="t",
+                custom_sse_user_id="u",
+                custom_sse_endpoint="https://llm-gateway.example.com/v1/chat/completions",
             )
 
-    def test_openai_mode_no_icbc_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """OpenAI 默认模式不校验 ICBC 字段（空也通过）——行为不回归。"""
-        for key in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+    def test_openai_mode_no_custom_sse_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OpenAI 默认模式不校验 CustomSSE 字段（空也通过）——行为不回归。"""
+        for key in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(key, raising=False)
-        # 显式 OpenAI + ICBC 字段全空
+        # 显式 OpenAI + CustomSSE 字段全空
         config = EvolveConfig(_env_file=None, llm_provider="OpenAI")
         assert config.llm_provider == "OpenAI"
 
-    def test_icbc_fields_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """EVO_LLM_PROVIDER/EVO_ICBC_* 环境变量被 pydantic-settings 正确读取。"""
-        monkeypatch.setenv("EVO_LLM_PROVIDER", "ICBC")
-        monkeypatch.setenv("EVO_ICBC_TOKEN", "env-token")
-        monkeypatch.setenv("EVO_ICBC_USER_ID", "env-user")
-        monkeypatch.setenv("EVO_ICBC_ENDPOINT", "http://env-icbc/svc.htm")
-        monkeypatch.setenv("EVO_ICBC_CONTEXT_WINDOW_TOKENS", "32768")
+    def test_custom_sse_fields_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """EVO_LLM_PROVIDER/EVO_CUSTOM_SSE_* 环境变量被 pydantic-settings 正确读取。"""
+        monkeypatch.setenv("EVO_LLM_PROVIDER", "CustomSSE")
+        monkeypatch.setenv("EVO_CUSTOM_SSE_TOKEN", "env-token")
+        monkeypatch.setenv("EVO_CUSTOM_SSE_USER_ID", "env-user")
+        monkeypatch.setenv(
+            "EVO_CUSTOM_SSE_ENDPOINT", "https://env-gateway.example.com/v1/chat/completions"
+        )
+        monkeypatch.setenv("EVO_CUSTOM_SSE_CONTEXT_WINDOW_TOKENS", "32768")
         config = EvolveConfig()
-        assert config.llm_provider == "ICBC"
-        assert config.icbc_token == "env-token"
-        assert config.icbc_user_id == "env-user"
-        assert config.icbc_endpoint == "http://env-icbc/svc.htm"
+        assert config.llm_provider == "CustomSSE"
+        assert config.custom_sse_token == "env-token"
+        assert config.custom_sse_user_id == "env-user"
+        assert config.custom_sse_endpoint == "https://env-gateway.example.com/v1/chat/completions"
 
     def test_llm_provider_lowercase_normalized(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """``llm_provider='icbc'``（小写）归一为 ``ICBC`` 并触发 ICBC 校验。"""
-        for key in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+        """``llm_provider='custom_sse'``（小写）归一为 ``CustomSSE`` 并触发 CustomSSE 校验。"""
+        for key in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(key, raising=False)
         # 缺凭证 → 归一后仍 fail-fast
         with pytest.raises(ValueError):
-            EvolveConfig(_env_file=None, llm_provider="icbc")
-        # 齐备 → 归一为 ICBC
+            EvolveConfig(_env_file=None, llm_provider="custom_sse")
+        # 齐备 → 归一为 CustomSSE
         config = EvolveConfig(
             _env_file=None,
-            llm_provider="icbc",
-            icbc_token="t",
-            icbc_user_id="u",
-            icbc_endpoint="http://icbc/svc.htm",
-            icbc_context_window_tokens=32768,
+            llm_provider="custom_sse",
+            custom_sse_token="t",
+            custom_sse_user_id="u",
+            custom_sse_endpoint="https://llm-gateway.example.com/v1/chat/completions",
+            custom_sse_context_window_tokens=32768,
         )
-        assert config.llm_provider == "ICBC"
+        assert config.llm_provider == "CustomSSE"
 
     def test_llm_provider_unknown_falls_through_to_openai(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """未知 provider 不归一、不校验 ICBC 字段（保持现状，不静默走 ICBC）。"""
-        for key in ("EVO_LLM_PROVIDER", "EVO_ICBC_TOKEN", "EVO_ICBC_USER_ID", "EVO_ICBC_ENDPOINT"):
+        """未知 provider 不归一、不校验 CustomSSE 字段（保持现状，不静默走 CustomSSE）。"""
+        for key in (
+            "EVO_LLM_PROVIDER",
+            "EVO_CUSTOM_SSE_TOKEN",
+            "EVO_CUSTOM_SSE_USER_ID",
+            "EVO_CUSTOM_SSE_ENDPOINT",
+        ):
             monkeypatch.delenv(key, raising=False)
         config = EvolveConfig(_env_file=None, llm_provider="azure")
         assert config.llm_provider == "azure"

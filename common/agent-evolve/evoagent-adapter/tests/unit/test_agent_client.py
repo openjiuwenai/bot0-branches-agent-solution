@@ -222,6 +222,22 @@ class TestAgentClientBuildRequest:
         assert body["custom_data"]["inputs"]["query"] == "你好"
         assert body["custom_data"]["inputs"]["UNION_NO"] == "12345"
 
+    def test_build_request_body_forwards_temperature_in_extra_data(self):
+        """TF-GRPO may pass temperature via extra_data for rollout diversity."""
+        client = AgentClient(
+            agent_url="http://localhost:8090",
+            project_id="proj_001",
+            agent_id="edp_agent",
+            timeout=300,
+        )
+        body = client._build_request_body(
+            "你好",
+            "conv123",
+            extra_data={"temperature": 0.7, "run_id": "r1"},
+        )
+        assert body["custom_data"]["inputs"]["temperature"] == 0.7
+        assert body["custom_data"]["inputs"]["run_id"] == "r1"
+
     def test_build_request_body_no_extra_data(self):
         client = AgentClient(
             agent_url="http://localhost:8090",

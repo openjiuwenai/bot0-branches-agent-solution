@@ -7,8 +7,8 @@
 | `--skill-path` | ✅ | — | 目标 skill 目录路径 |
 | `--dataset-manifest` | ✅ | — | 数据集 manifest 路径 (`dataset.yaml`) |
 | `--remote-endpoint` | ✅ | — | 远程 rollout agent 地址 |
-| `--epochs` | — | 3 | 优化轮数 |
-| `--batch-size` | — | 4 | 每批 case 数 |
+| `--epochs` | — | scenario.yaml / EvolveConfig | 优化轮数（未传则不覆盖场景配置） |
+| `--batch-size` | — | scenario.yaml / EvolveConfig | 每批 case 数（未传则不覆盖场景配置） |
 
 ## report.py
 

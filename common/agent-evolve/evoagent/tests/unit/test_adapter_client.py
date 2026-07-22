@@ -301,6 +301,26 @@ class TestUpdateSkill:
         assert received_body["skill_name"] == "product_skill"
         assert received_body["skill_content"] == "# Updated Skill"
 
+    def test_update_skill_returns_revision(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "skill_name": "product_skill",
+                    "revision": "a" * 64,
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        client = _make_mock_client(transport, agent_name="edp_agent")
+        data = client.update_skill(
+            skill_name="product_skill",
+            skill_content="# Updated Skill",
+        )
+        assert data["revision"] == "a" * 64
+        assert data["skill_name"] == "product_skill"
+
     def test_update_skill_failure(self) -> None:
         """success=false 抛出 AdapterError，错误信息从 message 字段获取。"""
 

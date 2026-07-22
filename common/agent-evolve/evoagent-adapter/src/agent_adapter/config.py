@@ -240,10 +240,12 @@ class AdapterConfig(BaseSettings):
     # ── Trace source (设计文档 §5): log 读归档 | standard 读 PG (经 kafka 消费) ──
     trace_source: Literal["log", "standard"] = "log"
     # ── DB (Repository 工厂, standard 模式用; 复用 collector 的 otel 库) ──
+    # 默认值对齐容器部署 (start.sh): pg_host=postgres 容器别名, pg_db=agent_adapter 独立库。
+    # 本地开发连宿主 PG 时设 ADAPTER_PG_HOST=127.0.0.1 覆写。
     db_type: Literal["postgres"] = "postgres"
-    pg_host: str = "127.0.0.1"
+    pg_host: str = "postgres"
     pg_port: int = 5432
-    pg_db: str = "otel_db"
+    pg_db: str = "agent_adapter"
     pg_user: str = "otel_user"
     pg_password: str = "otel_password"
     # ── Kafka (standard 模式消费 otlp_traces) ──
