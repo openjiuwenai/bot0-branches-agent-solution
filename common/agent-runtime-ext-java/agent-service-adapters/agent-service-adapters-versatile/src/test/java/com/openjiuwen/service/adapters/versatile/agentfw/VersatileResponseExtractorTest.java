@@ -42,7 +42,8 @@ class VersatileResponseExtractorTest {
                 .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ERROR);
         assertThat(chunks.get(0).getData()).isEqualTo("{\"event\":\"message\"}");
         assertThat(String.valueOf(chunks.get(1).getData()))
-                .contains("stream_closed_without_terminal");
+                .contains("\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\"")
+                .contains("\"reason\":\"no End/exception event\"");
     }
 
     @Tag("smoke")
@@ -75,7 +76,8 @@ class VersatileResponseExtractorTest {
         assertThat(chunks).extracting(QueryChunk::getType)
                 .containsExactly(QueryChunk.TYPE_ERROR);
         assertThat(String.valueOf(chunks.get(0).getData()))
-                .contains("stream_closed_without_terminal");
+                .contains("\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\"")
+                .contains("\"reason\":\"no End/exception event\"");
     }
 
     @Test
