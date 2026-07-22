@@ -25,6 +25,10 @@ class VersatileRequestExtractorTest {
     void buildsRemoteRequestFromMessagesAndMetadata() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/conversations/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
         properties.getHeadersTemplate().put("Accept", "text/event-stream");
         properties.getForwardHeaderWhitelist().add("x-user-id");
 
@@ -53,11 +57,13 @@ class VersatileRequestExtractorTest {
                 .doesNotContainKey("authorization");
         assertThat(remote.params()).containsEntry("workspace_id", "override")
                 .containsEntry("type", "controller");
-        assertThat(remote.body()).containsEntry("inputs", Map.of(
-                        "query", "new question",
-                        "intent", "knowledge_qa"
-                ))
-                .containsEntry("query", "old question")
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsEntry("query", "new question")
+                .containsEntry("intent", "knowledge_qa")
+                .containsKey("intents")
+                .containsKey("messages");
+        assertThat(remote.body()).containsEntry("query", "old question")
                 .containsEntry("intent", "old_intent")
                 .containsEntry("city", "Shenzhen");
         assertThat(remote.body()).doesNotContainKey("custom_data");
@@ -71,6 +77,10 @@ class VersatileRequestExtractorTest {
         endpoint.setIntent("booking");
         endpoint.setUrlTemplate("https://example.test/booking/{conversation_id}");
         properties.getEndpoints().add(endpoint);
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c-2");
@@ -84,11 +94,13 @@ class VersatileRequestExtractorTest {
                 new VersatileRequestExtractor(properties).extract(request);
 
         assertThat(remote.url()).isEqualTo("https://example.test/booking/c-2");
-        assertThat(remote.body()).containsEntry("inputs", Map.of(
-                        "query", "book hotel",
-                        "intent", "booking"
-                ))
-                .containsEntry("city", "Shanghai");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsEntry("query", "book hotel")
+                .containsEntry("intent", "booking")
+                .containsKey("intents")
+                .containsKey("messages");
+        assertThat(remote.body()).containsEntry("city", "Shanghai");
         assertThat(remote.body()).doesNotContainKeys("query", "intent", "custom_data");
     }
 
@@ -96,6 +108,10 @@ class VersatileRequestExtractorTest {
     void usesLastUserQueryFallbackWithoutReadingQueryFromCustomData() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/default/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c-3");
@@ -108,10 +124,12 @@ class VersatileRequestExtractorTest {
         VersatileRequestExtractor.RemoteRequest remote =
                 new VersatileRequestExtractor(properties).extract(request);
 
-        assertThat(remote.body()).containsEntry("inputs", Map.of(
-                        "query", "plain question"
-                ))
-                .containsEntry("query", "custom query")
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).containsEntry("query", "plain question")
+                .containsKey("intents")
+                .containsKey("messages");
+        assertThat(remote.body()).containsEntry("query", "custom query")
                 .containsEntry("city", "Beijing")
                 .doesNotContainKeys("intent", "custom_data");
         assertThat(remote.params()).containsEntry("channel", "web");
@@ -121,6 +139,10 @@ class VersatileRequestExtractorTest {
     void headersTemplateOverridesForwardedHeadersWithSameName() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/default/{conversation_id}");
+        VersatileProperties.Intent intent = new VersatileProperties.Intent();
+        intent.setId("i1");
+        intent.setName("n1");
+        properties.setIntents(List.of(intent));
         properties.getHeadersTemplate().put("x-user-id", "static-user");
         properties.getHeadersTemplate().put("Accept", "text/event-stream");
         properties.getForwardHeaderWhitelist().add("x-user-id");
