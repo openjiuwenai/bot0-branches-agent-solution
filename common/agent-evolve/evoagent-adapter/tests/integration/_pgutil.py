@@ -40,7 +40,7 @@ def find_jsonl() -> Path:
 
 
 def load_jsonl_spans() -> list[dict]:
-    """加载 jsonl 并提升 service_name/conversation_id (对齐 parse_span 输出形状)。"""
+    """加载 jsonl 并提升 service_name/session_id (对齐 parse_span 输出形状)。"""
     raw = find_jsonl().read_text(encoding="utf-8")
     dec = json.JSONDecoder()
     i, n, spans = 0, len(raw), []
@@ -54,7 +54,7 @@ def load_jsonl_spans() -> list[dict]:
         i = end
     for s in spans:
         s.setdefault("service_name", (s.get("resource_attributes") or {}).get("service.name"))
-        s.setdefault("conversation_id", (s.get("attributes") or {}).get("session.id"))
+        s.setdefault("session_id", (s.get("attributes") or {}).get("session.id"))
     return spans
 
 

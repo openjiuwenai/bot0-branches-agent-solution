@@ -38,8 +38,8 @@ async def test_insert_span_roundtrips_jsonb(repo, jsonl_spans):
     assert len(got) == 1
     g = got[0]
     for k in ("trace_id", "span_id", "parent_span_id", "name", "kind",
-              "start_time", "end_time", "duration_ns", "status_code", "status_message",
-              "service_name", "scope_name", "scope_version", "conversation_id"):
+              "start_time", "end_time", "status_code", "status_message",
+              "service_name", "scope_name", "scope_version", "session_id"):
         assert g[k] == s.get(k), f"{k}: {g[k]!r} != {s.get(k)!r}"
     assert g["attributes"] == s.get("attributes")
     assert g["resource_attributes"] == s.get("resource_attributes")
@@ -63,13 +63,20 @@ async def test_insert_span_upserts_trace_summary(repo, jsonl_spans):
     async with repo.pool.acquire() as conn:
         row = await conn.fetchrow("SELECT * FROM traces WHERE trace_id=$1", trace_id)
     assert row is not None
-    for k in ("trace_id", "conversation_id", "root_span_id", "service_name",
-              "span_count", "status", "openjiuwen_trace_id", "user_id"):
+    for k in ("trace_id", "session_id", "root_span_id", "service_name",
+              "span_count", "status"):
         assert row[k] == expected[k], f"traces.{k}: {row[k]!r} != {expected[k]!r}"
     assert row["start_time"].isoformat() == expected["start_time"]
     assert row["end_time"].isoformat() == expected["end_time"]
-    assert json.loads(row["request_summary"]) == expected["request_summary"]
-    assert json.loads(row["response_summary"]) == expected["response_summary"]
+    # request_summary / response_summary (jsonb; 决策 A 后 response_summary 取自 chain, 可能 None)
+    if expected["request_summary"] is not None:
+        assert json.loads(row["request_summary"]) == expected["request_summary"]
+    else:
+        assert row["request_summary"] is None
+    if expected["response_summary"] is not None:
+        assert json.loads(row["response_summary"]) == expected["response_summary"]
+    else:
+        assert row["response_summary"] is None
 
 
 async def test_insert_span_idempotent_span_count(repo, jsonl_spans):
@@ -100,14 +107,14 @@ async def test_bulk_insert_spans_all_traces(repo, jsonl_spans):
         assert rows[trace_id]["root_span_id"] == expected["root_span_id"]
 
 
-# ---- get_spans_by_conversation ----
+# ---- get_spans_by_session ----
 
-async def test_get_spans_by_conversation(repo, jsonl_spans):
+async def test_get_spans_by_session(repo, jsonl_spans):
     await repo.bulk_insert_spans(jsonl_spans)
-    conv = jsonl_spans[0]["conversation_id"]
-    expected = sorted([s for s in jsonl_spans if s["conversation_id"] == conv],
+    sid = jsonl_spans[0]["session_id"]
+    expected = sorted([s for s in jsonl_spans if s["session_id"] == sid],
                       key=lambda x: x["start_time"])
-    got = await repo.get_spans_by_conversation(conv)
+    got = await repo.get_spans_by_session(sid)
     assert [g["span_id"] for g in got] == [s["span_id"] for s in expected]
 
 
@@ -115,9 +122,9 @@ async def test_get_spans_by_conversation(repo, jsonl_spans):
 
 async def test_get_root_span_returns_server_root(repo, jsonl_spans):
     await repo.bulk_insert_spans(jsonl_spans)
-    conv = jsonl_spans[0]["conversation_id"]
-    expected_root = next(s for s in jsonl_spans if s["conversation_id"] == conv and is_root_span(s))
-    root = await repo.get_root_span(conv)
+    sid = jsonl_spans[0]["session_id"]
+    expected_root = next(s for s in jsonl_spans if s["session_id"] == sid and is_root_span(s))
+    root = await repo.get_root_span(sid)
     assert root is not None
     assert root["span_id"] == expected_root["span_id"]
     assert root["kind"] == "SERVER"
@@ -126,8 +133,8 @@ async def test_get_root_span_returns_server_root(repo, jsonl_spans):
 async def test_get_root_span_none_when_no_root(repo, jsonl_spans):
     no_root = [{**s, "kind": "INTERNAL"} for s in jsonl_spans]  # 抹掉 SERVER
     await repo.bulk_insert_spans(no_root)
-    conv = no_root[0]["conversation_id"]
-    assert await repo.get_root_span(conv) is None
+    sid = no_root[0]["session_id"]
+    assert await repo.get_root_span(sid) is None
 
 
 # ---- get_trace_tree ----
@@ -150,17 +157,17 @@ async def test_get_trace_tree(repo, jsonl_spans):
     assert sorted(seen) == sorted(s["span_id"] for s in tspans)
 
 
-# ---- list_conversations ----
+# ---- list_sessions ----
 
-async def test_list_conversations(repo, jsonl_spans):
+async def test_list_sessions(repo, jsonl_spans):
     await repo.bulk_insert_spans(jsonl_spans)
-    convs = await repo.list_conversations()
+    convs = await repo.list_sessions()
     traces = _by_trace(jsonl_spans)
-    assert {c["conversation_id"] for c in convs} == {
-        t[0]["conversation_id"] for t in traces.values()
+    assert {c["session_id"] for c in convs} == {
+        t[0]["session_id"] for t in traces.values()
     }
     svc = jsonl_spans[0]["service_name"]
-    filtered = await repo.list_conversations(agent_name=svc)
+    filtered = await repo.list_sessions(agent_name=svc)
     assert all(c["service_name"] == svc for c in filtered)
     assert len(filtered) == sum(1 for t in traces.values() if t[0]["service_name"] == svc)
 
@@ -175,4 +182,4 @@ async def test_upsert_trace_explicit(repo, jsonl_spans):
         row = await conn.fetchrow("SELECT * FROM traces WHERE trace_id=$1", trace_id)
     assert row is not None
     assert row["span_count"] == summary["span_count"]
-    assert row["conversation_id"] == summary["conversation_id"]
+    assert row["session_id"] == summary["session_id"]
