@@ -171,6 +171,49 @@ class VersatileResponseExtractorTest {
                 .contains("VERSATILE_INTENT_RESULT_CONTRACT");
     }
 
+    @Test
+    void emitsInterruptWhenNativeSignalHasCompleteInfo() {
+        VersatileProperties props = props("AnswerNode");
+        props.getInterrupt().setSignalMatch("need_user_input");
+        props.getInterrupt().setPromptGet("/data/question");
+        props.getInterrupt().setInputRequirementGet("/data/input_schema");
+        props.getInterrupt().setResumeTokenGet("/data/resume_token");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine(
+                "data: {\"event\":\"need_user_input\",\"data\":{"
+                        + "\"question\":\"请问入住日期？\","
+                        + "\"input_schema\":\"date\","
+                        + "\"resume_token\":\"tok-1\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_INTERRUPT);
+        Map<String, Object> payload = (Map<String, Object>) chunks.get(0).getData();
+        assertThat(payload).containsEntry("message", "请问入住日期？")
+                .containsEntry("input_requirement", "date")
+                .containsEntry("resume_token", "tok-1");
+    }
+
+    @Test
+    void emitsErrorWhenNativeSignalMissingFields() {
+        VersatileProperties props = props("AnswerNode");
+        props.getInterrupt().setSignalMatch("need_user_input");
+        props.getInterrupt().setPromptGet("/data/question");
+        props.getInterrupt().setInputRequirementGet("/data/input_schema");
+        props.getInterrupt().setResumeTokenGet("/data/resume_token");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine(
+                "data: {\"event\":\"need_user_input\",\"data\":{\"question\":\"q\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_ERROR);
+        assertThat(String.valueOf(chunks.get(chunks.size() - 1).getData()))
+                .contains("VERSATILE_INTENT_INTERRUPT_INCOMPLETE");
+    }
+
     private static void addExtraction(VersatileProperties props, String match, String get) {
         VersatileProperties.ResultExtraction extraction = new VersatileProperties.ResultExtraction();
         extraction.setMatch(match);

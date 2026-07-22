@@ -31,6 +31,10 @@ final class VersatileResponseExtractor {
     private boolean hasFailed;
     private final Map<String, String> extractedFields = new LinkedHashMap<>();
     private String error;
+    private boolean pendingInterrupt;
+    private String interruptPrompt;
+    private String interruptInputRequirement;
+    private String interruptResumeToken;
 
     VersatileResponseExtractor(VersatileProperties properties, IntentAgentResolver agentResolver) {
         this.properties = Objects.requireNonNull(properties, "properties");
@@ -47,6 +51,10 @@ final class VersatileResponseExtractor {
         }
 
         Optional<JsonNode> json = readTree(data.get());
+        if (matchesInterruptSignal(data.get(), json)) {
+            extractInterruptFields(json.orElse(null));
+            return new ArrayList<>();
+        }
         if (shouldExtractResult(data.get(), json)) {
             if (properties.getResultExtractions() == null || properties.getResultExtractions().isEmpty()) {
                 Optional<String> extracted = extractLegacyText(json.get());
@@ -77,6 +85,19 @@ final class VersatileResponseExtractor {
     }
 
     List<QueryChunk> finish() {
+        if (pendingInterrupt) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("message", interruptPrompt);
+            payload.put("input_requirement", interruptInputRequirement);
+            payload.put("resume_token", interruptResumeToken);
+            return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload));
+        }
+        if (!pendingInterrupt
+                && interruptSignalSeenButIncomplete()) {
+            return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                    "{\"code\":\"VERSATILE_INTENT_INTERRUPT_INCOMPLETE\","
+                            + "\"reason\":\"native interrupt missing prompt/input-requirement/resume-token\"}"));
+        }
         if (hasFailed) {
             return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, error));
         }
@@ -122,6 +143,39 @@ final class VersatileResponseExtractor {
                 && !resultNodeName.trim().isEmpty()
                 && rawData.contains("\"node_name\":\"" + resultNodeName + "\"")
                 && json.filter(JsonNode::isObject).isPresent();
+    }
+
+    private boolean matchesInterruptSignal(String rawData, Optional<JsonNode> json) {
+        VersatileProperties.Interrupt interrupt = properties.getInterrupt();
+        if (interrupt == null || !hasText(interrupt.getSignalMatch())) {
+            return false;
+        }
+        return rawData.contains(interrupt.getSignalMatch());
+    }
+
+    private void extractInterruptFields(JsonNode json) {
+        VersatileProperties.Interrupt interrupt = properties.getInterrupt();
+        interruptPrompt = readPath(json, interrupt.getPromptGet());
+        interruptInputRequirement = readPath(json, interrupt.getInputRequirementGet());
+        interruptResumeToken = readPath(json, interrupt.getResumeTokenGet());
+        pendingInterrupt = hasText(interruptPrompt)
+                && hasText(interruptInputRequirement)
+                && hasText(interruptResumeToken);
+    }
+
+    private boolean interruptSignalSeenButIncomplete() {
+        return interruptPrompt != null || interruptInputRequirement != null || interruptResumeToken != null;
+    }
+
+    private static String readPath(JsonNode json, String path) {
+        if (json == null || !hasText(path)) {
+            return null;
+        }
+        JsonNode node = json.at(path);
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        return node.isTextual() ? node.asText() : node.toString();
     }
 
     private Optional<String> extractLegacyText(JsonNode json) {
