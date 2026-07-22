@@ -105,11 +105,11 @@ common/agent-gateway/
 | T-G3-4 | S1-G3 | ParamValidatorTest#resumeWithTaskIdPopulatesTaskId | unit | ✅ |
 | T-G3-5 | S1-G3 | ParamValidatorTest#resumeMissingTaskIdIsTreatedAsCreate | unit | ✅ |
 | T-G3-6 | S1-G3 | ParamValidatorTest#malformedBodyReturns400ValidationJsonrpc / #methodNotInWhitelistReturns400ValidationMethod + A2aControllerWebMvcTest#badMethodReturns400ValidationMethod / #malformedBodyReturns400ValidationJsonrpc | unit+it | ✅ |
-| T-G4-1 | S1-G4 | IdempotencyStoreTest.firstCreateRecords | unit+it | 待写 |
-| T-G4-2 | S1-G4 | IdempotencyStoreTest.sameKeyShortCircuits | unit+it | 待写 |
-| T-G4-3 | S1-G4 | IdempotencyStoreTest.sameKeyDiffBodyReturns409 | unit+it | 待写 |
-| T-G4-4 | S1-G4 | IdempotencyStoreTest.noMessageIdSkipsDedup | unit | 待写 |
-| T-G4-5 | S1-G4 | IdempotencyStoreTest.resumeSkipsCreateDedup | unit | 待写 |
+| T-G4-1 | S1-G4 | IdempotencyRuleTest#firstCreateRegistersInFlightAndProceeds | unit | ✅ |
+| T-G4-2 | S1-G4 | IdempotencyRuleTest#sameKeySameBodyCompletedReplaysPriorResult（seeded completed；REPLAY 的 e2e 待 S2 产生结果） | unit | ✅ |
+| T-G4-3 | S1-G4 | IdempotencyRuleTest#sameKeyDifferentBodyReturnsConflict + A2aControllerWebMvcTest#sameMessageIdDifferentBodyReturns409Conflict | unit+it | ✅ |
+| T-G4-4 | S1-G4 | IdempotencyRuleTest#noMessageIdSkipsDedup + A2aControllerWebMvcTest#createWithoutMessageIdProceedsTwice | unit+it | ✅ |
+| T-G4-5 | S1-G4 | A2aControllerWebMvcTest#resumeWithTaskIdSkipsIdempotency | it | ✅ |
 | T-G5-1 | S1-G5 | AuditSinkTest.passedRecord | unit+it | 待写 |
 | T-G5-2 | S1-G5 | AuditSinkTest.rejectedRecordStageAndCode | unit+it | 待写 |
 | T-G5-3 | S1-G5 | AuditSinkTest.noSecretOrPromptBody | unit | 待写 |
@@ -166,7 +166,8 @@ common/agent-gateway/
 | S1-G1 鉴权 | ✅ GREEN | T-G1-1..5（见 §5） | feat(gateway): FEAT-011 S1-G1 |
 | S1-G2 租户 | ✅ GREEN（17 测全过） | T-G2-1..4（见 §5） | feat(gateway): FEAT-011 S1-G2 |
 | S1-G3 校验 | ✅ GREEN（28 测全过） | T-G3-1..6（见 §5） | feat(gateway): FEAT-011 S1-G3 |
-| S1-G4 幂等 | ⏳ 下一片 | T-G4-1..5 | — |
-| S1-G5 审计 … S4 | 待办 | 见 §5 | — |
+| S1-G4 幂等 | ✅ GREEN（37 测全过） | T-G4-1..5（见 §5；T-G4-2 REPLAY e2e 待 S2） | feat(gateway): FEAT-011 S1-G4 |
+| S1-G5 审计 | ⏳ 下一片 | T-G5-1..4 | — |
+| RDC-PORT … S4 | 待办 | 见 §5 | — |
 
 已知技术债（非阻塞）：Mockito self-attaching 警告（JDK 未来版本需把 mockito agent 加到 surefire argLine）；G5 前错误体 traceId 为 advice 内临时 UUID（G5 切片挪到入口捕获 traceparent）。
