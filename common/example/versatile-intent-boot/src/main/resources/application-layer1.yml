@@ -1,0 +1,58 @@
+server:
+  port: 8081
+
+openjiuwen:
+  service:
+    versatile:
+      url-template: http://versatile-host:3001/v1/{project_id}/agents/agent_L1/conversations/{conversation_id}
+      timeout: 30s
+      headers-template:
+        content-type: application/json
+        stream: "true"
+      forward-header-whitelist:
+        - x-language
+      result-node-name: AnswerNode
+
+      intents:
+        - id: intent_L1_hotel
+          name: 酒店
+        - id: intent_L1_flight
+          name: 机票
+        - id: intent_L1_other
+          name: 其他
+
+      messages:
+        source: serve_request_messages
+        required: true
+
+      intent-agent-mapping:
+        intent_L1_hotel:
+          - agent-card: agent_card_L2_hotel
+        intent_L1_flight:
+          - agent-card: agent_card_L2_flight_a
+            priority: 1
+          - agent-card: agent_card_L2_flight_b
+            priority: 2
+        intent_L1_other:
+          - agent-card: agent_card_L2_fallback
+      intent-agent-mapping-strategy: first
+
+      result-extractions:
+        - match: response_content
+          get: /custom_rsp_data/data/response_content
+        - match: intent_id
+          get: /custom_rsp_data/data/intent_id
+        - match: agent_id
+          get: /custom_rsp_data/data/agent_id
+
+      interrupt:
+        signal-match: need_user_input
+        prompt-get: /data/question
+        input-requirement-get: /data/input_schema
+        resume-token-get: /data/resume_token
+
+    a2a-gateway:
+      enabled: true
+      base-url: https://gateway.example.com
+      agent-card-path: /{agentCard}/.well-known/agent-card.json
+      json-rpc-path: /{agentCard}/a2a
