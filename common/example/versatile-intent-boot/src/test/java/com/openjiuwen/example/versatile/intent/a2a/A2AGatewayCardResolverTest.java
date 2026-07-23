@@ -18,21 +18,29 @@ class A2AGatewayCardResolverTest {
         props = new A2AGatewayProperties();
         props.setEnabled(true);
         props.setBaseUrl("https://gateway.example.com");
-        props.setAgentCardPath("/{agentCard}/.well-known/agent-card.json");
-        props.setJsonRpcPath("/{agentCard}/a2a");
+        props.setJsonRpcPath("/a2a/{agentCard}");
         resolver = new A2AGatewayCardResolver(props);
     }
 
     @Test
-    void resolveCardUrlSubstitutesAgentCardPlaceholder() {
-        assertThat(resolver.resolveCardUrl("agent_card_L2_hotel"))
-                .isEqualTo("https://gateway.example.com/agent_card_L2_hotel/.well-known/agent-card.json");
+    void resolveCardUrlReturnsEmptyInGatewayMode() {
+        assertThat(resolver.resolveCardUrl("agent_card_L2_hotel")).isEmpty();
     }
 
     @Test
     void resolveJsonRpcUrlSubstitutesAgentCardPlaceholder() {
         assertThat(resolver.resolveJsonRpcUrl("agent_card_L2_hotel"))
-                .isEqualTo("https://gateway.example.com/agent_card_L2_hotel/a2a");
+                .isEqualTo("https://gateway.example.com/a2a/agent_card_L2_hotel");
+    }
+
+    @Test
+    void resolveJsonRpcUrlUsesDefaultGatewayConventionWhenNotOverridden() {
+        A2AGatewayProperties defaults = new A2AGatewayProperties();
+        defaults.setBaseUrl("https://gateway.example.com");
+        A2AGatewayCardResolver r = new A2AGatewayCardResolver(defaults);
+
+        assertThat(r.resolveJsonRpcUrl("agent_L1"))
+                .isEqualTo("https://gateway.example.com/a2a/agent_L1");
     }
 
     @Test
@@ -46,7 +54,6 @@ class A2AGatewayCardResolverTest {
     void returnsEmptyWhenBaseUrlNotConfigured() {
         A2AGatewayProperties empty = new A2AGatewayProperties();
         A2AGatewayCardResolver r = new A2AGatewayCardResolver(empty);
-        assertThat(r.resolveCardUrl("agent_card_L2_hotel")).isEmpty();
         assertThat(r.resolveJsonRpcUrl("agent_card_L2_hotel")).isEmpty();
     }
 }

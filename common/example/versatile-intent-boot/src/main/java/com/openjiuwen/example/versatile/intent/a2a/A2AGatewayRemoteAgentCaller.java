@@ -7,8 +7,8 @@ package com.openjiuwen.example.versatile.intent.a2a;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentAnswerExtractor;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentException;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCardResolver;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentException;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteInputRequiredException;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.ServeRequest;
@@ -18,8 +18,11 @@ import org.a2aproject.sdk.client.ClientEvent;
 import org.a2aproject.sdk.client.TaskEvent;
 import org.a2aproject.sdk.client.TaskUpdateEvent;
 import org.a2aproject.sdk.client.config.ClientConfig;
+import org.a2aproject.sdk.client.http.A2AHttpClient;
+import org.a2aproject.sdk.client.http.JdkA2AHttpClient;
 import org.a2aproject.sdk.client.transport.jsonrpc.JSONRPCTransport;
 import org.a2aproject.sdk.client.transport.jsonrpc.JSONRPCTransportConfig;
+import org.a2aproject.sdk.client.transport.spi.interceptors.ClientCallContext;
 import org.a2aproject.sdk.spec.AgentCapabilities;
 import org.a2aproject.sdk.spec.AgentCard;
 import org.a2aproject.sdk.spec.AgentInterface;
@@ -34,11 +37,17 @@ import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.TextPart;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
+import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -46,23 +55,77 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
- * A2A Gateway {@link RemoteAgentCaller} implementation: routes via
- * {@code gatewayBaseUrl + "/" + agentId + jsonRpcPath} (resolved by
+ * A2A Gateway {@link RemoteAgentCaller} implementation: routes via the A2A SDK
+ * {@link Client} to {@code gatewayBaseUrl + "/a2a/" + agentId} (resolved by
  * {@link A2AGatewayCardResolver}) and consumes
- * {@link RemoteAgentCall#responseContent()} to append an assistant message
- * to the forwarded {@link ServeRequest#messages}.
+ * {@link RemoteAgentCall#responseContent()} to append an assistant message to
+ * the forwarded {@link ServeRequest#messages}.
  *
- * <p>Production deployment form. Activated by
- * {@code openjiuwen.service.a2a-gateway.enabled=true}.
+ * <p>Per the gateway's integration requirements, every request carries:
+ * <ul>
+ *   <li>{@code token} header — service credential from
+ *       {@link A2AGatewayProperties#getToken()} (required; call fails fast if absent)</li>
+ *   <li>{@code userId} header — propagated from
+ *       {@link ServeRequest#getUserId()}</li>
+ *   <li>{@code versionNode} header — optional, from
+ *       {@link A2AGatewayProperties#getVersionNode()}</li>
+ *   <li>{@code X-B3-TraceId} — propagated verbatim from the upstream HTTP
+ *       request header of the same name (when present)</li>
+ *   <li>{@code X-B3-SpanId} — freshly generated per call via
+ *       {@link UUID#randomUUID()} (with dashes stripped), so each cross-layer
+ *       hop has its own span id</li>
+ *   <li>{@code X-B3-ParentSpanId} — set to the upstream request's
+ *       {@code X-B3-SpanId} (when present), linking this hop under the caller's
+ *       span</li>
+ *   <li>{@code X-B3-Sampled} — propagated verbatim from the upstream HTTP
+ *       request header of the same name (when present; expected value
+ *       {@code 0} or {@code 1})</li>
+ *   <li>{@code X-Biz-Tag} — propagated verbatim from the upstream HTTP
+ *       request header of the same name (when present)</li>
+ * </ul>
+ *
+ * <p>Headers are injected per-call via {@link ClientCallContext}. The SDK's
+ * {@code JSONRPCTransport.createPostBuilder} iterates
+ * {@link org.a2aproject.sdk.client.transport.spi.interceptors.PayloadAndHeaders#getHeaders()}
+ * (populated from {@link ClientCallContext#getHeaders()}) and adds each entry
+ * to the HTTP request, so all headers — static (token, versionNode) and
+ * per-call (userId, X-B3-*) — flow through the same channel.
+ *
+ * <p>The ephemeral {@link AgentCard} built per agentId uses the uppercase
+ * {@link #PROTOCOL_BINDING_JSONRPC} constant for {@code protocolBinding}. The
+ * SDK's {@code TransportProtocol.JSONRPC.asString()} returns {@code "JSONRPC"};
+ * a lowercase value silently breaks {@code ClientBuilder.findBestClientTransport}
+ * with "No compatible transport found" — this was the root cause of the
+ * earlier misdiagnosis as a ServiceLoader issue.
+ *
+ * <p>Activated by {@code openjiuwen.service.a2a-gateway.enabled=true}.
  *
  * @since 0.1.0
  */
 public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
     private static final Logger log = LoggerFactory.getLogger(A2AGatewayRemoteAgentCaller.class);
 
+    /**
+     * Uppercase A2A protocol binding matching
+     * {@code TransportProtocol.JSONRPC.asString()}. The SDK matches
+     * {@code AgentInterface.protocolBinding()} against this value case-sensitively
+     * in {@code ClientBuilder.findBestClientTransport}.
+     */
+    static final String PROTOCOL_BINDING_JSONRPC = "JSONRPC";
+
+    private static final String HEADER_TOKEN = "token";
+    private static final String HEADER_USER_ID = "userId";
+    private static final String HEADER_VERSION_NODE = "versionNode";
+    private static final String HEADER_B3_TRACE_ID = "X-B3-TraceId";
+    private static final String HEADER_B3_SPAN_ID = "X-B3-SpanId";
+    private static final String HEADER_B3_PARENT_SPAN_ID = "X-B3-ParentSpanId";
+    private static final String HEADER_B3_SAMPLED = "X-B3-Sampled";
+    private static final String HEADER_BIZ_TAG = "X-Biz-Tag";
+
     private final A2AGatewayProperties properties;
     private final RemoteAgentCardResolver cardResolver;
-    private final Map<String, Client> clientCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final A2AHttpClient httpClient;
+    private final Map<String, Client> clientCache = new ConcurrentHashMap<>();
 
     /**
      * Constructs the gateway caller.
@@ -74,11 +137,17 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
             RemoteAgentCardResolver cardResolver) {
         this.properties = properties;
         this.cardResolver = cardResolver;
+        this.httpClient = new JdkA2AHttpClient();
     }
 
     @Override
     public void call(RemoteAgentCall call, QueryStreamObserver observer) {
-        ServeRequest forwarded = ForwardedServeRequests.build(call.serveRequest(), call.responseContent());
+        if (properties.getToken() == null || properties.getToken().isBlank()) {
+            observer.onError(new RemoteAgentException(
+                    "A2AGatewayRemoteAgentCaller: openjiuwen.service.a2a-gateway.token is not configured",
+                    null));
+            return;
+        }
         String jsonRpcUrl = cardResolver.resolveJsonRpcUrl(call.agentId());
         if (jsonRpcUrl == null || jsonRpcUrl.isBlank()) {
             observer.onError(new RemoteAgentException(
@@ -86,13 +155,16 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                     null));
             return;
         }
+
+        ServeRequest forwarded = ForwardedServeRequests.build(call.serveRequest(), call.responseContent());
         String contextId = call.contextId() != null
                 ? call.contextId()
                 : UUID.randomUUID().toString();
         String messageText = call.message() != null && !call.message().isBlank()
                 ? call.message() : forwarded.lastUserQuery();
-        log.info("A2AGateway call agent={} url={} responseContentLen={} appendedMessages={}",
-                call.agentId(), jsonRpcUrl,
+
+        log.info("A2AGateway call agent={} url={} userId={} responseContentLen={} appendedMessages={}",
+                call.agentId(), jsonRpcUrl, forwarded.getUserId(),
                 call.responseContent() != null ? call.responseContent().length() : 0,
                 forwarded.getMessages().size() - call.serveRequest().getMessages().size());
 
@@ -110,7 +182,9 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 .build();
 
         AgentCard card = buildEphemeralCard(call.agentId(), jsonRpcUrl);
-        Client client = createClient(card, true);
+        Client client = getOrCreateClient(card);
+        ClientCallContext context = new ClientCallContext(Map.of(), buildHeaders(forwarded.getUserId()));
+
         CompletableFuture<String> result = new CompletableFuture<>();
         try {
             client.sendMessage(params, List.of((BiConsumer<ClientEvent, AgentCard>) (event, c) -> {
@@ -123,7 +197,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 } else if (event instanceof TaskEvent te) {
                     handleTaskEvent(te, result, observer);
                 }
-            }), result::completeExceptionally, null);
+            }), result::completeExceptionally, context);
         } catch (RuntimeException ex) {
             observer.onError(new RemoteAgentException(
                     "A2AGateway call failed for agentId=" + call.agentId(), ex));
@@ -147,7 +221,8 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RemoteInputRequiredException rie) {
                 observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
-                        Map.of("message", rie.getMessage(), "remote_task_id", rie.getRemoteTaskId())));
+                        Map.of("message", rie.getMessage() == null ? "" : rie.getMessage(),
+                                "remote_task_id", rie.getRemoteTaskId() == null ? "" : rie.getRemoteTaskId())));
                 if (!observer.isCancelled()) {
                     observer.onComplete();
                 }
@@ -161,7 +236,87 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
     @Override
     public boolean supported(String agentId) {
         return agentId != null && !agentId.isBlank()
-                && properties.getBaseUrl() != null && !properties.getBaseUrl().isBlank();
+                && properties.getBaseUrl() != null && !properties.getBaseUrl().isBlank()
+                && properties.getToken() != null && !properties.getToken().isBlank();
+    }
+
+    /**
+     * Builds the per-call HTTP headers injected via {@link ClientCallContext}.
+     *
+     * <p>Tracing headers ({@code X-B3-TraceId}, {@code X-B3-Sampled},
+     * {@code X-Biz-Tag}) and the parent span id (derived from the upstream
+     * {@code X-B3-SpanId}) are propagated from the current upstream HTTP
+     * request via {@link RequestContextHolder}; a fresh
+     * {@code X-B3-SpanId} is generated per call.
+     *
+     * <p>Package-private for test access.
+     *
+     * @param userId the upstream user id (may be {@code null})
+     * @return a mutable map of header name to value
+     */
+    Map<String, String> buildHeaders(String userId) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put(HEADER_TOKEN, properties.getToken());
+        if (userId != null && !userId.isBlank()) {
+            headers.put(HEADER_USER_ID, userId);
+        }
+        if (properties.getVersionNode() != null && !properties.getVersionNode().isBlank()) {
+            headers.put(HEADER_VERSION_NODE, properties.getVersionNode());
+        }
+
+        String upstreamTraceId = resolveUpstreamHeader(HEADER_B3_TRACE_ID);
+        if (upstreamTraceId != null && !upstreamTraceId.isBlank()) {
+            headers.put(HEADER_B3_TRACE_ID, upstreamTraceId);
+        }
+
+        String upstreamSampled = resolveUpstreamHeader(HEADER_B3_SAMPLED);
+        if (upstreamSampled != null && !upstreamSampled.isBlank()) {
+            headers.put(HEADER_B3_SAMPLED, upstreamSampled);
+        }
+
+        String upstreamBizTag = resolveUpstreamHeader(HEADER_BIZ_TAG);
+        if (upstreamBizTag != null && !upstreamBizTag.isBlank()) {
+            headers.put(HEADER_BIZ_TAG, upstreamBizTag);
+        }
+
+        String upstreamSpanId = resolveUpstreamHeader(HEADER_B3_SPAN_ID);
+        if (upstreamSpanId != null && !upstreamSpanId.isBlank()) {
+            headers.put(HEADER_B3_PARENT_SPAN_ID, upstreamSpanId);
+        }
+
+        headers.put(HEADER_B3_SPAN_ID, generateSpanId());
+
+        return headers;
+    }
+
+    /**
+     * Resolves a header from the current upstream HTTP request, if any.
+     *
+     * <p>Package-private for test override (the default implementation reads
+     * from {@link RequestContextHolder}, which is empty in unit tests without
+     * a servlet request scope).
+     *
+     * @param name the header name (case-insensitive per servlet spec)
+     * @return the header value, or {@code null} if no upstream request is
+     *         bound or the header is absent
+     */
+    String resolveUpstreamHeader(String name) {
+        ServletRequestAttributes attrs =
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) {
+            return null;
+        }
+        HttpServletRequest request = attrs.getRequest();
+        return request.getHeader(name);
+    }
+
+    /**
+     * Generates a fresh span id for this outbound call. Uses
+     * {@link UUID#randomUUID()} with dashes stripped (32 hex chars), as
+     * permitted by the B3 extension spec for 128-bit span ids.
+     */
+    String generateSpanId() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     /**
@@ -184,7 +339,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
      *
      * <p>A WARN is logged once per agentId to surface this assumption.
      */
-    private AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl) {
+    AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl) {
         log.warn("A2AGateway caller using ephemeral AgentCard for agentId={} "
                 + "(protocol version pinned to CURRENT; FEAT-015 card fetch skipped)", agentId);
         return AgentCard.builder()
@@ -192,21 +347,22 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 .description("A2A Gateway route to " + agentId)
                 .version("0.1.0")
                 .url(jsonRpcUrl)
-                .capabilities(AgentCapabilities.builder().streaming(true).build())
+                .capabilities(AgentCapabilities.builder().streaming(properties.isStreaming()).build())
                 .skills(List.of())
                 .defaultInputModes(List.of())
                 .defaultOutputModes(List.of())
                 .supportedInterfaces(List.of(
-                        new AgentInterface("jsonrpc", jsonRpcUrl, null, AgentInterface.CURRENT_PROTOCOL_VERSION)))
+                        new AgentInterface(PROTOCOL_BINDING_JSONRPC, jsonRpcUrl, null,
+                                AgentInterface.CURRENT_PROTOCOL_VERSION)))
                 .build();
     }
 
-    private Client createClient(AgentCard card, boolean isStreaming) {
+    private Client getOrCreateClient(AgentCard card) {
         return withApplicationClassLoader(() -> clientCache.computeIfAbsent(
-                card.name() + ":" + isStreaming,
+                card.name(),
                 k -> Client.builder(card)
-                        .clientConfig(new ClientConfig.Builder().setStreaming(isStreaming).build())
-                        .withTransport(JSONRPCTransport.class, new JSONRPCTransportConfig())
+                        .clientConfig(new ClientConfig.Builder().setStreaming(properties.isStreaming()).build())
+                        .withTransport(JSONRPCTransport.class, new JSONRPCTransportConfig(httpClient))
                         .build()));
     }
 
@@ -274,6 +430,17 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                     statusText.isBlank() ? "Remote agent requires input" : statusText,
                     task.id() != null ? task.id() : ""));
         } else if (task.status().state().isFinal()) {
+            if (task.artifacts() != null) {
+                for (Artifact a : task.artifacts()) {
+                    if (a == null || a.parts() == null) {
+                        continue;
+                    }
+                    String raw = extractText(a.parts());
+                    if (!raw.isEmpty()) {
+                        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, raw));
+                    }
+                }
+            }
             String text = task.artifacts() != null && !task.artifacts().isEmpty()
                     ? extractText(task.artifacts().get(0).parts()) : "";
             result.complete(text);

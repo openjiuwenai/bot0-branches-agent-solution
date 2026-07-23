@@ -19,15 +19,50 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * call. It must not exceed the per-hop budget remaining from the original
  * chain deadline (PRD §9.3); deployments lower it as needed.
  *
+ * <p>{@link #token} is the service-level credential sent as the {@code token}
+ * header on every gateway request (required). {@link #versionNode} is an
+ * optional routing hint sent as the {@code versionNode} header. Per-request
+ * {@code userId} is resolved at call time from
+ * {@link com.openjiuwen.service.spec.dto.ServeRequest#getUserId()}; tracing
+ * headers ({@code X-B3-TraceId}, {@code X-B3-Sampled}, {@code X-Biz-Tag}) and
+ * the parent span id (derived from the upstream {@code X-B3-SpanId}) are
+ * propagated from the upstream HTTP request, while a fresh
+ * {@code X-B3-SpanId} is generated per call.
+ *
  * @since 0.1.0
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.a2a-gateway")
 public class A2AGatewayProperties {
+    /**
+     * Default JSON-RPC path template matching the gateway's
+     * {@code {a2a-gateway}/a2a/{agentId}} URL convention.
+     */
+    public static final String DEFAULT_JSONRPC_PATH = "/a2a/{agentCard}";
+
     private boolean enabled = false;
     private String baseUrl;
-    private String agentCardPath = "/{agentCard}/.well-known/agent-card.json";
-    private String jsonRpcPath = "/{agentCard}/a2a";
+    private String jsonRpcPath = DEFAULT_JSONRPC_PATH;
     private long callTimeoutSeconds = 300L;
+
+    /**
+     * Service-level authentication token forwarded as the {@code token} header.
+     * Required when {@link #isEnabled} is {@code true}; the caller refuses to
+     * send requests without it.
+     */
+    private String token;
+
+    /**
+     * Optional version-node routing hint forwarded as the {@code versionNode}
+     * header. Only added when non-blank.
+     */
+    private String versionNode;
+
+    /**
+     * Whether to use A2A streaming ({@code message/stream} SSE) for cross-layer
+     * calls. Defaults to {@code true}. Set to {@code false} for gateways that
+     * only support sync {@code message/send} (single JSON-RPC response).
+     */
+    private boolean streaming = true;
 
     public boolean isEnabled() {
         return enabled;
@@ -45,14 +80,6 @@ public class A2AGatewayProperties {
         this.baseUrl = baseUrl;
     }
 
-    public String getAgentCardPath() {
-        return agentCardPath;
-    }
-
-    public void setAgentCardPath(String agentCardPath) {
-        this.agentCardPath = agentCardPath;
-    }
-
     public String getJsonRpcPath() {
         return jsonRpcPath;
     }
@@ -67,5 +94,29 @@ public class A2AGatewayProperties {
 
     public void setCallTimeoutSeconds(long callTimeoutSeconds) {
         this.callTimeoutSeconds = callTimeoutSeconds;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    public String getVersionNode() {
+        return versionNode;
+    }
+
+    public void setVersionNode(String versionNode) {
+        this.versionNode = versionNode;
+    }
+
+    public boolean isStreaming() {
+        return streaming;
+    }
+
+    public void setStreaming(boolean streaming) {
+        this.streaming = streaming;
     }
 }

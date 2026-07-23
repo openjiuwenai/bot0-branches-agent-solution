@@ -8,8 +8,14 @@ import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCardResolver;
 
 /**
  * A2A Gateway card URL resolver: substitutes the {@code {agentCard}} placeholder
- * in {@link A2AGatewayProperties#getAgentCardPath()} / {@link A2AGatewayProperties#getJsonRpcPath()}
- * with the runtime {@code agentId}.
+ * in {@link A2AGatewayProperties#getJsonRpcPath()} with the runtime
+ * {@code agentId} to produce the JSON-RPC endpoint URL.
+ *
+ * <p>The gateway routing mode does not fetch a real Agent Card from the
+ * gateway — the caller builds an ephemeral card per agentId instead (see
+ * {@code A2AGatewayRemoteAgentCaller.buildEphemeralCard}). Consequently
+ * {@link #resolveCardUrl(String)} always returns the empty string; the method
+ * is implemented only to satisfy the {@link RemoteAgentCardResolver} contract.
  *
  * @since 0.1.0
  */
@@ -27,9 +33,13 @@ public class A2AGatewayCardResolver implements RemoteAgentCardResolver {
         this.properties = properties;
     }
 
+    /**
+     * Always returns the empty string: the gateway caller uses an ephemeral
+     * Agent Card and never fetches one over HTTP.
+     */
     @Override
     public String resolveCardUrl(String agentId) {
-        return substitute(agentId, properties.getBaseUrl(), properties.getAgentCardPath());
+        return "";
     }
 
     @Override
