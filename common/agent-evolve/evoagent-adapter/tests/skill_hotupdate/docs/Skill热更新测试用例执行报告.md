@@ -7,10 +7,10 @@
 | **测试对象** | EvoAgentAdapter Skill API + 业务 Agent 运行时热加载 + EvoAgent `AdapterClient` / Operator（单元） |
 | **集成/E2E 脚本** | `tests/skill_hotupdate/scripts/run_api_suite.py`、`run_e2e_experiment.py` |
 | **单元测试** | `community/EvoAgent/tests/unit/test_adapter_client.py`、`test_operator_factory.py` |
-| **Adapter 地址** | `http://124.71.234.237:8900`（最近一次实测） |
-| **a2a_service** | `http://124.71.234.237:18090/health` → healthy |
+| **Adapter 地址** | `http://<host>:8900`（最近一次实测） |
+| **a2a_service** | `http://<host>:18090/health` → healthy |
 | **agent_name** | `edp_agent` |
-| **skill_name** | `product_recommend_skill` |
+| **skill_name** | `demo_skill` |
 | **执行日期** | 2026-06-18（集成/E2E）；2026-06-17（单元） |
 | **执行环境** | Windows；Python 3.12 |
 
@@ -88,11 +88,11 @@
 ```
 命令:
   cd tests/skill_hotupdate/scripts
-  python run_api_suite.py --base-url http://124.71.234.237:8900
+  python run_api_suite.py --base-url http://<host>:8900
 
 结果:
-  TC-01 skill_list: fund_planning_skill, interact_finance_rec_skill,
-                    product_recommend_skill, product_select_skill
+  TC-01 skill_list: demo_skill_a, demo_skill_b,
+                    demo_skill, demo_skill_c
   TC-02 skill_content 长度 5714
   TC-03 update_skill success=True
   TC-04 对话 success=True
@@ -109,7 +109,7 @@
 
 ```
 命令:
-  python run_e2e_experiment.py --base-url http://124.71.234.237:8900
+  python run_e2e_experiment.py --base-url http://<host>:8900
 
 结果:
   标记: 【SKILL热更-20260618-000913】
@@ -148,7 +148,7 @@
 
 ```
 ======================================================================
-Skill 热更新 API 测试套件 | http://124.71.234.237:8900 | agent=edp_agent
+Skill 热更新 API 测试套件 | http://<host>:8900 | agent=edp_agent
 ======================================================================
   [PASS] TC-01 ~ TC-12（详见 §3.1）
 ======================================================================

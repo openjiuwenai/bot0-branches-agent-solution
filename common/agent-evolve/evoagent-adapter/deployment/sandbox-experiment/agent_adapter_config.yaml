@@ -8,7 +8,7 @@ port: 8900
 agents:
   - name: edp_agent
     log_dir: /data/logs/edp_agent
-    log_pattern: process_*.log
+    log_pattern: process*.log
     skills_dir: /data/skills/edp_agent
     agent_url: http://edpagent:8090
     project_id: default
@@ -16,5 +16,7 @@ agents:
     timeout: 300
     skill_backend: jiuwenbox
     jiuwenbox_url: http://jiuwenbox:8321
+    # 多 ready 沙箱时建议 fixed + 填写本机当前 sandbox_id；默认从日志解析
+    # sandbox_id: "<sandbox-id>"
     sandbox_id_resolve: from_logs
     remote_skills_dir: /tmp/skills

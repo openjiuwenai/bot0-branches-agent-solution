@@ -11,7 +11,7 @@
 ### 背景
 
 - **当前问题**：EvoAgent 执行 Skill 文档优化（多 epoch 反思、patch 应用、验证门控）时，需要反复修改业务 Agent 正在使用的 Skill 正文；若每次修改都重启业务进程，优化周期不可接受且会打断在线对话。
-- **影响范围**：所有通过 Adapter 接入 EvoAgent 优化的业务 Agent（本期以 `edp_agent` 理财场景为验证对象）。
+- **影响范围**：所有通过 Adapter 接入 EvoAgent 优化的业务 Agent（本期以 `edp_agent` 示例场景为验证对象）。
 - **解决思路**：EvoAgent 通过 Adapter 的 `update_skill` 写共享 `SKILL.md`；业务 Agent 在对话中 `read_file` 读取磁盘内容，**无需重启**即可生效正文变更。
 - **需求来源**：EvoAgent Skill 优化 Pipeline 与 EvoAgentAdapter 解耦部署。
 
@@ -70,7 +70,7 @@
 | 问题 | 影响 | 当前处理 |
 | --- | --- | --- |
 | 优化结束后是否自动 restore | 磁盘上是否保留最优 Skill | 当前**不**自动 restore；任务开始 restore 做幂等清理 |
-| 多 Skill 并行热更 | 多 operator 同时 `update_skill` | 已支持；`edp_agent` 理财 4 Skill 同目录 |
+| 多 Skill 并行热更 | 多 operator 同时 `update_skill` | 已支持；同 Agent 下多 Skill 同目录 |
 | Studio 展示热更事件 | 前端是否展示 `phase=apply` | 场景 Optimizer 已推 SSE log 事件 |
 
 ---

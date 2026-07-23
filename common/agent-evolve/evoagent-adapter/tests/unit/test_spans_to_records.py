@@ -144,7 +144,7 @@ def test_clean_traces_last_generation_wins():
 # ---- 未映射 span 跳过 ----
 
 def test_unmapped_spans_skipped():
-    """chain.EDPAgent / service.versatile_adapter 等不产 record (避免噪声)。"""
+    """chain.BusinessAgent / service.demo_adapter 等不产 record (避免噪声)。"""
     spans = _load_spans()
     chain = next(s for s in spans if s.get("name") == "chain.SampleAgent")
     recs = spans_to_records([chain])
