@@ -30,8 +30,10 @@ target/
 *.key
 *.pem
 
-# test/ 本地脚本与数据（评测/跑批脚本、人工标注、run 产物、测试 trace/skill）不提交
-test/
+# /test/ 仅忽略仓库根目录下的本地脚本/数据（评测/跑批/人工标注/run 产物）。
+# 收窄说明：原 `test/`（无前导斜杠）会误伤所有 Maven `src/test/`，导致 Java 单元测试
+# 被静默忽略；改为 `/test/` 仅匹配仓库根，与既有惯例（registry/agent-bus 的 src/test 入库）一致。
+/test/
 
 # evoagent 运行产物（GU/golden_data/intermediate 等 workspace 产物）
 common/agent-evolve/evoagent/workspace/
