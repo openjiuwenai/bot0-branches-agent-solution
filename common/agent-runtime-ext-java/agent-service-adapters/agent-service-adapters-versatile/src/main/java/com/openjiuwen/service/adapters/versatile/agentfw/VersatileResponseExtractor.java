@@ -235,7 +235,9 @@ final class VersatileResponseExtractor {
             return Optional.empty();
         }
         String agentId = agentResolver.resolve(intentId, workflowAgentId)
-                .orElseThrow(() -> new IllegalStateException("VERSATILE_INTENT_AGENT_ID_UNMAPPED"));
+                .orElseThrow(() -> new IllegalStateException(
+                        "VERSATILE_INTENT_AGENT_ID_UNMAPPED: intent_id=" + intentId
+                                + " workflow_agent_id=" + workflowAgentId));
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("type", "answer");
         envelope.put("output", responseContent);

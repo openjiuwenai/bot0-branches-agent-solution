@@ -80,7 +80,8 @@ public class MockA2AGatewayController {
      */
     static final Map<String, String> ROUTING = Map.of(
             "agent_card_L2_hotel", "http://localhost:8082",
-            "agent_card_L2_flight", "http://localhost:8082",
+            "agent_card_L2_flight_a", "http://localhost:8082",
+            "agent_card_L2_flight_b", "http://localhost:8082",
             "agent_card_L2_fallback", "http://localhost:8082",
             "agent_card_biz_hotel_domestic", "http://localhost:8083",
             "agent_card_biz_hotel_international", "http://localhost:8083",
@@ -147,7 +148,7 @@ public class MockA2AGatewayController {
             }
 
             String envelope = buildAnswerEnvelope(response.body());
-            String taskId = "task-mock-" + Math.abs(agentId.hashCode());
+            String taskId = "task-mock-" + Math.floorMod(agentId.hashCode(), Integer.MAX_VALUE);
             String jsonRpcResponse = completedJson(jsonRpcId, taskId, envelope);
             log.info("Mock A2A Gateway outbound agentId={} envelopeLen={} taskId={}",
                     agentId, envelope.length(), taskId);
