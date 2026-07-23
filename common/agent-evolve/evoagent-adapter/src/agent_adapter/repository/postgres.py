@@ -20,7 +20,11 @@ from typing import Any
 
 import asyncpg
 
-from agent_adapter.repository.aggregation import build_trace_tree, compute_trace_summary
+from agent_adapter.repository.aggregation import (
+    backfill_session_id,
+    build_trace_tree,
+    compute_trace_summary,
+)
 
 # spans 表列序 (与 _SPAN_SQL 对齐) —— 18 列, 对齐 schema/postgres.sql (无 duration_ns, session_id)
 _SPAN_COLUMNS = (
@@ -239,14 +243,23 @@ class PostgresTraceRepository:
                 await self._reupsert_trace(conn, span["trace_id"])
 
     async def bulk_insert_spans(self, spans: list[dict[str, Any]]) -> None:
-        """批量插 spans + 按涉及的 trace_id 各重算汇总 (一个事务)。"""
+        """批量插 spans + 按涉及的 trace_id 各重算汇总 (一个事务)。
+
+        session_id 回填两段式:
+          A. 批内: backfill_session_id (aggregation 纯函数) 用本批兄弟的非空 session 就地回填;
+          B. 跨批: _backfill_session_id_for_trace 用 DB 内同 trace 的 session 回填本批晚到空 span
+                 (session 兄弟可能在前一批已入库, 本批 in-memory 看不到)。
+        B 在 _reupsert_trace 之前跑, 使 traces 汇总读到回填后的 session_id 列。
+        """
         assert self.pool is not None, "start() 未调用"
         if not spans:
             return
+        spans = backfill_session_id(spans)  # A: 批内回填 (非原地, 返回新列表)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.executemany(_SPAN_SQL, [_span_params(s) for s in spans])
                 for trace_id in {s["trace_id"] for s in spans}:
+                    await self._backfill_session_id_for_trace(conn, trace_id)  # B: 跨批兜底
                     await self._reupsert_trace(conn, trace_id)
 
     async def upsert_trace(self, trace: dict[str, Any]) -> None:
@@ -264,6 +277,51 @@ class PostgresTraceRepository:
             return
         summary = compute_trace_summary(trace_id, [_row_to_span(r) for r in rows])
         await conn.execute(_TRACE_SQL, *_trace_params(summary))
+
+    async def _backfill_session_id_for_trace(
+        self, conn: asyncpg.Connection, trace_id: str
+    ) -> None:
+        """同 trace 内用首个非空 session_id 回填空 session_id 行 (跨批兜底, B 段, 幂等)。
+
+        晚到 span 的 session 兄弟可能在前一批已入库 → 批内回填 (A) 看不到, 在此用 DB
+        现有行的 session 补齐。孤儿 trace (DB 内无任何 session) → src.sid 为 NULL,
+        `AND src.sid IS NOT NULL` 守门, 不更新, 保留空。
+        """
+        await conn.execute(
+            """
+            UPDATE spans
+            SET session_id = src.sid
+            FROM (SELECT MIN(session_id) AS sid
+                  FROM spans
+                  WHERE trace_id = $1 AND session_id IS NOT NULL) src
+            WHERE trace_id = $1 AND session_id IS NULL AND src.sid IS NOT NULL
+            """,
+            trace_id,
+        )
+
+    async def backfill_session_id(self) -> int:
+        """全表回填空 session_id (按 trace 取首个非空 session 补齐; 孤儿不动)。返回受影响行数。
+
+        一次性维护用: 部署本回填逻辑后, 对历史已入库的空 session span 做一次性补齐。
+        常规摄取路径无需调用 (bulk_insert_spans 已含 per-trace 兜底)。
+        """
+        assert self.pool is not None, "start() 未调用"
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                WITH filled AS (
+                    UPDATE spans s
+                    SET session_id = sub.sid
+                    FROM (SELECT trace_id, MIN(session_id) AS sid
+                          FROM spans
+                          WHERE session_id IS NOT NULL
+                          GROUP BY trace_id) sub
+                    WHERE s.trace_id = sub.trace_id AND s.session_id IS NULL
+                    RETURNING 1
+                )
+                SELECT count(*) FROM filled
+                """
+            ) or 0
 
     # ---- 读 ----
 

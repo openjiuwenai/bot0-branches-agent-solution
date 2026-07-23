@@ -96,6 +96,38 @@ def compute_trace_summary(trace_id: str, spans: list[dict[str, Any]]) -> dict[st
     }
 
 
+def backfill_session_id(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """同 trace 内用首个非空 session_id 回填空 session_id 的 span (批内回填, A 段)。
+
+    EDPAgent 上报的部分 span 不带 session.id (内部工具 span / 未完成的 llm span /
+    无会话根的 trace) → session_id 为空。同 trace 内只要有一个 span 带了 session_id,
+    它对整条 trace 唯一, 取之回填到本批空 span。
+
+    只处理本批可见的兄弟; 跨批晚到的场景 (session 在前一批已入库, 本批 span 全空)
+    由 postgres 层的 SQL 兜底回填 (_backfill_session_id_for_trace) 覆盖。
+    孤儿 trace (整 trace 无任何 session) 不回填, 保留空 —— 不凭空造值。
+
+    非原地: 返回新列表, 仅对被回填的 span 做浅拷贝并覆写 session_id, 其余原样引用;
+    不改输入 (调用方可能传共享 fixture, 见 build_trace_tree 的非原地风格)。
+    """
+    # 第一遍: 收集每条 trace 的首个非空 session_id (插入顺序无关, 取最早出现的)
+    trace_session: dict[str, str] = {}
+    for s in spans:
+        tid = s.get("trace_id")
+        sid = s.get("session_id")
+        if tid and sid and tid not in trace_session:
+            trace_session[tid] = sid
+    # 第二遍: 空 session_id 的 span 用同 trace 的 session 回填 (浅拷贝, 不改输入)
+    out: list[dict[str, Any]] = []
+    for s in spans:
+        tid = s.get("trace_id")
+        if tid and not s.get("session_id") and tid in trace_session:
+            out.append({**s, "session_id": trace_session[tid]})
+        else:
+            out.append(s)
+    return out
+
+
 def build_trace_tree(spans: list[dict[str, Any]]) -> dict[str, Any] | None:
     """从扁平 spans (同 trace) 重建 parent/children 嵌套树。
 

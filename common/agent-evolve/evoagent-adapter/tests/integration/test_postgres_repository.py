@@ -112,7 +112,13 @@ async def test_bulk_insert_spans_all_traces(repo, jsonl_spans):
 async def test_get_spans_by_session(repo, jsonl_spans):
     await repo.bulk_insert_spans(jsonl_spans)
     sid = jsonl_spans[0]["session_id"]
-    expected = sorted([s for s in jsonl_spans if s["session_id"] == sid],
+    # 回填后 get_spans_by_session 返回该 session 所属全部 trace 的所有 span
+    # (含原空 session、经 A/B 回填的 span), 故期望 = 同 session 的全部 trace 的 span
+    trace_session = {}
+    for s in jsonl_spans:
+        if s.get("session_id") and s["trace_id"] not in trace_session:
+            trace_session[s["trace_id"]] = s["session_id"]
+    expected = sorted([s for s in jsonl_spans if trace_session.get(s["trace_id"]) == sid],
                       key=lambda x: x["start_time"])
     got = await repo.get_spans_by_session(sid)
     assert [g["span_id"] for g in got] == [s["span_id"] for s in expected]
@@ -183,3 +189,77 @@ async def test_upsert_trace_explicit(repo, jsonl_spans):
     assert row is not None
     assert row["span_count"] == summary["span_count"]
     assert row["session_id"] == summary["session_id"]
+
+
+# ---- session_id 回填 (A 批内 + B 跨批兜底 + 全表维护) ----
+
+async def _null_session_count(repo) -> int:
+    async with repo.pool.acquire() as conn:
+        return await conn.fetchval("SELECT count(*) FROM spans WHERE session_id IS NULL")
+
+
+def _pick_mixed_trace(spans):
+    """选一条同时含 session span 与空 session span 的 trace (动态, 不写死 id)。"""
+    for tid, ts in _by_trace(spans).items():
+        sess = [s for s in ts if s.get("session_id")]
+        empty = [s for s in ts if not s.get("session_id")]
+        if sess and empty:
+            return tid, sess, empty
+    return None, [], []
+
+
+async def test_bulk_insert_backfills_session_in_batch(repo, jsonl_spans):
+    """A: bulk_insert 整批后, 非孤儿 trace 的空 session span 被同 trace 兄弟回填;
+    孤儿 trace (整 trace 无 session) 的 span 保留 NULL (不造值)。"""
+    spans = [dict(s) for s in jsonl_spans]  # 拷贝: A 原地改 session_id, 防污染共享 fixture
+    await repo.bulk_insert_spans(spans)
+    orphan_tids = {tid for tid, ts in _by_trace(spans).items()
+                   if not any(s.get("session_id") for s in ts)}
+    # DB 内空 session 行 == 孤儿 trace 的全部 span (非孤儿已被 A 回填)
+    assert await _null_session_count(repo) == sum(
+        len(ts) for tid, ts in _by_trace(spans).items() if tid in orphan_tids)
+    # 同 trace session 唯一: 非孤儿全等于该 trace 的 session; 孤儿全 NULL
+    async with repo.pool.acquire() as conn:
+        rows = await conn.fetch("SELECT trace_id, session_id FROM spans")
+    by_t: dict[str, set] = {}
+    for r in rows:
+        by_t.setdefault(r["trace_id"], set()).add(r["session_id"])
+    for tid, ts in _by_trace(spans).items():
+        if tid in orphan_tids:
+            assert by_t[tid] == {None}, f"孤儿 trace {tid} 应全 NULL: {by_t[tid]}"
+        else:
+            sess = next(s["session_id"] for s in ts if s.get("session_id"))
+            assert by_t[tid] == {sess}, f"trace {tid} session 不唯一/未回填: {by_t[tid]}"
+
+
+async def test_bulk_insert_backfills_cross_batch_straggler(repo, jsonl_spans):
+    """B: 空 session span 的兄弟在前一批已入库时, 本批 in-memory 回填 (A) 看不到,
+    由 per-trace SQL 兜底 (_backfill_session_id_for_trace) 回填。"""
+    tid, sess_spans, empty_spans = _pick_mixed_trace(jsonl_spans)
+    assert tid, "jsonl 无同时含 session 与空 session span 的 trace"
+    expected_sid = sess_spans[0]["session_id"]
+    # 第一批: 只插 session 兄弟 (拷贝防污染 fixture)
+    await repo.bulk_insert_spans([dict(s) for s in sess_spans])
+    # 第二批: 只插空 span —— A 只看本批 (全空) 回填不了, 靠 B 读 DB 兜底
+    await repo.bulk_insert_spans([dict(s) for s in empty_spans])
+    for g in await repo.get_spans_by_trace(tid):
+        assert g["session_id"] == expected_sid, (
+            f"跨批空 span 未被 B 回填: span={g['span_id']} session={g['session_id']!r}")
+
+
+async def test_backfill_session_id_full_table(repo, jsonl_spans):
+    """公开全表回填: 用 insert_span (单条, 不走 bulk 的 A/B) 插入, 空行留 NULL;
+    调 backfill_session_id() 后用同 trace 兄弟补齐; 返回受影响行数。"""
+    tid, sess_spans, empty_spans = _pick_mixed_trace(jsonl_spans)
+    assert tid, "jsonl 无同时含 session 与空 session span 的 trace"
+    expected_sid = sess_spans[0]["session_id"]
+    # 单条插入 (insert_span 不触发 A/B), 空 span 行留 NULL
+    for s in sess_spans + empty_spans:
+        await repo.insert_span(dict(s))
+    got = await repo.get_spans_by_trace(tid)
+    assert any(g["session_id"] is None for g in got), "前置失败: 空 span 未留 NULL"
+    n = await repo.backfill_session_id()
+    assert n == len(empty_spans), f"回填行数 {n} != 空 span 数 {len(empty_spans)}"
+    for g in await repo.get_spans_by_trace(tid):
+        assert g["session_id"] == expected_sid, f"全表回填后仍有空/错值: {g['session_id']!r}"
+

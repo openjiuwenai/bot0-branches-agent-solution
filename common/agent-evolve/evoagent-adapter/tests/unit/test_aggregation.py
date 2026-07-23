@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 
 from agent_adapter.repository.aggregation import (
+    backfill_session_id,
     build_trace_tree,
     compute_trace_summary,
     is_root_span,
@@ -177,7 +178,53 @@ def test_compute_trace_summary_empty_raises():
         compute_trace_summary("t", [])
 
 
-# ---- build_trace_tree ----
+# ---- backfill_session_id (批内回填, A 段) ----
+
+def test_backfill_session_id_fills_from_sibling_leaves_orphan():
+    """同 trace 内空 session_id 用兄弟非空值回填; 孤儿 trace (整 trace 无 session) 保留空。
+
+    用 otel_spans.jsonl 钉死当前夹具: 13 条空 session, 11 条可从同 trace 兄弟回填,
+    2 条孤儿 (整 trace 无任何 session, trace_id 见 f27a9831...) 回填不了, 保留空。
+    """
+    spans = _load_jsonl_spans()
+    before_empty = [s for s in spans if not s.get("session_id")]
+    assert len(before_empty) == 13  # 当前夹具的空 session span 数
+
+    # 记录回填前的同 trace 兄弟 session (回填后应等于它)
+    trace_session = {}
+    for s in spans:
+        if s.get("session_id") and s.get("trace_id") not in trace_session:
+            trace_session[s["trace_id"]] = s["session_id"]
+
+    spans = backfill_session_id(spans)  # 非原地, 用返回值
+
+    after_empty = [s for s in spans if not s.get("session_id")]
+    assert len(after_empty) == 2  # 仅孤儿 trace 的 2 条留空
+
+    # 回填后的值都等于同 trace 兄弟的非空 session
+    for s in spans:
+        if s.get("session_id") and s["trace_id"] in trace_session:
+            assert s["session_id"] == trace_session[s["trace_id"]]
+
+    # 不变量: 回填后, 任一 trace 内 session 唯一 (非空 session 全等), 或整 trace 全空 (孤儿)
+    # 且"仍为空的 span"恰属于孤儿 trace (不凭空造值)
+    orphan_tids: set[str] = set()
+    for tid, tspans in _by_trace(spans).items():
+        sessions = {s.get("session_id") for s in tspans}
+        nonempty = {x for x in sessions if x}
+        if nonempty:  # 非孤儿: 回填后同 trace session 唯一, 且无残留空 span
+            assert len(nonempty) == 1, f"trace {tid} session 不唯一: {nonempty}"
+            assert None not in sessions, f"trace {tid} 仍有空 session span"
+        else:  # 孤儿: 整 trace 全空
+            assert sessions == {None}, f"trace {tid} 应为孤儿(全空), 实际 {sessions}"
+            orphan_tids.add(tid)
+
+    # 留空 span 恰属孤儿 trace, 且当前夹具唯一孤儿 (f27a9831..., 不写死全 id 防脆)
+    assert {s["trace_id"] for s in after_empty} == orphan_tids
+    assert orphan_tids == {next(iter(orphan_tids))}  # 唯一孤儿
+    assert next(iter(orphan_tids)).startswith("f27a9831")
+
+
 
 def test_build_trace_tree_nests_by_parent():
     spans = _load_jsonl_spans()
