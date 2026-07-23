@@ -19,6 +19,7 @@ package com.huawei.ascend.edp.autoconfigure;
 import com.huawei.ascend.edp.config.SandboxConfig;
 import com.huawei.ascend.edp.lifecycle.SandboxInitHook;
 import com.huawei.ascend.edp.lifecycle.SandboxShutdownHook;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -35,6 +36,7 @@ import org.springframework.context.annotation.Bean;
  * （它们本身已有 @Component 注解，此处为 Spring Boot Auto-Configuration 规范保底）。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 @AutoConfiguration
@@ -45,6 +47,7 @@ public class EdpaSandboxAutoConfiguration {
 
     /**
      * Sandbox init hook.
+      *
      */
     @Bean
     @ConditionalOnMissingBean(SandboxInitHook.class)
@@ -55,6 +58,7 @@ public class EdpaSandboxAutoConfiguration {
 
     /**
      * Sandbox shutdown hook.
+      *
      */
     @Bean
     @ConditionalOnMissingBean(SandboxShutdownHook.class)

@@ -38,62 +38,88 @@ import java.util.List;
  * </ul>
  *
  * @since 2024-01-01
+  *
  */
 
 public class EdpConfig {
-    /** 业务范围配置。 */
+    /**
+     * 业务范围配置。
+     */
     private Scope scope;
 
-    /** 规划步骤文本列表。 */
+    /**
+     * 规划步骤文本列表。
+     */
     private List<String> planningSteps;
 
-    /** 模型采样参数配置。 */
+    /**
+     * 模型采样参数配置。
+     */
     private LlmSampling llmSampling;
 
-    /** Gets the scope. */
+    /**
+     * Gets the scope.
+     */
     public Scope getScope() {
         return scope;
     }
 
-    /** Sets the scope. */
+    /**
+     * Sets the scope.
+     */
     public void setScope(Scope scope) {
         this.scope = scope;
     }
 
-    /** Gets the planning steps. */
+    /**
+     * Gets the planning steps.
+     */
     public List<String> getPlanningSteps() {
         return planningSteps;
     }
 
-    /** Sets the planning steps. */
+    /**
+     * Sets the planning steps.
+     */
     public void setPlanningSteps(List<String> planningSteps) {
         this.planningSteps = planningSteps;
     }
 
-    /** Gets the llm sampling. */
+    /**
+     * Gets the llm sampling.
+     */
     public LlmSampling getLlmSampling() {
         return llmSampling;
     }
 
-    /** Sets the llm sampling. */
+    /**
+     * Sets the llm sampling.
+     */
     public void setLlmSampling(LlmSampling llmSampling) {
         this.llmSampling = llmSampling;
     }
 
     /**
      * 业务范围配置。
+      *
      */
 
     public static class Scope {
-        /** 允许处理的业务范围描述。 */
+        /**
+         * 允许处理的业务范围描述。
+         */
         private String allowed;
 
-        /** Gets the allowed. */
+        /**
+         * Gets the allowed.
+         */
         public String getAllowed() {
             return allowed;
         }
 
-        /** Sets the allowed. */
+        /**
+         * Sets the allowed.
+         */
         public void setAllowed(String allowed) {
             this.allowed = allowed;
         }
@@ -101,44 +127,63 @@ public class EdpConfig {
 
     /**
      * 模型采样参数配置。
+      *
      */
 
     public static class LlmSampling {
-        /** 温度参数。 */
+        /**
+         * 温度参数。
+         */
         private double temperature;
 
-        /** top_p 采样参数。 */
+        /**
+         * top_p 采样参数。
+         */
         private double topP;
 
-        /** 最大重试次数。 */
+        /**
+         * 最大重试次数。
+         */
         private int maxRetries;
 
-        /** Gets the temperature. */
+        /**
+         * Gets the temperature.
+         */
         public double getTemperature() {
             return temperature;
         }
 
-        /** Sets the temperature. */
+        /**
+         * Sets the temperature.
+         */
         public void setTemperature(double temperature) {
             this.temperature = temperature;
         }
 
-        /** Gets the top p. */
+        /**
+         * Gets the top p.
+         */
         public double getTopP() {
             return topP;
         }
 
-        /** Sets the top p. */
+        /**
+         * Sets the top p.
+         */
         public void setTopP(double topP) {
             this.topP = topP;
         }
 
-        /** Gets the max retries. */
+        /**
+         * Gets the max retries.
+         */
         public int getMaxRetries() {
             return maxRetries;
         }
 
-        /** Sets the max retries. */
+        /**
+         * Sets the max retries.
+         */
         public void setMaxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
         }

@@ -17,8 +17,10 @@
 package com.huawei.ascend.edp.tools;
 
 import com.openjiuwen.core.foundation.tool.Tool;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +28,7 @@ import java.util.Map;
  * EDPAgent 任务取消工具。
  *
  * @since 2024-01-01
+  *
  */
 
 public final class CancelTaskTool {
@@ -34,7 +37,9 @@ public final class CancelTaskTool {
     private CancelTaskTool() {
     }
 
-    /** Builds the tool instance. */
+    /**
+     * Builds the tool instance.
+     */
     public static Tool build() {
         // 对齐 Python cancel_task.py L26: [cancel_task] reason=...
         LOGGER.info("[cancel_task] building CancelTask tool: {}", EdpaBusinessTools.TOOL_CANCEL_TASK);

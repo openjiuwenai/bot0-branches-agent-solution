@@ -25,6 +25,7 @@ import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ToolConstants;
 import com.huawei.ascend.edp.enhancer.TodoSessionResolver;
 import com.huawei.ascend.edp.todo.RedisTodoStore;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -38,8 +39,10 @@ import com.openjiuwen.harness.rails.TaskPlanningRail;
 import com.openjiuwen.harness.tools.TodoItem;
 import com.openjiuwen.harness.tools.TodoStatus;
 import com.openjiuwen.harness.tools.TodoTool;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -75,44 +78,65 @@ import java.util.Set;
  * 不门控执行、不查环。任务执行顺序由 LLM 按 prompt 自主遵守；本 Rail 只保证这份元数据是合法 DAG。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 public class EdpaTodoRail extends DeepAgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpaTodoRail.class);
 
-    /** Task summary prompt section name. */
+    /**
+     * Task summary prompt section name.
+     */
     public static final String TODO_SUMMARY_SECTION = "edpa_todo_summary";
 
-    /** 路径规则 prompt section 名称（路径规则与 catalog 无关，命名保持）。 */
+    /**
+     * 路径规则 prompt section 名称（路径规则与 catalog 无关，命名保持）。
+     */
     public static final String PATH_RULES_SECTION = "edpa_path_rules";
 
-    /** Task summary section priority (ref demo TodoCatalogRail 88). */
+    /**
+     * Task summary section priority (ref demo TodoCatalogRail 88).
+     */
     private static final int TODO_SUMMARY_PRIORITY = 88;
 
-    /** 路径规则 section 优先级（越小越靠后，作为补充说明放在末段）。 */
+    /**
+     * 路径规则 section 优先级（越小越靠后，作为补充说明放在末段）。
+     */
     private static final int PATH_RULES_PRIORITY = 30;
 
     private static final String TOOL_TODO_CREATE = ToolConstants.TODO_CREATE;
     private static final String TOOL_TODO_MODIFY = ToolConstants.TODO_MODIFY;
 
-    /** 业务工具：执行前必须已规划 todo（v2 §10.11 守卫）。 */
+    /**
+     * 业务工具：执行前必须已规划 todo（v2 §10.11 守卫）。
+     */
     private static final Set<String> BUSINESS_TOOLS = Set.of(ToolConstants.CALL_MCP, ToolConstants.CALL_VERSATILE);
 
-    /** 解析 LLM 原始 JSON 字符串形式 toolArgs（Core 经 ToolCallInputs 暴露给 rail 的是 String）。 */
+    /**
+     * 解析 LLM 原始 JSON 字符串形式 toolArgs（Core 经 ToolCallInputs 暴露给 rail 的是 String）。
+     */
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
-    /** 持有 DeepAgent 引用，用于在 afterToolCall 中创建 TodoTool（lazy）做dependency closure。 */
+    /**
+     * 持有 DeepAgent 引用，用于在 afterToolCall 中创建 TodoTool（lazy）做dependency closure。
+     */
     private final DeepAgent deepAgent;
 
     private final EdpaTodolist todolist;
 
-    /** Redis Todo 存储（UC-03~UC-11 主路径；可为 null：单测兼容、未启用 Redis 时）。 */
+    /**
+     * Redis Todo 存储（UC-03~UC-11 主路径；可为 null：单测兼容、未启用 Redis 时）。
+     */
     private final RedisTodoStore redisTodoStore;
 
-    /** 行为治理配置，提供 max_subtasks 等执行约束。 */
+    /**
+     * 行为治理配置，提供 max_subtasks 等执行约束。
+     */
     private final ActRuleConfig actrule;
 
-    /** TodoTool 实例（lazy 创建，路径与 Core TaskPlanningRail 一致：.todo）。 */
+    /**
+     * TodoTool 实例（lazy 创建，路径与 Core TaskPlanningRail 一致：.todo）。
+     */
     private volatile TodoTool todoTool;
 
     public EdpaTodoRail(DeepAgent deepAgent, EdpaTodolist todolist) {
@@ -132,7 +156,9 @@ public class EdpaTodoRail extends DeepAgentRail {
     }
 
     @Override
-    /** Priority. */
+    /**
+     * Priority.
+     */
     public int priority() {
         return 95;
     }
@@ -142,10 +168,13 @@ public class EdpaTodoRail extends DeepAgentRail {
      *
      * <p>本 Rail 在 BaseAgent（ReActAgent）上注册，init 传入的是 ReActAgent。
      * prompt section 经 ReActAgent.addPromptBuilderSection 注入。</p>
+      *
      */
 
     @Override
-    /** Init. */
+    /**
+     * Init.
+     */
     public void init(Object agent) {
         if (!(agent instanceof ReActAgent reActAgent)) {
             LOGGER.warn("EdpaTodoRail.init: agent is not ReActAgent ({}), skip prompt injection",
@@ -169,7 +198,9 @@ public class EdpaTodoRail extends DeepAgentRail {
     }
 
     @Override
-    /** Uninit. */
+    /**
+     * Uninit.
+     */
     public void uninit(Object agent) {
         if (!(agent instanceof ReActAgent reActAgent)) {
             return;
@@ -196,10 +227,13 @@ public class EdpaTodoRail extends DeepAgentRail {
      * 而当前会话尚未通过 todo_create 规划任何任务时，跳过本次工具执行并返回 PLAN_FIRST 合成结果，
      * 同时推送 steering 强制 LLM 先用 todo_create 规划。这根治「LLM 跳过规划直接调工具」的提示词不可靠问题
      * （harness SkillUseRail 的"先读 SKILL.md"指令与 EDPA"先规划"指令竞争，纯提示词无法保证）。</p>
+      *
      */
 
     @Override
-    /** Before tool call. */
+    /**
+     * Before tool call.
+     */
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -273,6 +307,7 @@ public class EdpaTodoRail extends DeepAgentRail {
     /**
      * 遍历 todo_create 的 tasks[]，对每个带 catalog_id 的 task 调 enrichArgs enriched（含 meta_data.catalog_id anchor）。
      * Jackson 解析出的 task 是可变 LinkedHashMap，原地修改后随 args 一起回写。
+      *
      */
 
     @SuppressWarnings("unchecked")
@@ -309,6 +344,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * 则跳过本次工具执行（_skip_tool），返回 PLAN_FIRST 合成结果，并 pushSteering 强制 LLM 先 todo_create。
      * 机制与 {@code BaseInterruptRail.reject} 一致：设置 _skip_tool + 合成 toolResult/toolMsg，
      * 框架 {@code AbilityManager} 据此跳过真实执行。</p>
+      *
      */
 
     private void enforcePlanBeforeBusinessTool(AgentCallbackContext ctx, ToolCallInputs inputs, String toolName) {
@@ -347,6 +383,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * filePath 非法→缓存恒空。落盘键则是注入的转义 sessionId，二者不一致，故绕过缓存直读文件。
      * 仅当 TodoTool 不可用时回落缓存，保证守卫逻辑可被确定性单测驱动；生产环境 workspace
      * 就绪后 TodoTool 可创建，兜底不会触发。</p>
+      *
      */
 
     private boolean hasPlannedTodos(AgentCallbackContext ctx) {
@@ -380,6 +417,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * ★ 启动竞态修复：优先使用构造注入的 redisTodoStore，为 null 时动态从 RedisConfig 静态持有者获取。
      * <p>原因：Rail 注册时机早于 Spring @Bean redisTodoStore 初始化，
      * 导致构造参数传入的 redisTodoStore 字段始终为 null。</p>
+      *
      */
 
     private RedisTodoStore getActiveRedisTodoStore() {
@@ -391,6 +429,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * 从已注册的 TaskPlanningRail 缓存读 todos（TodoTool 不可用时的兜底）。
+      *
      */
 
     private List<TodoItem> loadFromTaskPlanningCache(String sid) {
@@ -416,10 +455,13 @@ public class EdpaTodoRail extends DeepAgentRail {
      * <p>存储路径选择（方案 A）：Redis 启用时，dependency closure的 load/save 全部走 Redis，
      * 不再调用 TodoTool 的文件 load/save，消除 EDPA 自身的文件写入路径，避免并发写损坏与文件堆积。
      * Redis 降级时回落文件路径（兼容单测、旧部署）。</p>
+      *
      */
 
     @Override
-    /** After tool call. */
+    /**
+     * After tool call.
+     */
     public void afterToolCall(AgentCallbackContext ctx) {
         if (todolist == null || todolist.getEntries().isEmpty() || deepAgent == null) {
             return;
@@ -447,6 +489,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * Redis path: sync file→Redis, apply dependency closure, check UC-10.
+      *
      */
     private void handleRedisPath(AgentCallbackContext ctx, ToolCallInputs inputs,
             String rawSid, String toolName, boolean isCreate, boolean isModify) {
@@ -488,6 +531,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * Apply dependency closure on Redis path: build anchors, resolve deps, save back.
+      *
      */
     private void applyRedisDependencyClosure(RedisTodoStore activeStore, String rawSid,
             ToolCallInputs inputs, List<TodoItem> todos) throws IOException {
@@ -509,6 +553,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * File fallback path: load/save via TodoTool when Redis is unavailable.
+      *
      */
     private void handleFilePath(AgentCallbackContext ctx, ToolCallInputs inputs,
             String rawSid, String toolName, boolean isCreate, boolean isModify) {
@@ -559,6 +604,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * 从 Redis 读取 todos，如果全部 COMPLETED/DONE，pushSteering 引导 LLM 输出 final_answer。</p>
      *
      * <p>Redis 降级时 load() 返回空列表，不注入指令，不影响会话继续执行。</p>
+      *
      */
 
     private void injectFinalAnswerDirective(AgentCallbackContext ctx) {
@@ -584,6 +630,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * @param ctx  回调上下文
      * @param rawSid 原始 sessionId
      * @param todos 预读的 todos（可为 null/空）
+      *
      */
 
     private void injectFinalAnswerDirective(AgentCallbackContext ctx, String rawSid, List<TodoItem> todos) {
@@ -629,6 +676,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      *
      * @param paths 路径规则列表
      * @return 路径规则 prompt 文本，paths is empty时返回空串
+      *
      */
 
     public static String buildPathRulesPrompt(List<DynamicPath> paths) {
@@ -666,6 +714,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * 从 todos 的 meta_data.catalog_id 建 {catalog_id: uuid} anchors 映射。
+      *
      */
 
     static Map<String, String> buildAnchors(List<TodoItem> todos) {
@@ -686,6 +735,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * <p>从 anchors（catalog_id→uuid）+ todolist 还原每个 todo 应有的 depends_on（UUID 形式）。
      * fail-fast：被依赖的 catalog_id 在 anchors 中找不到映射时抛 IllegalStateException，
      * 杜绝 catalog_id 残留进 depends_on。</p>
+      *
      */
 
     static Map<String, List<String>> resolveDependencyMap(Map<String, String> anchors, EdpaTodolist todolist) {
@@ -719,6 +769,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * 应用依赖图到 TodoItem（唯一触碰 TodoItem 处）。
      *
      * @return true 表示有改动需 save
+      *
      */
 
     static boolean applyDependencies(List<TodoItem> todos, Map<String, List<String>> depMap) {
@@ -738,6 +789,7 @@ public class EdpaTodoRail extends DeepAgentRail {
     /**
      * sessionId 对齐 Core TaskPlanningRail：从 toolArgs 取 session_id（beforeToolCall 已注入转义后的真实 sessionId）。
      * 必须与 Core 落盘键一致才能读写同一份 .todo/{sessionId}/todo.json。
+      *
      */
 
     private static String resolveSessionId(ToolCallInputs inputs) {
@@ -751,6 +803,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * lazy 创建 TodoTool，路径与 Core TaskPlanningRail 一致（.todo）。
+      *
      */
 
     private Optional<TodoTool> getTodoTool() {
@@ -769,6 +822,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * 删除 Core TodoTool 落盘的 todo.json 文件（Redis 成为唯一数据源后无需保留）。
+      *
      */
 
     private void deleteTodoFile(String sid) {
@@ -810,7 +864,9 @@ public class EdpaTodoRail extends DeepAgentRail {
         return new LinkedHashMap<>();
     }
 
-    /** Sanitize session id. */
+    /**
+     * Sanitize session id.
+     */
     public static String sanitizeSessionId(String sessionId) {
         String safe = sessionId == null || sessionId.isBlank() ? "default" : sessionId;
         return safe.replaceAll("[\\\\/:*?\"<>|]", "_");
@@ -818,6 +874,7 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * 参数enriched（v2 §10.4）：填充 content/description/skill，meta_data 打 catalog_id anchor，不设 depends_on。
+      *
      */
 
     @SuppressWarnings("unchecked")
@@ -884,6 +941,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      *
      * <p>契约自洽：本段承诺"依赖由系统自动解析，无需手填 depends_on"，
      * 由 afterToolCall 的 resolveDependencyMap 兑现。</p>
+      *
      */
 
     private static String buildTodoSummaryPrompt(EdpaTodolist todolist) {
@@ -932,6 +990,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * 使LLM看到已有任务列表，自然不会重复调用todo_create。</p>
      *
      * <p>频率控制：用签名去重（todoId:status拼接），状态没变化时不重复注入。</p>
+      *
      */
 
     private void injectActiveTodoStatus(AgentCallbackContext ctx) {
@@ -995,3 +1054,4 @@ public class EdpaTodoRail extends DeepAgentRail {
         }
     }
 }
+

@@ -22,6 +22,7 @@ import com.huawei.ascend.edp.channel.ToolDataKeyFactory;
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,8 +34,10 @@ import com.openjiuwen.core.sysop.OperationMode;
 import com.openjiuwen.core.sysop.SysOperation;
 import com.openjiuwen.core.sysop.result.ExecuteCmdResult;
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -59,6 +62,7 @@ import java.util.concurrent.TimeoutException;
  * MCP 工具调用 Rail。
  *
  * @since 2024-01-01
+  *
  */
 
 public class McpInterruptRail extends AgentRail {
@@ -77,13 +81,19 @@ public class McpInterruptRail extends AgentRail {
     private final EdpaSpringBootConfig springBootConfig;
     private final String agentName;
 
-    /** 框架双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。 */
+    /**
+     * 框架双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。
+     */
     private final SysOperation sysOp;
 
-    /** 沙箱技能部署路径（如 /app/skills），SANDBOX 模式下作为 cwd 参数传入 executeCmd。可为 null。 */
+    /**
+     * 沙箱技能部署路径（如 /app/skills），SANDBOX 模式下作为 cwd 参数传入 executeCmd。可为 null。
+     */
     private final String skillDeployPath;
 
-    /** 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。 */
+    /**
+     * 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。
+     */
     private final SandboxClient decoratedClient;
 
     public McpInterruptRail(EdpConfig edpConfig) {
@@ -144,7 +154,9 @@ public class McpInterruptRail extends AgentRail {
     }
 
     @Override
-    /** Before tool call. */
+    /**
+     * Before tool call.
+     */
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -154,7 +166,7 @@ public class McpInterruptRail extends AgentRail {
             return;
         }
 
-        LOGGER.info("[MCPInterruptRail] intercept call_mcp: toolArgsKeys={}", normalizeArgs(inputs).keySet());
+        LOGGER.info("[MCPInterruptRail] intercept call_mcp: toolArgsKeys={ // no-op }", normalizeArgs(inputs).keySet());
         ctx.getExtra().put(ScriptConstants.KEY_SKIP_TOOL, Boolean.TRUE);
         Map<String, Object> result = executeMcpScript(inputs, ctx);
         inputs.setToolResult(result);
@@ -163,7 +175,9 @@ public class McpInterruptRail extends AgentRail {
     }
 
     @Override
-    /** After tool call. */
+    /**
+     * After tool call.
+     */
     public void afterToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -195,14 +209,14 @@ public class McpInterruptRail extends AgentRail {
         if (!DEFAULT_MCP_PRODUCTS_KEY.equals(resultKey)) {
             toolDataChannel.store(key, DEFAULT_MCP_PRODUCTS_KEY, data);
         }
-        LOGGER.info("McpInterruptRail: stored call_mcp result to ToolDataChannel key={}, resultKey={}, fields={}", key,
+        LOGGER.info("McpInterruptRail: stored call_mcp result to ToolDataChannel key={ // no-op }, resultKey={ // no-op }, fields={ // no-op }", key,
                 resultKey, data.keySet());
 
         Object versatileQuery = result.get("versatile_query");
         if (versatileQuery instanceof String text && !text.isBlank()) {
             toolDataChannel.store(key, VERSATILE_QUERY_KEY, Map.of("query_description", text));
             result.put("versatile_query", "");
-            LOGGER.info("McpInterruptRail: cached versatile_query to ToolDataChannel key={}", key);
+            LOGGER.info("McpInterruptRail: cached versatile_query to ToolDataChannel key={ // no-op }", key);
         }
 
         if (result.containsKey(HISTORY_INFO_KEY)) {
@@ -222,7 +236,7 @@ public class McpInterruptRail extends AgentRail {
         }
 
         Map<String, Object> scriptParams = normalizeArgsObject(args.get("script_params"));
-        LOGGER.info("[MCPInterruptRail] script_command='{}', scriptParamsKeys={}", abbreviate(scriptCommand, 80),
+        LOGGER.info("[MCPInterruptRail] script_command='{ // no-op }', scriptParamsKeys={ // no-op }", abbreviate(scriptCommand, 80),
                 scriptParams.keySet());
         Map<String, Object> skillInput = buildSkillInput(scriptParams, ctx);
         if (skillInput != null) {
@@ -245,7 +259,9 @@ public class McpInterruptRail extends AgentRail {
         return executeViaProcessBuilder(command, workDir, argumentsJson, scriptParams);
     }
 
-    /** Executes the MCP script via ProcessBuilder (local mode). */
+    /**
+     * Executes the MCP script via ProcessBuilder (local mode).
+     */
     private Map<String, Object> executeViaProcessBuilder(List<String> command, Path workDir, String argumentsJson,
             Map<String, Object> scriptParams) {
         try {
@@ -273,14 +289,14 @@ public class McpInterruptRail extends AgentRail {
                     builder.environment().put("MCP_APP_NAME", mcpConfig.getAppName());
                 }
                 LOGGER.info(
-                        "[MCPInterruptRail] MCP SSE env injected, wapGrayFlag={}, serverUrl={}, "
-                                + "hasAccessToken={}, appName={}",
+                        "[MCPInterruptRail] MCP SSE env injected, wapGrayFlag={ // no-op }, serverUrl={ // no-op }, "
+                                + "hasAccessToken={ // no-op }, appName={ // no-op }",
                         wapGrayFlag, mcpServerUrl, mcpConfig.getAccessToken() != null, mcpConfig.getAppName());
             }
 
             // ---- MCP SSE 配置注入结束 ----
 
-            LOGGER.info("McpInterruptRail: execute script command={}, workDir={}", command, workDir);
+            LOGGER.info("McpInterruptRail: execute script command={ // no-op }, workDir={ // no-op }", command, workDir);
 
             Process process = builder.start();
             StringBuilder stdout = new StringBuilder();
@@ -300,14 +316,14 @@ public class McpInterruptRail extends AgentRail {
             }
 
             int exitCode = process.exitValue();
-            LOGGER.info("[MCPInterruptRail] local script executed: exitCode={}, stdoutLen={}, stderrLen={}", exitCode,
+            LOGGER.info("[MCPInterruptRail] local script executed: exitCode={ // no-op }, stdoutLen={ // no-op }, stderrLen={ // no-op }", exitCode,
                     stdout.length(), abbreviate(stderr.toString()));
             if (exitCode != 0) {
                 return failedResult("MCP script exitCode=" + exitCode + ", stderr=" + abbreviate(stderr.toString()));
             }
             return parseScriptOutput(stdout.toString());
         } catch (IOException | InterruptedException | RuntimeException e) {
-            LOGGER.warn("McpInterruptRail: local script execution failed: {}", e.getMessage());
+            LOGGER.warn("McpInterruptRail: local script execution failed: { // no-op }", e.getMessage());
             return failedResult(e.getMessage());
         }
     }
@@ -320,6 +336,7 @@ public class McpInterruptRail extends AgentRail {
      * 持久化字段覆盖 LLM 可能传入的同名字段，避免 LLM 搬运导致的截断或遗漏风险。
      * mcp_required_params 在 Java 端由 LLM 通过 script_params 传入（设计与 Python 不同，
      * Python 从 session.state["original_body"] 读取以避免经过 LLM）。</p>
+      *
      */
 
     private Map<String, Object> buildSkillInput(Map<String, Object> scriptParams, AgentCallbackContext ctx) {
@@ -344,10 +361,10 @@ public class McpInterruptRail extends AgentRail {
             skillInput.putIfAbsent(HISTORY_PARAMS_KEY, Map.of());
         }
 
-        LOGGER.info("McpInterruptRail: injected from ToolDataChannel key={}, history_info={}, history_params={}", key,
+        LOGGER.info("McpInterruptRail: injected from ToolDataChannel key={ // no-op }, history_info={ // no-op }, history_params={ // no-op }", key,
                 abbreviate(String.valueOf(skillInput.get(HISTORY_INFO_KEY))),
                 abbreviate(String.valueOf(skillInput.get(HISTORY_PARAMS_KEY))));
-        LOGGER.debug("[MCPInterruptRail] history injected: historyInfoType={}, historyParamsType={}",
+        LOGGER.debug("[MCPInterruptRail] history injected: historyInfoType={ // no-op }, historyParamsType={ // no-op }",
                 historyInfo != null ? historyInfo.getClass().getSimpleName() : "null",
                 historyParams != null ? historyParams.getClass().getSimpleName() : "null");
         return skillInput;
@@ -410,21 +427,21 @@ public class McpInterruptRail extends AgentRail {
         if (skillsDir != null) {
             Path resolved = skillsDir.resolve(scriptPath).normalize();
             if (Files.exists(resolved)) {
-                LOGGER.debug("[MCPInterruptRail] script path resolved via skillsDir: {}", resolved);
+                LOGGER.debug("[MCPInterruptRail] script path resolved via skillsDir: { // no-op }", resolved);
                 return resolved;
             }
-            LOGGER.debug("[MCPInterruptRail] script path not found under skillsDir: {}", skillsDir);
+            LOGGER.debug("[MCPInterruptRail] script path not found under skillsDir: { // no-op }", skillsDir);
         }
         Path cwdResolved = Path.of("").toAbsolutePath().normalize().resolve(scriptPath).normalize();
         if (Files.exists(cwdResolved)) {
-            LOGGER.debug("[MCPInterruptRail] script path resolved via CWD: {}", cwdResolved);
+            LOGGER.debug("[MCPInterruptRail] script path resolved via CWD: { // no-op }", cwdResolved);
             return cwdResolved;
         }
         Path defaultSkillsResolved = Path.of("").toAbsolutePath().normalize().resolve("../scenarios/wealth-demo/skills")
                 .resolve(scriptPath).normalize();
 
         // 降级说明：脚本路径可能在默认路径不存在，走兜底回退
-        LOGGER.warn("[MCPInterruptRail] script path falling back to default (may not exist): {}",
+        LOGGER.warn("[MCPInterruptRail] script path falling back to default (may not exist): { // no-op }",
                 defaultSkillsResolved);
         return defaultSkillsResolved;
     }
@@ -475,7 +492,7 @@ public class McpInterruptRail extends AgentRail {
             result.putIfAbsent("result_key", DEFAULT_MCP_PRODUCTS_KEY);
             return result;
         } catch (JsonProcessingException e) {
-            LOGGER.warn("McpInterruptRail: failed to parse script stdout JSON: {}", abbreviate(stdout));
+            LOGGER.warn("McpInterruptRail: failed to parse script stdout JSON: { // no-op }", abbreviate(stdout));
             return failedResult("failed to parse MCP script stdout JSON: " + e.getMessage());
         }
     }
@@ -517,7 +534,7 @@ public class McpInterruptRail extends AgentRail {
                     return toStringKeyMap(OBJECT_MAPPER.convertValue(node, Map.class));
                 }
             } catch (JsonProcessingException e) {
-                LOGGER.warn("McpInterruptRail: failed to parse call_mcp result JSON: {}", abbreviate(text));
+                LOGGER.warn("McpInterruptRail: failed to parse call_mcp result JSON: { // no-op }", abbreviate(text));
             }
         }
         return Map.of();
@@ -545,7 +562,7 @@ public class McpInterruptRail extends AgentRail {
                             OBJECT_MAPPER.convertValue(entry.getValue(), Object.class)));
                 }
             } catch (JsonProcessingException e) {
-                LOGGER.warn("McpInterruptRail: failed to parse tool arguments: {}", text);
+                LOGGER.warn("McpInterruptRail: failed to parse tool arguments: { // no-op }", text);
             }
         }
         return args;
@@ -572,7 +589,9 @@ public class McpInterruptRail extends AgentRail {
         }
     }
 
-    /** Builds a failed result map with the given message. */
+    /**
+     * Builds a failed result map with the given message.
+     */
     public static Map<String, Object> failedResult(String message) {
         // 对齐 Python MCPInterruptRail._build_error_result：失败时清空 history_info 和 history_params，
         // 使下次调用不继承上次条件；不含 versatile_query（Python 端失败时不注入此字段）。
@@ -624,6 +643,7 @@ public class McpInterruptRail extends AgentRail {
      *
      * <p>mcp_required_params 在运行时可能是 String（Python dict repr 单引号格式）
      * 或已解析的 Map&lt;String,Object&gt;。两种类型均需处理。</p>
+      *
      */
 
     private Optional<String> extractWapGrayFlag(Map<String, Object> scriptParams) {
@@ -642,7 +662,9 @@ public class McpInterruptRail extends AgentRail {
         return Optional.empty();
     }
 
-    /** Extracts wap_grayFlag from a Map-typed mcp_required_params. */
+    /**
+     * Extracts wap_grayFlag from a Map-typed mcp_required_params.
+     */
     private Optional<String> extractWapGrayFlagFromMap(Map<?, ?> mcpRequiredMap) {
         Object customData = mcpRequiredMap.get("custom_data");
         if (!(customData instanceof Map<?, ?> cd)) {
@@ -658,7 +680,9 @@ public class McpInterruptRail extends AgentRail {
 
     // ===== 沙箱路由方法 =====
 
-    /** 通过 SysOperation 统一入口执行脚本（LOCAL 模式 → LocalShellOperation，含白名单+危险命令拦截）。 */
+    /**
+     * 通过 SysOperation 统一入口执行脚本（LOCAL 模式 → LocalShellOperation，含白名单+危险命令拦截）。
+     */
     private Map<String, Object> executeViaSysOperation(String scriptCommand, String argumentsJson,
             Map<String, Object> scriptParams, String workDir) {
         try {
@@ -679,7 +703,7 @@ public class McpInterruptRail extends AgentRail {
                 cwd = workDir != null ? workDir.replace('\\', '/') : ".";
             }
 
-            LOGGER.info("McpInterruptRail: execute via SysOperation, command={}, cwd={}, governed={}", command, cwd,
+            LOGGER.info("McpInterruptRail: execute via SysOperation, command={ // no-op }, cwd={ // no-op }, governed={ // no-op }", command, cwd,
                     decoratedClient != null);
 
             // 脚本执行结果日志将在 adaptCmdResult 方法中输出
@@ -694,13 +718,15 @@ public class McpInterruptRail extends AgentRail {
             }
             return adaptCmdResult(result);
         } catch (IllegalStateException e) {
-            LOGGER.warn("McpInterruptRail: SysOperation execution failed: {}, falling back to ProcessBuilder",
+            LOGGER.warn("McpInterruptRail: SysOperation execution failed: { // no-op }, falling back to ProcessBuilder",
                     e.getMessage());
             return failedResult(e.getMessage());
         }
     }
 
-    /** 适配 ExecuteCmdResult → McpInterruptRail.parseScriptOutput 兼容的 Map 格式。 */
+    /**
+     * 适配 ExecuteCmdResult → McpInterruptRail.parseScriptOutput 兼容的 Map 格式。
+     */
     private Map<String, Object> adaptCmdResult(ExecuteCmdResult result) {
         if (result == null || result.getData() == null) {
             return failedResult("SysOperation returned null result");
@@ -709,7 +735,7 @@ public class McpInterruptRail extends AgentRail {
         String stdout = result.getData().getStdout() != null ? result.getData().getStdout() : "";
         String stderr = result.getData().getStderr() != null ? result.getData().getStderr() : "";
 
-        LOGGER.info("[MCPInterruptRail] sandbox executed: exitCode={}, stdoutLen={}, stderrLen={}", exitCode,
+        LOGGER.info("[MCPInterruptRail] sandbox executed: exitCode={ // no-op }, stdoutLen={ // no-op }, stderrLen={ // no-op }", exitCode,
                 stdout.length(), stderr.length());
 
         if (exitCode != 0) {
@@ -718,7 +744,9 @@ public class McpInterruptRail extends AgentRail {
         return parseScriptOutput(stdout);
     }
 
-    /** 构建环境变量 Map（SKILL_INPUT + PYTHONIOENCODING + MCP SSE 配置）。 */
+    /**
+     * 构建环境变量 Map（SKILL_INPUT + PYTHONIOENCODING + MCP SSE 配置）。
+     */
     private Map<String, String> buildEnvMap(String argumentsJson, Map<String, Object> scriptParams) {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("SKILL_INPUT", argumentsJson);
@@ -741,16 +769,18 @@ public class McpInterruptRail extends AgentRail {
                 env.put("MCP_APP_NAME", mcpConfig.getAppName());
             }
             LOGGER.info(
-                    "[MCPInterruptRail] MCP SSE env injected via SysOperation, wapGrayFlag={}, "
-                            + "serverUrl={}, hasAccessToken={}, appName={}",
+                    "[MCPInterruptRail] MCP SSE env injected via SysOperation, wapGrayFlag={ // no-op }, "
+                            + "serverUrl={ // no-op }, hasAccessToken={ // no-op }, appName={ // no-op }",
                     wapGrayFlag, mcpServerUrl, mcpConfig.getAccessToken() != null, mcpConfig.getAppName());
         }
-        LOGGER.debug("[MCPInterruptRail] env constructed: keys={}, hasMCPUrl={}, hasAccessToken={}", env.keySet(),
+        LOGGER.debug("[MCPInterruptRail] env constructed: keys={ // no-op }, hasMCPUrl={ // no-op }, hasAccessToken={ // no-op }", env.keySet(),
                 env.containsKey("MCP_SERVER_URL"), env.containsKey("MCP_ACCESS_TOKEN"));
         return env;
     }
 
-    /** 当路径包含空格或特殊字符时，添加双引号包裹。 */
+    /**
+     * 当路径包含空格或特殊字符时，添加双引号包裹。
+     */
     private static String quoteIfNecessary(String path) {
         if (path == null || path.isEmpty()) {
             return path;
@@ -770,7 +800,9 @@ public class McpInterruptRail extends AgentRail {
 
     // ===== 公开静态辅助方法（供 SandboxInterruptRail 调用） =====
 
-    /** Extract script args. */
+    /**
+     * Extract script args.
+     */
     public static Map<String, Object> extractScriptArgs(ToolCallInputs inputs) {
         Map<String, Object> args = normalizeArgsObjectStatic(inputs.getToolArgs());
         if (args.isEmpty() && inputs.getToolCall() != null) {
@@ -779,17 +811,23 @@ public class McpInterruptRail extends AgentRail {
         return args;
     }
 
-    /** Extract script params. */
+    /**
+     * Extract script params.
+     */
     public static Map<String, Object> extractScriptParams(Map<String, Object> args) {
         return normalizeArgsObjectStatic(args.get("script_params"));
     }
 
-    /** Build script command. */
+    /**
+     * Build script command.
+     */
     public static String buildScriptCommand(String scriptCommand) {
         return buildScriptCommand(scriptCommand, null);
     }
 
-    /** 构建脚本命令字符串（含 skillsDir 的内部版，供实例方法调用）。 */
+    /**
+     * 构建脚本命令字符串（含 skillsDir 的内部版，供实例方法调用）。
+     */
     static String buildScriptCommand(String scriptCommand, Path skillsDir) {
         List<String> tokens = splitCommandStatic(scriptCommand);
         if (tokens.isEmpty()) {
@@ -805,12 +843,16 @@ public class McpInterruptRail extends AgentRail {
         return String.join(" ", tokens);
     }
 
-    /** Resolve script work dir. */
+    /**
+     * Resolve script work dir.
+     */
     public static String resolveScriptWorkDir(String scriptCommand) {
         return resolveScriptWorkDir(scriptCommand, null);
     }
 
-    /** 解析脚本所在工作目录（含 skillsDir 的内部版）。 */
+    /**
+     * 解析脚本所在工作目录（含 skillsDir 的内部版）。
+     */
     static String resolveScriptWorkDir(String scriptCommand, Path skillsDir) {
         List<String> tokens = splitCommandStatic(scriptCommand);
         if (tokens.isEmpty()) {
@@ -839,7 +881,7 @@ public class McpInterruptRail extends AgentRail {
                 }
             } catch (JsonProcessingException e) {
                 // 对齐 Python mcp_interrupt_rail.py L203-206: WARNING script_params 解码后非 dict
-                LOGGER.warn("[MCPInterruptRail] normalizeArgsObjectStatic failed to parse toolArgs JSON: {}", text);
+                LOGGER.warn("[MCPInterruptRail] normalizeArgsObjectStatic failed to parse toolArgs JSON: { // no-op }", text);
             }
         }
         return args;
@@ -888,6 +930,7 @@ public class McpInterruptRail extends AgentRail {
      * @param scriptPath 脚本相对路径
      * @param skillsDir  skills 目录绝对路径
      * @return 解析后的脚本路径（可能不存在）
+      *
      */
 
     private static Path resolveScriptPathStatic(String scriptPath, Path skillsDir) {

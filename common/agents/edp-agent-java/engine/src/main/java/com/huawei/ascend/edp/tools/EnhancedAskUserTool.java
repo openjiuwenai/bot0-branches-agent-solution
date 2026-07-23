@@ -22,8 +22,10 @@ import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.singleagent.interrupt.InterruptRequest;
 import com.openjiuwen.core.singleagent.interrupt.ToolInterruptException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 
@@ -31,6 +33,7 @@ import java.util.Map;
  * EDPAgent 增强 ask_user 工具。
  *
  * @since 2024-01-01
+  *
  */
 
 public final class EnhancedAskUserTool {
@@ -41,7 +44,9 @@ public final class EnhancedAskUserTool {
     private EnhancedAskUserTool() {
     }
 
-    /** Builds the tool instance. */
+    /**
+     * Builds the tool instance.
+     */
     public static Tool build() {
         return EdpaBusinessTools.localTool(EdpaBusinessTools.TOOL_ENHANCED_ASK_USER, "向用户追问缺失信息，并支持话术模板参数。",
                 EdpaBusinessTools.objectSchema(Map.of("question", EdpaBusinessTools.stringProp("需要向用户追问的问题"),
@@ -81,7 +86,9 @@ public final class EnhancedAskUserTool {
         }
     }
 
-    /** 截断字符串到指定长度，用于日志输出避免过长。 */
+    /**
+     * 截断字符串到指定长度，用于日志输出避免过长。
+     */
     private static String abbreviate(String text, int maxLen) {
         if (text == null) {
             return "null";

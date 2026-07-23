@@ -19,6 +19,7 @@ package com.huawei.ascend.edp.lifecycle;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.SandboxConfig;
 import com.huawei.ascend.edp.service.SkillPackService;
+
 import com.openjiuwen.core.sysop.OperationMode;
 import com.openjiuwen.core.sysop.SysOperation;
 import com.openjiuwen.core.sysop.SysOperationCard;
@@ -34,6 +35,7 @@ import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClient
 import com.openjiuwen.service.adapters.common.credential.CredentialDecryptor;
 import com.openjiuwen.service.spec.lifecycle.AgentInitHook;
 import com.openjiuwen.service.spec.lifecycle.AgentLifecycleContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,6 +60,7 @@ import java.util.Optional;
  * 创建 SysOperation 双模式门面并注册到 AgentLifecycleContext。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 @Component
@@ -76,7 +80,9 @@ public class SandboxInitHook implements AgentInitHook {
     private CredentialDecryptor credentialDecryptor;
 
     @Override
-    /** On init. */
+    /**
+     * On init.
+     */
     public void onInit(AgentLifecycleContext context) throws Exception {
         SandboxConfig config = springBootConfig.getSandbox();
         if (config == null || !config.isEnabled()) {
@@ -204,6 +210,7 @@ public class SandboxInitHook implements AgentInitHook {
      *
      * @param skillDeployPath 技能部署路径（如 /app/skills）
      * @return extraParams Map，包含 policy 和 policy_mode
+      *
      */
 
     private static Map<String, Object> buildSandboxPolicyExtraParams(String skillDeployPath) {
@@ -245,6 +252,7 @@ public class SandboxInitHook implements AgentInitHook {
      *
      * @param decoratedClient DecoratingSandboxClient 实例
      * @param skillDeployPath 技能部署路径（如 /app/skills）
+      *
      */
 
     private void injectFilesystemPolicyIntoDelegate(SandboxClient decoratedClient, String skillDeployPath) {
@@ -260,7 +268,9 @@ public class SandboxInitHook implements AgentInitHook {
         }
     }
 
-    /** 包装 SandboxOperationSupport.resolveIsolationKey 以简化异常处理 */
+    /**
+     * 包装 SandboxOperationSupport.resolveIsolationKey 以简化异常处理
+     */
     private String resolveIsolationKey(SandboxGatewayConfig config) {
         try {
             return com.openjiuwen.core.sysop.sandbox.SandboxOperationSupport.resolveIsolationKey(config);
@@ -279,6 +289,7 @@ public class SandboxInitHook implements AgentInitHook {
      * @param sysOp SysOperation 双模式门面
      * @param gatewayConfig 沙箱网关配置（用于解析技能目录路径）
      * @param config 沙箱配置（含 skillDeployPath）
+      *
      */
 
     private void deploySkillsToSandbox(SysOperation sysOp, SandboxGatewayConfig gatewayConfig, SandboxConfig config,
@@ -326,7 +337,9 @@ public class SandboxInitHook implements AgentInitHook {
         }
     }
 
-    /** 从 springBootConfig.scenarioHome 解析技能目录路径 */
+    /**
+     * 从 springBootConfig.scenarioHome 解析技能目录路径
+     */
     private Optional<Path> resolveSkillsDir() {
         String scenarioHome = springBootConfig.getScenarioHome();
         if (scenarioHome == null || scenarioHome.isBlank()) {

@@ -36,14 +36,17 @@ import com.huawei.ascend.edp.rail.VersatileInterruptRail;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail.VersatilePassthroughBuffer;
 import com.huawei.ascend.edp.todo.RedisTodoStore;
 import com.huawei.ascend.edp.tools.EdpaBusinessTools;
+
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.sysop.SysOperation;
 import com.openjiuwen.core.sysop.config.SandboxGatewayConfig;
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,29 +69,34 @@ import java.util.List;
  * </ul>
  *
  * @since 2024-01-01
+  *
  */
 
 public class EdpaAgentEnhancer {
     /**
      * MCP 沙箱调用工具名。
+      *
      */
 
     public static final String TOOL_CALL_MCP = EdpaBusinessTools.TOOL_CALL_MCP;
 
     /**
      * Versatile Agent 委托调用工具名。
+      *
      */
 
     public static final String TOOL_CALL_VERSATILE = EdpaBusinessTools.TOOL_CALL_VERSATILE;
 
     /**
      * 用户追问工具名。该工具需要触发 OpenJiuwen interrupt，而不是普通工具返回。
+      *
      */
 
     public static final String TOOL_ENHANCED_ASK_USER = EdpaBusinessTools.TOOL_ENHANCED_ASK_USER;
 
     /**
      * 任务取消工具名。
+      *
      */
 
     public static final String TOOL_CANCEL_TASK = EdpaBusinessTools.TOOL_CANCEL_TASK;
@@ -102,6 +110,7 @@ public class EdpaAgentEnhancer {
      *
      * @param agent 待增强的 DeepAgent 实例，不能为空
      * @param edpConfig EDP 专有配置，提供工具 Schema 和 Rail 行为需要的业务参数
+      *
      */
 
     public static void enhance(DeepAgent agent, EdpConfig edpConfig) {
@@ -113,7 +122,9 @@ public class EdpaAgentEnhancer {
         enhance(agent, ctx);
     }
 
-    /** Enhances the agent with EDP configuration. */
+    /**
+     * Enhances the agent with EDP configuration.
+     */
     public static void enhance(DeepAgent agent, EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig) {
         EnhanceContext ctx = new EnhanceContext();
         ctx.edpConfig = edpConfig;
@@ -124,7 +135,9 @@ public class EdpaAgentEnhancer {
         enhance(agent, ctx);
     }
 
-    /** Enhances the agent with EDP configuration. */
+    /**
+     * Enhances the agent with EDP configuration.
+     */
     public static void enhance(DeepAgent agent, EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel) {
         EnhanceContext ctx = new EnhanceContext();
@@ -136,7 +149,9 @@ public class EdpaAgentEnhancer {
         enhance(agent, ctx);
     }
 
-    /** Enhances the agent with EDP configuration. */
+    /**
+     * Enhances the agent with EDP configuration.
+     */
     public static void enhance(DeepAgent agent, EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel, Path skillsDir) {
         EnhanceContext ctx = new EnhanceContext();
@@ -154,6 +169,7 @@ public class EdpaAgentEnhancer {
      *
      * @param agent 待增强的 DeepAgent 实例，不能为空
      * @param ctx 配置上下文，承载工具数据通道、技能目录、话术配置、沙箱配置等
+      *
      */
 
     public static void enhance(DeepAgent agent, EnhanceContext ctx) {
@@ -188,6 +204,7 @@ public class EdpaAgentEnhancer {
      * @return 工具列表，包含 lite_todo_write、call_mcp、call_versatile、ask_user、cancel_task
      *
      * @param actrule description
+      *
      */
 
     public static List<Tool> buildBusinessTools(EdpConfig edpConfig, ActRuleConfig actrule) {
@@ -201,6 +218,7 @@ public class EdpaAgentEnhancer {
      *
      * @param edpConfig EDP 专有配置，供各 Rail 读取 scope、limits、话术等配置
      * @return Rail 列表，注册顺序即当前 spike 阶段的业务回调顺序
+      *
      */
 
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig) {
@@ -212,7 +230,9 @@ public class EdpaAgentEnhancer {
         return buildBusinessRails(ctx);
     }
 
-    /** Builds the business rails for the agent. */
+    /**
+     * Builds the business rails for the agent.
+     */
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig) {
         EnhanceContext ctx = new EnhanceContext();
         ctx.edpConfig = edpConfig;
@@ -223,7 +243,9 @@ public class EdpaAgentEnhancer {
         return buildBusinessRails(ctx);
     }
 
-    /** Builds the business rails for the agent. */
+    /**
+     * Builds the business rails for the agent.
+     */
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel) {
         EnhanceContext ctx = new EnhanceContext();
@@ -235,7 +257,9 @@ public class EdpaAgentEnhancer {
         return buildBusinessRails(ctx);
     }
 
-    /** Builds the business rails for the agent. */
+    /**
+     * Builds the business rails for the agent.
+     */
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel, Path skillsDir) {
         EnhanceContext ctx = new EnhanceContext();
@@ -248,7 +272,9 @@ public class EdpaAgentEnhancer {
         return buildBusinessRails(ctx);
     }
 
-    /** @see #buildBusinessRails(EnhanceContext) */
+    /**
+     * @see #buildBusinessRails(EnhanceContext)
+     */
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel, Path skillsDir, VersatilePassthroughBuffer passthroughBuffer) {
         EnhanceContext ctx = new EnhanceContext();
@@ -266,6 +292,7 @@ public class EdpaAgentEnhancer {
      *
      * @param ctx 配置上下文，承载 EDP 配置、技能目录、话术配置、沙箱配置等
      * @return Rail 列表
+      *
      */
 
     public static List<AgentRail> buildBusinessRails(EnhanceContext ctx) {
@@ -330,6 +357,7 @@ public class EdpaAgentEnhancer {
      * @param agent DeepAgent 实例
      * @param edpConfig EDP 专有配置
      * @param actrule 行为治理配置（含 allowed_tools，驱动工具注册）
+      *
      */
 
     private static void registerBusinessTools(DeepAgent agent, EdpConfig edpConfig, ActRuleConfig actrule) {
@@ -345,6 +373,7 @@ public class EdpaAgentEnhancer {
      *
      * @param agent DeepAgent 实例
      * @param ctx 配置上下文，承载 EDP 配置、技能目录、话术配置、沙箱配置等
+      *
      */
 
     private static void registerBusinessRails(DeepAgent agent, EnhanceContext ctx) {
@@ -363,36 +392,65 @@ public class EdpaAgentEnhancer {
      * enhance / buildBusinessRails 的参数对象，将 14 个配置参数收敛为单一对象，保证方法参数不超过 5 个。
      *
      * @since 2024-01-01
+      *
      */
 
     public static final class EnhanceContext {
-        /** EDP 专有配置。 */
+        /**
+         * EDP 专有配置。
+         */
         public EdpConfig edpConfig;
-        /** model / versatile 配置。 */
+        /**
+         * model / versatile 配置。
+         */
         public EdpaSpringBootConfig springBootConfig;
-        /** 行为治理配置（含 allowed_tools，驱动工具注册）。 */
+        /**
+         * 行为治理配置（含 allowed_tools，驱动工具注册）。
+         */
         public ActRuleConfig actrule;
-        /** 工具数据通道。 */
+        /**
+         * 工具数据通道。
+         */
         public ToolDataChannel toolDataChannel;
-        /** 技能目录。 */
+        /**
+         * 技能目录。
+         */
         public Path skillsDir;
-        /** Versatile 透传缓冲。 */
+        /**
+         * Versatile 透传缓冲。
+         */
         public VersatilePassthroughBuffer passthroughBuffer;
-        /** DeepAgent 引用（供 Rail 访问 workspace）。 */
+        /**
+         * DeepAgent 引用（供 Rail 访问 workspace）。
+         */
         public DeepAgent deepAgent;
-        /** Todo 数据层（catalog entries + dynamic paths）。 */
+        /**
+         * Todo 数据层（catalog entries + dynamic paths）。
+         */
         public EdpaTodolist edpaTodolist;
-        /** 话术配置（注入 EdpaEventRail A 面 + ScriptsRail B 面）。 */
+        /**
+         * 话术配置（注入 EdpaEventRail A 面 + ScriptsRail B 面）。
+         */
         public SysScriptsConfig scripts;
-        /** Redis Todo 存储（UC-03~UC-11 主路径；null 时 Rail 内部回落文件/缓存）。 */
+        /**
+         * Redis Todo 存储（UC-03~UC-11 主路径；null 时 Rail 内部回落文件/缓存）。
+         */
         public RedisTodoStore redisTodoStore;
-        /** Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）。 */
+        /**
+         * Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）。
+         */
         public String agentName;
-        /** SysOperation 双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。 */
+        /**
+         * SysOperation 双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。
+         */
         public SysOperation sysOp;
-        /** 沙箱网关配置。 */
+        /**
+         * 沙箱网关配置。
+         */
         public SandboxGatewayConfig gatewayConfig;
-        /** 治理装饰 SandboxClient（需求2路径，可为 null）。 */
+        /**
+         * 治理装饰 SandboxClient（需求2路径，可为 null）。
+         */
         public SandboxClient decoratedSandboxClient;
     }
 }

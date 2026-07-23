@@ -20,6 +20,7 @@ import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ScriptResolver;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.ToolConstants;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,8 +29,10 @@ import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.harness.rails.DeepAgentRail;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -56,6 +59,7 @@ import java.util.Optional;
  * </ol>
  *
  * @since 2024-01-01
+  *
  */
 
 public class ScriptsRail extends DeepAgentRail {
@@ -63,13 +67,17 @@ public class ScriptsRail extends DeepAgentRail {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    /** Prompt section 名 + 优先级（对齐 EdpaTodoRail 的 addPromptBuilderSection 模式）。 */
+    /**
+     * Prompt section 名 + 优先级（对齐 EdpaTodoRail 的 addPromptBuilderSection 模式）。
+     */
     private static final String CANCEL_RULES_SECTION = "edpa_scripts_cancel_rules";
     private static final String BUSINESS_RULES_SECTION = "edpa_scripts_business_rules";
     private static final int CANCEL_RULES_PRIORITY = 30;
     private static final int BUSINESS_RULES_PRIORITY = 40;
 
-    /** 话术配置，可为 null（退化为不填话术，等价现状）。 */
+    /**
+     * 话术配置，可为 null（退化为不填话术，等价现状）。
+     */
     private final SysScriptsConfig scripts;
 
     /**
@@ -78,6 +86,7 @@ public class ScriptsRail extends DeepAgentRail {
      * @param scripts 话术配置
      *
      * @return result
+      *
      */
 
     public ScriptsRail(SysScriptsConfig scripts) {
@@ -91,6 +100,7 @@ public class ScriptsRail extends DeepAgentRail {
      * @param edpConfig EDP 配置（UC-C04 scope 已通过 PlanrulePromptBuilder 注入 prompt，此处不使用）
      *
      * @return result
+      *
      */
 
     public ScriptsRail(SysScriptsConfig scripts, com.huawei.ascend.edp.config.EdpConfig edpConfig) {
@@ -98,7 +108,9 @@ public class ScriptsRail extends DeepAgentRail {
     }
 
     @Override
-    /** Priority. */
+    /**
+     * Priority.
+     */
     public int priority() {
         return 50;
     }
@@ -108,7 +120,9 @@ public class ScriptsRail extends DeepAgentRail {
     // ═══════════════════════════════════════════════════
 
     @Override
-    /** Before invoke. */
+    /**
+     * Before invoke.
+     */
     public void beforeInvoke(AgentCallbackContext ctx) {
         // request_start 不作为独立事件发射（对齐 Python 理念）。
         // 首轮开场感知由 conversation_start 承载；出口话术通过 conversation_end content 输出。
@@ -122,7 +136,9 @@ public class ScriptsRail extends DeepAgentRail {
     // ═══════════════════════════════════════════════════
 
     @Override
-    /** Before tool call. */
+    /**
+     * Before tool call.
+     */
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (scripts == null || !(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -142,6 +158,7 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * <p>reason 参数值需与 ScriptConstants 常量名一致（如 {@code "task_cancelled"}），
      * 内部通过 {@link SysScriptsConfig#resolveScriptKey(String)} 映射到实际配置键。</p>
+      *
      */
 
     private void resolveCancelScript(AgentCallbackContext ctx, Map<String, Object> args) {
@@ -170,7 +187,9 @@ public class ScriptsRail extends DeepAgentRail {
     // ③ 业务结果话术兜底（call_versatile / call_mcp 结果）
     // ═══════════════════════════════════════════════════
     @Override
-    /** After tool call. */
+    /**
+     * After tool call.
+     */
     public void afterToolCall(AgentCallbackContext ctx) {
         // 互斥判断：有进度提示时跳过标准话术（5.5.5）
         if (ctx.getExtra().containsKey(ScriptConstants.KEY_PROGRESS_HINT)) {
@@ -187,7 +206,9 @@ public class ScriptsRail extends DeepAgentRail {
     // ═══════════════════════════════════════════════════
 
     @Override
-    /** After invoke. */
+    /**
+     * After invoke.
+     */
     public void afterInvoke(AgentCallbackContext ctx) {
         // 出口 interrupt_start 已由 EdpaEventRail.afterInvoke（priority=80）在 conversation_end 之前发射。
         // 本 Rail（priority=50）不再重复发射，仅执行合规把关兜底（若 _edp_response_template 仍存在）。
@@ -217,6 +238,7 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * <p>注意：{@code _edp_last_script_key} 存储的是解析后的实际键名（非常量名），
      * 所以此处使用 {@link SysScriptsConfig#has(String)} 而非 {@link SysScriptsConfig#hasScript(String)}。</p>
+      *
      */
 
     private void complianceGate(AgentCallbackContext ctx) {
@@ -235,7 +257,9 @@ public class ScriptsRail extends DeepAgentRail {
     // ═══════════════════════════════════════════════════
 
     @Override
-    /** Init. */
+    /**
+     * Init.
+     */
     public void init(Object agent) {
         if (scripts == null || !(agent instanceof ReActAgent reActAgent)) {
             return;
@@ -248,7 +272,9 @@ public class ScriptsRail extends DeepAgentRail {
     }
 
     @Override
-    /** Uninit. */
+    /**
+     * Uninit.
+     */
     public void uninit(Object agent) {
         if (!(agent instanceof ReActAgent reActAgent)) {
             return;
@@ -274,6 +300,7 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * <p>Python 用 checkpoint/cascade；EventFlow 首轮信号来源待确认。本处保守判定：当
      * {@code ctx.getExtra()} 无 resume 标记时视为首轮。生产联调后可改为基于 session 历史。</p>
+      *
      */
 
     private boolean isFirstTurn(AgentCallbackContext ctx) {
@@ -290,6 +317,7 @@ public class ScriptsRail extends DeepAgentRail {
      * 发射 progress_hint chunk 到前端（与 think_chunk 并行推送）（5.5.4）。
      *
      * <p>格式: {type: "progress_hint", data: {text: hintText}}</p>
+      *
      */
 
     private void emitProgressChunk(AgentCallbackContext ctx, String hintText) {
@@ -311,6 +339,7 @@ public class ScriptsRail extends DeepAgentRail {
 
     /**
      * 发射话术事件（北向 SSE，复用 EdpaEventRail.emit 同款格式）。
+      *
      */
 
     private void emitScript(AgentCallbackContext ctx, String eventType, String text) {

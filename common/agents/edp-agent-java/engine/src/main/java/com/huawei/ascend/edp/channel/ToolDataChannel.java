@@ -18,6 +18,7 @@ package com.huawei.ascend.edp.channel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 对齐 Python tool_data_channel.py: 工具间数据透传通道。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 public class ToolDataChannel {
@@ -51,6 +53,7 @@ public class ToolDataChannel {
      * @param key 四元组隔离键
      * @param resultKey 单字段结果键
      * @param data 数据值
+      *
      */
 
     public void store(ToolDataKey key, String resultKey, Map<String, Object> data) {
@@ -63,6 +66,7 @@ public class ToolDataChannel {
      * @param key 四元组隔离键
      * @param resultKey 单字段结果键
      * @param data 数据值
+      *
      */
 
     public void store(ToolDataKey key, String resultKey, Object data) {
@@ -80,6 +84,7 @@ public class ToolDataChannel {
      * @param key 四元组隔离键
      * @param resultKey 单字段结果键
      * @return 数据值，null 表示不存在或不是 Map
+      *
      */
 
     public Object get(ToolDataKey key, String resultKey) {
@@ -89,6 +94,7 @@ public class ToolDataChannel {
 
     /**
      * 获取任意类型数据。
+      *
      */
 
     public Optional<Object> getObject(ToolDataKey key, String resultKey) {
@@ -101,6 +107,7 @@ public class ToolDataChannel {
 
     /**
      * 判断数据是否存在。
+      *
      */
 
     public boolean contains(ToolDataKey key, String resultKey) {
@@ -111,7 +118,9 @@ public class ToolDataChannel {
         return scope != null && scope.containsKey(resultKey);
     }
 
-    /** Snapshot. */
+    /**
+     * Snapshot.
+     */
     public Map<String, Object> snapshot(ToolDataKey key) {
         ConcurrentHashMap<String, Object> scope = channel.get(key);
         return scope == null ? Map.of() : new LinkedHashMap<>(scope);
@@ -119,6 +128,7 @@ public class ToolDataChannel {
 
     /**
      * 移除数据。
+      *
      */
 
     public void remove(ToolDataKey key, String resultKey) {
@@ -134,6 +144,7 @@ public class ToolDataChannel {
 
     /**
      * 清理指定 key 的所有数据。
+      *
      */
 
     public void clear(ToolDataKey key) {
@@ -143,6 +154,7 @@ public class ToolDataChannel {
 
     /**
      * 清理所有数据。
+      *
      */
 
     public void clearAll() {

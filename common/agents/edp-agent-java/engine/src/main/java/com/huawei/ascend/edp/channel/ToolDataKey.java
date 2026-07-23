@@ -22,6 +22,7 @@ package com.huawei.ascend.edp.channel;
  * 按 tenantId + agentId + contextId + taskId 隔离数据。
  *
  * @since 2024-01-01
+  *
  */
 
 public class ToolDataKey {
@@ -37,28 +38,38 @@ public class ToolDataKey {
         this.taskId = taskId;
     }
 
-    /** Gets the tenant id. */
+    /**
+     * Gets the tenant id.
+     */
     public String getTenantId() {
         return tenantId;
     }
 
-    /** Gets the agent id. */
+    /**
+     * Gets the agent id.
+     */
     public String getAgentId() {
         return agentId;
     }
 
-    /** Gets the context id. */
+    /**
+     * Gets the context id.
+     */
     public String getContextId() {
         return contextId;
     }
 
-    /** Gets the task id. */
+    /**
+     * Gets the task id.
+     */
     public String getTaskId() {
         return taskId;
     }
 
     @Override
-    /** Checks equality with another object. */
+    /**
+     * Checks equality with another object.
+     */
     public boolean equals(Object o) {
         if (this == o) {
             return true;
@@ -72,7 +83,9 @@ public class ToolDataKey {
     }
 
     @Override
-    /** Returns the hash code. */
+    /**
+     * Returns the hash code.
+     */
     public int hashCode() {
         int result = tenantId.hashCode();
         result = 31 * result + agentId.hashCode();
@@ -82,7 +95,9 @@ public class ToolDataKey {
     }
 
     @Override
-    /** Returns a string representation of the key. */
+    /**
+     * Returns a string representation of the key.
+     */
     public String toString() {
         return "ToolDataKey{tenant=" + tenantId + ",agent=" + agentId + ",context=" + contextId + ",task=" + taskId
                 + "}";

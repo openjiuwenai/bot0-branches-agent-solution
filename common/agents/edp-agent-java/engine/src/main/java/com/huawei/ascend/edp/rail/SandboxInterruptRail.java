@@ -17,6 +17,7 @@
 package com.huawei.ascend.edp.rail;
 
 import com.huawei.ascend.edp.config.SandboxConfig;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,8 +35,10 @@ import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import com.openjiuwen.core.sysop.sandbox.SandboxOperationSupport;
 import com.openjiuwen.harness.rails.interrupt.BaseInterruptRail;
 import com.openjiuwen.harness.rails.interrupt.InterruptDecision;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -53,23 +56,30 @@ import java.util.Set;
  * <p>与 RemoteA2aInterruptRail 的"拦截→委派→reject注回"模式完全一致。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 public class SandboxInterruptRail extends BaseInterruptRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(SandboxInterruptRail.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    /** 拦截 call_mcp 工具调用。 */
+    /**
+     * 拦截 call_mcp 工具调用。
+     */
     private static final Set<String> TARGET_TOOLS = Set.of("call_mcp");
 
     private final SysOperation sysOp;
     private final SandboxConfig sandboxConfig;
     private final SandboxGatewayConfig gatewayConfig;
 
-    /** 会话级沙箱容器管理器（可为 null，仅 containerScope=SESSION 时使用） */
+    /**
+     * 会话级沙箱容器管理器（可为 null，仅 containerScope=SESSION 时使用）
+     */
     private final ContainerManager containerManager;
 
-    /** 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时优先使用其 shell() 以获得熔断/重试/审计。 */
+    /**
+     * 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时优先使用其 shell() 以获得熔断/重试/审计。
+     */
     private final SandboxClient decoratedClient;
 
     public SandboxInterruptRail(SysOperation sysOp, SandboxConfig config, SandboxGatewayConfig gatewayConfig) {
@@ -96,10 +106,13 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      *
      * <p>SANDBOX 模式：在沙箱中执行脚本，reject(sandboxResult) 注回结果。
      * LOCAL 模式：approve() 放行，工具调用继续到 McpInterruptRail。</p>
+      *
      */
 
     @Override
-    /** Resolves the interrupt decision for the tool call. */
+    /**
+     * Resolves the interrupt decision for the tool call.
+     */
     protected InterruptDecision resolveInterrupt(AgentCallbackContext ctx, ToolCall toolCall, Object userInput) {
         if (sysOp.getMode() == OperationMode.SANDBOX) {
             // 会话级隔离：将当前 Session 绑定到线程上下文，
@@ -134,7 +147,9 @@ public class SandboxInterruptRail extends BaseInterruptRail {
         return approve();
     }
 
-    /** 在沙箱中执行脚本 */
+    /**
+     * 在沙箱中执行脚本
+     */
     private Map<String, Object> executeInSandbox(AgentCallbackContext ctx, ToolCall toolCall) {
         try {
             if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -202,7 +217,9 @@ public class SandboxInterruptRail extends BaseInterruptRail {
         }
     }
 
-    /** 适配 ExecuteCmdResult → Map<String, Object>（对齐 McpInterruptRail.parseScriptOutput 格式） */
+    /**
+     * 适配 ExecuteCmdResult → Map<String, Object>（对齐 McpInterruptRail.parseScriptOutput 格式）
+     */
     private Map<String, Object> adaptResult(ExecuteCmdResult result) {
         if (result == null || result.getData() == null) {
             return McpInterruptRail.failedResult("sandbox returned null result");
@@ -239,7 +256,9 @@ public class SandboxInterruptRail extends BaseInterruptRail {
         }
     }
 
-    /** 构建 SKILL_INPUT + PYTHONIOENCODING + MCP 认证环境变量 */
+    /**
+     * 构建 SKILL_INPUT + PYTHONIOENCODING + MCP 认证环境变量
+     */
     private Map<String, String> buildEnvironmentMap(String argumentsJson, AgentCallbackContext ctx) {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("SKILL_INPUT", argumentsJson);
@@ -254,6 +273,7 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      * 框架的 ActiveStreamRegistry.awaitDrain() 确保活跃流排空后再调用此方法。</p>
      *
      * @param sessionId 会话 ID（conversationId）
+      *
      */
 
     public void releaseSession(String sessionId) {

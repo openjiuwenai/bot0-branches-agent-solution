@@ -17,6 +17,7 @@
 package com.huawei.ascend.edp.stream;
 
 import com.huawei.ascend.edp.config.PlanRuleConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +43,7 @@ import org.slf4j.LoggerFactory;
  * <p>Role和description直接拼接，业务范围无数字章节标题，各字段之间用空行分隔。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 public class PlanrulePromptBuilder {
@@ -55,6 +57,7 @@ public class PlanrulePromptBuilder {
      *
      * @param planrule planrule配置，null时返回默认提示词（降级处理）
      * @return 系统提示词片段（对应Python版的markdown_body）
+      *
      */
 
     public static String buildSystemPromptFragment(PlanRuleConfig planrule) {
@@ -64,8 +67,8 @@ public class PlanrulePromptBuilder {
         }
 
         LOGGER.info(
-                "PlanrulePromptBuilder: role=[{}], description=[{}], supplementaryPrompt=[{}], "
-                        + "scope.allowed=[{}], scope.denied=[{}]",
+                "PlanrulePromptBuilder: role=[{ // no-op }], description=[{ // no-op }], supplementaryPrompt=[{ // no-op }], "
+                        + "scope.allowed=[{ // no-op }], scope.denied=[{ // no-op }]",
                 planrule.getRole(), planrule.getDescription(), planrule.getSupplementaryPrompt(),
                 planrule.getScope() != null ? planrule.getScope().getAllowed() : "null",
                 planrule.getScope() != null ? planrule.getScope().getDenied() : "null");
@@ -105,11 +108,13 @@ public class PlanrulePromptBuilder {
         appendSupplementaryPromptSection(sb, planrule);
 
         String result = sb.toString().trim();
-        LOGGER.info("PlanrulePromptBuilder: final fragment length={}, content=\n{}", result.length(), result);
+        LOGGER.info("PlanrulePromptBuilder: final fragment length={ // no-op }, content=\n{ // no-op }", result.length(), result);
         return result;
     }
 
-    /** Appends the scope section (allowed/denied business scope). */
+    /**
+     * Appends the scope section (allowed/denied business scope).
+     */
     private static void appendScopeSection(StringBuilder sb, PlanRuleConfig planrule) {
         PlanRuleConfig.Scope scope = planrule.getScope();
         if (scope != null) {
@@ -133,7 +138,9 @@ public class PlanrulePromptBuilder {
         }
     }
 
-    /** Appends the skill routing section. */
+    /**
+     * Appends the skill routing section.
+     */
     private static void appendSkillRoutingSection(StringBuilder sb, PlanRuleConfig planrule) {
         java.util.List<PlanRuleConfig.SkillRoute> skillRouting = planrule.getSkillRouting();
         if (skillRouting != null && !skillRouting.isEmpty()) {
@@ -145,7 +152,9 @@ public class PlanrulePromptBuilder {
         }
     }
 
-    /** Appends the supplementary prompt section (baseProtocol + additionalPrompt). */
+    /**
+     * Appends the supplementary prompt section (baseProtocol + additionalPrompt).
+     */
     private static void appendSupplementaryPromptSection(StringBuilder sb, PlanRuleConfig planrule) {
         if (planrule.getSupplementaryPrompt() != null) {
             PlanRuleConfig.SupplementaryPrompt suppPrompt = planrule.getSupplementaryPrompt();
@@ -165,6 +174,7 @@ public class PlanrulePromptBuilder {
      *
      * <p>降级场景：配置加载失败、文件损坏、planrule为null等异常情况</p>
      * <p>内容对齐planrule.yaml默认配置：通用动态规划智能体角色定位</p>
+      *
      */
 
     private static String getDefaultSystemPrompt() {
@@ -176,6 +186,7 @@ public class PlanrulePromptBuilder {
      *
      * @param str 待判断字符串
      * @return true表示非空，false表示null或空字符串
+      *
      */
 
     private static boolean isNotEmpty(String str) {

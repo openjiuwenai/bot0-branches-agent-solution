@@ -20,8 +20,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -51,6 +53,7 @@ import java.util.Optional;
  * </ol>
  *
  * @since 2024-01-01
+  *
  */
 
 public class QueryChunkFormatAdapter implements QueryStreamObserver {
@@ -76,7 +79,9 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
     }
 
     @Override
-    /** On next. */
+    /**
+     * On next.
+     */
     public void onNext(QueryChunk chunk) {
         if (chunk == null || chunk.getData() == null) {
             discardedFrames++;
@@ -101,7 +106,9 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
         delegate.onNext(chunk);
     }
 
-    /** Handles chunk data that is a Map. */
+    /**
+     * Handles chunk data that is a Map.
+     */
     private void handleMapData(QueryChunk chunk, Map<String, Object> map) {
         String chunkType = String.valueOf(map.getOrDefault("type", ""));
         switch (chunkType) {
@@ -133,7 +140,9 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
         }
     }
 
-    /** Handles chunk data that is a String (potentially JSON). */
+    /**
+     * Handles chunk data that is a String (potentially JSON).
+     */
     private void handleStringData(QueryChunk chunk, String text) {
         if (!text.trim().startsWith("{")) {
             forwardedFrames++;
@@ -173,21 +182,27 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
     }
 
     @Override
-    /** On error. */
+    /**
+     * On error.
+     */
     public void onError(Throwable error) {
         logStats();
         delegate.onError(error);
     }
 
     @Override
-    /** On complete. */
+    /**
+     * On complete.
+     */
     public void onComplete() {
         logStats();
         delegate.onComplete();
     }
 
     @Override
-    /** Checks whether cancelled. */
+    /**
+     * Checks whether cancelled.
+     */
     public boolean isCancelled() {
         return delegate.isCancelled();
     }

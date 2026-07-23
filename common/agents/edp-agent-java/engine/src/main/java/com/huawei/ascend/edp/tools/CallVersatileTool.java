@@ -17,8 +17,10 @@
 package com.huawei.ascend.edp.tools;
 
 import com.openjiuwen.core.foundation.tool.Tool;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +28,7 @@ import java.util.Map;
  * EDPAgent Versatile Agent 委托工具。
  *
  * @since 2024-01-01
+  *
  */
 
 public final class CallVersatileTool {
@@ -34,7 +37,9 @@ public final class CallVersatileTool {
     private CallVersatileTool() {
     }
 
-    /** Builds the tool instance. */
+    /**
+     * Builds the tool instance.
+     */
     public static Tool build() {
         // 对齐 Python call_versatile.py L33-40: [call_versatile] intent=..., desc=...
         LOGGER.info("[call_versatile] building Versatile tool: {}", EdpaBusinessTools.TOOL_CALL_VERSATILE);

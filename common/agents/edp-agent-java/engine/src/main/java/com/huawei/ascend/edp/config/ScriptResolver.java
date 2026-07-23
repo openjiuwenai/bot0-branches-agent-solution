@@ -18,6 +18,7 @@ package com.huawei.ascend.edp.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -42,6 +43,7 @@ import java.util.regex.Pattern;
  * <p>纯静态、无状态。{@code scripts==null} 时各方法返回空串/空 Map，保证调用方退化安全。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 public final class ScriptResolver {
@@ -49,13 +51,16 @@ public final class ScriptResolver {
 
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
-    /** 话术 status→key 容错正则（非法 JSON 兜底逐对抓 key:value）。 */
+    /**
+     * 话术 status→key 容错正则（非法 JSON 兜底逐对抓 key:value）。
+     */
     private static final Pattern KV_PAIR = Pattern.compile("([\"']?)([\\w_]+)\\1\\s*[:：]\\s*([\"']?)(.*?)\\3");
 
     private static final String FK_PREFIX = "scriptconfig.think_chunk_scripts.think_chunk_fixed_scripts.";
     private static final String FK_MODE = "scriptconfig.think_chunk_scripts.think_chunk_mode";
 
     private ScriptResolver() {
+        // no-op
     }
 
     // ═══════════════════════════════════════════════════
@@ -74,6 +79,7 @@ public final class ScriptResolver {
      * @return 渲染后内容
      *
      * @param Map<String description
+      *
      */
 
     public static String resolve(String template, Map<String, String> vars) {
@@ -108,6 +114,7 @@ public final class ScriptResolver {
      * @return 渲染后内容
      *
      * @param Map<String description
+      *
      */
 
     public static String safeFormat(String template, Map<String, String> vars) {
@@ -136,6 +143,7 @@ public final class ScriptResolver {
      * @return 渲染后内容；配置缺失则空串
      *
      * @param Map<String description
+      *
      */
 
     public static String resolve(SysScriptsConfig cfg, String key, Map<String, String> vars) {
@@ -147,6 +155,7 @@ public final class ScriptResolver {
      *
      * @param template 模板
      * @return 变量名集合（保持出现顺序）
+      *
      */
 
     public static Set<String> extractVariableNames(String template) {
@@ -165,17 +174,23 @@ public final class ScriptResolver {
     // A 面生命周期事件话术快捷方法（保持 EdpaEventRail 薄）
     // ═══════════════════════════════════════════════════
 
-    /** Returns the tool-start script. */
+    /**
+     * Returns the tool-start script.
+     */
     public static String toolStart(SysScriptsConfig cfg, String tool) {
         return resolve(cfg, EdpaEventType.TOOL_START.wireName(), Map.of("tool_name", safe(tool)));
     }
 
-    /** Returns the tool-end script. */
+    /**
+     * Returns the tool-end script.
+     */
     public static String toolEnd(SysScriptsConfig cfg, String tool) {
         return resolve(cfg, EdpaEventType.TOOL_END.wireName(), Map.of("tool_name", safe(tool)));
     }
 
-    /** Returns the tool-start script. */
+    /**
+     * Returns the tool-start script.
+     */
     public static String toolStart(SysScriptsConfig cfg, String queryIntent, String tool) {
         if (queryIntent != null && !queryIntent.isBlank() && cfg != null) {
             String key = "query_intent_tool_text." + queryIntent + ".tool_start";
@@ -187,7 +202,9 @@ public final class ScriptResolver {
         return resolve(cfg, EdpaEventType.TOOL_START.wireName(), Map.of("tool_name", safe(tool)));
     }
 
-    /** Returns the tool-end script. */
+    /**
+     * Returns the tool-end script.
+     */
     public static String toolEnd(SysScriptsConfig cfg, String queryIntent, String tool) {
         if (queryIntent != null && !queryIntent.isBlank() && cfg != null) {
             String key = "query_intent_tool_text." + queryIntent + ".tool_end";
@@ -199,17 +216,23 @@ public final class ScriptResolver {
         return resolve(cfg, EdpaEventType.TOOL_END.wireName(), Map.of("tool_name", safe(tool)));
     }
 
-    /** Returns the todo-start script. */
+    /**
+     * Returns the todo-start script.
+     */
     public static String todoStart(SysScriptsConfig cfg, String title) {
         return resolve(cfg, EdpaEventType.TODO_START.wireName(), Map.of("title", safe(title)));
     }
 
-    /** Returns the todo-end script. */
+    /**
+     * Returns the todo-end script.
+     */
     public static String todoEnd(SysScriptsConfig cfg, String title) {
         return resolve(cfg, EdpaEventType.TODO_END.wireName(), Map.of("title", safe(title)));
     }
 
-    /** Returns the todo-start script. */
+    /**
+     * Returns the todo-start script.
+     */
     public static String todoStart(SysScriptsConfig cfg, String queryIntent, String title) {
         if (queryIntent != null && !queryIntent.isBlank() && cfg != null) {
             String key = "query_intent_tool_text." + queryIntent + ".tool_start";
@@ -221,7 +244,9 @@ public final class ScriptResolver {
         return resolve(cfg, EdpaEventType.TODO_START.wireName(), Map.of("title", safe(title)));
     }
 
-    /** Returns the todo-end script. */
+    /**
+     * Returns the todo-end script.
+     */
     public static String todoEnd(SysScriptsConfig cfg, String queryIntent, String title) {
         if (queryIntent != null && !queryIntent.isBlank() && cfg != null) {
             String key = "query_intent_tool_text." + queryIntent + ".tool_end";
@@ -233,7 +258,9 @@ public final class ScriptResolver {
         return resolve(cfg, EdpaEventType.TODO_END.wireName(), Map.of("title", safe(title)));
     }
 
-    /** Resolve tool start by intent. */
+    /**
+     * Resolve tool start by intent.
+     */
     public static Optional<String> resolveToolStartByIntent(SysScriptsConfig cfg, String queryIntent, String toolName) {
         if (cfg == null || queryIntent == null || queryIntent.isBlank() || "null".equals(queryIntent)) {
             return Optional.empty();
@@ -246,7 +273,9 @@ public final class ScriptResolver {
         return Optional.empty();
     }
 
-    /** Resolve tool end by intent. */
+    /**
+     * Resolve tool end by intent.
+     */
     public static Optional<String> resolveToolEndByIntent(SysScriptsConfig cfg, String queryIntent, String toolName) {
         if (cfg == null || queryIntent == null || queryIntent.isBlank() || "null".equals(queryIntent)) {
             return Optional.empty();
@@ -259,32 +288,44 @@ public final class ScriptResolver {
         return Optional.empty();
     }
 
-    /** Returns the todolist-start script. */
+    /**
+     * Returns the todolist-start script.
+     */
     public static String todolistStart(SysScriptsConfig cfg) {
         return cfg == null ? "" : safe(cfg.getTemplate(EdpaEventType.TODOLIST_START.wireName()).orElse(null));
     }
 
-    /** Returns the todolist-end script. */
+    /**
+     * Returns the todolist-end script.
+     */
     public static String todolistEnd(SysScriptsConfig cfg) {
         return cfg == null ? "" : safe(cfg.getTemplate(EdpaEventType.TODOLIST_END.wireName()).orElse(null));
     }
 
-    /** Returns the interrupt-start script. */
+    /**
+     * Returns the interrupt-start script.
+     */
     public static String interruptStart(SysScriptsConfig cfg) {
         return cfg == null ? "" : safe(cfg.getTemplate(EdpaEventType.INTERRUPT_START.wireName()).orElse(null));
     }
 
-    /** Returns the request-start script. */
+    /**
+     * Returns the request-start script.
+     */
     public static String requestStart(SysScriptsConfig cfg) {
         return getScriptByEvent(cfg, ScriptEvent.REQUEST_START);
     }
 
-    /** Returns the planning-start script. */
+    /**
+     * Returns the planning-start script.
+     */
     public static String planningStart(SysScriptsConfig cfg) {
         return getScriptByEvent(cfg, ScriptEvent.PLANNING_START);
     }
 
-    /** Gets the script by event. */
+    /**
+     * Gets the script by event.
+     */
     public static String getScriptByEvent(SysScriptsConfig cfg, ScriptEvent event) {
         if (cfg == null || event == null) {
             return "";
@@ -292,7 +333,9 @@ public final class ScriptResolver {
         return safe(cfg.getTemplate(event.getKey()).orElse(null));
     }
 
-    /** Gets the script by key. */
+    /**
+     * Gets the script by key.
+     */
     public static String getScriptByKey(SysScriptsConfig cfg, String key) {
         return cfg == null ? "" : safe(cfg.getTemplate(key).orElse(null));
     }
@@ -301,7 +344,9 @@ public final class ScriptResolver {
     // 固定帧 think_chunk 切分（对齐 Python select_fixed_scripts + feeder）
     // ═══════════════════════════════════════════════════
 
-    /** Checks whether fixed script mode. */
+    /**
+     * Checks whether fixed script mode.
+     */
     public static boolean isFixedScriptMode(SysScriptsConfig cfg) {
         if (cfg == null) {
             return false;
@@ -314,7 +359,9 @@ public final class ScriptResolver {
         return "true".equalsIgnoreCase(enabled);
     }
 
-    /** Selects fixed scripts for the given phase. */
+    /**
+     * Selects fixed scripts for the given phase.
+     */
     public static List<String> selectFixedScripts(SysScriptsConfig cfg, String phase, String userQuery) {
         if (cfg == null) {
             return List.of();
@@ -334,7 +381,8 @@ public final class ScriptResolver {
                 }
                 return parseScriptList(cfg.getTemplate(FK_PREFIX + "scripts").orElse(null));
             case "executing" :
-                List<String> execScripts = parseScriptList(cfg.getTemplate(FK_PREFIX + "execution_scripts").orElse(null));
+                List<String> execScripts = parseScriptList(cfg.getTemplate(FK_PREFIX +
+                    "execution_scripts").orElse(null));
                 if (!execScripts.isEmpty()) {
                     return execScripts;
                 }
@@ -344,7 +392,8 @@ public final class ScriptResolver {
                 if ("false".equalsIgnoreCase(enableResume)) {
                     return List.of();
                 }
-                List<String> resumeScripts = parseScriptList(cfg.getTemplate(FK_PREFIX + "resume_scripts").orElse(null));
+                List<String> resumeScripts = parseScriptList(cfg.getTemplate(FK_PREFIX +
+                    "resume_scripts").orElse(null));
                 if (!resumeScripts.isEmpty()) {
                     return resumeScripts;
                 }
@@ -354,7 +403,9 @@ public final class ScriptResolver {
         }
     }
 
-    /** Splits fixed scripts into frames of the given size. */
+    /**
+     * Splits fixed scripts into frames of the given size.
+     */
     public static List<String> splitFixedScriptsIntoFrames(List<String> scripts, int charsPerFrame) {
         List<String> result = new ArrayList<>();
         if (scripts == null || scripts.isEmpty()) {
@@ -398,7 +449,9 @@ public final class ScriptResolver {
         return result;
     }
 
-    /** Parses an integer, returning a default on failure. */
+    /**
+     * Parses an integer, returning a default on failure.
+     */
     public static int parseIntOrDefault(String value, int def) {
         if (value == null || value.isBlank()) {
             return def;
@@ -427,10 +480,13 @@ public final class ScriptResolver {
      *
      * @param raw LLM 原始输出
      * @return 字符串键值 Map
+      *
      */
 
     @SuppressWarnings("unchecked")
-    /** Coerces a raw object into a string map. */
+    /**
+     * Coerces a raw object into a string map.
+     */
     public static Map<String, String> coerceJsonMap(Object raw) {
         Map<String, String> out = new LinkedHashMap<>();
         if (raw == null) {
@@ -510,6 +566,7 @@ public final class ScriptResolver {
      *
      * @param scripts 话术配置，null 返回空串
      * @return Prompt 文本
+      *
      */
 
     public static String cancelRulesPrompt(SysScriptsConfig scripts) {
@@ -533,6 +590,7 @@ public final class ScriptResolver {
      *
      * @param scripts 话术配置，null 返回空串
      * @return Prompt 文本
+      *
      */
 
     public static String businessRulesPrompt(SysScriptsConfig scripts) {
@@ -564,6 +622,7 @@ public final class ScriptResolver {
      * @param cfg  话术配置
      * @param constantName 常量名（如 "task_cancelled"，不含 SCRIPT_ 前缀）
      * @param desc 描述文本
+      *
      */
 
     private static void appendKey(StringBuilder sb, SysScriptsConfig cfg, String constantName, String desc) {
@@ -605,6 +664,7 @@ public final class ScriptResolver {
      * @return true 表示已写入业务话术
      *
      * @param Map<String description
+      *
      */
 
     public static boolean resolveAskUser(SysScriptsConfig scripts, Object rawArgs, Map<String, Object> extra) {
@@ -637,7 +697,9 @@ public final class ScriptResolver {
         return true;
     }
 
-    /** 把工具原始入参归一为 {@code Map<String,Object>}（Map 直转 / JSON 字符串解析）。 */
+    /**
+     * 把工具原始入参归一为 {@code Map<String,Object>}（Map 直转 / JSON 字符串解析）。
+     */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> normalizeArgs(Object rawArgs) {
         Map<String, Object> result = new LinkedHashMap<>();

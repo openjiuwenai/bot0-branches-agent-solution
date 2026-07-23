@@ -17,15 +17,18 @@
 package com.huawei.ascend.edp.todo;
 
 import com.huawei.ascend.edp.config.TodoRedisProperties;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.harness.tools.TodoItem;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +45,7 @@ import java.util.concurrent.TimeUnit;
  * {@code exists} 返回 false；不回退文件读取，不抛异常终止会话。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 public class RedisTodoStore {
@@ -51,7 +55,9 @@ public class RedisTodoStore {
     private static final TypeReference<List<TodoItem>> TODO_TYPE = new TypeReference<>() {
     };
 
-    /** Redis 最低版本要求（UC-01/UC-02 AF-02-B）。 */
+    /**
+     * Redis 最低版本要求（UC-01/UC-02 AF-02-B）。
+     */
     private static final String MIN_REDIS_VERSION = "5.0";
 
     private final StringRedisTemplate redis;
@@ -67,6 +73,7 @@ public class RedisTodoStore {
      *
      * <p>初始化阶段调用：PING + INFO server 版本检查。失败抛 {@link IllegalStateException}，
      * Spring 容器启动失败（UC-02）。</p>
+      *
      */
 
     public boolean healthCheck() {
@@ -100,6 +107,7 @@ public class RedisTodoStore {
      *
      * @param rawSessionId 原始 sessionId（不转义，UC-08/UC-15）
      * @return 永不返回 null；未命中或降级时返回空列表
+      *
      */
 
     public List<TodoItem> load(String rawSessionId) {
@@ -137,6 +145,7 @@ public class RedisTodoStore {
      *
      * @param rawSessionId 原始 sessionId（不转义）
      * @param todos        待持久化的 todo 列表
+      *
      */
 
     public void save(String rawSessionId, List<TodoItem> todos) {
@@ -166,6 +175,7 @@ public class RedisTodoStore {
      *
      * @param rawSessionId 原始 sessionId（不转义）
      * @return 存在返回 true；降级或不存在返回 false
+      *
      */
 
     public boolean exists(String rawSessionId) {
@@ -185,6 +195,7 @@ public class RedisTodoStore {
      * 删除 Redis 中该 session 的 Todo 数据。
      *
      * @param rawSessionId 原始 sessionId（不转义）
+      *
      */
 
     public void delete(String rawSessionId) {
@@ -201,6 +212,7 @@ public class RedisTodoStore {
      * TTL 续期（UC-04 / UC-11 AF-11-B）。
      *
      * <p>{@code refresh_on_read=true} 时由 {@link #load} 调用。续期失败仅 WARN，不抛异常。</p>
+      *
      */
 
     private void refreshTtl(String key) {
@@ -216,6 +228,7 @@ public class RedisTodoStore {
      *
      * <p>格式：{@code {prefix}:todo:{rawSessionId}}，使用原始 sessionId（不转义）。
      * 支持空格、中文、超长 sessionId；集群模式下 Key 不含花括号（hash tag 安全）。</p>
+      *
      */
 
     private String buildKey(String rawSessionId) {
@@ -225,6 +238,7 @@ public class RedisTodoStore {
 
     /**
      * 从 Redis INFO server 输出解析版本号。
+      *
      */
 
     private static Optional<String> parseRedisVersion(Properties info) {
@@ -251,6 +265,7 @@ public class RedisTodoStore {
      * 语义化版本比较：a 与 b 形如 "7.2.0"。
      *
      * @return 负数表示 a<b，0 表示相等，正数表示 a>b
+      *
      */
 
     private static int compareVersion(String a, String b) {

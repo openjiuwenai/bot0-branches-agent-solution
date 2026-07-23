@@ -23,6 +23,7 @@ import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,8 +44,10 @@ import com.openjiuwen.core.sysop.OperationMode;
 import com.openjiuwen.core.sysop.SysOperation;
 import com.openjiuwen.core.sysop.result.ExecuteCmdResult;
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -87,18 +90,22 @@ import java.util.regex.Pattern;
  * </ul>
  *
  * @since 2024-01-01
+  *
  */
 
 public class VersatileInterruptRail extends AgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(VersatileInterruptRail.class);
 
-    /** 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。 */
+    /**
+     * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
+     */
     private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
 
     /**
      * pre-delegate guard 计数器在 ToolDataChannel 中的 key 前缀。
      * 对齐 Python versatile_interrupt_rail.py 第 434 行 {@code state_key = f"_pre_delegate_guard:{command}:{rule_id}"}，
      * 用 {@code command:ruleId} 作为唯一标识，避免不同 skill 的同名规则互相干扰。
+      *
      */
 
     static final String GUARD_STATE_KEY_PREFIX = "_pre_delegate_guard:";
@@ -107,6 +114,7 @@ public class VersatileInterruptRail extends AgentRail {
      * history_info 字段名。与 {@link McpInterruptRail#HISTORY_INFO_KEY} 同名，
      * 保证 call_versatile 写入的 history_info 能被下一次 call_mcp 的 buildSkillInput 读到，
      * 形成跨工具的会话级持久化闭环（对齐 Python {@code session.state["history_info"]}）。
+      *
      */
 
     static final String HISTORY_INFO_KEY = "history_info";
@@ -115,6 +123,7 @@ public class VersatileInterruptRail extends AgentRail {
 
     /**
      * EDP 专有配置，当前预留给 VA 委托策略和目标 Agent 配置使用。
+      *
      */
 
     private final EdpConfig edpConfig;
@@ -122,13 +131,16 @@ public class VersatileInterruptRail extends AgentRail {
     private final EdpaSpringBootConfig.VersatileConfig versatileConfig;
     private final ToolDataChannel toolDataChannel;
 
-    /** 与 EdpaRuntimeHandler 共享，存放 adapter 返回的完整 Versatile message JSON。 */
+    /**
+     * 与 EdpaRuntimeHandler 共享，存放 adapter 返回的完整 Versatile message JSON。
+     */
     private final VersatilePassthroughBuffer passthroughBuffer;
     private final HttpClient httpClient;
 
     /**
      * skills 目录，用于 pre-delegate guard 静态解析脚本中的 {@code PRE_DELEGATE_GUARD} 配置。
      * 为 null 时 guard 直接跳过（不影响主流程）。
+      *
      */
 
     private final Path skillsDir;
@@ -136,19 +148,26 @@ public class VersatileInterruptRail extends AgentRail {
     /**
      * 话术配置，用于 pre-delegate guard 超限时解析 {@code response_template_key} 兜底话术。
      * 为 null 时回落到规则的 {@code fallback_message}。
+      *
      */
 
     private final SysScriptsConfig scripts;
 
     private final String agentName;
 
-    /** 框架双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。 */
+    /**
+     * 框架双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。
+     */
     private final SysOperation sysOp;
 
-    /** 沙箱技能部署路径（如 /app/skills），SANDBOX 模式下作为 cwd 参数传入 executeCmd。可为 null。 */
+    /**
+     * 沙箱技能部署路径（如 /app/skills），SANDBOX 模式下作为 cwd 参数传入 executeCmd。可为 null。
+     */
     private final String skillDeployPath;
 
-    /** 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。 */
+    /**
+     * 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。
+     */
     private final SandboxClient decoratedClient;
 
     /**
@@ -157,6 +176,7 @@ public class VersatileInterruptRail extends AgentRail {
      * @param edpConfig EDP 专有配置
      *
      * @return result
+      *
      */
 
     public VersatileInterruptRail(EdpConfig edpConfig) {
@@ -245,10 +265,13 @@ public class VersatileInterruptRail extends AgentRail {
      * </ol>
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具调用信息
+      *
      */
 
     @Override
-    /** Before tool call. */
+    /**
+     * Before tool call.
+     */
     public void beforeToolCall(AgentCallbackContext ctx) {
         // 关键判断：只有工具调用上下文才需要识别 VA 委托工具。
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -362,6 +385,7 @@ public class VersatileInterruptRail extends AgentRail {
      * <p>前置规则（pre-delegate guard）超限拦截：当同一 rule 的调用次数超过 limit 时，
      * 注入 response_template 并 request_force_finish。
      * 对齐 Python versatile_interrupt_rail.py L439-473: guard matched → exceeded → force_finish。</p>
+      *
      */
 
     private void blockCallVersatileByGuard(AgentCallbackContext ctx, ToolCallInputs inputs, String toolCallId,
@@ -429,7 +453,9 @@ public class VersatileInterruptRail extends AgentRail {
         return resumeInput;
     }
 
-    /** Invoke with inputs. */
+    /**
+     * Invoke with inputs.
+     */
     public Map<String, Object> invokeWithInputs(Map<String, Object> versatileInputs, String conversationId) {
         if (versatileConfig == null) {
             return failedResult("versatile config is missing");
@@ -489,7 +515,9 @@ public class VersatileInterruptRail extends AgentRail {
         return args;
     }
 
-    /** 通过 adapter-versatile-agent-java 的 A2A SendStreamingMessage 发起 SSE 调用。 */
+    /**
+     * 通过 adapter-versatile-agent-java 的 A2A SendStreamingMessage 发起 SSE 调用。
+     */
     private Map<String, Object> callVersatileAdapterA2a(Map<String, Object> versatileInputs, String conversationId)
             throws Exception {
         String adapterUrl = versatileConfig.getAdapterA2aUrl();
@@ -543,6 +571,7 @@ public class VersatileInterruptRail extends AgentRail {
     /**
      * 解析 adapter A2A SSE 响应体。
      * artifactUpdate 中的 text 为 USER 透传节点；statusUpdate 中的 text 为 LLM 终态内容。
+      *
      */
 
     private Map<String, Object> normalizeA2aAdapterResponse(String body) throws Exception {
@@ -591,6 +620,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 从 passthroughNodes 中提取 completedContent 兜底内容。
      * 优先取 answer envelope 的 output 字段，其次取 QA 节点的 text 字段，
      * 最后使用最后一个节点作为兜底。
+      *
      */
     private String extractContentFromPassthroughNodes(List<String> passthroughNodes) {
         String completedContent = "";
@@ -701,6 +731,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 从 toolResult 的 passthrough_nodes 中提取中断提示文本。
      * passthrough_nodes 中的每个元素是 JSON 字符串，如:
      * {"event":"message","data":{"text":"请确认转账信息","menu_type":"TRANSFER_MENU"}}
+      *
      */
 
     @SuppressWarnings("unchecked")
@@ -1060,7 +1091,9 @@ public class VersatileInterruptRail extends AgentRail {
         return value.substring(0, maxLen) + "...(truncated)";
     }
 
-    /** 对 JSON 字符串中的敏感字段自动脱敏：银行卡号保留前4后4位、用户姓名保留首字、会话ID/Cookie掩码。 */
+    /**
+     * 对 JSON 字符串中的敏感字段自动脱敏：银行卡号保留前4后4位、用户姓名保留首字、会话ID/Cookie掩码。
+     */
     private static String desensitizeSensitiveFields(String json) {
         if (json == null || "null".equals(json)) {
             return json;
@@ -1089,12 +1122,16 @@ public class VersatileInterruptRail extends AgentRail {
         return result;
     }
 
-    /** 安全转 String：null 返回空串。 */
+    /**
+     * 安全转 String：null 返回空串。
+     */
     private String asString(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
 
-    /** 安全转 int：null 或非数字返回默认值。 */
+    /**
+     * 安全转 int：null 或非数字返回默认值。
+     */
     private int asInt(Object value, int defaultValue) {
         if (value instanceof Number n) {
             return n.intValue();
@@ -1109,7 +1146,9 @@ public class VersatileInterruptRail extends AgentRail {
         return defaultValue;
     }
 
-    /** 把任意 Map 归一为 String 键的 Map。 */
+    /**
+     * 把任意 Map 归一为 String 键的 Map。
+     */
     private Map<String, Object> toStringKeyMap(Object source) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (source instanceof Map<?, ?> map) {
@@ -1142,10 +1181,13 @@ public class VersatileInterruptRail extends AgentRail {
      * <p>职责二：记录 call_versatile 完成事件。</p>
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具调用和工具结果信息
+      *
      */
 
     @Override
-    /** After tool call. */
+    /**
+     * After tool call.
+     */
     public void afterToolCall(AgentCallbackContext ctx) {
         // 关键判断：只有工具调用上下文才需要识别 VA 委托工具。
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -1170,6 +1212,7 @@ public class VersatileInterruptRail extends AgentRail {
      * <p>对齐 Python 第 297-306 行持久化、第 321 行剔除。无 history_info 时仅打 persistence check 日志，
      * 与 Python 行为一致。持久化 key 与 {@link McpInterruptRail#HISTORY_INFO_KEY} 同名，
      * 共享同一四元组隔离，下一次 call_mcp 能读到。</p>
+      *
      */
 
     private void persistHistoryInfoIfPresent(AgentCallbackContext ctx, ToolCallInputs inputs) {
@@ -1214,6 +1257,7 @@ public class VersatileInterruptRail extends AgentRail {
      * @param ctx  回调上下文
      * @param args call_versatile 工具参数（含 query_intent / query_response_analysis_scripts 等）
      * @return 超限判定；Optional.empty() 表示无 guard 或未超限，主流程继续
+      *
      */
 
     private Optional<GuardDecision> applyPreDelegateGuard(AgentCallbackContext ctx, Map<String, Object> args) {
@@ -1268,6 +1312,7 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * @param command query_response_analysis_scripts 命令字符串
      * @return guard 配置 Map；空 Map 表示跳过
+      *
      */
 
     private Map<String, Object> loadPreDelegateGuard(String command) {
@@ -1315,6 +1360,7 @@ public class VersatileInterruptRail extends AgentRail {
     /**
      * 从命令字符串中提取脚本文件名（第一个以 .py 结尾的 Token）。
      * 对齐 Python 第 480 行 {@code next((part for part in command.split() if part.endswith(".py")), "")}。
+      *
      */
 
     private String extractScriptName(String command) {
@@ -1338,6 +1384,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 标准 JSON-compatible dict 字面量，括号配对足够且不执行任意代码。</p>
      *
      * @return 字典字面量字符串（含外层花括号）；未找到返回 Optional.empty()
+      *
      */
 
     private Optional<String> extractAssignLiteral(String source, String name) {
@@ -1388,6 +1435,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 判断 tool_args 是否全部命中 match 中的键值。
      * 对齐 Python 第 430 行 {@code any(tool_args.get(key) != value for key, value in match.items())} 的反向逻辑
      * （Python 用 any+!= 表示"任一不匹配则跳过"，此处用 all+equals 表示"全部匹配才命中"）。
+      *
      */
 
     private boolean matchesArgs(Map<String, Object> args, Map<String, Object> match) {
@@ -1407,6 +1455,7 @@ public class VersatileInterruptRail extends AgentRail {
      * <p>对齐 Python {@code ctx.session.get_state(state_key)} + {@code update_state}。
      * Java 端 {@code ctx.getExtra()} 是 per-request、跨轮丢失，故用 ToolDataChannel（会话级四元组隔离）
      * 作为计数器存储，与 history_info / versatile_query 共享同一 channel。</p>
+      *
      */
 
     private int incrementGuardCount(ToolDataKey channelKey, String stateKey) {
@@ -1423,6 +1472,7 @@ public class VersatileInterruptRail extends AgentRail {
      * <p>对齐 Python 第 444-449 行：
      * {@code text = scripts.get_response_template(template_key) or rule.get("fallback_message", "")}。
      * Java 端 {@code SysScriptsConfig.getTemplate(key)} 返回 Optional.empty() 表示缺失，等价 Python 的 falsy。</p>
+      *
      */
 
     private String resolveGuardMessage(Map<String, Object> ruleMap) {
@@ -1440,7 +1490,9 @@ public class VersatileInterruptRail extends AgentRail {
         return text;
     }
 
-    /** guard 判定结果。blocked=true 表示超限需终止；其余字段仅用于日志。 */
+    /**
+     * guard 判定结果。blocked=true 表示超限需终止；其余字段仅用于日志。
+     */
     private record GuardDecision(boolean blocked, String ruleId, int count, int maxCalls, String message) {
     }
 
@@ -1450,15 +1502,20 @@ public class VersatileInterruptRail extends AgentRail {
      * <p>Rail 在 adapter 响应解析阶段写入完整 message JSON；
      * {@link com.huawei.ascend.edp.handler.EdpaRuntimeHandler} 的流式迭代器
      * 在 DeepAgent 帧之间按 FIFO 刷出，避免 node_type/menu_type 等字段被降维丢失。</p>
+      *
      */
 
     public static final class VersatilePassthroughBuffer {
         private final Map<String, Deque<String>> nodesByConversation = new HashMap<>();
 
-        /** 中断时的 toolCallId，续传完成后用于构造 InteractiveInput。 */
+        /**
+         * 中断时的 toolCallId，续传完成后用于构造 InteractiveInput。
+         */
         private final Map<String, String> interruptIdsByConversation = new HashMap<>();
 
-        /** Add all. */
+        /**
+         * Add all.
+         */
         public void addAll(String conversationId, Collection<String> nodes) {
             if (conversationId == null || conversationId.isBlank() || nodes == null || nodes.isEmpty()) {
                 return;
@@ -1474,7 +1531,9 @@ public class VersatileInterruptRail extends AgentRail {
             }
         }
 
-        /** Poll. */
+        /**
+         * Poll.
+         */
         public Optional<String> poll(String conversationId) {
             if (conversationId == null || conversationId.isBlank()) {
                 return Optional.empty();
@@ -1492,7 +1551,9 @@ public class VersatileInterruptRail extends AgentRail {
             }
         }
 
-        /** Checks whether pending is present. */
+        /**
+         * Checks whether pending is present.
+         */
         public boolean hasPending(String conversationId) {
             if (conversationId == null || conversationId.isBlank()) {
                 return false;
@@ -1503,7 +1564,9 @@ public class VersatileInterruptRail extends AgentRail {
             }
         }
 
-        /** Clears all data for the given key. */
+        /**
+         * Clears all data for the given key.
+         */
         public void clear(String conversationId) {
             if (conversationId != null && !conversationId.isBlank()) {
                 synchronized (nodesByConversation) {
@@ -1512,7 +1575,9 @@ public class VersatileInterruptRail extends AgentRail {
             }
         }
 
-        /** Remember interrupt id. */
+        /**
+         * Remember interrupt id.
+         */
         public void rememberInterruptId(String conversationId, String interruptId) {
             if (conversationId == null || conversationId.isBlank() || interruptId == null || interruptId.isBlank()) {
                 return;
@@ -1522,7 +1587,9 @@ public class VersatileInterruptRail extends AgentRail {
             }
         }
 
-        /** Poll interrupt id. */
+        /**
+         * Poll interrupt id.
+         */
         public Optional<String> pollInterruptId(String conversationId) {
             if (conversationId == null || conversationId.isBlank()) {
                 return Optional.empty();
@@ -1537,7 +1604,9 @@ public class VersatileInterruptRail extends AgentRail {
     // 归一化脚本执行（对齐 Python versatile_interrupt_rail.py _sandbox_normalize）
     // ═══════════════════════════════════════════════════════════════
 
-    /** 归一化脚本输出的封装。 */
+    /**
+     * 归一化脚本输出的封装。
+     */
     private static class NormalizeOutput {
         String status; // "success" | "failure"；null 表示脚本未执行或失败
         Map<String, Object> data; // 归一化后的业务数据（ui_notice 已 pop）
@@ -1548,6 +1617,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 从 tool args 中解析归一化脚本路径。
      * LLM 传入的 query_response_analysis_scripts 可能是 JSON 数组（如 ["python xxx.py"]）或纯字符串，
      * 此方法兼容两种格式，取第一个非空元素作为脚本路径。
+      *
      */
 
     private String resolveNormalizeScript(Object raw) {
@@ -1582,6 +1652,7 @@ public class VersatileInterruptRail extends AgentRail {
      * @param toolResult  callVersatile 的原始返回
      * @param ctx         回调上下文
      * @return 归一化输出
+      *
      */
 
     private NormalizeOutput invokeNormalizeScript(String command, Map<String, Object> toolResult,
@@ -1609,6 +1680,7 @@ public class VersatileInterruptRail extends AgentRail {
 
     /**
      * SANDBOX 路径：归一化脚本在沙箱容器中执行。
+      *
      */
     private NormalizeOutput invokeNormalizeSandbox(String command, Map<String, Object> toolResult,
             Map<String, Object> versatileArgs, AgentCallbackContext ctx, NormalizeOutput fallback) {
@@ -1655,6 +1727,7 @@ public class VersatileInterruptRail extends AgentRail {
 
     /**
      * LOCAL 路径：归一化脚本在本地 ProcessBuilder 执行。
+      *
      */
     private NormalizeOutput invokeNormalizeLocal(Map<String, Object> toolResult,
             Map<String, Object> versatileArgs, AgentCallbackContext ctx, NormalizeOutput fallback,
@@ -1698,6 +1771,7 @@ public class VersatileInterruptRail extends AgentRail {
     /**
      * 从 toolResult 中提取 business_data。
      * Versatile 返回的 content 可能是 JSON 字符串，需要解析。
+      *
      */
 
     private Map<String, Object> extractBusinessData(Map<String, Object> toolResult) {
@@ -1722,6 +1796,7 @@ public class VersatileInterruptRail extends AgentRail {
      * <p>Python版本构造5字段：query_intent + query_description + business_data +
      * notice_context(透传) + history_info。Java版补齐3个缺失字段，
      * 确保归一化脚本在沙箱环境下能获取完整输入数据。</p>
+      *
      */
 
     private Map<String, Object> buildNormalizeSkillInput(Map<String, Object> toolResult,
@@ -1746,7 +1821,9 @@ public class VersatileInterruptRail extends AgentRail {
         return skillInput;
     }
 
-    /** 适配沙箱 ExecuteCmdResult → NormalizeOutput。 */
+    /**
+     * 适配沙箱 ExecuteCmdResult → NormalizeOutput。
+     */
     private NormalizeOutput adaptNormalizeResult(ExecuteCmdResult result, NormalizeOutput fallback) {
         if (result == null || result.getData() == null) {
             return fallback;
@@ -1770,6 +1847,7 @@ public class VersatileInterruptRail extends AgentRail {
      *   <li>① [status, normalized] — 数组格式</li>
      *   <li>② {normalized}        — 单对象格式（0712版其他同事新增兼容）</li>
      * </ul>
+      *
      */
 
     private NormalizeOutput parseNormalizeStdout(String stdout, NormalizeOutput fallback) {
@@ -1821,6 +1899,7 @@ public class VersatileInterruptRail extends AgentRail {
      * @param keysObj response_template_keys 参数值（JSON 字符串或 List）
      * @param status  归一化脚本返回的 status
      * @return 话术 key；Optional.empty() 表示无法索引
+      *
      */
 
     private Optional<String> resolveTemplateKey(Object keysObj, String status) {
@@ -1851,3 +1930,4 @@ public class VersatileInterruptRail extends AgentRail {
         return index < keys.size() ? Optional.of(keys.get(index)) : Optional.empty();
     }
 }
+

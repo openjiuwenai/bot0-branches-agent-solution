@@ -37,44 +37,63 @@ package com.huawei.ascend.edp.config;
  * </ul>
  *
  * @since 2024-01-01
+  *
  */
 
 public class GovernanceConfig {
-    /** 身份域配置（planrule.yaml）。 */
+    /**
+     * 身份域配置（planrule.yaml）。
+     */
     private PlanRuleConfig planrule;
 
-    /** 规划域+执行域配置（actrule.yaml）。 */
+    /**
+     * 规划域+执行域配置（actrule.yaml）。
+     */
     private ActRuleConfig actrule;
 
-    /** 交互域配置（scriptconfig.yaml）。 */
+    /**
+     * 交互域配置（scriptconfig.yaml）。
+     */
     private ScriptConfig scriptconfig;
 
-    /** Gets the planrule. */
+    /**
+     * Gets the planrule.
+     */
     public PlanRuleConfig getPlanrule() {
         return planrule;
     }
 
-    /** Sets the planrule. */
+    /**
+     * Sets the planrule.
+     */
     public void setPlanrule(PlanRuleConfig planrule) {
         this.planrule = planrule;
     }
 
-    /** Gets the actrule. */
+    /**
+     * Gets the actrule.
+     */
     public ActRuleConfig getActrule() {
         return actrule;
     }
 
-    /** Sets the actrule. */
+    /**
+     * Sets the actrule.
+     */
     public void setActrule(ActRuleConfig actrule) {
         this.actrule = actrule;
     }
 
-    /** Gets the scriptconfig. */
+    /**
+     * Gets the scriptconfig.
+     */
     public ScriptConfig getScriptconfig() {
         return scriptconfig;
     }
 
-    /** Sets the scriptconfig. */
+    /**
+     * Sets the scriptconfig.
+     */
     public void setScriptconfig(ScriptConfig scriptconfig) {
         this.scriptconfig = scriptconfig;
     }
@@ -85,6 +104,7 @@ public class GovernanceConfig {
      * <p>继承覆盖规则：字段级别的继承覆盖，不是文件级别的完全覆盖。</p>
      *
      * @param scenarioConfig 场景级GovernanceConfig
+      *
      */
 
     public void mergeScenarioConfig(GovernanceConfig scenarioConfig) {
@@ -110,6 +130,7 @@ public class GovernanceConfig {
 
     /**
      * 合并planrule配置（替代式覆盖）。
+      *
      */
 
     private void mergePlanrule(PlanRuleConfig scenarioPlanrule) {
@@ -206,6 +227,7 @@ public class GovernanceConfig {
      * @param frameworkDenied 框架级 denied 配置
      * @param scenarioDenied 场景级 denied 配置
      * @return 合并后的 denied 字段
+      *
      */
 
     private String mergeDeniedFields(String frameworkDenied, String scenarioDenied) {
@@ -247,6 +269,7 @@ public class GovernanceConfig {
      * @param frameworkAdditional 框架级 additionalPrompt
      * @param scenarioAdditional 场景级 additionalPrompt
      * @return 合并后的 additionalPrompt
+      *
      */
 
     private String mergeSupplementaryPrompts(String frameworkAdditional, String scenarioAdditional) {
@@ -264,6 +287,7 @@ public class GovernanceConfig {
 
     /**
      * 合并actrule配置（继承式覆盖）。
+      *
      */
 
     private void mergeActrule(ActRuleConfig scenarioActrule) {
@@ -341,6 +365,7 @@ public class GovernanceConfig {
 
     /**
      * 合成scriptconfig配置（逐字段继承式覆盖）。
+      *
      */
 
     private void mergeScriptconfig(ScriptConfig scenarioScriptconfig) {
@@ -367,6 +392,7 @@ public class GovernanceConfig {
 
     /**
      * 合并 askUserConfirm 配置（继承式覆盖，逐字段合并）。
+      *
      */
 
     private void mergeAskUserConfirm(ScriptConfig.AskUserConfirm scenarioConfirm) {
@@ -385,6 +411,7 @@ public class GovernanceConfig {
 
     /**
      * 合并 generalScripts 配置（继承式覆盖，逐字段合并）。
+      *
      */
 
     private void mergeGeneralScripts(ScriptConfig.GeneralScripts scenarioScripts) {
@@ -433,6 +460,7 @@ public class GovernanceConfig {
 
     /**
      * 合并thinkChunkScripts配置（继承式覆盖）。
+      *
      */
 
     private void mergeThinkChunkScripts(ScriptConfig.ThinkChunkScripts scenarioThinkChunk) {
@@ -458,6 +486,7 @@ public class GovernanceConfig {
 
     /**
      * 合并固定话术帧配置（继承式覆盖各字段）。
+      *
      */
 
     private void mergeFixedScripts(ScriptConfig.ThinkChunkFixedScripts def,

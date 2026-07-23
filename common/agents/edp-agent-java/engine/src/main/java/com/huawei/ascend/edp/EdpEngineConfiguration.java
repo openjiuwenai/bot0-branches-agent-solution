@@ -19,9 +19,11 @@ package com.huawei.ascend.edp;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.handler.EdpaExtHandler;
 import com.huawei.ascend.edp.todo.RedisTodoStore;
+
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClientFactory;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,6 +31,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 import java.util.Optional;
 
 /**
@@ -43,6 +46,7 @@ import java.util.Optional;
  * </ul>
  *
  * @since 2024-01-01
+  *
  */
 
 @Configuration(proxyBeanMethods = false)
@@ -62,6 +66,7 @@ public class EdpEngineConfiguration {
      *
      * @param config EDPAgent 合并后配置属性（含 scenarioHome/model/versatile/mcpsse）
      * @return 已初始化的 AgentHandler Bean
+      *
      */
 
     @Bean
@@ -105,6 +110,7 @@ public class EdpEngineConfiguration {
      *
      * @param provider Spring ObjectProvider，可能不存在
      * @return DecoratingSandboxClient 实例，或 null（降级到需求1直接模式）
+      *
      */
 
     private static Optional<SandboxClient> resolveDecoratedSandboxClient(ObjectProvider<AgentCoreSandboxClientFactory> provider) {

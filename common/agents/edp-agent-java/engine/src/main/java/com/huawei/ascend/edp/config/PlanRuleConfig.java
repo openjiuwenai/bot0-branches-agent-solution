@@ -29,127 +29,183 @@ package com.huawei.ascend.edp.config;
  * </ul>
  *
  * @since 2024-01-01
+  *
  */
 
 public class PlanRuleConfig {
-    /** Agent角色。 */
+    /**
+     * Agent角色。
+     */
     private String role;
 
-    /** Agent描述。 */
+    /**
+     * Agent描述。
+     */
     private String description;
 
-    /** 场景名称（仅场景级配置，框架默认无值）。仅在 scenario 模式下注入系统提示词。 */
+    /**
+     * 场景名称（仅场景级配置，框架默认无值）。仅在 scenario 模式下注入系统提示词。
+     */
     private String scenarioName;
 
-    /** 场景描述（仅场景级配置，框架默认无值）。仅在 scenario 模式下注入系统提示词。 */
+    /**
+     * 场景描述（仅场景级配置，框架默认无值）。仅在 scenario 模式下注入系统提示词。
+     */
     private String scenarioDescription;
 
-    /** Agent职责边界配置。 */
+    /**
+     * Agent职责边界配置。
+     */
     private Scope scope;
 
-    /** 补充提示词（行为约束规则）。包含框架内置的 baseProtocol 和场景追加的 additionalPrompt。 */
+    /**
+     * 补充提示词（行为约束规则）。包含框架内置的 baseProtocol 和场景追加的 additionalPrompt。
+     */
     private SupplementaryPrompt supplementaryPrompt;
 
-    /** Skill路由规则列表（继承式覆盖）。框架默认无值，仅场景级配置。 */
+    /**
+     * Skill路由规则列表（继承式覆盖）。框架默认无值，仅场景级配置。
+     */
     private java.util.List<SkillRoute> skillRouting;
 
-    /** Gets the role. */
+    /**
+     * Gets the role.
+     */
     public String getRole() {
         return role;
     }
 
-    /** Sets the role. */
+    /**
+     * Sets the role.
+     */
     public void setRole(String role) {
         this.role = role;
     }
 
-    /** Gets the description. */
+    /**
+     * Gets the description.
+     */
     public String getDescription() {
         return description;
     }
 
-    /** Sets the description. */
+    /**
+     * Sets the description.
+     */
     public void setDescription(String description) {
         this.description = description;
     }
 
-    /** Gets the scenario name. */
+    /**
+     * Gets the scenario name.
+     */
     public String getScenarioName() {
         return scenarioName;
     }
 
-    /** Sets the scenario name. */
+    /**
+     * Sets the scenario name.
+     */
     public void setScenarioName(String scenarioName) {
         this.scenarioName = scenarioName;
     }
 
-    /** Gets the scenario description. */
+    /**
+     * Gets the scenario description.
+     */
     public String getScenarioDescription() {
         return scenarioDescription;
     }
 
-    /** Sets the scenario description. */
+    /**
+     * Sets the scenario description.
+     */
     public void setScenarioDescription(String scenarioDescription) {
         this.scenarioDescription = scenarioDescription;
     }
 
-    /** Gets the scope. */
+    /**
+     * Gets the scope.
+     */
     public Scope getScope() {
         return scope;
     }
 
-    /** Sets the scope. */
+    /**
+     * Sets the scope.
+     */
     public void setScope(Scope scope) {
         this.scope = scope;
     }
 
-    /** Gets the supplementary prompt. */
+    /**
+     * Gets the supplementary prompt.
+     */
     public SupplementaryPrompt getSupplementaryPrompt() {
         return supplementaryPrompt;
     }
 
-    /** Sets the supplementary prompt. */
+    /**
+     * Sets the supplementary prompt.
+     */
     public void setSupplementaryPrompt(SupplementaryPrompt supplementaryPrompt) {
         this.supplementaryPrompt = supplementaryPrompt;
     }
 
-    /** Gets the skill routing. */
+    /**
+     * Gets the skill routing.
+     */
     public java.util.List<SkillRoute> getSkillRouting() {
         return skillRouting;
     }
 
-    /** Sets the skill routing. */
+    /**
+     * Sets the skill routing.
+     */
     public void setSkillRouting(java.util.List<SkillRoute> skillRouting) {
         this.skillRouting = skillRouting;
     }
 
     /**
      * Agent职责边界配置。
+      *
      */
 
     public static class Scope {
-        /** 允许的业务范围列表（替代式覆盖）。 */
+        /**
+         * 允许的业务范围列表（替代式覆盖）。
+         */
         private String allowed;
 
-        /** 禁止的业务范围列表（追加拼接：框架denied + 场景denied取并集）。 */
+        /**
+         * 禁止的业务范围列表（追加拼接：框架denied + 场景denied取并集）。
+         */
         private String denied;
 
-        /** Gets the allowed. */
+        /**
+         * Gets the allowed.
+         */
         public String getAllowed() {
             return allowed;
         }
 
-        /** Sets the allowed. */
+        /**
+         * Sets the allowed.
+         */
         public void setAllowed(String allowed) {
             this.allowed = allowed;
         }
 
-        /** Gets the denied. */
+        /**
+         * Gets the denied.
+         */
         public String getDenied() {
             return denied;
         }
 
-        /** Sets the denied. */
+        /**
+         * Sets the denied.
+         */
         public void setDenied(String denied) {
             this.denied = denied;
         }
@@ -160,31 +216,44 @@ public class PlanRuleConfig {
      *
      * <p>包含框架内置的 baseProtocol 和场景追加的 additionalPrompt。</p>
      * <p>合并策略：章节智能合并，同名章节内容追加而非生成独立章节。</p>
+      *
      */
 
     public static class SupplementaryPrompt {
-        /** 框架内置协议（不可覆盖）。包含任务规划协议、工具调用规约等核心规则。 */
+        /**
+         * 框架内置协议（不可覆盖）。包含任务规划协议、工具调用规约等核心规则。
+         */
         private String baseProtocol;
 
-        /** 场景追加提示词（有序拼接）。可为 null 或空字符串。 */
+        /**
+         * 场景追加提示词（有序拼接）。可为 null 或空字符串。
+         */
         private String additionalPrompt;
 
-        /** Gets the base protocol. */
+        /**
+         * Gets the base protocol.
+         */
         public String getBaseProtocol() {
             return baseProtocol;
         }
 
-        /** Sets the base protocol. */
+        /**
+         * Sets the base protocol.
+         */
         public void setBaseProtocol(String baseProtocol) {
             this.baseProtocol = baseProtocol;
         }
 
-        /** Gets the additional prompt. */
+        /**
+         * Gets the additional prompt.
+         */
         public String getAdditionalPrompt() {
             return additionalPrompt;
         }
 
-        /** Sets the additional prompt. */
+        /**
+         * Sets the additional prompt.
+         */
         public void setAdditionalPrompt(String additionalPrompt) {
             this.additionalPrompt = additionalPrompt;
         }
@@ -194,44 +263,63 @@ public class PlanRuleConfig {
      * Skill路由规则。
      *
      * <p>描述特定触发条件下应调用的目标Skill及其优先级。</p>
+      *
      */
 
     public static class SkillRoute {
-        /** 触发条件描述，例如 "用户首次请求推荐理财产品"。 */
+        /**
+         * 触发条件描述，例如 "用户首次请求推荐理财产品"。
+         */
         private String trigger;
 
-        /** 目标 Skill 名称，例如 "product_recommend_skill"。 */
+        /**
+         * 目标 Skill 名称，例如 "product_recommend_skill"。
+         */
         private String skill;
 
-        /** 优先级，数字越小越优先。 */
+        /**
+         * 优先级，数字越小越优先。
+         */
         private int priority;
 
-        /** Gets the trigger. */
+        /**
+         * Gets the trigger.
+         */
         public String getTrigger() {
             return trigger;
         }
 
-        /** Sets the trigger. */
+        /**
+         * Sets the trigger.
+         */
         public void setTrigger(String trigger) {
             this.trigger = trigger;
         }
 
-        /** Gets the skill. */
+        /**
+         * Gets the skill.
+         */
         public String getSkill() {
             return skill;
         }
 
-        /** Sets the skill. */
+        /**
+         * Sets the skill.
+         */
         public void setSkill(String skill) {
             this.skill = skill;
         }
 
-        /** Gets the priority. */
+        /**
+         * Gets the priority.
+         */
         public int getPriority() {
             return priority;
         }
 
-        /** Sets the priority. */
+        /**
+         * Sets the priority.
+         */
         public void setPriority(int priority) {
             this.priority = priority;
         }

@@ -17,6 +17,7 @@
 package com.huawei.ascend.edp.channel;
 
 import com.huawei.ascend.edp.config.EdpConfig;
+
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
@@ -25,6 +26,7 @@ import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
  * ToolDataChannel 四元组隔离键工厂。
  *
  * @since 2024-01-01
+  *
  */
 
 public final class ToolDataKeyFactory {
@@ -35,7 +37,9 @@ public final class ToolDataKeyFactory {
     private ToolDataKeyFactory() {
     }
 
-    /** Creates a key from the callback context. */
+    /**
+     * Creates a key from the callback context.
+     */
     public static ToolDataKey fromContext(AgentCallbackContext ctx, EdpConfig edpConfig, String defaultAgentId) {
         String tenantId = resolveFromExtra(ctx, "tenantId", "tenant_id");
         String agentId = resolveFromExtra(ctx, "agentId", "agent_id");

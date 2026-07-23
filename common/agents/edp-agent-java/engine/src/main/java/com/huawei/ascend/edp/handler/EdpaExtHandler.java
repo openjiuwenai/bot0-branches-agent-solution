@@ -33,6 +33,7 @@ import com.huawei.ascend.edp.stream.PlanrulePromptBuilder;
 import com.huawei.ascend.edp.stream.QueryChunkFormatAdapter;
 import com.huawei.ascend.edp.stream.SkillScriptsCollector;
 import com.huawei.ascend.edp.todo.RedisTodoStore;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,8 +58,10 @@ import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -97,6 +100,7 @@ import java.util.Optional;
  * </pre>
  *
  * @since 2024-01-01
+  *
  */
 
 public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
@@ -104,24 +108,36 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    /** DeepAgent 外观对象 */
+    /**
+     * DeepAgent 外观对象
+     */
     private DeepAgent deepAgent;
 
-    /** EDPAgent 标准配置（0707 已废弃 yamlPath，agent 定义从 governance/scenario 加载） */
+    /**
+     * EDPAgent 标准配置（0707 已废弃 yamlPath，agent 定义从 governance/scenario 加载）
+     */
     private EdpAgentConfig agentConfig;
 
-    /** EDPAgent 专有配置 */
+    /**
+     * EDPAgent 专有配置
+     */
     private EdpConfig edpConfig;
 
-    /** Governance 配置 */
+    /**
+     * Governance 配置
+     */
     private GovernanceConfig governanceConfig;
 
-    /** EDPAgent Spring Boot 配置（合并版，含 model/versatile/mcpsse） */
+    /**
+     * EDPAgent Spring Boot 配置（合并版，含 model/versatile/mcpsse）
+     */
     private EdpaSpringBootConfig springBootConfig;
 
     private VersatilePassthroughBuffer versatilePassthroughBuffer;
 
-    /** 活动场景目录的绝对路径 */
+    /**
+     * 活动场景目录的绝对路径
+     */
     private Path scenarioHomePath;
 
     public EdpaExtHandler(Object agentInstance) {
@@ -130,148 +146,215 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     /**
      * performInit() 返回的初始化产物容器。
+      *
      */
 
     public static class InitResult {
-        /** DeepAgent 内部 Agent 实例 */
+        /**
+         * DeepAgent 内部 Agent 实例
+         */
         private Object agentInstance;
 
-        /** DeepAgent 外观对象 */
+        /**
+         * DeepAgent 外观对象
+         */
         private DeepAgent deepAgent;
 
-        /** EDPAgent 标准配置 */
+        /**
+         * EDPAgent 标准配置
+         */
         private EdpAgentConfig agentConfig;
 
-        /** EDPAgent 专有配置 */
+        /**
+         * EDPAgent 专有配置
+         */
         private EdpConfig edpConfig;
 
-        /** Governance 配置 */
+        /**
+         * Governance 配置
+         */
         private GovernanceConfig governanceConfig;
 
-        /** EDPAgent Spring Boot 配置 */
+        /**
+         * EDPAgent Spring Boot 配置
+         */
         private EdpaSpringBootConfig springBootConfig;
 
-        /** Versatile passthrough 缓冲 */
+        /**
+         * Versatile passthrough 缓冲
+         */
         private VersatilePassthroughBuffer versatilePassthroughBuffer;
 
-        /** 活动场景目录的绝对路径 */
+        /**
+         * 活动场景目录的绝对路径
+         */
         private Path scenarioHomePath;
 
-        /** SysOperation 双模式门面（sandbox.enabled=true 时非 null）。 */
+        /**
+         * SysOperation 双模式门面（sandbox.enabled=true 时非 null）。
+         */
         private SysOperation sysOperation;
 
-        /** 沙箱网关配置（sandbox.enabled=true 时非 null）。 */
+        /**
+         * 沙箱网关配置（sandbox.enabled=true 时非 null）。
+         */
         private SandboxGatewayConfig sandboxGatewayConfig;
 
-        /** 治理装饰 SandboxClient（需求2路径，sandboxClientFactory != null 时非 null）。 */
+        /**
+         * 治理装饰 SandboxClient（需求2路径，sandboxClientFactory != null 时非 null）。
+         */
         private SandboxClient decoratedSandboxClient;
 
-        /** Gets the agent instance. */
+        /**
+         * Gets the agent instance.
+         */
         public Object getAgentInstance() {
             return agentInstance;
         }
 
-        /** Sets the agent instance. */
+        /**
+         * Sets the agent instance.
+         */
         public void setAgentInstance(Object agentInstance) {
             this.agentInstance = agentInstance;
         }
 
-        /** Gets the deep agent. */
+        /**
+         * Gets the deep agent.
+         */
         public DeepAgent getDeepAgent() {
             return deepAgent;
         }
 
-        /** Sets the deep agent. */
+        /**
+         * Sets the deep agent.
+         */
         public void setDeepAgent(DeepAgent deepAgent) {
             this.deepAgent = deepAgent;
         }
 
-        /** Gets the agent config. */
+        /**
+         * Gets the agent config.
+         */
         public EdpAgentConfig getAgentConfig() {
             return agentConfig;
         }
 
-        /** Sets the agent config. */
+        /**
+         * Sets the agent config.
+         */
         public void setAgentConfig(EdpAgentConfig agentConfig) {
             this.agentConfig = agentConfig;
         }
 
-        /** Gets the edp config. */
+        /**
+         * Gets the edp config.
+         */
         public EdpConfig getEdpConfig() {
             return edpConfig;
         }
 
-        /** Sets the edp config. */
+        /**
+         * Sets the edp config.
+         */
         public void setEdpConfig(EdpConfig edpConfig) {
             this.edpConfig = edpConfig;
         }
 
-        /** Gets the governance config. */
+        /**
+         * Gets the governance config.
+         */
         public GovernanceConfig getGovernanceConfig() {
             return governanceConfig;
         }
 
-        /** Sets the governance config. */
+        /**
+         * Sets the governance config.
+         */
         public void setGovernanceConfig(GovernanceConfig governanceConfig) {
             this.governanceConfig = governanceConfig;
         }
 
-        /** Gets the spring boot config. */
+        /**
+         * Gets the spring boot config.
+         */
         public EdpaSpringBootConfig getSpringBootConfig() {
             return springBootConfig;
         }
 
-        /** Sets the spring boot config. */
+        /**
+         * Sets the spring boot config.
+         */
         public void setSpringBootConfig(EdpaSpringBootConfig springBootConfig) {
             this.springBootConfig = springBootConfig;
         }
 
-        /** Gets the versatile passthrough buffer. */
+        /**
+         * Gets the versatile passthrough buffer.
+         */
         public VersatilePassthroughBuffer getVersatilePassthroughBuffer() {
             return versatilePassthroughBuffer;
         }
 
-        /** Sets the versatile passthrough buffer. */
+        /**
+         * Sets the versatile passthrough buffer.
+         */
         public void setVersatilePassthroughBuffer(VersatilePassthroughBuffer versatilePassthroughBuffer) {
             this.versatilePassthroughBuffer = versatilePassthroughBuffer;
         }
 
-        /** Gets the scenario home path. */
+        /**
+         * Gets the scenario home path.
+         */
         public Path getScenarioHomePath() {
             return scenarioHomePath;
         }
 
-        /** Sets the scenario home path. */
+        /**
+         * Sets the scenario home path.
+         */
         public void setScenarioHomePath(Path scenarioHomePath) {
             this.scenarioHomePath = scenarioHomePath;
         }
 
-        /** Gets the sys operation. */
+        /**
+         * Gets the sys operation.
+         */
         public SysOperation getSysOperation() {
             return sysOperation;
         }
 
-        /** Sets the sys operation. */
+        /**
+         * Sets the sys operation.
+         */
         public void setSysOperation(SysOperation sysOperation) {
             this.sysOperation = sysOperation;
         }
 
-        /** Gets the sandbox gateway config. */
+        /**
+         * Gets the sandbox gateway config.
+         */
         public SandboxGatewayConfig getSandboxGatewayConfig() {
             return sandboxGatewayConfig;
         }
 
-        /** Sets the sandbox gateway config. */
+        /**
+         * Sets the sandbox gateway config.
+         */
         public void setSandboxGatewayConfig(SandboxGatewayConfig sandboxGatewayConfig) {
             this.sandboxGatewayConfig = sandboxGatewayConfig;
         }
 
-        /** Gets the decorated sandbox client. */
+        /**
+         * Gets the decorated sandbox client.
+         */
         public SandboxClient getDecoratedSandboxClient() {
             return decoratedSandboxClient;
         }
 
-        /** Sets the decorated sandbox client. */
+        /**
+         * Sets the decorated sandbox client.
+         */
         public void setDecoratedSandboxClient(SandboxClient decoratedSandboxClient) {
             this.decoratedSandboxClient = decoratedSandboxClient;
         }
@@ -288,6 +371,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * @param redisTodoStore Redis Todo 存储（可为null：未启用Redis时回落文件/缓存）
      * @param agentName Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）
      * @return InitResult 包含真实 agent 实例和初始化产物
+      *
      */
 
     public static InitResult performInit(EdpaSpringBootConfig config, RedisTodoStore redisTodoStore, String agentName,
@@ -434,6 +518,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     /**
      * 将 performInit() 返回的 InitResult 应用到当前实例。
+      *
      */
 
     public void applyInitResult(InitResult result) {
@@ -455,10 +540,13 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      *     <li>首轮请求：无续流标记时，走标准 streamQueryWithPassthrough 路径</li>
      * </ul>
      * 对齐 Python agent.py L894-917: 首轮 vs 续轮判断。
+      *
      */
 
     @Override
-    /** Stream query. */
+    /**
+     * Stream query.
+     */
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
         String conversationId = request.getConversationId();
         Map<String, Object> input = extractRequestInputs(request);
@@ -494,10 +582,13 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     /**
      * 适配版 SPI：同步查询。委托给父类。
+      *
      */
 
     @Override
-    /** Query. */
+    /**
+     * Query.
+     */
     public QueryResponse query(ServeRequest request) {
         return super.query(request);
     }
@@ -593,6 +684,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      *
      * @param input 原始 input Map（包含 passthroughNodes）
      * @return 续流请求 Map，解析失败返回 null
+      *
      */
 
     private Map<String, Object> extractVersatileContinuationInputs(Map<String, Object> input) {
@@ -662,6 +754,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      *     <li>其他（completed）→ 正常输出 chunk</li>
      * </ul>
      * 对齐 Python agent.py L894: Cascade 续轮结果推送。
+      *
      */
 
     private void pushVersatileContinuationResult(String conversationId, Map<String, Object> result,
@@ -696,27 +789,35 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         QueryStreamObserver wrappedObserver = new QueryStreamObserver() {
             @Override
-            /** On next. */
+            /**
+             * On next.
+             */
             public void onNext(QueryChunk chunk) {
                 drainPassthroughNodesToObserver(conversationId, formatAdapter);
                 formatAdapter.onNext(chunk);
             }
 
             @Override
-            /** On error. */
+            /**
+             * On error.
+             */
             public void onError(Throwable error) {
                 formatAdapter.onError(error);
             }
 
             @Override
-            /** On complete. */
+            /**
+             * On complete.
+             */
             public void onComplete() {
                 drainPassthroughNodesToObserver(conversationId, formatAdapter);
                 formatAdapter.onComplete();
             }
 
             @Override
-            /** Checks whether cancelled. */
+            /**
+             * Checks whether cancelled.
+             */
             public boolean isCancelled() {
                 return formatAdapter.isCancelled();
             }
@@ -742,6 +843,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * <p>SandboxInitHook 也会在 AgentLifecycleBootstrap 阶段创建 SysOperation 并注册到 AgentLifecycleContext，
      * 但 EdpaExtHandler.performInit() 运行在 Spring Bean 创建阶段，可能先于 Lifecycle 阶段。
      * 此处独立创建 SysOperation 供 Rail 注册使用，与 SandboxInitHook 的 ContainerManager.acquire() 互补。</p>
+      *
      */
 
     private static Optional<SysOperation> createSysOperationIfNeeded(EdpaSpringBootConfig config,
@@ -769,7 +871,9 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         }
     }
 
-    /** 构建 SandboxGatewayConfig（与 SandboxInitHook.buildGatewayConfig 逻辑一致）。 */
+    /**
+     * 构建 SandboxGatewayConfig（与 SandboxInitHook.buildGatewayConfig 逻辑一致）。
+     */
     private static SandboxGatewayConfig buildSandboxGatewayConfig(com.huawei.ascend.edp.config.SandboxConfig config) {
         ContainerScope scope;
         try {
@@ -805,6 +909,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      *
      * @param skillDeployPath 技能部署路径（如 /app/skills）
      * @return extraParams Map，包含 policy 和 policy_mode
+      *
      */
 
     private static java.util.Map<String, Object> buildSandboxPolicyExtraParams(String skillDeployPath) {
@@ -823,6 +928,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     /**
      * 构造 DeepAgentConfig（使用 EdpaSpringBootConfig.ModelConfig，Phase 2 合并版）。
+      *
      */
 
     private static DeepAgentConfig buildDeepAgentConfig(EdpaSpringBootConfig config, EdpConfig edpConfig,
@@ -905,27 +1011,37 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     // ===== 诊断方法 =====
 
-    /** Gets the deep agent. */
+    /**
+     * Gets the deep agent.
+     */
     public DeepAgent getDeepAgent() {
         return deepAgent;
     }
 
-    /** Gets the edp config. */
+    /**
+     * Gets the edp config.
+     */
     public EdpConfig getEdpConfig() {
         return edpConfig;
     }
 
-    /** Gets the governance config. */
+    /**
+     * Gets the governance config.
+     */
     public GovernanceConfig getGovernanceConfig() {
         return governanceConfig;
     }
 
-    /** Gets the spring boot config. */
+    /**
+     * Gets the spring boot config.
+     */
     public EdpaSpringBootConfig getSpringBootConfig() {
         return springBootConfig;
     }
 
-    /** Gets the scenario home path. */
+    /**
+     * Gets the scenario home path.
+     */
     public Path getScenarioHomePath() {
         return scenarioHomePath;
     }

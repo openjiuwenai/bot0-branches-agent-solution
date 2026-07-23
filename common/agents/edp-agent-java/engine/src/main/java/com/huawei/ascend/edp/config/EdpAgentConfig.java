@@ -17,6 +17,7 @@
 package com.huawei.ascend.edp.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,114 +43,164 @@ import java.util.Map;
  * </ul>
  *
  * @since 2024-01-01
+  *
  */
 
 public class EdpAgentConfig {
-    /** Agent 名称。 */
+    /**
+     * Agent 名称。
+     */
     private String name;
 
-    /** Agent 描述。 */
+    /**
+     * Agent 描述。
+     */
     private String description;
 
-    /** 框架配置节点。 */
+    /**
+     * 框架配置节点。
+     */
     private Framework framework;
 
-    /** 模型配置节点。 */
+    /**
+     * 模型配置节点。
+     */
     private Model model;
 
-    /** Versatile 服务配置节点。 */
+    /**
+     * Versatile 服务配置节点。
+     */
     private Versatile versatile;
 
-    /** Prompt 配置节点。 */
+    /**
+     * Prompt 配置节点。
+     */
     private Prompt prompt;
 
-    /** Skill 配置节点。 */
+    /**
+     * Skill 配置节点。
+     */
     private Skills skills;
 
-    /** Gets the name. */
+    /**
+     * Gets the name.
+     */
     public String getName() {
         return name;
     }
 
-    /** Sets the name. */
+    /**
+     * Sets the name.
+     */
     public void setName(String name) {
         this.name = name;
     }
 
-    /** Gets the description. */
+    /**
+     * Gets the description.
+     */
     public String getDescription() {
         return description;
     }
 
-    /** Sets the description. */
+    /**
+     * Sets the description.
+     */
     public void setDescription(String description) {
         this.description = description;
     }
 
-    /** Gets the framework. */
+    /**
+     * Gets the framework.
+     */
     public Framework getFramework() {
         return framework;
     }
 
-    /** Sets the framework. */
+    /**
+     * Sets the framework.
+     */
     public void setFramework(Framework framework) {
         this.framework = framework;
     }
 
-    /** Gets the model. */
+    /**
+     * Gets the model.
+     */
     public Model getModel() {
         return model;
     }
 
-    /** Sets the model. */
+    /**
+     * Sets the model.
+     */
     public void setModel(Model model) {
         this.model = model;
     }
 
-    /** Gets the versatile. */
+    /**
+     * Gets the versatile.
+     */
     public Versatile getVersatile() {
         return versatile;
     }
 
-    /** Sets the versatile. */
+    /**
+     * Sets the versatile.
+     */
     public void setVersatile(Versatile versatile) {
         this.versatile = versatile;
     }
 
-    /** Gets the prompt. */
+    /**
+     * Gets the prompt.
+     */
     public Prompt getPrompt() {
         return prompt;
     }
 
-    /** Sets the prompt. */
+    /**
+     * Sets the prompt.
+     */
     public void setPrompt(Prompt prompt) {
         this.prompt = prompt;
     }
 
-    /** Gets the skills. */
+    /**
+     * Gets the skills.
+     */
     public Skills getSkills() {
         return skills;
     }
 
-    /** Sets the skills. */
+    /**
+     * Sets the skills.
+     */
     public void setSkills(Skills skills) {
         this.skills = skills;
     }
 
     /**
      * 框架配置节点。
+      *
      */
 
     public static class Framework {
-        /** 框架运行选项。 */
+        /**
+         * 框架运行选项。
+         */
         private Options options;
 
-        /** Gets the options. */
+        /**
+         * Gets the options.
+         */
         public Options getOptions() {
             return options;
         }
 
-        /** Sets the options. */
+        /**
+         * Sets the options.
+         */
         public void setOptions(Options options) {
             this.options = options;
         }
@@ -157,31 +208,44 @@ public class EdpAgentConfig {
 
     /**
      * 框架运行选项。
+      *
      */
 
     public static class Options {
-        /** ReAct 最大迭代次数。 */
+        /**
+         * ReAct 最大迭代次数。
+         */
         private int maxIterations;
 
-        /** 是否启用 task loop。 */
+        /**
+         * 是否启用 task loop。
+         */
         private boolean enableTaskLoop;
 
-        /** Gets the max iterations. */
+        /**
+         * Gets the max iterations.
+         */
         public int getMaxIterations() {
             return maxIterations;
         }
 
-        /** Sets the max iterations. */
+        /**
+         * Sets the max iterations.
+         */
         public void setMaxIterations(int maxIterations) {
             this.maxIterations = maxIterations;
         }
 
-        /** Checks whether enable task loop. */
+        /**
+         * Checks whether enable task loop.
+         */
         public boolean isEnableTaskLoop() {
             return enableTaskLoop;
         }
 
-        /** Sets the enable task loop. */
+        /**
+         * Sets the enable task loop.
+         */
         public void setEnableTaskLoop(boolean enableTaskLoop) {
             this.enableTaskLoop = enableTaskLoop;
         }
@@ -189,57 +253,82 @@ public class EdpAgentConfig {
 
     /**
      * 模型后端配置。
+      *
      */
 
     public static class Model {
-        /** 模型 provider，例如 openai-compatible。 */
+        /**
+         * 模型 provider，例如 openai-compatible。
+         */
         private String provider;
 
-        /** 模型名称，例如 deepseek-v4-pro。 */
+        /**
+         * 模型名称，例如 deepseek-v4-pro。
+         */
         private String name;
 
-        /** 模型服务 baseUrl。 */
+        /**
+         * 模型服务 baseUrl。
+         */
         private String baseUrl;
 
-        /** 模型服务 API Key。 */
+        /**
+         * 模型服务 API Key。
+         */
         private String apiKey;
 
-        /** Gets the provider. */
+        /**
+         * Gets the provider.
+         */
         public String getProvider() {
             return provider;
         }
 
-        /** Sets the provider. */
+        /**
+         * Sets the provider.
+         */
         public void setProvider(String provider) {
             this.provider = provider;
         }
 
-        /** Gets the name. */
+        /**
+         * Gets the name.
+         */
         public String getName() {
             return name;
         }
 
-        /** Sets the name. */
+        /**
+         * Sets the name.
+         */
         public void setName(String name) {
             this.name = name;
         }
 
-        /** Gets the base url. */
+        /**
+         * Gets the base url.
+         */
         public String getBaseUrl() {
             return baseUrl;
         }
 
-        /** Sets the base url. */
+        /**
+         * Sets the base url.
+         */
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
         }
 
-        /** Gets the api key. */
+        /**
+         * Gets the api key.
+         */
         public String getApiKey() {
             return apiKey;
         }
 
-        /** Sets the api key. */
+        /**
+         * Sets the api key.
+         */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
         }
@@ -247,13 +336,18 @@ public class EdpAgentConfig {
 
     /**
      * Versatile 服务配置。
+      *
      */
 
     public static class Versatile {
-        /** Versatile REST 直连地址，含 {conversation_id} 等路径占位符。 */
+        /**
+         * Versatile REST 直连地址，含 {conversation_id} 等路径占位符。
+         */
         private String url;
 
-        /** adapter-versatile-agent-java 的 A2A SSE 入口；配置后优先于 url 直连。 */
+        /**
+         * adapter-versatile-agent-java 的 A2A SSE 入口；配置后优先于 url 直连。
+         */
         @JsonProperty("adapter_a2a_url")
         private String adapterA2aUrl;
         private String timeout = "30s";
@@ -263,62 +357,86 @@ public class EdpAgentConfig {
         private Map<String, String> queryParams = new LinkedHashMap<>();
         private Map<String, String> headers = new LinkedHashMap<>();
 
-        /** Gets the url. */
+        /**
+         * Gets the url.
+         */
         public String getUrl() {
             return url;
         }
 
-        /** Sets the url. */
+        /**
+         * Sets the url.
+         */
         public void setUrl(String url) {
             this.url = url;
         }
 
-        /** Gets the adapter a2a url. */
+        /**
+         * Gets the adapter a2a url.
+         */
         public String getAdapterA2aUrl() {
             return adapterA2aUrl;
         }
 
-        /** Sets the adapter a2a url. */
+        /**
+         * Sets the adapter a2a url.
+         */
         public void setAdapterA2aUrl(String adapterA2aUrl) {
             this.adapterA2aUrl = adapterA2aUrl;
         }
 
-        /** Gets the timeout. */
+        /**
+         * Gets the timeout.
+         */
         public String getTimeout() {
             return timeout;
         }
 
-        /** Sets the timeout. */
+        /**
+         * Sets the timeout.
+         */
         public void setTimeout(String timeout) {
             this.timeout = timeout;
         }
 
-        /** Gets the url variables. */
+        /**
+         * Gets the url variables.
+         */
         public Map<String, String> getUrlVariables() {
             return urlVariables;
         }
 
-        /** Sets the url variables. */
+        /**
+         * Sets the url variables.
+         */
         public void setUrlVariables(Map<String, String> urlVariables) {
             this.urlVariables = urlVariables != null ? urlVariables : new LinkedHashMap<>();
         }
 
-        /** Gets the query params. */
+        /**
+         * Gets the query params.
+         */
         public Map<String, String> getQueryParams() {
             return queryParams;
         }
 
-        /** Sets the query params. */
+        /**
+         * Sets the query params.
+         */
         public void setQueryParams(Map<String, String> queryParams) {
             this.queryParams = queryParams != null ? queryParams : new LinkedHashMap<>();
         }
 
-        /** Gets the headers. */
+        /**
+         * Gets the headers.
+         */
         public Map<String, String> getHeaders() {
             return headers;
         }
 
-        /** Sets the headers. */
+        /**
+         * Sets the headers.
+         */
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : new LinkedHashMap<>();
         }
@@ -326,28 +444,37 @@ public class EdpAgentConfig {
 
     /**
      * Skill 配置。
+      *
      */
 
     public static class Skills {
         private List<String> directories = new ArrayList<>();
         private String mode = "all";
 
-        /** Gets the directories. */
+        /**
+         * Gets the directories.
+         */
         public List<String> getDirectories() {
             return directories;
         }
 
-        /** Sets the directories. */
+        /**
+         * Sets the directories.
+         */
         public void setDirectories(List<String> directories) {
             this.directories = directories != null ? directories : new ArrayList<>();
         }
 
-        /** Gets the mode. */
+        /**
+         * Gets the mode.
+         */
         public String getMode() {
             return mode;
         }
 
-        /** Sets the mode. */
+        /**
+         * Sets the mode.
+         */
         public void setMode(String mode) {
             this.mode = mode;
         }
@@ -355,18 +482,25 @@ public class EdpAgentConfig {
 
     /**
      * Prompt 配置。
+      *
      */
 
     public static class Prompt {
-        /** 系统提示词。 */
+        /**
+         * 系统提示词。
+         */
         private String system;
 
-        /** Gets the system. */
+        /**
+         * Gets the system.
+         */
         public String getSystem() {
             return system;
         }
 
-        /** Sets the system. */
+        /**
+         * Sets the system.
+         */
         public void setSystem(String system) {
             this.system = system;
         }
@@ -377,70 +511,101 @@ public class EdpAgentConfig {
      *
      * 用于在 Spring Bean 创建阶段将环境变量中的密钥类配置注入到 agentConfig 中，
      * 因为 edp-agent.yaml 通过 Jackson 直读加载，不支持 Spring Boot ${...} 占位符替换。
+      *
      */
 
     public static class EnvOverrides {
-        /** API Key，从 EDP_AGENT_MODEL_API_KEY 环境变量注入。 */
+        /**
+         * API Key，从 EDP_AGENT_MODEL_API_KEY 环境变量注入。
+         */
         private String apiKey;
 
-        /** 模型 provider，从 EDP_AGENT_MODEL_PROVIDER 环境变量覆盖。 */
+        /**
+         * 模型 provider，从 EDP_AGENT_MODEL_PROVIDER 环境变量覆盖。
+         */
         private String modelProvider;
 
-        /** 模型 name，从 EDP_AGENT_MODEL_NAME 环境变量覆盖。 */
+        /**
+         * 模型 name，从 EDP_AGENT_MODEL_NAME 环境变量覆盖。
+         */
         private String modelName;
 
-        /** 模型 baseUrl，从 EDP_AGENT_MODEL_BASE_URL 环境变量覆盖。 */
+        /**
+         * 模型 baseUrl，从 EDP_AGENT_MODEL_BASE_URL 环境变量覆盖。
+         */
         private String modelBaseUrl;
 
-        /** Versatile URL，从 EDP_AGENT_VERSATILE_URL 环境变量覆盖。 */
+        /**
+         * Versatile URL，从 EDP_AGENT_VERSATILE_URL 环境变量覆盖。
+         */
         private String versatileUrl;
 
-        /** Gets the api key. */
+        /**
+         * Gets the api key.
+         */
         public String getApiKey() {
             return apiKey;
         }
 
-        /** Sets the api key. */
+        /**
+         * Sets the api key.
+         */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
         }
 
-        /** Gets the model provider. */
+        /**
+         * Gets the model provider.
+         */
         public String getModelProvider() {
             return modelProvider;
         }
 
-        /** Sets the model provider. */
+        /**
+         * Sets the model provider.
+         */
         public void setModelProvider(String modelProvider) {
             this.modelProvider = modelProvider;
         }
 
-        /** Gets the model name. */
+        /**
+         * Gets the model name.
+         */
         public String getModelName() {
             return modelName;
         }
 
-        /** Sets the model name. */
+        /**
+         * Sets the model name.
+         */
         public void setModelName(String modelName) {
             this.modelName = modelName;
         }
 
-        /** Gets the model base url. */
+        /**
+         * Gets the model base url.
+         */
         public String getModelBaseUrl() {
             return modelBaseUrl;
         }
 
-        /** Sets the model base url. */
+        /**
+         * Sets the model base url.
+         */
         public void setModelBaseUrl(String modelBaseUrl) {
             this.modelBaseUrl = modelBaseUrl;
         }
 
-        /** Gets the versatile url. */
+        /**
+         * Gets the versatile url.
+         */
         public String getVersatileUrl() {
             return versatileUrl;
         }
 
-        /** Sets the versatile url. */
+        /**
+         * Sets the versatile url.
+         */
         public void setVersatileUrl(String versatileUrl) {
             this.versatileUrl = versatileUrl;
         }

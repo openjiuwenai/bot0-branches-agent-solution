@@ -17,8 +17,10 @@
 package com.huawei.ascend.edp.tools;
 
 import com.openjiuwen.core.foundation.tool.Tool;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +28,7 @@ import java.util.Map;
  * EDPAgent MCP 调用工具。
  *
  * @since 2024-01-01
+  *
  */
 
 public final class CallMcpTool {
@@ -34,7 +37,9 @@ public final class CallMcpTool {
     private CallMcpTool() {
     }
 
-    /** Builds the tool instance. */
+    /**
+     * Builds the tool instance.
+     */
     public static Tool build() {
         // 对齐 Python call_mcp.py L31-34: [call_mcp] script_command=..., script_params=...
         LOGGER.info("[call_mcp] building MCP tool: {}", EdpaBusinessTools.TOOL_CALL_MCP);

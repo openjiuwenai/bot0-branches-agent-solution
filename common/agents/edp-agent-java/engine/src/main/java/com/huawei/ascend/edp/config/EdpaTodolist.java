@@ -18,6 +18,7 @@ package com.huawei.ascend.edp.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,6 +50,7 @@ import java.util.Set;
  * {@code catalog_id} 作为 entry 的内部主键字段名保留（字段层语义）。</p>
  *
  * @since 2024-01-01
+  *
  */
 
 public class EdpaTodolist {
@@ -56,18 +58,21 @@ public class EdpaTodolist {
 
     /**
      * 任务定义列表（保持配置顺序）。
+      *
      */
 
     private final List<TodoEntry> entries;
 
     /**
      * 动态路径规则列表。
+      *
      */
 
     private final List<DynamicPath> dynamicPaths;
 
     /**
      * catalog_id 到 TodoEntry 的索引，O(1) 查询。
+      *
      */
 
     private final Map<String, TodoEntry> index;
@@ -80,6 +85,7 @@ public class EdpaTodolist {
      * @throws IllegalArgumentException 校验失败（catalog_id 重复、引用不存在、依赖图有环）
      *
      * @return result
+      *
      */
 
     public EdpaTodolist(List<ActRuleConfig.TodolistEntry> rawEntries, List<ActRuleConfig.TodolistPath> rawPaths) {
@@ -113,17 +119,23 @@ public class EdpaTodolist {
         return index;
     }
 
-    /** Gets the entries. */
+    /**
+     * Gets the entries.
+     */
     public List<TodoEntry> getEntries() {
         return entries;
     }
 
-    /** Gets the dynamic paths. */
+    /**
+     * Gets the dynamic paths.
+     */
     public List<DynamicPath> getDynamicPaths() {
         return dynamicPaths;
     }
 
-    /** Find by catalog id. */
+    /**
+     * Find by catalog id.
+     */
     public TodoEntry findByCatalogId(String catalogId) {
         return index.get(catalogId);
     }
@@ -132,6 +144,7 @@ public class EdpaTodolist {
      * 是否存在动态路径规则。
      *
      * @return 存在 dynamic_paths 返回 true
+      *
      */
 
     public boolean hasDynamicPaths() {
@@ -140,6 +153,7 @@ public class EdpaTodolist {
 
     /**
      * 校验 depends_on 和 dynamic_paths.skip_steps 引用的 catalog_id 都存在。
+      *
      */
 
     private void validateReferences() {
@@ -163,6 +177,7 @@ public class EdpaTodolist {
 
     /**
      * 校验 depends_on 构成的有向图无环（Kahn's 算法）。
+      *
      */
 
     private void validateAcyclic() {
@@ -207,6 +222,7 @@ public class EdpaTodolist {
 
     /**
      * 任务定义（catalog_id 为内部主键字段，含完整字段）。
+      *
      */
 
     public static class TodoEntry {
@@ -226,27 +242,37 @@ public class EdpaTodolist {
             this.skill = skill;
         }
 
-        /** Gets the catalog id. */
+        /**
+         * Gets the catalog id.
+         */
         public String getCatalogId() {
             return catalogId;
         }
 
-        /** Gets the content. */
+        /**
+         * Gets the content.
+         */
         public String getContent() {
             return content;
         }
 
-        /** Gets the description. */
+        /**
+         * Gets the description.
+         */
         public String getDescription() {
             return description;
         }
 
-        /** Gets the depends on. */
+        /**
+         * Gets the depends on.
+         */
         public List<String> getDependsOn() {
             return dependsOn;
         }
 
-        /** Gets the skill. */
+        /**
+         * Gets the skill.
+         */
         public String getSkill() {
             return skill;
         }
@@ -254,6 +280,7 @@ public class EdpaTodolist {
 
     /**
      * 动态路径规则（LLM 根据业务结果自主判断是否切换）。
+      *
      */
 
     public static class DynamicPath {
@@ -273,27 +300,37 @@ public class EdpaTodolist {
             this.redirect = redirect;
         }
 
-        /** Gets the path id. */
+        /**
+         * Gets the path id.
+         */
         public String getPathId() {
             return pathId;
         }
 
-        /** Gets the description. */
+        /**
+         * Gets the description.
+         */
         public String getDescription() {
             return description;
         }
 
-        /** Gets the trigger. */
+        /**
+         * Gets the trigger.
+         */
         public String getTrigger() {
             return trigger;
         }
 
-        /** Gets the skip steps. */
+        /**
+         * Gets the skip steps.
+         */
         public List<String> getSkipSteps() {
             return skipSteps;
         }
 
-        /** Gets the redirect. */
+        /**
+         * Gets the redirect.
+         */
         public String getRedirect() {
             return redirect;
         }
