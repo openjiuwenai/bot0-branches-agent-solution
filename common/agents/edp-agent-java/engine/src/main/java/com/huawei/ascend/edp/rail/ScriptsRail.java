@@ -51,7 +51,8 @@ import java.util.Optional;
  * <p>六职责：</p>
  * <ol>
  *     <li>{@link #beforeInvoke}：首轮开场（request_start 不作为独立事件，对齐 Python 理念）。</li>
- *     <li>{@link #beforeToolCall}：ask_user 解析 {@code response_template_*} / cancel_task 写 reason → {@code _edp_response_template}。</li>
+ *     <li>{@link #beforeToolCall}：ask_user 解析 {@code response_template_*} /
+ *         cancel_task 写 reason -> {@code _edp_response_template}。</li>
  *     <li>{@link #afterToolCall}：call_versatile/call_mcp 结果话术兜底。</li>
  *     <li>{@link #afterInvoke}：出口发射 {@code _edp_response_template}（对齐 Python 流末出口）。</li>
  *     <li>{@link #complianceGate}：配置外话术替换为 {@code out_of_scope}。</li>

@@ -905,7 +905,8 @@ public class VersatileInterruptRail extends AgentRail {
 
         // 兜底逻辑（方案2.3）：versatile_query 缓存缺失时，从 mcp_products_data 构造 rich query，
         // 确保 VersatileInterruptRail 委托请求包含足够的产品数据信息。
-        Object mcpProductsData = toolDataChannel.getObject(channelKey, McpInterruptRail.DEFAULT_MCP_PRODUCTS_KEY).orElse(null);
+        Object mcpProductsData = toolDataChannel.getObject(channelKey,
+                McpInterruptRail.DEFAULT_MCP_PRODUCTS_KEY).orElse(null);
         if (mcpProductsData instanceof Map<?, ?> productsMap && !productsMap.isEmpty()) {
             String constructedQuery = buildQueryFromProducts(productsMap);
             if (constructedQuery != null) {

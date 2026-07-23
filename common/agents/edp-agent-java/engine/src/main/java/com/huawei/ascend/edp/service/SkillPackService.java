@@ -33,7 +33,8 @@ import java.util.stream.Stream;
  *
  * <p>对应特性：5.2.1（自动打包）+ 5.2.2（自动上传）+ 5.2.3（自动解压）+ 5.2.4（解压目录可配置）</p>
  *
- * <p>打包流程：SkillsPackService.packSkills() → SysOperation.fs().uploadFile() → SysOperation.shell().executeCmd("tar -xzf ...")</p>
+ * <p>打包流程：SkillsPackService.packSkills() -> SysOperation.fs().uploadFile()
+ * -> SysOperation.shell().executeCmd("tar -xzf ...")</p>
  *
  * @since 2024-01-01
  */

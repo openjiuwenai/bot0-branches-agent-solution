@@ -67,7 +67,8 @@ import java.util.stream.Stream;
  *
  * <p>事件发射职责（对齐设计文档 §7.1 各 Hook 职责表）：</p>
  * <ul>
- *     <li>{@code beforeInvoke}：发射 {@code conversation_start}；<b>不发跨轮 todolist</b>（Rule 9），只静默初始化 todo 状态追踪。</li>
+ *     <li>{@code beforeInvoke}：发射 {@code conversation_start}；<b>不发跨轮 todolist</b>（Rule 9），
+ *     只静默初始化 todo 状态追踪。</li>
  *     <li>{@code beforeModelCall}：不发任何事件（think_start 移到 afterModelCall，§7.1）。</li>
  *     <li>{@code afterModelCall}：有 reasoning → {@code think_start → think_chunk → think_end}（每轮一对，严格pair）；
  *         finish_reason=stop 且无 tool_calls → {@code final_answer_start → final_answer_chunk → final_answer_end}。
@@ -75,8 +76,10 @@ import java.util.stream.Stream;
  *     <li>{@code beforeToolCall}：业务工具（call_versatile/call_mcp）→ {@code tool_start}；
  *         PLAN_FIRST blocked → 不发。</li>
  *     <li>{@code afterToolCall}：业务工具 → {@code tool_end}；todo_create/todo_modify → 每次 status 变化必发
- *         {@code todolist_start/item×N/end}（逐条，Rule 12）；位置：todo_end 转移 todolist 在 todo_end 之后（Rule 10），
- *         todo_start 转移 todolist 在 todo_start 之前（Rule 11），路径切换独立；ask_user 恢复 → {@code interrupt_end}。</li>
+ *         {@code todolist_start/item×N/end}（逐条，Rule 12）；
+ *         位置：todo_end 转移 todolist 在 todo_end 之后（Rule 10），
+ *         todo_start 转移 todolist 在 todo_start 之前（Rule 11），
+ *         路径切换独立；ask_user 恢复 -> {@code interrupt_end}。</li>
  *     <li>{@code onModelException}：如 think_start unclosed → {@code think_end}；{@code error_event{stage:model}}；
  *         {@code conversation_end}（异常不破坏pair，Rule 8）。</li>
  *     <li>{@code onToolException}：ToolInterruptException → {@code interrupt_start{tool}}（正常中断）；
@@ -115,7 +118,8 @@ public class EdpaEventRail extends DeepAgentRail {
     private static final String KEY_PENDING_THINK = "_edp_pending_think";
 
     /**
-     * 缓存 call_versatile 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，对齐 Python _last_query_intent）。
+     * 缓存 call_versatile 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，
+     * 对齐 Python _last_query_intent）。
      */
     private static final String KEY_LAST_QUERY_INTENT = "_edp_last_query_intent";
 
@@ -344,7 +348,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 §7.2 判断流程：</p>
      * <pre>
      * ① 有 reasoning → emit think_start → think_chunk{content:reasoning} → think_end
-     * ② finish_reason=stop 且无 tool_calls → emit final_answer_start → final_answer_chunk{content:content} → final_answer_end
+     * ② finish_reason=stop 且无 tool_calls -> emit final_answer_start
+     * -> final_answer_chunk{content:content} -> final_answer_end
      * ③ 有 tool_calls → 不发 final_answer，由后续 beforeToolCall/afterToolCall 处理
      * </pre>
      *
@@ -386,7 +391,8 @@ public class EdpaEventRail extends DeepAgentRail {
             for (ToolCall tc : msg.getToolCalls()) {
                 if (TOOL_TODO_CREATE.equals(tc.getName())) {
                     ctx.getExtra().put(KEY_PENDING_PLANNING_START, true);
-                    LOGGER.info("[EDPA-DIAG] afterModelCall sid={} -> detected todo_create, mark emit planning_start", sid);
+                    LOGGER.info("[EDPA-DIAG] afterModelCall sid={} -> detected todo_create, "
+                            + "mark emit planning_start", sid);
                     break;
                 }
             }
@@ -463,7 +469,8 @@ public class EdpaEventRail extends DeepAgentRail {
                 ? "interrupt-handled"
                 : "real-exec";
 
-        // 缓存 call_versatile 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，对齐 Python _last_query_intent）
+        // 缓存 call_versatile 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，
+        // 对齐 Python _last_query_intent）
         String queryIntent = "";
         if (TOOL_CALL_VERSATILE.equals(toolName)) {
             Map<String, Object> args = normalizeToolArgs(inputs.getToolArgs());
@@ -508,7 +515,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * <ul>
      *     <li>业务工具 → tool_end{tool, data}（Rule 6）</li>
      *     <li>ask_user 恢复（_skip_tool=true 且 interruptActive）→ interrupt_end{tool}（Rule 7）</li>
-     *     <li>todo_create/todo_modify → todolist_start/item/end（指纹变化时）+ todo_start/todo_end（基于状态转移，§7.3）</li>
+     *     <li>todo_create/todo_modify -> todolist_start/item/end（指纹变化时）
+     *     + todo_start/todo_end（基于状态转移，§7.3）</li>
      * </ul>
      *
      * @param ctx the ctx value
@@ -671,7 +679,8 @@ public class EdpaEventRail extends DeepAgentRail {
     }
 
     /**
-     * onModelException：关闭unclosed的 think_start（保 Rule 2）+ error_event{stage:model} + conversation_end（保 Rule 1）。
+     * onModelException：关闭unclosed的 think_start（保 Rule 2）
+     * + error_event{stage:model} + conversation_end（保 Rule 1）。
      *
      * <p>设计文档 Rule 8：异常不破坏pair。所有已打开的 start 必须先发对应 end 关闭，
      * 再发 error_event，最后 conversation_end。像关括号一样从内到外依次关闭。</p>
@@ -720,7 +729,8 @@ public class EdpaEventRail extends DeepAgentRail {
                 exception == null ? "null" : truncate(String.valueOf(exception.getMessage()), 200));
 
         // ToolInterruptException 是正常中断机制（如 ask_user），不应作为 error_event
-        // 框架可能将 ToolInterruptException 包装在 RuntimeException 中（"Error invoking rail callback: beforeToolCall"），
+        // 框架可能将 ToolInterruptException 包装在 RuntimeException 中
+        // （"Error invoking rail callback: beforeToolCall"），
         // 需要递归检查 cause 链找到被包装的 ToolInterruptException。
         Throwable cause = exception;
         while (cause != null && !(cause instanceof ToolInterruptException)) {

@@ -66,7 +66,8 @@ public class VersatileAgentConfiguration {
     AgentHandler versatileAgentHandler(VersatileProperties properties) {
         // 对齐 Python app.py L107-116: VersatileProxy 初始化 + headers template keys 确认
         LOGGER.info(
-                "[VersatileAdapter] Registering VersatileAgentHandler bean: AGENT_ID={}, urlTemplate={}, resultNodeName={}",
+                "[VersatileAdapter] Registering VersatileAgentHandler bean: AGENT_ID={}, "
+                        + "urlTemplate={}, resultNodeName={}",
                 AGENT_ID, properties.getUrlTemplate(), properties.getResultNodeName());
         return new VersatileAgentHandler(properties);
     }

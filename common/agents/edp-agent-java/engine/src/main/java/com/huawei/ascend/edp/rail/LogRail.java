@@ -46,7 +46,8 @@ import java.util.Optional;
  *     <li>记录模型调用后的响应对象。</li>
  *     <li>记录模型 token 使用量，支撑端到端穿刺证据收集。</li>
  *     <li>记录工具调用完成事件。</li>
- *     <li>afterModelCall 中对 tool_call.arguments 做非法 JSON 自动修复（对齐 Python LogRail._repair_tool_call_arguments）。</li>
+ *     <li>afterModelCall 中对 tool_call.arguments 做非法 JSON 自动修复
+ *     （对齐 Python LogRail._repair_tool_call_arguments）。</li>
  * </ul>
  *
  * <p>对外提供的接口：</p>
@@ -117,7 +118,7 @@ public class LogRail extends AgentRail {
             Object lastMessage = inputs.getMessages().isEmpty()
                     ? null
                     : inputs.getMessages().get(inputs.getMessages().size() - 1);
-            LOGGER.info("E2E_MODEL_INPUT messageCount={ // no-op }, lastMessageType={ // no-op }, lastMessageHash={ // no-op }",
+            LOGGER.info("E2E_MODEL_INPUT messageCount={}, lastMessageType={}, lastMessageHash={}",
                     inputs.getMessages().size(), lastMessage != null ? lastMessage.getClass().getSimpleName() : "null",
                     lastMessage != null ? Integer.toHexString(System.identityHashCode(lastMessage)) : "null");
         }
@@ -148,13 +149,13 @@ public class LogRail extends AgentRail {
             return;
         }
         Object response = inputs.getResponse();
-        LOGGER.info("E2E_MODEL_OUTPUT responseType={ // no-op }, finishReason={ // no-op }", response.getClass().getSimpleName(),
+        LOGGER.info("E2E_MODEL_OUTPUT responseType={}, finishReason={}", response.getClass().getSimpleName(),
                 response instanceof AssistantMessage am ? am.getFinishReason() : "N/A");
 
         // 对齐 Python agent.py L1321-1326: [EDP-LLM-EMPTY] 空 response 快速过滤
         if (response instanceof AssistantMessage msg
                 && (msg.getContent() == null || String.valueOf(msg.getContent()).isBlank())) {
-            LOGGER.warn("[EDP-LLM-EMPTY] empty final answer: finishReason={ // no-op }, toolCalls={ // no-op }, contentIsNull={ // no-op }",
+            LOGGER.warn("[EDP-LLM-EMPTY] empty final answer: finishReason={}, toolCalls={}, contentIsNull={}",
                     msg.getFinishReason(), msg.getToolCalls() != null ? msg.getToolCalls().size() : 0,
                     msg.getContent() == null);
         }
@@ -164,10 +165,10 @@ public class LogRail extends AgentRail {
             String content = String.valueOf(rawMsg.getContent());
             int contentLen = content != null && !"null".equals(content) ? content.length() : 0;
             String preview = contentLen > 0 ? content.substring(0, Math.min(contentLen, 500)) : "";
-            LOGGER.debug("[EDP-LLM-RAW] answer event: contentLen={ // no-op }, finishReason={ // no-op }, contentPreview={ // no-op }", contentLen,
+            LOGGER.debug("[EDP-LLM-RAW] answer event: contentLen={}, finishReason={}, contentPreview={}", contentLen,
                     rawMsg.getFinishReason(), preview);
         } else {
-            LOGGER.debug("[EDP-LLM-RAW] answer event: responseType={ // no-op }", response.getClass().getSimpleName());
+            LOGGER.debug("[EDP-LLM-RAW] answer event: responseType={}", response.getClass().getSimpleName());
         }
 
         // 关键判断：只有 AssistantMessage 响应才可能携带 usage 元数据和 tool_calls。
@@ -175,7 +176,7 @@ public class LogRail extends AgentRail {
             repairToolCallArguments(assistantMessage);
             UsageMetadata usage = assistantMessage.getUsageMetadata();
             if (usage != null) {
-                LOGGER.info("E2E_MODEL_USAGE inputTokens={ // no-op }, outputTokens={ // no-op }, totalTokens={ // no-op }, model={ // no-op }",
+                LOGGER.info("E2E_MODEL_USAGE inputTokens={}, outputTokens={}, totalTokens={}, model={}",
                         usage.getInputTokens(), usage.getOutputTokens(), usage.getTotalTokens(), usage.getModelName());
             } else {
                 LOGGER.info("E2E_MODEL_USAGE null");
@@ -199,14 +200,14 @@ public class LogRail extends AgentRail {
     public void afterToolCall(AgentCallbackContext ctx) {
         // 关键判断：只有工具调用上下文才记录工具名。
         if (ctx.getInputs() instanceof ToolCallInputs inputs) {
-            LOGGER.info("LogRail: tool call completed, toolName={ // no-op }", inputs.getToolName());
+            LOGGER.info("LogRail: tool call completed, toolName={}", inputs.getToolName());
         }
     }
 
     /**
      * 对 response.tool_calls 里 arguments 不合法的 JSON 做 in-place 自动修复。
      *
-     * <p>对齐 Python {@code LogRail._repair_tool_call_arguments}：遍历未闭合的 {@code { // no-op } / {@code [}
+     * <p>对齐 Python {@code LogRail._repair_tool_call_arguments}：遍历未闭合的 {@code {} / {@code [}
      * 栈底，按相反顺序补齐 {@code }} / {@code ]}。对"丢末尾 }"这种最常见的 LLM streaming quirk 100% 生效。
      * 命中时打 WARNING；修复后仍非法（极罕见）时打 ERROR。</p>
      *
@@ -231,32 +232,32 @@ public class LogRail extends AgentRail {
             }
 
             String toolName = toolCall.getName();
-            LOGGER.info("[LogRail] before repair | name={ // no-op } | args_len={ // no-op } | args={ // no-op }", toolName, args.length(),
+            LOGGER.info("[LogRail] before repair | name={} | args_len={} | args={}", toolName, args.length(),
                     abbreviate(args, 200));
-            LOGGER.debug("[LogRail] before repair FULL | name={ // no-op } | args={ // no-op }", toolName, args);
+            LOGGER.debug("[LogRail] before repair FULL | name={} | args={}", toolName, args);
 
             String repaired = repairMalformedJson(args).orElse(null);
             if (repaired == null || repaired.equals(args)) {
                 LOGGER.error(
-                        "[LogRail] FAILED to repair malformed tool_call.arguments | name={ // no-op } | "
-                                + "args_len={ // no-op } | args_tail={ // no-op }",
+                        "[LogRail] FAILED to repair malformed tool_call.arguments | name={} | "
+                                + "args_len={} | args_tail={}",
                         toolName, args.length(), abbreviateTail(args, 60));
                 continue;
             }
 
             if (!isValidJson(repaired)) {
-                LOGGER.error("[LogRail] repaired args still invalid | name={ // no-op } | repaired_tail={ // no-op }", toolName,
+                LOGGER.error("[LogRail] repaired args still invalid | name={} | repaired_tail={}", toolName,
                         abbreviateTail(repaired, 60));
                 continue;
             }
 
             toolCall.setArguments(repaired);
-            LOGGER.info("[LogRail] after repair | name={ // no-op } | repaired_len={ // no-op } | repaired={ // no-op }", toolName, repaired.length(),
+            LOGGER.info("[LogRail] after repair | name={} | repaired_len={} | repaired={}", toolName, repaired.length(),
                     abbreviate(repaired, 200));
-            LOGGER.debug("[LogRail] after repair FULL | name={ // no-op } | repaired={ // no-op }", toolName, repaired);
+            LOGGER.debug("[LogRail] after repair FULL | name={} | repaired={}", toolName, repaired);
             LOGGER.warn(
-                    "[LogRail] auto-repaired malformed tool_call.arguments | name={ // no-op } | "
-                            + "diff={ // no-op } chars added | original_tail={ // no-op } | repaired_tail={ // no-op }",
+                    "[LogRail] auto-repaired malformed tool_call.arguments | name={} | "
+                            + "diff={} chars added | original_tail={} | repaired_tail={}",
                     toolName, repaired.length() - args.length(), abbreviateTail(args, 40),
                     abbreviateTail(repaired, 40));
         }
@@ -272,7 +273,7 @@ public class LogRail extends AgentRail {
     }
 
     /**
-     * 修复非法 JSON：遍历字符串，维护未闭合的 {@code { // no-op } / {@code [} 栈（字符串字面量内的括号忽略），
+     * 修复非法 JSON：遍历字符串，维护未闭合的 {@code {} / {@code [} 栈（字符串字面量内的括号忽略），
      * 按栈逆序补齐闭合符号。对齐 Python {@code AbilityManager._repair_tool_arguments_json}。
      *
      * @param json the json value

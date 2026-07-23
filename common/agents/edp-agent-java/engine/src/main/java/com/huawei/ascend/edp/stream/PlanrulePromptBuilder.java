@@ -67,8 +67,8 @@ public class PlanrulePromptBuilder {
         }
 
         LOGGER.info(
-                "PlanrulePromptBuilder: role=[{ // no-op }], description=[{ // no-op }], supplementaryPrompt=[{ // no-op }], "
-                        + "scope.allowed=[{ // no-op }], scope.denied=[{ // no-op }]",
+                "PlanrulePromptBuilder: role=[{}], description=[{}], supplementaryPrompt=[{}], "
+                        + "scope.allowed=[{}], scope.denied=[{}]",
                 planrule.getRole(), planrule.getDescription(), planrule.getSupplementaryPrompt(),
                 planrule.getScope() != null ? planrule.getScope().getAllowed() : "null",
                 planrule.getScope() != null ? planrule.getScope().getDenied() : "null");
@@ -106,7 +106,7 @@ public class PlanrulePromptBuilder {
         appendSupplementaryPromptSection(sb, planrule);
 
         String result = sb.toString().trim();
-        LOGGER.info("PlanrulePromptBuilder: final fragment length={ // no-op }, content=\n{ // no-op }", result.length(), result);
+        LOGGER.info("PlanrulePromptBuilder: final fragment length={}, content=\n{}", result.length(), result);
         return result;
     }
 

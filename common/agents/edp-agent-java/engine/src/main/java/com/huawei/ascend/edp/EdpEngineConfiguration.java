@@ -115,7 +115,8 @@ public class EdpEngineConfiguration {
      *
      */
 
-    private static Optional<SandboxClient> resolveDecoratedSandboxClient(ObjectProvider<AgentCoreSandboxClientFactory> provider) {
+    private static Optional<SandboxClient> resolveDecoratedSandboxClient(
+            ObjectProvider<AgentCoreSandboxClientFactory> provider) {
         AgentCoreSandboxClientFactory factory = provider.getIfAvailable();
         if (factory == null) {
             LOGGER.info("[EDP-SANDBOX] AgentCoreSandboxClientFactory absent, using Path 1 (direct)");

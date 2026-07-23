@@ -143,7 +143,7 @@ public class SysScriptsConfig {
                 loadFromFile(filePath);
                 this.loaded = true;
                 loadedFromFile = true;
-                LOGGER.info("SysScriptsConfig loaded from file: { // no-op }", filePath);
+                LOGGER.info("SysScriptsConfig loaded from file: {}", filePath);
             } catch (IOException | RuntimeException e) {
                 throw new IllegalStateException("加载场景话术配置失败: " + filePath, e);
             }
@@ -151,7 +151,8 @@ public class SysScriptsConfig {
 
         // 2. 文件系统路径不存在 → 尝试从 classpath 加载
         if (!loadedFromFile) {
-            // 从完整路径中提取相对路径（如 src/main/resources/governance/scriptconfig.yaml → governance/scriptconfig.yaml）
+            // 从完整路径中提取相对路径
+            // （如 src/main/resources/governance/scriptconfig.yaml -> governance/scriptconfig.yaml）
             String relativePath = extractClasspathResource(configPath);
 
             // 尝试多个可能的 classpath 资源路径
@@ -173,18 +174,19 @@ public class SysScriptsConfig {
                         aliasGovernancePrefixes();
                         inferScriptKeys(templates, scriptKeysMap);
                         this.loaded = true;
-                        LOGGER.info("SysScriptsConfig loaded from classpath: { // no-op }", resourcePath);
+                        LOGGER.info("SysScriptsConfig loaded from classpath: {}", resourcePath);
                         loadedFromFile = true;
                         break;
                     }
                 } catch (IOException e) {
-                    LOGGER.debug("Failed to load from classpath { // no-op }: { // no-op }", resourcePath, e.getMessage());
+                    LOGGER.debug("Failed to load from classpath {}: {}", resourcePath, e.getMessage());
                 }
             }
         }
 
         if (!loadedFromFile) {
-            throw new IllegalStateException("话术配置不存在: " + configPath + "（文件系统路径不存在，classpath 中也未找到）");
+            throw new IllegalStateException("话术配置不存在: " + configPath
+                    + "（文件系统路径不存在，classpath 中也未找到）");
         }
     }
 
@@ -222,7 +224,7 @@ public class SysScriptsConfig {
         // 自动推断话术键映射
         inferScriptKeys(templates, scriptKeysMap);
         loaded = true;
-        LOGGER.info("SysScriptsConfig loaded from { // no-op }, templates={ // no-op }, scriptKeys={ // no-op }, interruptSource={ // no-op }", path,
+        LOGGER.info("SysScriptsConfig loaded from {}, templates={}, scriptKeys={}, interruptSource={}", path,
                 templates.size(), scriptKeysMap.size(), interruptSource);
     }
 
@@ -251,7 +253,7 @@ public class SysScriptsConfig {
 
                 // 映射: shortKey → key（保留 general_scripts. 前缀供后续查找）
                 outScriptKeys.put(shortKey, key);
-                LOGGER.debug("Inferred script key: { // no-op } -> { // no-op }", shortKey, key);
+                LOGGER.debug("Inferred script key: {} -> {}", shortKey, key);
             }
         }
 
@@ -266,7 +268,7 @@ public class SysScriptsConfig {
 
             // 顶层键自动映射到自身
             outScriptKeys.put(key, key);
-            LOGGER.debug("Inferred top-level key: { // no-op } -> { // no-op }", key, key);
+            LOGGER.debug("Inferred top-level key: {} -> {}", key, key);
         }
     }
 
@@ -567,7 +569,7 @@ public class SysScriptsConfig {
         }
 
         queryPatterns = new ArrayList<>(mergedByKeywords.values());
-        LOGGER.info("SysScriptsConfig merged query_patterns: { // no-op } entries (from { // no-op } sources)", queryPatterns.size(),
+        LOGGER.info("SysScriptsConfig merged query_patterns: {} entries (from {} sources)", queryPatterns.size(),
                 queryPatternsSources.size());
         return queryPatterns;
     }
@@ -610,7 +612,7 @@ public class SysScriptsConfig {
                 }
             }
         } catch (JsonProcessingException e) {
-            LOGGER.warn("Failed to parse query_patterns from prefix { // no-op }: { // no-op }", prefix, e.getMessage());
+            LOGGER.warn("Failed to parse query_patterns from prefix {}: {}", prefix, e.getMessage());
         }
         return result;
     }
@@ -754,7 +756,7 @@ public class SysScriptsConfig {
         }
         if (!source.isEmpty()) {
             queryPatternsSources.add(source);
-            LOGGER.info("SysScriptsConfig collected query_patterns source: { // no-op } entries", source.size());
+            LOGGER.info("SysScriptsConfig collected query_patterns source: {} entries", source.size());
         }
     }
 
@@ -803,7 +805,7 @@ public class SysScriptsConfig {
             String val = s.trim().toLowerCase(Locale.ROOT);
             if ("script".equals(val) || "llm".equals(val)) {
                 interruptSource = val;
-                LOGGER.info("SysScriptsConfig interrupt_source={ // no-op }", val);
+                LOGGER.info("SysScriptsConfig interrupt_source={}", val);
             }
         }
     }

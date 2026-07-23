@@ -28,7 +28,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <ul>
  *     <li>{@code com.openjiuwen.service.app.autoconfigure} - agent-runtime A2A/Query endpoints</li>
  *     <li>{@code com.openjiuwen.service.adapters.agentcore.autoconfigure} - agentcore middleware adapters</li>
- *     <li>{@code com.openjiuwen.service.adapters.agentcore.ext.autoconfigure} - AgentCoreExt auto-config + RemoteA2aToolInstaller</li>
+ *     <li>{@code com.openjiuwen.service.adapters.agentcore.ext.autoconfigure} -
+ *         AgentCoreExt auto-config + RemoteA2aToolInstaller</li>
  *     <li>{@code com.huawei.ascend.edp} - EDPAgent 自身 Bean</li>
  * </ul>
  *

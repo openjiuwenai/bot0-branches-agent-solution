@@ -289,7 +289,8 @@ public class EdpaTodoRail extends DeepAgentRail {
                 LOGGER.info("[EDPA-DIAG] MAX_SUBTASKS tool=todo_create taskCount={} > maxSubtasks={}, blocked",
                         taskCount, actrule.getMaxSubtasks());
                 ctx.getExtra().put(ScriptConstants.KEY_SKIP_TOOL, Boolean.TRUE);
-                String synthetic = "{\"error\":\"MAX_SUBTASKS_EXCEEDED\",\"message\":\"子任务数量 " + taskCount + " 超过上限 "
+                String synthetic = "{\"error\":\"MAX_SUBTASKS_EXCEEDED\","
+                        + "\"message\":\"子任务数量 " + taskCount + " 超过上限 "
                         + actrule.getMaxSubtasks() + "，请精简任务列表后重试。\"}";
                 inputs.setToolResult(synthetic);
                 ToolCall tc = inputs.getToolCall();
@@ -309,7 +310,8 @@ public class EdpaTodoRail extends DeepAgentRail {
     }
 
     /**
-     * 遍历 todo_create 的 tasks[]，对每个带 catalog_id 的 task 调 enrichArgs enriched（含 meta_data.catalog_id anchor）。
+     * 遍历 todo_create 的 tasks[]，对每个带 catalog_id 的 task 调 enrichArgs enriched
+     * （含 meta_data.catalog_id anchor）。
      * Jackson 解析出的 task 是可变 LinkedHashMap，原地修改后随 args 一起回写。
      *
      * @param tasksObj the tasksObj value
@@ -364,7 +366,8 @@ public class EdpaTodoRail extends DeepAgentRail {
             return; // 已规划，放行
         }
         LOGGER.info(
-                "[EDPA-DIAG] PLAN_GUARD tool={} BLOCK (session not planned, block and steering LLM to call todo_create first)",
+                "[EDPA-DIAG] PLAN_GUARD tool={} BLOCK "
+                        + "(session not planned, block and steering LLM to call todo_create first)",
                 toolName);
         String synthetic = "{\"error\":\"PLAN_FIRST\",\"message\":\"BLOCKED: 业务工具 " + toolName
                 + " 被blocked。你必须先调用 todo_create 按 catalog_id 创建任务列表，规划完整执行步骤后，"
@@ -380,7 +383,8 @@ public class EdpaTodoRail extends DeepAgentRail {
         inputs.setToolMsg(ToolMessage.builder().content(synthetic).toolCallId(callId).build());
 
         // steering 额外强化（若 ctx 已绑定 steeringQueue 则生效）
-        ctx.pushSteering("系统强制要求：执行任何业务工具（call_mcp/call_versatile）前必须先用 todo_create 按 " + "catalog_id 创建任务列表。你刚才调用 "
+        ctx.pushSteering("系统强制要求：执行任何业务工具（call_mcp/call_versatile）"
+                + "前必须先用 todo_create 按 catalog_id 创建任务列表。你刚才调用 "
                 + toolName + " 被blocked了。请立即调用 todo_create 规划任务，" + "然后再继续。不要跳过规划直接回答。");
     }
 
@@ -570,7 +574,8 @@ public class EdpaTodoRail extends DeepAgentRail {
         if (tool != null) {
             tool.save(resolveSessionId(inputs), todos);
         }
-        LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(REDIS) deps written back to Redis+file (catalog_id→UUID replacement complete)");
+        LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(REDIS) deps written back to Redis+file "
+                + "(catalog_id->UUID replacement complete)");
     }
 
     /**
@@ -609,7 +614,8 @@ public class EdpaTodoRail extends DeepAgentRail {
                         sessionId, todos.size(), anchors, changed, depMap);
                 if (changed) {
                     tool.save(sessionId, todos);
-                    LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(FILE) deps written back to save (catalog_id→UUID replacement complete)");
+                    LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(FILE) deps written back to save "
+                            + "(catalog_id->UUID replacement complete)");
                 }
             }
             RedisTodoStore syncStore = getActiveRedisTodoStore();
@@ -680,7 +686,8 @@ public class EdpaTodoRail extends DeepAgentRail {
                         "[EDPA-DIAG] UC10_ALL_COMPLETED session={} todos={} statuses=[{}] "
                                 + "-> inject final_answer directive",
                         rawSid, todos.size(), statusSummary);
-                ctx.pushSteering("所有任务已完成。请直接输出最终回答（final_answer），" + "总结执行结果，不要再调用任何工具。");
+                ctx.pushSteering("所有任务已完成。请直接输出最终回答（final_answer），"
+                        + "总结执行结果，不要再调用任何工具。");
             } else {
                 LOGGER.info("[EDPA-DIAG] UC10_NOT_ALL_COMPLETED session={} todos={} statuses=[{}] -> skip inject",
                         rawSid, todos.size(), statusSummary);
