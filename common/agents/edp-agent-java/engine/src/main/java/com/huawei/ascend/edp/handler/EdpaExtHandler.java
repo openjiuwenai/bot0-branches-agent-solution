@@ -414,9 +414,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * @param config EDPAgent 合并后配置（含 scenarioHome/model/versatile/mcpsse）
      * @param redisTodoStore Redis Todo 存储（可为null：未启用Redis时回落文件/缓存）
      * @param agentName Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）
-     * @return InitResult 包含真实 agent 实例和初始化产物
-     *
      * @param decoratedSandboxClient the decoratedSandboxClient value
+     * @return InitResult 包含真实 agent 实例和初始化产物
      */
 
     public static InitResult performInit(EdpaSpringBootConfig config, RedisTodoStore redisTodoStore, String agentName,
@@ -587,15 +586,11 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * </ul>
      * 对齐 Python agent.py L894-917: 首轮 vs 续轮判断。
      *
-     */
-
-    @Override
-    /**
-     * Stream query.
-     *
      * @param request the request value
      * @param observer the observer value
      */
+
+    @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
         String conversationId = request.getConversationId();
         Map<String, Object> input = extractRequestInputs(request);
@@ -632,15 +627,11 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
     /**
      * 适配版 SPI：同步查询。委托给父类。
      *
-     */
-
-    @Override
-    /**
-     * Query.
-     *
      * @param request the request value
      * @return the result
      */
+
+    @Override
     public QueryResponse query(ServeRequest request) {
         return super.query(request);
     }

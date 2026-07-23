@@ -270,10 +270,9 @@ public class RedisTodoStore {
     /**
      * 语义化版本比较：a 与 b 形如 "7.2.0"。
      *
-     * @return 负数表示 a<b，0 表示相等，正数表示 a>b
-     *
      * @param a the a value
      * @param b the b value
+     * @return 负数表示 a<b，0 表示相等，正数表示 a>b
      */
 
     private static int compareVersion(String a, String b) {

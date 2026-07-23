@@ -80,9 +80,6 @@ public final class TodoSessionResolver {
      * @param ctx 回调上下文（提供真实 sessionId）
      * @param args 已解析的 toolArgs（可变 Map，原地修改）
      * @return true 表示 session_id 被注入（有变化），false 表示无需注入
-     *
-     * @param Map<String description
-     *
      */
 
     public static boolean injectFromContext(AgentCallbackContext ctx, Map<String, Object> args) {

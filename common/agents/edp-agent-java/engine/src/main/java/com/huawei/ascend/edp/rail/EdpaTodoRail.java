@@ -177,14 +177,9 @@ public class EdpaTodoRail extends DeepAgentRail {
      * <p>本 Rail 在 BaseAgent（ReActAgent）上注册，init 传入的是 ReActAgent。
      * prompt section 经 ReActAgent.addPromptBuilderSection 注入。</p>
      *
-     */
-
-    @Override
-    /**
-     * Init.
-     *
      * @param agent the agent value
      */
+    @Override
     public void init(Object agent) {
         if (!(agent instanceof ReActAgent reActAgent)) {
             LOGGER.warn("EdpaTodoRail.init: agent is not ReActAgent ({}), skip prompt injection",
@@ -240,14 +235,9 @@ public class EdpaTodoRail extends DeepAgentRail {
      * 同时推送 steering 强制 LLM 先用 todo_create 规划。这根治「LLM 跳过规划直接调工具」的提示词不可靠问题
      * （harness SkillUseRail 的"先读 SKILL.md"指令与 EDPA"先规划"指令竞争，纯提示词无法保证）。</p>
      *
-     */
-
-    @Override
-    /**
-     * Before tool call.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -480,14 +470,9 @@ public class EdpaTodoRail extends DeepAgentRail {
      * 不再调用 TodoTool 的文件 load/save，消除 EDPA 自身的文件写入路径，避免并发写损坏与文件堆积。
      * Redis 降级时回落文件路径（兼容单测、旧部署）。</p>
      *
-     */
-
-    @Override
-    /**
-     * After tool call.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void afterToolCall(AgentCallbackContext ctx) {
         if (todolist == null || todolist.getEntries().isEmpty() || deepAgent == null) {
             return;
@@ -568,6 +553,7 @@ public class EdpaTodoRail extends DeepAgentRail {
      * @param rawSid the rawSid value
      * @param inputs the inputs value
      * @param todos the todos value
+     * @throws IOException the io exception
      */
     private void applyRedisDependencyClosure(RedisTodoStore activeStore, String rawSid,
             ToolCallInputs inputs, List<TodoItem> todos) throws IOException {
@@ -816,12 +802,10 @@ public class EdpaTodoRail extends DeepAgentRail {
     /**
      * 应用依赖图到 TodoItem（唯一触碰 TodoItem 处）。
      *
-     * @return true 表示有改动需 save
-     *
      * @param todos the todos value
      * @param depMap the depMap value
+     * @return true 表示有改动需 save
      */
-
     static boolean applyDependencies(List<TodoItem> todos, Map<String, List<String>> depMap) {
         boolean changed = false;
         for (TodoItem item : todos) {

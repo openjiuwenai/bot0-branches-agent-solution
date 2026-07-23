@@ -65,9 +65,10 @@ public class EdpEngineConfiguration {
      * 不再需要 EnvOverrides 手动覆盖（Spring Boot ${ENV_VAR:default} 自动处理）。</p>
      *
      * @param config EDPAgent 合并后配置属性（含 scenarioHome/model/versatile/mcpsse）
+     * @param agentName the agentName value
+     * @param sandboxClientFactoryProvider the sandboxClientFactoryProvider value
+     * @param redisTodoStoreProvider the redisTodoStoreProvider value
      * @return 已初始化的 AgentHandler Bean
-     *
-     * @param ("${openjiuwen.service.a2a.agent-name:EDPAgent}" the ("${openjiuwen.service.a2a.agent-name:EDPAgent}" value
      */
 
     @Bean

@@ -128,15 +128,10 @@ public class RedisConfig {
      *
      * <p>RESP2 强制 + socket 超时 + 连接建立超时，保证 UC-01 健康检查可发现版本/认证问题。</p>
      *
-     */
-
-    @Bean
-    /**
-     * Redis connection factory.
-     *
      * @param props the props value
      * @return the result
      */
+    @Bean
     public LettuceConnectionFactory redisConnectionFactory(TodoRedisProperties props) {
         ClientOptions options = ClientOptions.builder().protocolVersion(ProtocolVersion.RESP2)
                 .socketOptions(
@@ -179,16 +174,11 @@ public class RedisConfig {
      * <p>启动时调用 {@link RedisTodoStore#healthCheck()} 做健康检查（UC-01/UC-02），
      * 失败则容器启动失败。</p>
      *
-     */
-
-    @Bean
-    /**
-     * Redis todo store.
-     *
      * @param redisTemplate the redisTemplate value
      * @param props the props value
      * @return the result
      */
+    @Bean
     public RedisTodoStore redisTodoStore(StringRedisTemplate redisTemplate, TodoRedisProperties props) {
         RedisTodoStore store = new RedisTodoStore(redisTemplate, props);
         store.healthCheck();

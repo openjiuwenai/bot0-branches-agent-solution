@@ -281,14 +281,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * 前端跨轮自行持久化状态。本方法只静默初始化 todo 状态追踪（指纹 + prevTodoStatus），
      * 供 afterToolCall 检测状态转移，但不发任何事件。</p>
      *
-     */
-
-    @Override
-    /**
-     * Before invoke.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void beforeInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
         conversationClosed.remove(sid);
@@ -328,14 +323,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 §7.1 明确：beforeModelCall 不发任何事件。think_start/think_chunk/think_end
      * 全部在 afterModelCall 中根据 LLM 返回的 reasoning_content 决定是否发射（§7.2）。</p>
      *
-     */
-
-    @Override
-    /**
-     * Before model call.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void beforeModelCall(AgentCallbackContext ctx) {
         // 不发任何事件（设计文档 §7.1）
         // ★ 缓存用户原始 query 文本（供 afterModelCall 的 think_chunk query_patterns 匹配使用）
@@ -370,14 +360,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>think_chunk 内容：优先 reasoning_content（推理模型），无则取 content（非推理模型回退）。
      * 每轮 LLM 调用发一对 think_start/think_end，严格pair。</p>
      *
-     */
-
-    @Override
-    /**
-     * After model call.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void afterModelCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
             return;
@@ -448,14 +433,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * todo_create / todo_modify / ask_user / read_file 不发 tool_start。
      * PLAN_FIRST blocked（_plan_first_block=true）时不发 tool_start，记录 id 供 afterToolCall 跳过 tool_end。</p>
      *
-     */
-
-    @Override
-    /**
-     * Before tool call.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -531,14 +511,9 @@ public class EdpaEventRail extends DeepAgentRail {
      *     <li>todo_create/todo_modify → todolist_start/item/end（指纹变化时）+ todo_start/todo_end（基于状态转移，§7.3）</li>
      * </ul>
      *
-     */
-
-    @Override
-    /**
-     * After tool call.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void afterToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -701,14 +676,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 Rule 8：异常不破坏pair。所有已打开的 start 必须先发对应 end 关闭，
      * 再发 error_event，最后 conversation_end。像关括号一样从内到外依次关闭。</p>
      *
-     */
-
-    @Override
-    /**
-     * On model exception.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void onModelException(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
         if (Boolean.TRUE.equals(thinkOpen.get(sid))) {
@@ -739,14 +709,9 @@ public class EdpaEventRail extends DeepAgentRail {
      *         emit error_event{stage:tool}；emit conversation_end（保 Rule 1）。</li>
      * </ul>
      *
-     */
-
-    @Override
-    /**
-     * On tool exception.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void onToolException(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
         Exception exception = ctx.getException();
@@ -832,14 +797,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * interruptActive 仅在 afterToolCall 发射 interrupt_end 时清理。
      * lastTodolistFingerprint / prevTodoStatus 在下轮 beforeInvoke 的跨轮快照中重新初始化。</p>
      *
-     */
-
-    @Override
-    /**
-     * After invoke.
-     *
      * @param ctx the ctx value
      */
+    @Override
     public void afterInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
 

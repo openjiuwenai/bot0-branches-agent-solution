@@ -110,10 +110,6 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      * <p>SANDBOX 模式：在沙箱中执行脚本，reject(sandboxResult) 注回结果。
      * LOCAL 模式：approve() 放行，工具调用继续到 McpInterruptRail。</p>
      *
-     */
-
-    @Override
-    /**
      * Resolves the interrupt decision for the tool call.
      *
      * @param ctx the ctx value
@@ -121,6 +117,7 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      * @param userInput the userInput value
      * @return the result
      */
+    @Override
     protected InterruptDecision resolveInterrupt(AgentCallbackContext ctx, ToolCall toolCall, Object userInput) {
         if (sysOp.getMode() == OperationMode.SANDBOX) {
             // 会话级隔离：将当前 Session 绑定到线程上下文，

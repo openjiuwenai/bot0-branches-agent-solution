@@ -216,10 +216,8 @@ public class EdpaAgentEnhancer {
      * <p>作用：委托 tools 包构造 Python EDPAgent 中已识别的核心工具。</p>
      *
      * @param edpConfig EDP 专有配置，用于动态生成 lite_todo_write 的 step_id 枚举
-     * @return 工具列表，包含 lite_todo_write、call_mcp、call_versatile、ask_user、cancel_task
-     *
      * @param actrule description
-     *
+     * @return 工具列表，包含 lite_todo_write、call_mcp、call_versatile、ask_user、cancel_task
      */
 
     public static List<Tool> buildBusinessTools(EdpConfig edpConfig, ActRuleConfig actrule) {
@@ -303,6 +301,8 @@ public class EdpaAgentEnhancer {
     }
 
     /**
+     * Delegate to buildBusinessRails.
+     *
      * @see #buildBusinessRails(EnhanceContext)
      *
      * @param edpConfig the edpConfig value

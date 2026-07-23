@@ -532,6 +532,7 @@ public class VersatileInterruptRail extends AgentRail {
      * @param versatileInputs the versatileInputs value
      * @param conversationId the conversationId value
      * @return the result
+     * @throws Exception the exception description
      */
     private Map<String, Object> callVersatileAdapterA2a(Map<String, Object> versatileInputs, String conversationId)
             throws Exception {
@@ -589,6 +590,7 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * @param body the body value
      * @return the result
+     * @throws Exception the exception description
      */
 
     private Map<String, Object> normalizeA2aAdapterResponse(String body) throws Exception {
@@ -1423,10 +1425,9 @@ public class VersatileInterruptRail extends AgentRail {
      * 替代 Python {@code ast.literal_eval}——Java 无 AST 模块，但 PRE_DELEGATE_GUARD 是
      * 标准 JSON-compatible dict 字面量，括号配对足够且不执行任意代码。</p>
      *
-     * @return 字典字面量字符串（含外层花括号）；未找到返回 Optional.empty()
-     *
      * @param source the source value
      * @param name the name value
+     * @return 字典字面量字符串（含外层花括号）；未找到返回 Optional.empty()
      */
 
     private Optional<String> extractAssignLiteral(String source, String name) {
@@ -1724,12 +1725,11 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * <p>脚本不存在或执行失败时降级透传，不影响主流程。</p>
      *
-     * @param command     query_response_analysis_scripts 命令字符串
-     * @param toolResult  callVersatile 的原始返回
-     * @param ctx         回调上下文
+     * @param command        query_response_analysis_scripts 命令字符串
+     * @param toolResult     callVersatile 的原始返回
+     * @param versatileArgs  the versatileArgs value
+     * @param ctx            回调上下文
      * @return 归一化输出
-     *
-     * @param versatileArgs the versatileArgs value
      */
 
     private NormalizeOutput invokeNormalizeScript(String command, Map<String, Object> toolResult,

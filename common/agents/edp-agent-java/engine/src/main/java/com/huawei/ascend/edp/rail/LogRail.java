@@ -275,9 +275,8 @@ public class LogRail extends AgentRail {
      * 修复非法 JSON：遍历字符串，维护未闭合的 {@code { // no-op } / {@code [} 栈（字符串字面量内的括号忽略），
      * 按栈逆序补齐闭合符号。对齐 Python {@code AbilityManager._repair_tool_arguments_json}。
      *
-     * @return 修复后的 JSON 字符串；输入为空或无未闭合括号时返回 Optional.empty()
-     *
      * @param json the json value
+     * @return 修复后的 JSON 字符串；输入为空或无未闭合括号时返回 Optional.empty()
      */
 
     private static Optional<String> repairMalformedJson(String json) {

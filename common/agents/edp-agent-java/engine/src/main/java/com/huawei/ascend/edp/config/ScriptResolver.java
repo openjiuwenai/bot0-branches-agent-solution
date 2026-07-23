@@ -80,9 +80,6 @@ public final class ScriptResolver {
      * @param template 模板，null/空返回空串
      * @param vars     变量字典，null/空时保留所有占位符
      * @return 渲染后内容
-     *
-     * @param Map<String description
-     *
      */
 
     public static String resolve(String template, Map<String, String> vars) {
@@ -115,9 +112,6 @@ public final class ScriptResolver {
      * @param template 模板，null/空返回空串
      * @param vars     变量字典，null/空时所有占位符替换为空串
      * @return 渲染后内容
-     *
-     * @param Map<String description
-     *
      */
 
     public static String safeFormat(String template, Map<String, String> vars) {
@@ -144,9 +138,6 @@ public final class ScriptResolver {
      * @param key  模板 key
      * @param vars 变量字典
      * @return 渲染后内容；配置缺失则空串
-     *
-     * @param Map<String description
-     *
      */
 
     public static String resolve(SysScriptsConfig cfg, String key, Map<String, String> vars) {
@@ -751,9 +742,6 @@ public final class ScriptResolver {
      * @param rawArgs ask_user 工具原始入参（Map 或 JSON 字符串）
      * @param extra   写入目标 Map（通常 {@code ctx.getExtra()}）
      * @return true 表示已写入业务话术
-     *
-     * @param Map<String description
-     *
      */
 
     public static boolean resolveAskUser(SysScriptsConfig scripts, Object rawArgs, Map<String, Object> extra) {
