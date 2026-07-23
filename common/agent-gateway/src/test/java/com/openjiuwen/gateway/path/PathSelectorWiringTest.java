@@ -1,0 +1,32 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.gateway.path;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+/**
+ * Integration test: {@link PathSelector} is wired by Spring from
+ * {@code gateway.path-mode} config (FEAT-012 §0.2 — deployment-level,
+ * not client-visible).
+ *
+ * <p>Default config (no property) → DIRECT is covered by the full-context smoke
+ * ({@code A2aRouteSmokeTest}); this class verifies the {@code bus} override.
+ */
+@SpringBootTest(properties = "gateway.path-mode=bus")
+class PathSelectorWiringTest {
+
+    @Autowired
+    private PathSelector pathSelector;
+
+    @Test
+    void busModeWiredFromSpringConfig() {
+        assertThat(pathSelector.isBus()).isTrue();
+        assertThat(pathSelector.mode()).isEqualTo(PathMode.BUS);
+    }
+}
