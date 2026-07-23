@@ -15,6 +15,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * active {@code RemoteAgentCaller} / {@code RemoteAgentCardResolver} beans,
  * overriding the runtime core module's {@code Default*} implementations.
  *
+ * <p>{@link #callTimeoutSeconds} bounds the wait for each cross-layer A2A
+ * call. It must not exceed the per-hop budget remaining from the original
+ * chain deadline (PRD §9.3); deployments lower it as needed.
+ *
  * @since 0.1.0
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.a2a-gateway")
@@ -23,6 +27,7 @@ public class A2AGatewayProperties {
     private String baseUrl;
     private String agentCardPath = "/{agentCard}/.well-known/agent-card.json";
     private String jsonRpcPath = "/{agentCard}/a2a";
+    private long callTimeoutSeconds = 300L;
 
     public boolean isEnabled() {
         return enabled;
@@ -54,5 +59,13 @@ public class A2AGatewayProperties {
 
     public void setJsonRpcPath(String jsonRpcPath) {
         this.jsonRpcPath = jsonRpcPath;
+    }
+
+    public long getCallTimeoutSeconds() {
+        return callTimeoutSeconds;
+    }
+
+    public void setCallTimeoutSeconds(long callTimeoutSeconds) {
+        this.callTimeoutSeconds = callTimeoutSeconds;
     }
 }
