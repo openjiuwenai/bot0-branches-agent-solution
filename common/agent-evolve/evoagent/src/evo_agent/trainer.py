@@ -99,8 +99,9 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         self._validation_require_same_case_set = validation_require_same_case_set
         self._cancellation_token = cancellation_token or CancellationToken()
 
-        # Gate score capture: records {base_score, candidate_score} per epoch
-        # where 2 candidates were evaluated. Index i → Trainer epoch i+1.
+        # Per-epoch validation score capture. Comparison epochs record the real
+        # base/candidate pair; no-op epochs mirror the unchanged score so report
+        # cardinality remains aligned with managed-doc snapshots.
         self._gate_epoch_scores: list[dict[str, float]] = []
         self._cached_base_val_score: float | None = None
         self._cached_base_val_evaluated: list[EvaluatedCase] | None = None
@@ -110,10 +111,11 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
 
     @property
     def gate_epoch_scores(self) -> list[dict[str, float]]:
-        """Per-epoch gate scores: [{base_score, candidate_score}, ...].
+        """Per-epoch validation scores: [{base_score, candidate_score}, ...].
 
         Index i corresponds to Trainer epoch i+1 (artifact dir ``epoch_{i+1}``).
-        Only populated when exactly 2 candidates were evaluated (base + candidate).
+        No-op epochs use the unchanged score for both numeric reporting fields;
+        their artifact keeps ``candidate_score=null`` and ``decision=unchanged``.
         """
         return list(self._gate_epoch_scores)
 
@@ -150,7 +152,17 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         """
         if not candidates:
             self._cancellation_token.raise_if_requested()
-            return self.evaluate(agent, val_cases)
+            score, evaluated = self.evaluate(agent, val_cases)
+            batch = _matching_or_synthetic_batch(self._last_validation_batch, evaluated)
+            self._last_validation_batch = batch
+            self._capture_managed_doc_candidate(operators)
+            self._publish_noop_epoch_artifact(
+                score=score,
+                selected_batch=batch,
+                reason="no_candidates",
+            )
+            self.record_validation_baseline(score, evaluated)
+            return score, evaluated
 
         base_state = self._snapshot_operators_state(operators)
         val_case_count = len(val_cases.get_cases()) if val_cases is not None else 0
@@ -173,12 +185,7 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
             # optimizer produced only one candidate. Capture happens before
             # validation can restore a winner, preserving rejected rounds.
             if candidate_index == len(candidates) - 1:
-                for operator_id, operator in operators.items():
-                    if not operator_id.startswith("managed_doc:"):
-                        continue
-                    content = operator.get_state().get("skill_content")
-                    if isinstance(content, str):
-                        self._managed_doc_candidates.setdefault(operator_id, []).append(content)
+                self._capture_managed_doc_candidate(operators)
 
             cached_base_score = self._cached_base_val_score
             cached_base_evaluated = self._cached_base_val_evaluated
@@ -340,6 +347,14 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
                     selected_batch=selected_batch,
                 )
             )
+        elif len(scores) == 1:
+            selected_batch = batches_by_candidate[0]
+            self._last_validation_batch = selected_batch
+            self._publish_noop_epoch_artifact(
+                score=scores[0],
+                selected_batch=selected_batch,
+                reason="no_selected_edits" if not candidates[0] else "single_candidate",
+            )
 
         if best_state is not None:
             self._restore_operators_state(operators, best_state)
@@ -379,6 +394,39 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         notify = getattr(self._callbacks, "on_gate_artifact_ready", None)
         if callable(notify):
             notify(artifact_input)
+
+    def _publish_noop_epoch_artifact(
+        self,
+        *,
+        score: float,
+        selected_batch: EvaluationBatchResult,
+        reason: str,
+    ) -> None:
+        """Publish an explicit unchanged epoch without fabricating a candidate gate."""
+        self._gate_epoch_scores.append({"base_score": score, "candidate_score": score})
+        self._notify_gate_artifact_ready(
+            GateEpochArtifactInput(
+                gate=GateEvaluationRecord(
+                    base_score=score,
+                    candidate_score=None,
+                    decision="unchanged",
+                    kind="no_op",
+                    reason=reason,
+                ),
+                base_batch=selected_batch,
+                candidate_batches=(),
+                selected_batch=selected_batch,
+            )
+        )
+
+    def _capture_managed_doc_candidate(self, operators: dict[str, _Operator]) -> None:
+        """Capture the evaluated managed document, including unchanged no-op epochs."""
+        for operator_id, operator in operators.items():
+            if not operator_id.startswith("managed_doc:"):
+                continue
+            content = operator.get_state().get("skill_content")
+            if isinstance(content, str):
+                self._managed_doc_candidates.setdefault(operator_id, []).append(content)
 
     def _require_comparable_validation(
         self,

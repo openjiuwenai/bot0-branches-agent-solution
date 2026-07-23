@@ -1,6 +1,6 @@
 """spans_to_records 纯转换器单测 —— 设计文档点 7 (数据一致性) 的核心验证。
 
-OTel span (jsonl 模拟 EDPAgent 数据) → log-mode archive record 格式, 使下游
+Synthetic OTel span → log-mode archive record 格式, 使下游
 trace_cleaner.clean_traces 零改动。关键映射:
 - llm.Model span → GENERATION record (input.messages=parse(gen_ai.prompt).inputs,
   output=parse(gen_ai.completion).output)
@@ -8,7 +8,7 @@ trace_cleaner.clean_traces 零改动。关键映射:
 - http.request SERVER → TRACE record (id=trace_id)
 
 等价验证: spans→records→clean_traces 的 task_input == root span 的 user_query
-(已验证 jsonl 3 条 trace 全 MATCH), messages 非空。这是 standard 模式与 log 模式
+(覆盖 3 条 synthetic trace), messages 非空。这是 standard 模式与 log 模式
 在 cleaned-traces API 上行为一致的保证。
 """
 
@@ -19,21 +19,11 @@ import json
 from agent_adapter.trace_cleaner import clean_traces
 from agent_adapter.trace_source.spans_to_records import spans_to_records
 
-from tests._testdata import otel_spans_jsonl
+from tests._testdata import otel_spans
 
 
-def _load_jsonl_spans() -> list[dict]:
-    raw = otel_spans_jsonl().read_text(encoding="utf-8")
-    dec = json.JSONDecoder()
-    i, n, spans = 0, len(raw), []
-    while i < n:
-        while i < n and raw[i].isspace():
-            i += 1
-        if i >= n:
-            break
-        obj, end = dec.raw_decode(raw, i)
-        spans.append(obj)
-        i = end
+def _load_spans() -> list[dict]:
+    spans = otel_spans()
     for s in spans:
         s.setdefault("service_name", (s.get("resource_attributes") or {}).get("service.name"))
         s.setdefault("conversation_id", (s.get("attributes") or {}).get("session.id"))
@@ -50,7 +40,7 @@ def _by_trace(spans: list[dict]) -> dict[str, list[dict]]:
 # ---- llm.Model → GENERATION ----
 
 def test_llm_model_span_to_generation_record():
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     llm = next(s for s in spans if s.get("name") == "llm.Model")
     recs = spans_to_records([llm])
     assert len(recs) == 1
@@ -68,8 +58,8 @@ def test_llm_model_span_to_generation_record():
     assert rec["output"] == expected_out
 
 
-def test_spans_to_records_jsonl_all_generations():
-    spans = _load_jsonl_spans()
+def test_spans_to_records_all_synthetic_generations():
+    spans = _load_spans()
     recs = spans_to_records(spans)
     gens = [r for r in recs if r.get("type") == "GENERATION"]
     assert len(gens) == sum(1 for s in spans if s.get("name") == "llm.Model")
@@ -77,7 +67,7 @@ def test_spans_to_records_jsonl_all_generations():
 
 def test_llm_span_missing_prompt_skipped():
     """llm.Model 但缺 gen_ai.prompt/completion → 跳过 (不产残缺 GENERATION)。"""
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     llm = next(s for s in spans if s.get("name") == "llm.Model")
     attrs = {k: v for k, v in (llm.get("attributes") or {}).items()
              if k not in ("gen_ai.prompt", "gen_ai.completion")}
@@ -89,7 +79,7 @@ def test_llm_span_missing_prompt_skipped():
 # ---- tool.* → TOOL ----
 
 def test_tool_span_to_tool_record():
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     tool = next(s for s in spans if s.get("name", "").startswith("tool."))
     recs = spans_to_records([tool])
     assert len(recs) == 1
@@ -101,7 +91,7 @@ def test_tool_span_to_tool_record():
 # ---- http.request SERVER → TRACE ----
 
 def test_http_request_to_trace_record():
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     root = next(s for s in spans if s.get("kind") == "SERVER" and not s.get("parent_span_id"))
     recs = spans_to_records([root])
     assert len(recs) == 1
@@ -114,9 +104,9 @@ def test_http_request_to_trace_record():
 
 # ---- 等价验证: spans → records → clean_traces ----
 
-def test_clean_traces_from_jsonl_spans_matches_user_query():
+def test_clean_traces_from_synthetic_spans_matches_user_query():
     """standard 模式端到端: spans→records→clean_traces, task_input == root user_query。"""
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     for trace_id, tspans in _by_trace(spans).items():
         root = next(s for s in tspans if s.get("kind") == "SERVER" and not s.get("parent_span_id"))
         request_body = json.loads(
@@ -125,7 +115,11 @@ def test_clean_traces_from_jsonl_spans_matches_user_query():
         user_query = request_body["user_query"]
 
         records = spans_to_records(tspans)
-        cleaned = clean_traces(records, session_id=root["conversation_id"], agent_name="edp_agent")
+        cleaned = clean_traces(
+            records,
+            session_id=root["conversation_id"],
+            agent_name="sample_agent",
+        )
 
         assert cleaned != {}, f"trace {trace_id}: clean_traces 返回空 (无 GENERATION?)"
         assert cleaned["task_input"] == user_query, f"trace {trace_id}: task_input 不等于 user_query"
@@ -136,7 +130,7 @@ def test_clean_traces_from_jsonl_spans_matches_user_query():
 
 def test_clean_traces_last_generation_wins():
     """多条 GENERATION 时 clean_traces 取最后一条 (对齐 log-mode 行为)。"""
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     records = spans_to_records(tspans)
     gens = [r for r in records if r.get("type") == "GENERATION"]
@@ -151,7 +145,7 @@ def test_clean_traces_last_generation_wins():
 
 def test_unmapped_spans_skipped():
     """chain.EDPAgent / service.versatile_adapter 等不产 record (避免噪声)。"""
-    spans = _load_jsonl_spans()
-    chain = next(s for s in spans if s.get("name") == "chain.EDPAgent")
+    spans = _load_spans()
+    chain = next(s for s in spans if s.get("name") == "chain.SampleAgent")
     recs = spans_to_records([chain])
     assert recs == []

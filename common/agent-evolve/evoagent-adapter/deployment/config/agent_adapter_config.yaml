@@ -114,7 +114,7 @@ agents:
     # request_template:
     #   timeout: 300
     #   role_id: "1"
-    #   role_name: "示例贷款场景"
+    #   role_name: "示例智能体"
     #   custom_data:
     #     user_profile:
     #       enable_extract: true

@@ -45,11 +45,11 @@ def standard_app(tmp_path):
     return app
 
 
-async def test_standard_list_and_get_records(standard_app, repo, jsonl_spans):
+async def test_standard_list_and_get_records(standard_app, repo, synthetic_spans):
     app = standard_app
     app.state.repo = repo
     app.state.trace_source = DbTraceSource(repo)
-    await repo.bulk_insert_spans(jsonl_spans)
+    await repo.bulk_insert_spans(synthetic_spans)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -57,11 +57,11 @@ async def test_standard_list_and_get_records(standard_app, repo, jsonl_spans):
         r = await client.get("/api/v1/traces")
         assert r.status_code == 200
         convs = set(r.json()["conversation_ids"])
-        expected = {t[0]["conversation_id"] for t in _by_trace(jsonl_spans).values()}
+        expected = {t[0]["conversation_id"] for t in _by_trace(synthetic_spans).values()}
         assert convs == expected
 
         # 取某会话 records + complete 信号 (根 span 已在 → complete=True)
-        conv = jsonl_spans[0]["conversation_id"]
+        conv = synthetic_spans[0]["conversation_id"]
         r = await client.get(f"/api/v1/traces/{conv}")
         data = r.json()
         assert data["conversation_id"] == conv
@@ -71,14 +71,14 @@ async def test_standard_list_and_get_records(standard_app, repo, jsonl_spans):
         assert any(rec.get("type") == "GENERATION" for rec in data["calls"])
 
 
-async def test_standard_cleaned_traces_matches_user_query(standard_app, repo, jsonl_spans):
+async def test_standard_cleaned_traces_matches_user_query(standard_app, repo, synthetic_spans):
     app = standard_app
     app.state.repo = repo
     app.state.trace_source = DbTraceSource(repo)
-    await repo.bulk_insert_spans(jsonl_spans)
+    await repo.bulk_insert_spans(synthetic_spans)
 
-    conv = jsonl_spans[0]["conversation_id"]
-    root = next(s for s in jsonl_spans if s["conversation_id"] == conv
+    conv = synthetic_spans[0]["conversation_id"]
+    root = next(s for s in synthetic_spans if s["conversation_id"] == conv
                 and s.get("kind") == "SERVER" and not s.get("parent_span_id"))
     user_query = json.loads(
         (root.get("attributes") or {}).get("openjiuwen.http.request_body")
@@ -93,13 +93,13 @@ async def test_standard_cleaned_traces_matches_user_query(standard_app, repo, js
         assert len(cleaned["messages"]) > 0
 
 
-async def test_standard_complete_false_when_no_root(standard_app, repo, jsonl_spans):
+async def test_standard_complete_false_when_no_root(standard_app, repo, synthetic_spans):
     """无根 span (会话未结束/未上报) → complete=False (等待 trace_wait_timeout 后)。"""
     app = standard_app
     app.state.repo = repo
     app.state.trace_source = DbTraceSource(repo)
     # 仅插入一条非根 INTERNAL span (新会话, 无 SERVER 根)
-    no_root = [{**jsonl_spans[0], "kind": "INTERNAL", "parent_span_id": "p0",
+    no_root = [{**synthetic_spans[0], "kind": "INTERNAL", "parent_span_id": "p0",
                 "conversation_id": "no-root-conv", "trace_id": "no-root-trace",
                 "span_id": "nr-s1"}]
     await repo.bulk_insert_spans(no_root)

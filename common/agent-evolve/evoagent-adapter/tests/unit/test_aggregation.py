@@ -1,6 +1,6 @@
 """repository.aggregation 纯函数单测 — 无 PG, 无 asyncpg。
 
-用 otel_spans_v2.jsonl (模拟 EDPAgent OTel 上报) 做基准, 钉住:
+用代码内生成的通用 synthetic OTel spans 做基准, 钉住:
 - 根 span 判定 (kind=SERVER 且 parent 为空)
 - status 取最差 (ERROR > OK > UNSET)
 - traces 汇总聚合 (span_count / 起止时间 / root 字段 / summary, 与插入顺序无关)
@@ -11,8 +11,6 @@
 
 from __future__ import annotations
 
-import json
-
 from agent_adapter.repository.aggregation import (
     build_trace_tree,
     compute_trace_summary,
@@ -20,23 +18,12 @@ from agent_adapter.repository.aggregation import (
     worst_status,
 )
 
-from tests._testdata import otel_spans_jsonl
+from tests._testdata import otel_spans
 
 
-def _load_jsonl_spans() -> list[dict]:
-    """加载 jsonl 并提升 service_name/conversation_id (对齐 parse_span 输出形状)。"""
-    p = otel_spans_jsonl()
-    raw = p.read_text(encoding="utf-8")
-    dec = json.JSONDecoder()
-    i, n, spans = 0, len(raw), []
-    while i < n:
-        while i < n and raw[i].isspace():
-            i += 1
-        if i >= n:
-            break
-        obj, end = dec.raw_decode(raw, i)
-        spans.append(obj)
-        i = end
+def _load_spans() -> list[dict]:
+    """加载 synthetic spans 并提升 service_name/conversation_id。"""
+    spans = otel_spans()
     # 提升字段 (mimic parse_span): service_name ← resource_attributes.service.name
     # conversation_id ← attributes.session.id
     for s in spans:
@@ -47,10 +34,10 @@ def _load_jsonl_spans() -> list[dict]:
 
 # ---- 根 span 判定 ----
 
-def test_is_root_span_matches_jsonl():
-    spans = _load_jsonl_spans()
+def test_is_root_span_matches_synthetic_spans():
+    spans = _load_spans()
     roots = [s for s in spans if is_root_span(s)]
-    # jsonl: 3 trace, 每个 1 个 http.request SERVER 根 span
+    # synthetic fixture: 3 trace, 每个 1 个 http.request SERVER 根 span
     assert len(roots) == 3
     assert {r["name"] for r in roots} == {"http.request"}
     assert all(r["kind"] == "SERVER" for r in roots)
@@ -96,8 +83,8 @@ def _by_trace(spans: list[dict]) -> dict[str, list[dict]]:
     return groups
 
 
-def test_compute_trace_summary_jsonl():
-    spans = _load_jsonl_spans()
+def test_compute_trace_summary_synthetic_spans():
+    spans = _load_spans()
     for trace_id, tspans in _by_trace(spans).items():
         root = next(s for s in tspans if is_root_span(s))
         rattrs = root.get("attributes") or {}
@@ -105,7 +92,7 @@ def test_compute_trace_summary_jsonl():
 
         assert summ["trace_id"] == trace_id
         assert summ["span_count"] == len(tspans)
-        assert summ["status"] == "OK"  # jsonl 全 OK
+        assert summ["status"] == "OK"  # fixture 全 OK
         assert summ["root_span_id"] == root["span_id"]
         assert summ["conversation_id"] == rattrs["session.id"]
         assert summ["user_id"] == rattrs["user.id"]
@@ -119,7 +106,7 @@ def test_compute_trace_summary_jsonl():
 
 def test_compute_trace_summary_order_independent():
     """乱序插入 (kafka 可能根 span 后到) 不影响汇总。"""
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     baseline = compute_trace_summary(trace_id, tspans)
     # 逆序 (根 span 移到末尾) + 旋转一位, 覆盖根 span 后到的场景
@@ -129,7 +116,7 @@ def test_compute_trace_summary_order_independent():
 
 def test_compute_trace_summary_error_propagates_from_non_root():
     """任一 span (含非根) ERROR → trace status ERROR。"""
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     # 把一个非根 span 标 ERROR
     non_root = next(s for s in tspans if not is_root_span(s))
@@ -140,7 +127,7 @@ def test_compute_trace_summary_error_propagates_from_non_root():
 
 def test_compute_trace_summary_no_root():
     """无 SERVER 根 span: root_span_id / summary / user_id 为 None, 其余仍聚合。"""
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     no_root = [{**s, "kind": "INTERNAL"} for s in tspans]  # 抹掉 SERVER
     summ = compute_trace_summary(trace_id, no_root)
@@ -162,7 +149,7 @@ def test_compute_trace_summary_empty_raises():
 # ---- build_trace_tree ----
 
 def test_build_trace_tree_nests_by_parent():
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     tree = build_trace_tree(tspans)
     assert tree is not None
