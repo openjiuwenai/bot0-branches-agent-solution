@@ -54,5 +54,6 @@ openjiuwen:
     a2a-gateway:
       enabled: true
       base-url: https://gateway.example.com
-      agent-card-path: /{agentCard}/.well-known/agent-card.json
-      json-rpc-path: /{agentCard}/a2a
+      token: ${A2A_GATEWAY_TOKEN:dev-token}
+      version-node: ${A2A_GATEWAY_VERSION_NODE:v1}
+      json-rpc-path: /a2a/{agentCard}
