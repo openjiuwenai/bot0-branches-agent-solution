@@ -28,11 +28,18 @@
 - `BusControlForwarder` 暂不 `@Component`（B4 facade 接线时再加，避免全量上下文测缺 ForwardingOutboxPort bean）。
 - **111/111 GREEN**（+12 新测 + RouterTest +1 因 AgentCardRoute 扩展）。
 
+### B3 — bus/wait + projection 五态 ✅
+
+- 实现：`FiveStateFolder`(static: AgentBusEventType→InvocationResponseStatus + isTerminal) + `ProjectionTracker`(per-correlationId dedup/terminal-closure/out-of-order) + `WaitWindow`(dual-window accept/response timeout) + `G4BusWiring`(maps fold→IdempotencyRule complete/abort) + `SyncDisconnectHandler`(release window + abort G4)。
+- 验收映射：§4.6.1 投影幂等/乱序/终态闭合、§4.6.2 同步断开、§4.6.3 G4 complete/abort 接投影、T-S2-B6/B7/B8/B10、SC-11/12。
+- **136/136 GREEN**（+25 新测）。
+
 ## 剩余切片
 
 | 切片 | 用例数（spec） | 状态 |
 |---|---|---|
-| ~~B2 control 出站~~ | ~~12~~ | ✅ 完成 |
+| ~~B2 control 出站~~ | ~~12~~ | ✅ |
+| ~~B3 wait+projection~~ | ~~27~~ | ✅ |
 | B3 wait+projection 五态 | 27 | 待办 |
 | B4 facade BUS 同步 | 12 | 待办 |
 | B5 流式 STREAM_READY | 10 | 待办 |
