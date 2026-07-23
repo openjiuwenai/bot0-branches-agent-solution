@@ -316,7 +316,6 @@ public class EdpaEventRail extends DeepAgentRail {
             emit(ctx, EdpaEventType.INTERRUPT_START,
                     Map.of("tool", "", "content", requestStartContent, "interrupt_id", interruptId));
         }
-
         // ★ 注意：planning_start 的标记不在这里设置
         // planning_start 只在检测到规划行为时发送（Rule 13）：
         // 1. afterModelCall 中 LLM 返回 todo_create
@@ -439,7 +438,6 @@ public class EdpaEventRail extends DeepAgentRail {
             emit(ctx, EdpaEventType.FINAL_ANSWER_CHUNK, Map.of("content", content));
             emit(ctx, EdpaEventType.FINAL_ANSWER_END, Map.of());
         }
-
         // ③ 有 tool_calls → 不发 final_answer，由后续 beforeToolCall/afterToolCall 处理
     }
 
@@ -1554,8 +1552,6 @@ public class EdpaEventRail extends DeepAgentRail {
                 } catch (JsonProcessingException ignore) {
                     // 非 JSON
                 }
-            } else {
-                // no-op: args is neither Map nor String
             }
         }
         return "";

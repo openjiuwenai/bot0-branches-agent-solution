@@ -638,8 +638,6 @@ public class SysScriptsConfig {
                 keywords.add(e.getValue());
             } else if ("scripts".equals(field)) {
                 scripts.add(e.getValue());
-            } else {
-                // no-op: unknown field ignored
             }
         }
     }
@@ -717,8 +715,6 @@ public class SysScriptsConfig {
                 templates.put(key, joinList(list));
             } else if (value != null) {
                 templates.put(key, String.valueOf(value));
-            } else {
-                // no-op: null values are skipped
             }
         }
     }

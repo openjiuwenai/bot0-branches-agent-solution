@@ -335,7 +335,6 @@ public class SandboxInitHook implements AgentInitHook {
             LOGGER.info("[EDP-SANDBOX] Skills decompressed in sandbox: {}", deployPath);
         } catch (IOException | RuntimeException e) {
             LOGGER.error("[EDP-SANDBOX] Failed to deploy skills to sandbox: {}", e.getMessage());
-
             // 技能部署失败不终止应用（非 initFailFast 项），降级到无技能模式
         } finally {
             // 步骤4：清理临时文件（无论成功或失败都清理）

@@ -206,7 +206,6 @@ public class ScriptsRail extends DeepAgentRail {
             LOGGER.debug("[EDPA-SCRIPT] Progress hint present, skipping response_template");
             return;
         }
-
         // 业务话术键由各 SKILL.yaml scripts 字段定义，通过 SkillScriptsCollector 动态收集。
         // LLM 通过 ask_user(response_template_keys=["..."]) 指定话术键，不再在此硬编码映射。
     }
@@ -225,7 +224,6 @@ public class ScriptsRail extends DeepAgentRail {
         // 出口 interrupt_start 已由 EdpaEventRail.afterInvoke（priority=80）在 conversation_end 之前发射。
         // 本 Rail（priority=50）不再重复发射，仅执行合规把关兜底（若 _edp_response_template 仍存在）。
         // 实际上 EdpaEventRail 已内置合规把关并清除 KEY_RESPONSE_TEMPLATE，此处通常直接 return。
-
         // 进度提示优先推送：有 progress_hint 时发射 progress_hint chunk 并互斥清理（5.5.5）
         Object progressHint = ctx.getExtra().get(ScriptConstants.KEY_PROGRESS_HINT);
         if (progressHint != null) {

@@ -674,8 +674,6 @@ public class McpInterruptRail extends AgentRail {
             }
         } else if (mcpRequired instanceof Map<?, ?> mcpRequiredMap) {
             return extractWapGrayFlagFromMap(mcpRequiredMap);
-        } else {
-            // no-op: mcp_required_params is neither String nor Map
         }
         return Optional.empty();
     }

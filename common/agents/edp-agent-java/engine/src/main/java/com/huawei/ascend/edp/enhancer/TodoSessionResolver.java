@@ -49,7 +49,6 @@ import java.util.Map;
  */
 
 public final class TodoSessionResolver {
-
     /**
      * sessionId 为空时的兜底值。
      *

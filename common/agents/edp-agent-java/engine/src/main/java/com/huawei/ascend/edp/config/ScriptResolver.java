@@ -461,8 +461,8 @@ public final class ScriptResolver {
                 }
                 return parseScriptList(cfg.getTemplate(FK_PREFIX + "scripts").orElse(null));
             case "executing" :
-                List<String> execScripts = parseScriptList(cfg.getTemplate(FK_PREFIX +
-                    "execution_scripts").orElse(null));
+                List<String> execScripts = parseScriptList(cfg.getTemplate(FK_PREFIX
+                    + "execution_scripts").orElse(null));
                 if (!execScripts.isEmpty()) {
                     return execScripts;
                 }
@@ -472,8 +472,8 @@ public final class ScriptResolver {
                 if ("false".equalsIgnoreCase(enableResume)) {
                     return List.of();
                 }
-                List<String> resumeScripts = parseScriptList(cfg.getTemplate(FK_PREFIX +
-                    "resume_scripts").orElse(null));
+                List<String> resumeScripts = parseScriptList(cfg.getTemplate(FK_PREFIX
+                    + "resume_scripts").orElse(null));
                 if (!resumeScripts.isEmpty()) {
                     return resumeScripts;
                 }
@@ -522,8 +522,6 @@ public final class ScriptResolver {
                     trimmed = trimmed.substring(2);
                 } else if (trimmed.startsWith("-")) {
                     trimmed = trimmed.substring(1).trim();
-                } else {
-                    // No list prefix, use trimmed line as-is
                 }
                 if (!trimmed.isEmpty()) {
                     result.add(trimmed);

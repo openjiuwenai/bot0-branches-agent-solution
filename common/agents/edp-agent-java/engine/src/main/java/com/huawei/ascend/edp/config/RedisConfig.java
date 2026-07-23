@@ -25,9 +25,7 @@ import com.openjiuwen.extensions.checkpointer.redis.RedisCheckpointer;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.protocol.ProtocolVersion;
-
 import jakarta.annotation.PostConstruct;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

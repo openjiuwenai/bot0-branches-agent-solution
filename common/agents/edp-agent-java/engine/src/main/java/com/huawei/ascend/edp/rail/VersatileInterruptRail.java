@@ -97,14 +97,6 @@ public class VersatileInterruptRail extends AgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(VersatileInterruptRail.class);
 
     /**
-     * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
-     *
-     * @param "(62\\d{14,17} the "(62\\d{14,17} value
-     * @return the result
-     */
-    private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
-
-    /**
      * pre-delegate guard 计数器在 ToolDataChannel 中的 key 前缀。
      * 对齐 Python versatile_interrupt_rail.py 第 434 行 {@code state_key = f"_pre_delegate_guard:{command}:{rule_id}"}，
      * 用 {@code command:ruleId} 作为唯一标识，避免不同 skill 的同名规则互相干扰。
@@ -112,6 +104,14 @@ public class VersatileInterruptRail extends AgentRail {
      */
 
     static final String GUARD_STATE_KEY_PREFIX = "_pre_delegate_guard:";
+
+    /**
+     * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
+     *
+     * @param "(62\\d{14,17} the "(62\\d{14,17} value
+     * @return the result
+     */
+    private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
 
     /**
      * history_info 字段名。与 {@link McpInterruptRail#HISTORY_INFO_KEY} 同名，
@@ -353,8 +353,6 @@ public class VersatileInterruptRail extends AgentRail {
                                 templateKey, output.status);
                     }
                 }
-            } else {
-                // no-op: no ui_notice or status to process
             }
             toolResult = output.data;
             inputs.setToolResult(toolResult);
@@ -1468,8 +1466,6 @@ public class VersatileInterruptRail extends AgentRail {
                 if (depth == 0) {
                     return Optional.of(source.substring(braceStart, i + 1));
                 }
-            } else {
-                // no-op: other characters do not affect brace matching
             }
         }
         return Optional.empty();

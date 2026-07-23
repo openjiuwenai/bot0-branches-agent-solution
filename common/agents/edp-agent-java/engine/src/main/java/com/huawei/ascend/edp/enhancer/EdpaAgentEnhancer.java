@@ -442,54 +442,67 @@ public class EdpaAgentEnhancer {
          * EDP 专有配置。
          */
         private EdpConfig edpConfig;
+
         /**
          * model / versatile 配置。
          */
         private EdpaSpringBootConfig springBootConfig;
+
         /**
          * 行为治理配置（含 allowed_tools，驱动工具注册）。
          */
         private ActRuleConfig actrule;
+
         /**
          * 工具数据通道。
          */
         private ToolDataChannel toolDataChannel;
+
         /**
          * 技能目录。
          */
         private Path skillsDir;
+
         /**
          * Versatile 透传缓冲。
          */
         private VersatilePassthroughBuffer passthroughBuffer;
+
         /**
          * DeepAgent 引用（供 Rail 访问 workspace）。
          */
         private DeepAgent deepAgent;
+
         /**
          * Todo 数据层（catalog entries + dynamic paths）。
          */
         private EdpaTodolist edpaTodolist;
+
         /**
          * 话术配置（注入 EdpaEventRail A 面 + ScriptsRail B 面）。
          */
         private SysScriptsConfig scripts;
+
         /**
          * Redis Todo 存储（UC-03~UC-11 主路径；null 时 Rail 内部回落文件/缓存）。
          */
         private RedisTodoStore redisTodoStore;
+
         /**
          * Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）。
          */
         private String agentName;
+
         /**
          * SysOperation 双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。
          */
         private SysOperation sysOp;
+
         /**
          * 沙箱网关配置。
          */
         private SandboxGatewayConfig gatewayConfig;
+
         /**
          * 治理装饰 SandboxClient（需求2路径，可为 null）。
          */

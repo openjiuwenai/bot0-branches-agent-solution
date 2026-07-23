@@ -19,6 +19,7 @@ package com.huawei.ascend.versatile;
 import com.openjiuwen.service.adapters.versatile.agentfw.VersatileAgentHandler;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
