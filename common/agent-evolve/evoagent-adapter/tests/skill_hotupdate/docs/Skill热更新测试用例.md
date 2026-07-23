@@ -68,7 +68,7 @@
 | --- | --- |
 | **前置条件** | Adapter 已启动；目标 `agent_name` 已在 `agents` 配置中注册 |
 | **测试步骤** | 1. `POST /api/v1/skills`，body：`{"agent_name":"<agent>","action":"skill_list"}`<br>2. 检查 HTTP 200<br>3. 检查 `skills` 数组含待测 `skill_name` |
-| **预期结果** | 返回该 Agent 下所有含 `SKILL.md` 的子目录名（如 `edp_agent` 理财场景含 4 个 Skill） |
+| **预期结果** | 返回该 Agent 下所有含 `SKILL.md` 的子目录名（如 `edp_agent` 示例场景含 4 个 Skill） |
 
 #### TC-02：`skill_content` 返回完整 Markdown
 
@@ -127,7 +127,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | **前置条件** | TC-03 已完成热更 |
-| **测试步骤** | 1. 生成新 `conversation_id`（格式建议 `{prefix}-{timestamp}`）<br>2. `POST /api/v1/agents/{agent_name}/conversations/{conv_id}`，body：`{"query":"推荐一款低风险理财产品"}`<br>3. 等待 SSE 消费完成 |
+| **测试步骤** | 1. 生成新 `conversation_id`（格式建议 `{prefix}-{timestamp}`）<br>2. `POST /api/v1/agents/{agent_name}/conversations/{conv_id}`，body：`{"query":"推荐一款示例产品"}`<br>3. 等待 SSE 消费完成 |
 | **预期结果** | HTTP 200；`success=true` |
 
 #### TC-05：对话 traces 含 SKILL 记录
@@ -195,7 +195,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | **前置条件** | Skill 处于干净状态（可先 `restore_skill`） |
-| **测试步骤** | 1. `skill_content` 取原文<br>2. 在 **frontmatter 之后**注入「最高优先级」验证块，要求用户可见回复第 1 行为 `【SKILL热更-{时间戳}】`<br>3. `update_skill` 推送<br>4. **新 conv_id** 发起理财推荐对话<br>5. 从 `answer` 或 traces `GENERATION.output.content` 取最终回复 |
+| **测试步骤** | 1. `skill_content` 取原文<br>2. 在 **frontmatter 之后**注入「最高优先级」验证块，要求用户可见回复第 1 行为 `【SKILL热更-{时间戳}】`<br>3. `update_skill` 推送<br>4. **新 conv_id** 发起示例对话<br>5. 从 `answer` 或 traces `GENERATION.output.content` 取最终回复 |
 | **预期结果** | 回复首行（去前导空行后）为热更标记；后续仍为正常推荐表格/话术 |
 
 #### TC-14：`restore` 后 Skill 与优化前一致
@@ -305,7 +305,7 @@ cd tests/skill_hotupdate/scripts
 python run_api_suite.py \
   --base-url http://127.0.0.1:8900 \
   --agent-name edp_agent \
-  --skill-name product_recommend_skill
+  --skill-name demo_skill
 
 python run_e2e_experiment.py --base-url http://127.0.0.1:8900
 ```

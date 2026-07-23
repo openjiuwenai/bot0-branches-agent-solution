@@ -29,7 +29,7 @@ tests/skill_hotupdate/
 | Skills 目录 | Adapter 与业务 Agent **共享挂载**同一 `skills_dir` |
 | 网络 | 执行机可访问 Adapter HTTP 端口；对话用例需业务 Agent 可达 |
 
-推荐验证组合：Adapter + `edp_agent`（EDPAgent）+ 理财场景 Skill（如 `product_recommend_skill`）。
+推荐验证组合：Adapter + `edp_agent`（EDPAgent）+ 示例场景 Skill（如 `demo_skill`）。
 
 ### EvoAgent 客户端单元测试（可选）
 
@@ -52,7 +52,7 @@ python run_api_suite.py
 python run_e2e_experiment.py
 
 # 指定远程或自定义 Agent / Skill
-python run_api_suite.py --base-url http://<host>:8900 --agent-name edp_agent --skill-name product_recommend_skill
+python run_api_suite.py --base-url http://<host>:8900 --agent-name edp_agent --skill-name demo_skill
 ```
 
 或使用环境变量：
@@ -60,7 +60,7 @@ python run_api_suite.py --base-url http://<host>:8900 --agent-name edp_agent --s
 ```bash
 export ADAPTER_URL=http://<host>:8900
 export ADAPTER_AGENT_NAME=edp_agent
-export ADAPTER_SKILL_NAME=product_recommend_skill
+export ADAPTER_SKILL_NAME=demo_skill
 python run_api_suite.py
 ```
 
@@ -81,7 +81,7 @@ python run_api_suite.py
 
 | 日期 | 范围 | 环境 | 结果 |
 | --- | --- | --- | --- |
-| 2026-06-18 | TC-01～14 集成/E2E | `124.71.234.237:8900` + `edp_agent` | **14/14 通过** |
+| 2026-06-18 | TC-01～14 集成/E2E | `<host>:8900` + `edp_agent` | **14/14 通过** |
 | 2026-06-17 | EvoAgent 单元 28 pytest | 本地 agent-core + EvoAgent[dev] | **28/28 通过** |
 
 详见 [`docs/Skill热更新测试用例执行报告.md`](docs/Skill热更新测试用例执行报告.md)。

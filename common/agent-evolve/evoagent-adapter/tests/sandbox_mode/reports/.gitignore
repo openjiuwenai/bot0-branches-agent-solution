@@ -1,3 +1,4 @@
-# Ignore local scratch; keep dated JSON reports tracked if committed intentionally.
-__pycache__/
-*.pyc
+# Local API/E2E run reports may contain host IPs and live skill inventories.
+# Do not commit dated JSON reports.
+*
+!.gitignore

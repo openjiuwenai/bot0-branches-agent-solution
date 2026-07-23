@@ -118,7 +118,7 @@ agents:
     #   fixed      — 使用下方 sandbox_id（多 ready 沙箱的共享环境建议改用 fixed）
     #   list_ready — 要求 jiuwenbox 上恰好一个 ready；多个会报错
     sandbox_id_resolve: from_logs
-    # sandbox_id: "380d47fd-d36"             # 仅 sandbox_id_resolve: fixed 时必填
+    # sandbox_id: "<sandbox-id>"             # 仅 sandbox_id_resolve: fixed 时必填
     remote_skills_dir: /tmp/skills            # 沙箱内路径 = {SKILL_TARGET_PATH}/skills
 
     # ── Managed-doc（可选，需优化 AgentRule.md 等"焙进单例、改文件不热加载"的文档）──
@@ -134,16 +134,16 @@ agents:
     #     health_url: "http://host.docker.internal:8090/health"
     #     # Docker 部署还需显式挂 socket：start.sh 设置
     #     # ADAPTER_ENABLE_DOCKER_RESTART=true；Compose 叠加 managed-doc override。
-    # ── EDPAgent 请求透传（客户现场 body/header/URL 自定义）──
-    # 需要透传 role_id/role_name/custom_data.user_profile 等客户环境绑定字段时配置。
+    # ── 业务 Agent 请求透传（可选 body/header/URL 自定义）──
+    # 需要透传部署侧稳定字段（如 role_id/role_name）时配置。
     # request_template 为稳定 body 底模（深合并到最终请求体；调用方 extra_data 仍合并进
     # custom_data.inputs）。extra_headers 稳定请求头，值支持 ${ENV_VAR} 从环境变量读取
     # （如 token）。url_query_params 拼 conversation URL 后的 query 参数。
-    # 示例（按客户现场实际字段填写）：
+    # 示例（请按目标 Agent 契约改成中性/通用字段名，勿提交真实客户协议字段）：
     # request_template:
     #   timeout: 300
     #   role_id: "1"
-    #   role_name: "示例智能体"
+    #   role_name: "demo_agent"
     #   custom_data:
     #     user_profile:
     #       enable_extract: true
@@ -151,14 +151,10 @@ agents:
     # extra_headers:
     #   X-Invoke-Mode: "debug"
     #   X-Language: "zh-cn"
-    #   projectname: "null"
-    #   region: "null"
-    #   stream: "true"
-    #   cftk: "${ADAPTER_AGENT_TOKEN}"          # 敏感值走 env，勿入 yaml
-    #   cf2-cftk: "${ADAPTER_AGENT_TOKEN}"
+    #   X-Auth-Token: "${ADAPTER_AGENT_TOKEN}"   # 敏感值走 env，勿入 yaml
     # url_query_params:
-    #   type: "controller"
-    #   workspace_id: "191"
+    #   mode: "default"
+    #   workspace_id: "ws_001"
 
   - name: "other_agent"
     log_dir: "/data/logs/other_agent"

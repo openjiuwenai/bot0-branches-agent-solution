@@ -7,7 +7,7 @@ Environment variables:
     EDP_URL              EDPAgent health base (default: http://127.0.0.1:18001)
     JIUWENBOX_URL        jiuwenbox management API (default: http://127.0.0.1:8321)
     ADAPTER_AGENT_NAME   Target agent_name (default: edp_agent)
-    ADAPTER_SKILL_NAME   Skill under remote_skills_dir (default: product_recommend_skill)
+    ADAPTER_SKILL_NAME   Skill under remote_skills_dir (default: demo_skill)
     REMOTE_SKILLS_DIR    Path inside sandbox (default: /tmp/skills)
 """
 
@@ -72,7 +72,7 @@ def add_sandbox_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--skill-name",
-        default=_env("ADAPTER_SKILL_NAME", "product_recommend_skill"),
+        default=_env("ADAPTER_SKILL_NAME", "demo_skill"),
         help="Skill name (env: ADAPTER_SKILL_NAME)",
     )
     parser.add_argument(
