@@ -97,8 +97,7 @@ final class VersatileRequestExtractor {
     private String serializeIntents() {
         List<VersatileProperties.Intent> intents = properties.getIntents();
         if (intents == null || intents.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "VERSATILE_INTENT_CONFIG_MISSING: openjiuwen.service.versatile.intents must be a non-empty list");
+            return null;
         }
         for (int i = 0; i < intents.size(); i++) {
             VersatileProperties.Intent intent = intents.get(i);

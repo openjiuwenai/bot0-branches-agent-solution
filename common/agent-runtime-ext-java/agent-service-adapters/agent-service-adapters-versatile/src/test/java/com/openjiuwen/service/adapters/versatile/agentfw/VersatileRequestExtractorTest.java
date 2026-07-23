@@ -192,18 +192,22 @@ class VersatileRequestExtractorTest {
     }
 
     @Test
-    void rejectsBlankIntentsList() {
+    void fallsBackToLegacyModeWhenIntentsNotConfigured() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/{conversation_id}");
-        properties.setIntents(List.of());
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c-1");
-        request.setMessages(List.of(Map.of("role", "user", "content", "q")));
+        request.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
 
-        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("VERSATILE_INTENT_CONFIG_MISSING");
+        VersatileRequestExtractor.RemoteRequest remote =
+                new VersatileRequestExtractor(properties).extract(request);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
+        assertThat(inputs).isNotNull();
+        assertThat(inputs).containsEntry("query", "订酒店");
+        assertThat(inputs).doesNotContainKey("intents");
     }
 
     @Test
