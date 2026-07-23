@@ -246,7 +246,6 @@ class A2aControllerWebMvcTest {
 
     @Test
     void sameKeySameBodyReplaysWithoutSecondRuntimeCall() throws Exception {
-        // first create registers + completes the idempotency record
         mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
                         .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
                 .andExpect(status().isOk())
@@ -259,6 +258,22 @@ class A2aControllerWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.id").value("task-9"));
         assertThat(runtime.lastEndpoint()).isNull();
+    }
+
+    @Test
+    void createFailureReleasesInFlightSoRetryCanProceed() throws Exception {
+        // first attempt fails at routing -> the in-flight record must be released
+        rdc.setCandidates(List.of());
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isServiceUnavailable()); // ROUTE_NO_CANDIDATES
+        // candidates now available; retry with the same messageId must NOT stay IN_FLIGHT
+        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(VALID_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value("task-9"));
+        assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
     }
 
     // --- G5 ---

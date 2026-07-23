@@ -1,6 +1,6 @@
 # FEAT-011 开发进展报告（最终，审核用）
 
-> **状态：全部 12 个切片完成，73/73 测试 GREEN（审核必修项 #1/#2 已修），未 push。** 请审核。
+> **状态：全部 12 个切片完成，76/76 测试 GREEN（审核必修 #1/#2 + P0-1 in-flight 释放已修），未 push。** 请审核。
 > 分支：`feat/feat-011-direct-route`（base `origin/common` `8770d87`）。
 > 真源：`/Users/kevin/Work/temp/spring-ai-ascend-claude-011/.../Feat-Func-011-...md`（L2，#440）。
 > 实现仓：`/Users/kevin/Work/agent-solution/common/agent-gateway`（新建模块）。
@@ -76,6 +76,7 @@
 | 8 | `ResponseEntity<StreamingResponseBody>` 在 `Object` 返回类型下不被流式 handler 识别（走 converter→500） | 流式改用直接写 `HttpServletResponse`（同步、可测、断开即释放） |
 | 9 | Fake 下游 bean 在缓存上下文里跨测试方法泄漏状态 | 给 `FakeAgentRuntimeClient`/`FakeRdcRouteClient` 加 `reset()`，`@BeforeEach` 调用 |
 | 10 | **G4 `complete()` 未接线**（审核发现）：创建成功后从不 complete，同键重试不走 REPLAY、卡 IN_FLIGHT 409；与"T-G4 全 ✅"矛盾 | controller 同步创建成功路径补 `complete(tenantId, messageId, response)`；补 facade 级 T-G4-2 测试 `sameKeySameBodyReplaysWithoutSecondRuntimeCall`（同键同文重放、不二次调 runtime） |
+| 11 | 创建**失败**后 IN_FLIGHT 不释放（同键重试卡 `IDEMPOTENCY_IN_FLIGHT` 409，挡本地重试/联调脚本） | `IdempotencyRule.abort()`；controller 在 create 失败路径（sync `routeCreate` / streaming `routeStream`+`writeSse`）调用；测 `createFailureReleasesInFlightSoRetryCanProceed`（失败后同键重试可达 runtime）+ abort 单测 |
 
 ## 6. 技术债（已记录，非阻塞）
 
@@ -88,7 +89,8 @@
 | TD-5 | 无 ArchUnit 模块边界/纯度测试 | 收尾期可参考 registry 加 ports 纯度守护 |
 | TD-6 | 模块集成测手工 `@Import` 装配治理/routing 组件 | 切片已多，可引入共享 test 切片配置收敛 |
 | TD-7 | G4 in-flight 重复命中返回 409 `IDEMPOTENCY_IN_FLIGHT`（L2 允许"实现选定"） | 后续可细化为 200+进行中语义 |
-| TD-8 | 流式创建不调 `complete()`（流式无单一可重放结果）→ 同键重试会 IN_FLIGHT 409；流式幂等短路 730 未支持 | 后续设计；**同步路径已完整**（`complete()` 已接线 + facade REPLAY 测试通过）。注：SSE sticky 从首帧 taskId 写入仍正常工作 |
+| TD-8 | 流式创建不调 `complete()`（流式无单一可重放结果）→ 同键重试会 IN_FLIGHT 409；流式幂等短路 730 未支持 | 后续设计（P1 决策中）；**同步路径已完整**（`complete()` 已接线 + facade REPLAY 测试通过）。注：SSE sticky 从首帧 taskId 写入仍正常工作 |
+| TD-9 | 创建失败未释放 IN_FLIGHT（功能正确性，挡重试） | ✅ **P0-1 已修**：`IdempotencyRule.abort()` + controller 失败路径调用；3 测覆盖（abort 单测 ×2 + facade 重试测） |
 
 ## 7. 730 交付边界确认
 

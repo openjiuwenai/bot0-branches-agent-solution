@@ -126,24 +126,28 @@ public class A2aController {
 
         if (context.taskId() == null) {
             if ("SendStreamingMessage".equals(context.method())) {
-                Stream<String> frames;
                 try {
-                    frames = router.routeStream(context);
-                } catch (GovernanceException ex) {
-                    ex.setTraceId(context.traceId());
+                    Stream<String> frames = router.routeStream(context);
+                    // Stream frames synchronously; release happens when consumed or the
+                    // client disconnects (writeSse throws IOException).
+                    response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+                    response.setCharacterEncoding("UTF-8");
+                    sseBridge.writeSse(response.getOutputStream(), frames);
+                } catch (GovernanceException | IOException ex) {
+                    // release the in-flight idempotency record so a same-key retry re-attempts
+                    idempotencyRule.abort(context.tenantId(), context.messageId());
+                    if (ex instanceof GovernanceException ge) {
+                        ge.setTraceId(context.traceId());
+                    }
                     throw ex;
                 }
-                // Stream frames synchronously to the client; release happens when the
-                // stream is consumed or the client disconnects (writeSse throws IOException).
-                response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
-                response.setCharacterEncoding("UTF-8");
-                sseBridge.writeSse(response.getOutputStream(), frames);
                 return null;
             }
             String runtimeResponse;
             try {
                 runtimeResponse = router.routeCreate(context);
             } catch (GovernanceException ex) {
+                idempotencyRule.abort(context.tenantId(), context.messageId());
                 ex.setTraceId(context.traceId());
                 throw ex;
             }

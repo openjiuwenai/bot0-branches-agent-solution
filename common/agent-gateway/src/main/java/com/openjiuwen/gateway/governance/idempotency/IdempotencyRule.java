@@ -93,6 +93,25 @@ public class IdempotencyRule {
         }
     }
 
+    /**
+     * Release an in-flight create record after a failure, so a same-key retry can
+     * re-register (NEW) and re-attempt instead of being blocked as IN_FLIGHT. A
+     * failed create must not pin the idempotency key. No-op for SKIP (no
+     * messageId) and for absent or already-completed records.
+     *
+     * @param tenantId  authoritative tenant
+     * @param messageId create idempotency key
+     */
+    public void abort(String tenantId, String messageId) {
+        if (messageId == null || messageId.isBlank()) {
+            return;
+        }
+        Entry existing = store.get(key(tenantId, messageId));
+        if (existing != null && !existing.completed) {
+            store.remove(key(tenantId, messageId));
+        }
+    }
+
     /** Clear all idempotency state (test / admin helper). */
     public void clear() {
         store.clear();
