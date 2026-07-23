@@ -46,6 +46,9 @@ final class VersatileResponseExtractor {
         if (line == null || line.isBlank()) {
             return List.of();
         }
+        if (hasFailed) {
+            return List.of();
+        }
         Optional<String> data = stripSsePrefix(line);
         if (data.isEmpty() || data.get().isBlank()) {
             return new ArrayList<>();

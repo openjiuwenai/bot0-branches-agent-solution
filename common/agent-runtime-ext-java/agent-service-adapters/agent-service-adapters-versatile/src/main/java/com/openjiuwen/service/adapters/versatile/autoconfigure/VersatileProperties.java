@@ -83,6 +83,7 @@ public class VersatileProperties {
     private IntentAgentMappingStrategy intentAgentMappingStrategy = IntentAgentMappingStrategy.FIRST;
     private List<ResultExtraction> resultExtractions = new ArrayList<>();
     private Interrupt interrupt = new Interrupt();
+    private boolean logMaskSensitive = true;
 
     public List<Intent> getIntents() {
         return intents;
@@ -132,6 +133,22 @@ public class VersatileProperties {
 
     public void setInterrupt(Interrupt interrupt) {
         this.interrupt = interrupt != null ? interrupt : new Interrupt();
+    }
+
+    /**
+     * Whether to mask sensitive fields ({@code messages[].content},
+     * {@code response_content}, metadata values) in DEBUG logs. Defaults to
+     * {@code true} per L2 §4.6.3 / DFX-001. Set to {@code false} only for
+     * local debugging where the log sink is already access-controlled.
+     *
+     * @return true if sensitive fields should be masked in logs
+     */
+    public boolean isLogMaskSensitive() {
+        return logMaskSensitive;
+    }
+
+    public void setLogMaskSensitive(boolean logMaskSensitive) {
+        this.logMaskSensitive = logMaskSensitive;
     }
 
     /**
