@@ -472,16 +472,16 @@ def main() -> int:
         "edp_url": args.edp_url,
         "jiuwenbox_url": args.jiuwenbox_url,
         "agent_name": args.agent_name,
-        "model_name": os.getenv("PLANNING_AGENT_MODEL_NAME", "qwen-flash"),
+        "model_name": os.getenv("PLANNING_AGENT_MODEL_NAME", "example-model"),
         "model_api_base": os.getenv(
             "PLANNING_AGENT_MODEL_BASE_URL",
-            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "https://api.example-llm.com/v1",
         ),
         "model_auth_ok": model_auth_ok,
         "model_auth_note": (
             None
             if model_auth_ok
-            else "LLM 返回 Access denied：调用代理链路已通，但模型鉴权失败（请核对 api_key 是否为 DashScope 可用密钥）"
+            else "LLM 返回 Access denied：调用代理链路已通，但模型鉴权失败（请核对 api_key 是否为 LLM 服务可用密钥）"
         ),
         "skill_backend": "jiuwenbox",
         "checks_passed": sum(1 for r in results if r.passed),

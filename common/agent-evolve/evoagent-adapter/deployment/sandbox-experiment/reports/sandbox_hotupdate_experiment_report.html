@@ -313,7 +313,7 @@
   <h1>沙箱模式开发串讲报告<br/>EvoAgent 生态定位 · 部署改造 · 三容器联调实证</h1>
   <p class="meta">
     报告版本：2026-07-13　·　实验时间（UTC）：2026-07-12T13:27:15Z　·　
-    环境：Docker Desktop（Windows → Linux 容器）　·　模型：Qwen/Qwen3.5-9B @ SiliconFlow　·　
+    环境：Docker Desktop（Windows → Linux 容器）　·　模型：example-model @ ExampleLLM　·　
     代码改动范围：仅 EvoAgentAdapter
   </p>
   <div class="badges">
@@ -667,7 +667,7 @@ remote_skills_dir: /tmp/skills  # 对齐 SKILL_TARGET_PATH/skills</pre>
   </p>
   <ul>
     <li><strong>轨迹采集</strong>：能否从 EDPAgent <code>process_*.log</code> 抽出对话轨迹</li>
-    <li><strong>调用代理</strong>：经 Adapter HTTP 能否完成业务对话（SiliconFlow 模型）</li>
+    <li><strong>调用代理</strong>：经 Adapter HTTP 能否完成业务对话（ExampleLLM 模型）</li>
     <li><strong>Skill 热更</strong>：Adapter 经 jiuwenbox File API 写沙箱后，新会话 <code>read_file</code> 是否读到新正文</li>
   </ul>
 </section>
@@ -681,7 +681,7 @@ remote_skills_dir: /tmp/skills  # 对齐 SKILL_TARGET_PATH/skills</pre>
       <tr><td>EDPAgent</td><td>容器 sandbox 模式</td><td><code>http://127.0.0.1:18001</code>；<code>SANDBOX_URL</code>、<code>LOG_DIR</code></td></tr>
       <tr><td>EvoAgentAdapter</td><td>容器（jiuwenbox 后端）</td><td><code>http://127.0.0.1:18900</code>（避开宿主机 8900）</td></tr>
       <tr><td>Redis</td><td>容器</td><td>服务名 <code>redis</code></td></tr>
-      <tr><td>LLM</td><td>SiliconFlow</td><td><code>Qwen/Qwen3.5-9B</code></td></tr>
+      <tr><td>LLM</td><td>ExampleLLM</td><td><code>example-model</code></td></tr>
       <tr><td>目标 Skill</td><td>沙箱内文件</td><td><code>/tmp/skills/product_recommend_skill/SKILL.md</code></td></tr>
       <tr><td>sandbox_id</td><td>本次运行</td><td><code>723842d9-fb8</code></td></tr>
     </tbody>
@@ -693,7 +693,7 @@ remote_skills_dir: /tmp/skills  # 对齐 SKILL_TARGET_PATH/skills</pre>
   <h3>8.1 启动与初始化</h3>
   <ol>
     <li>创建 Docker 网络 <code>evo-sandbox-net</code>，启动 redis / jiuwenbox / edpagent / evo-adapter。</li>
-    <li>EDPAgent：<code>SANDBOX_URL=http://jiuwenbox:8321</code>，LLM 使用 SiliconFlow。</li>
+    <li>EDPAgent：<code>SANDBOX_URL=http://jiuwenbox:8321</code>，LLM 使用 ExampleLLM。</li>
     <li>EDPAgent <code>initialize_dpa</code>：创建 sandbox → zip 上传 → 解压到 <code>{SKILL_TARGET_PATH}</code>（默认 <code>/tmp</code>，zip 内含 <code>skills/</code> 前缀 → 根路径 <code>/tmp/skills</code>）→ 注册 Skill。</li>
     <li>Adapter 加载 <code>skill_backend=jiuwenbox</code>，后台轮询日志。</li>
   </ol>
@@ -936,9 +936,9 @@ remote_skills_dir: /tmp/skills  # 对齐 SKILL_TARGET_PATH/skills</pre>
     </div>
   </div>
   <pre># 复现（需已有镜像与网络）
-$env:PLANNING_AGENT_MODEL_API_KEY="&lt;siliconflow-key&gt;"
-$env:PLANNING_AGENT_MODEL_BASE_URL="https://api.siliconflow.cn/v1"
-$env:PLANNING_AGENT_MODEL_NAME="Qwen/Qwen3.5-9B"
+$env:PLANNING_AGENT_MODEL_API_KEY="&lt;your-llm-key&gt;"
+$env:PLANNING_AGENT_MODEL_BASE_URL="https://api.example-llm.com/v1"
+$env:PLANNING_AGENT_MODEL_NAME="example-model"
 .\deployment\sandbox-experiment\start_stack.ps1
 python deployment\sandbox-experiment\run_dialogue_skill_e2e.py `
   --adapter-url http://127.0.0.1:18900</pre>

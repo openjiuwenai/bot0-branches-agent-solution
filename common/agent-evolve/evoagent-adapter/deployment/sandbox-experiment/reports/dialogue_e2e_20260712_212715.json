@@ -8,8 +8,8 @@
     "skill": "product_recommend_skill",
     "marker_a": "BEFORE_9E4ABBA9",
     "marker_b": "AFTER_743DF61C",
-    "model_name": "Qwen/Qwen3.5-9B",
-    "model_api_base": "https://api.siliconflow.cn/v1",
+    "model_name": "example-model",
+    "model_api_base": "https://api.example-llm.com/v1",
     "checks_passed": 8,
     "checks_total": 8,
     "proof": "对话A回答含 MARKER_A；热更后对话B回答含 MARKER_B 且不含 MARKER_A"

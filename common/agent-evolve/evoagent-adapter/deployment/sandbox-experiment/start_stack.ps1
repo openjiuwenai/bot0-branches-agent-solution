@@ -15,8 +15,8 @@ if (-not $ApiKey) {
   exit 1
 }
 
-$ApiBase = if ($env:PLANNING_AGENT_MODEL_BASE_URL) { $env:PLANNING_AGENT_MODEL_BASE_URL } else { "https://dashscope.aliyuncs.com/compatible-mode/v1" }
-$ModelName = if ($env:PLANNING_AGENT_MODEL_NAME) { $env:PLANNING_AGENT_MODEL_NAME } else { "qwen-flash" }
+$ApiBase = if ($env:PLANNING_AGENT_MODEL_BASE_URL) { $env:PLANNING_AGENT_MODEL_BASE_URL } else { "https://api.example-llm.com/v1" }
+$ModelName = if ($env:PLANNING_AGENT_MODEL_NAME) { $env:PLANNING_AGENT_MODEL_NAME } else { "example-model" }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $Exp "data") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $Exp "skills-meta/edp_agent") | Out-Null
