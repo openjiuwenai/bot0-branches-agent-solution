@@ -61,7 +61,7 @@ import java.util.logging.Logger;
  * home API, not via an aggregator.
  *
  * <p><b>Matrix</b>: 2 models × 2 thinking = 4 configs. Full EDPA stack (ExploreTool +
- * market_data stub + CriteriaReplanBridgeRail + PevReplanRail + ProactiveConvergenceRail).
+ * market_data stub + CriteriaReplanBridgeRail + ReplanRail + ProactiveConvergenceRail).
  * Same transient-flaky retry + tolerant-assert discipline as the openrouter matrix.
  *
  * <p>Env-gated opt-in: {@code OPENJIUWEN_API_KEY} / {@code OPENJIUWEN_BASE_URL} /

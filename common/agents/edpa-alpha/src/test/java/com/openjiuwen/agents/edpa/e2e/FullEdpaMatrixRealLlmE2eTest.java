@@ -79,7 +79,7 @@ import java.util.logging.Logger;
  * room and tool_calls/content still generate. Same root cause for both qwen failures.
  *
  * <p><b>Per config the full EDPA stack runs</b>: ExploreTool (Species E) + stub
- * market_data tool + CriteriaReplanBridgeRail (Action verify) + PevReplanRail (Decision
+ * market_data tool + CriteriaReplanBridgeRail (Action verify) + ReplanRail (Decision
  * reactive) + ProactiveConvergenceRail (Decision proactive). Collected signals:
  * exploreCount, toolCalls, criteria verified, convergence triggerCount, output length,
  * reasoning observed, completion status.

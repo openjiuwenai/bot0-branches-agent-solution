@@ -7,8 +7,8 @@ package com.openjiuwen.agents.edpa.kernel;
 import java.util.Set;
 
 /**
- * What to do next — 3-state sealed dispatch, output of {@link PevKernel#toReplanAction},
- * consumed by the PEV main loop's explicit dispatcher.
+ * What to do next — 3-state sealed dispatch, output of {@link EdpaKernel#toReplanAction},
+ * consumed by the EDPA agent loop's explicit dispatcher.
  *
  * <p>Layers (keep distinct — do not collapse into one type):
  * <ul>

@@ -4,7 +4,7 @@ kafka 上的 otlp_traces topic 承载的是 OTLP JSON 信封:
     resourceSpans[].scopeSpans[].spans[]
 span.attributes / resource.attributes 是 anyvalue 数组, 时间是 unix nano, kind 是 int 枚举。
 
-本模块摊平成 adapter 内部统一形状 (对齐 mock-assets/.../otel_spans_v2.jsonl):
+本模块摊平成 adapter 内部统一形状（由 synthetic span fixtures 验证）:
     trace_id/span_id/parent_span_id/trace_state/name/kind(字符串)/start_time(ISO)/end_time(ISO)/
     duration_ns/service_name/scope_name/scope_version/status_code(字符串)/status_message/
     attributes(dict)/resource_attributes(dict)/events(list)/links(list)/conversation_id
