@@ -210,7 +210,8 @@ main() {
     echo
     echo "==================== 验证 gateway 日志：header 透传 ===================="
     # 验证 L1→gateway hop 的 header 透传 (token/userId/versionNode 来自 A2AGatewayProperties)
-    assert_log_contains "header-token" "$LOG_DIR/gateway.log" "token=dev-token"
+    # MockA2AGatewayController 出于安全考虑只记录 tokenPresent 布尔值，不打印 raw token
+    assert_log_contains "header-token" "$LOG_DIR/gateway.log" "tokenPresent=true"
     assert_log_contains "header-user-id" "$LOG_DIR/gateway.log" "userId=u-42"
     assert_log_contains "header-version-node" "$LOG_DIR/gateway.log" "versionNode=v1"
     # 验证 B3 trace 透传
