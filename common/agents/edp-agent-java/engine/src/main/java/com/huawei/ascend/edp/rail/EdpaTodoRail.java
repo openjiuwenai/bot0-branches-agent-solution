@@ -495,25 +495,33 @@ public class EdpaTodoRail extends DeepAgentRail {
 
         String rawSid = ctx.getSession() != null ? ctx.getSession().getSessionId() : null;
         RedisTodoStore activeStore = getActiveRedisTodoStore();
+        TodoHandlerContext hc = new TodoHandlerContext(ctx, inputs, rawSid, toolName, isCreate, isModify);
         if (activeStore != null && rawSid != null && !rawSid.isBlank()) {
-            handleRedisPath(ctx, inputs, rawSid, toolName, isCreate, isModify);
+            handleRedisPath(hc);
             return;
         }
-        handleFilePath(ctx, inputs, rawSid, toolName, isCreate, isModify);
+        handleFilePath(hc);
     }
 
     /**
-     * Redis path: sync file→Redis, apply dependency closure, check UC-10.
-     *
-     * @param ctx the ctx value
-     * @param inputs the inputs value
-     * @param rawSid the rawSid value
-     * @param toolName the toolName value
-     * @param isCreate the isCreate value
-     * @param isModify the isModify value
+     * 传递给 handleRedisPath / handleFilePath 的公共参数上下文，避免方法参数超过 5 个（G.MET.01）。
      */
-    private void handleRedisPath(AgentCallbackContext ctx, ToolCallInputs inputs,
+    private record TodoHandlerContext(AgentCallbackContext ctx, ToolCallInputs inputs,
             String rawSid, String toolName, boolean isCreate, boolean isModify) {
+    }
+
+    /**
+     * Redis path: sync file->Redis, apply dependency closure, check UC-10.
+     *
+     * @param hc the todo handler context value
+     */
+    private void handleRedisPath(TodoHandlerContext hc) {
+        AgentCallbackContext ctx = hc.ctx();
+        ToolCallInputs inputs = hc.inputs();
+        String rawSid = hc.rawSid();
+        String toolName = hc.toolName();
+        boolean isCreate = hc.isCreate();
+        boolean isModify = hc.isModify();
         RedisTodoStore activeStore = getActiveRedisTodoStore();
         try {
             List<TodoItem> todos = null;
@@ -581,15 +589,15 @@ public class EdpaTodoRail extends DeepAgentRail {
     /**
      * File fallback path: load/save via TodoTool when Redis is unavailable.
      *
-     * @param ctx the ctx value
-     * @param inputs the inputs value
-     * @param rawSid the rawSid value
-     * @param toolName the toolName value
-     * @param isCreate the isCreate value
-     * @param isModify the isModify value
+     * @param hc the todo handler context value
      */
-    private void handleFilePath(AgentCallbackContext ctx, ToolCallInputs inputs,
-            String rawSid, String toolName, boolean isCreate, boolean isModify) {
+    private void handleFilePath(TodoHandlerContext hc) {
+        AgentCallbackContext ctx = hc.ctx();
+        ToolCallInputs inputs = hc.inputs();
+        String rawSid = hc.rawSid();
+        String toolName = hc.toolName();
+        boolean isCreate = hc.isCreate();
+        boolean isModify = hc.isModify();
         TodoTool tool = getTodoTool().orElse(null);
         if (tool == null) {
             if (isModify && getActiveRedisTodoStore() != null) {

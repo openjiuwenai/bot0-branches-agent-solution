@@ -339,17 +339,7 @@ public class VersatileInterruptRail extends AgentRail {
                         output.uiNotice);
                 ctx.getExtra().put(ScriptConstants.KEY_UI_NOTICE, output.uiNotice);
             } else if (output.status != null) {
-                String templateKey = resolveTemplateKey(versatileArgs.get("response_template_keys"),
-                        output.status).orElse(null);
-                if (templateKey != null) {
-                    String text = scripts.getTemplate(templateKey).orElse(null);
-                    if (text != null && !text.isBlank()) {
-                        ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, text);
-                        ctx.getExtra().put(ScriptConstants.KEY_LAST_SCRIPT, templateKey);
-                        LOGGER.info("[VersatileInterruptRail] response_template injected, key={}, status={}",
-                                templateKey, output.status);
-                    }
-                }
+                applyResponseTemplate(ctx, versatileArgs, output);
             }
             Map<String, Object> normalizedResult = output.data;
             inputs.setToolResult(normalizedResult);
@@ -368,6 +358,30 @@ public class VersatileInterruptRail extends AgentRail {
                     .toolCallId(inputs.getToolCall() != null ? inputs.getToolCall().getId() : "call_versatile")
                     .build());
         }
+    }
+
+    /**
+     * 根据归一化脚本的 status 索引话术模板并注入到 ctx.extra（G.MET.01：从 applyNormalizationAndTemplate 提取以降低嵌套深度）。
+     *
+     * @param ctx the ctx value
+     * @param versatileArgs the versatileArgs value
+     * @param output the output value
+     */
+    private void applyResponseTemplate(AgentCallbackContext ctx, Map<String, Object> versatileArgs,
+            NormalizeOutput output) {
+        String templateKey = resolveTemplateKey(versatileArgs.get("response_template_keys"),
+                output.status).orElse(null);
+        if (templateKey == null) {
+            return;
+        }
+        String text = scripts.getTemplate(templateKey).orElse(null);
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, text);
+        ctx.getExtra().put(ScriptConstants.KEY_LAST_SCRIPT, templateKey);
+        LOGGER.info("[VersatileInterruptRail] response_template injected, key={}, status={}",
+                templateKey, output.status);
     }
 
     /**

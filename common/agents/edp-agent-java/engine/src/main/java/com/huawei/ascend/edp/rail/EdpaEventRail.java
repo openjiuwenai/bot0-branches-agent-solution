@@ -737,49 +737,58 @@ public class EdpaEventRail extends DeepAgentRail {
             cause = cause.getCause();
         }
         if (cause instanceof ToolInterruptException tie) {
-            interruptActive.put(sid, true);
             String interruptId = java.util.UUID.randomUUID().toString();
             interruptIdMap.put(sid, interruptId);
-            String toolName = "";
-            String content;
-            if (ctx.getInputs() instanceof ToolCallInputs inputs) {
-                toolName = inputs.getToolName();
-                // F3-fix：ask_user 话术在 onToolException 解析（异常处理回调必触发；
-                // beforeToolCall(80) 被 AskUserTemplateRail(85) 抛异常中断、不可达）。
-                if (TOOL_ASK_USER.equals(toolName)) {
-                    ScriptResolver.resolveAskUser(scripts, inputs.getToolArgs(), ctx.getExtra());
-                }
-            }
-            // UC-C02: interrupt_source 开关控制追问内容来源
-            // 对齐 Python ask_user_rail.py L172-180: 未命中脚本时放行 LLM question
-            String interruptSource = scripts != null ? scripts.getInterruptSource() : "script";
-            // 优先级1: VersatileInterruptRail 从 passthrough_nodes 提取的 message（如"请确认转账信息"）
-            String versatileMessage = "";
-            if (tie.getRequest() != null && tie.getRequest().getMessage() != null) {
-                versatileMessage = tie.getRequest().getMessage();
-            }
-            Object rt = ctx.getExtra().get(ScriptConstants.KEY_RESPONSE_TEMPLATE);
-            if (!versatileMessage.isBlank()) {
-                // Versatile adapter 返回的中断提示文本
-                content = versatileMessage;
-            } else if (rt != null && !String.valueOf(rt).isBlank()) {
-                // 脚本话术命中（response_template 已解析）
-                content = String.valueOf(rt);
-            } else {
-                // 未命中脚本：用 LLM question 兜底（不丢弃），缺则用 interrupt_start 配置
-                String llmQuestion = extractAskUserQuestion(ctx);
-                content = llmQuestion.isBlank() ? ScriptResolver.interruptStart(scripts) : llmQuestion;
-            }
-            LOGGER.info(
-                    "[EDPA-DIAG] onToolException ToolInterruptException -> emit interrupt_start"
-                            + "(tool={}, interrupt_id={}, source={})",
-                    toolName, interruptId, interruptSource);
-            emit(ctx, EdpaEventType.INTERRUPT_START,
-                    Map.of("tool", toolName, "content", content, "interrupt_id", interruptId));
+            handleToolInterrupt(ctx, tie, sid, interruptId);
             return; // 正常中断，不发 error_event，conversation_end 由 afterInvoke 发射
         }
 
-        // 其他工具异常 → 先关 tool（如unclosed），再报错，最后关 conversation
+        handleGeneralToolError(ctx, sid, exception);
+    }
+
+    private void handleToolInterrupt(AgentCallbackContext ctx, ToolInterruptException tie,
+            String sid, String interruptId) {
+        interruptActive.put(sid, true);
+        String toolName = "";
+        String content;
+        if (ctx.getInputs() instanceof ToolCallInputs inputs) {
+            toolName = inputs.getToolName();
+            // F3-fix：ask_user 话术在 onToolException 解析（异常处理回调必触发；
+            // beforeToolCall(80) 被 AskUserTemplateRail(85) 抛异常中断、不可达）。
+            if (TOOL_ASK_USER.equals(toolName)) {
+                ScriptResolver.resolveAskUser(scripts, inputs.getToolArgs(), ctx.getExtra());
+            }
+        }
+        // UC-C02: interrupt_source 开关控制追问内容来源
+        // 对齐 Python ask_user_rail.py L172-180: 未命中脚本时放行 LLM question
+        String interruptSource = scripts != null ? scripts.getInterruptSource() : "script";
+        // 优先级1: VersatileInterruptRail 从 passthrough_nodes 提取的 message（如"请确认转账信息"）
+        String versatileMessage = "";
+        if (tie.getRequest() != null && tie.getRequest().getMessage() != null) {
+            versatileMessage = tie.getRequest().getMessage();
+        }
+        Object rt = ctx.getExtra().get(ScriptConstants.KEY_RESPONSE_TEMPLATE);
+        if (!versatileMessage.isBlank()) {
+            // Versatile adapter 返回的中断提示文本
+            content = versatileMessage;
+        } else if (rt != null && !String.valueOf(rt).isBlank()) {
+            // 脚本话术命中（response_template 已解析）
+            content = String.valueOf(rt);
+        } else {
+            // 未命中脚本：用 LLM question 兜底（不丢弃），缺则用 interrupt_start 配置
+            String llmQuestion = extractAskUserQuestion(ctx);
+            content = llmQuestion.isBlank() ? ScriptResolver.interruptStart(scripts) : llmQuestion;
+        }
+        LOGGER.info(
+                "[EDPA-DIAG] onToolException ToolInterruptException -> emit interrupt_start"
+                        + "(tool={}, interrupt_id={}, source={})",
+                toolName, interruptId, interruptSource);
+        emit(ctx, EdpaEventType.INTERRUPT_START,
+                Map.of("tool", toolName, "content", content, "interrupt_id", interruptId));
+    }
+
+    private void handleGeneralToolError(AgentCallbackContext ctx, String sid, Exception exception) {
+        // 其他工具异常 -> 先关 tool（如unclosed），再报错，最后关 conversation
         if (Boolean.TRUE.equals(toolOpen.get(sid))) {
             String toolName = "";
             if (ctx.getInputs() instanceof ToolCallInputs inputs) {

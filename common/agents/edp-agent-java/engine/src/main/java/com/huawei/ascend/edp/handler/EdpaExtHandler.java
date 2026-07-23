@@ -425,6 +425,59 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         result.setAgentConfig(new EdpAgentConfig());
         result.setEdpConfig(new EdpConfig());
         Path yamlDir = Path.of("src/main/resources").toAbsolutePath().normalize();
+        // 第三至五步：解析 scenarioHome、加载 Governance、配置校验 fail-fast。
+        loadGovernanceAndValidate(result, config, yamlDir);
+
+        // 第六步：从 Governance actrule 加载 Todo 数据层。
+        ActRuleConfig actrule = result.getGovernanceConfig() != null
+                ? result.getGovernanceConfig().getActrule() : null;
+        EdpaTodolist edpaTodolist = loadTodoDataLayer(actrule);
+
+        // 第七步：按 Governance 的 planrule 拼接系统提示词。
+        String systemPrompt = buildSystemPrompt(result);
+
+        // 第八步：构造 DeepAgentConfig（使用 EdpaSpringBootConfig.ModelConfig）。
+        Path skillsDir = result.getScenarioHomePath() != null ? result.getScenarioHomePath().resolve("skills") : null;
+        DeepAgentConfig deepAgentConfig = buildDeepAgentConfig(config, result.getEdpConfig(), actrule, systemPrompt,
+                skillsDir);
+
+        // 第九步：通过 HarnessFactory 创建 DeepAgent。
+        // 使用确定性的 agent card ID（基于 agentName），确保不同实例对同一 agent 定义
+        // 使用相同的 Redis checkpoint key（格式: {sessionId}:agent:{agentId}:agent_state_blobs）。
+        // 否则 HarnessFactory.ensureCardIdentity() 会为每个实例生成随机 UUID，导致跨实例会话无法共享。
+        AgentCard agentCard = AgentCard.builder().id(agentName).name(agentName).description("EDPAgent instance")
+                .build();
+        result.setDeepAgent(HarnessFactory.createDeepAgent(agentCard, deepAgentConfig, null));
+        LOGGER.info("[EDPA-DIAG] Created DeepAgent with deterministic card id={}, name={}", agentCard.getId(),
+                agentCard.getName());
+
+        // 第十步：注册 Skill 目录。
+        registerSkills(result.getDeepAgent(), skillsDir, agentName);
+
+        // 第十一步：加载框架级、场景级、Skill 级话术。
+        SysScriptsConfig sysScriptsConfig = loadSysScripts(result, yamlDir, skillsDir);
+
+        // 第十二、十三步：注册内置业务工具和 Rails，并强制完成 DeepAgent 初始化。
+        setupEnhanceContext(result, config, actrule, skillsDir, edpaTodolist, sysScriptsConfig, agentName,
+                decoratedSandboxClient);
+        result.getDeepAgent().ensureInitialized();
+        result.setAgentInstance(result.getDeepAgent().getAgent());
+        LOGGER.info("EdpaExtHandler performInit completed, agentId={}, deepAgent initialized={}, scenarioHome={}",
+                agentName, result.getDeepAgent().isInitialized(), result.getScenarioHomePath());
+        return result;
+    }
+
+    /**
+     * 解析 scenarioHome 路径、加载 Governance 配置并执行配置校验（fail-fast）。
+     *
+     * <p>对应 performInit 的第三至五步：scenarioHome 解析、Governance 加载、
+     * Model/Versatile/Scenario 配置校验。</p>
+     *
+     * @param result 初始化结果，承载 scenarioHomePath 与 governanceConfig
+     * @param config EDPAgent 合并后配置
+     * @param yamlDir 框架资源目录（src/main/resources）
+     */
+    private static void loadGovernanceAndValidate(InitResult result, EdpaSpringBootConfig config, Path yamlDir) {
         // 第三步：解析 scenarioHome 路径。
         String scenarioHome = config.getScenarioHome();
         if (scenarioHome != null && !scenarioHome.isBlank()) {
@@ -454,10 +507,18 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         if (result.getScenarioHomePath() != null) {
             EdpConfigValidator.validateScenarioConfig(result.getScenarioHomePath());
         }
+    }
 
-        // 第六步：从 Governance actrule 加载 Todo 数据层。
-        ActRuleConfig actrule = result.getGovernanceConfig() != null
-                ? result.getGovernanceConfig().getActrule() : null;
+    /**
+     * 从 Governance actrule 加载 Todo 数据层。
+     *
+     * <p>对应 performInit 的第六步：当 actrule 含有 todolist 条目时构造
+     * {@link EdpaTodolist}，加载失败时记录告警并返回 null。</p>
+     *
+     * @param actrule Governance 的 actrule 配置，可为 null
+     * @return 构造完成的 EdpaTodolist，无条目或加载失败时返回 null
+     */
+    private static EdpaTodolist loadTodoDataLayer(ActRuleConfig actrule) {
         EdpaTodolist edpaTodolist = null;
         if (actrule != null && actrule.getTodolistEntries() != null && !actrule.getTodolistEntries().isEmpty()) {
             try {
@@ -468,8 +529,19 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
                 LOGGER.warn("Failed to load EdpaTodolist from governance actrule: {}", e.getMessage());
             }
         }
+        return edpaTodolist;
+    }
 
-        // 第七步：按 Governance 的 planrule 拼接系统提示词。
+    /**
+     * 按 Governance 的 planrule 拼接系统提示词。
+     *
+     * <p>对应 performInit 的第七步：优先使用 PlanrulePromptBuilder 生成提示词片段，
+     * 其次回退到 AgentConfig.prompt.system，均不可用时使用空串。</p>
+     *
+     * @param result 初始化结果，用于获取 governanceConfig 与 agentConfig
+     * @return 拼接后的系统提示词字符串
+     */
+    private static String buildSystemPrompt(InitResult result) {
         String systemPrompt = "";
         if (result.getGovernanceConfig() != null && result.getGovernanceConfig().getPlanrule() != null) {
             systemPrompt = PlanrulePromptBuilder.buildSystemPromptFragment(result.getGovernanceConfig().getPlanrule());
@@ -479,26 +551,21 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         } else {
             LOGGER.info("No system prompt source available, using empty default");
         }
+        return systemPrompt;
+    }
 
-        // 第八步：构造 DeepAgentConfig（使用 EdpaSpringBootConfig.ModelConfig）。
-        Path skillsDir = result.getScenarioHomePath() != null ? result.getScenarioHomePath().resolve("skills") : null;
-        DeepAgentConfig deepAgentConfig = buildDeepAgentConfig(config, result.getEdpConfig(), actrule, systemPrompt,
-                skillsDir);
-
-        // 第九步：通过 HarnessFactory 创建 DeepAgent。
-        // 使用确定性的 agent card ID（基于 agentName），确保不同实例对同一 agent 定义
-        // 使用相同的 Redis checkpoint key（格式: {sessionId}:agent:{agentId}:agent_state_blobs）。
-        // 否则 HarnessFactory.ensureCardIdentity() 会为每个实例生成随机 UUID，导致跨实例会话无法共享。
-        AgentCard agentCard = AgentCard.builder().id(agentName).name(agentName).description("EDPAgent instance")
-                .build();
-        result.setDeepAgent(HarnessFactory.createDeepAgent(agentCard, deepAgentConfig, null));
-        LOGGER.info("[EDPA-DIAG] Created DeepAgent with deterministic card id={}, name={}", agentCard.getId(),
-                agentCard.getName());
-
-        // 第十步：注册 Skill 目录。
-        registerSkills(result.getDeepAgent(), skillsDir, agentName);
-
-        // 第十一步：加载框架级、场景级、Skill 级话术。
+    /**
+     * 加载框架级、场景级、Skill 级话术配置。
+     *
+     * <p>对应 performInit 的第十一步：依次加载 framework scriptconfig.yaml、
+     * scenario scriptconfig.yaml，并合并 Skill 目录下收集到的话术。</p>
+     *
+     * @param result 初始化结果，用于获取 scenarioHomePath
+     * @param yamlDir 框架资源目录（src/main/resources）
+     * @param skillsDir 场景 Skill 目录，可为 null
+     * @return 合并后的 SysScriptsConfig
+     */
+    private static SysScriptsConfig loadSysScripts(InitResult result, Path yamlDir, Path skillsDir) {
         SysScriptsConfig sysScriptsConfig = new SysScriptsConfig();
         Path frameworkScriptsPath = yamlDir.resolve("governance").resolve("scriptconfig.yaml").toAbsolutePath()
                 .normalize();
@@ -520,8 +587,29 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             LOGGER.info("Skill scripts collected: {} entries from {}", skillScripts.size(), skillsDir);
         }
         LOGGER.info("SysScriptsConfig merged templates: {}", sysScriptsConfig.getTemplates().size());
+        return sysScriptsConfig;
+    }
 
-        // 第十二步：注册 EDPAgent 内置业务工具和业务 Rails（13参数版，含沙箱）。
+    /**
+     * 注册 EDPAgent 内置业务工具和业务 Rails，并构造 enhance 上下文执行增强。
+     *
+     * <p>对应 performInit 的第十二步：创建 VersatilePassthroughBuffer、
+     * 配置沙箱门面与 SysOperation、组装 EnhanceContext 并调用
+     * {@link EdpaAgentEnhancer#enhance}。</p>
+     *
+     * @param result 初始化结果，承载 versatilePassthroughBuffer/sandboxGatewayConfig/sysOperation/deepAgent 等
+     * @param config EDPAgent 合并后配置
+     * @param actrule Governance 的 actrule 配置，可为 null
+     * @param skillsDir 场景 Skill 目录，可为 null
+     * @param edpaTodolist Todo 数据层，可为 null
+     * @param sysScriptsConfig 已加载的话术配置
+     * @param agentName Agent 名称
+     * @param decoratedSandboxClient 已装饰的沙箱客户端
+     */
+    private static void setupEnhanceContext(InitResult result, EdpaSpringBootConfig config, ActRuleConfig actrule,
+            Path skillsDir, EdpaTodolist edpaTodolist, SysScriptsConfig sysScriptsConfig, String agentName,
+            SandboxClient decoratedSandboxClient) {
+        // --- 第十二步：注册 EDPAgent 内置业务工具和业务 Rails（13参数版，含沙箱）。
         result.setVersatilePassthroughBuffer(new VersatilePassthroughBuffer());
 
         // --- 沙箱特性：创建SysOperation双模式门面 ---
@@ -547,16 +635,6 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         enhanceCtx.setGatewayConfig(result.getSandboxGatewayConfig());
         enhanceCtx.setDecoratedSandboxClient(decoratedSandboxClient);
         EdpaAgentEnhancer.enhance(result.getDeepAgent(), enhanceCtx);
-
-        // 第十三步：强制完成 DeepAgent 初始化。
-        result.getDeepAgent().ensureInitialized();
-
-        // 获取真实 agent 实例
-        result.setAgentInstance(result.getDeepAgent().getAgent());
-
-        LOGGER.info("EdpaExtHandler performInit completed, agentId={}, deepAgent initialized={}, scenarioHome={}",
-                agentName, result.getDeepAgent().isInitialized(), result.getScenarioHomePath());
-        return result;
     }
 
     /**

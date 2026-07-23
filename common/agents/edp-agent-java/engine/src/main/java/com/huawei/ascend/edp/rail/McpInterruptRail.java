@@ -275,67 +275,91 @@ public class McpInterruptRail extends AgentRail {
     private Map<String, Object> executeViaProcessBuilder(List<String> command, Path workDir, String argumentsJson,
             Map<String, Object> scriptParams) {
         try {
-            ProcessBuilder builder = new ProcessBuilder(command);
-            if (workDir != null) {
-                builder.directory(workDir.toFile());
-            }
-            builder.environment().put("SKILL_INPUT", argumentsJson);
-            builder.environment().put("PYTHONIOENCODING", "utf-8");
-
-            // ---- MCP SSE 配置注入 + 灰度路由 ----
-            String wapGrayFlag = extractWapGrayFlag(scriptParams).orElse(null);
-            if (springBootConfig != null && springBootConfig.getMcpsse() != null) {
-                var mcpConfig = springBootConfig.getMcpsse();
-                String mcpServerUrl = (wapGrayFlag != null && wapGrayFlag.startsWith("JD"))
-                        ? mcpConfig.getMasterUrl()
-                        : mcpConfig.getStandbyUrl();
-                if (mcpServerUrl != null) {
-                    builder.environment().put("MCP_SERVER_URL", mcpServerUrl);
-                }
-                if (mcpConfig.getAccessToken() != null) {
-                    builder.environment().put("MCP_ACCESS_TOKEN", mcpConfig.getAccessToken());
-                }
-                if (mcpConfig.getAppName() != null) {
-                    builder.environment().put("MCP_APP_NAME", mcpConfig.getAppName());
-                }
-                LOGGER.info(
-                        "[MCPInterruptRail] MCP SSE env injected, wapGrayFlag={}, serverUrl={}, "
-                                + "hasAccessToken={}, appName={}",
-                        wapGrayFlag, mcpServerUrl, mcpConfig.getAccessToken() != null, mcpConfig.getAppName());
-            }
-
-            // ---- MCP SSE 配置注入结束 ----
-
+            ProcessBuilder builder = configureProcessBuilder(command, workDir, argumentsJson, scriptParams);
             LOGGER.info("McpInterruptRail: execute script command={}, workDir={}", command, workDir);
-
-            Process process = builder.start();
-            StringBuilder stdout = new StringBuilder();
-            StringBuilder stderr = new StringBuilder();
-            Future<?> stdoutFuture = readAsync(process.getInputStream(), stdout);
-            Future<?> stderrFuture = readAsync(process.getErrorStream(), stderr);
-            boolean finished = process.waitFor(SCRIPT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                return failedResult("MCP script timeout after " + SCRIPT_TIMEOUT.toSeconds() + "s");
-            }
-            try {
-                stdoutFuture.get(1, TimeUnit.SECONDS);
-                stderrFuture.get(1, TimeUnit.SECONDS);
-            } catch (TimeoutException | ExecutionException e) {
-                LOGGER.debug("McpInterruptRail: stream read timeout/interrupt", e);
-            }
-
-            int exitCode = process.exitValue();
-            LOGGER.info("[MCPInterruptRail] local script executed: exitCode={}, stdoutLen={}, stderrLen={}", exitCode,
-                    stdout.length(), abbreviate(stderr.toString()));
-            if (exitCode != 0) {
-                return failedResult("MCP script exitCode=" + exitCode + ", stderr=" + abbreviate(stderr.toString()));
-            }
-            return parseScriptOutput(stdout.toString());
+            return executeProcess(builder);
         } catch (IOException | InterruptedException | RuntimeException e) {
             LOGGER.warn("McpInterruptRail: local script execution failed: {}", e.getMessage());
             return failedResult(e.getMessage());
         }
+    }
+
+    /**
+     * 配置 ProcessBuilder：设置 workDir、基础环境变量及 MCP SSE 灰度路由环境变量。
+     *
+     * @param command the command value
+     * @param workDir the workDir value
+     * @param argumentsJson the argumentsJson value
+     * @param scriptParams the scriptParams value
+     * @return the configured ProcessBuilder
+     */
+    private ProcessBuilder configureProcessBuilder(List<String> command, Path workDir, String argumentsJson,
+            Map<String, Object> scriptParams) {
+        ProcessBuilder builder = new ProcessBuilder(command);
+        if (workDir != null) {
+            builder.directory(workDir.toFile());
+        }
+        builder.environment().put("SKILL_INPUT", argumentsJson);
+        builder.environment().put("PYTHONIOENCODING", "utf-8");
+
+        // ---- MCP SSE 配置注入 + 灰度路由 ----
+        String wapGrayFlag = extractWapGrayFlag(scriptParams).orElse(null);
+        if (springBootConfig != null && springBootConfig.getMcpsse() != null) {
+            var mcpConfig = springBootConfig.getMcpsse();
+            String mcpServerUrl = (wapGrayFlag != null && wapGrayFlag.startsWith("JD"))
+                    ? mcpConfig.getMasterUrl()
+                    : mcpConfig.getStandbyUrl();
+            if (mcpServerUrl != null) {
+                builder.environment().put("MCP_SERVER_URL", mcpServerUrl);
+            }
+            if (mcpConfig.getAccessToken() != null) {
+                builder.environment().put("MCP_ACCESS_TOKEN", mcpConfig.getAccessToken());
+            }
+            if (mcpConfig.getAppName() != null) {
+                builder.environment().put("MCP_APP_NAME", mcpConfig.getAppName());
+            }
+            LOGGER.info(
+                    "[MCPInterruptRail] MCP SSE env injected, wapGrayFlag={}, serverUrl={}, "
+                            + "hasAccessToken={}, appName={}",
+                    wapGrayFlag, mcpServerUrl, mcpConfig.getAccessToken() != null, mcpConfig.getAppName());
+        }
+        // ---- MCP SSE 配置注入结束 ----
+        return builder;
+    }
+
+    /**
+     * 执行进程并收集输出：启动进程、异步读取 stdout/stderr、等待完成、解析结果。
+     *
+     * @param builder the configured ProcessBuilder
+     * @return the parsed result map
+     * @throws IOException if process start fails
+     * @throws InterruptedException if waiting is interrupted
+     */
+    private Map<String, Object> executeProcess(ProcessBuilder builder) throws IOException, InterruptedException {
+        Process process = builder.start();
+        StringBuilder stdout = new StringBuilder();
+        StringBuilder stderr = new StringBuilder();
+        Future<?> stdoutFuture = readAsync(process.getInputStream(), stdout);
+        Future<?> stderrFuture = readAsync(process.getErrorStream(), stderr);
+        boolean finished = process.waitFor(SCRIPT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            return failedResult("MCP script timeout after " + SCRIPT_TIMEOUT.toSeconds() + "s");
+        }
+        try {
+            stdoutFuture.get(1, TimeUnit.SECONDS);
+            stderrFuture.get(1, TimeUnit.SECONDS);
+        } catch (TimeoutException | ExecutionException e) {
+            LOGGER.debug("McpInterruptRail: stream read timeout/interrupt", e);
+        }
+
+        int exitCode = process.exitValue();
+        LOGGER.info("[MCPInterruptRail] local script executed: exitCode={}, stdoutLen={}, stderrLen={}", exitCode,
+                stdout.length(), abbreviate(stderr.toString()));
+        if (exitCode != 0) {
+            return failedResult("MCP script exitCode=" + exitCode + ", stderr=" + abbreviate(stderr.toString()));
+        }
+        return parseScriptOutput(stdout.toString());
     }
 
     /**
