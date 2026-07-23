@@ -35,8 +35,6 @@ import org.a2aproject.sdk.spec.TextPart;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -62,8 +60,6 @@ import java.util.function.Supplier;
 public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
     private static final Logger log = LoggerFactory.getLogger(A2AGatewayRemoteAgentCaller.class);
 
-    private static final long CALL_TIMEOUT_SECONDS = 300L;
-
     private final A2AGatewayProperties properties;
     private final RemoteAgentCardResolver cardResolver;
     private final Map<String, Client> clientCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -82,7 +78,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
 
     @Override
     public void call(RemoteAgentCall call, QueryStreamObserver observer) {
-        ServeRequest forwarded = buildForwardedServeRequest(call.serveRequest(), call.responseContent());
+        ServeRequest forwarded = ForwardedServeRequests.build(call.serveRequest(), call.responseContent());
         String jsonRpcUrl = cardResolver.resolveJsonRpcUrl(call.agentId());
         if (jsonRpcUrl == null || jsonRpcUrl.isBlank()) {
             observer.onError(new RemoteAgentException(
@@ -134,15 +130,16 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
             return;
         }
 
+        long timeoutSeconds = properties.getCallTimeoutSeconds();
         try {
-            result.get(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            result.get(timeoutSeconds, TimeUnit.SECONDS);
             if (!observer.isCancelled()) {
                 observer.onComplete();
             }
         } catch (TimeoutException e) {
             observer.onError(new RemoteAgentException(
                     "A2AGateway call timed out for agentId=" + call.agentId()
-                            + " after " + CALL_TIMEOUT_SECONDS + "s", e));
+                            + " after " + timeoutSeconds + "s", e));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             observer.onError(new RemoteAgentException(
@@ -168,35 +165,28 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     /**
-     * Builds a forwarded ServeRequest by copying the original and appending
-     * {@code responseContent} as an assistant message when non-null and non-blank.
+     * Builds an ephemeral {@link AgentCard} for the A2A Gateway route.
      *
-     * <p>Package-private for testability.
+     * <p>The gateway caller does NOT fetch the real Agent Card from
+     * {@code gatewayBaseUrl/{agentCard}/.well-known/agent-card.json}. This is
+     * a deliberate simplification for the gateway routing mode: the gateway
+     * itself handles target routing, and whether it exposes a standard card
+     * endpoint per agent is an open deployment question (PRD TBD-04/07).
+     * Consequences:
+     * <ul>
+     *   <li>Protocol version is fixed to {@link AgentInterface#CURRENT_PROTOCOL_VERSION};
+     *       if the gateway-bridged target speaks an older version, calls fail
+     *       at the SDK layer rather than being filtered up front.</li>
+     *   <li>FEAT-015 capability/skill negotiation is skipped. Deployments that
+     *       need compatibility filtering must configure the gateway to expose
+     *       real cards and switch to a caller implementation that fetches them.</li>
+     * </ul>
      *
-     * @param original        the original serve request
-     * @param responseContent optional upstream response content
-     * @return a new serve request with messages appended
+     * <p>A WARN is logged once per agentId to surface this assumption.
      */
-    static ServeRequest buildForwardedServeRequest(ServeRequest original, String responseContent) {
-        ServeRequest forwarded = new ServeRequest();
-        forwarded.setConversationId(original.getConversationId());
-        forwarded.setUserId(original.getUserId());
-        forwarded.setSpaceId(original.getSpaceId());
-        forwarded.setTenantId(original.getTenantId());
-        forwarded.setStream(original.isStream());
-        forwarded.setMetadata(original.getMetadata());
-        List<Map<String, Object>> messages = new ArrayList<>(original.getMessages());
-        if (responseContent != null && !responseContent.isBlank()) {
-            Map<String, Object> assistant = new LinkedHashMap<>();
-            assistant.put("role", "assistant");
-            assistant.put("content", responseContent);
-            messages.add(assistant);
-        }
-        forwarded.setMessages(messages);
-        return forwarded;
-    }
-
     private AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl) {
+        log.warn("A2AGateway caller using ephemeral AgentCard for agentId={} "
+                + "(protocol version pinned to CURRENT; FEAT-015 card fetch skipped)", agentId);
         return AgentCard.builder()
                 .name(agentId)
                 .description("A2A Gateway route to " + agentId)

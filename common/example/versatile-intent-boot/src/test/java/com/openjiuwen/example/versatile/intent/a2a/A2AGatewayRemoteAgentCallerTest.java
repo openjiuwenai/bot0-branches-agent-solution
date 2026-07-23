@@ -31,7 +31,7 @@ class A2AGatewayRemoteAgentCallerTest {
         original.setConversationId("c-1");
         original.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
 
-        ServeRequest forwarded = A2AGatewayRemoteAgentCaller.buildForwardedServeRequest(
+        ServeRequest forwarded = ForwardedServeRequests.build(
                 original, "一层输出");
 
         assertThat(forwarded.getMessages()).hasSize(2);
@@ -50,7 +50,7 @@ class A2AGatewayRemoteAgentCallerTest {
         original.setConversationId("c-1");
         original.setMessages(List.of(Map.of("role", "user", "content", "hi")));
 
-        ServeRequest forwarded = A2AGatewayRemoteAgentCaller.buildForwardedServeRequest(
+        ServeRequest forwarded = ForwardedServeRequests.build(
                 original, null);
 
         assertThat(forwarded.getMessages()).hasSize(1);
@@ -68,7 +68,7 @@ class A2AGatewayRemoteAgentCallerTest {
         original.setMessages(List.of(Map.of("role", "user", "content", "hi")));
         original.setMetadata(Map.of("k", "v"));
 
-        ServeRequest forwarded = A2AGatewayRemoteAgentCaller.buildForwardedServeRequest(
+        ServeRequest forwarded = ForwardedServeRequests.build(
                 original, "context");
 
         assertThat(forwarded.getConversationId()).isEqualTo("c-1");
@@ -93,7 +93,7 @@ class A2AGatewayRemoteAgentCallerTest {
         original.setConversationId("c-1");
         original.setMessages(List.of(Map.of("role", "user", "content", "hi")));
 
-        ServeRequest forwarded = A2AGatewayRemoteAgentCaller.buildForwardedServeRequest(
+        ServeRequest forwarded = ForwardedServeRequests.build(
                 original, "   ");
 
         assertThat(forwarded.getMessages()).hasSize(1);
