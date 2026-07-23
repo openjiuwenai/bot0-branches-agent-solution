@@ -40,11 +40,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -126,6 +128,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
     private final RemoteAgentCardResolver cardResolver;
     private final A2AHttpClient httpClient;
     private final Map<String, Client> clientCache = new ConcurrentHashMap<>();
+    private final Set<String> ephemeralCardWarnedAgents = ConcurrentHashMap.newKeySet();
 
     /**
      * Constructs the gateway caller.
@@ -347,8 +350,10 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
      * <p>A WARN is logged once per agentId to surface this assumption.
      */
     AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl) {
-        log.warn("A2AGateway caller using ephemeral AgentCard for agentId={} "
-                + "(protocol version pinned to CURRENT; FEAT-015 card fetch skipped)", agentId);
+        if (ephemeralCardWarnedAgents.add(agentId)) {
+            log.warn("A2AGateway caller using ephemeral AgentCard for agentId={} "
+                    + "(protocol version pinned to CURRENT; FEAT-015 card fetch skipped)", agentId);
+        }
         return AgentCard.builder()
                 .name(agentId)
                 .description("A2A Gateway route to " + agentId)
@@ -371,6 +376,23 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                         .clientConfig(new ClientConfig.Builder().setStreaming(properties.isStreaming()).build())
                         .withTransport(JSONRPCTransport.class, new JSONRPCTransportConfig(httpClient))
                         .build()));
+    }
+
+    /**
+     * Releases cached {@link Client} instances (each holding HTTP connection
+     * pool state) on bean destruction. Without this, context restarts / hot
+     * reloads leak connections until JVM exit.
+     */
+    @PreDestroy
+    void shutdown() {
+        for (Client client : clientCache.values()) {
+            try {
+                client.close();
+            } catch (RuntimeException ex) {
+                log.debug("A2AGateway caller: error closing cached client", ex);
+            }
+        }
+        clientCache.clear();
     }
 
     private static <T> T withApplicationClassLoader(Supplier<T> action) {

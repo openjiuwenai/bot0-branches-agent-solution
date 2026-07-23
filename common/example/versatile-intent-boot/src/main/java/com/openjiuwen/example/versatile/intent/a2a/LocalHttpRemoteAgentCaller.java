@@ -72,7 +72,9 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
                     "LocalHttpRemoteAgentCaller: no local mapping for agentId=" + call.agentId()));
             return;
         }
-        String queryUrl = a2aUrl.replace(A2A_SUFFIX, QUERY_PATH);
+        String queryUrl = a2aUrl.endsWith(A2A_SUFFIX)
+                ? a2aUrl.substring(0, a2aUrl.length() - A2A_SUFFIX.length()) + QUERY_PATH
+                : a2aUrl + QUERY_PATH;
         ServeRequest forwarded = ForwardedServeRequests.build(call.serveRequest(), call.responseContent());
 
         log.info("LocalHttp call agent={} url={} appendedMessages={}",
