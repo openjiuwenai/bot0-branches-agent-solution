@@ -835,34 +835,18 @@ Send-ParallelBalanceRequestJson $parallelBalanceRequestJson2
 
 如果三个远端流程都还需要余额查询结果，第二轮再次返回同一父 Task 的三个 `INPUT_REQUIRED` item。若只回答其中一个，另外两个必须继续保持 pending；不允许默认广播。
 
-第三轮仍按相同方式携带三个定向 Part。这里省略每个人完整的 `responseData.pageData`，实际验证时替换为 Versatile 返回的完整 JSON：
+第三轮仍按相同方式携带三个定向 Part。与第二轮相同，每个 Part 的 `text` 放一份完整报文，并通过 `metadata.toolCallId` 定向到对应的 pending member：
 
 ```powershell
-# 实际验证时，把三个对象替换为 Versatile 返回的完整 JSON 数据。
-$zhangBalanceResult = [ordered]@{
-  bankCardBalanceList = @(
-    [ordered]@{
-      bankCardNumber = "6222021816044054241"
-      currencyBalanceList = @([ordered]@{ balance = "1500.92" })
-    }
-  )
-}
-$liBalanceResult = [ordered]@{
-  bankCardBalanceList = @(
-    [ordered]@{
-      bankCardNumber = "6222021816044057816"
-      currencyBalanceList = @([ordered]@{ balance = "2088.10" })
-    }
-  )
-}
-$wangBalanceResult = [ordered]@{
-  bankCardBalanceList = @(
-    [ordered]@{
-      bankCardNumber = "6222021816044053058"
-      currencyBalanceList = @([ordered]@{ balance = "936.44" })
-    }
-  )
-}
+$zhangRound3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044054241","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"1500.92"}]}],"responseData":[{"answer":"已为您查询账户余额","readme":"已为您查询账户余额","pageData":"","type":"1"},{"answer":"","readme":"","pageData":{"id":"queryBalance","bankBalanceData":[{"layouttype":"1","actionFun_click":{"menu":{"param":"returnFlag=3","needLogin":"false","menuId":"account_1"}},"actionType_click":"menu","bankIoc":{"titleValueColor":"","titleValue":"","type":"pic","bgColor":"","bgPic":"","actionFun_click":"","actionType_click":""},"areaName":{"titleValueColor":"F4E1B3","titleValue":"广州","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardTypeDesc":{"titleValueColor":"F4E1B3","titleValue":"借记卡（I类）","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"alias":{"titleValueColor":"F4E1B3","titleValue":"","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardNumLast":{"titleValueColor":"F4E1B3","titleValue":"6222****4241","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balanceList":[{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"1970.23","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}},{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币可用余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"1500.92","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}}],"showCardNumBtn":{"type":"button","btnId":"tttt","btnName":"查看","bgColor":null,"actionFun_click":"abc","actionType_click":"4"},"showAccountBalanceBtn":{"type":"button","btnId":"qqqq","btnName":"点击查询","bgColor":null,"actionFun_click":"def","actionType_click":"4"}}],"queryStatus":"成功","failCause":"","type":"7"}}]}
+'@
+$liRound3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044057816","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"2088.10"}]}],"responseData":[{"answer":"已为您查询账户余额","readme":"已为您查询账户余额","pageData":"","type":"1"},{"answer":"","readme":"","pageData":{"id":"queryBalance","bankBalanceData":[{"layouttype":"1","actionFun_click":{"menu":{"param":"returnFlag=3","needLogin":"false","menuId":"account_1"}},"actionType_click":"menu","bankIoc":{"titleValueColor":"","titleValue":"","type":"pic","bgColor":"","bgPic":"","actionFun_click":"","actionType_click":""},"areaName":{"titleValueColor":"F4E1B3","titleValue":"广州","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardTypeDesc":{"titleValueColor":"F4E1B3","titleValue":"借记卡（I类）","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"alias":{"titleValueColor":"F4E1B3","titleValue":"","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardNumLast":{"titleValueColor":"F4E1B3","titleValue":"6222****7816","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balanceList":[{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"2088.10","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}},{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币可用余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"2088.10","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}}],"showCardNumBtn":{"type":"button","btnId":"tttt","btnName":"查看","bgColor":null,"actionFun_click":"abc","actionType_click":"4"},"showAccountBalanceBtn":{"type":"button","btnId":"qqqq","btnName":"点击查询","bgColor":null,"actionFun_click":"def","actionType_click":"4"}}],"queryStatus":"成功","failCause":"","type":"7"}}]}
+'@
+$wangRound3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044053058","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"936.44"}]}],"responseData":[{"answer":"已为您查询账户余额","readme":"已为您查询账户余额","pageData":"","type":"1"},{"answer":"","readme":"","pageData":{"id":"queryBalance","bankBalanceData":[{"layouttype":"1","actionFun_click":{"menu":{"param":"returnFlag=3","needLogin":"false","menuId":"account_1"}},"actionType_click":"menu","bankIoc":{"titleValueColor":"","titleValue":"","type":"pic","bgColor":"","bgPic":"","actionFun_click":"","actionType_click":""},"areaName":{"titleValueColor":"F4E1B3","titleValue":"广州","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardTypeDesc":{"titleValueColor":"F4E1B3","titleValue":"借记卡（I类）","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"alias":{"titleValueColor":"F4E1B3","titleValue":"","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardNumLast":{"titleValueColor":"F4E1B3","titleValue":"6222****3058","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balanceList":[{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"936.44","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}},{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币可用余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"936.44","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}}],"showCardNumBtn":{"type":"button","btnId":"tttt","btnName":"查看","bgColor":null,"actionFun_click":"abc","actionType_click":"4"},"showAccountBalanceBtn":{"type":"button","btnId":"qqqq","btnName":"点击查询","bgColor":null,"actionFun_click":"def","actionType_click":"4"}}],"queryStatus":"成功","failCause":"","type":"7"}}]}
+'@
 
 $parallelBalanceRequest3 = [ordered]@{
   jsonrpc = "2.0"
@@ -876,21 +860,21 @@ $parallelBalanceRequest3 = [ordered]@{
       parts = @(
         [ordered]@{
           text = ([ordered]@{
-            query = ($zhangBalanceResult | ConvertTo-Json -Compress -Depth 100)
+            query = $zhangRound3Query
             intent = "LATEST"
           } | ConvertTo-Json -Compress -Depth 100)
           metadata = [ordered]@{ toolCallId = $zhangToolCallId }
         }
         [ordered]@{
           text = ([ordered]@{
-            query = ($liBalanceResult | ConvertTo-Json -Compress -Depth 100)
+            query = $liRound3Query
             intent = "LATEST"
           } | ConvertTo-Json -Compress -Depth 100)
           metadata = [ordered]@{ toolCallId = $liToolCallId }
         }
         [ordered]@{
           text = ([ordered]@{
-            query = ($wangBalanceResult | ConvertTo-Json -Compress -Depth 100)
+            query = $wangRound3Query
             intent = "LATEST"
           } | ConvertTo-Json -Compress -Depth 100)
           metadata = [ordered]@{ toolCallId = $wangToolCallId }
