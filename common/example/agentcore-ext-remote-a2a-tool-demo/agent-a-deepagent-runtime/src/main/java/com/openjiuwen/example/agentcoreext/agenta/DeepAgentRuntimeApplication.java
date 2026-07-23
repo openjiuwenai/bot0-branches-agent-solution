@@ -4,12 +4,14 @@
 
 package com.openjiuwen.example.agentcoreext.agenta;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.SkillUseRail;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.harness.workspace.Workspace;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
+import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -34,6 +36,11 @@ public class DeepAgentRuntimeApplication {
     AgentHandler deepAgentHandler(DeepAgentLlmProperties properties) {
         properties.requireConfigured();
         return new JiuwenCoreAgentExtHandler(buildDeepAgent(properties));
+    }
+
+    @Bean
+    CustomRestProtocolAdapter customRestProtocolAdapter(ObjectMapper objectMapper) {
+        return new CustomRestDemoAdapter(objectMapper);
     }
 
     static DeepAgent buildDeepAgent(DeepAgentLlmProperties properties) {

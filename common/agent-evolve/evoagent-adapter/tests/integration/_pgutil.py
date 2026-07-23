@@ -1,4 +1,4 @@
-"""集成测试共享工具: PG 连接配置 + jsonl 加载 + 分组 helper。
+"""集成测试共享工具: PG 连接配置 + synthetic spans + 分组 helper。
 
 被 conftest.py (fixtures) 与各集成测试模块 (skipif + 数据派生断言) 复用。
 """
@@ -6,13 +6,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-from pathlib import Path
 
 import asyncpg
 
-from tests._testdata import otel_spans_jsonl
+from tests._testdata import otel_spans
 
 PG_HOST = os.environ.get("ADAPTER_TEST_PG_HOST", "127.0.0.1")
 PG_PORT = int(os.environ.get("ADAPTER_TEST_PG_PORT", "5432"))
@@ -34,24 +32,9 @@ def pg_available() -> bool:
         return False
 
 
-def find_jsonl() -> Path:
-    """返回归档在 tests/data 下的 jsonl 路径 (与 unit 测试共用同一份数据)。"""
-    return otel_spans_jsonl()
-
-
-def load_jsonl_spans() -> list[dict]:
-    """加载 jsonl 并提升 service_name/conversation_id (对齐 parse_span 输出形状)。"""
-    raw = find_jsonl().read_text(encoding="utf-8")
-    dec = json.JSONDecoder()
-    i, n, spans = 0, len(raw), []
-    while i < n:
-        while i < n and raw[i].isspace():
-            i += 1
-        if i >= n:
-            break
-        obj, end = dec.raw_decode(raw, i)
-        spans.append(obj)
-        i = end
+def load_spans() -> list[dict]:
+    """加载 synthetic spans 并提升 service_name/conversation_id。"""
+    spans = otel_spans()
     for s in spans:
         s.setdefault("service_name", (s.get("resource_attributes") or {}).get("service.name"))
         s.setdefault("conversation_id", (s.get("attributes") or {}).get("session.id"))

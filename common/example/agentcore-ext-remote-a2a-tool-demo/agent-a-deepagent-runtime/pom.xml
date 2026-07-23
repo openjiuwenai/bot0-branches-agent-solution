@@ -20,6 +20,11 @@
     <dependencies>
         <dependency>
             <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-app-custom-rest</artifactId>
+            <version>${agent-runtime-ext-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-app</artifactId>
             <version>${agent-runtime-java.version}</version>
         </dependency>

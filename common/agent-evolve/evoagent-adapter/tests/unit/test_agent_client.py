@@ -285,15 +285,15 @@ class TestAgentClientBuildRequest:
             request_template={
                 "timeout": 300,
                 "role_id": "1",
-                "role_name": "智贷通",
+                "role_name": "示例智能体",
                 "custom_data": {
                     "user_profile": {"enable_extract": True, "enable_retrieve": True},
                 },
             },
         )
-        body = client._build_request_body("帮小米科技做行业分类", "conv123")
+        body = client._build_request_body("处理测试请求", "conv123")
         assert body["role_id"] == "1"
-        assert body["role_name"] == "智贷通"
+        assert body["role_name"] == "示例智能体"
         assert body["timeout"] == 300
         assert body["custom_data"]["user_profile"] == {
             "enable_extract": True,
@@ -303,7 +303,7 @@ class TestAgentClientBuildRequest:
         assert body["agent_id"] == "edp_agent"
         assert body["conversation_id"] == "conv123"
         assert body["stream"] is True
-        assert body["input"]["query"] == "帮小米科技做行业分类"
+        assert body["input"]["query"] == "处理测试请求"
 
     def test_build_request_body_template_user_profile_not_clobbered_by_extra_data(self):
         """extra_data 合并进 custom_data.inputs，不覆盖 template 的 custom_data.user_profile。"""

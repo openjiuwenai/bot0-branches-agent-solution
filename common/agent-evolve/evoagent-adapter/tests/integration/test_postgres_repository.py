@@ -4,7 +4,7 @@
 (由 repository.aggregation 计算)、各查询方法的排序与过滤。聚合逻辑本身由
 tests/unit/test_aggregation.py 覆盖; 此处验证 I/O 接线与 SQL 方言 (JSONB/timestamptz)。
 
-PG fixtures (test_db / repo / jsonl_spans) 见 tests/integration/conftest.py。
+PG fixtures (test_db / repo / synthetic_spans) 见 tests/integration/conftest.py。
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ async def test_init_schema_creates_tables(repo):
 
 # ---- insert_span + get_spans_by_trace (JSONB 往返) ----
 
-async def test_insert_span_roundtrips_jsonb(repo, jsonl_spans):
-    s = jsonl_spans[0]
+async def test_insert_span_roundtrips_jsonb(repo, synthetic_spans):
+    s = synthetic_spans[0]
     await repo.insert_span(s)
     got = await repo.get_spans_by_trace(s["trace_id"])
     assert len(got) == 1
@@ -45,18 +45,20 @@ async def test_insert_span_roundtrips_jsonb(repo, jsonl_spans):
     assert g["resource_attributes"] == s.get("resource_attributes")
 
 
-async def test_get_spans_by_trace_ordered_by_start_time(repo, jsonl_spans):
-    trace_id, tspans = next(iter(_by_trace(jsonl_spans).items()))
+async def test_get_spans_by_trace_ordered_by_start_time(repo, synthetic_spans):
+    trace_id, tspans = next(iter(_by_trace(synthetic_spans).items()))
     for s in reversed(tspans):  # 乱序插入, 查询应按 start_time 升序
         await repo.insert_span(s)
     got = await repo.get_spans_by_trace(trace_id)
-    assert [g["span_id"] for g in got] == [s["span_id"] for s in sorted(tspans, key=lambda x: x["start_time"])]
+    assert [g["span_id"] for g in got] == [
+        s["span_id"] for s in sorted(tspans, key=lambda x: x["start_time"])
+    ]
 
 
 # ---- traces 汇总聚合 ----
 
-async def test_insert_span_upserts_trace_summary(repo, jsonl_spans):
-    trace_id, tspans = next(iter(_by_trace(jsonl_spans).items()))
+async def test_insert_span_upserts_trace_summary(repo, synthetic_spans):
+    trace_id, tspans = next(iter(_by_trace(synthetic_spans).items()))
     for s in tspans:
         await repo.insert_span(s)
     expected = compute_trace_summary(trace_id, tspans)
@@ -72,9 +74,9 @@ async def test_insert_span_upserts_trace_summary(repo, jsonl_spans):
     assert json.loads(row["response_summary"]) == expected["response_summary"]
 
 
-async def test_insert_span_idempotent_span_count(repo, jsonl_spans):
+async def test_insert_span_idempotent_span_count(repo, synthetic_spans):
     """重复插同一 span 不重复计数 (spans ON CONFLICT + 汇总重算)。"""
-    trace_id, tspans = next(iter(_by_trace(jsonl_spans).items()))
+    trace_id, tspans = next(iter(_by_trace(synthetic_spans).items()))
     for s in tspans:
         await repo.insert_span(s)
     await repo.insert_span(tspans[0])  # 再插一遍第一个 span
@@ -87,9 +89,9 @@ async def test_insert_span_idempotent_span_count(repo, jsonl_spans):
 
 # ---- bulk_insert_spans ----
 
-async def test_bulk_insert_spans_all_traces(repo, jsonl_spans):
-    await repo.bulk_insert_spans(jsonl_spans)
-    traces = _by_trace(jsonl_spans)
+async def test_bulk_insert_spans_all_traces(repo, synthetic_spans):
+    await repo.bulk_insert_spans(synthetic_spans)
+    traces = _by_trace(synthetic_spans)
     async with repo.pool.acquire() as conn:
         rows = {r["trace_id"]: r for r in await conn.fetch("SELECT * FROM traces")}
     assert set(rows) == set(traces)
@@ -102,10 +104,10 @@ async def test_bulk_insert_spans_all_traces(repo, jsonl_spans):
 
 # ---- get_spans_by_conversation ----
 
-async def test_get_spans_by_conversation(repo, jsonl_spans):
-    await repo.bulk_insert_spans(jsonl_spans)
-    conv = jsonl_spans[0]["conversation_id"]
-    expected = sorted([s for s in jsonl_spans if s["conversation_id"] == conv],
+async def test_get_spans_by_conversation(repo, synthetic_spans):
+    await repo.bulk_insert_spans(synthetic_spans)
+    conv = synthetic_spans[0]["conversation_id"]
+    expected = sorted([s for s in synthetic_spans if s["conversation_id"] == conv],
                       key=lambda x: x["start_time"])
     got = await repo.get_spans_by_conversation(conv)
     assert [g["span_id"] for g in got] == [s["span_id"] for s in expected]
@@ -113,18 +115,20 @@ async def test_get_spans_by_conversation(repo, jsonl_spans):
 
 # ---- get_root_span ----
 
-async def test_get_root_span_returns_server_root(repo, jsonl_spans):
-    await repo.bulk_insert_spans(jsonl_spans)
-    conv = jsonl_spans[0]["conversation_id"]
-    expected_root = next(s for s in jsonl_spans if s["conversation_id"] == conv and is_root_span(s))
+async def test_get_root_span_returns_server_root(repo, synthetic_spans):
+    await repo.bulk_insert_spans(synthetic_spans)
+    conv = synthetic_spans[0]["conversation_id"]
+    expected_root = next(
+        s for s in synthetic_spans if s["conversation_id"] == conv and is_root_span(s)
+    )
     root = await repo.get_root_span(conv)
     assert root is not None
     assert root["span_id"] == expected_root["span_id"]
     assert root["kind"] == "SERVER"
 
 
-async def test_get_root_span_none_when_no_root(repo, jsonl_spans):
-    no_root = [{**s, "kind": "INTERNAL"} for s in jsonl_spans]  # 抹掉 SERVER
+async def test_get_root_span_none_when_no_root(repo, synthetic_spans):
+    no_root = [{**s, "kind": "INTERNAL"} for s in synthetic_spans]  # 抹掉 SERVER
     await repo.bulk_insert_spans(no_root)
     conv = no_root[0]["conversation_id"]
     assert await repo.get_root_span(conv) is None
@@ -132,9 +136,9 @@ async def test_get_root_span_none_when_no_root(repo, jsonl_spans):
 
 # ---- get_trace_tree ----
 
-async def test_get_trace_tree(repo, jsonl_spans):
-    await repo.bulk_insert_spans(jsonl_spans)
-    trace_id, tspans = next(iter(_by_trace(jsonl_spans).items()))
+async def test_get_trace_tree(repo, synthetic_spans):
+    await repo.bulk_insert_spans(synthetic_spans)
+    trace_id, tspans = next(iter(_by_trace(synthetic_spans).items()))
     tree = await repo.get_trace_tree(trace_id)
     assert tree is not None
     expected_root = next(s for s in tspans if is_root_span(s))
@@ -152,14 +156,14 @@ async def test_get_trace_tree(repo, jsonl_spans):
 
 # ---- list_conversations ----
 
-async def test_list_conversations(repo, jsonl_spans):
-    await repo.bulk_insert_spans(jsonl_spans)
+async def test_list_conversations(repo, synthetic_spans):
+    await repo.bulk_insert_spans(synthetic_spans)
     convs = await repo.list_conversations()
-    traces = _by_trace(jsonl_spans)
+    traces = _by_trace(synthetic_spans)
     assert {c["conversation_id"] for c in convs} == {
         t[0]["conversation_id"] for t in traces.values()
     }
-    svc = jsonl_spans[0]["service_name"]
+    svc = synthetic_spans[0]["service_name"]
     filtered = await repo.list_conversations(agent_name=svc)
     assert all(c["service_name"] == svc for c in filtered)
     assert len(filtered) == sum(1 for t in traces.values() if t[0]["service_name"] == svc)
@@ -167,8 +171,8 @@ async def test_list_conversations(repo, jsonl_spans):
 
 # ---- upsert_trace (显式汇总) ----
 
-async def test_upsert_trace_explicit(repo, jsonl_spans):
-    trace_id, tspans = next(iter(_by_trace(jsonl_spans).items()))
+async def test_upsert_trace_explicit(repo, synthetic_spans):
+    trace_id, tspans = next(iter(_by_trace(synthetic_spans).items()))
     summary = compute_trace_summary(trace_id, tspans)
     await repo.upsert_trace(summary)
     async with repo.pool.acquire() as conn:

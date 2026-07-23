@@ -7,7 +7,10 @@ package com.openjiuwen.agents.edpa.kernel;
 import java.util.Set;
 
 /**
- * Why a verify step failed — 3-state sealed diagnosis, output of {@link PevKernel#diagnoseRootCause}.
+ * Why a verify step failed — 3-state sealed diagnosis, produced by EDPA's rail-composed diagnosis
+ * ({@link com.openjiuwen.agents.edpa.verification.ProactiveConvergenceRail} /
+ * {@link com.openjiuwen.agents.edpa.verification.GroundTruthVerifier}), then mapped to a
+ * {@link ReplanAction} via {@link EdpaKernel#toReplanAction}.
  *
  * <p>The three states are prioritised by signal certainty (not LLM self-report):
  * <ul>
