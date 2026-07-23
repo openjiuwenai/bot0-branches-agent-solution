@@ -1,6 +1,5 @@
 package com.huawei.ascend.client.verify;
 
-import com.huawei.ascend.mockgateway.MockGatewayServer;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -48,6 +47,7 @@ final class ConversationApiServer {
     });
 
     private ConversationDriver driver;
+    private String gatewayUrl;
 
     ConversationApiServer(int port) {
         this.port = port;
@@ -71,15 +71,15 @@ final class ConversationApiServer {
     }
 
     int start() throws IOException {
-        // 默认内嵌启动 mock-gateway；若设了 AGENT_GATEWAY_URL 则连外部。
+        // 必须由环境变量 AGENT_GATEWAY_URL 指向一个已在外部独立运行的 gateway 进程。
         String url = System.getenv("AGENT_GATEWAY_URL");
-        MockGatewayServer embedded = null;
         if (url == null || url.isBlank()) {
-            embedded = new MockGatewayServer(0);
-            int gwPort = embedded.start();
-            url = "http://127.0.0.1:" + gwPort;
+            throw new IllegalStateException(
+                    "未设置环境变量 AGENT_GATEWAY_URL。请先启动你的 gateway 进程，"
+                            + "再用 set AGENT_GATEWAY_URL=http://127.0.0.1:<端口> 指向它，然后启动本程序。");
         }
-        driver = new ConversationDriver(url, embedded, broadcaster);
+        driver = new ConversationDriver(url, broadcaster);
+        this.gatewayUrl = url;
         driver.announceGateway();
 
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
@@ -285,7 +285,8 @@ final class ConversationApiServer {
 
     private void handleStatus(HttpExchange ex) throws IOException {
         send(ex, 200, "application/json; charset=utf-8",
-                "{\"running\":" + running.get() + "}");
+                "{\"running\":" + running.get()
+                        + ",\"gatewayUrl\":\"" + esc(gatewayUrl) + "\"}");
     }
 
     // ---------------------- helpers ----------------------
