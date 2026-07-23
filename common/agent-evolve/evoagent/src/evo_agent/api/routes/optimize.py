@@ -182,6 +182,11 @@ class JobResponse(BaseModel):
     cancellation_requested: bool = False
 
 
+def _normalize_error_code(code: object | None) -> str | None:
+    """Normalize dependency error codes to the public string contract."""
+    return None if code is None else str(code)
+
+
 class SubmissionResponse(BaseModel):
     """Durable idempotent-submission metadata safe for callers."""
 
@@ -501,13 +506,13 @@ async def start_optimize(api_request: OptimizeAPIRequest) -> JobResponse:
         except CancelRollbackError as exc:
             job_manager.set_status(job, JobStatus.FAILED)
             job.error = f"{exc.code}: {exc.diagnostics}"
-            job.error_code = exc.code
+            job.error_code = _normalize_error_code(exc.code)
             job.push_event(
                 "error",
                 {
                     "status": "failed",
                     "error": job.error,
-                    "code": exc.code,
+                    "code": job.error_code,
                     "diagnostics": exc.diagnostics,
                 },
             )
@@ -522,7 +527,7 @@ async def start_optimize(api_request: OptimizeAPIRequest) -> JobResponse:
             print(f"[OPTIMIZE FAILED] {type(e).__name__}: {e}\n{tb}", flush=True)
             job_manager.set_status(job, JobStatus.FAILED)
             job.error = f"{type(e).__name__}: {e}"
-            job.error_code = getattr(e, "code", None)
+            job.error_code = _normalize_error_code(getattr(e, "code", None))
             # 推送 error 事件，让 SSE 客户端能感知失败（on_train_end 不再推 completed）
             job.push_event(
                 "error",

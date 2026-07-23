@@ -612,6 +612,61 @@ async def test_prompt_submission_replay_returns_same_job_and_starts_once(
 
 
 @pytest.mark.asyncio
+async def test_integer_dependency_error_code_is_normalized_across_job_responses(
+    client: AsyncClient,
+    tmp_path: Path,
+    config_with_adapter: EvolveConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """依赖整数错误码在 Job、SSE 和公共 HTTP 响应中统一为字符串。"""
+
+    class IntegerCodeDependencyError(Exception):
+        code: int = 181002
+
+    manager = JobManager(control_db_path=tmp_path / "control.db")
+    monkeypatch.setattr(optimize_routes, "job_manager", manager)
+    body = _make_managed_doc_api_request(tmp_path=tmp_path)
+    body["client_task_id"] = "studio-task-integer-error-code"
+    run_mock = AsyncMock(side_effect=IntegerCodeDependencyError("model service config error"))
+
+    with (
+        patch(
+            "evo_agent.api.routes.optimize.EvolveConfig.get",
+            return_value=config_with_adapter,
+        ),
+        patch(
+            "evo_agent.api.routes.optimize.run_optimization_with_cancellation_recovery",
+            new=run_mock,
+        ),
+    ):
+        first = await client.post("/optimize", json=body)
+        assert first.status_code == 200
+
+        job = manager.get(first.json()["job_id"])
+        assert job is not None
+        assert job.background_task is not None
+        await job.background_task
+
+        assert job.status == JobStatus.FAILED
+        assert job.error_code == "181002"
+        error_events = [event for event in job.event_buffer if event.event == "error"]
+        assert error_events[-1].data["code"] == "181002"
+
+        failed_job = await client.get(f"/optimize/{job.job_id}")
+        assert failed_job.status_code == 200
+        assert failed_job.json()["status"] == "failed"
+        assert failed_job.json()["error_code"] == "181002"
+
+        replay = await client.post("/optimize", json=body)
+        assert replay.status_code == 200
+        assert replay.json()["job_id"] == job.job_id
+        assert replay.json()["status"] == "failed"
+        assert replay.json()["error_code"] == "181002"
+
+    assert run_mock.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_start_optimize_managed_doc_response_includes_before_after_task_ids(
     client: AsyncClient, tmp_path: Path, config_with_adapter: EvolveConfig
 ) -> None:
