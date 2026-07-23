@@ -273,8 +273,8 @@ public class LogRail extends AgentRail {
     }
 
     /**
-     * 修复非法 JSON：遍历字符串，维护未闭合的 {@code {} / {@code [} 栈（字符串字面量内的括号忽略），
-     * 按栈逆序补齐闭合符号。对齐 Python {@code AbilityManager._repair_tool_arguments_json}。
+     * 修复非法 JSON：遍历字符串，维护未闭合的大括号/中括号栈（字符串字面量内的括号忽略），
+     * 按栈逆序补齐闭合符号。对齐 Python AbilityManager._repair_tool_arguments_json。
      *
      * @param json the json value
      * @return 修复后的 JSON 字符串；输入为空或无未闭合括号时返回 Optional.empty()
@@ -301,7 +301,7 @@ public class LogRail extends AgentRail {
                 } else if (ch == stringDelimiter) {
                     inString = false;
                 } else {
-                    // no-op: normal character inside string
+                    LOGGER.debug("normal character inside string: {}", ch);
                 }
                 continue;
             }
@@ -318,7 +318,7 @@ public class LogRail extends AgentRail {
                     stack.pop();
                 }
             } else {
-                // no-op: normal character, no bracket tracking needed
+                LOGGER.debug("normal character, no bracket tracking needed: {}", ch);
             }
         }
 

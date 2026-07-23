@@ -1483,7 +1483,7 @@ public class VersatileInterruptRail extends AgentRail {
                     return Optional.of(source.substring(braceStart, i + 1));
                 }
             } else {
-                // no-op: normal character, no bracket tracking needed
+                LOGGER.debug("normal character, no bracket tracking needed: {}", ch);
             }
         }
         return Optional.empty();

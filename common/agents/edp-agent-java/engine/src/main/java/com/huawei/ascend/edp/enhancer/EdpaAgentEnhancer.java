@@ -474,7 +474,7 @@ public class EdpaAgentEnhancer {
         private DeepAgent deepAgent;
 
         /**
-         * Todo 数据层（catalog entries + dynamic paths）。
+         * 待办数据层（catalog entries + dynamic paths）。
          */
         private EdpaTodolist edpaTodolist;
 
@@ -484,7 +484,7 @@ public class EdpaAgentEnhancer {
         private SysScriptsConfig scripts;
 
         /**
-         * Redis Todo 存储（UC-03~UC-11 主路径；null 时 Rail 内部回落文件/缓存）。
+         * Redis 待办存储（UC-03~UC-11 主路径；null 时 Rail 内部回落文件/缓存）。
          */
         private RedisTodoStore redisTodoStore;
 
