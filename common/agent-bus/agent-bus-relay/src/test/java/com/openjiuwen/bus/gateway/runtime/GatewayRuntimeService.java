@@ -312,6 +312,11 @@ public final class GatewayRuntimeService implements IngressGateway {
             case ACCEPTED_WITH_TASK -> new MatchResult(null, responseToken(msg, "taskId"));
             case COMPLETED_RESPONSE -> new MatchResult(toIngressResponse(requestId, status,
                     taskId != null ? taskId : responseToken(msg, "taskId"), null, null), null);
+            // FEAT-017: INPUT_REQUIRED is non-terminal but actionable — the Task is accepted yet needs
+            // input. Return promptly (ACCEPTED with taskId) so the caller can resume, instead of draining
+            // the accept window. Coexists with the FEAT-005 shadow-task resume on the caller side.
+            case INPUT_REQUIRED -> new MatchResult(toIngressResponse(requestId, status,
+                    taskId != null ? taskId : responseToken(msg, "taskId"), null, null), null);
             case STREAM_READY -> new MatchResult(toIngressResponse(requestId, status, null,
                     responseToken(msg, "streamRef"), null), null);
             case REJECTED, FAILED -> new MatchResult(toIngressResponse(requestId, status, null, null,
@@ -325,10 +330,11 @@ public final class GatewayRuntimeService implements IngressGateway {
 
     /**
      * Classify a polled response by its NATIVE {@link BrokerInboundMessage#eventType()}
-     * (FEAT-013/014 family). The {@code INVOCATION_TERMINAL} / {@code A2A_CALL_TERMINAL}
+     * (FEAT-013/014/017 family). The {@code INVOCATION_TERMINAL} / {@code A2A_CALL_TERMINAL}
      * sub-state (completed / cancelled / failed) is decoded from the {@code status=} token in the
      * {@code inlinePayload} (the A2A response envelope as DATA — P-06/FEAT-014:68); all other
-     * classifications are pure eventType mappings.
+     * classifications are pure eventType mappings. {@code *_INPUT_REQUIRED} (FEAT-017) maps to
+     * {@link InvocationResponseStatus#INPUT_REQUIRED}. Pure (no instance state), hence static.
      *
      * <p>Terminal sub-state mapping:
      * <ul>
@@ -343,7 +349,7 @@ public final class GatewayRuntimeService implements IngressGateway {
      * @param m the polled response (non-null; correlationId already matched by the caller)
      * @return the observed invocation status
      */
-    public InvocationResponseStatus classify(BrokerInboundMessage m) {
+    public static InvocationResponseStatus classify(BrokerInboundMessage m) {
         Objects.requireNonNull(m, "m is required");
         AgentBusEventType eventType = m.eventType();
         if (eventType == null) {
@@ -351,6 +357,8 @@ public final class GatewayRuntimeService implements IngressGateway {
         }
         return switch (eventType) {
             case INVOCATION_RESPONSE, A2A_CALL_RESPONSE -> InvocationResponseStatus.COMPLETED_RESPONSE;
+            case INVOCATION_INPUT_REQUIRED, A2A_CALL_INPUT_REQUIRED ->
+                    InvocationResponseStatus.INPUT_REQUIRED;
             case INVOCATION_ACCEPTED, A2A_CALL_ACCEPTED -> InvocationResponseStatus.ACCEPTED_WITH_TASK;
             case INVOCATION_STREAM_READY, A2A_STREAM_READY -> InvocationResponseStatus.STREAM_READY;
             case INVOCATION_REJECTED, A2A_CALL_REJECTED -> InvocationResponseStatus.REJECTED;
@@ -383,6 +391,7 @@ public final class GatewayRuntimeService implements IngressGateway {
         return switch (status) {
             case COMPLETED_RESPONSE -> IngressResponse.accepted(requestId, taskId); // cursor = taskId or null
             case ACCEPTED_WITH_TASK -> IngressResponse.accepted(requestId, taskId);
+            case INPUT_REQUIRED -> IngressResponse.accepted(requestId, taskId); // FEAT-017: needs input; resume via taskId
             case STREAM_READY -> IngressResponse.accepted(requestId, streamRef);
             case REJECTED, FAILED -> IngressResponse.rejected(requestId, rejectionReason(status, reason));
             case UNKNOWN -> IngressResponse.deferred(requestId);

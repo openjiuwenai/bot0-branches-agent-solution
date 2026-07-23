@@ -306,6 +306,29 @@ class EventBusRelayWorkerTest {
     }
 
     @Test
+    void responseRelayRelaysInputRequiredRespInToRespOutAndCommits() {
+        // FEAT-017: *_INPUT_REQUIRED is a response projection the response relay must forward
+        // (resp_in → resp_out) like the other RESPONSE_TYPES — not SKIP as an out-of-set echo.
+        FakeConsumer c = new FakeConsumer();
+        FakeInbox inbox = new FakeInbox();
+        InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
+        FakeRelay relay = new FakeRelay();
+        EventBusRelayWorker w = newResponseWorker(c, inbox, outbox, relay);
+
+        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_INPUT_REQUIRED,
+                "taskId=task-1;input=needed"));
+
+        EventBusRelayWorker.RelayTickResult r = w.runOnce("t1", 100L, 5);
+
+        assertEquals(1, r.relayed());
+        assertEquals(0, r.skipped());
+        assertEquals(1, relay.produced.size());     // resp_out re-published
+        assertEquals(1, c.committed.size());        // resp_in committed (model B ack)
+        assertEquals(0, c.rejected.size());
+        assertEquals(1, inbox.consumed.size());     // audit: inbox CONSUMED
+    }
+
+    @Test
     void responseRelayDedupSuppressesReplayedRespInWithoutDoubleProducing() {
         FakeConsumer c = new FakeConsumer();
         FakeInbox inbox = new FakeInbox();

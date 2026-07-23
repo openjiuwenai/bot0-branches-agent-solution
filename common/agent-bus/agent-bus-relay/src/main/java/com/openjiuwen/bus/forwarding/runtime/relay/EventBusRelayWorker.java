@@ -103,9 +103,10 @@ public final class EventBusRelayWorker {
             AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED);
 
     /**
-     * The FEAT-013/014 response/terminal eventTypes a <b>response relay</b>
-     * relays ({@code ascend_bus_*_resp_in} → {@code ascend_bus_*_resp_out}). The response carries
-     * its control plane as first-class broker fields (P-06) + the response content (taskId /
+     * The FEAT-013/014/017 response/terminal eventTypes a <b>response relay</b>
+     * relays ({@code ascend_bus_*_resp_in} → {@code ascend_bus_*_resp_out}). Includes the
+     * FEAT-017 {@code *_INPUT_REQUIRED} wait-for-input projections. The response carries its
+     * control plane as first-class broker fields (P-06) + the response content (taskId /
      * status / streamRef) in {@code inlinePayload} (A2A response envelope as DATA), which the
      * gateway reads via responseToken.
      */
@@ -114,12 +115,14 @@ public final class EventBusRelayWorker {
             AgentBusEventType.INVOCATION_REJECTED,
             AgentBusEventType.INVOCATION_FAILED,
             AgentBusEventType.INVOCATION_RESPONSE,
+            AgentBusEventType.INVOCATION_INPUT_REQUIRED,
             AgentBusEventType.INVOCATION_STREAM_READY,
             AgentBusEventType.INVOCATION_TERMINAL,
             AgentBusEventType.A2A_CALL_ACCEPTED,
             AgentBusEventType.A2A_CALL_REJECTED,
             AgentBusEventType.A2A_CALL_FAILED,
             AgentBusEventType.A2A_CALL_RESPONSE,
+            AgentBusEventType.A2A_CALL_INPUT_REQUIRED,
             AgentBusEventType.A2A_STREAM_READY,
             AgentBusEventType.A2A_CALL_TERMINAL);
 

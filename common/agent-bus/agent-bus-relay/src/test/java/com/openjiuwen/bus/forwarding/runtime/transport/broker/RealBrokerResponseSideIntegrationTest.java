@@ -308,6 +308,12 @@ class RealBrokerResponseSideIntegrationTest {
                 InvocationResponseStatus.COMPLETED_RESPONSE);
         assertClassify(AgentBusEventType.INVOCATION_TERMINAL, "taskId=t5;status=failed",
                 InvocationResponseStatus.FAILED);
+        // FEAT-017: *_INPUT_REQUIRED wait-for-input projection survives the broker round-trip and
+        // maps to INPUT_REQUIRED (not UNKNOWN) so the gateway surfaces it promptly.
+        assertClassify(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "taskId=t6;input=needed",
+                InvocationResponseStatus.INPUT_REQUIRED);
+        assertClassify(AgentBusEventType.A2A_CALL_INPUT_REQUIRED, "taskId=t7;input=needed",
+                InvocationResponseStatus.INPUT_REQUIRED);
     }
 
     /**
@@ -315,13 +321,13 @@ class RealBrokerResponseSideIntegrationTest {
      *
      * @param eventType the response event type to produce + classify
      * @param payloadRef the response payloadRef (carrying status / taskId / streamRef tokens)
-     * @param expected   the classification {@code gateway.classify} should yield
+     * @param expected   the classification {@code GatewayRuntimeService.classify} should yield
      */
     private void assertClassify(AgentBusEventType eventType, String payloadRef,
                                 InvocationResponseStatus expected) {
         String corrId = UUID.randomUUID().toString();
         tempRuntime.produceResponse(eventType, payloadRef, corrId);
-        assertThat(gateway.classify(pollNext(corrId))).isEqualTo(expected);
+        assertThat(GatewayRuntimeService.classify(pollNext(corrId))).isEqualTo(expected);
     }
 
     /**

@@ -7,6 +7,7 @@ package com.openjiuwen.bus.gateway.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
+import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,19 @@ class GatewayRuntimeServiceResponseTest {
                 response(AgentBusEventType.INVOCATION_ACCEPTED, "malformed-no-eq", null), "taskId")).isNull();
         assertThat(GatewayRuntimeService.responseToken(
                 response(AgentBusEventType.INVOCATION_ACCEPTED, "otherKey=other", null), "taskId")).isNull();
+    }
+
+    @Test
+    void classify_maps_input_required_events_to_input_required_status() {
+        // FEAT-017: *_INPUT_REQUIRED projects a wait-for-input state. classify must map it to
+        // INPUT_REQUIRED (not the default UNKNOWN) so the gateway can surface the wait-for-input
+        // projection promptly instead of treating it as an unknown / control-only echo.
+        assertThat(GatewayRuntimeService.classify(
+                response(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "taskId=task-1", null)))
+                .isEqualTo(InvocationResponseStatus.INPUT_REQUIRED);
+        assertThat(GatewayRuntimeService.classify(
+                response(AgentBusEventType.A2A_CALL_INPUT_REQUIRED, "taskId=task-2", null)))
+                .isEqualTo(InvocationResponseStatus.INPUT_REQUIRED);
     }
 
     private static BrokerInboundMessage response(AgentBusEventType eventType, String inlinePayload,
