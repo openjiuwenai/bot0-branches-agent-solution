@@ -5,20 +5,19 @@
 package com.openjiuwen.bus.test;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 
-import org.apache.rocketmq.client.exception.MQBrokerException;
-import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
-import org.apache.rocketmq.common.message.Message;
-import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -103,6 +102,7 @@ public final class TempRuntimeMain {
     private final boolean verbose;
 
     private final DefaultMQProducer producer;
+    private final RocketMqBrokerForwardingRelay respProducer;
     private final RocketMqBrokerForwardingConsumer consumer;
     private final String consumerGroup;
     private final String respInTopic;
@@ -137,6 +137,11 @@ public final class TempRuntimeMain {
         this.respInTopic = new DefaultBrokerTopicResolver().resolveTopic(representativeRequestEventType(), "resp_in");
         this.producer = new DefaultMQProducer(producerGroupResolved);
         this.producer.setNamesrvAddr(nameserver);
+        // Wrap the raw producer in the SPI relay port (suffix "resp_in") so produceResponse reuses the
+        // SDK wire-format encoder (RocketMqBrokerForwardingRelay.buildMessage) instead of hand-rolling
+        // Message + putUserProperty — the wire format cannot drift from what the response relay decodes.
+        this.respProducer = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_in",
+                RocketMqBrokerForwardingRelay.defaultSender(this.producer));
     }
 
     /** Configurable response behaviour for a REQUESTED event (FEAT-013 S6 scenarios). */
@@ -388,16 +393,16 @@ public final class TempRuntimeMain {
     }
 
     /**
-     * Build + send a response to {@link #respInTopic} with a symmetric descriptor payloadRef.
-     * Body is a routing descriptor only (S6.2 2). Routing metadata rides as user properties
-     * (incl. {@code correlationId} + {@code eventType} so the gateway classifies by NATIVE
-     * headers - no descriptor-decoding for classification).
+     * Build a response {@link BrokerOutboundMessage} and produce it to {@code resp_in} via the SPI relay
+     * port ({@link #respProducer}) — reuses {@code RocketMqBrokerForwardingRelay.buildMessage} so the
+     * response's first-class control headers + {@code inlinePayload} wire format matches what the response
+     * relay decodes (its poison guard requires traceId/idempotencyKey/routeHandle/capability present).
      *
      * @param eventType the response event type to emit
      * @param taskId the task reference (may be {@code null} for reject/cancel/query stubs)
      * @param status the response status token (e.g. "accepted", "snapshot", "completed")
-     * @param ctx the inbound request + decoded descriptor bundle
-     * @param extraToken an optional extra token appended to the descriptor (e.g. streamRef); may be {@code null}
+     * @param ctx the inbound request + first-class control bundle
+     * @param extraToken an optional extra token appended to the inline payload (e.g. streamRef); may be {@code null}
      */
     private void produceResponse(AgentBusEventType eventType, String taskId, String status,
                                  RequestCtx ctx, String extraToken) {
@@ -406,7 +411,7 @@ public final class TempRuntimeMain {
         // originalCaller field), NOT req.sourceServiceId() (the event-bus relay, which overwrote it).
         String responseTarget = req.originalCaller() != null ? req.originalCaller() : req.sourceServiceId();
         // P-06: response content (taskId/status/extra) rides inlinePayload (A2A response envelope as DATA);
-        // control rides first-class user properties (mirrors RocketMqBrokerForwardingRelay.buildMessage).
+        // control rides first-class headers (built by the relay encoder from the BrokerOutboundMessage).
         StringBuilder inline = new StringBuilder();
         if (taskId != null) {
             inline.append("taskId=").append(taskId).append(";");
@@ -417,30 +422,23 @@ public final class TempRuntimeMain {
         }
 
         String messageId = "resp-" + java.util.UUID.randomUUID();
-        Message msg = new Message(respInTopic, /* tags */ null, messageId,
-                ("target=" + responseTarget).getBytes(StandardCharsets.UTF_8));
-        msg.putUserProperty("tenantId", tenant);
-        msg.putUserProperty("messageId", messageId);
-        msg.putUserProperty("sourceServiceId", runtimeServiceId);
-        msg.putUserProperty("targetServiceId", responseTarget);
-        msg.putUserProperty("correlationId", req.correlationId());
-        msg.putUserProperty("eventType", eventType.name());
-        msg.putUserProperty("traceId", req.traceId());
-        msg.putUserProperty("idempotencyKey", req.idempotencyKey());
-        msg.putUserProperty("routeHandle", req.routeHandle());
-        msg.putUserProperty("capability", req.capability());
-        msg.putUserProperty("inlinePayload", inline.toString());
-
-        try {
-            producer.send(msg);
+        BrokerOutboundMessage message = new BrokerOutboundMessage(
+                "target=" + responseTarget,
+                new BrokerMessageHeaders(
+                        tenant, messageId, runtimeServiceId, responseTarget,
+                        null, req.correlationId(), eventType,
+                        req.traceId(), req.idempotencyKey(), req.routeHandle(), req.capability(),
+                        Long.MAX_VALUE, inline.toString(), null));
+        BrokerProduceOutcome outcome = respProducer.produce(message, System.currentTimeMillis());
+        if (outcome.outcome() == BrokerProduceOutcome.Outcome.ACCEPTED) {
             log("SEND: eventType=" + eventType + " messageId=" + messageId
                     + " taskId=" + taskId + " status=" + status
                     + " target=" + responseTarget
                     + " inline=" + abbreviate(inline.toString(), 120)
                     + (extraToken != null ? " extra=" + extraToken : ""));
-        } catch (InterruptedException | RemotingException | MQBrokerException | MQClientException e) {
-            log("ERROR: producer.send failed for eventType=" + eventType
-                    + " messageId=" + messageId + " err=" + e);
+        } else {
+            log("ERROR: produce failed for eventType=" + eventType
+                    + " messageId=" + messageId + " outcome=" + outcome.outcome());
         }
     }
 

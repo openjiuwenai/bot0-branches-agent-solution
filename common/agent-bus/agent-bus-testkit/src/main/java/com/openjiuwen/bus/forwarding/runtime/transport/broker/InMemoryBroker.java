@@ -174,10 +174,16 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
     @Override
     public synchronized BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
         Objects.requireNonNull(record, "record is required");
-        // Option B: derive the topic from the record's eventType via the injected resolver
+        return produce(toOutboundMessage(record), nowMillisEpoch);
+    }
+
+    @Override
+    public synchronized BrokerProduceOutcome produce(BrokerOutboundMessage message, long nowMillisEpoch) {
+        Objects.requireNonNull(message, "message is required");
+        // Option B: derive the topic from the message's eventType via the injected resolver
         // (event-type-driven; the opaque routeHandle is never read for the topic — HD4 preserved).
         // A null eventType cannot yield a topic → non-retryable ROUTE_NOT_FOUND.
-        AgentBusEventType eventType = record.eventType();
+        AgentBusEventType eventType = message.headers().eventType();
         if (eventType == null) {
             return BrokerProduceOutcome.routeNotFound(ForwardingFailureCode.ROUTE_NOT_FOUND);
         }
@@ -185,10 +191,26 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             return BrokerProduceOutcome.unavailable(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
         }
         String t = resolver.resolveTopic(eventType, suffix);
-        // §6.2②: body is a routing descriptor only — NEVER the payload body / token stream / Task state.
-        // payloadRef rides as a header (conditionally), NOT in the descriptor. P-06: the control plane
-        // (traceId/idempotencyKey/routeHandle/capability/deadline) + inlinePayload ride FIRST-CLASS header
-        // fields — payloadRef is the A2A data reference only, never a control-descriptor token.
+        List<QueueEntry> q = queues.computeIfAbsent(t, k -> new ArrayList<>());
+        int index = q.size();
+        q.add(new QueueEntry(sequence.incrementAndGet(), message));
+        locations.put(locationKey(message.headers().tenantId(), message.headers().messageId()),
+                new Location(t, index));
+        return BrokerProduceOutcome.accepted();
+    }
+
+    /**
+     * Map a claimed outbox record to the broker-agnostic {@link BrokerOutboundMessage} this broker
+     * stores. §6.2②: the body is a routing descriptor only — NEVER the payload body / token stream /
+     * Task state; {@code payloadRef} rides as a header (conditionally), NOT in the descriptor. P-06:
+     * the control plane (traceId/idempotencyKey/routeHandle/capability/deadline) + inlinePayload ride
+     * FIRST-CLASS header fields — {@code payloadRef} is the A2A data reference only, never a
+     * control-descriptor token.
+     *
+     * @param record the claimed outbox record to map (required)
+     * @return the broker-agnostic outbound message
+     */
+    private static BrokerOutboundMessage toOutboundMessage(ForwardingOutboxRecord record) {
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
                 record.tenantId(),
                 record.messageId().value(),
@@ -204,14 +226,7 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
                 record.deadlineMillisEpoch(),
                 record.inlinePayload(),          // bounded small body (2b); passthrough, never resolved here
                 record.originalCaller());        // P-06: original caller serviceId (response routing)
-        BrokerOutboundMessage outbound = new BrokerOutboundMessage(
-                "target=" + record.targetServiceId(),   // routing descriptor only
-                headers);
-        List<QueueEntry> q = queues.computeIfAbsent(t, k -> new ArrayList<>());
-        int index = q.size();
-        q.add(new QueueEntry(sequence.incrementAndGet(), outbound));
-        locations.put(locationKey(record.tenantId(), record.messageId().value()), new Location(t, index));
-        return BrokerProduceOutcome.accepted();
+        return new BrokerOutboundMessage("target=" + record.targetServiceId(), headers);
     }
 
     /**

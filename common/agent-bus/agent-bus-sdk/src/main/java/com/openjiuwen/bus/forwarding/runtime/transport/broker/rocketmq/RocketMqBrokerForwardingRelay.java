@@ -5,6 +5,8 @@
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
@@ -80,18 +82,29 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
     @Override
     public BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
         Objects.requireNonNull(record, "record is required");
-        // Option B: derive the topic from the record's eventType via the injected resolver
-        // (event-type-driven; the opaque routeHandle is never read for the topic — HD4 preserved).
-        // A null eventType (a JDBC-loaded back-compat row without the V3 eventType column) cannot
-        // yield a topic → non-retryable ROUTE_NOT_FOUND.
-        AgentBusEventType eventType = record.eventType();
+        return produce(toOutboundMessage(record), nowMillisEpoch);
+    }
+
+    /**
+     * Direct (non-outbox) produce — the FEAT-017 direct-tap entry. Builds the RocketMQ
+     * {@link Message} from the pre-built {@link BrokerOutboundMessage} (routing-descriptor
+     * body + first-class control-plane headers) and sends it via the injected {@link MessageSender}.
+     *
+     * @param message the pre-built broker-agnostic outbound message (required)
+     * @param nowMillisEpoch the produce instant (adapter-internal sequencing / observability)
+     * @return the produce outcome (ACCEPTED / UNAVAILABLE / ROUTE_NOT_FOUND)
+     */
+    @Override
+    public BrokerProduceOutcome produce(BrokerOutboundMessage message, long nowMillisEpoch) {
+        Objects.requireNonNull(message, "message is required");
+        AgentBusEventType eventType = message.headers().eventType();
         if (eventType == null) {
             return BrokerProduceOutcome.routeNotFound(ForwardingFailureCode.ROUTE_NOT_FOUND);
         }
         String topic = resolver.resolveTopic(eventType, suffix);
-        Message message = buildMessage(record, topic);
+        Message rocketmq = buildMessage(message, topic);
         try {
-            sender.send(message);
+            sender.send(rocketmq);
             return BrokerProduceOutcome.accepted();
         } catch (InterruptedException e) {
             // interrupted during send — surface retryable UNAVAILABLE; the dispatch loop's
@@ -105,59 +118,100 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
     }
 
     /**
-     * Pure mapping: a claimed outbox record → RocketMQ {@link Message}. Body is a routing
-     * descriptor only (§6.2 ②); routing metadata rides as user properties (incl.
-     * {@code correlationId} per FEAT-013 §4.2 so the gateway can match responses).
-     * {@code keys} = messageId (broker-side query / dedup hook). Extracted static so unit
-     * tests pin the mapping without a producer.
+     * Pure mapping: a claimed outbox record → RocketMQ {@link Message}. Delegates to
+     * {@link #toOutboundMessage(ForwardingOutboxRecord)} then
+     * {@link #buildMessage(BrokerOutboundMessage, String)}.
      *
      * @param record the claimed outbox record to map (required)
      * @param topic  the resolved RocketMQ topic to produce to (required)
      * @return the built RocketMQ {@link Message} (routing descriptor body + user-property headers)
      */
     static Message buildMessage(ForwardingOutboxRecord record, String topic) {
-        Message message = new Message(
+        return buildMessage(toOutboundMessage(record), topic);
+    }
+
+    /**
+     * Pure mapping: a broker-agnostic {@link BrokerOutboundMessage} → RocketMQ {@link Message}.
+     * Body is the message's routing descriptor (§6.2 ②); routing metadata rides as user properties
+     * (incl. {@code correlationId} per FEAT-013 §4.2 so the gateway can match responses). Shared by
+     * the outbox-record overload (via {@link #toOutboundMessage}) and the direct-tap overload — a
+     * single encoder so the wire format never drifts between the two produce paths.
+     *
+     * @param message the broker-agnostic outbound message to map (required)
+     * @param topic   the resolved RocketMQ topic to produce to (required)
+     * @return the built RocketMQ {@link Message} (routing descriptor body + user-property headers)
+     */
+    static Message buildMessage(BrokerOutboundMessage message, String topic) {
+        BrokerMessageHeaders h = message.headers();
+        Message msg = new Message(
                 topic,
                 /* tags */ null,
-                /* keys */ record.messageId().value(),
-                buildRoutingDescriptor(record).getBytes(StandardCharsets.UTF_8));
-        message.putUserProperty("tenantId", record.tenantId());
-        message.putUserProperty("messageId", record.messageId().value());
-        message.putUserProperty("sourceServiceId", record.sourceServiceId());
-        message.putUserProperty("targetServiceId", record.targetServiceId());
-        if (record.correlationId() != null) {
-            message.putUserProperty("correlationId", record.correlationId());
+                /* keys */ h.messageId(),
+                message.routingDescriptor().getBytes(StandardCharsets.UTF_8));
+        msg.putUserProperty("tenantId", h.tenantId());
+        msg.putUserProperty("messageId", h.messageId());
+        msg.putUserProperty("sourceServiceId", h.sourceServiceId());
+        msg.putUserProperty("targetServiceId", h.targetServiceId());
+        if (h.correlationId() != null) {
+            msg.putUserProperty("correlationId", h.correlationId());
         }
-        if (record.eventType() != null) {
-            message.putUserProperty("eventType", record.eventType().name());
+        if (h.eventType() != null) {
+            msg.putUserProperty("eventType", h.eventType().name());
         }
-        if (record.payloadRef() != null) {
-            message.putUserProperty("payloadRef", record.payloadRef());
+        if (h.payloadRef() != null) {
+            msg.putUserProperty("payloadRef", h.payloadRef());
         }
         // P-06: the control plane rides FIRST-CLASS user properties — never overloaded into payloadRef
         // (payloadRef stays the A2A data reference). Mirrors InMemoryBroker's produce-side mapping.
-        if (record.traceId() != null) {
-            message.putUserProperty("traceId", record.traceId());
+        if (h.traceId() != null) {
+            msg.putUserProperty("traceId", h.traceId());
         }
-        if (record.idempotencyKey() != null) {
-            message.putUserProperty("idempotencyKey", record.idempotencyKey());
+        if (h.idempotencyKey() != null) {
+            msg.putUserProperty("idempotencyKey", h.idempotencyKey());
         }
-        if (record.routeHandle() != null) {
-            message.putUserProperty("routeHandle", record.routeHandle().value());
+        if (h.routeHandle() != null) {
+            msg.putUserProperty("routeHandle", h.routeHandle());
         }
-        if (record.capability() != null) {
-            message.putUserProperty("capability", record.capability());
+        if (h.capability() != null) {
+            msg.putUserProperty("capability", h.capability());
         }
-        if (record.deadlineMillisEpoch() != Long.MAX_VALUE) {
-            message.putUserProperty("deadlineMillisEpoch", Long.toString(record.deadlineMillisEpoch()));
+        if (h.deadlineMillisEpoch() != Long.MAX_VALUE) {
+            msg.putUserProperty("deadlineMillisEpoch", Long.toString(h.deadlineMillisEpoch()));
         }
-        if (record.inlinePayload() != null) {
-            message.putUserProperty("inlinePayload", record.inlinePayload());
+        if (h.inlinePayload() != null) {
+            msg.putUserProperty("inlinePayload", h.inlinePayload());
         }
-        if (record.originalCaller() != null) {
-            message.putUserProperty("originalCaller", record.originalCaller());
+        if (h.originalCaller() != null) {
+            msg.putUserProperty("originalCaller", h.originalCaller());
         }
-        return message;
+        return msg;
+    }
+
+    /**
+     * Map a claimed outbox record to the broker-agnostic {@link BrokerOutboundMessage} the
+     * encoder reads. The routing descriptor is {@link #buildRoutingDescriptor(ForwardingOutboxRecord)};
+     * the headers mirror the record's first-class control plane + data reference + inlinePayload.
+     *
+     * @param record the claimed outbox record to map (required)
+     * @return the broker-agnostic outbound message
+     */
+    static BrokerOutboundMessage toOutboundMessage(ForwardingOutboxRecord record) {
+        BrokerMessageHeaders headers = new BrokerMessageHeaders(
+                record.tenantId(),
+                record.messageId().value(),
+                record.sourceServiceId(),
+                record.targetServiceId(),
+                record.payloadRef(),
+                record.correlationId(),
+                record.eventType(),
+                record.traceId(),
+                record.idempotencyKey(),
+                record.routeHandle().value(),
+                record.capability(),
+                record.deadlineMillisEpoch(),
+                record.inlinePayload(),
+                record.originalCaller());
+        return new BrokerOutboundMessage(buildRoutingDescriptor(record), headers);
     }
 
     /**

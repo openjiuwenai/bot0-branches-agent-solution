@@ -392,12 +392,62 @@ class BrokerForwardingPortsContractTest {
         assertThat(stored.headers().originalCaller()).isEqualTo("caller-sep");
     }
 
+    @Test
+    void produce_outbound_message_directly_without_outbox_record() {
+        // FEAT-017 direct-tap contract: a BrokerOutboundMessage produced directly (NO outbox record)
+        // is stored + pollable with its first-class control plane + inlinePayload, identical to an
+        // outbox-record produce. This is the path the target runtime's response producer uses.
+        InMemoryBroker broker = responseBroker();
+        BrokerMessageHeaders headers = new BrokerMessageHeaders(
+                "tenant-a", "msg-direct", "runtime-svc", "target-svc",
+                null, "corr-direct", AgentBusEventType.INVOCATION_ACCEPTED,
+                "trace-direct", "idem-direct", "route-for-tenant-a", "a2a",
+                Long.MAX_VALUE, "taskId=task-1;status=accepted", "gateway-1");
+        BrokerOutboundMessage message = new BrokerOutboundMessage("target=target-svc", headers);
+
+        BrokerProduceOutcome outcome = broker.produce(message, 1_000L);
+
+        assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ACCEPTED);
+        BrokerOutboundMessage stored = broker.outboundMessage("tenant-a", "msg-direct").orElseThrow();
+        assertThat(stored.headers().eventType()).isEqualTo(AgentBusEventType.INVOCATION_ACCEPTED);
+        assertThat(stored.headers().inlinePayload()).isEqualTo("taskId=task-1;status=accepted");
+        assertThat(stored.headers().originalCaller()).isEqualTo("gateway-1");
+        // a consumer polling for target-svc receives it with the first-class fields intact
+        BrokerForwardingConsumerPort consumer = broker.consumerFor("consumer-a");
+        consumer.subscribe("consumer-a", AgentBusEventType.INVOCATION_ACCEPTED,
+                DeliveryFilter.forRuntime("tenant-a", "target-svc"));
+        BrokerInboundMessage m = consumer.poll(2_000L).orElseThrow();
+        assertThat(m.messageId()).isEqualTo("msg-direct");
+        assertThat(m.eventType()).isEqualTo(AgentBusEventType.INVOCATION_ACCEPTED);
+        assertThat(m.inlinePayload()).isEqualTo("taskId=task-1;status=accepted");
+        assertThat(m.originalCaller()).isEqualTo("gateway-1");
+    }
+
+    @Test
+    void produce_outbound_message_with_null_event_type_returns_route_not_found() {
+        InMemoryBroker broker = responseBroker();
+        BrokerMessageHeaders headers = new BrokerMessageHeaders(
+                "tenant-a", "msg-no-et", "source-svc", "target-svc",
+                null, "corr", null, null, null, "route-for-tenant-a", null,
+                Long.MAX_VALUE, null, null);
+        BrokerOutboundMessage message = new BrokerOutboundMessage("target=target-svc", headers);
+
+        BrokerProduceOutcome outcome = broker.produce(message, 1_000L);
+
+        assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ROUTE_NOT_FOUND);
+        assertThat(outcome.failureCode()).isEqualTo(ForwardingFailureCode.ROUTE_NOT_FOUND);
+    }
+
     private InMemoryBroker broker() {
         return new InMemoryBroker(new DefaultBrokerTopicResolver(), "req");
     }
 
     private InMemoryBroker broker(BrokerTopicResolver resolver) {
         return new InMemoryBroker(resolver, "req");
+    }
+
+    private InMemoryBroker responseBroker() {
+        return new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_in");
     }
 
     private static ForwardingRouteHandle routeHandle(String tenantId) {

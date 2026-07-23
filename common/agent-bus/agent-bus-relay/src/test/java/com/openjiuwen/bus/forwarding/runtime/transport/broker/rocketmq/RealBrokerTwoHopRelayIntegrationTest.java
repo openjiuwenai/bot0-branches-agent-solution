@@ -10,10 +10,13 @@ import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingInbo
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
 import com.openjiuwen.bus.forwarding.runtime.relay.EventBusRelayWorker;
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.gateway.runtime.FakeAgentDiscoveryService;
 import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
@@ -135,7 +138,6 @@ class RealBrokerTwoHopRelayIntegrationTest {
     private static final String ROUTE_INVOCATION = "invocation"; // BrokerTopicResolver → ascend_bus_invocation_*
     private static final String TOPIC_REQ = "ascend_bus_invocation_req";
     private static final String TOPIC_DELIVER = "ascend_bus_invocation_deliver";
-    private static final String TOPIC_RESP_IN = "ascend_bus_invocation_resp_in";
     private static final String TOPIC_RESP_OUT = "ascend_bus_invocation_resp_out";
 
     private static final long ACCEPT_TIMEOUT_MS = 20_000L;
@@ -567,6 +569,9 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
         private final RocketMqBrokerForwardingConsumer consumer;
         private final DefaultMQProducer producer;
+        // SPI relay port (suffix "resp_in") — wraps the raw producer so produceResponse reuses the SDK
+        // wire-format encoder instead of hand-rolling Message + putUserProperty.
+        private final RocketMqBrokerForwardingRelay respProducer;
         private final AtomicLong taskSeq = new AtomicLong();
         private final AtomicLong respSeq = new AtomicLong();
         private final String runId;
@@ -579,6 +584,10 @@ class RealBrokerTwoHopRelayIntegrationTest {
                     RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
             this.producer = new DefaultMQProducer("it-runtime-producer-2hop" + runId);
             this.producer.setNamesrvAddr(nameserver);
+            // suffix "resp_in": produce responses to ascend_bus_invocation_resp_in (the response relay
+            // governs them and re-publishes to resp_out for the gateway).
+            this.respProducer = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_in",
+                    RocketMqBrokerForwardingRelay.defaultSender(this.producer));
             this.runId = runId;
         }
 
@@ -654,7 +663,10 @@ class RealBrokerTwoHopRelayIntegrationTest {
         }
 
         /**
-         * Build + send a response to {@code resp_in}.
+         * Build a response {@link BrokerOutboundMessage} and produce it to {@code resp_in} via the SPI
+         * relay port ({@link #respProducer}) — reuses {@code RocketMqBrokerForwardingRelay.buildMessage}
+         * so the response's first-class control headers + {@code inlinePayload} wire format matches what
+         * the response relay decodes (resp_in → resp_out).
          *
          * @param eventType the response event type stamped on the header
          * @param task      the task cursor (id + status snapshot) carried in the inlinePayload
@@ -664,30 +676,25 @@ class RealBrokerTwoHopRelayIntegrationTest {
          */
         private void produceResponse(AgentBusEventType eventType, TaskCursor task,
                                      String corrId, String trace, String idem) {
-            // P-06: response control rides FIRST-CLASS user properties; response content (taskId/status)
-            // rides inlinePayload (A2A response envelope as DATA). The response relay reads control
-            // first-class; the gateway reads taskId/status via responseToken.
+            // P-06: response control rides FIRST-CLASS headers (built by the relay encoder from the
+            // BrokerOutboundMessage); response content (taskId/status) rides inlinePayload (A2A response
+            // envelope as DATA). The response relay reads control first-class; the gateway reads
+            // taskId/status via responseToken.
             String messageId = "resp-" + respSeq.incrementAndGet();
-            Message msg = new Message(TOPIC_RESP_IN, /* tags */ null, messageId,
-                    ("target=" + GATEWAY).getBytes(StandardCharsets.UTF_8));
-            msg.putUserProperty("tenantId", TENANT);
-            msg.putUserProperty("messageId", messageId);
-            msg.putUserProperty("sourceServiceId", RUNTIME);
-            msg.putUserProperty("targetServiceId", GATEWAY);
-            msg.putUserProperty("correlationId", corrId);
-            msg.putUserProperty("eventType", eventType.name());
-            msg.putUserProperty("traceId", trace);
-            msg.putUserProperty("idempotencyKey", idem);
-            msg.putUserProperty("routeHandle", ROUTE_INVOCATION);
-            msg.putUserProperty("capability", "a2a");
             String inline = "taskId=" + task.taskId() + ";status=" + task.status();
-            msg.putUserProperty("inlinePayload", inline);
-            LOG.info("[TempRuntime] SEND eventType={} messageId={} target={} inline={}",
-                    eventType, messageId, GATEWAY, inline);
-            try {
-                producer.send(msg);
-            } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
-                throw new IllegalStateException("temp runtime failed to produce response " + eventType, e);
+            BrokerOutboundMessage message = new BrokerOutboundMessage(
+                    "target=" + GATEWAY,
+                    new BrokerMessageHeaders(
+                            TENANT, messageId, RUNTIME, GATEWAY,
+                            null, corrId, eventType,
+                            trace, idem, ROUTE_INVOCATION, "a2a",
+                            Long.MAX_VALUE, inline, null));
+            BrokerProduceOutcome outcome = respProducer.produce(message, System.currentTimeMillis());
+            LOG.info("[TempRuntime] SEND eventType={} messageId={} target={} inline={} outcome={}",
+                    eventType, messageId, GATEWAY, inline, outcome.outcome());
+            if (outcome.outcome() != BrokerProduceOutcome.Outcome.ACCEPTED) {
+                throw new IllegalStateException(
+                        "temp runtime failed to produce response " + eventType + ": " + outcome.outcome());
             }
         }
 

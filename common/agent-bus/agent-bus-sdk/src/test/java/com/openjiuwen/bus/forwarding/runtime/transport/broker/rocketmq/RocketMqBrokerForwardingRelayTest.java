@@ -8,6 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
@@ -149,9 +151,64 @@ class RocketMqBrokerForwardingRelayTest {
     void produce_rejects_null_record() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
                 resolver("topic-x"), SUFFIX, msg -> {});
-        assertThatThrownBy(() -> relay.produce(null, 1_000L))
+        // cast disambiguates the outbox-record overload from the direct-tap produce(BrokerOutboundMessage)
+        assertThatThrownBy(() -> relay.produce((ForwardingOutboxRecord) null, 1_000L))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("record");
+    }
+
+    @Test
+    void produce_outbound_message_directly_is_accepted_and_carries_first_class_fields() {
+        // FEAT-017 direct-tap: a response producer builds a BrokerOutboundMessage (NO outbox record)
+        // and produces it directly. The message carries the full control plane + inlinePayload as
+        // FIRST-CLASS headers so the relay's poison guard (trace/idem/route/cap present) accepts it.
+        List<Message> sent = new ArrayList<>();
+        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+                resolver("topic-from-resolver"), SUFFIX, sent::add);
+        BrokerMessageHeaders headers = new BrokerMessageHeaders(
+                TENANT, "msg-resp", "runtime-svc", "gateway-1",
+                null, "corr-resp", AgentBusEventType.INVOCATION_ACCEPTED,
+                "trace-resp", "idem-resp", ROUTE, "a2a",
+                Long.MAX_VALUE, "taskId=task-1;status=accepted", "gateway-1");
+        BrokerOutboundMessage message = new BrokerOutboundMessage("target=gateway-1", headers);
+
+        BrokerProduceOutcome outcome = relay.produce(message, 1_000L);
+
+        assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ACCEPTED);
+        assertThat(sent).hasSize(1);
+        Message m = sent.get(0);
+        assertThat(m.getTopic()).isEqualTo("topic-from-resolver");
+        assertThat(m.getKeys()).isEqualTo("msg-resp");
+        assertThat(new String(m.getBody(), StandardCharsets.UTF_8)).isEqualTo("target=gateway-1");
+        assertThat(m.getUserProperty("eventType")).isEqualTo("INVOCATION_ACCEPTED");
+        assertThat(m.getUserProperty("correlationId")).isEqualTo("corr-resp");
+        assertThat(m.getUserProperty("inlinePayload")).isEqualTo("taskId=task-1;status=accepted");
+        assertThat(m.getUserProperty("originalCaller")).isEqualTo("gateway-1");
+        assertThat(m.getUserProperty("targetServiceId")).isEqualTo("gateway-1");
+    }
+
+    @Test
+    void produce_outbound_message_with_null_event_type_returns_route_not_found() {
+        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+                resolver("topic-x"), SUFFIX, msg -> { });
+        BrokerMessageHeaders headers = new BrokerMessageHeaders(
+                TENANT, "msg-no-et", SOURCE, TARGET, null, "corr", null,
+                null, null, ROUTE, null, Long.MAX_VALUE, null, null);
+        BrokerOutboundMessage message = new BrokerOutboundMessage("target=" + TARGET, headers);
+
+        BrokerProduceOutcome outcome = relay.produce(message, 1_000L);
+
+        assertThat(outcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ROUTE_NOT_FOUND);
+        assertThat(outcome.failureCode()).isEqualTo(ForwardingFailureCode.ROUTE_NOT_FOUND);
+    }
+
+    @Test
+    void produce_outbound_message_rejects_null_message() {
+        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+                resolver("topic-x"), SUFFIX, msg -> { });
+        assertThatThrownBy(() -> relay.produce((BrokerOutboundMessage) null, 1_000L))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("message");
     }
 
     /**
