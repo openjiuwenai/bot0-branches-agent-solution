@@ -83,16 +83,24 @@ public class LocalMappingCardRegistrar {
     /**
      * Registers the local HTTP caller bean for 方案 B 联调.
      *
-     * <p>Active under the {@code mock-versatile} profile, overrides the runtime's
-     * {@code DefaultRemoteAgentCaller} (which hits an A2A SDK ServiceLoader
-     * transport issue in Spring Boot fat jars). The local caller posts directly
-     * to the target runtime's {@code /v1/query} endpoint via plain HTTP.
+     * <p>Active under the {@code mock-versatile} profile <em>and only when the
+     * A2A Gateway caller is disabled</em> ({@code openjiuwen.service.a2a-gateway.enabled}
+     * is {@code false} or absent). When the gateway caller is enabled it takes
+     * precedence, since both beans use {@code @ConditionalOnMissingBean} and
+     * auto-configuration ordering alone is not enough to disambiguate them.
+     *
+     * <p>Overrides the runtime's {@code DefaultRemoteAgentCaller} (which hits
+     * an A2A SDK ServiceLoader transport issue in Spring Boot fat jars). The
+     * local caller posts directly to the target runtime's {@code /v1/query}
+     * endpoint via plain HTTP.
      *
      * @param registry the remote agent card registry (populated by {@link LocalMappingCardRegistrar})
      * @return the local HTTP remote agent caller
      */
     @Bean
     @Profile("mock-versatile")
+    @ConditionalOnProperty(prefix = "openjiuwen.service.a2a-gateway", name = "enabled",
+            havingValue = "false", matchIfMissing = true)
     @ConditionalOnMissingBean(RemoteAgentCaller.class)
     public RemoteAgentCaller localHttpRemoteAgentCaller(A2ARemoteAgentCardRegistry registry) {
         return new LocalHttpRemoteAgentCaller(registry);
