@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,17 @@
 
 package com.huawei.ascend.edp.service;
 
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 /**
  * 技能包打包服务 -- 将 skillsDir 打包为 tar.gz 供沙箱部署使用。
  *
@@ -36,8 +36,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class SkillPackService {
 
+public class SkillPackService {
     private static final Logger LOGGER = LoggerFactory.getLogger(SkillPackService.class);
 
     /**
@@ -47,6 +47,7 @@ public class SkillPackService {
      * @return 生成的 tar.gz 临时文件路径
      * @throws IOException 打包失败时抛出
      */
+
     public Path packSkills(Path skillsDir) throws IOException {
         if (skillsDir == null || !Files.exists(skillsDir)) {
             throw new IOException("Skills directory not found: " + skillsDir);
@@ -67,7 +68,7 @@ public class SkillPackService {
                         Files.copy(path, tos);
                         tos.closeArchiveEntry();
                     } catch (IOException e) {
-                        throw new RuntimeException("Failed to add file to tar: " + path, e);
+                        throw new IllegalStateException("Failed to add file to tar: " + path, e);
                     }
                 });
             }
@@ -76,6 +77,7 @@ public class SkillPackService {
             try {
                 Files.deleteIfExists(tarGz);
             } catch (IOException ignored) {
+                LOGGER.warn("Failed to clean up temp file: {}", tarGz, ignored);
             }
             throw e;
         }
@@ -88,6 +90,7 @@ public class SkillPackService {
      *
      * @param tarGz 临时文件路径
      */
+
     public void cleanup(Path tarGz) {
         if (tarGz != null) {
             try {

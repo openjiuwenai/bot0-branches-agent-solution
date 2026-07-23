@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package com.huawei.ascend.edp.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,8 +30,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 /**
  * EDPAgent Todo 数据层（单一文件）。
  *
@@ -50,23 +50,26 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class EdpaTodolist {
 
+public class EdpaTodolist {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpaTodolist.class);
 
     /**
      * 任务定义列表（保持配置顺序）。
      */
+
     private final List<TodoEntry> entries;
 
     /**
      * 动态路径规则列表。
      */
+
     private final List<DynamicPath> dynamicPaths;
 
     /**
      * catalog_id 到 TodoEntry 的索引，O(1) 查询。
      */
+
     private final Map<String, TodoEntry> index;
 
     /**
@@ -75,9 +78,10 @@ public class EdpaTodolist {
      * @param rawEntries  ActRuleConfig.TodolistEntry 列表
      * @param rawPaths    ActRuleConfig.TodolistPath 列表
      * @throws IllegalArgumentException 校验失败（catalog_id 重复、引用不存在、依赖图有环）
+     *
+     * @return result
+     */
 
-    * @return result
-    */
     public EdpaTodolist(List<ActRuleConfig.TodolistEntry> rawEntries, List<ActRuleConfig.TodolistPath> rawPaths) {
         Objects.requireNonNull(rawEntries, "todolist entries must not be null");
         this.entries = new ArrayList<>(rawEntries.size());
@@ -129,6 +133,7 @@ public class EdpaTodolist {
      *
      * @return 存在 dynamic_paths 返回 true
      */
+
     public boolean hasDynamicPaths() {
         return !dynamicPaths.isEmpty();
     }
@@ -136,6 +141,7 @@ public class EdpaTodolist {
     /**
      * 校验 depends_on 和 dynamic_paths.skip_steps 引用的 catalog_id 都存在。
      */
+
     private void validateReferences() {
         for (TodoEntry entry : entries) {
             for (String dep : entry.getDependsOn()) {
@@ -158,6 +164,7 @@ public class EdpaTodolist {
     /**
      * 校验 depends_on 构成的有向图无环（Kahn's 算法）。
      */
+
     private void validateAcyclic() {
         Map<String, Set<String>> graph = new HashMap<>();
         Map<String, Integer> inDegree = new HashMap<>();
@@ -201,6 +208,7 @@ public class EdpaTodolist {
     /**
      * 任务定义（catalog_id 为内部主键字段，含完整字段）。
      */
+
     public static class TodoEntry {
         private final String catalogId;
         private final String content;
@@ -222,18 +230,22 @@ public class EdpaTodolist {
         public String getCatalogId() {
             return catalogId;
         }
+
         /** Gets the content. */
         public String getContent() {
             return content;
         }
+
         /** Gets the description. */
         public String getDescription() {
             return description;
         }
+
         /** Gets the depends on. */
         public List<String> getDependsOn() {
             return dependsOn;
         }
+
         /** Gets the skill. */
         public String getSkill() {
             return skill;
@@ -243,6 +255,7 @@ public class EdpaTodolist {
     /**
      * 动态路径规则（LLM 根据业务结果自主判断是否切换）。
      */
+
     public static class DynamicPath {
         private final String pathId;
         private final String description;
@@ -264,18 +277,22 @@ public class EdpaTodolist {
         public String getPathId() {
             return pathId;
         }
+
         /** Gets the description. */
         public String getDescription() {
             return description;
         }
+
         /** Gets the trigger. */
         public String getTrigger() {
             return trigger;
         }
+
         /** Gets the skip steps. */
         public List<String> getSkipSteps() {
             return skipSteps;
         }
+
         /** Gets the redirect. */
         public String getRedirect() {
             return redirect;

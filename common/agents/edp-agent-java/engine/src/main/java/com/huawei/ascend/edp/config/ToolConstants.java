@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,31 +23,38 @@ package com.huawei.ascend.edp.config;
  *
  * @since 2024-01-01
  */
+
 public final class ToolConstants {
-
-    private ToolConstants() {
-    }
-
     /** Core TaskPlanningRail 提供的 Todo 工具。 */
     public static final String TODO_CREATE = "todo_create";
+
     /** modify tool name. */
     public static final String TODO_MODIFY = "todo_modify";
+
     /** list tool name. */
     public static final String TODO_LIST = "todo_list";
+
     /** get tool name. */
     public static final String TODO_GET = "todo_get";
 
     /** 业务工具。 */
     public static final String CALL_MCP = "call_mcp";
+
     /** Call versatile tool name. */
     public static final String CALL_VERSATILE = "call_versatile";
+
     /** Ask user tool name. */
     public static final String ASK_USER = "ask_user";
+
     /** Cancel task tool name. */
     public static final String CANCEL_TASK = "cancel_task";
 
     /** 脚本执行工具。 */
     public static final String BASH = "bash";
+
     /** Skill tool name. */
     public static final String SKILL_TOOL = "skill_tool";
+
+    private ToolConstants() {
+    }
 }

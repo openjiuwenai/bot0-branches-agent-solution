@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,14 @@ import com.huawei.ascend.edp.config.EdpConfig;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
+
 /**
  * ToolDataChannel 四元组隔离键工厂。
  *
  * @since 2024-01-01
  */
-public final class ToolDataKeyFactory {
 
+public final class ToolDataKeyFactory {
     private static final String DEFAULT_TENANT_ID = "defaultTenant";
     private static final String DEFAULT_CONTEXT_ID = "defaultContext";
     private static final String DEFAULT_TASK_ID = "defaultTask";

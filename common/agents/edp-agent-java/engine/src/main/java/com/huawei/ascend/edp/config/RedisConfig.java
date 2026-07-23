@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,6 @@
  */
 
 package com.huawei.ascend.edp.config;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 import com.huawei.ascend.edp.todo.RedisTodoStore;
 import com.openjiuwen.core.session.checkpointer.Checkpointer;
@@ -41,6 +36,11 @@ import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Redis 连接配置（Lettuce + RESP2 + 连接超时）。
  *
@@ -50,32 +50,31 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  *   <li>UC-07/UC-22~UC-24：single/sentinel/cluster 三模式按 {@code mode} 切换。</li>
  *   <li>UC-16：Lettuce 默认连接池，支持 Checkpointer + TodoStore 共存。</li>
  * </ul>
+ *
+ * @since 2026-01-01
  */
+
 @Configuration
 @EnableConfigurationProperties(TodoRedisProperties.class)
-/**
- * RedisConfig class.
- *
- * @since 2024-01-01
- */
 public class RedisConfig {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisConfig.class);
 
     /** 静态持有 RedisTodoStore 实例，供非 Spring 管理的 EdpaAgentEnhancer 取用。 */
     private static volatile RedisTodoStore singletonStore;
 
-    /** 获取已注册的 RedisTodoStore（未启动 Redis 时返回 null，Rail 回落文件路径）。
-    * @return result
-    */
-    public static RedisTodoStore getRedisTodoStore() {
-        return singletonStore;
-    }
-
     private final TodoRedisProperties props;
 
     public RedisConfig(TodoRedisProperties props) {
         this.props = props;
+    }
+
+    /** 获取已注册的 RedisTodoStore（未启动 Redis 时返回 null，Rail 回落文件路径）。
+     *
+     * @return result
+     */
+
+    public static RedisTodoStore getRedisTodoStore() {
+        return singletonStore;
     }
 
     /**
@@ -85,6 +84,7 @@ public class RedisConfig {
      * {@link CheckpointerFactory#setDefaultCheckpointer} 注册为全局默认，
      * Core SDK 会话状态将持久化到 Redis（UC-18~UC-21）。</p>
      */
+
     @PostConstruct
     /** Init redis checkpointer. */
     public void initRedisCheckpointer() {
@@ -96,7 +96,7 @@ public class RedisConfig {
             CheckpointerFactory.setDefaultCheckpointer(redisCheckpointer);
             LOGGER.info("[EDPA-DIAG] REDIS_CHECKPOINTER registered (url={}, ttl={}min)", sanitizeUrl(redisUrl),
                     props.getCheckpointerTtlMinutes());
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
             LOGGER.error("[EDPA-DIAG] REDIS_CHECKPOINTER register failed", e);
             throw new IllegalStateException("Redis Checkpointer registration failed", e);
         }
@@ -118,6 +118,7 @@ public class RedisConfig {
      *
      * <p>RESP2 强制 + socket 超时 + 连接建立超时，保证 UC-01 健康检查可发现版本/认证问题。</p>
      */
+
     @Bean
     /** Redis connection factory. */
     public LettuceConnectionFactory redisConnectionFactory(TodoRedisProperties props) {
@@ -138,15 +139,15 @@ public class RedisConfig {
         }
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(
-                (org.springframework.data.redis.connection.RedisConfiguration) redisConfig, clientBuilder.build());
+                redisConfig, clientBuilder.build());
         factory.afterPropertiesSet();
         LOGGER.info("[EDPA-DIAG] REDIS_CONFIG mode={} host={} port={} db={} resp2=true", mode, props.getHost(),
                 props.getPort(), props.getDatabase());
         return factory;
     }
 
-    @Bean
     /** String redis template. */
+    @Bean
     public StringRedisTemplate stringRedisTemplate(LettuceConnectionFactory factory) {
         return new StringRedisTemplate(factory);
     }
@@ -157,6 +158,7 @@ public class RedisConfig {
      * <p>启动时调用 {@link RedisTodoStore#healthCheck()} 做健康检查（UC-01/UC-02），
      * 失败则容器启动失败。</p>
      */
+
     @Bean
     /** Redis todo store. */
     public RedisTodoStore redisTodoStore(StringRedisTemplate redisTemplate, TodoRedisProperties props) {

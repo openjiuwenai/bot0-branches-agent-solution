@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,25 +41,29 @@ package com.huawei.ascend.edp.config;
  *
  * @since 2024-01-01
  */
-public final class ScriptConstants {
 
-    private ScriptConstants() {
-    }
+public final class ScriptConstants {
 
     // ── ctx.getExtra() 内的 key（话术载体 + 控制信号）──
 
     /** 话术载体键：本请求内业务话术文本（供 EdpaEventRail.interrupt_start 与 ScriptsRail 出口读取）。 */
     public static final String KEY_RESPONSE_TEMPLATE = "_edp_response_template";
+
     /** 上次命中的话术 key（合规把关用）。 */
     public static final String KEY_LAST_SCRIPT = "_edp_last_script_key";
+
     /** ask_user confirm 时落选品变量（对齐 Python selected_product）。 */
     public static final String KEY_SELECTED_PRODUCT = "_edp_selected_product";
+
     /** cancel reason（对齐 Python cancel_reason）。 */
     public static final String KEY_CANCEL_REASON = "_edp_cancel_reason";
+
     /** 归一化脚本注入的 ui_notice（VersatileRail 写，EdpaEventRail 读）。 */
     public static final String KEY_UI_NOTICE = "_edp_ui_notice";
+
     /** 进度提示互斥字段（归一化脚本输出 progress_hint 时写入，ScriptsRail 出口发射时读取并推送 progress_hint chunk）。 */
     public static final String KEY_PROGRESS_HINT = "_edp_progress_hint";
+
     /** 归一化脚本执行超时（秒）。 */
     public static final int SANDBOX_TIMEOUT_SECONDS = 60;
 
@@ -67,10 +71,13 @@ public final class ScriptConstants {
 
     /** skip tool key. */
     public static final String KEY_SKIP_TOOL = "_skip_tool";
+
     /** plan first block key. */
     public static final String KEY_PLAN_FIRST_BLOCK = "_plan_first_block";
+
     /** checkpoint release key. */
     public static final String KEY_CHECKPOINT_RELEASE = "_edp_checkpoint_release";
+
     /** planning_start per-request 去重标记（解耦后仅真正进入规划时发一次）。 */
     public static final String KEY_PLANNING_START_SENT = "_edp_planning_start_sent";
 
@@ -81,14 +88,19 @@ public final class ScriptConstants {
 
     /** request start script key. */
     public static final String SCRIPT_REQUEST_START = "request_start";
+
     /** planning start script key. */
     public static final String SCRIPT_PLANNING_START = "planning_start";
+
     /** task cancelled script key. */
     public static final String SCRIPT_TASK_CANCELLED = "task_cancelled";
+
     /** cancel confirm script key. */
     public static final String SCRIPT_CANCEL_CONFIRM = "cancel_confirm";
+
     /** out of scope script key. */
     public static final String SCRIPT_OUT_OF_SCOPE = "out_of_scope";
+
     // 业务话术键（product_select_confirm 等）由各 SKILL.yaml scripts 字段定义，
     // 通过 SkillScriptsCollector 动态收集到 templates，不再在此硬编码。
 
@@ -96,8 +108,10 @@ public final class ScriptConstants {
 
     /** response template status parameter key. */
     public static final String PARAM_RESPONSE_TEMPLATE_STATUS = "response_template_status";
+
     /** response template keys parameter key. */
     public static final String PARAM_RESPONSE_TEMPLATE_KEYS = "response_template_keys";
+
     /** response template vars parameter key. */
     public static final String PARAM_RESPONSE_TEMPLATE_VARS = "response_template_vars";
 
@@ -105,10 +119,13 @@ public final class ScriptConstants {
 
     /** confirm status value. */
     public static final String STATUS_CONFIRM = "confirm";
+
     /** missing amount status value. */
     public static final String STATUS_MISSING_AMOUNT = "missing_amount";
+
     /** missing product status value. */
     public static final String STATUS_MISSING_PRODUCT = "missing_product";
+
     /** out of scope status value. */
     public static final String STATUS_OUT_OF_SCOPE = "out_of_scope";
 
@@ -116,8 +133,13 @@ public final class ScriptConstants {
 
     /** success result value. */
     public static final String RESULT_SUCCESS = "success";
+
     /** completed result value. */
     public static final String RESULT_COMPLETED = "completed";
+
     /** failed result value. */
     public static final String RESULT_FAILED = "failed";
+
+    private ScriptConstants() {
+    }
 }

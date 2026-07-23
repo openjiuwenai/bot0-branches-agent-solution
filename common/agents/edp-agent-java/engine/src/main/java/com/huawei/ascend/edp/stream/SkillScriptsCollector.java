@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,10 @@
 
 package com.huawei.ascend.edp.stream;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -23,10 +27,6 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 /**
  * 从各 Skill 的 SKILL.yaml 收集业务话术。
  *
@@ -35,8 +35,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class SkillScriptsCollector {
 
+public class SkillScriptsCollector {
     private static final Logger LOGGER = LoggerFactory.getLogger(SkillScriptsCollector.class);
 
     private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
@@ -47,6 +47,7 @@ public class SkillScriptsCollector {
      * @param skillsDir skills 根目录
      * @return 话术字典，key 为话术名，value 为话术内容
      */
+
     public static Map<String, String> collectSkillScripts(Path skillsDir) {
         Map<String, String> scripts = new HashMap<>();
         if (!Files.exists(skillsDir) || !Files.isDirectory(skillsDir)) {
@@ -56,23 +57,19 @@ public class SkillScriptsCollector {
 
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(skillsDir)) {
             for (Path skillDir : stream) {
-                if (!Files.isDirectory(skillDir))
+                if (!Files.isDirectory(skillDir)) {
                     continue;
+                }
                 Path v1Dir = skillDir.resolve("v1");
                 Path skillYaml = (Files.exists(v1Dir)) ? v1Dir.resolve("SKILL.yaml") : skillDir.resolve("SKILL.yaml");
 
-                if (!Files.exists(skillYaml))
+                if (!Files.exists(skillYaml)) {
                     continue;
+                }
 
                 Map<String, Object> parsed = YAML_MAPPER.readValue(Files.readString(skillYaml), Map.class);
                 Object scriptsObj = parsed.get("scripts");
-                if (scriptsObj instanceof Map) {
-                    for (Map.Entry<?, ?> entry : ((Map<?, ?>) scriptsObj).entrySet()) {
-                        if (entry.getKey() instanceof String && entry.getValue() instanceof String) {
-                            scripts.put((String) entry.getKey(), (String) entry.getValue());
-                        }
-                    }
-                }
+                collectScriptsFromObject(scriptsObj, scripts);
             }
         } catch (IOException e) {
             LOGGER.warn("SkillScriptsCollector: failed to scan skills dir: {}", e.getMessage());
@@ -80,5 +77,16 @@ public class SkillScriptsCollector {
 
         LOGGER.info("SkillScriptsCollector: collected {} skill scripts", scripts.size());
         return scripts;
+    }
+
+    private static void collectScriptsFromObject(Object scriptsObj, Map<String, String> scripts) {
+        if (!(scriptsObj instanceof Map<?, ?> map)) {
+            return;
+        }
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() instanceof String key && entry.getValue() instanceof String value) {
+                scripts.put(key, value);
+            }
+        }
     }
 }

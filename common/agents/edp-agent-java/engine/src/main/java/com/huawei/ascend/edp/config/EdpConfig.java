@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ import java.util.List;
  *
  * @since 2024-01-01
  */
-public class EdpConfig {
 
+public class EdpConfig {
     /** 业务范围配置。 */
     private Scope scope;
 
@@ -54,6 +54,7 @@ public class EdpConfig {
     public Scope getScope() {
         return scope;
     }
+
     /** Sets the scope. */
     public void setScope(Scope scope) {
         this.scope = scope;
@@ -63,6 +64,7 @@ public class EdpConfig {
     public List<String> getPlanningSteps() {
         return planningSteps;
     }
+
     /** Sets the planning steps. */
     public void setPlanningSteps(List<String> planningSteps) {
         this.planningSteps = planningSteps;
@@ -72,6 +74,7 @@ public class EdpConfig {
     public LlmSampling getLlmSampling() {
         return llmSampling;
     }
+
     /** Sets the llm sampling. */
     public void setLlmSampling(LlmSampling llmSampling) {
         this.llmSampling = llmSampling;
@@ -80,6 +83,7 @@ public class EdpConfig {
     /**
      * 业务范围配置。
      */
+
     public static class Scope {
         /** 允许处理的业务范围描述。 */
         private String allowed;
@@ -88,6 +92,7 @@ public class EdpConfig {
         public String getAllowed() {
             return allowed;
         }
+
         /** Sets the allowed. */
         public void setAllowed(String allowed) {
             this.allowed = allowed;
@@ -97,6 +102,7 @@ public class EdpConfig {
     /**
      * 模型采样参数配置。
      */
+
     public static class LlmSampling {
         /** 温度参数。 */
         private double temperature;
@@ -111,6 +117,7 @@ public class EdpConfig {
         public double getTemperature() {
             return temperature;
         }
+
         /** Sets the temperature. */
         public void setTemperature(double temperature) {
             this.temperature = temperature;
@@ -120,6 +127,7 @@ public class EdpConfig {
         public double getTopP() {
             return topP;
         }
+
         /** Sets the top p. */
         public void setTopP(double topP) {
             this.topP = topP;
@@ -129,10 +137,10 @@ public class EdpConfig {
         public int getMaxRetries() {
             return maxRetries;
         }
+
         /** Sets the max retries. */
         public void setMaxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
         }
     }
-
 }

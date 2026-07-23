@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,12 @@
 
 package com.huawei.ascend.edp.tools;
 
-import java.util.function.Function;
-import java.util.Map;
-
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.openjiuwen.core.foundation.tool.Tool;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+
 /**
  * EDPAgent 内置工具注册表。
  *
@@ -39,8 +40,8 @@ import com.openjiuwen.core.foundation.tool.Tool;
  *
  * @since 2024-01-01
  */
-public final class EdpaToolRegistry {
 
+public final class EdpaToolRegistry {
     private static final Map<String, Function<EdpConfig, Tool>> BUILTIN_TOOLS = Map.of(EdpaBusinessTools.TOOL_CALL_MCP,
             cfg -> CallMcpTool.build(), EdpaBusinessTools.TOOL_CALL_VERSATILE, cfg -> CallVersatileTool.build(),
             EdpaBusinessTools.TOOL_ENHANCED_ASK_USER, cfg -> EnhancedAskUserTool.build(),
@@ -54,11 +55,12 @@ public final class EdpaToolRegistry {
      *
      * @param name 工具名称（如 "call_mcp"）
      * @param edpConfig EDP 专有配置
-     * @return 工具实例，未知名称为 null
+     * @return 工具实例，未知名称返回 Optional.empty()
      */
-    public static Tool build(String name, EdpConfig edpConfig) {
+
+    public static Optional<Tool> build(String name, EdpConfig edpConfig) {
         Function<EdpConfig, Tool> builder = BUILTIN_TOOLS.get(name);
-        return builder != null ? builder.apply(edpConfig) : null;
+        return builder != null ? Optional.of(builder.apply(edpConfig)) : Optional.empty();
     }
 
     /**
@@ -67,6 +69,7 @@ public final class EdpaToolRegistry {
      * @param name 工具名称
      * @return true 如果此名称在注册表中
      */
+
     public static boolean isBuiltin(String name) {
         return BUILTIN_TOOLS.containsKey(name);
     }

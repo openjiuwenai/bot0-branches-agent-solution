@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ package com.huawei.ascend.edp.channel;
  *
  * @since 2024-01-01
  */
+
 public enum ToolDataScope {
     /** 单次工具调用作用域，调用结束后自动清理。 */
     SINGLE_CALL,

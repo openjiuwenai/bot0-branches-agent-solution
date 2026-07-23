@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,6 @@
 package com.huawei.ascend.edp.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.util.List;
-import java.util.Map;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.tool.Tool;
@@ -28,13 +24,16 @@ import com.openjiuwen.core.singleagent.interrupt.InterruptRequest;
 import com.openjiuwen.core.singleagent.interrupt.ToolInterruptException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.List;
+import java.util.Map;
+
 /**
  * EDPAgent 增强 ask_user 工具。
  *
  * @since 2024-01-01
  */
-public final class EnhancedAskUserTool {
 
+public final class EnhancedAskUserTool {
     private static final Logger LOGGER = LoggerFactory.getLogger(EnhancedAskUserTool.class);
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -87,8 +86,9 @@ public final class EnhancedAskUserTool {
         if (text == null) {
             return "null";
         }
-        if (text.length() <= maxLen)
+        if (text.length() <= maxLen) {
             return text;
+        }
         return text.substring(0, maxLen) + "...";
     }
 

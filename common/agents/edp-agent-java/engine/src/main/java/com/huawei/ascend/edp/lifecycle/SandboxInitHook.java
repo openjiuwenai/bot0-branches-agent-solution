@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,6 @@
  */
 
 package com.huawei.ascend.edp.lifecycle;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.SandboxConfig;
@@ -49,22 +41,28 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+
 /**
  * 沙箱初始化生命周期钩子 -- 替代 EdpaExtHandler.performInit() 手动初始化。
  *
  * <p>享受 AgentLifecycleBootstrap 的 initFailFast 保障（失败快速终止整个应用）。
  * 创建 SysOperation 双模式门面并注册到 AgentLifecycleContext。</p>
- */
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 100)
-@ConditionalOnProperty(prefix = "edpa.agent.sandbox", name = "enabled", havingValue = "true")
-/**
- * SandboxInitHook class.
  *
  * @since 2024-01-01
  */
-public class SandboxInitHook implements AgentInitHook {
 
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE + 100)
+@ConditionalOnProperty(prefix = "edpa.agent.sandbox", name = "enabled", havingValue = "true")
+public class SandboxInitHook implements AgentInitHook {
     private static final Logger LOGGER = LoggerFactory.getLogger(SandboxInitHook.class);
 
     @Autowired
@@ -103,32 +101,10 @@ public class SandboxInitHook implements AgentInitHook {
                 .mode(config.isEnabled() ? OperationMode.SANDBOX : OperationMode.LOCAL).workConfig(localWorkConfig)
                 .gatewayConfig(gatewayConfig).build();
 
-        // 5. 创建 SysOperation
-        SysOperation sysOp;
-        SandboxClient decoratedClient = null;
-        if (sandboxClientFactory != null) {
-            // 需求2：通过 agent-runtime-java 中转，获得治理装饰
-            LOGGER.info("[EDP-SANDBOX] Path 2: Using AgentCoreSandboxClientFactory (governed)");
-            try {
-                decoratedClient = sandboxClientFactory.create();
-                // 修复：Spring Boot YAML 绑定 Map<String, Object> 时会将嵌套列表转为带数字键的 LinkedHashMap，
-                // 导致 jiuwenswarm Pydantic 校验失败（期望 JSON 数组，实际收到 JSON 对象）。
-                // 此处将 SandboxInitHook 构建的 filesystem_policy（含正确 Java List）注入到 delegate 的 extraParams 中，
-                // 确保 DecoratingSandboxClient 创建沙箱时传递正确的 filesystem_policy。
-                injectFilesystemPolicyIntoDelegate(decoratedClient, config.getSkillDeployPath());
-                LOGGER.info("[EDP-SANDBOX] DecoratingSandboxClient created and filesystem_policy injected");
-            } catch (RuntimeException e) {
-                LOGGER.warn("[EDP-SANDBOX] Failed to create DecoratingSandboxClient, using direct mode: {}",
-                        e.getMessage());
-            }
-            sysOp = new SysOperation(sysOpCard);
-            SandboxRegistryBootstrap.ensureInitialized();
-        } else {
-            // 需求1：agent-core-java 直接调用
-            sysOp = new SysOperation(sysOpCard);
-            SandboxRegistryBootstrap.ensureInitialized();
-            LOGGER.info("[EDP-SANDBOX] Path 1: SysOperation with direct SandboxClient");
-        }
+        // 5. 创建 SysOperation 和治理装饰 SandboxClient
+        SandboxClient decoratedClient = createDecoratedSandboxClientIfNeeded(config);
+        SysOperation sysOp = new SysOperation(sysOpCard);
+        SandboxRegistryBootstrap.ensureInitialized();
 
         // 6. 注册到生命周期上下文
         context.setAttribute("sysOperation", sysOp);
@@ -136,28 +112,57 @@ public class SandboxInitHook implements AgentInitHook {
         context.setAttribute("decoratedSandboxClient", decoratedClient);
 
         // 7. 自动创建沙箱容器（ContainerManager.acquire）
-        if (config.isAutoCreateOnStartup()) {
-            try {
-                ContainerManager containerMgr = new ContainerManager();
-                String isolationKey = SandboxOperationSupport_resolveIsolationKey(gatewayConfig);
-                containerMgr.acquire(isolationKey, gatewayConfig);
-                context.setAttribute("containerManager", containerMgr);
-                LOGGER.info("[EDP-SANDBOX] Sandbox container acquired: key={}", isolationKey);
-
-                // 8. 部署技能包到沙箱（阶段二新增）
-                deploySkillsToSandbox(sysOp, gatewayConfig, config, decoratedClient);
-            } catch (RuntimeException e) {
-                LOGGER.warn("[EDP-SANDBOX] Sandbox container acquire failed: {}", e.getMessage());
-                if (config.isFallbackOnFailure()) {
-                    LOGGER.info("[EDP-SANDBOX] fallback_on_failure=true, continuing with LOCAL fallback");
-                } else {
-                    throw e; // initFailFast：沙箱创建失败且不允许降级时快速终止
-                }
-            }
-        }
+        acquireSandboxContainerIfNeeded(context, sysOp, gatewayConfig, config, decoratedClient);
 
         LOGGER.info("[EDP-SANDBOX] SandboxInitHook completed: mode={}, path={}", sysOpCard.getMode(),
                 sandboxClientFactory != null ? "governed" : "direct");
+    }
+
+    private SandboxClient createDecoratedSandboxClientIfNeeded(SandboxConfig config) {
+        if (sandboxClientFactory == null) {
+            LOGGER.info("[EDP-SANDBOX] Path 1: SysOperation with direct SandboxClient");
+            return null;
+        }
+        LOGGER.info("[EDP-SANDBOX] Path 2: Using AgentCoreSandboxClientFactory (governed)");
+        try {
+            SandboxClient decoratedClient = sandboxClientFactory.create();
+
+            // 修复：Spring Boot YAML 绑定 Map<String, Object> 时会将嵌套列表转为带数字键的 LinkedHashMap，
+            // 导致 jiuwenswarm Pydantic 校验失败（期望 JSON 数组，实际收到 JSON 对象）。
+            // 此处将 SandboxInitHook 构建的 filesystem_policy（含正确 Java List）注入到 delegate 的 extraParams 中，
+            // 确保 DecoratingSandboxClient 创建沙箱时传递正确的 filesystem_policy。
+            injectFilesystemPolicyIntoDelegate(decoratedClient, config.getSkillDeployPath());
+            LOGGER.info("[EDP-SANDBOX] DecoratingSandboxClient created and filesystem_policy injected");
+            return decoratedClient;
+        } catch (IllegalStateException e) {
+            LOGGER.warn("[EDP-SANDBOX] Failed to create DecoratingSandboxClient, using direct mode: {}",
+                    e.getMessage());
+            return null;
+        }
+    }
+
+    private void acquireSandboxContainerIfNeeded(AgentLifecycleContext context, SysOperation sysOp,
+            SandboxGatewayConfig gatewayConfig, SandboxConfig config, SandboxClient decoratedClient) {
+        if (!config.isAutoCreateOnStartup()) {
+            return;
+        }
+        try {
+            ContainerManager containerMgr = new ContainerManager();
+            String isolationKey = resolveIsolationKey(gatewayConfig);
+            containerMgr.acquire(isolationKey, gatewayConfig);
+            context.setAttribute("containerManager", containerMgr);
+            LOGGER.info("[EDP-SANDBOX] Sandbox container acquired: key={}", isolationKey);
+
+            // 8. 部署技能包到沙箱（阶段二新增）
+            deploySkillsToSandbox(sysOp, gatewayConfig, config, decoratedClient);
+        } catch (IllegalStateException e) {
+            LOGGER.warn("[EDP-SANDBOX] Sandbox container acquire failed: {}", e.getMessage());
+            if (config.isFallbackOnFailure()) {
+                LOGGER.info("[EDP-SANDBOX] fallback_on_failure=true, continuing with LOCAL fallback");
+            } else {
+                throw e; // initFailFast：沙箱创建失败且不允许降级时快速终止
+            }
+        }
     }
 
     // === 辅助方法 ===
@@ -200,6 +205,7 @@ public class SandboxInitHook implements AgentInitHook {
      * @param skillDeployPath 技能部署路径（如 /app/skills）
      * @return extraParams Map，包含 policy 和 policy_mode
      */
+
     private static Map<String, Object> buildSandboxPolicyExtraParams(String skillDeployPath) {
         Map<String, Object> filesystemPolicy = new HashMap<>();
         filesystemPolicy.put("read_write", List.of(skillDeployPath));
@@ -240,6 +246,7 @@ public class SandboxInitHook implements AgentInitHook {
      * @param decoratedClient DecoratingSandboxClient 实例
      * @param skillDeployPath 技能部署路径（如 /app/skills）
      */
+
     private void injectFilesystemPolicyIntoDelegate(SandboxClient decoratedClient, String skillDeployPath) {
         try {
             SandboxGatewayConfig delegateConfig = decoratedClient.getConfig();
@@ -248,16 +255,16 @@ public class SandboxInitHook implements AgentInitHook {
                 delegateConfig.getLauncherConfig().setExtraParams(correctExtraParams);
                 LOGGER.info("[EDP-SANDBOX] filesystem_policy injected into DecoratingSandboxClient delegate config");
             }
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.warn("[EDP-SANDBOX] Failed to inject filesystem_policy into delegate config: {}", e.getMessage());
         }
     }
 
     /** 包装 SandboxOperationSupport.resolveIsolationKey 以简化异常处理 */
-    private String SandboxOperationSupport_resolveIsolationKey(SandboxGatewayConfig config) {
+    private String resolveIsolationKey(SandboxGatewayConfig config) {
         try {
             return com.openjiuwen.core.sysop.sandbox.SandboxOperationSupport.resolveIsolationKey(config);
-        } catch (RuntimeException e) {
+        } catch (NullPointerException | IllegalArgumentException e) {
             return config.getIsolation() != null && config.getIsolation().getCustomId() != null
                     ? config.getIsolation().getCustomId()
                     : "edp_default";
@@ -273,10 +280,11 @@ public class SandboxInitHook implements AgentInitHook {
      * @param gatewayConfig 沙箱网关配置（用于解析技能目录路径）
      * @param config 沙箱配置（含 skillDeployPath）
      */
+
     private void deploySkillsToSandbox(SysOperation sysOp, SandboxGatewayConfig gatewayConfig, SandboxConfig config,
             SandboxClient decoratedClient) {
         // 1. 解析技能目录路径：scenarioHome/skills
-        Path skillsDir = resolveSkillsDir();
+        Path skillsDir = resolveSkillsDir().orElse(null);
         if (skillsDir == null || !Files.exists(skillsDir)) {
             LOGGER.info("[EDP-SANDBOX] Skills directory not found, skipping skill deployment: {}", skillsDir);
             return;
@@ -310,6 +318,7 @@ public class SandboxInitHook implements AgentInitHook {
             LOGGER.info("[EDP-SANDBOX] Skills decompressed in sandbox: {}", deployPath);
         } catch (IOException | RuntimeException e) {
             LOGGER.error("[EDP-SANDBOX] Failed to deploy skills to sandbox: {}", e.getMessage());
+
             // 技能部署失败不终止应用（非 initFailFast 项），降级到无技能模式
         } finally {
             // 步骤4：清理临时文件（无论成功或失败都清理）
@@ -318,11 +327,11 @@ public class SandboxInitHook implements AgentInitHook {
     }
 
     /** 从 springBootConfig.scenarioHome 解析技能目录路径 */
-    private Path resolveSkillsDir() {
+    private Optional<Path> resolveSkillsDir() {
         String scenarioHome = springBootConfig.getScenarioHome();
         if (scenarioHome == null || scenarioHome.isBlank()) {
-            return null;
+            return Optional.empty();
         }
-        return Path.of(scenarioHome).toAbsolutePath().normalize().resolve("skills");
+        return Optional.of(Path.of(scenarioHome).toAbsolutePath().normalize().resolve("skills"));
     }
 }

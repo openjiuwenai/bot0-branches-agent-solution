@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,11 @@
 
 package com.huawei.ascend.edp.rail;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ScriptResolver;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.ToolConstants;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.session.stream.OutputSchema;
@@ -30,13 +28,13 @@ import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.harness.rails.DeepAgentRail;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+
 /**
  * 话术出口 Rail（B 面，priority=50）。
  *
@@ -59,8 +57,8 @@ import java.util.Map;
  *
  * @since 2024-01-01
  */
-public class ScriptsRail extends DeepAgentRail {
 
+public class ScriptsRail extends DeepAgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(ScriptsRail.class);
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -78,9 +76,10 @@ public class ScriptsRail extends DeepAgentRail {
      * 构造话术 Rail。
      *
      * @param scripts 话术配置
+     *
+     * @return result
+     */
 
-    * @return result
-    */
     public ScriptsRail(SysScriptsConfig scripts) {
         this.scripts = scripts;
     }
@@ -90,11 +89,12 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * @param scripts 话术配置
      * @param edpConfig EDP 配置（UC-C04 scope 已通过 PlanrulePromptBuilder 注入 prompt，此处不使用）
+     *
+     * @return result
+     */
 
-    * @return result
-    */
     public ScriptsRail(SysScriptsConfig scripts, com.huawei.ascend.edp.config.EdpConfig edpConfig) {
-        this.scripts = scripts;
+        this(scripts);
     }
 
     @Override
@@ -132,7 +132,7 @@ public class ScriptsRail extends DeepAgentRail {
 
         // ask_user 话术解析已迁移至 EdpaEventRail.onToolException
         // （AskUserTemplateRail p=85 抛 ToolInterruptException 后此 Rail p=50 不可达）
-        if (ToolConstants.CANCEL_TASK.equals(tool) && readResponseTemplate(ctx) == null) {
+        if (ToolConstants.CANCEL_TASK.equals(tool) && readResponseTemplate(ctx).isEmpty()) {
             resolveCancelScript(ctx, args);
         }
     }
@@ -143,11 +143,13 @@ public class ScriptsRail extends DeepAgentRail {
      * <p>reason 参数值需与 ScriptConstants 常量名一致（如 {@code "task_cancelled"}），
      * 内部通过 {@link SysScriptsConfig#resolveScriptKey(String)} 映射到实际配置键。</p>
      */
+
     private void resolveCancelScript(AgentCallbackContext ctx, Map<String, Object> args) {
         String reason = str(args.get("reason"));
         if (isBlank(reason)) {
             reason = "task_cancelled";
         }
+
         // 使用配置驱动的键映射
         String resolvedKey = scripts.resolveScriptKey("SCRIPT_" + reason.toUpperCase(Locale.ROOT).replace("-", "_"));
         String text = scripts.getScriptOrDefault("SCRIPT_" + reason.toUpperCase(Locale.ROOT).replace("-", "_"), "");
@@ -175,6 +177,7 @@ public class ScriptsRail extends DeepAgentRail {
             LOGGER.debug("[EDPA-SCRIPT] Progress hint present, skipping response_template");
             return;
         }
+
         // 业务话术键由各 SKILL.yaml scripts 字段定义，通过 SkillScriptsCollector 动态收集。
         // LLM 通过 ask_user(response_template_keys=["..."]) 指定话术键，不再在此硬编码映射。
     }
@@ -200,7 +203,7 @@ public class ScriptsRail extends DeepAgentRail {
             return; // 有进度提示时不执行标准话术合规把关
         }
 
-        String text = readResponseTemplate(ctx);
+        String text = readResponseTemplate(ctx).orElse(null);
         if (isBlank(text)) {
             return;
         }
@@ -215,6 +218,7 @@ public class ScriptsRail extends DeepAgentRail {
      * <p>注意：{@code _edp_last_script_key} 存储的是解析后的实际键名（非常量名），
      * 所以此处使用 {@link SysScriptsConfig#has(String)} 而非 {@link SysScriptsConfig#hasScript(String)}。</p>
      */
+
     private void complianceGate(AgentCallbackContext ctx) {
         Object k = ctx.getExtra().get(ScriptConstants.KEY_LAST_SCRIPT);
         String resolvedKey = k == null ? null : String.valueOf(k);
@@ -251,12 +255,12 @@ public class ScriptsRail extends DeepAgentRail {
         }
         try {
             reActAgent.getPromptBuilder().removeSection(CANCEL_RULES_SECTION);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.debug("[EDPA-SCRIPT] uninit removeSection '{}' ignored: {}", CANCEL_RULES_SECTION, e.getMessage());
         }
         try {
             reActAgent.getPromptBuilder().removeSection(BUSINESS_RULES_SECTION);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.debug("[EDPA-SCRIPT] uninit removeSection '{}' ignored: {}", BUSINESS_RULES_SECTION, e.getMessage());
         }
     }
@@ -271,12 +275,13 @@ public class ScriptsRail extends DeepAgentRail {
      * <p>Python 用 checkpoint/cascade；EventFlow 首轮信号来源待确认。本处保守判定：当
      * {@code ctx.getExtra()} 无 resume 标记时视为首轮。生产联调后可改为基于 session 历史。</p>
      */
+
     private boolean isFirstTurn(AgentCallbackContext ctx) {
         try {
             Object resume = ctx.getExtra()
                     .get(com.openjiuwen.core.singleagent.interrupt.ToolInterruptionState.RESUME_USER_INPUT_KEY);
             return resume == null;
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             return true;
         }
     }
@@ -286,6 +291,7 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * <p>格式: {type: "progress_hint", data: {text: hintText}}</p>
      */
+
     private void emitProgressChunk(AgentCallbackContext ctx, String hintText) {
         if (isBlank(hintText)) {
             return;
@@ -298,7 +304,7 @@ public class ScriptsRail extends DeepAgentRail {
             event.put("data", data);
             ctx.getSession().writeStream(new OutputSchema("custom", 0, event));
             LOGGER.info("[EDPA-SCRIPT] progress_hint chunk emitted: {}", hintText);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.warn("[EDPA-SCRIPT] emitProgressChunk failed: {}", e.getMessage());
         }
     }
@@ -306,6 +312,7 @@ public class ScriptsRail extends DeepAgentRail {
     /**
      * 发射话术事件（北向 SSE，复用 EdpaEventRail.emit 同款格式）。
      */
+
     private void emitScript(AgentCallbackContext ctx, String eventType, String text) {
         if (isBlank(text)) {
             return;
@@ -317,14 +324,14 @@ public class ScriptsRail extends DeepAgentRail {
             event.put("conversation_id", sessionId(ctx));
             event.put("content", text);
             ctx.getSession().writeStream(new OutputSchema("custom", 0, event));
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.warn("[EDPA-SCRIPT] emitScript failed: {}", e.getMessage());
         }
     }
 
-    private String readResponseTemplate(AgentCallbackContext ctx) {
+    private Optional<String> readResponseTemplate(AgentCallbackContext ctx) {
         Object v = ctx.getExtra().get(ScriptConstants.KEY_RESPONSE_TEMPLATE);
-        return v == null ? null : String.valueOf(v);
+        return v == null ? Optional.empty() : Optional.of(String.valueOf(v));
     }
 
     @SuppressWarnings("unchecked")
@@ -350,7 +357,7 @@ public class ScriptsRail extends DeepAgentRail {
     private static String sessionId(AgentCallbackContext ctx) {
         try {
             return ctx.getSession().getSessionId();
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             return "unknown";
         }
     }

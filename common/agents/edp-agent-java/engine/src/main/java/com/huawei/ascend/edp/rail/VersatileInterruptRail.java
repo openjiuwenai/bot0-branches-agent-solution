@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,34 +16,6 @@
 
 package com.huawei.ascend.edp.rail;
 
-import java.io.IOException;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.concurrent.TimeUnit;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.UUID;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.huawei.ascend.edp.channel.ToolDataChannel;
 import com.huawei.ascend.edp.channel.ToolDataKey;
 import com.huawei.ascend.edp.channel.ToolDataKeyFactory;
@@ -51,6 +23,11 @@ import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.llm.schema.ToolMessage;
 import com.openjiuwen.core.session.Session;
@@ -68,6 +45,28 @@ import com.openjiuwen.core.sysop.result.ExecuteCmdResult;
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+
 /**
  * Versatile Agent 委托调用 Rail。
  *
@@ -89,18 +88,19 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class VersatileInterruptRail extends AgentRail {
 
+public class VersatileInterruptRail extends AgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(VersatileInterruptRail.class);
+
     /** 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。 */
     private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * pre-delegate guard 计数器在 ToolDataChannel 中的 key 前缀。
      * 对齐 Python versatile_interrupt_rail.py 第 434 行 {@code state_key = f"_pre_delegate_guard:{command}:{rule_id}"}，
      * 用 {@code command:ruleId} 作为唯一标识，避免不同 skill 的同名规则互相干扰。
      */
+
     static final String GUARD_STATE_KEY_PREFIX = "_pre_delegate_guard:";
 
     /**
@@ -108,15 +108,20 @@ public class VersatileInterruptRail extends AgentRail {
      * 保证 call_versatile 写入的 history_info 能被下一次 call_mcp 的 buildSkillInput 读到，
      * 形成跨工具的会话级持久化闭环（对齐 Python {@code session.state["history_info"]}）。
      */
+
     static final String HISTORY_INFO_KEY = "history_info";
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * EDP 专有配置，当前预留给 VA 委托策略和目标 Agent 配置使用。
      */
+
     private final EdpConfig edpConfig;
 
     private final EdpaSpringBootConfig.VersatileConfig versatileConfig;
     private final ToolDataChannel toolDataChannel;
+
     /** 与 EdpaRuntimeHandler 共享，存放 adapter 返回的完整 Versatile message JSON。 */
     private final VersatilePassthroughBuffer passthroughBuffer;
     private final HttpClient httpClient;
@@ -125,20 +130,24 @@ public class VersatileInterruptRail extends AgentRail {
      * skills 目录，用于 pre-delegate guard 静态解析脚本中的 {@code PRE_DELEGATE_GUARD} 配置。
      * 为 null 时 guard 直接跳过（不影响主流程）。
      */
+
     private final Path skillsDir;
 
     /**
      * 话术配置，用于 pre-delegate guard 超限时解析 {@code response_template_key} 兜底话术。
      * 为 null 时回落到规则的 {@code fallback_message}。
      */
+
     private final SysScriptsConfig scripts;
 
     private final String agentName;
 
     /** 框架双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。 */
     private final SysOperation sysOp;
+
     /** 沙箱技能部署路径（如 /app/skills），SANDBOX 模式下作为 cwd 参数传入 executeCmd。可为 null。 */
     private final String skillDeployPath;
+
     /** 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。 */
     private final SandboxClient decoratedClient;
 
@@ -146,9 +155,10 @@ public class VersatileInterruptRail extends AgentRail {
      * 构造 VA 委托 Rail。
      *
      * @param edpConfig EDP 专有配置
+     *
+     * @return result
+     */
 
-    * @return result
-    */
     public VersatileInterruptRail(EdpConfig edpConfig) {
         this(edpConfig, null, new ToolDataChannel(), new VersatilePassthroughBuffer(), null, null, "EDPAgent", null,
                 null);
@@ -218,6 +228,7 @@ public class VersatileInterruptRail extends AgentRail {
                 ? parseTimeout(versatileConfig.getTimeout())
                 : Duration.ofSeconds(30);
         this.httpClient = HttpClient.newBuilder().connectTimeout(timeout).version(HttpClient.Version.HTTP_1_1).build();
+
         // VA 与 MCP、ask_user 同属工具调用增强类 Rail，使用同一优先级。
         setPriority(85);
     }
@@ -235,6 +246,7 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具调用信息
      */
+
     @Override
     /** Before tool call. */
     public void beforeToolCall(AgentCallbackContext ctx) {
@@ -248,6 +260,7 @@ public class VersatileInterruptRail extends AgentRail {
         if ("call_versatile".equals(toolName)) {
             LOGGER.info("[VersatileInterruptRail] intercept call_versatile: toolCallId={}", toolCallId(inputs));
             String toolCallId = toolCallId(inputs);
+
             // 续传路径：用户已提交菜单确认等输入，直接回填工具结果，不再重复调 adapter。
             Object resumeInput = resolveResumeInput(ctx, toolCallId);
             if (resumeInput != null) {
@@ -263,7 +276,7 @@ public class VersatileInterruptRail extends AgentRail {
             // pre-delegate guard：在真正委托 adapter 之前检查 skill 声明的前置规则。
             // 超限时直接终止当前 ReAct 流程，避免 adapter 继续执行真实业务（如转账）。
             // 对齐 Python versatile_interrupt_rail.py 第 128-130 行。
-            GuardDecision guardDecision = applyPreDelegateGuard(ctx, normalizeArgs(inputs));
+            GuardDecision guardDecision = applyPreDelegateGuard(ctx, normalizeArgs(inputs)).orElse(null);
             if (guardDecision != null && guardDecision.blocked()) {
                 LOGGER.info("[VersatileInterruptRail] guard blocked: rule={}, count={}, limit={}",
                         guardDecision.ruleId(), guardDecision.count(), guardDecision.maxCalls());
@@ -283,56 +296,54 @@ public class VersatileInterruptRail extends AgentRail {
             }
 
             // ── 归一化脚本 + 话术索引（对齐 Python versatile_interrupt_rail.py L190-260）──
-            Map<String, Object> versatileArgs = normalizeArgs(inputs);
-            LOGGER.info("[VersatileInterruptRail] call_versatile params: intent='{}', desc='{}'",
-                    abbreviate(String.valueOf(versatileArgs.getOrDefault("query_intent", "")), 60),
-                    abbreviate(String.valueOf(versatileArgs.getOrDefault("query_description", "")), 80));
-            String normalizeScript = resolveNormalizeScript(versatileArgs.get("query_response_analysis_scripts"));
-            if (normalizeScript != null && !normalizeScript.isBlank() && skillsDir != null && scripts != null) {
-                // 1. 执行归一化脚本 → [status, normalized]
-                NormalizeOutput output = invokeNormalizeScript(normalizeScript, toolResult, versatileArgs, ctx);
+            applyNormalizationAndTemplate(inputs, toolResult, ctx);
+        }
+    }
 
-                // 2. ui_notice 优先：脚本显式指定话术 key（如 product_recommend_no_card）
-                if (output.uiNotice != null) {
-                    LOGGER.info("[VersatileInterruptRail] ui_notice: templateKey='{}', deliveryMode=direct",
-                            output.uiNotice);
-                    ctx.getExtra().put(ScriptConstants.KEY_UI_NOTICE, output.uiNotice);
-                } else if (output.status != null) {
-                    // 3. 通用索引：status → response_template_keys[index]
-                    String templateKey = resolveTemplateKey(versatileArgs.get("response_template_keys"), output.status);
-                    if (templateKey != null) {
-                        String text = scripts.getTemplate(templateKey);
-                        if (text != null && !text.isBlank()) {
-                            ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, text);
-                            ctx.getExtra().put(ScriptConstants.KEY_LAST_SCRIPT, templateKey);
-                            LOGGER.info("[VersatileInterruptRail] response_template injected, key={}, status={}",
-                                    templateKey, output.status);
-                        }
+    private void applyNormalizationAndTemplate(ToolCallInputs inputs, Map<String, Object> toolResult,
+            AgentCallbackContext ctx) {
+        Map<String, Object> versatileArgs = normalizeArgs(inputs);
+        LOGGER.info("[VersatileInterruptRail] call_versatile params: intent='{}', desc='{}'",
+                abbreviate(String.valueOf(versatileArgs.getOrDefault("query_intent", "")), 60),
+                abbreviate(String.valueOf(versatileArgs.getOrDefault("query_description", "")), 80));
+        String normalizeScript = resolveNormalizeScript(versatileArgs.get("query_response_analysis_scripts"));
+        if (normalizeScript != null && !normalizeScript.isBlank() && skillsDir != null && scripts != null) {
+            NormalizeOutput output = invokeNormalizeScript(normalizeScript, toolResult, versatileArgs, ctx);
+            if (output.uiNotice != null) {
+                LOGGER.info("[VersatileInterruptRail] ui_notice: templateKey='{}', deliveryMode=direct",
+                        output.uiNotice);
+                ctx.getExtra().put(ScriptConstants.KEY_UI_NOTICE, output.uiNotice);
+            } else if (output.status != null) {
+                String templateKey = resolveTemplateKey(versatileArgs.get("response_template_keys"),
+                        output.status).orElse(null);
+                if (templateKey != null) {
+                    String text = scripts.getTemplate(templateKey).orElse(null);
+                    if (text != null && !text.isBlank()) {
+                        ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, text);
+                        ctx.getExtra().put(ScriptConstants.KEY_LAST_SCRIPT, templateKey);
+                        LOGGER.info("[VersatileInterruptRail] response_template injected, key={}, status={}",
+                                templateKey, output.status);
                     }
                 }
-
-                // 4. 归一化后的数据回写为 toolResult（ui_notice 已 pop，不暴露给 LLM）
-                toolResult = output.data;
-
-                // setToolMsg 先用不含 ui_notice 的版本构建（LLM 不会看到）
-                inputs.setToolResult(toolResult);
-                inputs.setToolMsg(ToolMessage.builder().content(toJson(toolResult))
-                        .toolCallId(inputs.getToolCall() != null ? inputs.getToolCall().getId() : "call_versatile")
-                        .build());
-
-                // 把 ui_notice 放回 toolResult，供 EdpaEventRail.afterToolCall 从 toolResult 直接读取
-                if (output.uiNotice != null && toolResult instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> trMap = (Map<String, Object>) toolResult;
-                    trMap.put("ui_notice", output.uiNotice);
-                    inputs.setToolResult(trMap);
-                }
             } else {
-                inputs.setToolResult(toolResult);
-                inputs.setToolMsg(ToolMessage.builder().content(toJson(toolResult))
-                        .toolCallId(inputs.getToolCall() != null ? inputs.getToolCall().getId() : "call_versatile")
-                        .build());
+                // no-op: no ui_notice or status to process
             }
+            toolResult = output.data;
+            inputs.setToolResult(toolResult);
+            inputs.setToolMsg(ToolMessage.builder().content(toJson(toolResult))
+                    .toolCallId(inputs.getToolCall() != null ? inputs.getToolCall().getId() : "call_versatile")
+                    .build());
+            if (output.uiNotice != null && toolResult instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> trMap = (Map<String, Object>) toolResult;
+                trMap.put("ui_notice", output.uiNotice);
+                inputs.setToolResult(trMap);
+            }
+        } else {
+            inputs.setToolResult(toolResult);
+            inputs.setToolMsg(ToolMessage.builder().content(toJson(toolResult))
+                    .toolCallId(inputs.getToolCall() != null ? inputs.getToolCall().getId() : "call_versatile")
+                    .build());
         }
     }
 
@@ -352,6 +363,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 注入 response_template 并 request_force_finish。
      * 对齐 Python versatile_interrupt_rail.py L439-473: guard matched → exceeded → force_finish。</p>
      */
+
     private void blockCallVersatileByGuard(AgentCallbackContext ctx, ToolCallInputs inputs, String toolCallId,
             GuardDecision decision) {
         ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, decision.message());
@@ -377,7 +389,7 @@ public class VersatileInterruptRail extends AgentRail {
                     : "call-versatile-spike";
             Map<String, Object> versatileInputs = buildInputs(args, ctx);
             return invokeWithInputs(versatileInputs, conversationId);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.warn("VersatileInterruptRail: direct call failed: {}", e.getMessage());
             return failedResult(e.getMessage());
         }
@@ -481,6 +493,7 @@ public class VersatileInterruptRail extends AgentRail {
     private Map<String, Object> callVersatileAdapterA2a(Map<String, Object> versatileInputs, String conversationId)
             throws Exception {
         String adapterUrl = versatileConfig.getAdapterA2aUrl();
+
         // 扁平化字段到顶层，确保 query 和 intent 同时以两个键名存在，
         // 以便 VersatileRequestExtractor.extractSemanticInput() 正确提取 query 和 intent。
         // 嵌套 {"inputs:{...}} 格式会使 VersatileRequestExtractor 只看到 "inputs" 键，无法路由。
@@ -531,6 +544,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 解析 adapter A2A SSE 响应体。
      * artifactUpdate 中的 text 为 USER 透传节点；statusUpdate 中的 text 为 LLM 终态内容。
      */
+
     private Map<String, Object> normalizeA2aAdapterResponse(String body) throws Exception {
         List<String> passthroughNodes = new ArrayList<>();
         String completedContent = "";
@@ -556,58 +570,14 @@ public class VersatileInterruptRail extends AgentRail {
                 completedContent = terminalText;
             }
         }
+
         // ── 兜底回填：当 completedContent 为空时，从 passthroughNodes 提取 answer 内容 ──
         // VersatileResponseExtractor 产生的 answer envelope {type:"answer", output:...}
         // 在 A2A SSE 中映射为 artifactUpdate（而非 statusUpdate），因此 extractA2aStatusText
         // 无法提取。此处从 passthroughNodes 回查 answer 节点并提取 output 字段，
         // 确保 LLM 能看到 Versatile 的结果数据（0705版已验证逻辑，0707版合并时缺失）。
         if (completedContent.isBlank() && !passthroughNodes.isEmpty()) {
-            for (String node : passthroughNodes) {
-                try {
-                    JsonNode nodeJson = OBJECT_MAPPER.readTree(node);
-                    // 1) answer envelope（VersatileResponseExtractor截留成功时生成）
-                    String type = nodeJson.path("type").asText("");
-                    if ("answer".equals(type)) {
-                        String output = nodeJson.path("output").asText("");
-                        if (!output.isBlank()) {
-                            completedContent = output;
-                            LOGGER.info(
-                                    "VersatileInterruptRail: extracted answer content from passthroughNodes, length={}",
-                                    output.length());
-                            break;
-                        }
-                    }
-                    // 2) 直接透传的QA节点（result-node-name未配置/截留失败时）
-                    String nodeType = nodeJson.path("node_type").asText("");
-                    if ("QA".equals(nodeType)) {
-                        String text = nodeJson.path("text").asText("");
-                        if (!text.isBlank()) {
-                            completedContent = text;
-                            LOGGER.info(
-                                    "VersatileInterruptRail: extracted QA node text from passthroughNodes, length={}",
-                                    text.length());
-                            break;
-                        }
-                    }
-                } catch (JsonProcessingException e) {
-                    LOGGER.debug("VersatileInterruptRail: failed to parse passthrough node for answer extraction: {}",
-                            e.getMessage());
-                }
-            }
-            // fallback: 若未找到 answer 节点，使用最后一个 passthroughNode 作为兜底
-            if (completedContent.isBlank()) {
-                String lastNode = passthroughNodes.get(passthroughNodes.size() - 1);
-                try {
-                    JsonNode lastJson = OBJECT_MAPPER.readTree(lastNode);
-                    if (lastJson.isObject() || lastJson.isArray()) {
-                        completedContent = lastNode;
-                        LOGGER.info("VersatileInterruptRail: fallback to last passthroughNode as content, length={}",
-                                lastNode.length());
-                    }
-                } catch (JsonProcessingException e) {
-                    LOGGER.debug("[VersatileInterruptRail] passthroughNode fallback parse failed: {}", e.getMessage());
-                }
-            }
+            completedContent = extractContentFromPassthroughNodes(passthroughNodes);
         }
         Map<String, Object> normalized = new LinkedHashMap<>();
         normalized.put("source", "versatile");
@@ -615,6 +585,68 @@ public class VersatileInterruptRail extends AgentRail {
         normalized.put("content", completedContent);
         normalized.put("passthrough_nodes", passthroughNodes);
         return normalized;
+    }
+
+    /**
+     * 从 passthroughNodes 中提取 completedContent 兜底内容。
+     * 优先取 answer envelope 的 output 字段，其次取 QA 节点的 text 字段，
+     * 最后使用最后一个节点作为兜底。
+     */
+    private String extractContentFromPassthroughNodes(List<String> passthroughNodes) {
+        String completedContent = "";
+        for (String node : passthroughNodes) {
+            try {
+                JsonNode nodeJson = OBJECT_MAPPER.readTree(node);
+                String extracted = extractAnswerFromNode(nodeJson).orElse(null);
+                if (extracted != null) {
+                    return extracted;
+                }
+            } catch (JsonProcessingException e) {
+                LOGGER.debug("VersatileInterruptRail: failed to parse passthrough node for answer extraction: {}",
+                        e.getMessage());
+            }
+        }
+        // fallback: 若未找到 answer 节点，使用最后一个 passthroughNode 作为兜底
+        return extractLastNodeFallback(passthroughNodes, completedContent);
+    }
+
+    private Optional<String> extractAnswerFromNode(JsonNode nodeJson) {
+        // 1) answer envelope（VersatileResponseExtractor截留成功时生成）
+        String type = nodeJson.path("type").asText("");
+        if ("answer".equals(type)) {
+            String output = nodeJson.path("output").asText("");
+            if (!output.isBlank()) {
+                LOGGER.info("VersatileInterruptRail: extracted answer content from passthroughNodes, length={}",
+                        output.length());
+                return Optional.of(output);
+            }
+        }
+        // 2) 直接透传的QA节点（result-node-name未配置/截留失败时）
+        String nodeType = nodeJson.path("node_type").asText("");
+        if ("QA".equals(nodeType)) {
+            String text = nodeJson.path("text").asText("");
+            if (!text.isBlank()) {
+                LOGGER.info("VersatileInterruptRail: extracted QA node text from passthroughNodes, length={}",
+                        text.length());
+                return Optional.of(text);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private String extractLastNodeFallback(List<String> passthroughNodes, String completedContent) {
+        String lastNode = passthroughNodes.get(passthroughNodes.size() - 1);
+        try {
+            JsonNode lastJson = OBJECT_MAPPER.readTree(lastNode);
+            if (lastJson.isObject() || lastJson.isArray()) {
+                LOGGER.info("VersatileInterruptRail: fallback to last passthroughNode as content, length={}",
+                        lastNode.length());
+                return lastNode;
+            }
+        } catch (JsonProcessingException e) {
+            LOGGER.debug("[VersatileInterruptRail] passthroughNode fallback parse failed: {}", e.getMessage());
+        }
+        return completedContent;
     }
 
     private void storePassthroughNodes(AgentCallbackContext ctx, Map<String, Object> toolResult) {
@@ -649,8 +681,10 @@ public class VersatileInterruptRail extends AgentRail {
         String toolCallId = inputs.getToolCall() != null && inputs.getToolCall().getId() != null
                 ? inputs.getToolCall().getId()
                 : "call_versatile";
+
         // 记录 interruptId，供续传完成时包装 InteractiveInput 恢复 call_versatile。
         passthroughBuffer.rememberInterruptId(conversationId(ctx), toolCallId);
+
         // 从 passthrough_nodes 中提取中断提示文本（如"请确认转账信息"）
         String message = extractPassthroughMessage(toolResult);
         LOGGER.info("VersatileInterruptRail: adapter requested user input, toolCallId={}, message={}", toolCallId,
@@ -668,6 +702,7 @@ public class VersatileInterruptRail extends AgentRail {
      * passthrough_nodes 中的每个元素是 JSON 字符串，如:
      * {"event":"message","data":{"text":"请确认转账信息","menu_type":"TRANSFER_MENU"}}
      */
+
     @SuppressWarnings("unchecked")
     private String extractPassthroughMessage(Map<String, Object> toolResult) {
         if (toolResult == null) {
@@ -687,11 +722,13 @@ public class VersatileInterruptRail extends AgentRail {
             try {
                 com.fasterxml.jackson.databind.JsonNode parsed = new com.fasterxml.jackson.databind.ObjectMapper()
                         .readTree(nodeStr);
+
                 // 优先取 data.text
                 String text = parsed.path("data").path("text").asText("");
                 if (!text.isBlank()) {
                     return text;
                 }
+
                 // 回退取 text
                 text = parsed.path("text").asText("");
                 if (!text.isBlank()) {
@@ -787,7 +824,7 @@ public class VersatileInterruptRail extends AgentRail {
 
         String inputKey = String.valueOf(args.getOrDefault("input_key", ""));
         if (!inputKey.isBlank()) {
-            Object inputData = toolDataChannel.getObject(channelKey, inputKey);
+            Object inputData = toolDataChannel.getObject(channelKey, inputKey).orElse(null);
             if (inputData != null) {
                 inputs.put("input_data", inputData);
                 inputs.put("business_data", inputData);
@@ -802,7 +839,7 @@ public class VersatileInterruptRail extends AgentRail {
     }
 
     private String readCachedQuery(ToolDataKey channelKey) {
-        Object cached = toolDataChannel.getObject(channelKey, McpInterruptRail.VERSATILE_QUERY_KEY);
+        Object cached = toolDataChannel.getObject(channelKey, McpInterruptRail.VERSATILE_QUERY_KEY).orElse(null);
         if (cached instanceof String text) {
             return text;
         }
@@ -816,35 +853,13 @@ public class VersatileInterruptRail extends AgentRail {
 
         // 兜底逻辑（方案2.3）：versatile_query 缓存缺失时，从 mcp_products_data 构造 rich query，
         // 确保 VersatileInterruptRail 委托请求包含足够的产品数据信息。
-        Object mcpProductsData = toolDataChannel.getObject(channelKey, McpInterruptRail.DEFAULT_MCP_PRODUCTS_KEY);
+        Object mcpProductsData = toolDataChannel.getObject(channelKey, McpInterruptRail.DEFAULT_MCP_PRODUCTS_KEY).orElse(null);
         if (mcpProductsData instanceof Map<?, ?> productsMap && !productsMap.isEmpty()) {
-            // 从 products 数据中提取关键字段构造查询描述
-            Object productsList = productsMap.get("products");
-            if (productsList instanceof List<?> list && !list.isEmpty()) {
-                StringBuilder queryBuilder = new StringBuilder("理财产品推荐数据：");
-                for (Object item : list) {
-                    if (item instanceof Map<?, ?> product) {
-                        Object name = product.get("product_name");
-                        Object type = product.get("product_type");
-                        if (name != null) {
-                            queryBuilder.append(name);
-                            if (type != null) {
-                                queryBuilder.append("(").append(type).append(")");
-                            }
-                            queryBuilder.append("、");
-                        }
-                    }
-                }
-                String constructedQuery = queryBuilder.toString();
-                if (!"理财产品推荐数据：".equals(constructedQuery)) {
-                    // 降级说明：versatile_query 缓存未命中，从 mcp_products_data 兜底构造（非预期路径）
-                    LOGGER.warn(
-                            "[VersatileInterruptRail] fallback query from mcp_products_data, "
-                                    + "length={} (non-primary path)",
-                            constructedQuery.length());
-                    return constructedQuery;
-                }
+            String constructedQuery = buildQueryFromProducts(productsMap);
+            if (constructedQuery != null) {
+                return constructedQuery;
             }
+
             // products 为空列表时，使用 map 的字符串表示作为兜底
             String dataStr = String.valueOf(productsMap);
             if (!dataStr.isBlank() && !"{}".equals(dataStr)) {
@@ -858,6 +873,38 @@ public class VersatileInterruptRail extends AgentRail {
 
         LOGGER.warn("[VersatileInterruptRail] readCachedQuery: all caches empty, returning empty query");
         return "";
+    }
+
+    private String buildQueryFromProducts(Map<?, ?> productsMap) {
+        Object productsList = productsMap.get("products");
+        if (!(productsList instanceof List<?> list) || list.isEmpty()) {
+            return null;
+        }
+        StringBuilder queryBuilder = new StringBuilder("理财产品推荐数据：");
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> product)) {
+                continue;
+            }
+            Object name = product.get("product_name");
+            if (name == null) {
+                continue;
+            }
+            queryBuilder.append(name);
+            Object type = product.get("product_type");
+            if (type != null) {
+                queryBuilder.append("(").append(type).append(")");
+            }
+            queryBuilder.append("、");
+        }
+        String constructedQuery = queryBuilder.toString();
+        if ("理财产品推荐数据：".equals(constructedQuery)) {
+            return null;
+        }
+        LOGGER.warn(
+                "[VersatileInterruptRail] fallback query from mcp_products_data, "
+                        + "length={} (non-primary path)",
+                constructedQuery.length());
+        return constructedQuery;
     }
 
     private String resolveUrl(String conversationId) {
@@ -935,7 +982,7 @@ public class VersatileInterruptRail extends AgentRail {
             JsonNode node = OBJECT_MAPPER.readTree(payload);
             lastJson = node;
             if (node.has("text")) {
-                JsonNode textResult = parseTextJson(node.get("text"));
+                JsonNode textResult = parseTextJson(node.get("text")).orElse(null);
                 if (textResult != null) {
                     return textResult;
                 }
@@ -972,15 +1019,15 @@ public class VersatileInterruptRail extends AgentRail {
         return node;
     }
 
-    private JsonNode parseTextJson(JsonNode node) {
+    private Optional<JsonNode> parseTextJson(JsonNode node) {
         if (node == null || !node.isTextual()) {
-            return null;
+            return Optional.empty();
         }
         try {
             JsonNode parsed = OBJECT_MAPPER.readTree(node.asText());
-            return parsed.isObject() || parsed.isArray() ? parsed : null;
+            return parsed.isObject() || parsed.isArray() ? Optional.of(parsed) : Optional.empty();
         } catch (JsonProcessingException e) {
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -1015,22 +1062,28 @@ public class VersatileInterruptRail extends AgentRail {
 
     /** 对 JSON 字符串中的敏感字段自动脱敏：银行卡号保留前4后4位、用户姓名保留首字、会话ID/Cookie掩码。 */
     private static String desensitizeSensitiveFields(String json) {
-        if (json == null || "null".equals(json))
+        if (json == null || "null".equals(json)) {
             return json;
+        }
+
         // 银行卡号字段名匹配：保留前4后4位
         String result = json.replaceAll(
                 "\"(bankCardNumber|payerCardNumber|payeeCardNumber|cardNum|cardNumber)\""
                         + "\\s*:\\s*\"(\\d{4})\\d+(\\d{4})\"",
                 "\"$1\":\"$2****$3\"");
+
         // 中国银联卡号数字模式匹配：以62开头的16-19位连续数字，覆盖所有银联BIN
         result = BANK_CARD_NUMBER_PATTERN.matcher(result)
                 .replaceAll(m -> m.group(1).substring(0, 4) + "****" + m.group(1).substring(m.group(1).length() - 4));
+
         // 用户姓名：保留首字+掩码
         result = result.replaceAll(
                 "\"(wap_userName|wap_realName|userName|realName|customerName)\"\\s*:\\s*\"([^\"]{1})[^\"]+\"",
                 "\"$1\":\"$2***\"");
+
         // 会话ID：仅保留前8位
         result = result.replaceAll("\"(wap_sessionId|sessionId)\"\\s*:\\s*\"([^\"]{8})[^\"]+\"", "\"$1\":\"$2***\"");
+
         // Cookie列表：不打印完整值
         result = result.replaceAll("\"(wapbCookieList|cookieList|cookies)\"\\s*:\\s*\"[^\"]+\"", "\"$1\":\"***\"");
         return result;
@@ -1090,6 +1143,7 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具调用和工具结果信息
      */
+
     @Override
     /** After tool call. */
     public void afterToolCall(AgentCallbackContext ctx) {
@@ -1117,6 +1171,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 与 Python 行为一致。持久化 key 与 {@link McpInterruptRail#HISTORY_INFO_KEY} 同名，
      * 共享同一四元组隔离，下一次 call_mcp 能读到。</p>
      */
+
     private void persistHistoryInfoIfPresent(AgentCallbackContext ctx, ToolCallInputs inputs) {
         Object rawResult = inputs.getToolResult();
         if (!(rawResult instanceof Map<?, ?> rawMap)) {
@@ -1130,11 +1185,13 @@ public class VersatileInterruptRail extends AgentRail {
         }
         Object historyInfo = result.get(HISTORY_INFO_KEY);
         ToolDataKey channelKey = ToolDataKeyFactory.fromContext(ctx, edpConfig, agentName);
+
         // 包装为 {"value": ...} 结构，与 McpInterruptRail 读取时的解包逻辑对齐。
         toolDataChannel.store(channelKey, HISTORY_INFO_KEY,
                 Map.of("value", historyInfo != null ? historyInfo : List.of()));
         LOGGER.info("VersatileInterruptRail: persistence check history_info=persisted:{}",
                 abbreviate(String.valueOf(historyInfo)));
+
         // 出口剔除：从 toolResult 与 toolMsg 中移除，避免 LLM 看到内部字段。
         result.remove(HISTORY_INFO_KEY);
         inputs.setToolResult(result);
@@ -1156,17 +1213,18 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * @param ctx  回调上下文
      * @param args call_versatile 工具参数（含 query_intent / query_response_analysis_scripts 等）
-     * @return 超限判定；null 表示无 guard 或未超限，主流程继续
+     * @return 超限判定；Optional.empty() 表示无 guard 或未超限，主流程继续
      */
-    private GuardDecision applyPreDelegateGuard(AgentCallbackContext ctx, Map<String, Object> args) {
+
+    private Optional<GuardDecision> applyPreDelegateGuard(AgentCallbackContext ctx, Map<String, Object> args) {
         String command = asString(args.get("query_response_analysis_scripts"));
         Map<String, Object> guard = loadPreDelegateGuard(command);
         if (guard == null || guard.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         Object rulesObj = guard.get("rules");
         if (!(rulesObj instanceof List<?> rules) || rules.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         ToolDataKey channelKey = ToolDataKeyFactory.fromContext(ctx, edpConfig, agentName);
         for (Object ruleObj : rules) {
@@ -1174,6 +1232,7 @@ public class VersatileInterruptRail extends AgentRail {
                 continue;
             }
             Map<String, Object> ruleMap = toStringKeyMap(rule);
+
             // match 表示这条规则只对哪些 tool_args 生效，例如 {"query_intent": "快速转账"}。
             // 全部键值匹配才命中（等价 Python any(...) 取反的循环逻辑）。
             Map<String, Object> match = toStringKeyMap(ruleMap.get("match"));
@@ -1182,6 +1241,7 @@ public class VersatileInterruptRail extends AgentRail {
             }
 
             String ruleId = asString(ruleMap.getOrDefault("id", "default"));
+
             // state_key 用 command:ruleId 唯一标识，避免不同 skill 的同名规则互相干扰。
             String stateKey = GUARD_STATE_KEY_PREFIX + command + ":" + ruleId;
             int count = incrementGuardCount(channelKey, stateKey);
@@ -1190,10 +1250,10 @@ public class VersatileInterruptRail extends AgentRail {
                     ruleId, count, maxCalls, match);
             if (maxCalls > 0 && count > maxCalls) {
                 String message = resolveGuardMessage(ruleMap);
-                return new GuardDecision(true, ruleId, count, maxCalls, message);
+                return Optional.of(new GuardDecision(true, ruleId, count, maxCalls, message));
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -1209,6 +1269,7 @@ public class VersatileInterruptRail extends AgentRail {
      * @param command query_response_analysis_scripts 命令字符串
      * @return guard 配置 Map；空 Map 表示跳过
      */
+
     private Map<String, Object> loadPreDelegateGuard(String command) {
         String script = extractScriptName(command);
         if (script == null || script.isBlank()) {
@@ -1220,6 +1281,7 @@ public class VersatileInterruptRail extends AgentRail {
             return Map.of();
         }
         Path scriptPath = skillsDir.resolve(script).toAbsolutePath().normalize();
+
         // 路径越界保护：解析后的路径必须在 skillsDir 之下。
         if (!scriptPath.startsWith(skillsDir)) {
             LOGGER.warn("VersatileInterruptRail: pre-delegate guard skipped, script outside skills dir, path={}",
@@ -1232,7 +1294,7 @@ public class VersatileInterruptRail extends AgentRail {
         }
         try {
             String source = Files.readString(scriptPath, StandardCharsets.UTF_8);
-            String literal = extractAssignLiteral(source, "PRE_DELEGATE_GUARD");
+            String literal = extractAssignLiteral(source, "PRE_DELEGATE_GUARD").orElse(null);
             if (literal == null) {
                 LOGGER.info("VersatileInterruptRail: pre-delegate guard skipped, PRE_DELEGATE_GUARD not found, path={}",
                         scriptPath);
@@ -1254,6 +1316,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 从命令字符串中提取脚本文件名（第一个以 .py 结尾的 Token）。
      * 对齐 Python 第 480 行 {@code next((part for part in command.split() if part.endswith(".py")), "")}。
      */
+
     private String extractScriptName(String command) {
         if (command == null || command.isBlank()) {
             return "";
@@ -1274,19 +1337,20 @@ public class VersatileInterruptRail extends AgentRail {
      * 替代 Python {@code ast.literal_eval}——Java 无 AST 模块，但 PRE_DELEGATE_GUARD 是
      * 标准 JSON-compatible dict 字面量，括号配对足够且不执行任意代码。</p>
      *
-     * @return 字典字面量字符串（含外层花括号）；未找到返回 null
+     * @return 字典字面量字符串（含外层花括号）；未找到返回 Optional.empty()
      */
-    private String extractAssignLiteral(String source, String name) {
+
+    private Optional<String> extractAssignLiteral(String source, String name) {
         int assignIdx = source.indexOf(name + " =");
         if (assignIdx < 0) {
             assignIdx = source.indexOf(name + "=");
         }
         if (assignIdx < 0) {
-            return null;
+            return Optional.empty();
         }
         int braceStart = source.indexOf('{', assignIdx + name.length());
         if (braceStart < 0) {
-            return null;
+            return Optional.empty();
         }
         int depth = 0;
         boolean inString = false;
@@ -1311,11 +1375,13 @@ public class VersatileInterruptRail extends AgentRail {
             } else if (ch == '}') {
                 depth--;
                 if (depth == 0) {
-                    return source.substring(braceStart, i + 1);
+                    return Optional.of(source.substring(braceStart, i + 1));
                 }
+            } else {
+                // no-op: other characters do not affect brace matching
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -1323,6 +1389,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 对齐 Python 第 430 行 {@code any(tool_args.get(key) != value for key, value in match.items())} 的反向逻辑
      * （Python 用 any+!= 表示"任一不匹配则跳过"，此处用 all+equals 表示"全部匹配才命中"）。
      */
+
     private boolean matchesArgs(Map<String, Object> args, Map<String, Object> match) {
         for (Map.Entry<String, Object> entry : match.entrySet()) {
             Object actual = args.get(entry.getKey());
@@ -1341,8 +1408,9 @@ public class VersatileInterruptRail extends AgentRail {
      * Java 端 {@code ctx.getExtra()} 是 per-request、跨轮丢失，故用 ToolDataChannel（会话级四元组隔离）
      * 作为计数器存储，与 history_info / versatile_query 共享同一 channel。</p>
      */
+
     private int incrementGuardCount(ToolDataKey channelKey, String stateKey) {
-        Object current = toolDataChannel.getObject(channelKey, stateKey);
+        Object current = toolDataChannel.getObject(channelKey, stateKey).orElse(null);
         int count = (current instanceof Number n ? n.intValue() : 0) + 1;
         toolDataChannel.store(channelKey, stateKey, count);
         return count;
@@ -1354,13 +1422,14 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * <p>对齐 Python 第 444-449 行：
      * {@code text = scripts.get_response_template(template_key) or rule.get("fallback_message", "")}。
-     * Java 端 {@code SysScriptsConfig.getTemplate(key)} 返回 null 表示缺失，等价 Python 的 falsy。</p>
+     * Java 端 {@code SysScriptsConfig.getTemplate(key)} 返回 Optional.empty() 表示缺失，等价 Python 的 falsy。</p>
      */
+
     private String resolveGuardMessage(Map<String, Object> ruleMap) {
         String templateKey = asString(ruleMap.get("response_template_key"));
         String text = "";
         if (scripts != null && templateKey != null && !templateKey.isBlank()) {
-            String resolved = scripts.getTemplate(templateKey);
+            String resolved = scripts.getTemplate(templateKey).orElse(null);
             if (resolved != null && !resolved.isBlank()) {
                 text = resolved;
             }
@@ -1382,9 +1451,10 @@ public class VersatileInterruptRail extends AgentRail {
      * {@link com.huawei.ascend.edp.handler.EdpaRuntimeHandler} 的流式迭代器
      * 在 DeepAgent 帧之间按 FIFO 刷出，避免 node_type/menu_type 等字段被降维丢失。</p>
      */
-    public static final class VersatilePassthroughBuffer {
 
+    public static final class VersatilePassthroughBuffer {
         private final Map<String, Deque<String>> nodesByConversation = new HashMap<>();
+
         /** 中断时的 toolCallId，续传完成后用于构造 InteractiveInput。 */
         private final Map<String, String> interruptIdsByConversation = new HashMap<>();
 
@@ -1405,20 +1475,20 @@ public class VersatileInterruptRail extends AgentRail {
         }
 
         /** Poll. */
-        public String poll(String conversationId) {
+        public Optional<String> poll(String conversationId) {
             if (conversationId == null || conversationId.isBlank()) {
-                return null;
+                return Optional.empty();
             }
             synchronized (nodesByConversation) {
                 Deque<String> queue = nodesByConversation.get(conversationId);
                 if (queue == null) {
-                    return null;
+                    return Optional.empty();
                 }
                 String node = queue.pollFirst();
                 if (queue.isEmpty()) {
                     nodesByConversation.remove(conversationId);
                 }
-                return node;
+                return Optional.ofNullable(node);
             }
         }
 
@@ -1453,12 +1523,12 @@ public class VersatileInterruptRail extends AgentRail {
         }
 
         /** Poll interrupt id. */
-        public String pollInterruptId(String conversationId) {
+        public Optional<String> pollInterruptId(String conversationId) {
             if (conversationId == null || conversationId.isBlank()) {
-                return null;
+                return Optional.empty();
             }
             synchronized (interruptIdsByConversation) {
-                return interruptIdsByConversation.remove(conversationId);
+                return Optional.ofNullable(interruptIdsByConversation.remove(conversationId));
             }
         }
     }
@@ -1479,6 +1549,7 @@ public class VersatileInterruptRail extends AgentRail {
      * LLM 传入的 query_response_analysis_scripts 可能是 JSON 数组（如 ["python xxx.py"]）或纯字符串，
      * 此方法兼容两种格式，取第一个非空元素作为脚本路径。
      */
+
     private String resolveNormalizeScript(Object raw) {
         if (raw == null) {
             return "";
@@ -1512,6 +1583,7 @@ public class VersatileInterruptRail extends AgentRail {
      * @param ctx         回调上下文
      * @return 归一化输出
      */
+
     private NormalizeOutput invokeNormalizeScript(String command, Map<String, Object> toolResult,
             Map<String, Object> versatileArgs, AgentCallbackContext ctx) {
         NormalizeOutput fallback = new NormalizeOutput();
@@ -1528,52 +1600,65 @@ public class VersatileInterruptRail extends AgentRail {
 
         // ── SANDBOX 路径：归一化脚本在沙箱容器中执行 ──
         if (sysOp != null && sysOp.getMode() == OperationMode.SANDBOX && skillDeployPath != null) {
-            // SANDBOX模式：不验证本地文件存在性（脚本在沙箱容器中，本地不一定有）
-            // SessionContextHolder 绑定：使 {session_id} 占位符自动替换为 conversationId，
-            // 确保每个会话使用独立沙箱容器（对齐 SandboxInterruptRail.resolveInterrupt()）
-            Session previousSession = SessionContextHolder.getCurrentSession();
-            if (ctx.getSession() != null) {
-                SessionContextHolder.setCurrentSession(ctx.getSession());
-            }
-            try {
-                Map<String, Object> skillInput = buildNormalizeSkillInput(toolResult, versatileArgs, ctx);
-                String skillInputJson = OBJECT_MAPPER.writeValueAsString(skillInput);
-
-                Map<String, String> env = new LinkedHashMap<>();
-                env.put("SKILL_INPUT", skillInputJson);
-                env.put("PYTHONIOENCODING", "utf-8");
-
-                LOGGER.info("VersatileInterruptRail: normalize via sandbox, command={}, cwd={}, governed={}", command,
-                        skillDeployPath, decoratedClient != null);
-
-                // 核心修改：优先使用 decoratedClient（需求2路径：经过治理装饰）
-                ExecuteCmdResult result;
-                if (decoratedClient != null) {
-                    result = decoratedClient.shell().executeCmd(command, skillDeployPath,
-                            ScriptConstants.SANDBOX_TIMEOUT_SECONDS, env, null);
-                } else {
-                    result = sysOp.shell().executeCmd(command, skillDeployPath, ScriptConstants.SANDBOX_TIMEOUT_SECONDS,
-                            env, null);
-                }
-
-                return adaptNormalizeResult(result, fallback);
-            } catch (com.openjiuwen.service.adapters.common.external.ExternalSvcAdapterException e) {
-                LOGGER.warn("VersatileInterruptRail: normalize sandbox error, code={}, msg={}", e.getErrorCode(),
-                        e.getMessage());
-                return fallback; // 沙箱不可用 → 降级透传原始数据（不降级到本地执行）
-            } catch (JsonProcessingException e) {
-                LOGGER.warn("VersatileInterruptRail: normalize sandbox exception, err={}", e.getMessage());
-                return fallback;
-            } finally {
-                if (previousSession != null) {
-                    SessionContextHolder.setCurrentSession(previousSession);
-                } else {
-                    SessionContextHolder.setCurrentSession(null);
-                }
-            }
+            return invokeNormalizeSandbox(command, toolResult, versatileArgs, ctx, fallback);
         }
 
         // ── LOCAL 路径：归一化脚本在本地 ProcessBuilder 执行 ──
+        return invokeNormalizeLocal(toolResult, versatileArgs, ctx, fallback, scriptName);
+    }
+
+    /**
+     * SANDBOX 路径：归一化脚本在沙箱容器中执行。
+     */
+    private NormalizeOutput invokeNormalizeSandbox(String command, Map<String, Object> toolResult,
+            Map<String, Object> versatileArgs, AgentCallbackContext ctx, NormalizeOutput fallback) {
+        // SANDBOX模式：不验证本地文件存在性（脚本在沙箱容器中，本地不一定有）
+        // SessionContextHolder 绑定：使 {session_id} 占位符自动替换为 conversationId，
+        // 确保每个会话使用独立沙箱容器（对齐 SandboxInterruptRail.resolveInterrupt()）
+        Session previousSession = SessionContextHolder.getCurrentSession();
+        if (ctx.getSession() != null) {
+            SessionContextHolder.setCurrentSession(ctx.getSession());
+        }
+        try {
+            Map<String, Object> skillInput = buildNormalizeSkillInput(toolResult, versatileArgs, ctx);
+            String skillInputJson = OBJECT_MAPPER.writeValueAsString(skillInput);
+
+            Map<String, String> env = new LinkedHashMap<>();
+            env.put("SKILL_INPUT", skillInputJson);
+            env.put("PYTHONIOENCODING", "utf-8");
+
+            LOGGER.info("VersatileInterruptRail: normalize via sandbox, command={}, cwd={}, governed={}", command,
+                    skillDeployPath, decoratedClient != null);
+
+            // 核心修改：优先使用 decoratedClient（需求2路径：经过治理装饰）
+            ExecuteCmdResult result;
+            if (decoratedClient != null) {
+                result = decoratedClient.shell().executeCmd(command, skillDeployPath,
+                        ScriptConstants.SANDBOX_TIMEOUT_SECONDS, env, null);
+            } else {
+                result = sysOp.shell().executeCmd(command, skillDeployPath, ScriptConstants.SANDBOX_TIMEOUT_SECONDS,
+                        env, null);
+            }
+
+            return adaptNormalizeResult(result, fallback);
+        } catch (com.openjiuwen.service.adapters.common.external.ExternalSvcAdapterException e) {
+            LOGGER.warn("VersatileInterruptRail: normalize sandbox error, code={}, msg={}", e.getErrorCode(),
+                    e.getMessage());
+            return fallback; // 沙箱不可用 -> 降级透传原始数据（不降级到本地执行）
+        } catch (JsonProcessingException e) {
+            LOGGER.warn("VersatileInterruptRail: normalize sandbox exception, err={}", e.getMessage());
+            return fallback;
+        } finally {
+            SessionContextHolder.setCurrentSession(previousSession);
+        }
+    }
+
+    /**
+     * LOCAL 路径：归一化脚本在本地 ProcessBuilder 执行。
+     */
+    private NormalizeOutput invokeNormalizeLocal(Map<String, Object> toolResult,
+            Map<String, Object> versatileArgs, AgentCallbackContext ctx, NormalizeOutput fallback,
+            String scriptName) {
         Path scriptPath = skillsDir.resolve(scriptName).toAbsolutePath().normalize();
         if (!scriptPath.startsWith(skillsDir) || !Files.exists(scriptPath) || !Files.isRegularFile(scriptPath)) {
             LOGGER.info("VersatileInterruptRail: normalize skipped, script not found, path={}", scriptPath);
@@ -1604,7 +1689,6 @@ public class VersatileInterruptRail extends AgentRail {
                 return fallback;
             }
             return parseNormalizeStdout(stdout, fallback);
-
         } catch (IOException | InterruptedException e) {
             LOGGER.warn("VersatileInterruptRail: normalize exception, script={}, err={}", scriptPath, e.getMessage());
             return fallback;
@@ -1615,6 +1699,7 @@ public class VersatileInterruptRail extends AgentRail {
      * 从 toolResult 中提取 business_data。
      * Versatile 返回的 content 可能是 JSON 字符串，需要解析。
      */
+
     private Map<String, Object> extractBusinessData(Map<String, Object> toolResult) {
         Object content = toolResult.get("content");
         if (content instanceof String s && !s.isBlank()) {
@@ -1638,21 +1723,25 @@ public class VersatileInterruptRail extends AgentRail {
      * notice_context(透传) + history_info。Java版补齐3个缺失字段，
      * 确保归一化脚本在沙箱环境下能获取完整输入数据。</p>
      */
+
     private Map<String, Object> buildNormalizeSkillInput(Map<String, Object> toolResult,
             Map<String, Object> versatileArgs, AgentCallbackContext ctx) {
         Map<String, Object> skillInput = new LinkedHashMap<>();
         skillInput.put("business_data", extractBusinessData(toolResult));
+
         // ── Python对标补齐：query_intent + query_description + notice_context ──
         skillInput.put("query_intent", versatileArgs.getOrDefault("query_intent", ""));
         skillInput.put("query_description", versatileArgs.getOrDefault("query_description", ""));
+
         // notice_context 透传到脚本，不在 rail 层解析（对齐 Python "保证双向透明"）
         Object noticeContext = versatileArgs.get("notice_context");
         if (noticeContext != null) {
             skillInput.put("notice_context", noticeContext);
         }
+
         // history_info 跨 Skill 传递
         Object historyInfo = toolDataChannel.getObject(ToolDataKeyFactory.fromContext(ctx, edpConfig, agentName),
-                HISTORY_INFO_KEY);
+                HISTORY_INFO_KEY).orElse(null);
         skillInput.put("history_info", historyInfo instanceof Map<?, ?> m ? m.get("value") : List.of());
         return skillInput;
     }
@@ -1682,6 +1771,7 @@ public class VersatileInterruptRail extends AgentRail {
      *   <li>② {normalized}        — 单对象格式（0712版其他同事新增兼容）</li>
      * </ul>
      */
+
     private NormalizeOutput parseNormalizeStdout(String stdout, NormalizeOutput fallback) {
         try {
             JsonNode root = OBJECT_MAPPER.readTree(stdout);
@@ -1730,11 +1820,12 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * @param keysObj response_template_keys 参数值（JSON 字符串或 List）
      * @param status  归一化脚本返回的 status
-     * @return 话术 key；null 表示无法索引
+     * @return 话术 key；Optional.empty() 表示无法索引
      */
-    private String resolveTemplateKey(Object keysObj, String status) {
+
+    private Optional<String> resolveTemplateKey(Object keysObj, String status) {
         if (keysObj == null || status == null || status.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         List<String> keys;
         try {
@@ -1747,16 +1838,16 @@ public class VersatileInterruptRail extends AgentRail {
                     keys.add(String.valueOf(item));
                 }
             } else {
-                return null;
+                return Optional.empty();
             }
         } catch (JsonProcessingException e) {
             LOGGER.warn("VersatileInterruptRail: failed to parse response_template_keys={}", keysObj);
-            return null;
+            return Optional.empty();
         }
         if (keys.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         int index = "success".equals(status) ? 0 : 1;
-        return index < keys.size() ? keys.get(index) : null;
+        return index < keys.size() ? Optional.of(keys.get(index)) : Optional.empty();
     }
 }

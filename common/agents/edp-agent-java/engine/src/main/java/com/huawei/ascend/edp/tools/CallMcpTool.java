@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,19 @@
 
 package com.huawei.ascend.edp.tools;
 
-import java.util.List;
-import java.util.Map;
-
 import com.openjiuwen.core.foundation.tool.Tool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.List;
+import java.util.Map;
+
 /**
  * EDPAgent MCP 调用工具。
  *
  * @since 2024-01-01
  */
-public final class CallMcpTool {
 
+public final class CallMcpTool {
     private static final Logger LOGGER = LoggerFactory.getLogger(CallMcpTool.class);
 
     private CallMcpTool() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,10 @@
 
 package com.huawei.ascend.edp.rail;
 
+import com.huawei.ascend.edp.config.SandboxConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.huawei.ascend.edp.config.SandboxConfig;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.SessionContextHolder;
@@ -42,6 +36,11 @@ import com.openjiuwen.harness.rails.interrupt.BaseInterruptRail;
 import com.openjiuwen.harness.rails.interrupt.InterruptDecision;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+
 /**
  * 沙箱中断委派 Rail -- 基于 BaseInterruptRail 的中断模式实现沙箱双路径路由。
  *
@@ -55,8 +54,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class SandboxInterruptRail extends BaseInterruptRail {
 
+public class SandboxInterruptRail extends BaseInterruptRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(SandboxInterruptRail.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -66,8 +65,10 @@ public class SandboxInterruptRail extends BaseInterruptRail {
     private final SysOperation sysOp;
     private final SandboxConfig sandboxConfig;
     private final SandboxGatewayConfig gatewayConfig;
+
     /** 会话级沙箱容器管理器（可为 null，仅 containerScope=SESSION 时使用） */
     private final ContainerManager containerManager;
+
     /** 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时优先使用其 shell() 以获得熔断/重试/审计。 */
     private final SandboxClient decoratedClient;
 
@@ -96,10 +97,10 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      * <p>SANDBOX 模式：在沙箱中执行脚本，reject(sandboxResult) 注回结果。
      * LOCAL 模式：approve() 放行，工具调用继续到 McpInterruptRail。</p>
      */
+
     @Override
     /** Resolves the interrupt decision for the tool call. */
     protected InterruptDecision resolveInterrupt(AgentCallbackContext ctx, ToolCall toolCall, Object userInput) {
-
         if (sysOp.getMode() == OperationMode.SANDBOX) {
             // 会话级隔离：将当前 Session 绑定到线程上下文，
             // 使 SandboxOperationSupport.resolveIsolationKey() 中的 {session_id} 占位符
@@ -115,6 +116,7 @@ public class SandboxInterruptRail extends BaseInterruptRail {
                 if (!sandboxResult.isEmpty()) {
                     return reject(sandboxResult);
                 }
+
                 // 沙箱执行失败但 fallback_on_failure 未生效时，降级到本地
                 LOGGER.warn("[EDP-SANDBOX] Sandbox exec failed, approving for local fallback");
                 return approve();
@@ -253,6 +255,7 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      *
      * @param sessionId 会话 ID（conversationId）
      */
+
     public void releaseSession(String sessionId) {
         if (containerManager == null || sessionId == null || sessionId.isBlank()) {
             return;
@@ -261,6 +264,7 @@ public class SandboxInterruptRail extends BaseInterruptRail {
             // 通过 {session_id} 模板解析出与 resolveInterrupt 中相同的 isolationKey
             String keyTemplate = SandboxOperationSupport.computeIsolationKey(gatewayConfig);
             String isolationKey = SandboxOperationSupport.resolveIsolationKeyTemplate(keyTemplate);
+
             // 如果 isolationKey 仍包含 {session_id}（无 SessionContextHolder 时），手动替换
             if (isolationKey.contains("{session_id}")) {
                 isolationKey = isolationKey.replace("{session_id}", sessionId);
@@ -268,7 +272,7 @@ public class SandboxInterruptRail extends BaseInterruptRail {
             boolean released = containerManager.release(isolationKey);
             LOGGER.info("[EDP-SANDBOX] Session sandbox released: sessionId={}, isolationKey={}, released={}", sessionId,
                     isolationKey, released);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
             LOGGER.warn("[EDP-SANDBOX] Failed to release session sandbox: sessionId={}, error={}", sessionId,
                     e.getMessage());
         }

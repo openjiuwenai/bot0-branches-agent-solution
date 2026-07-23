@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,7 @@
 
 package com.huawei.ascend.edp.config;
 
-import java.io.IOException;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +24,13 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Governance配置加载器。
  *
@@ -50,13 +49,14 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class GovernanceConfigLoader {
 
+public class GovernanceConfigLoader {
     private static final Logger LOGGER = LoggerFactory.getLogger(GovernanceConfigLoader.class);
 
     /**
      * YAML 解析器。使用 snake_case 字段映射。
      */
+
     private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory())
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
             .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
@@ -67,6 +67,7 @@ public class GovernanceConfigLoader {
      * @param governanceDir governance目录路径（包含三个yaml文件）
      * @return 解析后的 GovernanceConfig；文件不存在时返回默认对象
      */
+
     public static GovernanceConfig load(Path governanceDir) {
         if (governanceDir == null || !Files.exists(governanceDir)) {
             LOGGER.info("Governance directory not found at {}, using defaults", governanceDir);
@@ -141,6 +142,7 @@ public class GovernanceConfigLoader {
      * @param frameworkDir 框架级governance目录
      * @return 合并后的 GovernanceConfig
      */
+
     public static GovernanceConfig loadWithPriority(Path scenarioDir, Path frameworkDir) {
         // 1. 先加载框架级配置（Default）
         GovernanceConfig defaultConfig = load(frameworkDir);
@@ -163,12 +165,13 @@ public class GovernanceConfigLoader {
      *
      * @return 框架级默认 GovernanceConfig
      */
+
     public static GovernanceConfig loadDefaultFromClasspath() {
         try {
             // 从classpath读取governance目录
             Path defaultGovernancePath = Path.of("src/main/resources/governance").toAbsolutePath();
             return load(defaultGovernancePath);
-        } catch (RuntimeException e) {
+        } catch (InvalidPathException e) {
             LOGGER.warn("Failed to load default governance config from classpath: {}", e.getMessage());
             return new GovernanceConfig();
         }
@@ -181,6 +184,7 @@ public class GovernanceConfigLoader {
      * @param baseDir scenarios目录路径
      * @return 合并后的 GovernanceConfig
      */
+
     public static GovernanceConfig loadForScenario(String scenarioName, Path baseDir) {
         if (scenarioName == null || scenarioName.isBlank()) {
             LOGGER.info("No scenario specified, using default governance config");

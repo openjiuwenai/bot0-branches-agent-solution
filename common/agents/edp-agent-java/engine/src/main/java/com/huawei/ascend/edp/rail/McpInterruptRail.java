@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,31 +16,15 @@
 
 package com.huawei.ascend.edp.rail;
 
-import java.io.IOException;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.concurrent.TimeUnit;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.ascend.edp.channel.ToolDataChannel;
 import com.huawei.ascend.edp.channel.ToolDataKey;
 import com.huawei.ascend.edp.channel.ToolDataKeyFactory;
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolMessage;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
@@ -51,31 +35,54 @@ import com.openjiuwen.core.sysop.result.ExecuteCmdResult;
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 /**
  * MCP 工具调用 Rail。
  *
  * @since 2024-01-01
  */
+
 public class McpInterruptRail extends AgentRail {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(McpInterruptRail.class);
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final Duration SCRIPT_TIMEOUT = Duration.ofSeconds(60);
-
     static final String DEFAULT_MCP_PRODUCTS_KEY = "mcp_products_data";
     static final String VERSATILE_QUERY_KEY = "mcp_to_versatile_information";
     static final String HISTORY_INFO_KEY = "history_info";
     static final String HISTORY_PARAMS_KEY = "history_params";
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(McpInterruptRail.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final Duration SCRIPT_TIMEOUT = Duration.ofSeconds(60);
 
     private final EdpConfig edpConfig;
     private final ToolDataChannel toolDataChannel;
     private final Path skillsDir;
     private final EdpaSpringBootConfig springBootConfig;
     private final String agentName;
+
     /** 框架双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。 */
     private final SysOperation sysOp;
+
     /** 沙箱技能部署路径（如 /app/skills），SANDBOX 模式下作为 cwd 参数传入 executeCmd。可为 null。 */
     private final String skillDeployPath;
+
     /** 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。 */
     private final SandboxClient decoratedClient;
 
@@ -223,7 +230,7 @@ public class McpInterruptRail extends AgentRail {
         }
         String argumentsJson = toJson(skillInput);
         List<String> command = buildCommand(scriptCommand);
-        Path workDir = resolveWorkDir(command);
+        Path workDir = resolveWorkDir(command).orElse(null);
 
         // SandboxInterruptRail 在 SANDBOX 模式下已拦截 call_mcp 工具调用并 reject 结果，
         // 此方法仅在以下情况执行：
@@ -235,6 +242,12 @@ public class McpInterruptRail extends AgentRail {
                     workDir != null ? workDir.toString() : ".");
         }
 
+        return executeViaProcessBuilder(command, workDir, argumentsJson, scriptParams);
+    }
+
+    /** Executes the MCP script via ProcessBuilder (local mode). */
+    private Map<String, Object> executeViaProcessBuilder(List<String> command, Path workDir, String argumentsJson,
+            Map<String, Object> scriptParams) {
         try {
             ProcessBuilder builder = new ProcessBuilder(command);
             if (workDir != null) {
@@ -244,7 +257,7 @@ public class McpInterruptRail extends AgentRail {
             builder.environment().put("PYTHONIOENCODING", "utf-8");
 
             // ---- MCP SSE 配置注入 + 灰度路由 ----
-            String wapGrayFlag = extractWapGrayFlag(scriptParams);
+            String wapGrayFlag = extractWapGrayFlag(scriptParams).orElse(null);
             if (springBootConfig != null && springBootConfig.getMcpsse() != null) {
                 var mcpConfig = springBootConfig.getMcpsse();
                 String mcpServerUrl = (wapGrayFlag != null && wapGrayFlag.startsWith("JD"))
@@ -264,6 +277,7 @@ public class McpInterruptRail extends AgentRail {
                                 + "hasAccessToken={}, appName={}",
                         wapGrayFlag, mcpServerUrl, mcpConfig.getAccessToken() != null, mcpConfig.getAppName());
             }
+
             // ---- MCP SSE 配置注入结束 ----
 
             LOGGER.info("McpInterruptRail: execute script command={}, workDir={}", command, workDir);
@@ -271,15 +285,19 @@ public class McpInterruptRail extends AgentRail {
             Process process = builder.start();
             StringBuilder stdout = new StringBuilder();
             StringBuilder stderr = new StringBuilder();
-            Thread stdoutThread = readAsync(process.getInputStream(), stdout);
-            Thread stderrThread = readAsync(process.getErrorStream(), stderr);
+            Future<?> stdoutFuture = readAsync(process.getInputStream(), stdout);
+            Future<?> stderrFuture = readAsync(process.getErrorStream(), stderr);
             boolean finished = process.waitFor(SCRIPT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 return failedResult("MCP script timeout after " + SCRIPT_TIMEOUT.toSeconds() + "s");
             }
-            stdoutThread.join(1000);
-            stderrThread.join(1000);
+            try {
+                stdoutFuture.get(1, TimeUnit.SECONDS);
+                stderrFuture.get(1, TimeUnit.SECONDS);
+            } catch (TimeoutException | ExecutionException e) {
+                LOGGER.debug("McpInterruptRail: stream read timeout/interrupt", e);
+            }
 
             int exitCode = process.exitValue();
             LOGGER.info("[MCPInterruptRail] local script executed: exitCode={}, stdoutLen={}, stderrLen={}", exitCode,
@@ -303,11 +321,12 @@ public class McpInterruptRail extends AgentRail {
      * mcp_required_params 在 Java 端由 LLM 通过 script_params 传入（设计与 Python 不同，
      * Python 从 session.state["original_body"] 读取以避免经过 LLM）。</p>
      */
+
     private Map<String, Object> buildSkillInput(Map<String, Object> scriptParams, AgentCallbackContext ctx) {
         Map<String, Object> skillInput = new LinkedHashMap<>(scriptParams);
 
         ToolDataKey key = ToolDataKeyFactory.fromContext(ctx, edpConfig, agentName);
-        Object historyInfo = toolDataChannel.getObject(key, HISTORY_INFO_KEY);
+        Object historyInfo = toolDataChannel.getObject(key, HISTORY_INFO_KEY).orElse(null);
         if (historyInfo instanceof Map<?, ?> map && map.containsKey("value")) {
             skillInput.put(HISTORY_INFO_KEY, map.get("value"));
         } else if (historyInfo != null) {
@@ -316,7 +335,7 @@ public class McpInterruptRail extends AgentRail {
             skillInput.putIfAbsent(HISTORY_INFO_KEY, List.of());
         }
 
-        Object historyParams = toolDataChannel.getObject(key, HISTORY_PARAMS_KEY);
+        Object historyParams = toolDataChannel.getObject(key, HISTORY_PARAMS_KEY).orElse(null);
         if (historyParams instanceof Map<?, ?> map) {
             skillInput.put(HISTORY_PARAMS_KEY, toStringKeyMap(map));
         } else if (historyParams != null) {
@@ -334,8 +353,16 @@ public class McpInterruptRail extends AgentRail {
         return skillInput;
     }
 
-    private Thread readAsync(java.io.InputStream inputStream, StringBuilder target) {
-        Thread thread = new Thread(() -> {
+    private Future<?> readAsync(java.io.InputStream inputStream, StringBuilder target) {
+        ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            t.setUncaughtExceptionHandler((thread, e) -> {
+                LOGGER.error("McpInterruptRail: unexpected error in async read thread", e);
+            });
+            return t;
+        });
+        return executor.submit(() -> {
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
                 String line;
@@ -347,14 +374,10 @@ public class McpInterruptRail extends AgentRail {
                 }
             } catch (IOException e) {
                 LOGGER.debug("McpInterruptRail: failed to read process stream", e);
+            } finally {
+                executor.shutdown();
             }
         });
-        thread.setUncaughtExceptionHandler((t, e) -> {
-            LOGGER.error("McpInterruptRail: unexpected error in async read thread", e);
-        });
-        thread.setDaemon(true);
-        thread.start();
-        return thread;
     }
 
     private List<String> buildCommand(String scriptCommand) {
@@ -370,13 +393,13 @@ public class McpInterruptRail extends AgentRail {
         return tokens;
     }
 
-    private Path resolveWorkDir(List<String> command) {
+    private Optional<Path> resolveWorkDir(List<String> command) {
         if (command.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         int scriptIndex = command.size() >= 2 && isPythonCommand(command.get(0)) ? 1 : 0;
         Path scriptPath = Path.of(command.get(scriptIndex));
-        return scriptPath.getParent();
+        return Optional.ofNullable(scriptPath.getParent());
     }
 
     private Path resolveScriptPath(String scriptPath) {
@@ -399,6 +422,7 @@ public class McpInterruptRail extends AgentRail {
         }
         Path defaultSkillsResolved = Path.of("").toAbsolutePath().normalize().resolve("../scenarios/wealth-demo/skills")
                 .resolve(scriptPath).normalize();
+
         // 降级说明：脚本路径可能在默认路径不存在，走兜底回退
         LOGGER.warn("[MCPInterruptRail] script path falling back to default (may not exist): {}",
                 defaultSkillsResolved);
@@ -601,27 +625,35 @@ public class McpInterruptRail extends AgentRail {
      * <p>mcp_required_params 在运行时可能是 String（Python dict repr 单引号格式）
      * 或已解析的 Map&lt;String,Object&gt;。两种类型均需处理。</p>
      */
-    private String extractWapGrayFlag(Map<String, Object> scriptParams) {
+
+    private Optional<String> extractWapGrayFlag(Map<String, Object> scriptParams) {
         Object mcpRequired = scriptParams.get("mcp_required_params");
         if (mcpRequired instanceof String mcpRequiredStr) {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("wap_grayFlag['\"]\\s*:\\s*['\"]([^'\"]+)")
                     .matcher(mcpRequiredStr);
             if (m.find()) {
-                return m.group(1);
+                return Optional.of(m.group(1));
             }
         } else if (mcpRequired instanceof Map<?, ?> mcpRequiredMap) {
-            Object customData = mcpRequiredMap.get("custom_data");
-            if (customData instanceof Map<?, ?> cd) {
-                Object inputs = cd.get("inputs");
-                if (inputs instanceof Map<?, ?> in) {
-                    Object flag = in.get("wap_grayFlag");
-                    if (flag != null) {
-                        return flag.toString();
-                    }
-                }
-            }
+            return extractWapGrayFlagFromMap(mcpRequiredMap);
+        } else {
+            // no-op: mcp_required_params is neither String nor Map
         }
-        return null;
+        return Optional.empty();
+    }
+
+    /** Extracts wap_grayFlag from a Map-typed mcp_required_params. */
+    private Optional<String> extractWapGrayFlagFromMap(Map<?, ?> mcpRequiredMap) {
+        Object customData = mcpRequiredMap.get("custom_data");
+        if (!(customData instanceof Map<?, ?> cd)) {
+            return Optional.empty();
+        }
+        Object inputs = cd.get("inputs");
+        if (!(inputs instanceof Map<?, ?> in)) {
+            return Optional.empty();
+        }
+        Object flag = in.get("wap_grayFlag");
+        return flag != null ? Optional.of(flag.toString()) : Optional.empty();
     }
 
     // ===== 沙箱路由方法 =====
@@ -642,12 +674,14 @@ public class McpInterruptRail extends AgentRail {
             } else {
                 // LOCAL模式或 skillDeployPath 未配置：走原有 buildScriptCommand 逻辑（解析为绝对路径）
                 command = buildScriptCommand(scriptCommand, skillsDir);
+
                 // Windows 下将 workDir 中的反斜杠统一为正斜杠，避免传递过程中的转义问题
                 cwd = workDir != null ? workDir.replace('\\', '/') : ".";
             }
 
             LOGGER.info("McpInterruptRail: execute via SysOperation, command={}, cwd={}, governed={}", command, cwd,
                     decoratedClient != null);
+
             // 脚本执行结果日志将在 adaptCmdResult 方法中输出
 
             // 核心修改：SANDBOX 模式优先使用 decoratedClient（需求2路径：经过治理装饰）
@@ -659,7 +693,7 @@ public class McpInterruptRail extends AgentRail {
                 result = sysOp.shell().executeCmd(command, cwd, (int) SCRIPT_TIMEOUT.toSeconds(), env, null);
             }
             return adaptCmdResult(result);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.warn("McpInterruptRail: SysOperation execution failed: {}, falling back to ProcessBuilder",
                     e.getMessage());
             return failedResult(e.getMessage());
@@ -689,8 +723,9 @@ public class McpInterruptRail extends AgentRail {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("SKILL_INPUT", argumentsJson);
         env.put("PYTHONIOENCODING", "utf-8");
+
         // MCP SSE 配置注入
-        String wapGrayFlag = extractWapGrayFlag(scriptParams);
+        String wapGrayFlag = extractWapGrayFlag(scriptParams).orElse(null);
         if (springBootConfig != null && springBootConfig.getMcpsse() != null) {
             var mcpConfig = springBootConfig.getMcpsse();
             String mcpServerUrl = (wapGrayFlag != null && wapGrayFlag.startsWith("JD"))
@@ -720,10 +755,12 @@ public class McpInterruptRail extends AgentRail {
         if (path == null || path.isEmpty()) {
             return path;
         }
+
         // 已经有引号则不再添加
         if (path.startsWith("\"") && path.endsWith("\"")) {
             return path;
         }
+
         // 包含空格、括号等特殊字符时需要引号
         if (path.contains(" ") || path.contains("(") || path.contains(")")) {
             return "\"" + path + "\"";
@@ -852,6 +889,7 @@ public class McpInterruptRail extends AgentRail {
      * @param skillsDir  skills 目录绝对路径
      * @return 解析后的脚本路径（可能不存在）
      */
+
     private static Path resolveScriptPathStatic(String scriptPath, Path skillsDir) {
         Path path = Path.of(scriptPath);
         if (path.isAbsolute()) {

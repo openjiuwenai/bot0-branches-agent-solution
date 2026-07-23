@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package com.huawei.ascend.edp.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 /**
  * 启动时配置校验器。
  *
@@ -31,15 +31,16 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class EdpConfigValidator {
 
+public class EdpConfigValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpConfigValidator.class);
 
     /**
      * 校验模型配置完整性。
+     *
+     * @param model description
+     */
 
-    * @param model description
-    */
     public static void validateModelConfig(EdpaSpringBootConfig.ModelConfig model) {
         if (model == null) {
             throw new IllegalStateException("Model config missing. Set edpa.agent.model in application.yml.");
@@ -67,9 +68,10 @@ public class EdpConfigValidator {
 
     /**
      * 校验 Versatile URL 合法性。
+     *
+     * @param versatile description
+     */
 
-    * @param versatile description
-    */
     public static void validateVersatileUrl(EdpaSpringBootConfig.VersatileConfig versatile) {
         if (versatile != null && versatile.getUrl() != null) {
             String url = versatile.getUrl();
@@ -92,9 +94,10 @@ public class EdpConfigValidator {
 
     /**
      * 校验 Skill 目录存在。
+     *
+     * @param skillDir description
+     */
 
-    * @param skillDir description
-    */
     public static void validateSkillDir(Path skillDir) {
         if (skillDir != null && !Files.exists(skillDir)) {
             throw new IllegalStateException("Skill directory not found: " + skillDir);
@@ -103,9 +106,10 @@ public class EdpConfigValidator {
 
     /**
      * 校验场景目录。scenario-config.yaml 已删除，验证 governance/ 目录结构。
+     *
+     * @param scenarioHome description
+     */
 
-    * @param scenarioHome description
-    */
     public static void validateScenarioConfig(Path scenarioHome) {
         if (scenarioHome == null) {
             LOGGER.info("No scenarioHome configured, skipping scenario validation.");
@@ -125,14 +129,16 @@ public class EdpConfigValidator {
     /**
      * 校验 skill_routing 中声明的 Skill 在 skills 目录中存在。
      * 数据源已从 ScenarioConfig 迁移至 PlanRuleConfig。
+     *
+     * @param planrule description
+     *
+     * @param skillsDir description
+     */
 
-    * @param planrule description
-
-    * @param skillsDir description
-    */
     public static void validateSkillRouting(PlanRuleConfig planrule, Path skillsDir) {
-        if (planrule == null || planrule.getSkillRouting() == null)
+        if (planrule == null || planrule.getSkillRouting() == null) {
             return;
+        }
         for (PlanRuleConfig.SkillRoute routing : planrule.getSkillRouting()) {
             Path skillDir = skillsDir.resolve(routing.getSkill());
             if (!Files.exists(skillDir)) {

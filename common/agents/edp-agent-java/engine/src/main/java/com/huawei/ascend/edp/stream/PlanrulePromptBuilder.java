@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package com.huawei.ascend.edp.stream;
 import com.huawei.ascend.edp.config.PlanRuleConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 /**
  * Planrule系统提示词拼接器。
  *
@@ -42,8 +43,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class PlanrulePromptBuilder {
 
+public class PlanrulePromptBuilder {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlanrulePromptBuilder.class);
 
     /**
@@ -55,6 +56,7 @@ public class PlanrulePromptBuilder {
      * @param planrule planrule配置，null时返回默认提示词（降级处理）
      * @return 系统提示词片段（对应Python版的markdown_body）
      */
+
     public static String buildSystemPromptFragment(PlanRuleConfig planrule) {
         if (planrule == null) {
             LOGGER.warn("Planrule is null, using default system prompt");
@@ -89,59 +91,73 @@ public class PlanrulePromptBuilder {
         } else if (isNotEmpty(planrule.getScenarioName())) {
             // scenarioDescription 为空时也保证空行分隔
             sb.append("\n");
+        } else {
+            // no-op: both scenarioDescription and scenarioName are empty
         }
 
         // 4. 业务范围（scope字段）
+        appendScopeSection(sb, planrule);
+
+        // 5. Skill路由（skillRouting字段）- 场景级，框架默认无值
+        appendSkillRoutingSection(sb, planrule);
+
+        // 6. 补充提示词（supplementaryPrompt字段）- 拼接 baseProtocol + additionalPrompt
+        appendSupplementaryPromptSection(sb, planrule);
+
+        String result = sb.toString().trim();
+        LOGGER.info("PlanrulePromptBuilder: final fragment length={}, content=\n{}", result.length(), result);
+        return result;
+    }
+
+    /** Appends the scope section (allowed/denied business scope). */
+    private static void appendScopeSection(StringBuilder sb, PlanRuleConfig planrule) {
         PlanRuleConfig.Scope scope = planrule.getScope();
         if (scope != null) {
             boolean hasScopeContent = false;
             StringBuilder scopeSb = new StringBuilder();
 
-            // allowed字段：非空且非" "时才拼接（" "表示默认配置无业务范围限制）
             if (isNotEmpty(scope.getAllowed()) && !" ".equals(scope.getAllowed())) {
                 scopeSb.append("**当前支持的业务**：").append(scope.getAllowed()).append("\n");
                 hasScopeContent = true;
             }
 
-            // denied字段：非空且非" "时才拼接（" "表示默认配置无禁止业务）
             if (isNotEmpty(scope.getDenied()) && !" ".equals(scope.getDenied())) {
                 scopeSb.append("**禁止的业务**：").append(scope.getDenied()).append("\n");
                 hasScopeContent = true;
             }
 
-            // 只有当scope中至少有一个字段非空时，才添加scope内容
             if (hasScopeContent) {
                 sb.append("\n");
                 sb.append(scopeSb);
             }
         }
+    }
 
-        // 5. Skill路由（skillRouting字段）- 场景级，框架默认无值
+    /** Appends the skill routing section. */
+    private static void appendSkillRoutingSection(StringBuilder sb, PlanRuleConfig planrule) {
         java.util.List<PlanRuleConfig.SkillRoute> skillRouting = planrule.getSkillRouting();
         if (skillRouting != null && !skillRouting.isEmpty()) {
             sb.append("\n**Skill 路由**：\n");
             for (PlanRuleConfig.SkillRoute r : skillRouting) {
-                sb.append("- ").append(r.getTrigger()).append(" → ").append(r.getSkill()).append("（priority=")
+                sb.append("- ").append(r.getTrigger()).append(" -> ").append(r.getSkill()).append("（priority=")
                         .append(r.getPriority()).append("）\n");
             }
         }
+    }
 
-        // 6. 补充提示词（supplementaryPrompt字段）- 拼接 baseProtocol + additionalPrompt
+    /** Appends the supplementary prompt section (baseProtocol + additionalPrompt). */
+    private static void appendSupplementaryPromptSection(StringBuilder sb, PlanRuleConfig planrule) {
         if (planrule.getSupplementaryPrompt() != null) {
             PlanRuleConfig.SupplementaryPrompt suppPrompt = planrule.getSupplementaryPrompt();
-            // baseProtocol（框架内置）
+
             if (isNotEmpty(suppPrompt.getBaseProtocol())) {
                 sb.append(suppPrompt.getBaseProtocol()).append("\n");
             }
-            // additionalPrompt（场景追加）
+
             if (isNotEmpty(suppPrompt.getAdditionalPrompt())) {
                 sb.append(suppPrompt.getAdditionalPrompt()).append("\n");
             }
         }
-
-        String result = sb.toString().trim();
-        LOGGER.info("PlanrulePromptBuilder: final fragment length={}, content=\n{}", result.length(), result);
-        return result;
     }
 
     /**
@@ -150,6 +166,7 @@ public class PlanrulePromptBuilder {
      * <p>降级场景：配置加载失败、文件损坏、planrule为null等异常情况</p>
      * <p>内容对齐planrule.yaml默认配置：通用动态规划智能体角色定位</p>
      */
+
     private static String getDefaultSystemPrompt() {
         return "# 通用动态规划智能体\n\n你是一个智能助手，负责任务规划、执行和结果总结。";
     }
@@ -160,6 +177,7 @@ public class PlanrulePromptBuilder {
      * @param str 待判断字符串
      * @return true表示非空，false表示null或空字符串
      */
+
     private static boolean isNotEmpty(String str) {
         return str != null && !str.trim().isEmpty();
     }

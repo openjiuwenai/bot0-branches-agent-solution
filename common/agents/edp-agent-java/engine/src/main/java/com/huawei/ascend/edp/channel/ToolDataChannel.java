@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@ package com.huawei.ascend.edp.channel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.util.Collections;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * 跨工具数据通道。
  *
@@ -37,8 +38,8 @@ import java.util.Map;
  *
  * @since 2024-01-01
  */
-public class ToolDataChannel {
 
+public class ToolDataChannel {
     // 对齐 Python tool_data_channel.py: store/remove/clear 确认日志
     private static final Logger LOGGER = LoggerFactory.getLogger(ToolDataChannel.class);
 
@@ -51,6 +52,7 @@ public class ToolDataChannel {
      * @param resultKey 单字段结果键
      * @param data 数据值
      */
+
     public void store(ToolDataKey key, String resultKey, Map<String, Object> data) {
         store(key, resultKey, (Object) data);
     }
@@ -62,6 +64,7 @@ public class ToolDataChannel {
      * @param resultKey 单字段结果键
      * @param data 数据值
      */
+
     public void store(ToolDataKey key, String resultKey, Object data) {
         if (key == null || resultKey == null || resultKey.isBlank()) {
             LOGGER.debug("[ToolDataChannel] store: rejected null/blank key or resultKey");
@@ -78,25 +81,28 @@ public class ToolDataChannel {
      * @param resultKey 单字段结果键
      * @return 数据值，null 表示不存在或不是 Map
      */
-    public Map<String, Object> get(ToolDataKey key, String resultKey) {
-        Object value = getObject(key, resultKey);
+
+    public Object get(ToolDataKey key, String resultKey) {
+        Object value = getObject(key, resultKey).orElse(null);
         return value instanceof Map<?, ?> map ? toStringKeyMap(map) : Collections.emptyMap();
     }
 
     /**
      * 获取任意类型数据。
      */
-    public Object getObject(ToolDataKey key, String resultKey) {
+
+    public Optional<Object> getObject(ToolDataKey key, String resultKey) {
         if (key == null || resultKey == null || resultKey.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         ConcurrentHashMap<String, Object> scope = channel.get(key);
-        return scope != null ? scope.get(resultKey) : null;
+        return scope != null ? Optional.ofNullable(scope.get(resultKey)) : Optional.empty();
     }
 
     /**
      * 判断数据是否存在。
      */
+
     public boolean contains(ToolDataKey key, String resultKey) {
         if (key == null || resultKey == null || resultKey.isBlank()) {
             return false;
@@ -114,6 +120,7 @@ public class ToolDataChannel {
     /**
      * 移除数据。
      */
+
     public void remove(ToolDataKey key, String resultKey) {
         LOGGER.info("[ToolDataChannel] remove: resultKey={}", resultKey);
         ConcurrentHashMap<String, Object> scope = channel.get(key);
@@ -128,6 +135,7 @@ public class ToolDataChannel {
     /**
      * 清理指定 key 的所有数据。
      */
+
     public void clear(ToolDataKey key) {
         LOGGER.info("[ToolDataChannel] clear: key={}", key);
         channel.remove(key);
@@ -136,6 +144,7 @@ public class ToolDataChannel {
     /**
      * 清理所有数据。
      */
+
     public void clearAll() {
         LOGGER.info("[ToolDataChannel] clearAll: all data removed");
         channel.clear();

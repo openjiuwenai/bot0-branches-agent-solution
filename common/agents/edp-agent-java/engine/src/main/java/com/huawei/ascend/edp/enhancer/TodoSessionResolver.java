@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,16 @@
 package com.huawei.ascend.edp.enhancer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * Todo sessionId 来源解析器（替代 Core TaskPlanningRail 默认的 "default" 兜底）。
+ * SessionId 来源解析器（替代 Core TaskPlanningRail 默认的 "default" 兜底）。
  *
  * <p>问题背景：Core {@code TaskPlanningRail} 的 sessionId 来源是
  * {@code toolArgs.session_id}（LLM 传的），LLM 不传则兜底 "default"，
@@ -45,10 +44,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public final class TodoSessionResolver {
 
-    private TodoSessionResolver() {
-    }
+public final class TodoSessionResolver {
 
     /** sessionId 为空时的兜底值。 */
     private static final Logger LOGGER = LoggerFactory.getLogger(TodoSessionResolver.class);
@@ -61,15 +58,19 @@ public final class TodoSessionResolver {
     /** 解析 LLM 原始 JSON 字符串形式 toolArgs（Core 经 ToolCallInputs 暴露给 rail 的是 String）。 */
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
+    private TodoSessionResolver() {
+    }
+
     /**
      * 从 ctx 获取真实 sessionId，转义后注入到 args.session_id（仅当原值为空时）。
      *
      * @param ctx 回调上下文（提供真实 sessionId）
      * @param args 已解析的 toolArgs（可变 Map，原地修改）
      * @return true 表示 session_id 被注入（有变化），false 表示无需注入
+     *
+     * @param Map<String description
+     */
 
-    * @param Map<String description
-    */
     public static boolean injectFromContext(AgentCallbackContext ctx, Map<String, Object> args) {
         String realSid = sanitizeSessionId(ctx.getSession() != null ? ctx.getSession().getSessionId() : null);
         Object prevSid = args.get(FIELD_SESSION_ID);
@@ -86,6 +87,7 @@ public final class TodoSessionResolver {
      * @param inputs 工具调用输入
      * @return 转义后的 session_id，未配置时返回 "default"
      */
+
     public static String resolveFromInputs(ToolCallInputs inputs) {
         Map<String, Object> args = normalizeArgs(inputs.getToolArgs());
         Object value = args.get(FIELD_SESSION_ID);
@@ -104,6 +106,7 @@ public final class TodoSessionResolver {
      * @param sessionId 原始 sessionId（可能含冒号等非法路径字符）
      * @return 转义后的合法路径段
      */
+
     public static String sanitizeSessionId(String sessionId) {
         String safe = sessionId == null || sessionId.isBlank() ? DEFAULT_SESSION_ID : sessionId;
         return safe.replaceAll("[\\\\/:*?\"<>|]", "_");
@@ -118,6 +121,7 @@ public final class TodoSessionResolver {
      * @param rawArgs 原始参数（String 或 Map）
      * @return 可变 Map（空 Map 表示解析失败或空参数）
      */
+
     @SuppressWarnings("unchecked")
     /** Normalizes raw arguments into a map. */
     public static Map<String, Object> normalizeArgs(Object rawArgs) {

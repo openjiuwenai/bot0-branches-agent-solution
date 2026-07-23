@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ import java.util.Map;
  *
  * @since 2024-01-01
  */
-public class ScriptConfig {
 
+public class ScriptConfig {
     /** 通用话术配置。 */
     private GeneralScripts generalScripts;
 
@@ -50,6 +50,7 @@ public class ScriptConfig {
     public GeneralScripts getGeneralScripts() {
         return generalScripts;
     }
+
     /** Sets the general scripts. */
     public void setGeneralScripts(GeneralScripts generalScripts) {
         this.generalScripts = generalScripts;
@@ -59,6 +60,7 @@ public class ScriptConfig {
     public Map<String, QueryIntentEntry> getQueryIntentToolText() {
         return queryIntentToolText;
     }
+
     /** Sets the query intent tool text. */
     public void setQueryIntentToolText(Map<String, QueryIntentEntry> queryIntentToolText) {
         this.queryIntentToolText = queryIntentToolText;
@@ -68,6 +70,7 @@ public class ScriptConfig {
     public ThinkChunkScripts getThinkChunkScripts() {
         return thinkChunkScripts;
     }
+
     /** Sets the think chunk scripts. */
     public void setThinkChunkScripts(ThinkChunkScripts thinkChunkScripts) {
         this.thinkChunkScripts = thinkChunkScripts;
@@ -77,6 +80,7 @@ public class ScriptConfig {
     public AskUserConfirm getAskUserConfirm() {
         return askUserConfirm;
     }
+
     /** Sets the ask user confirm. */
     public void setAskUserConfirm(AskUserConfirm askUserConfirm) {
         this.askUserConfirm = askUserConfirm;
@@ -85,6 +89,7 @@ public class ScriptConfig {
     /**
      * 通用话术配置，用于业务流程状态（工具调用、中断、取消等）。
      */
+
     public static class GeneralScripts {
         private String toolStart;
         private String toolEnd;
@@ -103,6 +108,7 @@ public class ScriptConfig {
         public String getToolStart() {
             return toolStart;
         }
+
         /** Sets the tool start. */
         public void setToolStart(String toolStart) {
             this.toolStart = toolStart;
@@ -112,6 +118,7 @@ public class ScriptConfig {
         public String getToolEnd() {
             return toolEnd;
         }
+
         /** Sets the tool end. */
         public void setToolEnd(String toolEnd) {
             this.toolEnd = toolEnd;
@@ -121,6 +128,7 @@ public class ScriptConfig {
         public String getTodoStart() {
             return todoStart;
         }
+
         /** Sets the todo start. */
         public void setTodoStart(String todoStart) {
             this.todoStart = todoStart;
@@ -130,6 +138,7 @@ public class ScriptConfig {
         public String getTodoEnd() {
             return todoEnd;
         }
+
         /** Sets the todo end. */
         public void setTodoEnd(String todoEnd) {
             this.todoEnd = todoEnd;
@@ -139,6 +148,7 @@ public class ScriptConfig {
         public String getTodolistStart() {
             return todolistStart;
         }
+
         /** Sets the todolist start. */
         public void setTodolistStart(String todolistStart) {
             this.todolistStart = todolistStart;
@@ -148,6 +158,7 @@ public class ScriptConfig {
         public String getTodolistEnd() {
             return todolistEnd;
         }
+
         /** Sets the todolist end. */
         public void setTodolistEnd(String todolistEnd) {
             this.todolistEnd = todolistEnd;
@@ -157,6 +168,7 @@ public class ScriptConfig {
         public String getInterruptStart() {
             return interruptStart;
         }
+
         /** Sets the interrupt start. */
         public void setInterruptStart(String interruptStart) {
             this.interruptStart = interruptStart;
@@ -166,6 +178,7 @@ public class ScriptConfig {
         public String getRequestStart() {
             return requestStart;
         }
+
         /** Sets the request start. */
         public void setRequestStart(String requestStart) {
             this.requestStart = requestStart;
@@ -175,6 +188,7 @@ public class ScriptConfig {
         public String getPlanningStart() {
             return planningStart;
         }
+
         /** Sets the planning start. */
         public void setPlanningStart(String planningStart) {
             this.planningStart = planningStart;
@@ -184,6 +198,7 @@ public class ScriptConfig {
         public String getTaskCancelled() {
             return taskCancelled;
         }
+
         /** Sets the task cancelled. */
         public void setTaskCancelled(String taskCancelled) {
             this.taskCancelled = taskCancelled;
@@ -193,6 +208,7 @@ public class ScriptConfig {
         public String getCancelConfirm() {
             return cancelConfirm;
         }
+
         /** Sets the cancel confirm. */
         public void setCancelConfirm(String cancelConfirm) {
             this.cancelConfirm = cancelConfirm;
@@ -202,6 +218,7 @@ public class ScriptConfig {
         public String getOutOfScope() {
             return outOfScope;
         }
+
         /** Sets the out of scope. */
         public void setOutOfScope(String outOfScope) {
             this.outOfScope = outOfScope;
@@ -211,6 +228,7 @@ public class ScriptConfig {
     /**
      * 思维链话术配置，用于思维链展示（替代真实LLM thinking）。
      */
+
     public static class ThinkChunkScripts {
         /** 模式选择：real_stream 或 fixed_script。 */
         private String thinkChunkMode;
@@ -222,6 +240,7 @@ public class ScriptConfig {
         public String getThinkChunkMode() {
             return thinkChunkMode;
         }
+
         /** Sets the think chunk mode. */
         public void setThinkChunkMode(String thinkChunkMode) {
             this.thinkChunkMode = thinkChunkMode;
@@ -231,6 +250,7 @@ public class ScriptConfig {
         public ThinkChunkFixedScripts getThinkChunkFixedScripts() {
             return thinkChunkFixedScripts;
         }
+
         /** Sets the think chunk fixed scripts. */
         public void setThinkChunkFixedScripts(ThinkChunkFixedScripts thinkChunkFixedScripts) {
             this.thinkChunkFixedScripts = thinkChunkFixedScripts;
@@ -240,6 +260,7 @@ public class ScriptConfig {
     /**
      * 固定话术帧配置。
      */
+
     public static class ThinkChunkFixedScripts {
         /** 是否启用固定话术帧（布尔开关，继承式覆盖）。 */
         private Boolean enabled;
@@ -275,6 +296,7 @@ public class ScriptConfig {
         public Boolean getEnabled() {
             return enabled;
         }
+
         /** Sets the enabled. */
         public void setEnabled(Boolean enabled) {
             this.enabled = enabled;
@@ -284,6 +306,7 @@ public class ScriptConfig {
         public Integer getCharsPerFrame() {
             return charsPerFrame;
         }
+
         /** Sets the chars per frame. */
         public void setCharsPerFrame(Integer charsPerFrame) {
             this.charsPerFrame = charsPerFrame;
@@ -293,6 +316,7 @@ public class ScriptConfig {
         public Integer getTokensBetweenFrames() {
             return tokensBetweenFrames;
         }
+
         /** Sets the tokens between frames. */
         public void setTokensBetweenFrames(Integer tokensBetweenFrames) {
             this.tokensBetweenFrames = tokensBetweenFrames;
@@ -302,6 +326,7 @@ public class ScriptConfig {
         public Integer getMinIntervalMs() {
             return minIntervalMs;
         }
+
         /** Sets the min interval ms. */
         public void setMinIntervalMs(Integer minIntervalMs) {
             this.minIntervalMs = minIntervalMs;
@@ -311,6 +336,7 @@ public class ScriptConfig {
         public List<String> getDefaultScripts() {
             return defaultScripts;
         }
+
         /** Sets the default scripts. */
         public void setDefaultScripts(List<String> defaultScripts) {
             this.defaultScripts = defaultScripts;
@@ -320,6 +346,7 @@ public class ScriptConfig {
         public List<String> getExecutionScripts() {
             return executionScripts;
         }
+
         /** Sets the execution scripts. */
         public void setExecutionScripts(List<String> executionScripts) {
             this.executionScripts = executionScripts;
@@ -329,6 +356,7 @@ public class ScriptConfig {
         public List<String> getResumeScripts() {
             return resumeScripts;
         }
+
         /** Sets the resume scripts. */
         public void setResumeScripts(List<String> resumeScripts) {
             this.resumeScripts = resumeScripts;
@@ -338,6 +366,7 @@ public class ScriptConfig {
         public Boolean getEnableResumeScripts() {
             return enableResumeScripts;
         }
+
         /** Sets the enable resume scripts. */
         public void setEnableResumeScripts(Boolean enableResumeScripts) {
             this.enableResumeScripts = enableResumeScripts;
@@ -347,6 +376,7 @@ public class ScriptConfig {
         public List<String> getScripts() {
             return scripts;
         }
+
         /** Sets the scripts. */
         public void setScripts(List<String> scripts) {
             this.scripts = scripts;
@@ -356,6 +386,7 @@ public class ScriptConfig {
         public List<QueryPattern> getQueryPatterns() {
             return queryPatterns;
         }
+
         /** Sets the query patterns. */
         public void setQueryPatterns(List<QueryPattern> queryPatterns) {
             this.queryPatterns = queryPatterns;
@@ -364,6 +395,7 @@ public class ScriptConfig {
         /**
          * 按关键词匹配的话术组。planning 阶段遍历列表，首个命中的关键词组即生效。
          */
+
         public static class QueryPattern {
             private List<String> keywords;
             private List<String> scripts;
@@ -372,14 +404,17 @@ public class ScriptConfig {
             public List<String> getKeywords() {
                 return keywords;
             }
+
             /** Sets the keywords. */
             public void setKeywords(List<String> keywords) {
                 this.keywords = keywords;
             }
+
             /** Gets the scripts. */
             public List<String> getScripts() {
                 return scripts;
             }
+
             /** Sets the scripts. */
             public void setScripts(List<String> scripts) {
                 this.scripts = scripts;
@@ -392,6 +427,7 @@ public class ScriptConfig {
      *
      * <p>消费方：AskUserTemplateRail（spike 阶段，当前未读取 YAML，预留建模）。</p>
      */
+
     public static class AskUserConfirm {
         /** 购买确认话术模板，支持 {product_name}、{amount} 等占位符。 */
         private String purchaseConfirm;
@@ -403,6 +439,7 @@ public class ScriptConfig {
         public String getPurchaseConfirm() {
             return purchaseConfirm;
         }
+
         /** Sets the purchase confirm. */
         public void setPurchaseConfirm(String purchaseConfirm) {
             this.purchaseConfirm = purchaseConfirm;
@@ -412,6 +449,7 @@ public class ScriptConfig {
         public String getCancelConfirm() {
             return cancelConfirm;
         }
+
         /** Sets the cancel confirm. */
         public void setCancelConfirm(String cancelConfirm) {
             this.cancelConfirm = cancelConfirm;
@@ -424,6 +462,7 @@ public class ScriptConfig {
      * <p>仅影响 todo_start/todo_end，不影响 tool_start/tool_end（E-04 澄清）。
      * 对齐 Python QUERY_INTENT_TO_TODO_TEXT。</p>
      */
+
     public static class QueryIntentEntry {
         private String toolStart;
         private String toolEnd;
@@ -432,6 +471,7 @@ public class ScriptConfig {
         public String getToolStart() {
             return toolStart;
         }
+
         /** Sets the tool start. */
         public void setToolStart(String toolStart) {
             this.toolStart = toolStart;
@@ -441,6 +481,7 @@ public class ScriptConfig {
         public String getToolEnd() {
             return toolEnd;
         }
+
         /** Sets the tool end. */
         public void setToolEnd(String toolEnd) {
             this.toolEnd = toolEnd;

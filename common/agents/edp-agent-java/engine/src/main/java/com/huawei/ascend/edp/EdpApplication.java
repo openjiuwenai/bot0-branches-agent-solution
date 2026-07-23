@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,27 +20,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+
 /**
  * EDPAgent Spring Boot 启动入口（适配版）。
  *
  * <p>扫描以下包路径：</p>
  * <ul>
- *     <li>{@code com.openjiuwen.service.app.autoconfigure} — agent-runtime A2A/Query endpoints</li>
- *     <li>{@code com.openjiuwen.service.adapters.agentcore.autoconfigure} — agentcore middleware adapters</li>
- *     <li>{@code com.openjiuwen.service.adapters.agentcore.ext.autoconfigure} — AgentCoreExt auto-config + RemoteA2aToolInstaller</li>
- *     <li>{@code com.huawei.ascend.edp} — EDPAgent 自身 Bean</li>
+ *     <li>{@code com.openjiuwen.service.app.autoconfigure} - agent-runtime A2A/Query endpoints</li>
+ *     <li>{@code com.openjiuwen.service.adapters.agentcore.autoconfigure} - agentcore middleware adapters</li>
+ *     <li>{@code com.openjiuwen.service.adapters.agentcore.ext.autoconfigure} - AgentCoreExt auto-config + RemoteA2aToolInstaller</li>
+ *     <li>{@code com.huawei.ascend.edp} - EDPAgent 自身 Bean</li>
  * </ul>
+ *
+ * @since 2026-01-01
  */
+
 @SpringBootApplication(scanBasePackages = {"com.openjiuwen.service.app.autoconfigure",
         "com.openjiuwen.service.adapters.agentcore.autoconfigure",
         "com.openjiuwen.service.adapters.agentcore.ext.autoconfigure", "com.huawei.ascend.edp"})
-/**
- * EdpApplication class.
- *
- * @since 2024-01-01
- */
 public class EdpApplication {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpApplication.class);
 
     /**
@@ -49,9 +47,10 @@ public class EdpApplication {
      * SERVER_PORT, EDP_AGENT_SCENARIO_HOME, EDPA_SANDBOX_ENABLED,
      * EDPA_REDIS_HOST/PORT, EDP_AGENT_MODEL_* 等。
      * 对齐 Python agent.py L820-823: 初始化完成汇总。
+     *
+     * @param args description
+     */
 
-    * @param args description
-    */
     public static void main(String[] args) {
         LOGGER.info("EDPAgent Application starting...");
         SpringApplication.run(EdpApplication.class, args);

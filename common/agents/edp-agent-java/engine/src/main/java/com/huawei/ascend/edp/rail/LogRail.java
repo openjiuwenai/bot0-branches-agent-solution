@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,10 @@
 
 package com.huawei.ascend.edp.rail;
 
+import com.huawei.ascend.edp.config.EdpConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.List;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.huawei.ascend.edp.config.EdpConfig;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.llm.schema.UsageMetadata;
@@ -34,6 +29,11 @@ import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
+import java.util.Optional;
+
 /**
  * EDPAgent 观测日志 Rail。
  *
@@ -66,25 +66,28 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class LogRail extends AgentRail {
 
+public class LogRail extends AgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(LogRail.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * EDP 专有配置，当前预留给后续日志脱敏、采样和开关控制使用。
      */
+
     private final EdpConfig edpConfig;
 
     /**
      * 构造日志 Rail。
      *
      * @param edpConfig EDP 专有配置
+     *
+     * @return result
+     */
 
-    * @return result
-    */
     public LogRail(EdpConfig edpConfig) {
         this.edpConfig = edpConfig;
+
         // 日志 Rail 使用较低优先级，尽量在其他业务 Rail 完成处理后记录最终上下文。
         setPriority(10);
     }
@@ -94,6 +97,7 @@ public class LogRail extends AgentRail {
      *
      * @param ctx OpenJiuwen 回调上下文，包含模型入参
      */
+
     @Override
     /** Before model call. */
     public void beforeModelCall(AgentCallbackContext ctx) {
@@ -118,6 +122,7 @@ public class LogRail extends AgentRail {
      *
      * @param ctx OpenJiuwen 回调上下文，包含模型响应
      */
+
     @Override
     /** After model call. */
     public void afterModelCall(AgentCallbackContext ctx) {
@@ -137,6 +142,7 @@ public class LogRail extends AgentRail {
                     msg.getFinishReason(), msg.getToolCalls() != null ? msg.getToolCalls().size() : 0,
                     msg.getContent() == null);
         }
+
         // 对齐 Python agent.py L1116-1122: [EDP-LLM-RAW] 输出 content 摘要而非对象哈希
         if (response instanceof AssistantMessage rawMsg) {
             String content = String.valueOf(rawMsg.getContent());
@@ -166,6 +172,7 @@ public class LogRail extends AgentRail {
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具调用信息
      */
+
     @Override
     /** After tool call. */
     public void afterToolCall(AgentCallbackContext ctx) {
@@ -182,6 +189,7 @@ public class LogRail extends AgentRail {
      * 栈底，按相反顺序补齐 {@code }} / {@code ]}。对"丢末尾 }"这种最常见的 LLM streaming quirk 100% 生效。
      * 命中时打 WARNING；修复后仍非法（极罕见）时打 ERROR。</p>
      */
+
     private static void repairToolCallArguments(AssistantMessage response) {
         List<ToolCall> toolCalls = response.getToolCalls();
         if (toolCalls == null || toolCalls.isEmpty()) {
@@ -204,7 +212,7 @@ public class LogRail extends AgentRail {
                     abbreviate(args, 200));
             LOGGER.debug("[LogRail] before repair FULL | name={} | args={}", toolName, args);
 
-            String repaired = repairMalformedJson(args);
+            String repaired = repairMalformedJson(args).orElse(null);
             if (repaired == null || repaired.equals(args)) {
                 LOGGER.error(
                         "[LogRail] FAILED to repair malformed tool_call.arguments | name={} | "
@@ -244,11 +252,12 @@ public class LogRail extends AgentRail {
      * 修复非法 JSON：遍历字符串，维护未闭合的 {@code {} / {@code [} 栈（字符串字面量内的括号忽略），
      * 按栈逆序补齐闭合符号。对齐 Python {@code AbilityManager._repair_tool_arguments_json}。
      *
-     * @return 修复后的 JSON 字符串；输入为空或无未闭合括号时返回 null
+     * @return 修复后的 JSON 字符串；输入为空或无未闭合括号时返回 Optional.empty()
      */
-    private static String repairMalformedJson(String json) {
+
+    private static Optional<String> repairMalformedJson(String json) {
         if (json == null || json.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
 
         Deque<Character> stack = new ArrayDeque<>();
@@ -266,6 +275,8 @@ public class LogRail extends AgentRail {
                     escaped = true;
                 } else if (ch == stringDelimiter) {
                     inString = false;
+                } else {
+                    // no-op: other characters inside string are kept as-is
                 }
                 continue;
             }
@@ -281,11 +292,13 @@ public class LogRail extends AgentRail {
                 if (!stack.isEmpty() && stack.peek() == expectedOpen) {
                     stack.pop();
                 }
+            } else {
+                // no-op: other characters do not affect bracket stack
             }
         }
 
         if (stack.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
 
         StringBuilder repaired = new StringBuilder(json);
@@ -293,7 +306,7 @@ public class LogRail extends AgentRail {
             char open = stack.pop();
             repaired.append(open == '{' ? '}' : ']');
         }
-        return repaired.toString();
+        return Optional.of(repaired.toString());
     }
 
     private static String abbreviate(String value, int max) {

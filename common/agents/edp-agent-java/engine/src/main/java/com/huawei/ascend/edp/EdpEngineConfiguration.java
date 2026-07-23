@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,18 +19,18 @@ package com.huawei.ascend.edp;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.handler.EdpaExtHandler;
 import com.huawei.ascend.edp.todo.RedisTodoStore;
-
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClientFactory;
 import com.openjiuwen.service.spec.spi.AgentHandler;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import java.util.Optional;
+
 /**
  * EDPAgent Spring Bean 配置（适配版，Phase 2 合并后）。
  *
@@ -41,16 +41,13 @@ import org.springframework.context.annotation.Configuration;
  *         Spring Boot 原生支持 ${ENV_VAR:default} 占位符，不再需要手写 resolveEnvOverrides。</li>
  *     <li>注入 RedisTodoStore（0707新增的Redis Todo持久化），传入 EdpaExtHandler.init()。</li>
  * </ul>
- */
-@Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(EdpaSpringBootConfig.class)
-/**
- * EdpEngineConfiguration class.
  *
  * @since 2024-01-01
  */
-public class EdpEngineConfiguration {
 
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(EdpaSpringBootConfig.class)
+public class EdpEngineConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpEngineConfiguration.class);
 
     /**
@@ -66,6 +63,7 @@ public class EdpEngineConfiguration {
      * @param config EDPAgent 合并后配置属性（含 scenarioHome/model/versatile/mcpsse）
      * @return 已初始化的 AgentHandler Bean
      */
+
     @Bean
     AgentHandler edpaExtHandler(EdpaSpringBootConfig config,
             @Value("${openjiuwen.service.a2a.agent-name:EDPAgent}") String agentName,
@@ -78,20 +76,20 @@ public class EdpEngineConfiguration {
         }
 
         // 需求2：通过 agent-runtime-java 中转获取治理装饰 SandboxClient
-        SandboxClient decoratedSandboxClient = resolveDecoratedSandboxClient(sandboxClientFactoryProvider);
+        SandboxClient decoratedSandboxClient = resolveDecoratedSandboxClient(sandboxClientFactoryProvider).orElse(null);
 
         // Bean 创建阶段先完成全部初始化，获取真实 agent 实例
         EdpaExtHandler.InitResult initResult = EdpaExtHandler.performInit(config, redisTodoStore, agentName,
                 decoratedSandboxClient);
 
         // 用真实 agent 实例构造 Handler，消除反射 hack
-        EdpaExtHandler handler = new EdpaExtHandler(initResult.agentInstance);
+        EdpaExtHandler handler = new EdpaExtHandler(initResult.getAgentInstance());
         handler.applyInitResult(initResult);
 
         LOGGER.info(
                 "EdpEngineConfiguration: edpaExtHandler bean created, agentId={}, "
                         + "deepAgent initialized={}, sandboxPath={}",
-                agentName, initResult.deepAgent.isInitialized(),
+                agentName, initResult.getDeepAgent().isInitialized(),
                 decoratedSandboxClient != null ? "governed(Path2)" : "direct(Path1)");
         return handler;
     }
@@ -108,20 +106,21 @@ public class EdpEngineConfiguration {
      * @param provider Spring ObjectProvider，可能不存在
      * @return DecoratingSandboxClient 实例，或 null（降级到需求1直接模式）
      */
-    private static SandboxClient resolveDecoratedSandboxClient(ObjectProvider<AgentCoreSandboxClientFactory> provider) {
+
+    private static Optional<SandboxClient> resolveDecoratedSandboxClient(ObjectProvider<AgentCoreSandboxClientFactory> provider) {
         AgentCoreSandboxClientFactory factory = provider.getIfAvailable();
         if (factory == null) {
             LOGGER.info("[EDP-SANDBOX] AgentCoreSandboxClientFactory absent, using Path 1 (direct)");
-            return null;
+            return Optional.empty();
         }
         try {
             SandboxClient client = factory.create();
             LOGGER.info("[EDP-SANDBOX] DecoratingSandboxClient created via factory (Path 2: governed)");
-            return client;
-        } catch (RuntimeException e) {
+            return Optional.of(client);
+        } catch (IllegalStateException e) {
             LOGGER.warn("[EDP-SANDBOX] Failed to create DecoratingSandboxClient, falling back to Path 1: {}",
                     e.getMessage());
-            return null;
+            return Optional.empty();
         }
     }
 }

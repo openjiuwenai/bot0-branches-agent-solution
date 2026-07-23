@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 package com.huawei.ascend.edp.rail;
 
-import java.util.Map;
-
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ToolConstants;
@@ -26,6 +24,8 @@ import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Map;
+
 /**
  * 任务取消 Rail。
  *
@@ -49,24 +49,27 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class CancelRail extends AgentRail {
 
+public class CancelRail extends AgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(CancelRail.class);
 
     /**
      * EDP 专有配置，当前预留给后续取消话术模板和取消策略使用。
      */
+
     private final EdpConfig edpConfig;
 
     /**
      * 构造取消 Rail。
      *
      * @param edpConfig EDP 专有配置
+     *
+     * @return result
+     */
 
-    * @return result
-    */
     public CancelRail(EdpConfig edpConfig) {
         this.edpConfig = edpConfig;
+
         // 取消优先级较高，尽早拦截 cancel_task，避免继续执行其它业务逻辑。
         setPriority(100);
     }
@@ -79,6 +82,7 @@ public class CancelRail extends AgentRail {
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具调用信息
      */
+
     @Override
     /** After tool call. */
     public void afterToolCall(AgentCallbackContext ctx) {

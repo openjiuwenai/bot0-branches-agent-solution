@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,16 @@
 package com.huawei.ascend.edp.stream;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+
 /**
  * QueryChunk 流式输出适配器，将 适配版 AgentCore 的结构化 chunk 格式
  * 过滤并转换为前端可正常显示的纯文本 chunk。
@@ -52,8 +52,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class QueryChunkFormatAdapter implements QueryStreamObserver {
 
+public class QueryChunkFormatAdapter implements QueryStreamObserver {
     private static final Logger LOGGER = LoggerFactory.getLogger(QueryChunkFormatAdapter.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -88,75 +88,88 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
         if (data instanceof Map<?, ?> rawMap) {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = (Map<String, Object>) rawMap;
-            String chunkType = String.valueOf(map.getOrDefault("type", ""));
-
-            switch (chunkType) {
-                case TYPE_LLM_REASONING :
-                    discardedFrames++;
-                    return;
-                case TYPE_LLM_USAGE :
-                    discardedFrames++;
-                    return;
-                case TYPE_LLM_OUTPUT :
-                    transformLlmOutputToPlainText(chunk, map);
-                    return;
-                case TYPE_ANSWER :
-                    transformAnswerToPlainText(chunk, map);
-                    return;
-                case TYPE_PASSTHROUGH_NODE :
-                    forwardedFrames++;
-                    delegate.onNext(chunk);
-                    return;
-                default :
-                    QueryChunk adapted = adaptPassthrough(chunk, map);
-                    if (adapted != null) {
-                        delegate.onNext(adapted);
-                        return;
-                    }
-                    forwardedFrames++;
-                    delegate.onNext(chunk);
-                    return;
-            }
+            handleMapData(chunk, map);
+            return;
         }
 
         if (data instanceof String text) {
-            if (text.trim().startsWith("{")) {
-                Map<String, Object> parsed = parseJsonToMap(text);
-                if (parsed != null && parsed.containsKey("type")) {
-                    String chunkType = String.valueOf(parsed.get("type"));
-
-                    switch (chunkType) {
-                        case TYPE_LLM_REASONING :
-                            discardedFrames++;
-                            return;
-                        case TYPE_LLM_USAGE :
-                            discardedFrames++;
-                            return;
-                        case TYPE_LLM_OUTPUT :
-                            transformLlmOutputToPlainText(chunk, parsed);
-                            return;
-                        case TYPE_ANSWER :
-                            transformAnswerToPlainText(chunk, parsed);
-                            return;
-                        default :
-                            QueryChunk adaptedStr = adaptPassthrough(chunk, parsed);
-                            if (adaptedStr != null) {
-                                delegate.onNext(adaptedStr);
-                                return;
-                            }
-                            forwardedFrames++;
-                            delegate.onNext(chunk);
-                            return;
-                    }
-                }
-            }
-            forwardedFrames++;
-            delegate.onNext(chunk);
+            handleStringData(chunk, text);
             return;
         }
 
         forwardedFrames++;
         delegate.onNext(chunk);
+    }
+
+    /** Handles chunk data that is a Map. */
+    private void handleMapData(QueryChunk chunk, Map<String, Object> map) {
+        String chunkType = String.valueOf(map.getOrDefault("type", ""));
+        switch (chunkType) {
+            case TYPE_LLM_REASONING :
+                discardedFrames++;
+                return;
+            case TYPE_LLM_USAGE :
+                discardedFrames++;
+                return;
+            case TYPE_LLM_OUTPUT :
+                transformLlmOutputToPlainText(chunk, map);
+                return;
+            case TYPE_ANSWER :
+                transformAnswerToPlainText(chunk, map);
+                return;
+            case TYPE_PASSTHROUGH_NODE :
+                forwardedFrames++;
+                delegate.onNext(chunk);
+                return;
+            default :
+                Optional<QueryChunk> adapted = adaptPassthrough(chunk, map);
+                if (adapted.isPresent()) {
+                    delegate.onNext(adapted.get());
+                    return;
+                }
+                forwardedFrames++;
+                delegate.onNext(chunk);
+                return;
+        }
+    }
+
+    /** Handles chunk data that is a String (potentially JSON). */
+    private void handleStringData(QueryChunk chunk, String text) {
+        if (!text.trim().startsWith("{")) {
+            forwardedFrames++;
+            delegate.onNext(chunk);
+            return;
+        }
+        Map<String, Object> parsed = parseJsonToMap(text);
+        if (parsed == null || !parsed.containsKey("type")) {
+            forwardedFrames++;
+            delegate.onNext(chunk);
+            return;
+        }
+        String chunkType = String.valueOf(parsed.get("type"));
+        switch (chunkType) {
+            case TYPE_LLM_REASONING :
+                discardedFrames++;
+                return;
+            case TYPE_LLM_USAGE :
+                discardedFrames++;
+                return;
+            case TYPE_LLM_OUTPUT :
+                transformLlmOutputToPlainText(chunk, parsed);
+                return;
+            case TYPE_ANSWER :
+                transformAnswerToPlainText(chunk, parsed);
+                return;
+            default :
+                Optional<QueryChunk> adaptedStr = adaptPassthrough(chunk, parsed);
+                if (adaptedStr.isPresent()) {
+                    delegate.onNext(adaptedStr.get());
+                    return;
+                }
+                forwardedFrames++;
+                delegate.onNext(chunk);
+                return;
+        }
     }
 
     @Override
@@ -181,9 +194,9 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
 
     private void transformLlmOutputToPlainText(QueryChunk originalChunk, Map<String, Object> map) {
         Object payload = map.get("payload");
-        String content = extractPayloadContent(payload);
+        String content = extractPayloadContent(payload).orElse("");
 
-        if (content == null || content.isEmpty()) {
+        if (content.isEmpty()) {
             discardedFrames++;
             return;
         }
@@ -194,9 +207,9 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
 
     private void transformAnswerToPlainText(QueryChunk originalChunk, Map<String, Object> map) {
         Object payload = map.get("payload");
-        String output = extractPayloadOutput(payload);
+        String output = extractPayloadOutput(payload).orElse("");
 
-        if (output == null || output.isEmpty()) {
+        if (output.isEmpty()) {
             discardedFrames++;
             return;
         }
@@ -206,29 +219,29 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
         delegate.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, output));
     }
 
-    private String extractPayloadContent(Object payload) {
+    private Optional<String> extractPayloadContent(Object payload) {
         if (payload instanceof Map<?, ?> payloadMap) {
             Object content = payloadMap.get("content");
-            return content != null ? String.valueOf(content) : null;
+            return content != null ? Optional.of(String.valueOf(content)) : Optional.empty();
         }
-        return null;
+        return Optional.empty();
     }
 
-    private String extractPayloadOutput(Object payload) {
+    private Optional<String> extractPayloadOutput(Object payload) {
         if (payload instanceof Map<?, ?> payloadMap) {
             Object output = payloadMap.get("output");
-            return output != null ? String.valueOf(output) : null;
+            return output != null ? Optional.of(String.valueOf(output)) : Optional.empty();
         }
-        return null;
+        return Optional.empty();
     }
 
-    private QueryChunk adaptPassthrough(QueryChunk chunk, Map<String, Object> map) {
+    private Optional<QueryChunk> adaptPassthrough(QueryChunk chunk, Map<String, Object> map) {
         String chunkType = String.valueOf(map.getOrDefault("type", ""));
 
         if (map.containsKey("menu_type") || (map.containsKey("data") && hasMenuType(map.get("data")))) {
             LOGGER.debug("QueryChunkFormatAdapter: detected menu_type, marking as PASSTHROUGH_NODE");
             transformedFrames++;
-            return new QueryChunk(TYPE_PASSTHROUGH_NODE, chunk.getData());
+            return Optional.of(new QueryChunk(TYPE_PASSTHROUGH_NODE, chunk.getData()));
         }
 
         if ("answer".equals(chunkType) && map.containsKey("output")) {
@@ -236,17 +249,17 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
             if (output != null && !output.isEmpty()) {
                 transformedFrames++;
                 LOGGER.debug("QueryChunkFormatAdapter: detected answer envelope, extracting output");
-                return new QueryChunk(QueryChunk.TYPE_CHUNK, output);
+                return Optional.of(new QueryChunk(QueryChunk.TYPE_CHUNK, output));
             }
         }
 
         if (map.containsKey("node_type") || (map.containsKey("data") && hasNodeType(map.get("data")))) {
             LOGGER.debug("QueryChunkFormatAdapter: detected node_type, marking as PASSTHROUGH_NODE");
             transformedFrames++;
-            return new QueryChunk(TYPE_PASSTHROUGH_NODE, chunk.getData());
+            return Optional.of(new QueryChunk(TYPE_PASSTHROUGH_NODE, chunk.getData()));
         }
 
-        return null;
+        return Optional.empty();
     }
 
     private boolean hasMenuType(Object dataObj) {

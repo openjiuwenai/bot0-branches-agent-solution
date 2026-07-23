@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,21 @@
 
 package com.huawei.ascend.edp.config;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * Redis TodoStore 配置属性。
  *
  * <p>对应配置前缀 {@code edpa.agent.redis}，承载部署模式、连接参数、TodoStore 与 Checkpointer TTL。
  * 设计参考：FEAT_EDPA Redis 存储设计方案 §2.2.1。</p>
- */
-@ConfigurationProperties(prefix = "edpa.agent.redis")
-/**
- * TodoRedisProperties class.
  *
  * @since 2024-01-01
  */
-public class TodoRedisProperties {
 
+@ConfigurationProperties(prefix = "edpa.agent.redis")
+public class TodoRedisProperties {
     /** 部署模式：single | sentinel | cluster。 */
     private String mode = "single";
 
@@ -183,7 +180,7 @@ public class TodoRedisProperties {
         private String keyPrefix = "edpa";
 
         /** TTL（秒），默认 3600（60min）。 */
-        private long ttlSeconds = 3600;
+        private long ttlSeconds = 3600L;
 
         /** 读时是否续期，默认 true（UC-04）。 */
         private boolean refreshOnRead = true;

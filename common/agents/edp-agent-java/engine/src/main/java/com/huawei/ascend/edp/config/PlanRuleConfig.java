@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ package com.huawei.ascend.edp.config;
  *
  * @since 2024-01-01
  */
-public class PlanRuleConfig {
 
+public class PlanRuleConfig {
     /** Agent角色。 */
     private String role;
 
@@ -57,6 +57,7 @@ public class PlanRuleConfig {
     public String getRole() {
         return role;
     }
+
     /** Sets the role. */
     public void setRole(String role) {
         this.role = role;
@@ -66,6 +67,7 @@ public class PlanRuleConfig {
     public String getDescription() {
         return description;
     }
+
     /** Sets the description. */
     public void setDescription(String description) {
         this.description = description;
@@ -75,6 +77,7 @@ public class PlanRuleConfig {
     public String getScenarioName() {
         return scenarioName;
     }
+
     /** Sets the scenario name. */
     public void setScenarioName(String scenarioName) {
         this.scenarioName = scenarioName;
@@ -84,6 +87,7 @@ public class PlanRuleConfig {
     public String getScenarioDescription() {
         return scenarioDescription;
     }
+
     /** Sets the scenario description. */
     public void setScenarioDescription(String scenarioDescription) {
         this.scenarioDescription = scenarioDescription;
@@ -93,6 +97,7 @@ public class PlanRuleConfig {
     public Scope getScope() {
         return scope;
     }
+
     /** Sets the scope. */
     public void setScope(Scope scope) {
         this.scope = scope;
@@ -102,6 +107,7 @@ public class PlanRuleConfig {
     public SupplementaryPrompt getSupplementaryPrompt() {
         return supplementaryPrompt;
     }
+
     /** Sets the supplementary prompt. */
     public void setSupplementaryPrompt(SupplementaryPrompt supplementaryPrompt) {
         this.supplementaryPrompt = supplementaryPrompt;
@@ -111,6 +117,7 @@ public class PlanRuleConfig {
     public java.util.List<SkillRoute> getSkillRouting() {
         return skillRouting;
     }
+
     /** Sets the skill routing. */
     public void setSkillRouting(java.util.List<SkillRoute> skillRouting) {
         this.skillRouting = skillRouting;
@@ -119,6 +126,7 @@ public class PlanRuleConfig {
     /**
      * Agent职责边界配置。
      */
+
     public static class Scope {
         /** 允许的业务范围列表（替代式覆盖）。 */
         private String allowed;
@@ -130,6 +138,7 @@ public class PlanRuleConfig {
         public String getAllowed() {
             return allowed;
         }
+
         /** Sets the allowed. */
         public void setAllowed(String allowed) {
             this.allowed = allowed;
@@ -139,6 +148,7 @@ public class PlanRuleConfig {
         public String getDenied() {
             return denied;
         }
+
         /** Sets the denied. */
         public void setDenied(String denied) {
             this.denied = denied;
@@ -151,6 +161,7 @@ public class PlanRuleConfig {
      * <p>包含框架内置的 baseProtocol 和场景追加的 additionalPrompt。</p>
      * <p>合并策略：章节智能合并，同名章节内容追加而非生成独立章节。</p>
      */
+
     public static class SupplementaryPrompt {
         /** 框架内置协议（不可覆盖）。包含任务规划协议、工具调用规约等核心规则。 */
         private String baseProtocol;
@@ -162,6 +173,7 @@ public class PlanRuleConfig {
         public String getBaseProtocol() {
             return baseProtocol;
         }
+
         /** Sets the base protocol. */
         public void setBaseProtocol(String baseProtocol) {
             this.baseProtocol = baseProtocol;
@@ -171,6 +183,7 @@ public class PlanRuleConfig {
         public String getAdditionalPrompt() {
             return additionalPrompt;
         }
+
         /** Sets the additional prompt. */
         public void setAdditionalPrompt(String additionalPrompt) {
             this.additionalPrompt = additionalPrompt;
@@ -182,6 +195,7 @@ public class PlanRuleConfig {
      *
      * <p>描述特定触发条件下应调用的目标Skill及其优先级。</p>
      */
+
     public static class SkillRoute {
         /** 触发条件描述，例如 "用户首次请求推荐理财产品"。 */
         private String trigger;
@@ -196,6 +210,7 @@ public class PlanRuleConfig {
         public String getTrigger() {
             return trigger;
         }
+
         /** Sets the trigger. */
         public void setTrigger(String trigger) {
             this.trigger = trigger;
@@ -205,6 +220,7 @@ public class PlanRuleConfig {
         public String getSkill() {
             return skill;
         }
+
         /** Sets the skill. */
         public void setSkill(String skill) {
             this.skill = skill;
@@ -214,6 +230,7 @@ public class PlanRuleConfig {
         public int getPriority() {
             return priority;
         }
+
         /** Sets the priority. */
         public void setPriority(int priority) {
             this.priority = priority;

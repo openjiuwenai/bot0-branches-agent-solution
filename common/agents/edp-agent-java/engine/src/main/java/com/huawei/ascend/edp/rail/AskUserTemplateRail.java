@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,14 @@
 
 package com.huawei.ascend.edp.rail;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ScriptResolver;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.ToolConstants;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolMessage;
 import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.singleagent.interrupt.InterruptRequest;
@@ -39,6 +34,10 @@ import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * ask_user 工具话术增强 Rail。
  *
@@ -47,8 +46,8 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public class AskUserTemplateRail extends AgentRail {
 
+public class AskUserTemplateRail extends AgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(AskUserTemplateRail.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String TOOL_ASK_USER = ToolConstants.ASK_USER;
@@ -57,12 +56,14 @@ public class AskUserTemplateRail extends AgentRail {
     /**
      * EDP 专有配置，当前用于读取 utterances.config_path。
      */
+
     private final EdpConfig edpConfig;
 
     /**
      * 话术配置，用于在 beforeToolCall 中预解析 ask_user 话术，
      * 使 InterruptRequest.message 与 interrupt_start.content 一致。
      */
+
     private final SysScriptsConfig scripts;
 
     /**
@@ -70,9 +71,10 @@ public class AskUserTemplateRail extends AgentRail {
      *
      * @param edpConfig EDP 专有配置，提供话术配置路径
      * @param scripts  话术配置，用于预解析 ask_user 话术
+     *
+     * @return result
+     */
 
-    * @return result
-    */
     public AskUserTemplateRail(EdpConfig edpConfig, SysScriptsConfig scripts) {
         this.edpConfig = edpConfig;
         this.scripts = scripts;
@@ -86,6 +88,7 @@ public class AskUserTemplateRail extends AgentRail {
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具名、工具入参、会话等信息
      */
+
     @Override
     /** Before tool call. */
     public void beforeToolCall(AgentCallbackContext ctx) {
@@ -179,6 +182,7 @@ public class AskUserTemplateRail extends AgentRail {
         if (question != null && !String.valueOf(question).isBlank()) {
             return String.valueOf(question);
         }
+
         // 话术由 ScriptsRail（B 面）解析 response_template_* → _edp_response_template，
         // EdpaEventRail.onToolException 读之填 interrupt_start.content；此处仅返回占位。
         return "";

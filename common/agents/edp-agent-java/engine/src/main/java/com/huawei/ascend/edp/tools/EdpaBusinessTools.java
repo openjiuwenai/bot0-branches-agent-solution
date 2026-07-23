@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,6 @@
 
 package com.huawei.ascend.edp.tools;
 
-import java.util.ArrayList;
-import java.util.function.Function;
-import java.util.List;
-import java.util.Map;
-
 import com.huawei.ascend.edp.config.ActRuleConfig;
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.openjiuwen.core.foundation.tool.Tool;
@@ -28,6 +23,11 @@ import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
 /**
  * EDPAgent 内置业务工具聚合入口。
  *
@@ -40,32 +40,36 @@ import org.slf4j.LoggerFactory;
  *
  * @since 2024-01-01
  */
-public final class EdpaBusinessTools {
 
+public final class EdpaBusinessTools {
     /**
      * MCP 沙箱调用工具名。
      */
+
     public static final String TOOL_CALL_MCP = "call_mcp";
 
     /**
      * Versatile Agent 委托调用工具名。
      */
+
     public static final String TOOL_CALL_VERSATILE = "call_versatile";
 
     /**
      * 用户追问工具名。该工具需要触发 OpenJiuwen interrupt，而不是普通工具返回。
      */
+
     public static final String TOOL_ENHANCED_ASK_USER = "ask_user";
 
     /**
      * 任务取消工具名。
      */
+
     public static final String TOOL_CANCEL_TASK = "cancel_task";
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EdpaBusinessTools.class);
 
     private EdpaBusinessTools() {
     }
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(EdpaBusinessTools.class);
 
     /**
      * 构造 EDPAgent 内置业务工具列表，按 actrule.allowed_tools 配置驱动注册。
@@ -82,6 +86,7 @@ public final class EdpaBusinessTools {
      * @param actrule 行为治理配置（从 actrule.yaml 加载），包含 allowed_tools 列表
      * @return 工具列表，顺序与 allowed_tools 一致
      */
+
     public static List<Tool> build(EdpConfig edpConfig, ActRuleConfig actrule) {
         List<Tool> tools = new ArrayList<>();
 
@@ -97,7 +102,7 @@ public final class EdpaBusinessTools {
                 continue;
             }
 
-            Tool tool = EdpaToolRegistry.build(toolName, edpConfig);
+            Tool tool = EdpaToolRegistry.build(toolName, edpConfig).orElse(null);
             if (tool != null) {
                 tools.add(tool);
                 LOGGER.debug("Registered business tool: {}", toolName);

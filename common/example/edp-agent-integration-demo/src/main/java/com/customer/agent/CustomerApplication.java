@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.customer.agent;
 
 import org.springframework.boot.SpringApplication;
@@ -15,14 +19,16 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *
  * <p>客户无需额外配置任何 Bean，引擎自动注册 EdpaExtHandler 为 AgentHandler SPI Bean。
  * 客户只需提供 application.yml 配置和场景目录。
+ *
+ * @since 2026-01-01
  */
+
 @SpringBootApplication(scanBasePackages = {
     "com.customer.agent",
     "com.huawei.ascend.edp",
     "com.openjiuwen.service"
 })
 public class CustomerApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(CustomerApplication.class, args);
     }

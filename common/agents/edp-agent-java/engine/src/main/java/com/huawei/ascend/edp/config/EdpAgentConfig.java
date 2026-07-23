@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@
 package com.huawei.ascend.edp.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 /**
  * edp-agent.yaml 标准配置模型。
  *
@@ -43,8 +43,8 @@ import java.util.Map;
  *
  * @since 2024-01-01
  */
-public class EdpAgentConfig {
 
+public class EdpAgentConfig {
     /** Agent 名称。 */
     private String name;
 
@@ -70,6 +70,7 @@ public class EdpAgentConfig {
     public String getName() {
         return name;
     }
+
     /** Sets the name. */
     public void setName(String name) {
         this.name = name;
@@ -79,6 +80,7 @@ public class EdpAgentConfig {
     public String getDescription() {
         return description;
     }
+
     /** Sets the description. */
     public void setDescription(String description) {
         this.description = description;
@@ -88,6 +90,7 @@ public class EdpAgentConfig {
     public Framework getFramework() {
         return framework;
     }
+
     /** Sets the framework. */
     public void setFramework(Framework framework) {
         this.framework = framework;
@@ -97,6 +100,7 @@ public class EdpAgentConfig {
     public Model getModel() {
         return model;
     }
+
     /** Sets the model. */
     public void setModel(Model model) {
         this.model = model;
@@ -106,6 +110,7 @@ public class EdpAgentConfig {
     public Versatile getVersatile() {
         return versatile;
     }
+
     /** Sets the versatile. */
     public void setVersatile(Versatile versatile) {
         this.versatile = versatile;
@@ -115,6 +120,7 @@ public class EdpAgentConfig {
     public Prompt getPrompt() {
         return prompt;
     }
+
     /** Sets the prompt. */
     public void setPrompt(Prompt prompt) {
         this.prompt = prompt;
@@ -124,6 +130,7 @@ public class EdpAgentConfig {
     public Skills getSkills() {
         return skills;
     }
+
     /** Sets the skills. */
     public void setSkills(Skills skills) {
         this.skills = skills;
@@ -132,6 +139,7 @@ public class EdpAgentConfig {
     /**
      * 框架配置节点。
      */
+
     public static class Framework {
         /** 框架运行选项。 */
         private Options options;
@@ -140,6 +148,7 @@ public class EdpAgentConfig {
         public Options getOptions() {
             return options;
         }
+
         /** Sets the options. */
         public void setOptions(Options options) {
             this.options = options;
@@ -149,6 +158,7 @@ public class EdpAgentConfig {
     /**
      * 框架运行选项。
      */
+
     public static class Options {
         /** ReAct 最大迭代次数。 */
         private int maxIterations;
@@ -160,6 +170,7 @@ public class EdpAgentConfig {
         public int getMaxIterations() {
             return maxIterations;
         }
+
         /** Sets the max iterations. */
         public void setMaxIterations(int maxIterations) {
             this.maxIterations = maxIterations;
@@ -169,6 +180,7 @@ public class EdpAgentConfig {
         public boolean isEnableTaskLoop() {
             return enableTaskLoop;
         }
+
         /** Sets the enable task loop. */
         public void setEnableTaskLoop(boolean enableTaskLoop) {
             this.enableTaskLoop = enableTaskLoop;
@@ -178,6 +190,7 @@ public class EdpAgentConfig {
     /**
      * 模型后端配置。
      */
+
     public static class Model {
         /** 模型 provider，例如 openai-compatible。 */
         private String provider;
@@ -195,6 +208,7 @@ public class EdpAgentConfig {
         public String getProvider() {
             return provider;
         }
+
         /** Sets the provider. */
         public void setProvider(String provider) {
             this.provider = provider;
@@ -204,6 +218,7 @@ public class EdpAgentConfig {
         public String getName() {
             return name;
         }
+
         /** Sets the name. */
         public void setName(String name) {
             this.name = name;
@@ -213,6 +228,7 @@ public class EdpAgentConfig {
         public String getBaseUrl() {
             return baseUrl;
         }
+
         /** Sets the base url. */
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
@@ -222,6 +238,7 @@ public class EdpAgentConfig {
         public String getApiKey() {
             return apiKey;
         }
+
         /** Sets the api key. */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
@@ -231,9 +248,11 @@ public class EdpAgentConfig {
     /**
      * Versatile 服务配置。
      */
+
     public static class Versatile {
         /** Versatile REST 直连地址，含 {conversation_id} 等路径占位符。 */
         private String url;
+
         /** adapter-versatile-agent-java 的 A2A SSE 入口；配置后优先于 url 直连。 */
         @JsonProperty("adapter_a2a_url")
         private String adapterA2aUrl;
@@ -248,6 +267,7 @@ public class EdpAgentConfig {
         public String getUrl() {
             return url;
         }
+
         /** Sets the url. */
         public void setUrl(String url) {
             this.url = url;
@@ -257,6 +277,7 @@ public class EdpAgentConfig {
         public String getAdapterA2aUrl() {
             return adapterA2aUrl;
         }
+
         /** Sets the adapter a2a url. */
         public void setAdapterA2aUrl(String adapterA2aUrl) {
             this.adapterA2aUrl = adapterA2aUrl;
@@ -266,6 +287,7 @@ public class EdpAgentConfig {
         public String getTimeout() {
             return timeout;
         }
+
         /** Sets the timeout. */
         public void setTimeout(String timeout) {
             this.timeout = timeout;
@@ -275,6 +297,7 @@ public class EdpAgentConfig {
         public Map<String, String> getUrlVariables() {
             return urlVariables;
         }
+
         /** Sets the url variables. */
         public void setUrlVariables(Map<String, String> urlVariables) {
             this.urlVariables = urlVariables != null ? urlVariables : new LinkedHashMap<>();
@@ -284,6 +307,7 @@ public class EdpAgentConfig {
         public Map<String, String> getQueryParams() {
             return queryParams;
         }
+
         /** Sets the query params. */
         public void setQueryParams(Map<String, String> queryParams) {
             this.queryParams = queryParams != null ? queryParams : new LinkedHashMap<>();
@@ -293,6 +317,7 @@ public class EdpAgentConfig {
         public Map<String, String> getHeaders() {
             return headers;
         }
+
         /** Sets the headers. */
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : new LinkedHashMap<>();
@@ -302,6 +327,7 @@ public class EdpAgentConfig {
     /**
      * Skill 配置。
      */
+
     public static class Skills {
         private List<String> directories = new ArrayList<>();
         private String mode = "all";
@@ -310,6 +336,7 @@ public class EdpAgentConfig {
         public List<String> getDirectories() {
             return directories;
         }
+
         /** Sets the directories. */
         public void setDirectories(List<String> directories) {
             this.directories = directories != null ? directories : new ArrayList<>();
@@ -319,6 +346,7 @@ public class EdpAgentConfig {
         public String getMode() {
             return mode;
         }
+
         /** Sets the mode. */
         public void setMode(String mode) {
             this.mode = mode;
@@ -328,6 +356,7 @@ public class EdpAgentConfig {
     /**
      * Prompt 配置。
      */
+
     public static class Prompt {
         /** 系统提示词。 */
         private String system;
@@ -336,6 +365,7 @@ public class EdpAgentConfig {
         public String getSystem() {
             return system;
         }
+
         /** Sets the system. */
         public void setSystem(String system) {
             this.system = system;
@@ -348,6 +378,7 @@ public class EdpAgentConfig {
      * 用于在 Spring Bean 创建阶段将环境变量中的密钥类配置注入到 agentConfig 中，
      * 因为 edp-agent.yaml 通过 Jackson 直读加载，不支持 Spring Boot ${...} 占位符替换。
      */
+
     public static class EnvOverrides {
         /** API Key，从 EDP_AGENT_MODEL_API_KEY 环境变量注入。 */
         private String apiKey;
@@ -368,6 +399,7 @@ public class EdpAgentConfig {
         public String getApiKey() {
             return apiKey;
         }
+
         /** Sets the api key. */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
@@ -377,6 +409,7 @@ public class EdpAgentConfig {
         public String getModelProvider() {
             return modelProvider;
         }
+
         /** Sets the model provider. */
         public void setModelProvider(String modelProvider) {
             this.modelProvider = modelProvider;
@@ -386,6 +419,7 @@ public class EdpAgentConfig {
         public String getModelName() {
             return modelName;
         }
+
         /** Sets the model name. */
         public void setModelName(String modelName) {
             this.modelName = modelName;
@@ -395,6 +429,7 @@ public class EdpAgentConfig {
         public String getModelBaseUrl() {
             return modelBaseUrl;
         }
+
         /** Sets the model base url. */
         public void setModelBaseUrl(String modelBaseUrl) {
             this.modelBaseUrl = modelBaseUrl;
@@ -404,6 +439,7 @@ public class EdpAgentConfig {
         public String getVersatileUrl() {
             return versatileUrl;
         }
+
         /** Sets the versatile url. */
         public void setVersatileUrl(String versatileUrl) {
             this.versatileUrl = versatileUrl;

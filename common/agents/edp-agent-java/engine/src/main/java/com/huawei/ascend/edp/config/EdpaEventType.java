@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,8 @@ package com.huawei.ascend.edp.config;
  *
  * @since 2024-01-01
  */
-public enum EdpaEventType {
 
+public enum EdpaEventType {
     // 会话生命周期
     CONVERSATION_START("conversation_start"), CONVERSATION_END("conversation_end"),
 
@@ -76,8 +76,10 @@ public enum EdpaEventType {
     }
 
     /** 事件在线缆上的字符串标识（写入 SSE payload 的 event 字段）。
-    * @return result
-    */
+     *
+     * @return result
+     */
+
     public String wireName() {
         return wireName;
     }

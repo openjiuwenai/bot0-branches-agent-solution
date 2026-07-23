@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,22 @@
 
 package com.huawei.ascend.edp.todo;
 
+import com.huawei.ascend.edp.config.TodoRedisProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
-
-import java.util.ArrayList;
-import java.util.concurrent.TimeUnit;
-import java.util.List;
-import java.util.Properties;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.huawei.ascend.edp.config.TodoRedisProperties;
 import com.openjiuwen.harness.tools.TodoItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+
 /**
  * 基于 Redis 的 Todo 持久化存储。
  *
@@ -42,8 +43,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  *
  * @since 2024-01-01
  */
-public class RedisTodoStore {
 
+public class RedisTodoStore {
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisTodoStore.class);
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -67,6 +68,7 @@ public class RedisTodoStore {
      * <p>初始化阶段调用：PING + INFO server 版本检查。失败抛 {@link IllegalStateException}，
      * Spring 容器启动失败（UC-02）。</p>
      */
+
     public boolean healthCheck() {
         try {
             RedisConnection conn = redis.getConnectionFactory().getConnection();
@@ -74,7 +76,7 @@ public class RedisTodoStore {
                 String pong = conn.ping();
                 LOGGER.debug("[EDPA-DIAG] REDIS_PING response={}", pong);
                 Properties info = conn.info("server");
-                String version = parseRedisVersion(info);
+                String version = parseRedisVersion(info).orElse(null);
                 if (version == null || compareVersion(version, MIN_REDIS_VERSION) < 0) {
                     LOGGER.error("[EDPA-DIAG] REDIS_VERSION_TOO_LOW: {}, require >= {}", version, MIN_REDIS_VERSION);
                     throw new IllegalStateException(
@@ -99,6 +101,7 @@ public class RedisTodoStore {
      * @param rawSessionId 原始 sessionId（不转义，UC-08/UC-15）
      * @return 永不返回 null；未命中或降级时返回空列表
      */
+
     public List<TodoItem> load(String rawSessionId) {
         String key = buildKey(rawSessionId);
         try {
@@ -122,7 +125,7 @@ public class RedisTodoStore {
                 LOGGER.error("[EDPA-DIAG] REDIS_CORRUPT key={} session={}", key, rawSessionId);
                 return new ArrayList<>();
             }
-        } catch (RuntimeException e) {
+        } catch (DataAccessException e) {
             // UC-11: runtime degradation, return empty list
             LOGGER.error("[EDPA-DIAG] REDIS_UNAVAILABLE key={} session={}", key, rawSessionId, e);
             return new ArrayList<>();
@@ -135,6 +138,7 @@ public class RedisTodoStore {
      * @param rawSessionId 原始 sessionId（不转义）
      * @param todos        待持久化的 todo 列表
      */
+
     public void save(String rawSessionId, List<TodoItem> todos) {
         String key = buildKey(rawSessionId);
         try {
@@ -163,6 +167,7 @@ public class RedisTodoStore {
      * @param rawSessionId 原始 sessionId（不转义）
      * @return 存在返回 true；降级或不存在返回 false
      */
+
     public boolean exists(String rawSessionId) {
         String key = buildKey(rawSessionId);
         try {
@@ -170,7 +175,7 @@ public class RedisTodoStore {
             boolean result = Boolean.TRUE.equals(exists);
             LOGGER.debug("[EDPA-DIAG] REDIS_EXISTS key={} session={} exists={}", key, rawSessionId, result);
             return result;
-        } catch (RuntimeException e) {
+        } catch (DataAccessException e) {
             LOGGER.error("[EDPA-DIAG] REDIS_UNAVAILABLE key={} session={}", key, rawSessionId, e);
             return false;
         }
@@ -181,12 +186,13 @@ public class RedisTodoStore {
      *
      * @param rawSessionId 原始 sessionId（不转义）
      */
+
     public void delete(String rawSessionId) {
         String key = buildKey(rawSessionId);
         try {
             Boolean deleted = redis.delete(key);
             LOGGER.debug("[EDPA-DIAG] REDIS_DELETE key={} session={} deleted={}", key, rawSessionId, deleted);
-        } catch (RuntimeException e) {
+        } catch (DataAccessException e) {
             LOGGER.error("[EDPA-DIAG] REDIS_DELETE_FAIL key={} session={}", key, rawSessionId, e);
         }
     }
@@ -196,10 +202,11 @@ public class RedisTodoStore {
      *
      * <p>{@code refresh_on_read=true} 时由 {@link #load} 调用。续期失败仅 WARN，不抛异常。</p>
      */
+
     private void refreshTtl(String key) {
         try {
             redis.expire(key, props.getTodo().getTtlSeconds(), TimeUnit.SECONDS);
-        } catch (RuntimeException e) {
+        } catch (DataAccessException e) {
             LOGGER.warn("[EDPA-DIAG] REDIS_TTL_REFRESH_FAIL key={}", key, e);
         }
     }
@@ -210,6 +217,7 @@ public class RedisTodoStore {
      * <p>格式：{@code {prefix}:todo:{rawSessionId}}，使用原始 sessionId（不转义）。
      * 支持空格、中文、超长 sessionId；集群模式下 Key 不含花括号（hash tag 安全）。</p>
      */
+
     private String buildKey(String rawSessionId) {
         String prefix = props.getTodo().getKeyPrefix();
         return prefix + ":todo:" + rawSessionId;
@@ -218,22 +226,25 @@ public class RedisTodoStore {
     /**
      * 从 Redis INFO server 输出解析版本号。
      */
-    private static String parseRedisVersion(Properties info) {
+
+    private static Optional<String> parseRedisVersion(Properties info) {
         if (info == null) {
-            return null;
+            return Optional.empty();
         }
+
         // Spring 的 Properties 视图：key 为 redis_version
         String v = info.getProperty("redis_version");
         if (v != null) {
-            return v.trim();
+            return Optional.of(v.trim());
         }
+
         // 兜底：遍历原始字符串行
         for (String key : info.stringPropertyNames()) {
             if ("redis_version".equalsIgnoreCase(key)) {
-                return info.getProperty(key).trim();
+                return Optional.of(info.getProperty(key).trim());
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -241,6 +252,7 @@ public class RedisTodoStore {
      *
      * @return 负数表示 a<b，0 表示相等，正数表示 a>b
      */
+
     private static int compareVersion(String a, String b) {
         String[] pa = a.split("\\.");
         String[] pb = b.split("\\.");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,8 +38,8 @@ package com.huawei.ascend.edp.config;
  *
  * @since 2024-01-01
  */
-public class GovernanceConfig {
 
+public class GovernanceConfig {
     /** 身份域配置（planrule.yaml）。 */
     private PlanRuleConfig planrule;
 
@@ -53,6 +53,7 @@ public class GovernanceConfig {
     public PlanRuleConfig getPlanrule() {
         return planrule;
     }
+
     /** Sets the planrule. */
     public void setPlanrule(PlanRuleConfig planrule) {
         this.planrule = planrule;
@@ -62,6 +63,7 @@ public class GovernanceConfig {
     public ActRuleConfig getActrule() {
         return actrule;
     }
+
     /** Sets the actrule. */
     public void setActrule(ActRuleConfig actrule) {
         this.actrule = actrule;
@@ -71,6 +73,7 @@ public class GovernanceConfig {
     public ScriptConfig getScriptconfig() {
         return scriptconfig;
     }
+
     /** Sets the scriptconfig. */
     public void setScriptconfig(ScriptConfig scriptconfig) {
         this.scriptconfig = scriptconfig;
@@ -83,6 +86,7 @@ public class GovernanceConfig {
      *
      * @param scenarioConfig 场景级GovernanceConfig
      */
+
     public void mergeScenarioConfig(GovernanceConfig scenarioConfig) {
         if (scenarioConfig == null) {
             return;
@@ -107,6 +111,7 @@ public class GovernanceConfig {
     /**
      * 合并planrule配置（替代式覆盖）。
      */
+
     private void mergePlanrule(PlanRuleConfig scenarioPlanrule) {
         if (this.planrule == null) {
             this.planrule = scenarioPlanrule;
@@ -133,52 +138,64 @@ public class GovernanceConfig {
             this.planrule.setScenarioDescription(scenarioPlanrule.getScenarioDescription());
         }
 
-        // scope: allowed 替代式覆盖，denied 追加拼接（并集）
-        if (scenarioPlanrule.getScope() != null) {
-            if (this.planrule.getScope() == null) {
-                this.planrule.setScope(scenarioPlanrule.getScope());
-            } else {
-                // allowed: 替代式覆盖
-                if (scenarioPlanrule.getScope().getAllowed() != null) {
-                    this.planrule.getScope().setAllowed(scenarioPlanrule.getScope().getAllowed());
-                }
-                // denied: 追加拼接（并集）
-                if (scenarioPlanrule.getScope().getDenied() != null) {
-                    String frameworkDenied = this.planrule.getScope().getDenied();
-                    String scenarioDenied = scenarioPlanrule.getScope().getDenied();
-                    String mergedDenied = mergeDeniedFields(frameworkDenied, scenarioDenied);
-                    this.planrule.getScope().setDenied(mergedDenied);
-                }
-            }
+        mergePlanruleScope(scenarioPlanrule);
+        mergePlanruleSupplementaryPrompt(scenarioPlanrule);
+        mergePlanruleSkillRouting(scenarioPlanrule);
+    }
+
+    private void mergePlanruleScope(PlanRuleConfig scenarioPlanrule) {
+        if (scenarioPlanrule.getScope() == null) {
+            return;
+        }
+        if (this.planrule.getScope() == null) {
+            this.planrule.setScope(scenarioPlanrule.getScope());
+            return;
+        }
+        // allowed: 替代式覆盖
+        if (scenarioPlanrule.getScope().getAllowed() != null) {
+            this.planrule.getScope().setAllowed(scenarioPlanrule.getScope().getAllowed());
         }
 
-        // supplementaryPrompt: baseProtocol 保持框架内置，additionalPrompt 有序拼接
-        if (scenarioPlanrule.getSupplementaryPrompt() != null) {
-            if (this.planrule.getSupplementaryPrompt() == null) {
-                this.planrule.setSupplementaryPrompt(scenarioPlanrule.getSupplementaryPrompt());
-            } else {
-                // baseProtocol: 保持框架内置，不可覆盖
-                // additionalPrompt: 有序拼接（框架additionalPrompt + 场景additionalPrompt）
-                if (scenarioPlanrule.getSupplementaryPrompt().getAdditionalPrompt() != null) {
-                    String frameworkAdditional = this.planrule.getSupplementaryPrompt().getAdditionalPrompt();
-                    String scenarioAdditional = scenarioPlanrule.getSupplementaryPrompt().getAdditionalPrompt();
-                    String mergedAdditional = mergeSupplementaryPrompts(frameworkAdditional, scenarioAdditional);
-                    this.planrule.getSupplementaryPrompt().setAdditionalPrompt(mergedAdditional);
-                }
-            }
+        // denied: 追加拼接（并集）
+        if (scenarioPlanrule.getScope().getDenied() != null) {
+            String frameworkDenied = this.planrule.getScope().getDenied();
+            String scenarioDenied = scenarioPlanrule.getScope().getDenied();
+            String mergedDenied = mergeDeniedFields(frameworkDenied, scenarioDenied);
+            this.planrule.getScope().setDenied(mergedDenied);
         }
+    }
 
-        // skillRouting: 叠加合并（框架通用路由 + 场景路由）
-        if (scenarioPlanrule.getSkillRouting() != null) {
-            if (this.planrule.getSkillRouting() == null) {
-                this.planrule.setSkillRouting(scenarioPlanrule.getSkillRouting());
-            } else {
-                java.util.List<PlanRuleConfig.SkillRoute> mergedRouting = new java.util.ArrayList<>();
-                mergedRouting.addAll(this.planrule.getSkillRouting()); // 先加框架路由
-                mergedRouting.addAll(scenarioPlanrule.getSkillRouting()); // 再加场景路由
-                this.planrule.setSkillRouting(mergedRouting);
-            }
+    private void mergePlanruleSupplementaryPrompt(PlanRuleConfig scenarioPlanrule) {
+        if (scenarioPlanrule.getSupplementaryPrompt() == null) {
+            return;
         }
+        if (this.planrule.getSupplementaryPrompt() == null) {
+            this.planrule.setSupplementaryPrompt(scenarioPlanrule.getSupplementaryPrompt());
+            return;
+        }
+        // baseProtocol: 保持框架内置，不可覆盖
+        // additionalPrompt: 有序拼接（框架additionalPrompt + 场景additionalPrompt）
+        if (scenarioPlanrule.getSupplementaryPrompt().getAdditionalPrompt() != null) {
+            String frameworkAdditional = this.planrule.getSupplementaryPrompt().getAdditionalPrompt();
+            String scenarioAdditional = scenarioPlanrule.getSupplementaryPrompt().getAdditionalPrompt();
+            String mergedAdditional = mergeSupplementaryPrompts(frameworkAdditional, scenarioAdditional);
+            this.planrule.getSupplementaryPrompt().setAdditionalPrompt(mergedAdditional);
+        }
+    }
+
+    private void mergePlanruleSkillRouting(PlanRuleConfig scenarioPlanrule) {
+        if (scenarioPlanrule.getSkillRouting() == null) {
+            return;
+        }
+        if (this.planrule.getSkillRouting() == null) {
+            this.planrule.setSkillRouting(scenarioPlanrule.getSkillRouting());
+            return;
+        }
+        // 叠加合并（框架通用路由 + 场景路由）
+        java.util.List<PlanRuleConfig.SkillRoute> mergedRouting = new java.util.ArrayList<>();
+        mergedRouting.addAll(this.planrule.getSkillRouting()); // 先加框架路由
+        mergedRouting.addAll(scenarioPlanrule.getSkillRouting()); // 再加场景路由
+        this.planrule.setSkillRouting(mergedRouting);
     }
 
     /**
@@ -190,6 +207,7 @@ public class GovernanceConfig {
      * @param scenarioDenied 场景级 denied 配置
      * @return 合并后的 denied 字段
      */
+
     private String mergeDeniedFields(String frameworkDenied, String scenarioDenied) {
         if (frameworkDenied == null || frameworkDenied.isEmpty()) {
             return scenarioDenied;
@@ -230,6 +248,7 @@ public class GovernanceConfig {
      * @param scenarioAdditional 场景级 additionalPrompt
      * @return 合并后的 additionalPrompt
      */
+
     private String mergeSupplementaryPrompts(String frameworkAdditional, String scenarioAdditional) {
         if (frameworkAdditional == null || frameworkAdditional.isEmpty()) {
             return scenarioAdditional;
@@ -246,6 +265,7 @@ public class GovernanceConfig {
     /**
      * 合并actrule配置（继承式覆盖）。
      */
+
     private void mergeActrule(ActRuleConfig scenarioActrule) {
         if (this.actrule == null) {
             this.actrule = scenarioActrule;
@@ -278,42 +298,51 @@ public class GovernanceConfig {
         if (scenarioActrule.getSkillMode() != null) {
             this.actrule.setSkillMode(scenarioActrule.getSkillMode());
         }
+
         // toolLimits: 逐key合并，场景只声明需要调整的工具，限制值取min（场景不能放宽框架限制）
-        if (scenarioActrule.getToolLimits() != null) {
-            if (this.actrule.getToolLimits() == null) {
-                this.actrule.setToolLimits(scenarioActrule.getToolLimits());
-            } else {
-                // 逐key合并：框架toolLimits + 场景toolLimits，同key取min
-                java.util.Map<String, Integer> mergedToolLimits = new java.util.HashMap<>(this.actrule.getToolLimits());
-                for (java.util.Map.Entry<String, Integer> entry : scenarioActrule.getToolLimits().entrySet()) {
-                    String toolName = entry.getKey();
-                    Integer scenarioLimit = entry.getValue();
-                    Integer frameworkLimit = mergedToolLimits.get(toolName);
-                    // 场景只能设更小值，不能放宽框架限制
-                    if (frameworkLimit != null) {
-                        mergedToolLimits.put(toolName, Math.min(frameworkLimit, scenarioLimit));
-                    } else {
-                        // 框架无该工具限制，场景新增限制
-                        mergedToolLimits.put(toolName, scenarioLimit);
-                    }
-                }
-                this.actrule.setToolLimits(mergedToolLimits);
-            }
-        }
+        mergeActruleToolLimits(scenarioActrule);
 
         // todolistEntries: 替代式覆盖（场景提供完整定义，框架默认无值）
         if (scenarioActrule.getTodolistEntries() != null) {
             this.actrule.setTodolistEntries(scenarioActrule.getTodolistEntries());
         }
+
         // todolistDynamicPaths: 替代式覆盖
         if (scenarioActrule.getTodolistDynamicPaths() != null) {
             this.actrule.setTodolistDynamicPaths(scenarioActrule.getTodolistDynamicPaths());
         }
     }
 
+    private void mergeActruleToolLimits(ActRuleConfig scenarioActrule) {
+        if (scenarioActrule.getToolLimits() == null) {
+            return;
+        }
+        if (this.actrule.getToolLimits() == null) {
+            this.actrule.setToolLimits(scenarioActrule.getToolLimits());
+            return;
+        }
+        // 逐key合并：框架toolLimits + 场景toolLimits，同key取min
+        java.util.Map<String, Integer> mergedToolLimits = new java.util.HashMap<>(this.actrule.getToolLimits());
+        for (java.util.Map.Entry<String, Integer> entry : scenarioActrule.getToolLimits().entrySet()) {
+            String toolName = entry.getKey();
+            Integer scenarioLimit = entry.getValue();
+            Integer frameworkLimit = mergedToolLimits.get(toolName);
+
+            // 场景只能设更小值，不能放宽框架限制
+            if (frameworkLimit != null) {
+                mergedToolLimits.put(toolName, Math.min(frameworkLimit, scenarioLimit));
+            } else {
+                // 框架无该工具限制，场景新增限制
+                mergedToolLimits.put(toolName, scenarioLimit);
+            }
+        }
+        this.actrule.setToolLimits(mergedToolLimits);
+    }
+
     /**
      * 合成scriptconfig配置（逐字段继承式覆盖）。
      */
+
     private void mergeScriptconfig(ScriptConfig scenarioScriptconfig) {
         if (this.scriptconfig == null) {
             this.scriptconfig = scenarioScriptconfig;
@@ -339,6 +368,7 @@ public class GovernanceConfig {
     /**
      * 合并 askUserConfirm 配置（继承式覆盖，逐字段合并）。
      */
+
     private void mergeAskUserConfirm(ScriptConfig.AskUserConfirm scenarioConfirm) {
         if (this.scriptconfig.getAskUserConfirm() == null) {
             this.scriptconfig.setAskUserConfirm(new ScriptConfig.AskUserConfirm());
@@ -356,6 +386,7 @@ public class GovernanceConfig {
     /**
      * 合并 generalScripts 配置（继承式覆盖，逐字段合并）。
      */
+
     private void mergeGeneralScripts(ScriptConfig.GeneralScripts scenarioScripts) {
         if (this.scriptconfig.getGeneralScripts() == null) {
             this.scriptconfig.setGeneralScripts(new ScriptConfig.GeneralScripts());
@@ -403,6 +434,7 @@ public class GovernanceConfig {
     /**
      * 合并thinkChunkScripts配置（继承式覆盖）。
      */
+
     private void mergeThinkChunkScripts(ScriptConfig.ThinkChunkScripts scenarioThinkChunk) {
         if (this.scriptconfig.getThinkChunkScripts() == null) {
             this.scriptconfig.setThinkChunkScripts(scenarioThinkChunk);
@@ -427,6 +459,7 @@ public class GovernanceConfig {
     /**
      * 合并固定话术帧配置（继承式覆盖各字段）。
      */
+
     private void mergeFixedScripts(ScriptConfig.ThinkChunkFixedScripts def,
             ScriptConfig.ThinkChunkFixedScripts scenario) {
         // enabled: 布尔开关，继承式覆盖

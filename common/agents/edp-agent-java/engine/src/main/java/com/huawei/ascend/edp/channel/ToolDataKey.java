@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ package com.huawei.ascend.edp.channel;
  *
  * @since 2024-01-01
  */
-public class ToolDataKey {
 
+public class ToolDataKey {
     private final String tenantId;
     private final String agentId;
     private final String contextId;
@@ -41,14 +41,17 @@ public class ToolDataKey {
     public String getTenantId() {
         return tenantId;
     }
+
     /** Gets the agent id. */
     public String getAgentId() {
         return agentId;
     }
+
     /** Gets the context id. */
     public String getContextId() {
         return contextId;
     }
+
     /** Gets the task id. */
     public String getTaskId() {
         return taskId;

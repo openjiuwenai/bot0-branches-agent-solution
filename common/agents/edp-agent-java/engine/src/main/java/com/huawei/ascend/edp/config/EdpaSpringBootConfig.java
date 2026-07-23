@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package com.huawei.ascend.edp.config;
 
+import com.huawei.ascend.edp.config.SandboxConfig;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.huawei.ascend.edp.config.SandboxConfig;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * EDPAgent Spring Boot 配置模型。
  *
@@ -45,18 +45,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * edpa.agent.versatile.adapter-a2a-url → versatile.adapterA2aUrl
  * edpa.agent.versatile.timeout     → versatile.timeout
  * edpa.agent.versatile.url-variables   → versatile.urlVariables
- * edpa.agent.versatile.query-params    → versatile.queryParams
- * edpa.agent.versatile.headers     → versatile.headers
+ * edpa.agent.versatile.query-params    -> versatile.queryParams
+ * edpa.agent.versatile.headers     -> versatile.headers
  * </pre>
- */
-@ConfigurationProperties(prefix = "edpa.agent")
-/**
- * EdpaSpringBootConfig class.
  *
  * @since 2024-01-01
  */
-public class EdpaSpringBootConfig {
 
+@ConfigurationProperties(prefix = "edpa.agent")
+public class EdpaSpringBootConfig {
     /** 场景配置路径。 */
     private String scenarioHome = "../scenarios/wealth-demo";
 
@@ -76,6 +73,7 @@ public class EdpaSpringBootConfig {
     public String getScenarioHome() {
         return scenarioHome;
     }
+
     /** Sets the scenario home. */
     public void setScenarioHome(String scenarioHome) {
         this.scenarioHome = scenarioHome;
@@ -85,6 +83,7 @@ public class EdpaSpringBootConfig {
     public ModelConfig getModel() {
         return model;
     }
+
     /** Sets the model. */
     public void setModel(ModelConfig model) {
         this.model = model;
@@ -94,6 +93,7 @@ public class EdpaSpringBootConfig {
     public VersatileConfig getVersatile() {
         return versatile;
     }
+
     /** Sets the versatile. */
     public void setVersatile(VersatileConfig versatile) {
         this.versatile = versatile;
@@ -103,6 +103,7 @@ public class EdpaSpringBootConfig {
     public McpSseConfig getMcpsse() {
         return mcpsse;
     }
+
     /** Sets the mcpsse. */
     public void setMcpsse(McpSseConfig mcpsse) {
         this.mcpsse = mcpsse;
@@ -112,6 +113,7 @@ public class EdpaSpringBootConfig {
     public SandboxConfig getSandbox() {
         return sandbox;
     }
+
     /** Sets the sandbox. */
     public void setSandbox(SandboxConfig sandbox) {
         this.sandbox = sandbox;
@@ -120,6 +122,7 @@ public class EdpaSpringBootConfig {
     /**
      * 模型后端配置。
      */
+
     public static class ModelConfig {
         /** 模型 provider，例如 openai-compatible。 */
         private String provider;
@@ -137,6 +140,7 @@ public class EdpaSpringBootConfig {
         public String getProvider() {
             return provider;
         }
+
         /** Sets the provider. */
         public void setProvider(String provider) {
             this.provider = provider;
@@ -146,6 +150,7 @@ public class EdpaSpringBootConfig {
         public String getName() {
             return name;
         }
+
         /** Sets the name. */
         public void setName(String name) {
             this.name = name;
@@ -155,6 +160,7 @@ public class EdpaSpringBootConfig {
         public String getBaseUrl() {
             return baseUrl;
         }
+
         /** Sets the base url. */
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
@@ -164,6 +170,7 @@ public class EdpaSpringBootConfig {
         public String getApiKey() {
             return apiKey;
         }
+
         /** Sets the api key. */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
@@ -173,6 +180,7 @@ public class EdpaSpringBootConfig {
     /**
      * Versatile 服务配置。
      */
+
     public static class VersatileConfig {
         /** Versatile REST 直连地址，含 {conversation_id} 等路径占位符。 */
         private String url;
@@ -196,6 +204,7 @@ public class EdpaSpringBootConfig {
         public String getUrl() {
             return url;
         }
+
         /** Sets the url. */
         public void setUrl(String url) {
             this.url = url;
@@ -205,6 +214,7 @@ public class EdpaSpringBootConfig {
         public String getAdapterA2aUrl() {
             return adapterA2aUrl;
         }
+
         /** Sets the adapter a2a url. */
         public void setAdapterA2aUrl(String adapterA2aUrl) {
             this.adapterA2aUrl = adapterA2aUrl;
@@ -214,6 +224,7 @@ public class EdpaSpringBootConfig {
         public String getTimeout() {
             return timeout;
         }
+
         /** Sets the timeout. */
         public void setTimeout(String timeout) {
             this.timeout = timeout;
@@ -223,6 +234,7 @@ public class EdpaSpringBootConfig {
         public Map<String, String> getUrlVariables() {
             return urlVariables;
         }
+
         /** Sets the url variables. */
         public void setUrlVariables(Map<String, String> urlVariables) {
             this.urlVariables = urlVariables != null ? urlVariables : new LinkedHashMap<>();
@@ -232,6 +244,7 @@ public class EdpaSpringBootConfig {
         public Map<String, String> getQueryParams() {
             return queryParams;
         }
+
         /** Sets the query params. */
         public void setQueryParams(Map<String, String> queryParams) {
             this.queryParams = queryParams != null ? queryParams : new LinkedHashMap<>();
@@ -241,6 +254,7 @@ public class EdpaSpringBootConfig {
         public Map<String, String> getHeaders() {
             return headers;
         }
+
         /** Sets the headers. */
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : new LinkedHashMap<>();
@@ -250,6 +264,7 @@ public class EdpaSpringBootConfig {
     /**
      * MCP SSE 连接配置。
      */
+
     public static class McpSseConfig {
         /** MCP SSE 主 URL（灰度：wap_grayFlag 以 JD 开头时使用）。 */
         private String masterUrl;
@@ -267,6 +282,7 @@ public class EdpaSpringBootConfig {
         public String getMasterUrl() {
             return masterUrl;
         }
+
         /** Sets the master url. */
         public void setMasterUrl(String masterUrl) {
             this.masterUrl = masterUrl;
@@ -276,6 +292,7 @@ public class EdpaSpringBootConfig {
         public String getStandbyUrl() {
             return standbyUrl;
         }
+
         /** Sets the standby url. */
         public void setStandbyUrl(String standbyUrl) {
             this.standbyUrl = standbyUrl;
@@ -285,6 +302,7 @@ public class EdpaSpringBootConfig {
         public String getAccessToken() {
             return accessToken;
         }
+
         /** Sets the access token. */
         public void setAccessToken(String accessToken) {
             this.accessToken = accessToken;
@@ -294,6 +312,7 @@ public class EdpaSpringBootConfig {
         public String getAppName() {
             return appName;
         }
+
         /** Sets the app name. */
         public void setAppName(String appName) {
             this.appName = appName;

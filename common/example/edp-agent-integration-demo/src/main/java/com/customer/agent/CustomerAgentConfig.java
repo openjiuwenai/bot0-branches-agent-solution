@@ -1,20 +1,20 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.customer.agent;
 
 import com.huawei.ascend.edp.handler.EdpaExtHandler;
-
-import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 import com.openjiuwen.core.foundation.tool.ToolCard;
+import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.DeepAgentRail;
 import com.openjiuwen.service.spec.spi.AgentHandler;
-
 import jakarta.annotation.PostConstruct;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,10 +36,12 @@ import java.util.Map;
  * 此时 EDPA 引擎已完成初始化，DeepAgent 已就绪。
  *
  * <p>注意：本类仅作为示例，客户可根据实际需求修改或删除。
+ *
+ * @since 2026-01-01
  */
+
 @Configuration
 public class CustomerAgentConfig {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(CustomerAgentConfig.class);
 
     /** AgentHandler 由 EDPA 引擎自动注入，实际类型为 EdpaExtHandler */
@@ -50,6 +52,7 @@ public class CustomerAgentConfig {
      *
      * @param agentHandler EDPA 引擎注册的 AgentHandler
      */
+
     public CustomerAgentConfig(AgentHandler agentHandler) {
         this.agentHandler = agentHandler;
     }
@@ -63,6 +66,7 @@ public class CustomerAgentConfig {
      * 3. 注册自定义工具（greeting）
      * 4. 注册自定义 Rail（CustomerAuditRail）
      */
+
     @PostConstruct
     public void registerCustomExtensions() {
         // 校验：确保 AgentHandler 是 EDPA 引擎的 EdpaExtHandler
@@ -112,6 +116,7 @@ public class CustomerAgentConfig {
      *
      * @return 配置好的 LocalFunction 实例
      */
+
     private LocalFunction buildGreetingTool() {
         // 构建工具参数 schema（JSON Schema 格式）
         Map<String, Object> paramsSchema = new HashMap<>();
@@ -163,14 +168,15 @@ public class CustomerAgentConfig {
      *   LogRail(10) → CustomerAuditRail(15) → ... → 模型调用 → ...(倒序)
      * </pre>
      */
-    public static class CustomerAuditRail extends DeepAgentRail {
 
+    public static class CustomerAuditRail extends DeepAgentRail {
         /**
          * Rail 优先级：数字越小越先执行。
          * 15 = 在内置 LogRail(10) 之后执行。
          *
          * @return 优先级值
          */
+
         @Override
         public int priority() {
             return 15;
@@ -181,6 +187,7 @@ public class CustomerAgentConfig {
          *
          * @param ctx 回调上下文，包含 Session、消息历史等信息
          */
+
         @Override
         public void beforeModelCall(AgentCallbackContext ctx) {
             String sessionId = ctx.getSession() != null ? ctx.getSession().getSessionId() : "unknown";
@@ -192,6 +199,7 @@ public class CustomerAgentConfig {
          *
          * @param ctx 回调上下文，包含 Session、模型响应结果等信息
          */
+
         @Override
         public void afterModelCall(AgentCallbackContext ctx) {
             String sessionId = ctx.getSession() != null ? ctx.getSession().getSessionId() : "unknown";

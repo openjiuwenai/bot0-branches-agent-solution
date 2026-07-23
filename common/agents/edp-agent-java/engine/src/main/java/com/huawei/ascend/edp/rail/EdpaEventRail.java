@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,6 @@
 
 package com.huawei.ascend.edp.rail;
 
-import java.io.IOException;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-
 import com.huawei.ascend.edp.config.EdpaEventType;
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ScriptResolver;
@@ -27,7 +23,7 @@ import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.ToolConstants;
 import com.huawei.ascend.edp.enhancer.TodoSessionResolver;
 import com.huawei.ascend.edp.todo.RedisTodoStore;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.openjiuwen.core.common.exception.BaseError;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
@@ -43,22 +39,23 @@ import com.openjiuwen.harness.rails.TaskPlanningRail;
 import com.openjiuwen.harness.tools.TodoItem;
 import com.openjiuwen.harness.tools.TodoStatus;
 import com.openjiuwen.harness.tools.TodoTool;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
 /**
  * EDPAgent 思维链事件发射 Rail。
  *
@@ -90,9 +87,10 @@ import java.util.stream.Stream;
  *
  * @since 2024-01-01
  */
-public class EdpaEventRail extends DeepAgentRail {
 
+public class EdpaEventRail extends DeepAgentRail {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpaEventRail.class);
+
     /** 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。 */
     private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
 
@@ -114,10 +112,18 @@ public class EdpaEventRail extends DeepAgentRail {
     /** 标记是否需要发射 planning_start（有 todo 规划时）。 */
     private static final String KEY_PENDING_PLANNING_START = "_edp_pending_planning_start";
 
+    /** 阶段标识 extra key */
+    private static final String KEY_THINK_TURN_COUNT = "_edp_think_turn_count";
+    private static final String KEY_JUST_RESUMED = "_edp_just_resumed";
+
+    /** 固定帧配置 key 前缀 */
+    private static final String FK_PREFIX = "scriptconfig.think_chunk_scripts.think_chunk_fixed_scripts.";
+
     /**
      * 上一轮发射的 todolist 指纹，用于检测任务列表是否变化并决定是否重推。
      * key 为 sessionId，value 为 todolist 内容指纹。
      */
+
     private final Map<String, String> lastTodolistFingerprint = new ConcurrentHashMap<>();
 
     /**
@@ -125,12 +131,14 @@ public class EdpaEventRail extends DeepAgentRail {
      * 用于在 interrupt 恢复时pair发射 interrupt_end。
      * key 为 sessionId，value 为 true/false。
      */
+
     private final Map<String, Boolean> interruptActive = new ConcurrentHashMap<>();
 
     /**
      * 当前活跃中断的 interrupt_id（UUID），与 interruptActive 同生命周期，跨轮持久化。
      * onToolException 生成 UUID 存入，afterToolCall interrupt_end 取出，afterInvoke 兜底清理。
      */
+
     private final Map<String, String> interruptIdMap = new ConcurrentHashMap<>();
 
     /**
@@ -138,6 +146,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * key 为 sessionId。afterModelCall 发 think_start 前置 true，发 think_end 后置 false。
      * 用于 onModelException 关闭本轮 think_start，保证 think_start == think_end（Rule 2）。
      */
+
     private final Map<String, Boolean> thinkOpen = new ConcurrentHashMap<>();
 
     /**
@@ -145,6 +154,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * key 为 sessionId。beforeToolCall 发 tool_start 前置 true，afterToolCall 发 tool_end 后置 false。
      * 用于 onToolException 关闭本轮 tool_start，保证 tool_start == tool_end（Rule 6）。
      */
+
     private final Map<String, Boolean> toolOpen = new ConcurrentHashMap<>();
 
     /**
@@ -152,6 +162,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * key 为 sessionId。onModelException/onToolException(非中断) 发 conversation_end 后置 true，
      * afterInvoke 检查此标记避免重复发射。
      */
+
     private final Map<String, Boolean> conversationClosed = new ConcurrentHashMap<>();
 
     /**
@@ -159,22 +170,26 @@ public class EdpaEventRail extends DeepAgentRail {
      * 外层 key 为 sessionId，内层 key 为 todoId，value 为上一轮的 TodoStatus。
      * 核心用途：区分 PENDING→CANCELLED（路径切换，不发 start/end）与 IN_PROGRESS→CANCELLED（执行中取消，发 end）。
      */
+
     private final Map<String, Map<String, TodoStatus>> prevTodoStatus = new ConcurrentHashMap<>();
 
     /**
      * 被规划前置守卫blocked（_plan_first_block）的业务工具 callId 集合，
      * afterToolCall 据此跳过 tool_end 发射（未真正执行的工具不发pair事件）。
      */
+
     private final Set<String> skippedToolCallIds = ConcurrentHashMap.newKeySet();
 
     /**
      * 持有 DeepAgent 引用，用于在 afterToolCall 中查找 TaskPlanningRail 读取最新 todos 缓存。
      */
+
     private final DeepAgent deepAgent;
 
     /**
      * 话术配置（A 面：生命周期事件话术 content）。null 表示不填 content（等价现状，保回归安全）。
      */
+
     private final SysScriptsConfig scripts;
 
     /** lazy 创建 TodoTool，路径与 Core TaskPlanningRail / EdpaTodoRail 一致（.todo）。 */
@@ -217,15 +232,18 @@ public class EdpaEventRail extends DeepAgentRail {
      * 前端跨轮自行持久化状态。本方法只静默初始化 todo 状态追踪（指纹 + prevTodoStatus），
      * 供 afterToolCall 检测状态转移，但不发任何事件。</p>
      */
+
     @Override
     /** Before invoke. */
     public void beforeInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
         conversationClosed.remove(sid);
+
         // 会话开始时 workspace 一定就绪，提前缓存 .todo 根目录路径
         if (todoRootPath == null) {
             getTodoTool();
         }
+
         // ★ 方案 B：清理非当前会话的旧 .todo 残留目录（避免文件无限堆积）
         // 在 beforeInvoke 时清理，不影响多轮会话中的文件读取（只清理别的会话目录）
         cleanupStaleTodoDirs(sid);
@@ -257,6 +275,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 §7.1 明确：beforeModelCall 不发任何事件。think_start/think_chunk/think_end
      * 全部在 afterModelCall 中根据 LLM 返回的 reasoning_content 决定是否发射（§7.2）。</p>
      */
+
     @Override
     /** Before model call. */
     public void beforeModelCall(AgentCallbackContext ctx) {
@@ -264,21 +283,9 @@ public class EdpaEventRail extends DeepAgentRail {
         // ★ 缓存用户原始 query 文本（供 afterModelCall 的 think_chunk query_patterns 匹配使用）
         if (ctx.getInputs() instanceof ModelCallInputs inputs) {
             List<?> messages = inputs.getMessages();
-            if (messages != null && !messages.isEmpty()) {
-                // 从后往前找最后一条 UserMessage（跳过 ToolMessage/AssistantMessage）
-                for (int i = messages.size() - 1; i >= 0; i--) {
-                    Object msg = messages.get(i);
-                    if (msg == null) {
-                        continue;
-                    }
-                    if (msg instanceof UserMessage um) {
-                        String text = um.getContentAsString();
-                        if (text != null && !text.isBlank()) {
-                            ctx.getExtra().put("_edp_user_input", text);
-                            break;
-                        }
-                    }
-                }
+            String text = findLastUserMessageText(messages);
+            if (text != null) {
+                ctx.getExtra().put("_edp_user_input", text);
             }
         }
     }
@@ -296,6 +303,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>think_end 在 final_answer_start 之前（Rule 3 / C4）。
      * think_start 数 == think_end 数（每轮 LLM 推理一对，严格pair，无 quirk，Rule 2）。</p>
      */
+
     /**
      * afterModelCall：有 think 内容 → think_start → think_chunk → think_end（每轮一对）；
      * finish_reason=stop 且无 tool_calls → final_answer 对。
@@ -303,6 +311,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>think_chunk 内容：优先 reasoning_content（推理模型），无则取 content（非推理模型回退）。
      * 每轮 LLM 调用发一对 think_start/think_end，严格pair。</p>
      */
+
     @Override
     /** After model call. */
     public void afterModelCall(AgentCallbackContext ctx) {
@@ -328,7 +337,7 @@ public class EdpaEventRail extends DeepAgentRail {
             for (ToolCall tc : msg.getToolCalls()) {
                 if (TOOL_TODO_CREATE.equals(tc.getName())) {
                     ctx.getExtra().put(KEY_PENDING_PLANNING_START, true);
-                    LOGGER.info("[EDPA-DIAG] afterModelCall sid={} -> 检测到 todo_create，mark emit planning_start", sid);
+                    LOGGER.info("[EDPA-DIAG] afterModelCall sid={} -> detected todo_create, mark emit planning_start", sid);
                     break;
                 }
             }
@@ -365,6 +374,7 @@ public class EdpaEventRail extends DeepAgentRail {
             emit(ctx, EdpaEventType.FINAL_ANSWER_CHUNK, Map.of("content", content));
             emit(ctx, EdpaEventType.FINAL_ANSWER_END, Map.of());
         }
+
         // ③ 有 tool_calls → 不发 final_answer，由后续 beforeToolCall/afterToolCall 处理
     }
 
@@ -375,6 +385,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * todo_create / todo_modify / ask_user / read_file 不发 tool_start。
      * PLAN_FIRST blocked（_plan_first_block=true）时不发 tool_start，记录 id 供 afterToolCall 跳过 tool_end。</p>
      */
+
     @Override
     /** Before tool call. */
     public void beforeToolCall(AgentCallbackContext ctx) {
@@ -386,6 +397,7 @@ public class EdpaEventRail extends DeepAgentRail {
             return;
         }
         String sid = sessionId(ctx);
+
         // PLAN_FIRST 真blocked（EdpaTodoRail 未规划 todo 时blocked，工具未执行）→ 不发 tool_start；
         // 标记需要发射 planning_start（在 afterModelCall 中发射）
         if (Boolean.TRUE.equals(ctx.getExtra().get(ScriptConstants.KEY_PLAN_FIRST_BLOCK))) {
@@ -397,10 +409,12 @@ public class EdpaEventRail extends DeepAgentRail {
             }
             return;
         }
+
         // 中断接管型（_skip_tool=true 但非 PLAN_FIRST）或真实执行：工具已执行/将执行 → 发 tool_start
         String mode = Boolean.TRUE.equals(ctx.getExtra().get(ScriptConstants.KEY_SKIP_TOOL))
                 ? "interrupt-handled"
                 : "real-exec";
+
         // 缓存 call_versatile 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，对齐 Python _last_query_intent）
         String queryIntent = "";
         if (TOOL_CALL_VERSATILE.equals(toolName)) {
@@ -411,13 +425,15 @@ public class EdpaEventRail extends DeepAgentRail {
                 LOGGER.info("[EDPA-DIAG] beforeToolCall tool={} cached query_intent={}", toolName, queryIntent);
             }
         }
+
         // UC-A03: tool_start 话术来源对齐 Python execution_limit_rail.py L228-234
         // 优先级: query_intent_tool_text[intent].tool_start > query_description > general_scripts.tool_start
         Map<String, Object> argsForStart = normalizeToolArgs(inputs.getToolArgs());
         Object qd = argsForStart.get("query_description");
         String toolStartContent;
+
         // 优先1: query_intent_tool_text[intent].tool_start
-        String matched = ScriptResolver.resolveToolStartByIntent(scripts, queryIntent, toolName);
+        String matched = ScriptResolver.resolveToolStartByIntent(scripts, queryIntent, toolName).orElse(null);
         if (matched != null && !matched.isBlank()) {
             toolStartContent = matched;
         } else if (qd != null && !String.valueOf(qd).isBlank() && !"null".equals(String.valueOf(qd))) {
@@ -447,6 +463,7 @@ public class EdpaEventRail extends DeepAgentRail {
      *     <li>todo_create/todo_modify → todolist_start/item/end（指纹变化时）+ todo_start/todo_end（基于状态转移，§7.3）</li>
      * </ul>
      */
+
     @Override
     /** After tool call. */
     public void afterToolCall(AgentCallbackContext ctx) {
@@ -458,129 +475,151 @@ public class EdpaEventRail extends DeepAgentRail {
 
         // 业务工具完成 → tool_end
         if (isBusinessTool(toolName)) {
-            ToolCall tc = inputs.getToolCall();
-            if (tc != null && tc.getId() != null && skippedToolCallIds.remove(tc.getId())) {
-                LOGGER.info("[EDPA-DIAG] afterToolCall tool={} Skip (PLAN_FIRST blocked, skip tool_end)", toolName);
-                return;
-            }
-            Object toolResult = inputs.getToolResult();
-            // UC-A05: 解析 ui_notice（对齐 Python versatile_interrupt_rail.py L196-230）
-            // 两个来源：
-            //   ① tool_result 中的 ui_notice（外部工具直接注入）
-            //   ② ctx.getExtra() 中的 _edp_ui_notice（VersatileRail 归一化脚本注入后写入 extra）
-            String uiNoticeEvent = null;
-            String uiNoticeText = null;
-            if (toolResult instanceof Map<?, ?> resultMap) {
-                Object uiNoticeObj = resultMap.get("ui_notice");
-                // 兼容 VersatileRail 归一化后写入 extra 的场景
-                if (uiNoticeObj == null) {
-                    Object extraNotice = ctx.getExtra().get(ScriptConstants.KEY_UI_NOTICE);
-                    if (extraNotice instanceof Map<?, ?> em) {
-                        uiNoticeObj = em;
-                        ctx.getExtra().remove(ScriptConstants.KEY_UI_NOTICE);
-                    }
-                }
-                if (uiNoticeObj instanceof Map<?, ?> uiNotice) {
-                    Object eventObj = uiNotice.get("event");
-                    Object keyObj = uiNotice.get("key");
-                    if (eventObj != null && keyObj != null) {
-                        String noticeEvent = String.valueOf(eventObj).trim();
-                        String noticeKey = String.valueOf(keyObj).trim();
-                        if (!noticeEvent.isEmpty() && !noticeKey.isEmpty() && scripts != null) {
-                            String noticeText = scripts.getTemplate(noticeKey);
-                            if (noticeText != null && !noticeText.isBlank()) {
-                                if ("interrupt_start".equals(noticeEvent)) {
-                                    // 中断话术：走 response_template 机制，由 afterInvoke 发射
-                                    ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, noticeText);
-                                    LOGGER.info("[EDPA-DIAG] ui_notice interrupt_start: key={}, text={}", noticeKey,
-                                            noticeText);
-                                } else {
-                                    // 非中断话术（tool_end/todo_end）：uiNoticeText 会被后续优先级逻辑使用
-                                    uiNoticeEvent = noticeEvent;
-                                    uiNoticeText = noticeText;
-                                    LOGGER.info("[EDPA-DIAG] ui_notice {}: key={}, text={}", noticeEvent, noticeKey,
-                                            noticeText);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // UC-A05: ui_notice > query_intent_tool_text[intent].tool_end > general_scripts.tool_end
-            // ui_notice 已通过上面逻辑设置 uiNoticeText
-            String qi = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, ""));
-            String toolEndContent;
-            if (uiNoticeText != null && !uiNoticeText.isBlank()) {
-                toolEndContent = uiNoticeText;
-            } else {
-                // 优先2: query_intent_tool_text[intent].tool_end
-                String matched = ScriptResolver.resolveToolEndByIntent(scripts, qi, toolName);
-                if (matched != null && !matched.isBlank()) {
-                    toolEndContent = matched;
-                } else {
-                    // 兜底: general_scripts.tool_end
-                    toolEndContent = ScriptResolver.resolve(scripts, EdpaEventType.TOOL_END.wireName(),
-                            Map.of("tool_name", safe(toolName)));
-                }
-            }
-            // UC-A05: ui_notice.event=="interrupt_start" 时，不发射 tool_end
-            // （interrupt_start 由 afterInvoke 末尾 exit 路径统一发射，避免 tool_end + interrupt_start 重复话术）
-            boolean skipToolEndForInterrupt = uiNoticeEvent != null && "interrupt_start".equals(uiNoticeEvent);
-            if (!skipToolEndForInterrupt) {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("tool", toolName);
-                payload.put("data", toolResult != null ? toolResult : "");
-                payload.put("content", toolEndContent);
-                LOGGER.info(
-                        "[EDPA-DIAG] afterToolCall tool={} queryIntent={} uiNoticeText={} -> emit tool_end content={}",
-                        toolName, qi, uiNoticeText != null ? "SET" : "null", toolEndContent);
-                emit(ctx, EdpaEventType.TOOL_END, payload);
-            } else {
-                LOGGER.info(
-                        "[EDPA-DIAG] afterToolCall tool={} uiNoticeEvent=interrupt_start "
-                                + "-> skip tool_end (handled by exit interrupt)",
-                        toolName);
-            }
-            // UC-A05: ui_notice 的 todo_end 事件直发（interrupt_start 已由 exit 路径处理，此处不重复）
-            if (uiNoticeEvent != null && "todo_end".equals(uiNoticeEvent)) {
-                emit(ctx, EdpaEventType.TODO_END, Map.of("content", uiNoticeText, "status", "done"));
-            }
-            toolOpen.put(sid, false);
+            emitBusinessToolEnd(ctx, inputs, toolName, sid);
             return;
         }
 
         // ask_user 中断恢复：检测 _skip_tool 标记 + interruptActive pair
         if (TOOL_ASK_USER.equals(toolName) && Boolean.TRUE.equals(ctx.getExtra().get(ScriptConstants.KEY_SKIP_TOOL))) {
-            if (interruptActive.getOrDefault(sid, false)) {
-                String interruptId = interruptIdMap.remove(sid);
-                LOGGER.info("[EDPA-DIAG] afterToolCall tool={} interrupt resume -> emit interrupt_end(interrupt_id={})",
-                        toolName, interruptId);
-                Map<String, Object> endPayload = new java.util.LinkedHashMap<>();
-                endPayload.put("tool", toolName);
-                endPayload.put("interrupt_id", interruptId != null ? interruptId : "");
-                emit(ctx, EdpaEventType.INTERRUPT_END, endPayload);
-                interruptActive.remove(sid);
-                // 标记刚刚恢复（供 afterModelCall 选择 resuming 话术，对齐 Python is_resuming）
-                ctx.getExtra().put(KEY_JUST_RESUMED, true);
-            }
+            handleAskUserResume(ctx, toolName, sid);
             return;
         }
 
-        // todo 相关事件
+        // Task management events (todo_create/todo_modify)
         if (TOOL_TODO_CREATE.equals(toolName) || TOOL_TODO_MODIFY.equals(toolName)) {
             LOGGER.info("[EDPA-DIAG] afterToolCall todo tool={} -> emitTodoEvents", toolName);
             emitTodoEvents(ctx);
         }
 
         // 兜底：如果 think 被延迟但仍未发射（todo 状态无变化时 emitTodoEvents 内部不会触发），在此补发
-        Object pendingThink = ctx.getExtra().get(KEY_PENDING_THINK);
-        if (pendingThink != null) {
-            String pendingSid = sessionId(ctx);
-            String thinkContent = String.valueOf(pendingThink);
-            emitThinkPair(ctx, pendingSid, thinkContent);
-            ctx.getExtra().remove(KEY_PENDING_THINK);
-            LOGGER.info("[EDPA-DIAG] afterToolCall sid={} -> emit delayed think (fallback)", pendingSid);
+        emitPendingThinkIfNeeded(ctx);
+    }
+
+    private void emitBusinessToolEnd(AgentCallbackContext ctx, ToolCallInputs inputs, String toolName, String sid) {
+        ToolCall tc = inputs.getToolCall();
+        if (tc != null && tc.getId() != null && skippedToolCallIds.remove(tc.getId())) {
+            LOGGER.info("[EDPA-DIAG] afterToolCall tool={} Skip (PLAN_FIRST blocked, skip tool_end)", toolName);
+            return;
         }
+        Object toolResult = inputs.getToolResult();
+
+        // UC-A05: 解析 ui_notice（对齐 Python versatile_interrupt_rail.py L196-230）
+        String[] uiNotice = resolveUiNotice(ctx, toolResult);
+        String uiNoticeEvent = uiNotice[0];
+        String uiNoticeText = uiNotice[1];
+
+        // UC-A05: ui_notice > query_intent_tool_text[intent].tool_end > general_scripts.tool_end
+        String qi = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, ""));
+        String toolEndContent = resolveToolEndContent(qi, toolName, uiNoticeText);
+
+        // UC-A05: ui_notice.event=="interrupt_start" 时，不发射 tool_end
+        boolean skipToolEndForInterrupt = "interrupt_start".equals(uiNoticeEvent);
+        if (!skipToolEndForInterrupt) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("tool", toolName);
+            payload.put("data", toolResult != null ? toolResult : "");
+            payload.put("content", toolEndContent);
+            LOGGER.info(
+                    "[EDPA-DIAG] afterToolCall tool={} queryIntent={} uiNoticeText={} -> emit tool_end content={}",
+                    toolName, qi, uiNoticeText != null ? "SET" : "null", toolEndContent);
+            emit(ctx, EdpaEventType.TOOL_END, payload);
+        } else {
+            LOGGER.info(
+                    "[EDPA-DIAG] afterToolCall tool={} uiNoticeEvent=interrupt_start "
+                            + "-> skip tool_end (handled by exit interrupt)",
+                    toolName);
+        }
+
+        // UC-A05: ui_notice 的 todo_end 事件直发（interrupt_start 已由 exit 路径处理，此处不重复）
+        if ("todo_end".equals(uiNoticeEvent)) {
+            emit(ctx, EdpaEventType.TODO_END, Map.of("content", uiNoticeText, "status", "done"));
+        }
+        toolOpen.put(sid, false);
+    }
+
+    private String[] resolveUiNotice(AgentCallbackContext ctx, Object toolResult) {
+        if (!(toolResult instanceof Map<?, ?> resultMap)) {
+            return new String[] {null, null};
+        }
+        Object uiNoticeObj = resultMap.get("ui_notice");
+
+        // 兼容 VersatileRail 归一化后写入 extra 的场景
+        if (uiNoticeObj == null) {
+            Object extraNotice = ctx.getExtra().get(ScriptConstants.KEY_UI_NOTICE);
+            if (extraNotice instanceof Map<?, ?> em) {
+                uiNoticeObj = em;
+                ctx.getExtra().remove(ScriptConstants.KEY_UI_NOTICE);
+            }
+        }
+        if (!(uiNoticeObj instanceof Map<?, ?> uiNotice)) {
+            return new String[] {null, null};
+        }
+        Object eventObj = uiNotice.get("event");
+        Object keyObj = uiNotice.get("key");
+        if (eventObj == null || keyObj == null) {
+            return new String[] {null, null};
+        }
+        String noticeEvent = String.valueOf(eventObj).trim();
+        String noticeKey = String.valueOf(keyObj).trim();
+        if (noticeEvent.isEmpty() || noticeKey.isEmpty() || scripts == null) {
+            return new String[] {null, null};
+        }
+        String noticeText = scripts.getTemplate(noticeKey).orElse(null);
+        if (noticeText == null || noticeText.isBlank()) {
+            return new String[] {null, null};
+        }
+        if ("interrupt_start".equals(noticeEvent)) {
+            // 中断话术：走 response_template 机制，由 afterInvoke 发射
+            ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, noticeText);
+            LOGGER.info("[EDPA-DIAG] ui_notice interrupt_start: key={}, text={}", noticeKey, noticeText);
+            return new String[] {null, null};
+        }
+        // 非中断话术（tool_end/todo_end）：uiNoticeText 会被后续优先级逻辑使用
+        LOGGER.info("[EDPA-DIAG] ui_notice {}: key={}, text={}", noticeEvent, noticeKey, noticeText);
+        return new String[] {noticeEvent, noticeText};
+    }
+
+    private String resolveToolEndContent(String qi, String toolName, String uiNoticeText) {
+        if (uiNoticeText != null && !uiNoticeText.isBlank()) {
+            return uiNoticeText;
+        }
+        // 优先2: query_intent_tool_text[intent].tool_end
+        String matched = ScriptResolver.resolveToolEndByIntent(scripts, qi, toolName).orElse(null);
+        if (matched != null && !matched.isBlank()) {
+            return matched;
+        }
+        // 兜底: general_scripts.tool_end
+        return ScriptResolver.resolve(scripts, EdpaEventType.TOOL_END.wireName(),
+                Map.of("tool_name", safe(toolName)));
+    }
+
+    private void handleAskUserResume(AgentCallbackContext ctx, String toolName, String sid) {
+        if (!interruptActive.getOrDefault(sid, false)) {
+            return;
+        }
+        String interruptId = interruptIdMap.remove(sid);
+        LOGGER.info("[EDPA-DIAG] afterToolCall tool={} interrupt resume -> emit interrupt_end(interrupt_id={})",
+                toolName, interruptId);
+        Map<String, Object> endPayload = new java.util.LinkedHashMap<>();
+        endPayload.put("tool", toolName);
+        endPayload.put("interrupt_id", interruptId != null ? interruptId : "");
+        emit(ctx, EdpaEventType.INTERRUPT_END, endPayload);
+        interruptActive.remove(sid);
+
+        // 标记刚刚恢复（供 afterModelCall 选择 resuming 话术，对齐 Python is_resuming）
+        ctx.getExtra().put(KEY_JUST_RESUMED, true);
+    }
+
+    private void emitPendingThinkIfNeeded(AgentCallbackContext ctx) {
+        Object pendingThink = ctx.getExtra().get(KEY_PENDING_THINK);
+        if (pendingThink == null) {
+            return;
+        }
+        String pendingSid = sessionId(ctx);
+        String thinkContent = String.valueOf(pendingThink);
+        emitThinkPair(ctx, pendingSid, thinkContent);
+        ctx.getExtra().remove(KEY_PENDING_THINK);
+        LOGGER.info("[EDPA-DIAG] afterToolCall sid={} -> emit delayed think (fallback)", pendingSid);
     }
 
     /**
@@ -589,6 +628,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 Rule 8：异常不破坏pair。所有已打开的 start 必须先发对应 end 关闭，
      * 再发 error_event，最后 conversation_end。像关括号一样从内到外依次关闭。</p>
      */
+
     @Override
     /** On model exception. */
     public void onModelException(AgentCallbackContext ctx) {
@@ -621,6 +661,7 @@ public class EdpaEventRail extends DeepAgentRail {
      *         emit error_event{stage:tool}；emit conversation_end（保 Rule 1）。</li>
      * </ul>
      */
+
     @Override
     /** On tool exception. */
     public void onToolException(AgentCallbackContext ctx) {
@@ -708,10 +749,12 @@ public class EdpaEventRail extends DeepAgentRail {
      * interruptActive 仅在 afterToolCall 发射 interrupt_end 时清理。
      * lastTodolistFingerprint / prevTodoStatus 在下轮 beforeInvoke 的跨轮快照中重新初始化。</p>
      */
+
     @Override
     /** After invoke. */
     public void afterInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
+
         // 出口话术：在 conversation_end 之前发射（EdpaEventRail priority=80 是唯一出口发射者）。
         // 对齐 Python agent.py 第 733-739 行：流末读 response_template → yield InterruptStartEvent。
         // 事件类型用 INTERRUPT_START（非 REQUEST_START），interrupt_id="response_template" 与
@@ -722,6 +765,7 @@ public class EdpaEventRail extends DeepAgentRail {
         if (rt != null && !String.valueOf(rt).isBlank()) {
             if (!interruptActive.getOrDefault(sid, false)) {
                 exitContent = String.valueOf(rt);
+
                 // 合规把关：配置外话术 → 替换为 out_of_scope（使用配置驱动的键映射）
                 Object lastKey = ctx.getExtra().get(ScriptConstants.KEY_LAST_SCRIPT);
                 if (scripts != null && lastKey != null && !scripts.has(String.valueOf(lastKey))) {
@@ -743,12 +787,14 @@ public class EdpaEventRail extends DeepAgentRail {
         }
         LOGGER.info("[EDPA-DIAG] afterInvoke sid={} -> emit conversation_end (if not already closed)", sid);
         emitConversationEnd(ctx, sid, exitContent);
+
         // 清理本轮状态（interruptActive/interruptIdMap 跨轮持久化，不在此清理）
         lastTodolistFingerprint.remove(sid);
         thinkOpen.remove(sid);
         toolOpen.remove(sid);
         conversationClosed.remove(sid);
         prevTodoStatus.remove(sid);
+
         // ★ 方案 B：会话正常结束（非中断挂起）时清理 Core TodoTool 落盘的 .todo/<sid>/ 目录，
         // 避免 .todo/ 无限堆积。interruptActive=true 表示本轮是 ask_user 中断等待，下一轮还会继续，
         // 不能清理。仅当会话真正结束（无中断挂起）时清理。
@@ -769,13 +815,14 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * @param rawSid 原始 sessionId（含冒号等非法路径字符，需转义）
      */
+
     private void cleanupTodoDir(String rawSid) {
         // 优先用缓存的 todoRootPath（getTodoTool 成功时缓存），避免 afterInvoke 时 workspace 已释放
         Path todoRoot = todoRootPath;
         if (todoRoot == null && deepAgent != null) {
             try {
                 todoRoot = deepAgent.getWorkspace().root().resolve(".todo");
-            } catch (RuntimeException e) {
+            } catch (IllegalStateException e) {
                 LOGGER.warn("[EDPA-DIAG] cleanupTodoDir sid={} failed: workspace unavailable, {}", rawSid,
                         e.getMessage());
                 return;
@@ -814,12 +861,13 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>在 beforeInvoke 时调用，只清理非当前 sid 的旧目录，不影响当前会话的文件读取。
      * 这样既避免文件无限堆积，又不破坏多轮会话中的 todo_modify 文件同步。</p>
      */
+
     private void cleanupStaleTodoDirs(String currentRawSid) {
         Path todoRoot = todoRootPath;
         if (todoRoot == null && deepAgent != null) {
             try {
                 todoRoot = deepAgent.getWorkspace().root().resolve(".todo");
-            } catch (RuntimeException e) {
+            } catch (IllegalStateException e) {
                 return;
             }
         }
@@ -835,10 +883,12 @@ public class EdpaEventRail extends DeepAgentRail {
                                 try {
                                     Files.deleteIfExists(p);
                                 } catch (IOException ignored) {
+                                    // Ignored: best-effort file deletion during stale cleanup
                                 }
                             });
                             LOGGER.info("[EDPA-DIAG] cleanupStaleTodoDirs -> deleted {}", sessionDir);
                         } catch (IOException ignored) {
+                            // Ignored: stale todo dir cleanup, best-effort operation
                         }
                     });
         } catch (IOException e) {
@@ -856,6 +906,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>异常处理（onModelException / onToolException 非中断）可能已发射 conversation_end，
      * afterInvoke 检查 conversationClosed 标记避免重复发射。</p>
      */
+
     private void emitConversationEnd(AgentCallbackContext ctx, String sid, String content) {
         if (Boolean.TRUE.equals(conversationClosed.get(sid))) {
             return;
@@ -882,10 +933,12 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>判断优先级：BaseError.StatusCode 枚举 → cause 原始异常类型 → message 文字匹配 → 兜底。</p>
      */
+
     private static String classifyModelError(Exception ex) {
         if (ex == null) {
             return "INTERNAL_ERROR";
         }
+
         // 第一层：框架 BaseError 的 StatusCode 枚举判断（精确）
         if (ex instanceof BaseError be) {
             String status = String.valueOf(be.getStatus());
@@ -895,30 +948,12 @@ public class EdpaEventRail extends DeepAgentRail {
                 case "MODEL_INVOKE_PARAM_ERROR" :
                     return "INTERNAL_ERROR";
                 case "MODEL_CALL_FAILED" :
-                    // 第二层：看 cause 原始异常类型
-                    Throwable cause = be.getCause();
-                    if (cause != null) {
-                        if (cause instanceof java.net.http.HttpTimeoutException) {
-                            return "LLM_TIMEOUT";
-                        }
-                        String cm = String.valueOf(cause.getMessage()).toLowerCase(Locale.ROOT);
-                        if (cm.contains("401") || cm.contains("unauthorized")) {
-                            return "LLM_AUTH_ERROR";
-                        }
-                    }
-                    // 兜底：message 文字匹配
-                    String msg = String.valueOf(be.getMessage()).toLowerCase(Locale.ROOT);
-                    if (msg.contains("timeout") || msg.contains("timed out")) {
-                        return "LLM_TIMEOUT";
-                    }
-                    if (msg.contains("401") || msg.contains("unauthorized") || msg.contains("auth")) {
-                        return "LLM_AUTH_ERROR";
-                    }
-                    return "INTERNAL_ERROR";
+                    return classifyModelCallFailed(be);
                 default :
                     return "INTERNAL_ERROR";
             }
         }
+
         // 兜底：非 BaseError，退化为文字匹配
         String msg = String.valueOf(ex.getMessage()).toLowerCase(Locale.ROOT);
         String cls = ex.getClass().getName().toLowerCase(Locale.ROOT);
@@ -931,9 +966,31 @@ public class EdpaEventRail extends DeepAgentRail {
         return "INTERNAL_ERROR";
     }
 
+    private static String classifyModelCallFailed(BaseError be) {
+        Throwable cause = be.getCause();
+        if (cause != null) {
+            if (cause instanceof java.net.http.HttpTimeoutException) {
+                return "LLM_TIMEOUT";
+            }
+            String cm = String.valueOf(cause.getMessage()).toLowerCase(Locale.ROOT);
+            if (cm.contains("401") || cm.contains("unauthorized")) {
+                return "LLM_AUTH_ERROR";
+            }
+        }
+        String msg = String.valueOf(be.getMessage()).toLowerCase(Locale.ROOT);
+        if (msg.contains("timeout") || msg.contains("timed out")) {
+            return "LLM_TIMEOUT";
+        }
+        if (msg.contains("401") || msg.contains("unauthorized") || msg.contains("auth")) {
+            return "LLM_AUTH_ERROR";
+        }
+        return "INTERNAL_ERROR";
+    }
+
     /**
      * 工具异常分类：TOOL_TIMEOUT / INVALID_TOOL_OUTPUT / DEPENDENCY_VIOLATION / INTERNAL_ERROR。
      */
+
     private static String classifyToolError(Exception ex) {
         if (ex == null) {
             return "INTERNAL_ERROR";
@@ -956,6 +1013,7 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * error_type → 用户可见话术映射。
      */
+
     private static String errorContent(String errorType) {
         switch (errorType) {
             case "LLM_TIMEOUT" :
@@ -980,6 +1038,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * 本方法只加载当前 todos 并初始化 lastTodolistFingerprint 与 prevTodoStatus，
      * 供后续 afterToolCall 检测状态转移，<b>不发 todolist_start/item/end</b>。</p>
      */
+
     private void initTodoStateSilent(AgentCallbackContext ctx, String sid) {
         List<TodoItem> todos = loadCurrentTodos(ctx);
         if (todos == null || todos.isEmpty()) {
@@ -1000,15 +1059,12 @@ public class EdpaEventRail extends DeepAgentRail {
      *     <li>路径切换（PENDING→CANCELLED）：独立 todolist（无 todo_start/todo_end，Rule 4④）。</li>
      * </ul>
      */
+
     private void emitTodoEvents(AgentCallbackContext ctx) {
         List<TodoItem> todos = loadCurrentTodos(ctx);
         if (todos == null || todos.isEmpty()) {
             // ★ UC-26: 空列表仍发射 todolist_start → todolist_end pair（无 item），保证事件pair完整
-            LOGGER.info("[EDPA-DIAG] emitTodoEvents todos empty, emit empty todolist pair (UC-26)");
-            emit(ctx, EdpaEventType.TODOLIST_START,
-                    Map.of("content", scripts != null ? ScriptResolver.todolistStart(scripts) : ""));
-            emit(ctx, EdpaEventType.TODOLIST_END,
-                    Map.of("content", scripts != null ? ScriptResolver.todolistEnd(scripts) : ""));
+            emitEmptyTodolistPair(ctx);
             return;
         }
 
@@ -1020,30 +1076,10 @@ public class EdpaEventRail extends DeepAgentRail {
                 fp);
 
         Map<String, TodoStatus> prevMap = prevTodoStatus.getOrDefault(sid, new LinkedHashMap<>());
-
-        // 判定本轮转移类型
-        boolean hasEnd = false;
-        boolean hasStart = false;
-        boolean hasPathSwitch = false;
-        for (TodoItem todo : todos) {
-            TodoStatus cur = todo.getStatus();
-            TodoStatus prev = prevMap.get(todo.getId());
-            if (isInProgress(cur) && !isInProgress(prev)) {
-                hasStart = true;
-            }
-            if (isCompletedLike(cur) && isInProgress(prev)) {
-                hasEnd = true;
-            }
-            if (cur == TodoStatus.CANCELLED && isInProgress(prev)) {
-                hasEnd = true;
-            }
-            if (cur == TodoStatus.CANCELLED && !isInProgress(prev) && prev != TodoStatus.CANCELLED && prev != null) {
-                hasPathSwitch = true;
-            }
-        }
+        boolean[] flags = detectTodoTransfers(todos, prevMap);
 
         // ① end 转移：发 todo_end
-        if (hasEnd) {
+        if (flags[0]) {
             emitTodoEnds(ctx, todos, prevMap);
         }
 
@@ -1065,7 +1101,7 @@ public class EdpaEventRail extends DeepAgentRail {
         }
 
         // ③ start 转移：发 todo_start
-        if (hasStart) {
+        if (flags[1]) {
             emitTodoStarts(ctx, todos, prevMap);
         }
 
@@ -1075,11 +1111,43 @@ public class EdpaEventRail extends DeepAgentRail {
         updatePrevTodoStatus(sid, todos);
     }
 
+    private void emitEmptyTodolistPair(AgentCallbackContext ctx) {
+        LOGGER.info("[EDPA-DIAG] emitTodoEvents todos empty, emit empty todolist pair (UC-26)");
+        emit(ctx, EdpaEventType.TODOLIST_START,
+                Map.of("content", scripts != null ? ScriptResolver.todolistStart(scripts) : ""));
+        emit(ctx, EdpaEventType.TODOLIST_END,
+                Map.of("content", scripts != null ? ScriptResolver.todolistEnd(scripts) : ""));
+    }
+
+    private static boolean[] detectTodoTransfers(List<TodoItem> todos, Map<String, TodoStatus> prevMap) {
+        boolean hasEnd = false;
+        boolean hasStart = false;
+        boolean hasPathSwitch = false;
+        for (TodoItem todo : todos) {
+            TodoStatus cur = todo.getStatus();
+            TodoStatus prev = prevMap.get(todo.getId());
+            if (isInProgress(cur) && !isInProgress(prev)) {
+                hasStart = true;
+            }
+            if (isCompletedLike(cur) && isInProgress(prev)) {
+                hasEnd = true;
+            }
+            if (cur == TodoStatus.CANCELLED && isInProgress(prev)) {
+                hasEnd = true;
+            }
+            if (cur == TodoStatus.CANCELLED && !isInProgress(prev) && prev != TodoStatus.CANCELLED && prev != null) {
+                hasPathSwitch = true;
+            }
+        }
+        return new boolean[] {hasEnd, hasStart, hasPathSwitch};
+    }
+
     /**
-     * 发射 todolist_start → todolist_item{单条}×N → todolist_end（逐条，Rule 12）。
+     * 发射 todolist_start -> todolist_item{单条}×N -> todolist_end（逐条，Rule 12）。
      *
      * <p>设计文档 v1.1 Rule 12：N 条 todo = N 个 todolist_item 事件，每个携带单条 todo（非 tasks 数组）。</p>
      */
+
     private void emitTodolistPerItem(AgentCallbackContext ctx, List<TodoItem> todos) {
         emit(ctx, EdpaEventType.TODOLIST_START, Map.of("content", ScriptResolver.todolistStart(scripts)));
         for (TodoItem todo : todos) {
@@ -1093,6 +1161,7 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>设计文档 v1.1 Rule 5：PENDING/null→IN_PROGRESS 发 todo_start。</p>
      */
+
     private void emitTodoStarts(AgentCallbackContext ctx, List<TodoItem> todos, Map<String, TodoStatus> prevMap) {
         Object intentObj = ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, "");
         String queryIntent = intentObj instanceof String s ? s : "";
@@ -1115,6 +1184,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * IN_PROGRESS→CANCELLED 发 todo_end{cancelled}。PENDING→CANCELLED（路径切换）在此不发，
      * 由 emitTodoEvents 的路径切换分支发独立 todolist（Rule 4④）。</p>
      */
+
     private void emitTodoEnds(AgentCallbackContext ctx, List<TodoItem> todos, Map<String, TodoStatus> prevMap) {
         Object intentObj = ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, "");
         String queryIntent = intentObj instanceof String s ? s : "";
@@ -1143,6 +1213,7 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 更新 prevTodoStatus 快照（供下次状态转移比较）。
      */
+
     private void updatePrevTodoStatus(String sid, List<TodoItem> todos) {
         Map<String, TodoStatus> map = new LinkedHashMap<>();
         for (TodoItem todo : todos) {
@@ -1160,8 +1231,10 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>兜底路径：TodoTool 不可用（workspace 未就绪，如单元测试 mock DeepAgent 无 workspace）时，
      * 回落到 TaskPlanningRail.cachedTodos 读缓存，保证事件发射逻辑可被确定性单测驱动。</p>
      */
+
     private List<TodoItem> loadCurrentTodos(AgentCallbackContext ctx) {
         String rawSid = sessionId(ctx);
+
         // ★ Redis 唯一数据源：只从 Redis 读取（EdpaTodoRail 在 todo_create/todo_modify 后
         // 已将 Core 写入的文件数据同步到 Redis 并删除文件）
         if (redisTodoStore != null) {
@@ -1170,19 +1243,21 @@ public class EdpaEventRail extends DeepAgentRail {
             LOGGER.debug("[EDPA-DIAG] LOAD_CURRENT_TODOS source=REDIS session={} items={}", rawSid, size);
             return todos != null ? todos : new ArrayList<>();
         }
+
         // 兜底：未启用 Redis 时回落文件（单测兼容、旧部署）
         String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
-        TodoTool tool = getTodoTool();
+        TodoTool tool = getTodoTool().orElse(null);
         if (tool != null) {
             try {
                 List<TodoItem> todos = tool.load(sid);
                 int size = todos == null ? 0 : todos.size();
                 LOGGER.info("[EDPA-DIAG] LOAD_CURRENT_TODOS source=FILE session={} items={}", rawSid, size);
                 return todos != null ? todos : new ArrayList<>();
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | IllegalStateException e) {
                 LOGGER.debug("EdpaEventRail.loadCurrentTodos from disk failed: {}", e.getMessage());
             }
         }
+
         // 兜底：TodoTool 不可用时从 TaskPlanningRail 缓存读
         List<TodoItem> cached = loadFromTaskPlanningCache(rawSid);
         int cacheSize = cached == null ? 0 : cached.size();
@@ -1193,6 +1268,7 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 从已注册的 TaskPlanningRail 缓存读 todos（TodoTool 不可用时的兜底）。
      */
+
     private List<TodoItem> loadFromTaskPlanningCache(String sid) {
         if (deepAgent == null) {
             return Collections.emptyList();
@@ -1204,26 +1280,26 @@ public class EdpaEventRail extends DeepAgentRail {
                     return todos != null ? todos : new ArrayList<>();
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.debug("EdpaEventRail.loadFromTaskPlanningCache failed: {}", e.getMessage());
         }
         return Collections.emptyList();
     }
 
     /** lazy 创建 TodoTool，路径与 Core TaskPlanningRail / EdpaTodoRail 一致（.todo）。同时缓存 .todo 根目录路径。 */
-    private TodoTool getTodoTool() {
+    private Optional<TodoTool> getTodoTool() {
         if (todoTool != null) {
-            return todoTool;
+            return Optional.of(todoTool);
         }
         try {
             Path root = deepAgent.getWorkspace().root();
             Path todoDir = root.resolve(".todo");
             todoRootPath = todoDir;
             todoTool = new TodoTool(todoDir.toString());
-            return todoTool;
-        } catch (RuntimeException e) {
+            return Optional.of(todoTool);
+        } catch (IllegalStateException | NullPointerException e) {
             LOGGER.warn("EdpaEventRail failed to create TodoTool: {}", e.getMessage());
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -1263,6 +1339,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>用于延迟 think 发射：当 LLM 本轮只调 todo_modify 时，think 是"状态更新推理"，
      * 应放在 todo_end 之后、todolist 之前，使事件流为 tool_end → todo_end → think → todolist。</p>
      */
+
     private static boolean isOnlyTodoModify(AssistantMessage msg) {
         List<ToolCall> tcs = msg.getToolCalls();
         if (tcs == null || tcs.isEmpty()) {
@@ -1284,16 +1361,10 @@ public class EdpaEventRail extends DeepAgentRail {
     // 固定帧 think_chunk 切分（对齐 Python select_fixed_scripts）
     // ═══════════════════════════════════════════════════
 
-    /** 阶段标识 extra key */
-    private static final String KEY_THINK_TURN_COUNT = "_edp_think_turn_count";
-    private static final String KEY_JUST_RESUMED = "_edp_just_resumed";
-
-    /** 固定帧配置 key 前缀 */
-    private static final String FK_PREFIX = "scriptconfig.think_chunk_scripts.think_chunk_fixed_scripts.";
-
     /**
      * 阶段检测：planning（第1轮）/ executing（工具后）/ resuming（中断恢复后）。
      */
+
     private String detectPhase(AgentCallbackContext ctx) {
         if (Boolean.TRUE.equals(ctx.getExtra().get(KEY_JUST_RESUMED))) {
             return "resuming";
@@ -1306,6 +1377,7 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 从 ask_user 工具入参中提取 LLM 生成的 question 文本（UC-C02: interrupt_source=llm 时使用）。
      */
+
     @SuppressWarnings("unchecked")
     private String extractAskUserQuestion(AgentCallbackContext ctx) {
         if (ctx.getInputs() instanceof ToolCallInputs inputs) {
@@ -1318,8 +1390,8 @@ public class EdpaEventRail extends DeepAgentRail {
             } else if (args instanceof String s && !s.isBlank()) {
                 try {
                     Map<String, Object> parsed = new com.fasterxml.jackson.databind.ObjectMapper().readValue(s,
-                            new com.fasterxml.jackson.core.type.TypeReference<
-                                    java.util.LinkedHashMap<String, Object>>() {
+                            new com.fasterxml.jackson.core.type.TypeReference
+                                    <java.util.LinkedHashMap<String, Object>>() {
                             });
                     Object q = parsed.get("question");
                     if (q != null && !String.valueOf(q).isBlank()) {
@@ -1328,6 +1400,8 @@ public class EdpaEventRail extends DeepAgentRail {
                 } catch (JsonProcessingException ignore) {
                     // 非 JSON
                 }
+            } else {
+                // no-op: args is neither Map nor String
             }
         }
         return "";
@@ -1336,42 +1410,54 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 获取用户原始 query 文本。
      */
+
     private String getUserQuery(AgentCallbackContext ctx) {
         // 优先从 extra 缓存读取
         Object userInput = ctx.getExtra().getOrDefault("_edp_user_input", "");
         if (userInput instanceof String s && !s.isBlank()) {
             return s;
         }
+
         // 兜底：从 ModelContext 获取最后一条 UserMessage
         try {
             var modelContext = ctx.getContext();
             if (modelContext != null) {
                 var messages = modelContext.getMessages();
-                if (messages != null && !messages.isEmpty()) {
-                    for (int i = messages.size() - 1; i >= 0; i--) {
-                        var msg = messages.get(i);
-                        if (msg == null) {
-                            continue;
-                        }
-                        if (msg instanceof UserMessage um) {
-                            String text = um.getContentAsString();
-                            if (text != null && !text.isBlank()) {
-                                ctx.getExtra().put("_edp_user_input", text);
-                                return text;
-                            }
-                        }
-                    }
+                String text = findLastUserMessageText(messages);
+                if (text != null) {
+                    ctx.getExtra().put("_edp_user_input", text);
+                    return text;
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             LOGGER.debug("[EDPA-DIAG] getUserQuery fallback failed: {}", e.getMessage());
         }
         return "";
     }
 
+    private static String findLastUserMessageText(List<?> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return null;
+        }
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            var msg = messages.get(i);
+            if (msg == null) {
+                continue;
+            }
+            if (msg instanceof UserMessage um) {
+                String text = um.getContentAsString();
+                if (text != null && !text.isBlank()) {
+                    return text;
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * 发射 think 对（固定帧模式或真实 token 模式）。
      */
+
     private void emitThinkPair(AgentCallbackContext ctx, String sid, String realThinkContent) {
         thinkOpen.put(sid, true);
         emit(ctx, EdpaEventType.THINK_START, Map.of());
@@ -1381,13 +1467,14 @@ public class EdpaEventRail extends DeepAgentRail {
             String userQuery = getUserQuery(ctx);
             List<String> scriptsList = ScriptResolver.selectFixedScripts(scripts, phase, userQuery);
             if (!scriptsList.isEmpty()) {
-                int charsPerFrame = ScriptResolver.parseIntOrDefault(scripts.getTemplate(FK_PREFIX + "chars_per_frame"),
-                        4);
-                int minIntervalMs = ScriptResolver.parseIntOrDefault(scripts.getTemplate(FK_PREFIX + "min_interval_ms"),
-                        0);
+                int charsPerFrame = ScriptResolver.parseIntOrDefault(scripts.getTemplate(FK_PREFIX + "chars_per_frame")
+                        .orElse(null), 4);
+                int minIntervalMs = ScriptResolver.parseIntOrDefault(scripts.getTemplate(FK_PREFIX + "min_interval_ms")
+                        .orElse(null), 0);
                 int tokensBetweenFrames = ScriptResolver
-                        .parseIntOrDefault(scripts.getTemplate(FK_PREFIX + "tokens_between_frames"), 0);
+                        .parseIntOrDefault(scripts.getTemplate(FK_PREFIX + "tokens_between_frames").orElse(null), 0);
                 List<String> frames = ScriptResolver.splitFixedScriptsIntoFrames(scriptsList, charsPerFrame);
+
                 // UC-B03: 帧间节奏控制（对齐 Python FixedScriptFeeder.feed_token）
                 // 不丢帧：所有帧全部推送（保证话术完整性）
                 // 有节奏：tokens_between_frames 转换为 sleep 时长（1 token ≈ 25ms 估算）
@@ -1398,18 +1485,7 @@ public class EdpaEventRail extends DeepAgentRail {
                     // 与 min_interval_ms 取较大值，保证基础间隔
                     frameIntervalMs = Math.max(minIntervalMs, tokensBetweenFrames * 25L);
                 }
-                int totalFrames = frames.size();
-                for (int i = 0; i < totalFrames; i++) {
-                    emit(ctx, EdpaEventType.THINK_CHUNK, Map.of("content", frames.get(i)));
-                    // 最后一帧不 sleep（think_end 紧接其后）
-                    if (i < totalFrames - 1 && frameIntervalMs > 0) {
-                        try {
-                            Thread.sleep(frameIntervalMs);
-                        } catch (InterruptedException ignored) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
+                emitFixedFrameChunks(ctx, frames, frameIntervalMs);
             }
             LOGGER.info("[EDPA-DIAG] sid={} phase={} -> fixed_frame think (frames={})", sid, phase, scriptsList.size());
         } else {
@@ -1427,6 +1503,22 @@ public class EdpaEventRail extends DeepAgentRail {
         ctx.getExtra().remove(KEY_JUST_RESUMED);
     }
 
+    private void emitFixedFrameChunks(AgentCallbackContext ctx, List<String> frames, long frameIntervalMs) {
+        int totalFrames = frames.size();
+        for (int i = 0; i < totalFrames; i++) {
+            emit(ctx, EdpaEventType.THINK_CHUNK, Map.of("content", frames.get(i)));
+
+            // 最后一帧不 sleep（think_end 紧接其后）
+            if (i < totalFrames - 1 && frameIntervalMs > 0) {
+                try {
+                    Thread.sleep(frameIntervalMs);
+                } catch (InterruptedException ignored) {
+                    // Sleep interrupted; continue emitting remaining frames without delay
+                }
+            }
+        }
+    }
+
     /**
      * 当 LLM 返回 tool_calls 但 reasoning_content is empty时，生成业务话术替代 think_chunk 内容。
      *
@@ -1436,6 +1528,7 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>优先级：tool_calls 中的工具名映射 → SysScriptsConfig.thinking 兜底 → 硬编码兜底。</p>
      */
+
     private String generateFallbackThink(AssistantMessage msg) {
         List<ToolCall> tcs = msg.getToolCalls();
         if (tcs != null && !tcs.isEmpty()) {
@@ -1461,6 +1554,7 @@ public class EdpaEventRail extends DeepAgentRail {
                 }
             }
         }
+
         // 无 tool_calls 或未匹配的工具 → 使用配置兜底
         if (scripts != null) {
             String def = scripts.getOrDefault("thinking", "");
@@ -1484,6 +1578,7 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>条件：finish_reason=stop 且 AssistantMessage 不含 tool_calls（§7.2）。</p>
      */
+
     private static boolean isFinalAnswer(AssistantMessage msg) {
         String finishReason = msg.getFinishReason();
         boolean hasToolCalls = msg.getToolCalls() != null && !msg.getToolCalls().isEmpty();
@@ -1497,7 +1592,7 @@ public class EdpaEventRail extends DeepAgentRail {
     private static String sessionId(AgentCallbackContext ctx) {
         try {
             return ctx.getSession().getSessionId();
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             return "unknown";
         }
     }
@@ -1505,6 +1600,7 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 单条 todo → Map（供 todolist_item 逐条 payload，Rule 12）。
      */
+
     private static Map<String, Object> toTaskMap(TodoItem todo) {
         Map<String, Object> task = new LinkedHashMap<>();
         task.put("id", todo.getId());
@@ -1529,6 +1625,7 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 记录 LLM 模型响应的关键信息：finish_reason / tool_calls 数量与名称 / 文本预览 / 当前 todo 缓存。
      */
+
     private void diagModelResponse(AgentCallbackContext ctx, ModelCallInputs inputs) {
         try {
             Object response = inputs.getResponse();
@@ -1541,16 +1638,7 @@ public class EdpaEventRail extends DeepAgentRail {
                 finishReason = msg.getFinishReason();
                 List<ToolCall> tcs = msg.getToolCalls();
                 toolCallCount = tcs == null ? 0 : tcs.size();
-                if (tcs != null && !tcs.isEmpty()) {
-                    StringBuilder names = new StringBuilder();
-                    for (ToolCall tc : tcs) {
-                        if (names.length() > 0) {
-                            names.append(",");
-                        }
-                        names.append(tc.getName());
-                    }
-                    toolNames = names.toString();
-                }
+                toolNames = collectToolNames(tcs);
                 contentPreview = safe(msg.getContentAsString());
                 reasoningPreview = safe(msg.getReasoningContent());
             }
@@ -1559,14 +1647,29 @@ public class EdpaEventRail extends DeepAgentRail {
                             + "reasoningPreview=[{}], contentPreview=[{}], todos={}",
                     finishReason, toolCallCount, toolNames, truncate(reasoningPreview, 200),
                     truncate(contentPreview, 300), diagTodosSummary(ctx));
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             LOGGER.warn("[EDPA-DIAG] model response diag failed: {}", e.getMessage());
         }
+    }
+
+    private static String collectToolNames(List<ToolCall> tcs) {
+        if (tcs == null || tcs.isEmpty()) {
+            return "";
+        }
+        StringBuilder names = new StringBuilder();
+        for (ToolCall tc : tcs) {
+            if (names.length() > 0) {
+                names.append(",");
+            }
+            names.append(tc.getName());
+        }
+        return names.toString();
     }
 
     /**
      * 汇总当前会话 todo 缓存：数量 + 每项 content=status。
      */
+
     private String diagTodosSummary(AgentCallbackContext ctx) {
         try {
             List<TodoItem> todos = loadCurrentTodos(ctx);
@@ -1584,7 +1687,7 @@ public class EdpaEventRail extends DeepAgentRail {
             }
             sb.append("]");
             return sb.toString();
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             return "diagErr:" + e.getMessage();
         }
     }
@@ -1607,6 +1710,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * @param eventType 事件类型
      * @param payload   事件负载
      */
+
     private void emit(AgentCallbackContext ctx, EdpaEventType type, Map<String, Object> payload) {
         try {
             Map<String, Object> event = new LinkedHashMap<>();
@@ -1614,43 +1718,52 @@ public class EdpaEventRail extends DeepAgentRail {
             event.put("timestamp", System.currentTimeMillis());
             event.put("conversation_id", sessionId(ctx));
             event.putAll(payload);
+
             // 对齐 Python agent.py L71-77: [EDPAgent] stream payload 含 content 截断预览（脱敏）
             String contentPreview = desensitizeSensitiveFields(
                     abbreviate(String.valueOf(payload.getOrDefault("content", "")), 120));
             LOGGER.info("[EDPAgent] stream payload [{}]: {}", type.wireName(), contentPreview);
             ctx.getSession().writeStream(new OutputSchema("custom", 0, event));
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             // 关键事件丢失应为 ERROR 级别 + 记录完整堆栈
             LOGGER.error("[EDPA-DIAG] emit '{}' failed: {}", type.wireName(), e.getMessage(), e);
         }
     }
 
     private static String abbreviate(String text, int maxLen) {
-        if (text == null || "null".equals(text))
+        if (text == null || "null".equals(text)) {
             return "";
-        if (text.length() <= maxLen)
+        }
+        if (text.length() <= maxLen) {
             return text;
+        }
         return text.substring(0, maxLen - 3) + "...";
     }
 
     /** 对 JSON 字符串中的敏感字段自动脱敏：银行卡号保留前4后4位、用户姓名保留首字、会话ID/Cookie掩码。 */
     private static String desensitizeSensitiveFields(String json) {
-        if (json == null || "null".equals(json) || json.isEmpty())
+        if (json == null || "null".equals(json) || json.isEmpty()) {
             return json;
+        }
+
         // 银行卡号字段名匹配：保留前4后4位
         String result = json.replaceAll(
                 "\"(bankCardNumber|payerCardNumber|payeeCardNumber|cardNum|cardNumber|bank_card_number)\""
                         + "\\s*:\\s*\"(\\d{4})\\d+(\\d{4})\"",
                 "\"$1\":\"$2****$3\"");
+
         // 中国银联卡号数字模式匹配：以62开头的16-19位连续数字，覆盖所有银联BIN
         result = BANK_CARD_NUMBER_PATTERN.matcher(result)
                 .replaceAll(m -> m.group(1).substring(0, 4) + "****" + m.group(1).substring(m.group(1).length() - 4));
+
         // 用户姓名：保留首字+掩码
         result = result.replaceAll(
                 "\"(wap_userName|wap_realName|userName|realName|customerName)\"\\s*:\\s*\"([^\"]{1})[^\"]+\"",
                 "\"$1\":\"$2***\"");
+
         // 会话ID：仅保留前8位
         result = result.replaceAll("\"(wap_sessionId|sessionId)\"\\s*:\\s*\"([^\"]{8})[^\"]+\"", "\"$1\":\"$2***\"");
+
         // Cookie列表：不打印完整值
         result = result.replaceAll("\"(wapbCookieList|cookieList|cookies)\"\\s*:\\s*\"[^\"]+\"", "\"$1\":\"***\"");
         return result;

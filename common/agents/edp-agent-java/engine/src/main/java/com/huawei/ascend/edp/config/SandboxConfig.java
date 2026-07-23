@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,20 +17,18 @@
 package com.huawei.ascend.edp.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
 /**
  * 沙箱配置属性类。
  *
  * <p>映射 application.yml 中 {@code edpa.agent.sandbox.*} 配置段，
  * 控制沙箱模式的开关、超时、降级策略等行为。</p>
- */
-@ConfigurationProperties(prefix = "edpa.agent.sandbox")
-/**
- * SandboxConfig class.
  *
  * @since 2024-01-01
  */
-public class SandboxConfig {
 
+@ConfigurationProperties(prefix = "edpa.agent.sandbox")
+public class SandboxConfig {
     /** 是否启用沙箱模式。 */
     private boolean enabled = false;
 
@@ -68,6 +66,7 @@ public class SandboxConfig {
     public boolean isEnabled() {
         return enabled;
     }
+
     /** Sets the enabled. */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
@@ -77,6 +76,7 @@ public class SandboxConfig {
     public String getServiceUrl() {
         return serviceUrl;
     }
+
     /** Sets the service url. */
     public void setServiceUrl(String serviceUrl) {
         this.serviceUrl = serviceUrl;
@@ -86,6 +86,7 @@ public class SandboxConfig {
     public String getSandboxIdPrefix() {
         return sandboxIdPrefix;
     }
+
     /** Sets the sandbox id prefix. */
     public void setSandboxIdPrefix(String sandboxIdPrefix) {
         this.sandboxIdPrefix = sandboxIdPrefix;
@@ -95,6 +96,7 @@ public class SandboxConfig {
     public int getCreateTimeoutSeconds() {
         return createTimeoutSeconds;
     }
+
     /** Sets the create timeout seconds. */
     public void setCreateTimeoutSeconds(int createTimeoutSeconds) {
         this.createTimeoutSeconds = createTimeoutSeconds;
@@ -104,6 +106,7 @@ public class SandboxConfig {
     public int getExecTimeoutSeconds() {
         return execTimeoutSeconds;
     }
+
     /** Sets the exec timeout seconds. */
     public void setExecTimeoutSeconds(int execTimeoutSeconds) {
         this.execTimeoutSeconds = execTimeoutSeconds;
@@ -113,6 +116,7 @@ public class SandboxConfig {
     public String getSkillDeployPath() {
         return skillDeployPath;
     }
+
     /** Sets the skill deploy path. */
     public void setSkillDeployPath(String skillDeployPath) {
         this.skillDeployPath = skillDeployPath;
@@ -122,6 +126,7 @@ public class SandboxConfig {
     public boolean isAutoCreateOnStartup() {
         return autoCreateOnStartup;
     }
+
     /** Sets the auto create on startup. */
     public void setAutoCreateOnStartup(boolean autoCreateOnStartup) {
         this.autoCreateOnStartup = autoCreateOnStartup;
@@ -131,6 +136,7 @@ public class SandboxConfig {
     public String getOnStop() {
         return onStop;
     }
+
     /** Sets the on stop. */
     public void setOnStop(String onStop) {
         this.onStop = onStop;
@@ -140,6 +146,7 @@ public class SandboxConfig {
     public boolean isFallbackOnFailure() {
         return fallbackOnFailure;
     }
+
     /** Sets the fallback on failure. */
     public void setFallbackOnFailure(boolean fallbackOnFailure) {
         this.fallbackOnFailure = fallbackOnFailure;
@@ -149,6 +156,7 @@ public class SandboxConfig {
     public String getExcludedCommands() {
         return excludedCommands;
     }
+
     /** Sets the excluded commands. */
     public void setExcludedCommands(String excludedCommands) {
         this.excludedCommands = excludedCommands;
@@ -158,6 +166,7 @@ public class SandboxConfig {
     public String getContainerScope() {
         return containerScope;
     }
+
     /** Sets the container scope. */
     public void setContainerScope(String containerScope) {
         this.containerScope = containerScope;
