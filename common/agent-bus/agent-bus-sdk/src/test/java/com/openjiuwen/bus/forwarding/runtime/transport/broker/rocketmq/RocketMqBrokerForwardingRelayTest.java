@@ -151,14 +151,15 @@ class RocketMqBrokerForwardingRelayTest {
     void produce_rejects_null_record() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
                 resolver("topic-x"), SUFFIX, msg -> {});
-        // cast disambiguates the outbox-record overload from the direct-tap produce(BrokerOutboundMessage)
-        assertThatThrownBy(() -> relay.produce((ForwardingOutboxRecord) null, 1_000L))
+        // a typed null selects the outbox-record overload over the direct-tap produce(BrokerOutboundMessage)
+        ForwardingOutboxRecord nullRecord = null;
+        assertThatThrownBy(() -> relay.produce(nullRecord, 1_000L))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("record");
     }
 
     @Test
-    void produce_outbound_message_directly_is_accepted_and_carries_first_class_fields() {
+    void produce_outbound_message_directly_carries_first_class_fields() {
         // FEAT-017 direct-tap: a response producer builds a BrokerOutboundMessage (NO outbox record)
         // and produces it directly. The message carries the full control plane + inlinePayload as
         // FIRST-CLASS headers so the relay's poison guard (trace/idem/route/cap present) accepts it.
@@ -188,7 +189,7 @@ class RocketMqBrokerForwardingRelayTest {
     }
 
     @Test
-    void produce_outbound_message_with_null_event_type_returns_route_not_found() {
+    void produce_outbound_message_null_event_type_route_not_found() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
                 resolver("topic-x"), SUFFIX, msg -> { });
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
@@ -206,7 +207,8 @@ class RocketMqBrokerForwardingRelayTest {
     void produce_outbound_message_rejects_null_message() {
         RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
                 resolver("topic-x"), SUFFIX, msg -> { });
-        assertThatThrownBy(() -> relay.produce((BrokerOutboundMessage) null, 1_000L))
+        BrokerOutboundMessage nullMessage = null;
+        assertThatThrownBy(() -> relay.produce(nullMessage, 1_000L))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("message");
     }

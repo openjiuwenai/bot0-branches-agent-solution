@@ -569,6 +569,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
         private final RocketMqBrokerForwardingConsumer consumer;
         private final DefaultMQProducer producer;
+
         // SPI relay port (suffix "resp_in") — wraps the raw producer so produceResponse reuses the SDK
         // wire-format encoder instead of hand-rolling Message + putUserProperty.
         private final RocketMqBrokerForwardingRelay respProducer;

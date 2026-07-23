@@ -391,7 +391,7 @@ public final class GatewayRuntimeService implements IngressGateway {
         return switch (status) {
             case COMPLETED_RESPONSE -> IngressResponse.accepted(requestId, taskId); // cursor = taskId or null
             case ACCEPTED_WITH_TASK -> IngressResponse.accepted(requestId, taskId);
-            case INPUT_REQUIRED -> IngressResponse.accepted(requestId, taskId); // FEAT-017: needs input; resume via taskId
+            case INPUT_REQUIRED -> IngressResponse.accepted(requestId, taskId); // FEAT-017: resume via taskId
             case STREAM_READY -> IngressResponse.accepted(requestId, streamRef);
             case REJECTED, FAILED -> IngressResponse.rejected(requestId, rejectionReason(status, reason));
             case UNKNOWN -> IngressResponse.deferred(requestId);

@@ -24,7 +24,7 @@ import java.util.EnumSet;
  */
 class AgentBusEventTypeTest {
     @Test
-    void has_all_22_event_types_across_feat_013_014_and_feat_017_input_required() {
+    void has_all_22_event_types_across_feat_013_014_017() {
         assertThat(EnumSet.allOf(AgentBusEventType.class)).containsExactlyInAnyOrder(
                 // FEAT-013: client -> server (gateway -> event-bus -> agent-runtime)
                 AgentBusEventType.CLIENT_INVOCATION_REQUESTED,

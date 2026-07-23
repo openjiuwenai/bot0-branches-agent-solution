@@ -21,12 +21,9 @@ import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 import com.openjiuwen.bus.spi.ingress.IngressResponse;
 
-import org.apache.rocketmq.client.exception.MQBrokerException;
-import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
-import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -531,6 +528,7 @@ class RealBrokerResponseSideIntegrationTest {
     static final class TempRuntime {
         private final RocketMqBrokerForwardingConsumer consumer; // T: LitePull adapter (request consumption)
         private final DefaultMQProducer producer; // produce responses
+
         // SPI relay port (suffix "resp_out") — wraps the raw producer so produceResponse reuses the SDK
         // wire-format encoder instead of hand-rolling Message + putUserProperty.
         private final RocketMqBrokerForwardingRelay respProducer;

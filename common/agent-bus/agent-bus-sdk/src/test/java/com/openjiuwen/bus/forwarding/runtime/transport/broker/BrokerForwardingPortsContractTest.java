@@ -424,7 +424,7 @@ class BrokerForwardingPortsContractTest {
     }
 
     @Test
-    void produce_outbound_message_with_null_event_type_returns_route_not_found() {
+    void produce_outbound_message_null_event_type_route_not_found() {
         InMemoryBroker broker = responseBroker();
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
                 "tenant-a", "msg-no-et", "source-svc", "target-svc",
