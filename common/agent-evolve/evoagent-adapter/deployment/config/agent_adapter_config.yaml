@@ -82,6 +82,13 @@ agents:
   - name: "edp_agent"
     log_dir: "/data/logs/edp_agent"           # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
     skills_dir: "/data/skills/edp_agent"      # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
+    # ── Skill backend（可选；默认 local 走宿主 bind-mount；切 jiuwenbox 走沙箱文件 API）──
+    # skill_backend: jiuwenbox          # local(默认,宿主共享挂载) | jiuwenbox(沙箱文件 API,需配 jiuwenbox_url)
+    # jiuwenbox_url: http://host.docker.internal:8321   # jiuwenbox 管理 API base URL; skill_backend=jiuwenbox 时必填; 相同 URL 的 agent 共享 HTTP client
+    # sandbox_id_resolve: from_logs     # fixed | list_ready | from_logs(默认); 确定 EDPAgent 所在 sandbox_id 的方式(不改 EDPAgent)
+    #                                   #   from_logs: 从 log_dir 日志解析 "sandbox_id=...",找不到回退 list_ready(推荐)
+    #                                   #   fixed: 用 sandbox_id(需同时配 sandbox_id); list_ready: 挑唯一 ready 沙箱,多个则报错
+    # remote_skills_dir: /tmp/skills    # 沙箱内 skill 目录路径,须与 EDPAgent SKILL_TARGET_PATH 对齐; 默认 /tmp/skills
     # log_pattern: "process*.log"            # Optional: defaults to top-level log_pattern
     # output_dir: "data/output/edp_agent"     # Optional: defaults to data/output/{name}
     # offset_file: "data/offsets/edp_agent.json"  # Optional: defaults to data/offsets/{name}.json
