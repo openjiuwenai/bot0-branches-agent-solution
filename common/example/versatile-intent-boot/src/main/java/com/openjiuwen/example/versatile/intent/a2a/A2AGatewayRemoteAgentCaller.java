@@ -188,6 +188,10 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
         CompletableFuture<String> result = new CompletableFuture<>();
         try {
             client.sendMessage(params, List.of((BiConsumer<ClientEvent, AgentCard>) (event, c) -> {
+                log.debug("A2AGateway callback agentId={} eventClass={} taskState={}",
+                        call.agentId(), event.getClass().getSimpleName(),
+                        event instanceof TaskEvent te && te.getTask() != null && te.getTask().status() != null
+                                ? te.getTask().status().state() : "n/a");
                 if (event instanceof TaskUpdateEvent tue) {
                     if (tue.getUpdateEvent() instanceof TaskArtifactUpdateEvent aue) {
                         handleArtifact(aue, result, observer);
@@ -206,7 +210,10 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
 
         long timeoutSeconds = properties.getCallTimeoutSeconds();
         try {
-            result.get(timeoutSeconds, TimeUnit.SECONDS);
+            String answer = result.get(timeoutSeconds, TimeUnit.SECONDS);
+            log.info("A2AGateway call completed agentId={} answerLen={} answerHead={}",
+                    call.agentId(), answer == null ? 0 : answer.length(),
+                    answer == null ? "" : answer.substring(0, Math.min(answer.length(), 80)));
             if (!observer.isCancelled()) {
                 observer.onComplete();
             }
