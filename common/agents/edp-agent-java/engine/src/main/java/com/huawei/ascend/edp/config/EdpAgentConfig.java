@@ -43,7 +43,7 @@ import java.util.Map;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class EdpAgentConfig {
@@ -84,6 +84,8 @@ public class EdpAgentConfig {
 
     /**
      * Gets the name.
+     *
+     * @return the result
      */
     public String getName() {
         return name;
@@ -91,6 +93,8 @@ public class EdpAgentConfig {
 
     /**
      * Sets the name.
+     *
+     * @param name the name value
      */
     public void setName(String name) {
         this.name = name;
@@ -98,6 +102,8 @@ public class EdpAgentConfig {
 
     /**
      * Gets the description.
+     *
+     * @return the result
      */
     public String getDescription() {
         return description;
@@ -105,6 +111,8 @@ public class EdpAgentConfig {
 
     /**
      * Sets the description.
+     *
+     * @param description the description value
      */
     public void setDescription(String description) {
         this.description = description;
@@ -112,6 +120,8 @@ public class EdpAgentConfig {
 
     /**
      * Gets the framework.
+     *
+     * @return the result
      */
     public Framework getFramework() {
         return framework;
@@ -119,6 +129,8 @@ public class EdpAgentConfig {
 
     /**
      * Sets the framework.
+     *
+     * @param framework the framework value
      */
     public void setFramework(Framework framework) {
         this.framework = framework;
@@ -126,6 +138,8 @@ public class EdpAgentConfig {
 
     /**
      * Gets the model.
+     *
+     * @return the result
      */
     public Model getModel() {
         return model;
@@ -133,6 +147,8 @@ public class EdpAgentConfig {
 
     /**
      * Sets the model.
+     *
+     * @param model the model value
      */
     public void setModel(Model model) {
         this.model = model;
@@ -140,6 +156,8 @@ public class EdpAgentConfig {
 
     /**
      * Gets the versatile.
+     *
+     * @return the result
      */
     public Versatile getVersatile() {
         return versatile;
@@ -147,6 +165,8 @@ public class EdpAgentConfig {
 
     /**
      * Sets the versatile.
+     *
+     * @param versatile the versatile value
      */
     public void setVersatile(Versatile versatile) {
         this.versatile = versatile;
@@ -154,6 +174,8 @@ public class EdpAgentConfig {
 
     /**
      * Gets the prompt.
+     *
+     * @return the result
      */
     public Prompt getPrompt() {
         return prompt;
@@ -161,6 +183,8 @@ public class EdpAgentConfig {
 
     /**
      * Sets the prompt.
+     *
+     * @param prompt the prompt value
      */
     public void setPrompt(Prompt prompt) {
         this.prompt = prompt;
@@ -168,6 +192,8 @@ public class EdpAgentConfig {
 
     /**
      * Gets the skills.
+     *
+     * @return the result
      */
     public Skills getSkills() {
         return skills;
@@ -175,6 +201,8 @@ public class EdpAgentConfig {
 
     /**
      * Sets the skills.
+     *
+     * @param skills the skills value
      */
     public void setSkills(Skills skills) {
         this.skills = skills;
@@ -182,7 +210,7 @@ public class EdpAgentConfig {
 
     /**
      * 框架配置节点。
-      *
+     *
      */
 
     public static class Framework {
@@ -193,6 +221,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the options.
+         *
+         * @return the result
          */
         public Options getOptions() {
             return options;
@@ -200,6 +230,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the options.
+         *
+         * @param options the options value
          */
         public void setOptions(Options options) {
             this.options = options;
@@ -208,7 +240,7 @@ public class EdpAgentConfig {
 
     /**
      * 框架运行选项。
-      *
+     *
      */
 
     public static class Options {
@@ -224,6 +256,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the max iterations.
+         *
+         * @return the result
          */
         public int getMaxIterations() {
             return maxIterations;
@@ -231,6 +265,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the max iterations.
+         *
+         * @param maxIterations the maxIterations value
          */
         public void setMaxIterations(int maxIterations) {
             this.maxIterations = maxIterations;
@@ -238,6 +274,8 @@ public class EdpAgentConfig {
 
         /**
          * Checks whether enable task loop.
+         *
+         * @return the result
          */
         public boolean isEnableTaskLoop() {
             return enableTaskLoop;
@@ -245,6 +283,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the enable task loop.
+         *
+         * @param enableTaskLoop the enableTaskLoop value
          */
         public void setEnableTaskLoop(boolean enableTaskLoop) {
             this.enableTaskLoop = enableTaskLoop;
@@ -253,7 +293,7 @@ public class EdpAgentConfig {
 
     /**
      * 模型后端配置。
-      *
+     *
      */
 
     public static class Model {
@@ -279,6 +319,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the provider.
+         *
+         * @return the result
          */
         public String getProvider() {
             return provider;
@@ -286,6 +328,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the provider.
+         *
+         * @param provider the provider value
          */
         public void setProvider(String provider) {
             this.provider = provider;
@@ -293,6 +337,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the name.
+         *
+         * @return the result
          */
         public String getName() {
             return name;
@@ -300,6 +346,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the name.
+         *
+         * @param name the name value
          */
         public void setName(String name) {
             this.name = name;
@@ -307,6 +355,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the base url.
+         *
+         * @return the result
          */
         public String getBaseUrl() {
             return baseUrl;
@@ -314,6 +364,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the base url.
+         *
+         * @param baseUrl the baseUrl value
          */
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
@@ -321,6 +373,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the api key.
+         *
+         * @return the result
          */
         public String getApiKey() {
             return apiKey;
@@ -328,6 +382,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the api key.
+         *
+         * @param apiKey the apiKey value
          */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
@@ -336,7 +392,7 @@ public class EdpAgentConfig {
 
     /**
      * Versatile 服务配置。
-      *
+     *
      */
 
     public static class Versatile {
@@ -359,6 +415,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the url.
+         *
+         * @return the result
          */
         public String getUrl() {
             return url;
@@ -366,6 +424,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the url.
+         *
+         * @param url the url value
          */
         public void setUrl(String url) {
             this.url = url;
@@ -373,6 +433,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the adapter a2a url.
+         *
+         * @return the result
          */
         public String getAdapterA2aUrl() {
             return adapterA2aUrl;
@@ -380,6 +442,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the adapter a2a url.
+         *
+         * @param adapterA2aUrl the adapterA2aUrl value
          */
         public void setAdapterA2aUrl(String adapterA2aUrl) {
             this.adapterA2aUrl = adapterA2aUrl;
@@ -387,6 +451,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the timeout.
+         *
+         * @return the result
          */
         public String getTimeout() {
             return timeout;
@@ -394,6 +460,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the timeout.
+         *
+         * @param timeout the timeout value
          */
         public void setTimeout(String timeout) {
             this.timeout = timeout;
@@ -401,6 +469,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the url variables.
+         *
+         * @return the result
          */
         public Map<String, String> getUrlVariables() {
             return urlVariables;
@@ -408,6 +478,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the url variables.
+         *
+         * @param urlVariables the urlVariables value
          */
         public void setUrlVariables(Map<String, String> urlVariables) {
             this.urlVariables = urlVariables != null ? urlVariables : new LinkedHashMap<>();
@@ -415,6 +487,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the query params.
+         *
+         * @return the result
          */
         public Map<String, String> getQueryParams() {
             return queryParams;
@@ -422,6 +496,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the query params.
+         *
+         * @param queryParams the queryParams value
          */
         public void setQueryParams(Map<String, String> queryParams) {
             this.queryParams = queryParams != null ? queryParams : new LinkedHashMap<>();
@@ -429,6 +505,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the headers.
+         *
+         * @return the result
          */
         public Map<String, String> getHeaders() {
             return headers;
@@ -436,6 +514,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the headers.
+         *
+         * @param headers the headers value
          */
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : new LinkedHashMap<>();
@@ -444,7 +524,7 @@ public class EdpAgentConfig {
 
     /**
      * Skill 配置。
-      *
+     *
      */
 
     public static class Skills {
@@ -453,6 +533,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the directories.
+         *
+         * @return the result
          */
         public List<String> getDirectories() {
             return directories;
@@ -460,6 +542,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the directories.
+         *
+         * @param directories the directories value
          */
         public void setDirectories(List<String> directories) {
             this.directories = directories != null ? directories : new ArrayList<>();
@@ -467,6 +551,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the mode.
+         *
+         * @return the result
          */
         public String getMode() {
             return mode;
@@ -474,6 +560,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the mode.
+         *
+         * @param mode the mode value
          */
         public void setMode(String mode) {
             this.mode = mode;
@@ -482,7 +570,7 @@ public class EdpAgentConfig {
 
     /**
      * Prompt 配置。
-      *
+     *
      */
 
     public static class Prompt {
@@ -493,6 +581,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the system.
+         *
+         * @return the result
          */
         public String getSystem() {
             return system;
@@ -500,6 +590,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the system.
+         *
+         * @param system the system value
          */
         public void setSystem(String system) {
             this.system = system;
@@ -511,7 +603,7 @@ public class EdpAgentConfig {
      *
      * 用于在 Spring Bean 创建阶段将环境变量中的密钥类配置注入到 agentConfig 中，
      * 因为 edp-agent.yaml 通过 Jackson 直读加载，不支持 Spring Boot ${...} 占位符替换。
-      *
+     *
      */
 
     public static class EnvOverrides {
@@ -542,6 +634,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the api key.
+         *
+         * @return the result
          */
         public String getApiKey() {
             return apiKey;
@@ -549,6 +643,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the api key.
+         *
+         * @param apiKey the apiKey value
          */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
@@ -556,6 +652,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the model provider.
+         *
+         * @return the result
          */
         public String getModelProvider() {
             return modelProvider;
@@ -563,6 +661,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the model provider.
+         *
+         * @param modelProvider the modelProvider value
          */
         public void setModelProvider(String modelProvider) {
             this.modelProvider = modelProvider;
@@ -570,6 +670,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the model name.
+         *
+         * @return the result
          */
         public String getModelName() {
             return modelName;
@@ -577,6 +679,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the model name.
+         *
+         * @param modelName the modelName value
          */
         public void setModelName(String modelName) {
             this.modelName = modelName;
@@ -584,6 +688,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the model base url.
+         *
+         * @return the result
          */
         public String getModelBaseUrl() {
             return modelBaseUrl;
@@ -591,6 +697,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the model base url.
+         *
+         * @param modelBaseUrl the modelBaseUrl value
          */
         public void setModelBaseUrl(String modelBaseUrl) {
             this.modelBaseUrl = modelBaseUrl;
@@ -598,6 +706,8 @@ public class EdpAgentConfig {
 
         /**
          * Gets the versatile url.
+         *
+         * @return the result
          */
         public String getVersatileUrl() {
             return versatileUrl;
@@ -605,6 +715,8 @@ public class EdpAgentConfig {
 
         /**
          * Sets the versatile url.
+         *
+         * @param versatileUrl the versatileUrl value
          */
         public void setVersatileUrl(String versatileUrl) {
             this.versatileUrl = versatileUrl;

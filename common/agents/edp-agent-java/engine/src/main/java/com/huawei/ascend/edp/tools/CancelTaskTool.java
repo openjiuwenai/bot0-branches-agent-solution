@@ -28,7 +28,7 @@ import java.util.Map;
  * EDPAgent 任务取消工具。
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public final class CancelTaskTool {
@@ -39,6 +39,8 @@ public final class CancelTaskTool {
 
     /**
      * Builds the tool instance.
+     *
+     * @return the result
      */
     public static Tool build() {
         // 对齐 Python cancel_task.py L26: [cancel_task] reason=...

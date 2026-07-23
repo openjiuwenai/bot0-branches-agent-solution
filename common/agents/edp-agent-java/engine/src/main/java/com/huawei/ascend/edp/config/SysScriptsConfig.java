@@ -58,7 +58,7 @@ import java.util.Set;
  * <p>场景可以定义自己的话术键（如 abc-loan-scenario 的 loan_success），同样自动映射。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class SysScriptsConfig {
@@ -68,6 +68,8 @@ public class SysScriptsConfig {
 
     /**
      * 话术模板字典（扁平化后的键值对）。
+     *
+     * @return the result
      */
     private final Map<String, String> templates = new LinkedHashMap<>();
 
@@ -81,7 +83,8 @@ public class SysScriptsConfig {
      *   <li>常量名存在但大小写不同 → 自动映射（忽略大小写匹配）</li>
      *   <li>常量名不存在 → 运行时抛出 IllegalStateException</li>
      * </ul>
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, String> scriptKeysMap = new LinkedHashMap<>();
@@ -93,6 +96,8 @@ public class SysScriptsConfig {
 
     /**
      * 每次 load() 时独立解析的 query_patterns 源列表（用于框架级+场景级合并）。
+     *
+     * @return the result
      */
     private final List<List<QueryPattern>> queryPatternsSources = new ArrayList<>();
 
@@ -121,7 +126,7 @@ public class SysScriptsConfig {
      *
      * @param configPath 配置文件路径或 classpath 资源路径
      * @throws IllegalStateException 配置文件不存在且 classpath 中也不存在
-      *
+     *
      */
 
     public void load(String configPath) {
@@ -185,7 +190,9 @@ public class SysScriptsConfig {
 
     /**
      * 从完整路径中提取 classpath 相对路径。
-      *
+     *
+     * @param configPath the configPath value
+     * @return the result
      */
 
     private String extractClasspathResource(String configPath) {
@@ -232,7 +239,7 @@ public class SysScriptsConfig {
      * @param outScriptKeys 输出映射的目标 map
      *
      * @param Map<String description
-      *
+     *
      */
 
     public static void inferScriptKeys(Map<String, String> templates, Map<String, String> outScriptKeys) {
@@ -288,7 +295,7 @@ public class SysScriptsConfig {
      * @param constantName ScriptConstants 常量全名（如 {@code "SCRIPT_FUND_PLANNING_SUCCESS"}）
      * @return 配置中的实际键名
      * @throws IllegalStateException 映射不存在（常量在配置中未定义）
-      *
+     *
      */
 
     public String resolveScriptKey(String constantName) {
@@ -325,7 +332,7 @@ public class SysScriptsConfig {
      *
      * @param constantName ScriptConstants 常量名
      * @return 话术模板内容，不存在返回 Optional.empty()
-      *
+     *
      */
 
     public Optional<String> getScript(String constantName) {
@@ -343,7 +350,7 @@ public class SysScriptsConfig {
      * @param constantName ScriptConstants 常量名
      * @param defaultValue 缺失时的默认值
      * @return 话术模板内容或 defaultValue
-      *
+     *
      */
 
     public String getScriptOrDefault(String constantName, String defaultValue) {
@@ -355,7 +362,7 @@ public class SysScriptsConfig {
      *
      * @param constantName ScriptConstants 常量名
      * @return true 表示配置中存在该话术
-      *
+     *
      */
 
     public boolean hasScript(String constantName) {
@@ -370,7 +377,8 @@ public class SysScriptsConfig {
     /**
      * 动态收集业务话术键（来自各 SKILL.yaml 的 scripts 字段，由 SkillScriptsCollector 合并）。
      * 业务键 = templates 中不含 "." 的键（如 product_select_confirm），排除通用前缀键（如 general_scripts.xxx）。
-      *
+     *
+     * @return the result
      */
 
     public List<String> listBusinessScriptKeys() {
@@ -387,7 +395,7 @@ public class SysScriptsConfig {
      * 获取当前话术键映射表（调试用）。
      *
      * @return 不可变的映射表副本
-      *
+     *
      */
 
     public Map<String, String> getScriptKeysMap() {
@@ -398,7 +406,7 @@ public class SysScriptsConfig {
      * 设置话术键映射（用于测试）。
      *
      * @param keysMap 常量名 → 实际键名 的映射
-      *
+     *
      */
 
     public void setScriptKeysMap(Map<String, String> keysMap) {
@@ -409,7 +417,7 @@ public class SysScriptsConfig {
 
     /**
      * 从当前模板自动推断话术键映射（用于测试或动态配置场景）。
-      *
+     *
      */
 
     public void inferScriptKeysFromTemplates() {
@@ -425,7 +433,7 @@ public class SysScriptsConfig {
      *
      * @param key 模板 key（可以是完整路径或短键名）
      * @return 模板内容的 Optional，不存在时返回 Optional.empty()
-      *
+     *
      */
 
     public Optional<String> getTemplate(String key) {
@@ -449,7 +457,7 @@ public class SysScriptsConfig {
      *
      * @param key 模板 key
      * @return true 表示配置内存在该 key
-      *
+     *
      */
 
     public boolean has(String key) {
@@ -462,7 +470,7 @@ public class SysScriptsConfig {
      * @param key 模板 key
      * @param def 缺失时的默认值
      * @return 模板内容或 def
-      *
+     *
      */
 
     public String getOrDefault(String key, String def) {
@@ -474,7 +482,7 @@ public class SysScriptsConfig {
      * 合并场景级话术（场景级覆盖系统级同名 key）。
      *
      * @param skillScripts Skill 话术字典
-      *
+     *
      */
 
     public void mergeSkillScripts(Map<String, String> skillScripts) {
@@ -489,7 +497,7 @@ public class SysScriptsConfig {
      * @param template 模板内容
      * @param vars 变量字典
      * @return 替换后的内容
-      *
+     *
      */
 
     public String render(String template, Map<String, String> vars) {
@@ -508,6 +516,8 @@ public class SysScriptsConfig {
 
     /**
      * Gets the templates.
+     *
+     * @return the result
      */
     public Map<String, String> getTemplates() {
         return Map.copyOf(templates);
@@ -521,7 +531,7 @@ public class SysScriptsConfig {
      * 获取 interrupt 追问内容来源开关（UC-C02）。
      *
      * @return "script"（默认，追问内容必须来自脚本）或 "llm"（允许 LLM 生成）
-      *
+     *
      */
 
     public String getInterruptSource() {
@@ -532,7 +542,8 @@ public class SysScriptsConfig {
      * 获取 query_patterns 配置（解析后缓存）。
      * 支持场景级与框架级合并：同 keywords 组时场景级覆盖框架级，不同 keywords 组各自生效。
      * 对齐 FEAT_EDPA 话术特性用例文档 UC-B02 A5 验收5/6。
-      *
+     *
+     * @return the result
      */
 
     public List<QueryPattern> getQueryPatterns() {
@@ -563,7 +574,9 @@ public class SysScriptsConfig {
 
     /**
      * 从指定前缀解析 query_patterns 配置。
-      *
+     *
+     * @param prefix the prefix value
+     * @return the result
      */
 
     @SuppressWarnings("unchecked")
@@ -645,7 +658,9 @@ public class SysScriptsConfig {
 
     /**
      * 根据用户 query 匹配关键词，选择对应的话术。
-      *
+     *
+     * @param userQuery the userQuery value
+     * @return the result
      */
 
     public List<String> matchQueryPatterns(String userQuery) {
@@ -711,7 +726,8 @@ public class SysScriptsConfig {
     /**
      * 从原始 YAML 解析结果中收集 query_patterns（在 flatten 覆盖前调用）。
      * 对齐 UC-B02 A5：场景级同 keywords 组覆盖框架级，不同 keywords 组各自生效。
-      *
+     *
+     * @param parsed the parsed value
      */
 
     @SuppressWarnings("unchecked")
@@ -773,7 +789,8 @@ public class SysScriptsConfig {
      * 解析 interrupt_source 开关（UC-C02）。
      * 配置位置：scriptconfig.interrupt_source，可选值 "script"（默认）/ "llm"。
      * 后加载的配置覆盖先加载的（场景级覆盖框架级）。
-      *
+     *
+     * @param parsed the parsed value
      */
 
     @SuppressWarnings("unchecked")
@@ -810,7 +827,7 @@ public class SysScriptsConfig {
 
     /**
      * governance/scriptconfig.yaml 嵌套结构适配。
-      *
+     *
      */
 
     private void aliasGovernancePrefixes() {

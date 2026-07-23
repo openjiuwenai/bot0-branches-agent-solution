@@ -38,7 +38,7 @@ import java.util.List;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class EdpConfig {
@@ -59,6 +59,8 @@ public class EdpConfig {
 
     /**
      * Gets the scope.
+     *
+     * @return the result
      */
     public Scope getScope() {
         return scope;
@@ -66,6 +68,8 @@ public class EdpConfig {
 
     /**
      * Sets the scope.
+     *
+     * @param scope the scope value
      */
     public void setScope(Scope scope) {
         this.scope = scope;
@@ -73,6 +77,8 @@ public class EdpConfig {
 
     /**
      * Gets the planning steps.
+     *
+     * @return the result
      */
     public List<String> getPlanningSteps() {
         return planningSteps;
@@ -80,6 +86,8 @@ public class EdpConfig {
 
     /**
      * Sets the planning steps.
+     *
+     * @param planningSteps the planningSteps value
      */
     public void setPlanningSteps(List<String> planningSteps) {
         this.planningSteps = planningSteps;
@@ -87,6 +95,8 @@ public class EdpConfig {
 
     /**
      * Gets the llm sampling.
+     *
+     * @return the result
      */
     public LlmSampling getLlmSampling() {
         return llmSampling;
@@ -94,6 +104,8 @@ public class EdpConfig {
 
     /**
      * Sets the llm sampling.
+     *
+     * @param llmSampling the llmSampling value
      */
     public void setLlmSampling(LlmSampling llmSampling) {
         this.llmSampling = llmSampling;
@@ -101,7 +113,7 @@ public class EdpConfig {
 
     /**
      * 业务范围配置。
-      *
+     *
      */
 
     public static class Scope {
@@ -112,6 +124,8 @@ public class EdpConfig {
 
         /**
          * Gets the allowed.
+         *
+         * @return the result
          */
         public String getAllowed() {
             return allowed;
@@ -119,6 +133,8 @@ public class EdpConfig {
 
         /**
          * Sets the allowed.
+         *
+         * @param allowed the allowed value
          */
         public void setAllowed(String allowed) {
             this.allowed = allowed;
@@ -127,7 +143,7 @@ public class EdpConfig {
 
     /**
      * 模型采样参数配置。
-      *
+     *
      */
 
     public static class LlmSampling {
@@ -148,6 +164,8 @@ public class EdpConfig {
 
         /**
          * Gets the temperature.
+         *
+         * @return the result
          */
         public double getTemperature() {
             return temperature;
@@ -155,6 +173,8 @@ public class EdpConfig {
 
         /**
          * Sets the temperature.
+         *
+         * @param temperature the temperature value
          */
         public void setTemperature(double temperature) {
             this.temperature = temperature;
@@ -162,6 +182,8 @@ public class EdpConfig {
 
         /**
          * Gets the top p.
+         *
+         * @return the result
          */
         public double getTopP() {
             return topP;
@@ -169,6 +191,8 @@ public class EdpConfig {
 
         /**
          * Sets the top p.
+         *
+         * @param topP the topP value
          */
         public void setTopP(double topP) {
             this.topP = topP;
@@ -176,6 +200,8 @@ public class EdpConfig {
 
         /**
          * Gets the max retries.
+         *
+         * @return the result
          */
         public int getMaxRetries() {
             return maxRetries;
@@ -183,6 +209,8 @@ public class EdpConfig {
 
         /**
          * Sets the max retries.
+         *
+         * @param maxRetries the maxRetries value
          */
         public void setMaxRetries(int maxRetries) {
             this.maxRetries = maxRetries;

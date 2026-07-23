@@ -28,7 +28,7 @@ import java.util.Map;
  * EDPAgent Versatile Agent 委托工具。
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public final class CallVersatileTool {
@@ -39,6 +39,8 @@ public final class CallVersatileTool {
 
     /**
      * Builds the tool instance.
+     *
+     * @return the result
      */
     public static Tool build() {
         // 对齐 Python call_versatile.py L33-40: [call_versatile] intent=..., desc=...

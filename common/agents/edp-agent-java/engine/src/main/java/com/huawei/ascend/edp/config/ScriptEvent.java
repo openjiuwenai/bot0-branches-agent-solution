@@ -20,7 +20,7 @@ package com.huawei.ascend.edp.config;
  * 脚本事件枚举，用于标记特定话术场景（对应需求文档 §A 的五个特定事件）。
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public enum ScriptEvent {
@@ -35,6 +35,8 @@ public enum ScriptEvent {
 
     /**
      * Gets the key.
+     *
+     * @return the result
      */
     public String getKey() {
         return key;

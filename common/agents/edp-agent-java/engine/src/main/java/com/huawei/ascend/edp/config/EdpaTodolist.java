@@ -50,7 +50,7 @@ import java.util.Set;
  * {@code catalog_id} 作为 entry 的内部主键字段名保留（字段层语义）。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class EdpaTodolist {
@@ -58,21 +58,21 @@ public class EdpaTodolist {
 
     /**
      * 任务定义列表（保持配置顺序）。
-      *
+     *
      */
 
     private final List<TodoEntry> entries;
 
     /**
      * 动态路径规则列表。
-      *
+     *
      */
 
     private final List<DynamicPath> dynamicPaths;
 
     /**
      * catalog_id 到 TodoEntry 的索引，O(1) 查询。
-      *
+     *
      */
 
     private final Map<String, TodoEntry> index;
@@ -85,7 +85,7 @@ public class EdpaTodolist {
      * @throws IllegalArgumentException 校验失败（catalog_id 重复、引用不存在、依赖图有环）
      *
      * @return result
-      *
+     *
      */
 
     public EdpaTodolist(List<ActRuleConfig.TodolistEntry> rawEntries, List<ActRuleConfig.TodolistPath> rawPaths) {
@@ -121,6 +121,8 @@ public class EdpaTodolist {
 
     /**
      * Gets the entries.
+     *
+     * @return the result
      */
     public List<TodoEntry> getEntries() {
         return entries;
@@ -128,6 +130,8 @@ public class EdpaTodolist {
 
     /**
      * Gets the dynamic paths.
+     *
+     * @return the result
      */
     public List<DynamicPath> getDynamicPaths() {
         return dynamicPaths;
@@ -135,6 +139,9 @@ public class EdpaTodolist {
 
     /**
      * Find by catalog id.
+     *
+     * @param catalogId the catalogId value
+     * @return the result
      */
     public TodoEntry findByCatalogId(String catalogId) {
         return index.get(catalogId);
@@ -144,7 +151,7 @@ public class EdpaTodolist {
      * 是否存在动态路径规则。
      *
      * @return 存在 dynamic_paths 返回 true
-      *
+     *
      */
 
     public boolean hasDynamicPaths() {
@@ -153,7 +160,7 @@ public class EdpaTodolist {
 
     /**
      * 校验 depends_on 和 dynamic_paths.skip_steps 引用的 catalog_id 都存在。
-      *
+     *
      */
 
     private void validateReferences() {
@@ -177,7 +184,7 @@ public class EdpaTodolist {
 
     /**
      * 校验 depends_on 构成的有向图无环（Kahn's 算法）。
-      *
+     *
      */
 
     private void validateAcyclic() {
@@ -222,7 +229,7 @@ public class EdpaTodolist {
 
     /**
      * 任务定义（catalog_id 为内部主键字段，含完整字段）。
-      *
+     *
      */
 
     public static class TodoEntry {
@@ -244,6 +251,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the catalog id.
+         *
+         * @return the result
          */
         public String getCatalogId() {
             return catalogId;
@@ -251,6 +260,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the content.
+         *
+         * @return the result
          */
         public String getContent() {
             return content;
@@ -258,6 +269,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the description.
+         *
+         * @return the result
          */
         public String getDescription() {
             return description;
@@ -265,6 +278,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the depends on.
+         *
+         * @return the result
          */
         public List<String> getDependsOn() {
             return dependsOn;
@@ -272,6 +287,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the skill.
+         *
+         * @return the result
          */
         public String getSkill() {
             return skill;
@@ -280,7 +297,7 @@ public class EdpaTodolist {
 
     /**
      * 动态路径规则（LLM 根据业务结果自主判断是否切换）。
-      *
+     *
      */
 
     public static class DynamicPath {
@@ -302,6 +319,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the path id.
+         *
+         * @return the result
          */
         public String getPathId() {
             return pathId;
@@ -309,6 +328,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the description.
+         *
+         * @return the result
          */
         public String getDescription() {
             return description;
@@ -316,6 +337,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the trigger.
+         *
+         * @return the result
          */
         public String getTrigger() {
             return trigger;
@@ -323,6 +346,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the skip steps.
+         *
+         * @return the result
          */
         public List<String> getSkipSteps() {
             return skipSteps;
@@ -330,6 +355,8 @@ public class EdpaTodolist {
 
         /**
          * Gets the redirect.
+         *
+         * @return the result
          */
         public String getRedirect() {
             return redirect;

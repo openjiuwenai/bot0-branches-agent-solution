@@ -53,7 +53,7 @@ import java.util.Optional;
  * </ol>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class QueryChunkFormatAdapter implements QueryStreamObserver {
@@ -81,6 +81,8 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
     @Override
     /**
      * On next.
+     *
+     * @param chunk the chunk value
      */
     public void onNext(QueryChunk chunk) {
         if (chunk == null || chunk.getData() == null) {
@@ -108,6 +110,9 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
 
     /**
      * Handles chunk data that is a Map.
+     *
+     * @param chunk the chunk value
+     * @param map the map value
      */
     private void handleMapData(QueryChunk chunk, Map<String, Object> map) {
         String chunkType = String.valueOf(map.getOrDefault("type", ""));
@@ -142,6 +147,9 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
 
     /**
      * Handles chunk data that is a String (potentially JSON).
+     *
+     * @param chunk the chunk value
+     * @param text the text value
      */
     private void handleStringData(QueryChunk chunk, String text) {
         if (!text.trim().startsWith("{")) {
@@ -184,6 +192,8 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
     @Override
     /**
      * On error.
+     *
+     * @param error the error value
      */
     public void onError(Throwable error) {
         logStats();
@@ -202,6 +212,8 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
     @Override
     /**
      * Checks whether cancelled.
+     *
+     * @return the result
      */
     public boolean isCancelled() {
         return delegate.isCancelled();

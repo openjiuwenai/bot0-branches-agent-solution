@@ -31,7 +31,7 @@ import java.util.Map;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class ScriptConfig {
@@ -57,6 +57,8 @@ public class ScriptConfig {
 
     /**
      * Gets the general scripts.
+     *
+     * @return the result
      */
     public GeneralScripts getGeneralScripts() {
         return generalScripts;
@@ -64,6 +66,8 @@ public class ScriptConfig {
 
     /**
      * Sets the general scripts.
+     *
+     * @param generalScripts the generalScripts value
      */
     public void setGeneralScripts(GeneralScripts generalScripts) {
         this.generalScripts = generalScripts;
@@ -71,6 +75,8 @@ public class ScriptConfig {
 
     /**
      * Gets the query intent tool text.
+     *
+     * @return the result
      */
     public Map<String, QueryIntentEntry> getQueryIntentToolText() {
         return queryIntentToolText;
@@ -78,6 +84,8 @@ public class ScriptConfig {
 
     /**
      * Sets the query intent tool text.
+     *
+     * @param queryIntentToolText the queryIntentToolText value
      */
     public void setQueryIntentToolText(Map<String, QueryIntentEntry> queryIntentToolText) {
         this.queryIntentToolText = queryIntentToolText;
@@ -85,6 +93,8 @@ public class ScriptConfig {
 
     /**
      * Gets the think chunk scripts.
+     *
+     * @return the result
      */
     public ThinkChunkScripts getThinkChunkScripts() {
         return thinkChunkScripts;
@@ -92,6 +102,8 @@ public class ScriptConfig {
 
     /**
      * Sets the think chunk scripts.
+     *
+     * @param thinkChunkScripts the thinkChunkScripts value
      */
     public void setThinkChunkScripts(ThinkChunkScripts thinkChunkScripts) {
         this.thinkChunkScripts = thinkChunkScripts;
@@ -99,6 +111,8 @@ public class ScriptConfig {
 
     /**
      * Gets the ask user confirm.
+     *
+     * @return the result
      */
     public AskUserConfirm getAskUserConfirm() {
         return askUserConfirm;
@@ -106,6 +120,8 @@ public class ScriptConfig {
 
     /**
      * Sets the ask user confirm.
+     *
+     * @param askUserConfirm the askUserConfirm value
      */
     public void setAskUserConfirm(AskUserConfirm askUserConfirm) {
         this.askUserConfirm = askUserConfirm;
@@ -113,7 +129,7 @@ public class ScriptConfig {
 
     /**
      * 通用话术配置，用于业务流程状态（工具调用、中断、取消等）。
-      *
+     *
      */
 
     public static class GeneralScripts {
@@ -132,6 +148,8 @@ public class ScriptConfig {
 
         /**
          * Gets the tool start.
+         *
+         * @return the result
          */
         public String getToolStart() {
             return toolStart;
@@ -139,6 +157,8 @@ public class ScriptConfig {
 
         /**
          * Sets the tool start.
+         *
+         * @param toolStart the toolStart value
          */
         public void setToolStart(String toolStart) {
             this.toolStart = toolStart;
@@ -146,6 +166,8 @@ public class ScriptConfig {
 
         /**
          * Gets the tool end.
+         *
+         * @return the result
          */
         public String getToolEnd() {
             return toolEnd;
@@ -153,6 +175,8 @@ public class ScriptConfig {
 
         /**
          * Sets the tool end.
+         *
+         * @param toolEnd the toolEnd value
          */
         public void setToolEnd(String toolEnd) {
             this.toolEnd = toolEnd;
@@ -160,6 +184,8 @@ public class ScriptConfig {
 
         /**
          * Gets the todo start.
+         *
+         * @return the result
          */
         public String getTodoStart() {
             return todoStart;
@@ -167,6 +193,8 @@ public class ScriptConfig {
 
         /**
          * Sets the todo start.
+         *
+         * @param todoStart the todoStart value
          */
         public void setTodoStart(String todoStart) {
             this.todoStart = todoStart;
@@ -174,6 +202,8 @@ public class ScriptConfig {
 
         /**
          * Gets the todo end.
+         *
+         * @return the result
          */
         public String getTodoEnd() {
             return todoEnd;
@@ -181,6 +211,8 @@ public class ScriptConfig {
 
         /**
          * Sets the todo end.
+         *
+         * @param todoEnd the todoEnd value
          */
         public void setTodoEnd(String todoEnd) {
             this.todoEnd = todoEnd;
@@ -188,6 +220,8 @@ public class ScriptConfig {
 
         /**
          * Gets the todolist start.
+         *
+         * @return the result
          */
         public String getTodolistStart() {
             return todolistStart;
@@ -195,6 +229,8 @@ public class ScriptConfig {
 
         /**
          * Sets the todolist start.
+         *
+         * @param todolistStart the todolistStart value
          */
         public void setTodolistStart(String todolistStart) {
             this.todolistStart = todolistStart;
@@ -202,6 +238,8 @@ public class ScriptConfig {
 
         /**
          * Gets the todolist end.
+         *
+         * @return the result
          */
         public String getTodolistEnd() {
             return todolistEnd;
@@ -209,6 +247,8 @@ public class ScriptConfig {
 
         /**
          * Sets the todolist end.
+         *
+         * @param todolistEnd the todolistEnd value
          */
         public void setTodolistEnd(String todolistEnd) {
             this.todolistEnd = todolistEnd;
@@ -216,6 +256,8 @@ public class ScriptConfig {
 
         /**
          * Gets the interrupt start.
+         *
+         * @return the result
          */
         public String getInterruptStart() {
             return interruptStart;
@@ -223,6 +265,8 @@ public class ScriptConfig {
 
         /**
          * Sets the interrupt start.
+         *
+         * @param interruptStart the interruptStart value
          */
         public void setInterruptStart(String interruptStart) {
             this.interruptStart = interruptStart;
@@ -230,6 +274,8 @@ public class ScriptConfig {
 
         /**
          * Gets the request start.
+         *
+         * @return the result
          */
         public String getRequestStart() {
             return requestStart;
@@ -237,6 +283,8 @@ public class ScriptConfig {
 
         /**
          * Sets the request start.
+         *
+         * @param requestStart the requestStart value
          */
         public void setRequestStart(String requestStart) {
             this.requestStart = requestStart;
@@ -244,6 +292,8 @@ public class ScriptConfig {
 
         /**
          * Gets the planning start.
+         *
+         * @return the result
          */
         public String getPlanningStart() {
             return planningStart;
@@ -251,6 +301,8 @@ public class ScriptConfig {
 
         /**
          * Sets the planning start.
+         *
+         * @param planningStart the planningStart value
          */
         public void setPlanningStart(String planningStart) {
             this.planningStart = planningStart;
@@ -258,6 +310,8 @@ public class ScriptConfig {
 
         /**
          * Gets the task cancelled.
+         *
+         * @return the result
          */
         public String getTaskCancelled() {
             return taskCancelled;
@@ -265,6 +319,8 @@ public class ScriptConfig {
 
         /**
          * Sets the task cancelled.
+         *
+         * @param taskCancelled the taskCancelled value
          */
         public void setTaskCancelled(String taskCancelled) {
             this.taskCancelled = taskCancelled;
@@ -272,6 +328,8 @@ public class ScriptConfig {
 
         /**
          * Gets the cancel confirm.
+         *
+         * @return the result
          */
         public String getCancelConfirm() {
             return cancelConfirm;
@@ -279,6 +337,8 @@ public class ScriptConfig {
 
         /**
          * Sets the cancel confirm.
+         *
+         * @param cancelConfirm the cancelConfirm value
          */
         public void setCancelConfirm(String cancelConfirm) {
             this.cancelConfirm = cancelConfirm;
@@ -286,6 +346,8 @@ public class ScriptConfig {
 
         /**
          * Gets the out of scope.
+         *
+         * @return the result
          */
         public String getOutOfScope() {
             return outOfScope;
@@ -293,6 +355,8 @@ public class ScriptConfig {
 
         /**
          * Sets the out of scope.
+         *
+         * @param outOfScope the outOfScope value
          */
         public void setOutOfScope(String outOfScope) {
             this.outOfScope = outOfScope;
@@ -301,7 +365,7 @@ public class ScriptConfig {
 
     /**
      * 思维链话术配置，用于思维链展示（替代真实LLM thinking）。
-      *
+     *
      */
 
     public static class ThinkChunkScripts {
@@ -317,6 +381,8 @@ public class ScriptConfig {
 
         /**
          * Gets the think chunk mode.
+         *
+         * @return the result
          */
         public String getThinkChunkMode() {
             return thinkChunkMode;
@@ -324,6 +390,8 @@ public class ScriptConfig {
 
         /**
          * Sets the think chunk mode.
+         *
+         * @param thinkChunkMode the thinkChunkMode value
          */
         public void setThinkChunkMode(String thinkChunkMode) {
             this.thinkChunkMode = thinkChunkMode;
@@ -331,6 +399,8 @@ public class ScriptConfig {
 
         /**
          * Gets the think chunk fixed scripts.
+         *
+         * @return the result
          */
         public ThinkChunkFixedScripts getThinkChunkFixedScripts() {
             return thinkChunkFixedScripts;
@@ -338,6 +408,8 @@ public class ScriptConfig {
 
         /**
          * Sets the think chunk fixed scripts.
+         *
+         * @param thinkChunkFixedScripts the thinkChunkFixedScripts value
          */
         public void setThinkChunkFixedScripts(ThinkChunkFixedScripts thinkChunkFixedScripts) {
             this.thinkChunkFixedScripts = thinkChunkFixedScripts;
@@ -346,7 +418,7 @@ public class ScriptConfig {
 
     /**
      * 固定话术帧配置。
-      *
+     *
      */
 
     public static class ThinkChunkFixedScripts {
@@ -402,6 +474,8 @@ public class ScriptConfig {
 
         /**
          * Gets the enabled.
+         *
+         * @return the result
          */
         public Boolean getEnabled() {
             return enabled;
@@ -409,6 +483,8 @@ public class ScriptConfig {
 
         /**
          * Sets the enabled.
+         *
+         * @param enabled the enabled value
          */
         public void setEnabled(Boolean enabled) {
             this.enabled = enabled;
@@ -416,6 +492,8 @@ public class ScriptConfig {
 
         /**
          * Gets the chars per frame.
+         *
+         * @return the result
          */
         public Integer getCharsPerFrame() {
             return charsPerFrame;
@@ -423,6 +501,8 @@ public class ScriptConfig {
 
         /**
          * Sets the chars per frame.
+         *
+         * @param charsPerFrame the charsPerFrame value
          */
         public void setCharsPerFrame(Integer charsPerFrame) {
             this.charsPerFrame = charsPerFrame;
@@ -430,6 +510,8 @@ public class ScriptConfig {
 
         /**
          * Gets the tokens between frames.
+         *
+         * @return the result
          */
         public Integer getTokensBetweenFrames() {
             return tokensBetweenFrames;
@@ -437,6 +519,8 @@ public class ScriptConfig {
 
         /**
          * Sets the tokens between frames.
+         *
+         * @param tokensBetweenFrames the tokensBetweenFrames value
          */
         public void setTokensBetweenFrames(Integer tokensBetweenFrames) {
             this.tokensBetweenFrames = tokensBetweenFrames;
@@ -444,6 +528,8 @@ public class ScriptConfig {
 
         /**
          * Gets the min interval ms.
+         *
+         * @return the result
          */
         public Integer getMinIntervalMs() {
             return minIntervalMs;
@@ -451,6 +537,8 @@ public class ScriptConfig {
 
         /**
          * Sets the min interval ms.
+         *
+         * @param minIntervalMs the minIntervalMs value
          */
         public void setMinIntervalMs(Integer minIntervalMs) {
             this.minIntervalMs = minIntervalMs;
@@ -458,6 +546,8 @@ public class ScriptConfig {
 
         /**
          * Gets the default scripts.
+         *
+         * @return the result
          */
         public List<String> getDefaultScripts() {
             return defaultScripts;
@@ -465,6 +555,8 @@ public class ScriptConfig {
 
         /**
          * Sets the default scripts.
+         *
+         * @param defaultScripts the defaultScripts value
          */
         public void setDefaultScripts(List<String> defaultScripts) {
             this.defaultScripts = defaultScripts;
@@ -472,6 +564,8 @@ public class ScriptConfig {
 
         /**
          * Gets the execution scripts.
+         *
+         * @return the result
          */
         public List<String> getExecutionScripts() {
             return executionScripts;
@@ -479,6 +573,8 @@ public class ScriptConfig {
 
         /**
          * Sets the execution scripts.
+         *
+         * @param executionScripts the executionScripts value
          */
         public void setExecutionScripts(List<String> executionScripts) {
             this.executionScripts = executionScripts;
@@ -486,6 +582,8 @@ public class ScriptConfig {
 
         /**
          * Gets the resume scripts.
+         *
+         * @return the result
          */
         public List<String> getResumeScripts() {
             return resumeScripts;
@@ -493,6 +591,8 @@ public class ScriptConfig {
 
         /**
          * Sets the resume scripts.
+         *
+         * @param resumeScripts the resumeScripts value
          */
         public void setResumeScripts(List<String> resumeScripts) {
             this.resumeScripts = resumeScripts;
@@ -500,6 +600,8 @@ public class ScriptConfig {
 
         /**
          * Gets the enable resume scripts.
+         *
+         * @return the result
          */
         public Boolean getEnableResumeScripts() {
             return enableResumeScripts;
@@ -507,6 +609,8 @@ public class ScriptConfig {
 
         /**
          * Sets the enable resume scripts.
+         *
+         * @param enableResumeScripts the enableResumeScripts value
          */
         public void setEnableResumeScripts(Boolean enableResumeScripts) {
             this.enableResumeScripts = enableResumeScripts;
@@ -514,6 +618,8 @@ public class ScriptConfig {
 
         /**
          * Gets the scripts.
+         *
+         * @return the result
          */
         public List<String> getScripts() {
             return scripts;
@@ -521,6 +627,8 @@ public class ScriptConfig {
 
         /**
          * Sets the scripts.
+         *
+         * @param scripts the scripts value
          */
         public void setScripts(List<String> scripts) {
             this.scripts = scripts;
@@ -528,6 +636,8 @@ public class ScriptConfig {
 
         /**
          * Gets the query patterns.
+         *
+         * @return the result
          */
         public List<QueryPattern> getQueryPatterns() {
             return queryPatterns;
@@ -535,6 +645,8 @@ public class ScriptConfig {
 
         /**
          * Sets the query patterns.
+         *
+         * @param queryPatterns the queryPatterns value
          */
         public void setQueryPatterns(List<QueryPattern> queryPatterns) {
             this.queryPatterns = queryPatterns;
@@ -542,7 +654,7 @@ public class ScriptConfig {
 
         /**
          * 按关键词匹配的话术组。planning 阶段遍历列表，首个命中的关键词组即生效。
-          *
+         *
          */
 
         public static class QueryPattern {
@@ -551,6 +663,8 @@ public class ScriptConfig {
 
             /**
              * Gets the keywords.
+             *
+             * @return the result
              */
             public List<String> getKeywords() {
                 return keywords;
@@ -558,6 +672,8 @@ public class ScriptConfig {
 
             /**
              * Sets the keywords.
+             *
+             * @param keywords the keywords value
              */
             public void setKeywords(List<String> keywords) {
                 this.keywords = keywords;
@@ -565,6 +681,8 @@ public class ScriptConfig {
 
             /**
              * Gets the scripts.
+             *
+             * @return the result
              */
             public List<String> getScripts() {
                 return scripts;
@@ -572,6 +690,8 @@ public class ScriptConfig {
 
             /**
              * Sets the scripts.
+             *
+             * @param scripts the scripts value
              */
             public void setScripts(List<String> scripts) {
                 this.scripts = scripts;
@@ -583,7 +703,7 @@ public class ScriptConfig {
      * ask_user 中断确认话术配置。
      *
      * <p>消费方：AskUserTemplateRail（spike 阶段，当前未读取 YAML，预留建模）。</p>
-      *
+     *
      */
 
     public static class AskUserConfirm {
@@ -599,6 +719,8 @@ public class ScriptConfig {
 
         /**
          * Gets the purchase confirm.
+         *
+         * @return the result
          */
         public String getPurchaseConfirm() {
             return purchaseConfirm;
@@ -606,6 +728,8 @@ public class ScriptConfig {
 
         /**
          * Sets the purchase confirm.
+         *
+         * @param purchaseConfirm the purchaseConfirm value
          */
         public void setPurchaseConfirm(String purchaseConfirm) {
             this.purchaseConfirm = purchaseConfirm;
@@ -613,6 +737,8 @@ public class ScriptConfig {
 
         /**
          * Gets the cancel confirm.
+         *
+         * @return the result
          */
         public String getCancelConfirm() {
             return cancelConfirm;
@@ -620,6 +746,8 @@ public class ScriptConfig {
 
         /**
          * Sets the cancel confirm.
+         *
+         * @param cancelConfirm the cancelConfirm value
          */
         public void setCancelConfirm(String cancelConfirm) {
             this.cancelConfirm = cancelConfirm;
@@ -631,7 +759,7 @@ public class ScriptConfig {
      *
      * <p>仅影响 todo_start/todo_end，不影响 tool_start/tool_end（E-04 澄清）。
      * 对齐 Python QUERY_INTENT_TO_TODO_TEXT。</p>
-      *
+     *
      */
 
     public static class QueryIntentEntry {
@@ -640,6 +768,8 @@ public class ScriptConfig {
 
         /**
          * Gets the tool start.
+         *
+         * @return the result
          */
         public String getToolStart() {
             return toolStart;
@@ -647,6 +777,8 @@ public class ScriptConfig {
 
         /**
          * Sets the tool start.
+         *
+         * @param toolStart the toolStart value
          */
         public void setToolStart(String toolStart) {
             this.toolStart = toolStart;
@@ -654,6 +786,8 @@ public class ScriptConfig {
 
         /**
          * Gets the tool end.
+         *
+         * @return the result
          */
         public String getToolEnd() {
             return toolEnd;
@@ -661,6 +795,8 @@ public class ScriptConfig {
 
         /**
          * Sets the tool end.
+         *
+         * @param toolEnd the toolEnd value
          */
         public void setToolEnd(String toolEnd) {
             this.toolEnd = toolEnd;

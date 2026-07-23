@@ -89,7 +89,7 @@ import java.util.stream.Stream;
  * 框架排序：数字越大越早执行；80 < 90 表示本 Rail 在 TaskPlanningRail 之后执行。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class EdpaEventRail extends DeepAgentRail {
@@ -97,6 +97,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
+     *
+     * @param "(62\\d{14,17} the "(62\\d{14,17} value
+     * @return the result
      */
     private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
 
@@ -140,7 +143,8 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 上一轮发射的 todolist 指纹，用于检测任务列表是否变化并决定是否重推。
      * key 为 sessionId，value 为 todolist 内容指纹。
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, String> lastTodolistFingerprint = new ConcurrentHashMap<>();
@@ -149,7 +153,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * 标记当前 conversation 是否已经发射过 interrupt_start（ask_user HITL），
      * 用于在 interrupt 恢复时pair发射 interrupt_end。
      * key 为 sessionId，value 为 true/false。
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, Boolean> interruptActive = new ConcurrentHashMap<>();
@@ -157,7 +162,8 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 当前活跃中断的 interrupt_id（UUID），与 interruptActive 同生命周期，跨轮持久化。
      * onToolException 生成 UUID 存入，afterToolCall interrupt_end 取出，afterInvoke 兜底清理。
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, String> interruptIdMap = new ConcurrentHashMap<>();
@@ -166,7 +172,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * 标记当前轮 think_start 是否尚unclosed（think_end 未发）。
      * key 为 sessionId。afterModelCall 发 think_start 前置 true，发 think_end 后置 false。
      * 用于 onModelException 关闭本轮 think_start，保证 think_start == think_end（Rule 2）。
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, Boolean> thinkOpen = new ConcurrentHashMap<>();
@@ -175,7 +182,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * 标记当前轮 tool_start 是否尚unclosed（tool_end 未发）。
      * key 为 sessionId。beforeToolCall 发 tool_start 前置 true，afterToolCall 发 tool_end 后置 false。
      * 用于 onToolException 关闭本轮 tool_start，保证 tool_start == tool_end（Rule 6）。
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, Boolean> toolOpen = new ConcurrentHashMap<>();
@@ -184,7 +192,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * 标记当前 conversation 的 conversation_end 是否已发射（异常处理时已关闭）。
      * key 为 sessionId。onModelException/onToolException(非中断) 发 conversation_end 后置 true，
      * afterInvoke 检查此标记避免重复发射。
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, Boolean> conversationClosed = new ConcurrentHashMap<>();
@@ -193,7 +202,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * 上一轮各 todo 的状态快照（id→status），用于检测状态转移并决定是否发射 todo_start/todo_end。
      * 外层 key 为 sessionId，内层 key 为 todoId，value 为上一轮的 TodoStatus。
      * 核心用途：区分 PENDING→CANCELLED（路径切换，不发 start/end）与 IN_PROGRESS→CANCELLED（执行中取消，发 end）。
-      *
+     *
+     * @return the result
      */
 
     private final Map<String, Map<String, TodoStatus>> prevTodoStatus = new ConcurrentHashMap<>();
@@ -201,21 +211,22 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 被规划前置守卫blocked（_plan_first_block）的业务工具 callId 集合，
      * afterToolCall 据此跳过 tool_end 发射（未真正执行的工具不发pair事件）。
-      *
+     *
+     * @return the result
      */
 
     private final Set<String> skippedToolCallIds = ConcurrentHashMap.newKeySet();
 
     /**
      * 持有 DeepAgent 引用，用于在 afterToolCall 中查找 TaskPlanningRail 读取最新 todos 缓存。
-      *
+     *
      */
 
     private final DeepAgent deepAgent;
 
     /**
      * 话术配置（A 面：生命周期事件话术 content）。null 表示不填 content（等价现状，保回归安全）。
-      *
+     *
      */
 
     private final SysScriptsConfig scripts;
@@ -252,6 +263,8 @@ public class EdpaEventRail extends DeepAgentRail {
     @Override
     /**
      * Priority.
+     *
+     * @return the result
      */
     public int priority() {
         return 80;
@@ -267,12 +280,14 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 v1.1 Rule 9：conversation_start 时不再立即重放 todolist。
      * 前端跨轮自行持久化状态。本方法只静默初始化 todo 状态追踪（指纹 + prevTodoStatus），
      * 供 afterToolCall 检测状态转移，但不发任何事件。</p>
-      *
+     *
      */
 
     @Override
     /**
      * Before invoke.
+     *
+     * @param ctx the ctx value
      */
     public void beforeInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
@@ -313,12 +328,14 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>设计文档 §7.1 明确：beforeModelCall 不发任何事件。think_start/think_chunk/think_end
      * 全部在 afterModelCall 中根据 LLM 返回的 reasoning_content 决定是否发射（§7.2）。</p>
-      *
+     *
      */
 
     @Override
     /**
      * Before model call.
+     *
+     * @param ctx the ctx value
      */
     public void beforeModelCall(AgentCallbackContext ctx) {
         // 不发任何事件（设计文档 §7.1）
@@ -344,7 +361,7 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>think_end 在 final_answer_start 之前（Rule 3 / C4）。
      * think_start 数 == think_end 数（每轮 LLM 推理一对，严格pair，无 quirk，Rule 2）。</p>
-      *
+     *
      */
 
     /**
@@ -353,12 +370,14 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>think_chunk 内容：优先 reasoning_content（推理模型），无则取 content（非推理模型回退）。
      * 每轮 LLM 调用发一对 think_start/think_end，严格pair。</p>
-      *
+     *
      */
 
     @Override
     /**
      * After model call.
+     *
+     * @param ctx the ctx value
      */
     public void afterModelCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ModelCallInputs inputs)) {
@@ -430,12 +449,14 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 §7.1 + Rule 6：仅业务工具发 tool_start。
      * todo_create / todo_modify / ask_user / read_file 不发 tool_start。
      * PLAN_FIRST blocked（_plan_first_block=true）时不发 tool_start，记录 id 供 afterToolCall 跳过 tool_end。</p>
-      *
+     *
      */
 
     @Override
     /**
      * Before tool call.
+     *
+     * @param ctx the ctx value
      */
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -511,12 +532,14 @@ public class EdpaEventRail extends DeepAgentRail {
      *     <li>ask_user 恢复（_skip_tool=true 且 interruptActive）→ interrupt_end{tool}（Rule 7）</li>
      *     <li>todo_create/todo_modify → todolist_start/item/end（指纹变化时）+ todo_start/todo_end（基于状态转移，§7.3）</li>
      * </ul>
-      *
+     *
      */
 
     @Override
     /**
      * After tool call.
+     *
+     * @param ctx the ctx value
      */
     public void afterToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -679,12 +702,14 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>设计文档 Rule 8：异常不破坏pair。所有已打开的 start 必须先发对应 end 关闭，
      * 再发 error_event，最后 conversation_end。像关括号一样从内到外依次关闭。</p>
-      *
+     *
      */
 
     @Override
     /**
      * On model exception.
+     *
+     * @param ctx the ctx value
      */
     public void onModelException(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
@@ -715,12 +740,14 @@ public class EdpaEventRail extends DeepAgentRail {
      *     <li>其他工具异常：如 tool_start 已发unclosed → emit tool_end{status:failed}（保 Rule 6）；
      *         emit error_event{stage:tool}；emit conversation_end（保 Rule 1）。</li>
      * </ul>
-      *
+     *
      */
 
     @Override
     /**
      * On tool exception.
+     *
+     * @param ctx the ctx value
      */
     public void onToolException(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
@@ -806,12 +833,14 @@ public class EdpaEventRail extends DeepAgentRail {
      * 与 interrupt_end（下轮 afterToolCall ask_user 恢复），见 Rule 7。
      * interruptActive 仅在 afterToolCall 发射 interrupt_end 时清理。
      * lastTodolistFingerprint / prevTodoStatus 在下轮 beforeInvoke 的跨轮快照中重新初始化。</p>
-      *
+     *
      */
 
     @Override
     /**
      * After invoke.
+     *
+     * @param ctx the ctx value
      */
     public void afterInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
@@ -875,7 +904,7 @@ public class EdpaEventRail extends DeepAgentRail {
      * 清理失败不影响会话流程（只 log warn）。</p>
      *
      * @param rawSid 原始 sessionId（含冒号等非法路径字符，需转义）
-      *
+     *
      */
 
     private void cleanupTodoDir(String rawSid) {
@@ -922,7 +951,8 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>在 beforeInvoke 时调用，只清理非当前 sid 的旧目录，不影响当前会话的文件读取。
      * 这样既避免文件无限堆积，又不破坏多轮会话中的 todo_modify 文件同步。</p>
-      *
+     *
+     * @param currentRawSid the currentRawSid value
      */
 
     private void cleanupStaleTodoDirs(String currentRawSid) {
@@ -968,7 +998,10 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>异常处理（onModelException / onToolException 非中断）可能已发射 conversation_end，
      * afterInvoke 检查 conversationClosed 标记避免重复发射。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @param sid the sid value
+     * @param content the content value
      */
 
     private void emitConversationEnd(AgentCallbackContext ctx, String sid, String content) {
@@ -985,6 +1018,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 无出口话术的 conversation_end 重载（异常/中断路径）。
+     *
+     * @param ctx the ctx value
+     * @param sid the sid value
      */
     private void emitConversationEnd(AgentCallbackContext ctx, String sid) {
         emitConversationEnd(ctx, sid, "");
@@ -998,7 +1034,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * 模型异常分类：LLM_TIMEOUT / LLM_AUTH_ERROR / INTERNAL_ERROR。
      *
      * <p>判断优先级：BaseError.StatusCode 枚举 → cause 原始异常类型 → message 文字匹配 → 兜底。</p>
-      *
+     *
+     * @param ex the ex value
+     * @return the result
      */
 
     private static String classifyModelError(Exception ex) {
@@ -1056,7 +1094,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 工具异常分类：TOOL_TIMEOUT / INVALID_TOOL_OUTPUT / DEPENDENCY_VIOLATION / INTERNAL_ERROR。
-      *
+     *
+     * @param ex the ex value
+     * @return the result
      */
 
     private static String classifyToolError(Exception ex) {
@@ -1080,7 +1120,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * error_type → 用户可见话术映射。
-      *
+     *
+     * @param errorType the errorType value
+     * @return the result
      */
 
     private static String errorContent(String errorType) {
@@ -1106,7 +1148,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 v1.1 Rule 9：conversation_start 不再发跨轮 todolist。
      * 本方法只加载当前 todos 并初始化 lastTodolistFingerprint 与 prevTodoStatus，
      * 供后续 afterToolCall 检测状态转移，<b>不发 todolist_start/item/end</b>。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @param sid the sid value
      */
 
     private void initTodoStateSilent(AgentCallbackContext ctx, String sid) {
@@ -1128,7 +1172,8 @@ public class EdpaEventRail extends DeepAgentRail {
      *     <li>todo_start 转移（建表/PENDING→IN_PROGRESS）：先 todolist，后 todo_start（Rule 11）。</li>
      *     <li>路径切换（PENDING→CANCELLED）：独立 todolist（无 todo_start/todo_end，Rule 4④）。</li>
      * </ul>
-      *
+     *
+     * @param ctx the ctx value
      */
 
     private void emitTodoEvents(AgentCallbackContext ctx) {
@@ -1217,7 +1262,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * 发射 todolist_start -> todolist_item{单条}×N -> todolist_end（逐条，Rule 12）。
      *
      * <p>设计文档 v1.1 Rule 12：N 条 todo = N 个 todolist_item 事件，每个携带单条 todo（非 tasks 数组）。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @param todos the todos value
      */
 
     private void emitTodolistPerItem(AgentCallbackContext ctx, List<TodoItem> todos) {
@@ -1232,7 +1279,10 @@ public class EdpaEventRail extends DeepAgentRail {
      * 发射 todo_start{PENDING/null → IN_PROGRESS}（任务开始执行）。
      *
      * <p>设计文档 v1.1 Rule 5：PENDING/null→IN_PROGRESS 发 todo_start。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @param todos the todos value
+     * @param prevMap the prevMap value
      */
 
     private void emitTodoStarts(AgentCallbackContext ctx, List<TodoItem> todos, Map<String, TodoStatus> prevMap) {
@@ -1256,7 +1306,10 @@ public class EdpaEventRail extends DeepAgentRail {
      * <p>设计文档 v1.1 Rule 5：IN_PROGRESS→COMPLETED/DONE 发 todo_end{completed}；
      * IN_PROGRESS→CANCELLED 发 todo_end{cancelled}。PENDING→CANCELLED（路径切换）在此不发，
      * 由 emitTodoEvents 的路径切换分支发独立 todolist（Rule 4④）。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @param todos the todos value
+     * @param prevMap the prevMap value
      */
 
     private void emitTodoEnds(AgentCallbackContext ctx, List<TodoItem> todos, Map<String, TodoStatus> prevMap) {
@@ -1286,7 +1339,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 更新 prevTodoStatus 快照（供下次状态转移比较）。
-      *
+     *
+     * @param sid the sid value
+     * @param todos the todos value
      */
 
     private void updatePrevTodoStatus(String sid, List<TodoItem> todos) {
@@ -1305,7 +1360,9 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>兜底路径：TodoTool 不可用（workspace 未就绪，如单元测试 mock DeepAgent 无 workspace）时，
      * 回落到 TaskPlanningRail.cachedTodos 读缓存，保证事件发射逻辑可被确定性单测驱动。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @return the result
      */
 
     private List<TodoItem> loadCurrentTodos(AgentCallbackContext ctx) {
@@ -1343,7 +1400,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 从已注册的 TaskPlanningRail 缓存读 todos（TodoTool 不可用时的兜底）。
-      *
+     *
+     * @param sid the sid value
+     * @return the result
      */
 
     private List<TodoItem> loadFromTaskPlanningCache(String sid) {
@@ -1365,6 +1424,8 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * lazy 创建 TodoTool，路径与 Core TaskPlanningRail / EdpaTodoRail 一致（.todo）。同时缓存 .todo 根目录路径。
+     *
+     * @return the result
      */
     private Optional<TodoTool> getTodoTool() {
         if (todoTool != null) {
@@ -1392,6 +1453,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 把工具原始入参归一为 Map<String,Object>（Map 直转 / JSON 字符串解析）。
+     *
+     * @param rawArgs the rawArgs value
+     * @return the result
      */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> normalizeToolArgs(Object rawArgs) {
@@ -1419,7 +1483,9 @@ public class EdpaEventRail extends DeepAgentRail {
      *
      * <p>用于延迟 think 发射：当 LLM 本轮只调 todo_modify 时，think 是"状态更新推理"，
      * 应放在 todo_end 之后、todolist 之前，使事件流为 tool_end → todo_end → think → todolist。</p>
-      *
+     *
+     * @param msg the msg value
+     * @return the result
      */
 
     private static boolean isOnlyTodoModify(AssistantMessage msg) {
@@ -1445,7 +1511,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 阶段检测：planning（第1轮）/ executing（工具后）/ resuming（中断恢复后）。
-      *
+     *
+     * @param ctx the ctx value
+     * @return the result
      */
 
     private String detectPhase(AgentCallbackContext ctx) {
@@ -1459,7 +1527,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 从 ask_user 工具入参中提取 LLM 生成的 question 文本（UC-C02: interrupt_source=llm 时使用）。
-      *
+     *
+     * @param ctx the ctx value
+     * @return the result
      */
 
     @SuppressWarnings("unchecked")
@@ -1493,7 +1563,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 获取用户原始 query 文本。
-      *
+     *
+     * @param ctx the ctx value
+     * @return the result
      */
 
     private String getUserQuery(AgentCallbackContext ctx) {
@@ -1541,7 +1613,10 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 发射 think 对（固定帧模式或真实 token 模式）。
-      *
+     *
+     * @param ctx the ctx value
+     * @param sid the sid value
+     * @param realThinkContent the realThinkContent value
      */
 
     private void emitThinkPair(AgentCallbackContext ctx, String sid, String realThinkContent) {
@@ -1613,7 +1688,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * 符合业务语义和人的理解。对应 edp-config.yaml 的 think_chunk.mode=fixed_script 机制。</p>
      *
      * <p>优先级：tool_calls 中的工具名映射 → SysScriptsConfig.thinking 兜底 → 硬编码兜底。</p>
-      *
+     *
+     * @param msg the msg value
+     * @return the result
      */
 
     private String generateFallbackThink(AssistantMessage msg) {
@@ -1664,7 +1741,9 @@ public class EdpaEventRail extends DeepAgentRail {
      * 判断当前 model call 是否是最终回答。
      *
      * <p>条件：finish_reason=stop 且 AssistantMessage 不含 tool_calls（§7.2）。</p>
-      *
+     *
+     * @param msg the msg value
+     * @return the result
      */
 
     private static boolean isFinalAnswer(AssistantMessage msg) {
@@ -1687,7 +1766,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 单条 todo → Map（供 todolist_item 逐条 payload，Rule 12）。
-      *
+     *
+     * @param todo the todo value
+     * @return the result
      */
 
     private static Map<String, Object> toTaskMap(TodoItem todo) {
@@ -1713,7 +1794,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 记录 LLM 模型响应的关键信息：finish_reason / tool_calls 数量与名称 / 文本预览 / 当前 todo 缓存。
-      *
+     *
+     * @param ctx the ctx value
+     * @param inputs the inputs value
      */
 
     private void diagModelResponse(AgentCallbackContext ctx, ModelCallInputs inputs) {
@@ -1758,7 +1841,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 汇总当前会话 todo 缓存：数量 + 每项 content=status。
-      *
+     *
+     * @param ctx the ctx value
+     * @return the result
      */
 
     private String diagTodosSummary(AgentCallbackContext ctx) {
@@ -1800,7 +1885,8 @@ public class EdpaEventRail extends DeepAgentRail {
      * @param ctx       回调上下文
      * @param eventType 事件类型
      * @param payload   事件负载
-      *
+     *
+     * @param type the type value
      */
 
     private void emit(AgentCallbackContext ctx, EdpaEventType type, Map<String, Object> payload) {
@@ -1834,6 +1920,9 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 对 JSON 字符串中的敏感字段自动脱敏：银行卡号保留前4后4位、用户姓名保留首字、会话ID/Cookie掩码。
+     *
+     * @param json the json value
+     * @return the result
      */
     private static String desensitizeSensitiveFields(String json) {
         if (json == null || "null".equals(json) || json.isEmpty()) {

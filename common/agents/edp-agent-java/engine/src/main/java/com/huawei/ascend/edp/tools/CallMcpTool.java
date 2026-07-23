@@ -28,7 +28,7 @@ import java.util.Map;
  * EDPAgent MCP 调用工具。
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public final class CallMcpTool {
@@ -39,6 +39,8 @@ public final class CallMcpTool {
 
     /**
      * Builds the tool instance.
+     *
+     * @return the result
      */
     public static Tool build() {
         // 对齐 Python call_mcp.py L31-34: [call_mcp] script_command=..., script_params=...

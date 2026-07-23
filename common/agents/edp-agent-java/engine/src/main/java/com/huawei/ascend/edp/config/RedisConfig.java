@@ -57,7 +57,7 @@ import java.util.Map;
  * </ul>
  *
  * @since 2026-01-01
-  *
+ *
  */
 
 @Configuration
@@ -79,7 +79,7 @@ public class RedisConfig {
     /** 获取已注册的 RedisTodoStore（未启动 Redis 时返回 null，Rail 回落文件路径）。
      *
      * @return result
-      *
+     *
      */
 
     public static RedisTodoStore getRedisTodoStore() {
@@ -92,7 +92,7 @@ public class RedisConfig {
      * <p>启动时创建 {@link RedisCheckpointer} 并通过
      * {@link CheckpointerFactory#setDefaultCheckpointer} 注册为全局默认，
      * Core SDK 会话状态将持久化到 Redis（UC-18~UC-21）。</p>
-      *
+     *
      */
 
     @PostConstruct
@@ -129,12 +129,15 @@ public class RedisConfig {
      * 构建 Lettuce 连接工厂：按 {@code mode} 分发 single/sentinel/cluster。
      *
      * <p>RESP2 强制 + socket 超时 + 连接建立超时，保证 UC-01 健康检查可发现版本/认证问题。</p>
-      *
+     *
      */
 
     @Bean
     /**
      * Redis connection factory.
+     *
+     * @param props the props value
+     * @return the result
      */
     public LettuceConnectionFactory redisConnectionFactory(TodoRedisProperties props) {
         ClientOptions options = ClientOptions.builder().protocolVersion(ProtocolVersion.RESP2)
@@ -163,6 +166,9 @@ public class RedisConfig {
 
     /**
      * String redis template.
+     *
+     * @param factory the factory value
+     * @return the result
      */
     @Bean
     public StringRedisTemplate stringRedisTemplate(LettuceConnectionFactory factory) {
@@ -174,12 +180,16 @@ public class RedisConfig {
      *
      * <p>启动时调用 {@link RedisTodoStore#healthCheck()} 做健康检查（UC-01/UC-02），
      * 失败则容器启动失败。</p>
-      *
+     *
      */
 
     @Bean
     /**
      * Redis todo store.
+     *
+     * @param redisTemplate the redisTemplate value
+     * @param props the props value
+     * @return the result
      */
     public RedisTodoStore redisTodoStore(StringRedisTemplate redisTemplate, TodoRedisProperties props) {
         RedisTodoStore store = new RedisTodoStore(redisTemplate, props);

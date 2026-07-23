@@ -37,7 +37,7 @@ package com.huawei.ascend.edp.config;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class GovernanceConfig {
@@ -58,6 +58,8 @@ public class GovernanceConfig {
 
     /**
      * Gets the planrule.
+     *
+     * @return the result
      */
     public PlanRuleConfig getPlanrule() {
         return planrule;
@@ -65,6 +67,8 @@ public class GovernanceConfig {
 
     /**
      * Sets the planrule.
+     *
+     * @param planrule the planrule value
      */
     public void setPlanrule(PlanRuleConfig planrule) {
         this.planrule = planrule;
@@ -72,6 +76,8 @@ public class GovernanceConfig {
 
     /**
      * Gets the actrule.
+     *
+     * @return the result
      */
     public ActRuleConfig getActrule() {
         return actrule;
@@ -79,6 +85,8 @@ public class GovernanceConfig {
 
     /**
      * Sets the actrule.
+     *
+     * @param actrule the actrule value
      */
     public void setActrule(ActRuleConfig actrule) {
         this.actrule = actrule;
@@ -86,6 +94,8 @@ public class GovernanceConfig {
 
     /**
      * Gets the scriptconfig.
+     *
+     * @return the result
      */
     public ScriptConfig getScriptconfig() {
         return scriptconfig;
@@ -93,6 +103,8 @@ public class GovernanceConfig {
 
     /**
      * Sets the scriptconfig.
+     *
+     * @param scriptconfig the scriptconfig value
      */
     public void setScriptconfig(ScriptConfig scriptconfig) {
         this.scriptconfig = scriptconfig;
@@ -104,7 +116,7 @@ public class GovernanceConfig {
      * <p>继承覆盖规则：字段级别的继承覆盖，不是文件级别的完全覆盖。</p>
      *
      * @param scenarioConfig 场景级GovernanceConfig
-      *
+     *
      */
 
     public void mergeScenarioConfig(GovernanceConfig scenarioConfig) {
@@ -130,7 +142,8 @@ public class GovernanceConfig {
 
     /**
      * 合并planrule配置（替代式覆盖）。
-      *
+     *
+     * @param scenarioPlanrule the scenarioPlanrule value
      */
 
     private void mergePlanrule(PlanRuleConfig scenarioPlanrule) {
@@ -227,7 +240,7 @@ public class GovernanceConfig {
      * @param frameworkDenied 框架级 denied 配置
      * @param scenarioDenied 场景级 denied 配置
      * @return 合并后的 denied 字段
-      *
+     *
      */
 
     private String mergeDeniedFields(String frameworkDenied, String scenarioDenied) {
@@ -269,7 +282,7 @@ public class GovernanceConfig {
      * @param frameworkAdditional 框架级 additionalPrompt
      * @param scenarioAdditional 场景级 additionalPrompt
      * @return 合并后的 additionalPrompt
-      *
+     *
      */
 
     private String mergeSupplementaryPrompts(String frameworkAdditional, String scenarioAdditional) {
@@ -287,7 +300,8 @@ public class GovernanceConfig {
 
     /**
      * 合并actrule配置（继承式覆盖）。
-      *
+     *
+     * @param scenarioActrule the scenarioActrule value
      */
 
     private void mergeActrule(ActRuleConfig scenarioActrule) {
@@ -365,7 +379,8 @@ public class GovernanceConfig {
 
     /**
      * 合成scriptconfig配置（逐字段继承式覆盖）。
-      *
+     *
+     * @param scenarioScriptconfig the scenarioScriptconfig value
      */
 
     private void mergeScriptconfig(ScriptConfig scenarioScriptconfig) {
@@ -392,7 +407,8 @@ public class GovernanceConfig {
 
     /**
      * 合并 askUserConfirm 配置（继承式覆盖，逐字段合并）。
-      *
+     *
+     * @param scenarioConfirm the scenarioConfirm value
      */
 
     private void mergeAskUserConfirm(ScriptConfig.AskUserConfirm scenarioConfirm) {
@@ -411,7 +427,8 @@ public class GovernanceConfig {
 
     /**
      * 合并 generalScripts 配置（继承式覆盖，逐字段合并）。
-      *
+     *
+     * @param scenarioScripts the scenarioScripts value
      */
 
     private void mergeGeneralScripts(ScriptConfig.GeneralScripts scenarioScripts) {
@@ -460,7 +477,8 @@ public class GovernanceConfig {
 
     /**
      * 合并thinkChunkScripts配置（继承式覆盖）。
-      *
+     *
+     * @param scenarioThinkChunk the scenarioThinkChunk value
      */
 
     private void mergeThinkChunkScripts(ScriptConfig.ThinkChunkScripts scenarioThinkChunk) {
@@ -486,7 +504,9 @@ public class GovernanceConfig {
 
     /**
      * 合并固定话术帧配置（继承式覆盖各字段）。
-      *
+     *
+     * @param def the def value
+     * @param scenario the scenario value
      */
 
     private void mergeFixedScripts(ScriptConfig.ThinkChunkFixedScripts def,

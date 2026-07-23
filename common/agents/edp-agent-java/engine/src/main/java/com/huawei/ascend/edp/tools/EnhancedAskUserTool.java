@@ -33,7 +33,7 @@ import java.util.Map;
  * EDPAgent 增强 ask_user 工具。
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public final class EnhancedAskUserTool {
@@ -46,6 +46,8 @@ public final class EnhancedAskUserTool {
 
     /**
      * Builds the tool instance.
+     *
+     * @return the result
      */
     public static Tool build() {
         return EdpaBusinessTools.localTool(EdpaBusinessTools.TOOL_ENHANCED_ASK_USER, "向用户追问缺失信息，并支持话术模板参数。",
@@ -88,6 +90,10 @@ public final class EnhancedAskUserTool {
 
     /**
      * 截断字符串到指定长度，用于日志输出避免过长。
+     *
+     * @param text the text value
+     * @param maxLen the maxLen value
+     * @return the result
      */
     private static String abbreviate(String text, int maxLen) {
         if (text == null) {

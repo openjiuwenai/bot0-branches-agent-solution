@@ -56,7 +56,7 @@ import java.util.Set;
  * <p>与 RemoteA2aInterruptRail 的"拦截→委派→reject注回"模式完全一致。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class SandboxInterruptRail extends BaseInterruptRail {
@@ -65,6 +65,9 @@ public class SandboxInterruptRail extends BaseInterruptRail {
 
     /**
      * 拦截 call_mcp 工具调用。
+     *
+     * @param "call_mcp" the "call_mcp" value
+     * @return the result
      */
     private static final Set<String> TARGET_TOOLS = Set.of("call_mcp");
 
@@ -106,12 +109,17 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      *
      * <p>SANDBOX 模式：在沙箱中执行脚本，reject(sandboxResult) 注回结果。
      * LOCAL 模式：approve() 放行，工具调用继续到 McpInterruptRail。</p>
-      *
+     *
      */
 
     @Override
     /**
      * Resolves the interrupt decision for the tool call.
+     *
+     * @param ctx the ctx value
+     * @param toolCall the toolCall value
+     * @param userInput the userInput value
+     * @return the result
      */
     protected InterruptDecision resolveInterrupt(AgentCallbackContext ctx, ToolCall toolCall, Object userInput) {
         if (sysOp.getMode() == OperationMode.SANDBOX) {
@@ -149,6 +157,10 @@ public class SandboxInterruptRail extends BaseInterruptRail {
 
     /**
      * 在沙箱中执行脚本
+     *
+     * @param ctx the ctx value
+     * @param toolCall the toolCall value
+     * @return the result
      */
     private Map<String, Object> executeInSandbox(AgentCallbackContext ctx, ToolCall toolCall) {
         try {
@@ -219,6 +231,9 @@ public class SandboxInterruptRail extends BaseInterruptRail {
 
     /**
      * 适配 ExecuteCmdResult → Map<String, Object>（对齐 McpInterruptRail.parseScriptOutput 格式）
+     *
+     * @param result the result value
+     * @return the result
      */
     private Map<String, Object> adaptResult(ExecuteCmdResult result) {
         if (result == null || result.getData() == null) {
@@ -258,6 +273,10 @@ public class SandboxInterruptRail extends BaseInterruptRail {
 
     /**
      * 构建 SKILL_INPUT + PYTHONIOENCODING + MCP 认证环境变量
+     *
+     * @param argumentsJson the argumentsJson value
+     * @param ctx the ctx value
+     * @return the result
      */
     private Map<String, String> buildEnvironmentMap(String argumentsJson, AgentCallbackContext ctx) {
         Map<String, String> env = new LinkedHashMap<>();
@@ -273,7 +292,7 @@ public class SandboxInterruptRail extends BaseInterruptRail {
      * 框架的 ActiveStreamRegistry.awaitDrain() 确保活跃流排空后再调用此方法。</p>
      *
      * @param sessionId 会话 ID（conversationId）
-      *
+     *
      */
 
     public void releaseSession(String sessionId) {

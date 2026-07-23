@@ -62,7 +62,7 @@ import java.util.concurrent.TimeoutException;
  * MCP 工具调用 Rail。
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class McpInterruptRail extends AgentRail {
@@ -156,6 +156,8 @@ public class McpInterruptRail extends AgentRail {
     @Override
     /**
      * Before tool call.
+     *
+     * @param ctx the ctx value
      */
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -177,6 +179,8 @@ public class McpInterruptRail extends AgentRail {
     @Override
     /**
      * After tool call.
+     *
+     * @param ctx the ctx value
      */
     public void afterToolCall(AgentCallbackContext ctx) {
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -261,6 +265,12 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * Executes the MCP script via ProcessBuilder (local mode).
+     *
+     * @param command the command value
+     * @param workDir the workDir value
+     * @param argumentsJson the argumentsJson value
+     * @param scriptParams the scriptParams value
+     * @return the result
      */
     private Map<String, Object> executeViaProcessBuilder(List<String> command, Path workDir, String argumentsJson,
             Map<String, Object> scriptParams) {
@@ -336,7 +346,10 @@ public class McpInterruptRail extends AgentRail {
      * 持久化字段覆盖 LLM 可能传入的同名字段，避免 LLM 搬运导致的截断或遗漏风险。
      * mcp_required_params 在 Java 端由 LLM 通过 script_params 传入（设计与 Python 不同，
      * Python 从 session.state["original_body"] 读取以避免经过 LLM）。</p>
-      *
+     *
+     * @param scriptParams the scriptParams value
+     * @param ctx the ctx value
+     * @return the result
      */
 
     private Map<String, Object> buildSkillInput(Map<String, Object> scriptParams, AgentCallbackContext ctx) {
@@ -591,6 +604,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * Builds a failed result map with the given message.
+     *
+     * @param message the message value
+     * @return the result
      */
     public static Map<String, Object> failedResult(String message) {
         // 对齐 Python MCPInterruptRail._build_error_result：失败时清空 history_info 和 history_params，
@@ -643,7 +659,9 @@ public class McpInterruptRail extends AgentRail {
      *
      * <p>mcp_required_params 在运行时可能是 String（Python dict repr 单引号格式）
      * 或已解析的 Map&lt;String,Object&gt;。两种类型均需处理。</p>
-      *
+     *
+     * @param scriptParams the scriptParams value
+     * @return the result
      */
 
     private Optional<String> extractWapGrayFlag(Map<String, Object> scriptParams) {
@@ -664,6 +682,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * Extracts wap_grayFlag from a Map-typed mcp_required_params.
+     *
+     * @param mcpRequiredMap the mcpRequiredMap value
+     * @return the result
      */
     private Optional<String> extractWapGrayFlagFromMap(Map<?, ?> mcpRequiredMap) {
         Object customData = mcpRequiredMap.get("custom_data");
@@ -682,6 +703,12 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * 通过 SysOperation 统一入口执行脚本（LOCAL 模式 → LocalShellOperation，含白名单+危险命令拦截）。
+     *
+     * @param scriptCommand the scriptCommand value
+     * @param argumentsJson the argumentsJson value
+     * @param scriptParams the scriptParams value
+     * @param workDir the workDir value
+     * @return the result
      */
     private Map<String, Object> executeViaSysOperation(String scriptCommand, String argumentsJson,
             Map<String, Object> scriptParams, String workDir) {
@@ -726,6 +753,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * 适配 ExecuteCmdResult → McpInterruptRail.parseScriptOutput 兼容的 Map 格式。
+     *
+     * @param result the result value
+     * @return the result
      */
     private Map<String, Object> adaptCmdResult(ExecuteCmdResult result) {
         if (result == null || result.getData() == null) {
@@ -746,6 +776,10 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * 构建环境变量 Map（SKILL_INPUT + PYTHONIOENCODING + MCP SSE 配置）。
+     *
+     * @param argumentsJson the argumentsJson value
+     * @param scriptParams the scriptParams value
+     * @return the result
      */
     private Map<String, String> buildEnvMap(String argumentsJson, Map<String, Object> scriptParams) {
         Map<String, String> env = new LinkedHashMap<>();
@@ -780,6 +814,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * 当路径包含空格或特殊字符时，添加双引号包裹。
+     *
+     * @param path the path value
+     * @return the result
      */
     private static String quoteIfNecessary(String path) {
         if (path == null || path.isEmpty()) {
@@ -802,6 +839,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * Extract script args.
+     *
+     * @param inputs the inputs value
+     * @return the result
      */
     public static Map<String, Object> extractScriptArgs(ToolCallInputs inputs) {
         Map<String, Object> args = normalizeArgsObjectStatic(inputs.getToolArgs());
@@ -813,6 +853,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * Extract script params.
+     *
+     * @param args the args value
+     * @return the result
      */
     public static Map<String, Object> extractScriptParams(Map<String, Object> args) {
         return normalizeArgsObjectStatic(args.get("script_params"));
@@ -820,6 +863,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * Build script command.
+     *
+     * @param scriptCommand the scriptCommand value
+     * @return the result
      */
     public static String buildScriptCommand(String scriptCommand) {
         return buildScriptCommand(scriptCommand, null);
@@ -827,6 +873,10 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * 构建脚本命令字符串（含 skillsDir 的内部版，供实例方法调用）。
+     *
+     * @param scriptCommand the scriptCommand value
+     * @param skillsDir the skillsDir value
+     * @return the result
      */
     static String buildScriptCommand(String scriptCommand, Path skillsDir) {
         List<String> tokens = splitCommandStatic(scriptCommand);
@@ -845,6 +895,9 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * Resolve script work dir.
+     *
+     * @param scriptCommand the scriptCommand value
+     * @return the result
      */
     public static String resolveScriptWorkDir(String scriptCommand) {
         return resolveScriptWorkDir(scriptCommand, null);
@@ -852,6 +905,10 @@ public class McpInterruptRail extends AgentRail {
 
     /**
      * 解析脚本所在工作目录（含 skillsDir 的内部版）。
+     *
+     * @param scriptCommand the scriptCommand value
+     * @param skillsDir the skillsDir value
+     * @return the result
      */
     static String resolveScriptWorkDir(String scriptCommand, Path skillsDir) {
         List<String> tokens = splitCommandStatic(scriptCommand);
@@ -930,7 +987,7 @@ public class McpInterruptRail extends AgentRail {
      * @param scriptPath 脚本相对路径
      * @param skillsDir  skills 目录绝对路径
      * @return 解析后的脚本路径（可能不存在）
-      *
+     *
      */
 
     private static Path resolveScriptPathStatic(String scriptPath, Path skillsDir) {

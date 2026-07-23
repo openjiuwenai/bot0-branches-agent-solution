@@ -29,7 +29,7 @@ package com.huawei.ascend.edp.config;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class PlanRuleConfig {
@@ -70,6 +70,8 @@ public class PlanRuleConfig {
 
     /**
      * Gets the role.
+     *
+     * @return the result
      */
     public String getRole() {
         return role;
@@ -77,6 +79,8 @@ public class PlanRuleConfig {
 
     /**
      * Sets the role.
+     *
+     * @param role the role value
      */
     public void setRole(String role) {
         this.role = role;
@@ -84,6 +88,8 @@ public class PlanRuleConfig {
 
     /**
      * Gets the description.
+     *
+     * @return the result
      */
     public String getDescription() {
         return description;
@@ -91,6 +97,8 @@ public class PlanRuleConfig {
 
     /**
      * Sets the description.
+     *
+     * @param description the description value
      */
     public void setDescription(String description) {
         this.description = description;
@@ -98,6 +106,8 @@ public class PlanRuleConfig {
 
     /**
      * Gets the scenario name.
+     *
+     * @return the result
      */
     public String getScenarioName() {
         return scenarioName;
@@ -105,6 +115,8 @@ public class PlanRuleConfig {
 
     /**
      * Sets the scenario name.
+     *
+     * @param scenarioName the scenarioName value
      */
     public void setScenarioName(String scenarioName) {
         this.scenarioName = scenarioName;
@@ -112,6 +124,8 @@ public class PlanRuleConfig {
 
     /**
      * Gets the scenario description.
+     *
+     * @return the result
      */
     public String getScenarioDescription() {
         return scenarioDescription;
@@ -119,6 +133,8 @@ public class PlanRuleConfig {
 
     /**
      * Sets the scenario description.
+     *
+     * @param scenarioDescription the scenarioDescription value
      */
     public void setScenarioDescription(String scenarioDescription) {
         this.scenarioDescription = scenarioDescription;
@@ -126,6 +142,8 @@ public class PlanRuleConfig {
 
     /**
      * Gets the scope.
+     *
+     * @return the result
      */
     public Scope getScope() {
         return scope;
@@ -133,6 +151,8 @@ public class PlanRuleConfig {
 
     /**
      * Sets the scope.
+     *
+     * @param scope the scope value
      */
     public void setScope(Scope scope) {
         this.scope = scope;
@@ -140,6 +160,8 @@ public class PlanRuleConfig {
 
     /**
      * Gets the supplementary prompt.
+     *
+     * @return the result
      */
     public SupplementaryPrompt getSupplementaryPrompt() {
         return supplementaryPrompt;
@@ -147,6 +169,8 @@ public class PlanRuleConfig {
 
     /**
      * Sets the supplementary prompt.
+     *
+     * @param supplementaryPrompt the supplementaryPrompt value
      */
     public void setSupplementaryPrompt(SupplementaryPrompt supplementaryPrompt) {
         this.supplementaryPrompt = supplementaryPrompt;
@@ -154,6 +178,8 @@ public class PlanRuleConfig {
 
     /**
      * Gets the skill routing.
+     *
+     * @return the result
      */
     public java.util.List<SkillRoute> getSkillRouting() {
         return skillRouting;
@@ -161,6 +187,8 @@ public class PlanRuleConfig {
 
     /**
      * Sets the skill routing.
+     *
+     * @param skillRouting the skillRouting value
      */
     public void setSkillRouting(java.util.List<SkillRoute> skillRouting) {
         this.skillRouting = skillRouting;
@@ -168,7 +196,7 @@ public class PlanRuleConfig {
 
     /**
      * Agent职责边界配置。
-      *
+     *
      */
 
     public static class Scope {
@@ -184,6 +212,8 @@ public class PlanRuleConfig {
 
         /**
          * Gets the allowed.
+         *
+         * @return the result
          */
         public String getAllowed() {
             return allowed;
@@ -191,6 +221,8 @@ public class PlanRuleConfig {
 
         /**
          * Sets the allowed.
+         *
+         * @param allowed the allowed value
          */
         public void setAllowed(String allowed) {
             this.allowed = allowed;
@@ -198,6 +230,8 @@ public class PlanRuleConfig {
 
         /**
          * Gets the denied.
+         *
+         * @return the result
          */
         public String getDenied() {
             return denied;
@@ -205,6 +239,8 @@ public class PlanRuleConfig {
 
         /**
          * Sets the denied.
+         *
+         * @param denied the denied value
          */
         public void setDenied(String denied) {
             this.denied = denied;
@@ -216,7 +252,7 @@ public class PlanRuleConfig {
      *
      * <p>包含框架内置的 baseProtocol 和场景追加的 additionalPrompt。</p>
      * <p>合并策略：章节智能合并，同名章节内容追加而非生成独立章节。</p>
-      *
+     *
      */
 
     public static class SupplementaryPrompt {
@@ -232,6 +268,8 @@ public class PlanRuleConfig {
 
         /**
          * Gets the base protocol.
+         *
+         * @return the result
          */
         public String getBaseProtocol() {
             return baseProtocol;
@@ -239,6 +277,8 @@ public class PlanRuleConfig {
 
         /**
          * Sets the base protocol.
+         *
+         * @param baseProtocol the baseProtocol value
          */
         public void setBaseProtocol(String baseProtocol) {
             this.baseProtocol = baseProtocol;
@@ -246,6 +286,8 @@ public class PlanRuleConfig {
 
         /**
          * Gets the additional prompt.
+         *
+         * @return the result
          */
         public String getAdditionalPrompt() {
             return additionalPrompt;
@@ -253,6 +295,8 @@ public class PlanRuleConfig {
 
         /**
          * Sets the additional prompt.
+         *
+         * @param additionalPrompt the additionalPrompt value
          */
         public void setAdditionalPrompt(String additionalPrompt) {
             this.additionalPrompt = additionalPrompt;
@@ -263,7 +307,7 @@ public class PlanRuleConfig {
      * Skill路由规则。
      *
      * <p>描述特定触发条件下应调用的目标Skill及其优先级。</p>
-      *
+     *
      */
 
     public static class SkillRoute {
@@ -284,6 +328,8 @@ public class PlanRuleConfig {
 
         /**
          * Gets the trigger.
+         *
+         * @return the result
          */
         public String getTrigger() {
             return trigger;
@@ -291,6 +337,8 @@ public class PlanRuleConfig {
 
         /**
          * Sets the trigger.
+         *
+         * @param trigger the trigger value
          */
         public void setTrigger(String trigger) {
             this.trigger = trigger;
@@ -298,6 +346,8 @@ public class PlanRuleConfig {
 
         /**
          * Gets the skill.
+         *
+         * @return the result
          */
         public String getSkill() {
             return skill;
@@ -305,6 +355,8 @@ public class PlanRuleConfig {
 
         /**
          * Sets the skill.
+         *
+         * @param skill the skill value
          */
         public void setSkill(String skill) {
             this.skill = skill;
@@ -312,6 +364,8 @@ public class PlanRuleConfig {
 
         /**
          * Gets the priority.
+         *
+         * @return the result
          */
         public int getPriority() {
             return priority;
@@ -319,6 +373,8 @@ public class PlanRuleConfig {
 
         /**
          * Sets the priority.
+         *
+         * @param priority the priority value
          */
         public void setPriority(int priority) {
             this.priority = priority;

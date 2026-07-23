@@ -43,7 +43,7 @@ import org.slf4j.LoggerFactory;
  * <p>Role和description直接拼接，业务范围无数字章节标题，各字段之间用空行分隔。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class PlanrulePromptBuilder {
@@ -57,7 +57,7 @@ public class PlanrulePromptBuilder {
      *
      * @param planrule planrule配置，null时返回默认提示词（降级处理）
      * @return 系统提示词片段（对应Python版的markdown_body）
-      *
+     *
      */
 
     public static String buildSystemPromptFragment(PlanRuleConfig planrule) {
@@ -114,6 +114,9 @@ public class PlanrulePromptBuilder {
 
     /**
      * Appends the scope section (allowed/denied business scope).
+     *
+     * @param sb the sb value
+     * @param planrule the planrule value
      */
     private static void appendScopeSection(StringBuilder sb, PlanRuleConfig planrule) {
         PlanRuleConfig.Scope scope = planrule.getScope();
@@ -140,6 +143,9 @@ public class PlanrulePromptBuilder {
 
     /**
      * Appends the skill routing section.
+     *
+     * @param sb the sb value
+     * @param planrule the planrule value
      */
     private static void appendSkillRoutingSection(StringBuilder sb, PlanRuleConfig planrule) {
         java.util.List<PlanRuleConfig.SkillRoute> skillRouting = planrule.getSkillRouting();
@@ -154,6 +160,9 @@ public class PlanrulePromptBuilder {
 
     /**
      * Appends the supplementary prompt section (baseProtocol + additionalPrompt).
+     *
+     * @param sb the sb value
+     * @param planrule the planrule value
      */
     private static void appendSupplementaryPromptSection(StringBuilder sb, PlanRuleConfig planrule) {
         if (planrule.getSupplementaryPrompt() != null) {
@@ -174,7 +183,8 @@ public class PlanrulePromptBuilder {
      *
      * <p>降级场景：配置加载失败、文件损坏、planrule为null等异常情况</p>
      * <p>内容对齐planrule.yaml默认配置：通用动态规划智能体角色定位</p>
-      *
+     *
+     * @return the result
      */
 
     private static String getDefaultSystemPrompt() {
@@ -186,7 +196,7 @@ public class PlanrulePromptBuilder {
      *
      * @param str 待判断字符串
      * @return true表示非空，false表示null或空字符串
-      *
+     *
      */
 
     private static boolean isNotEmpty(String str) {

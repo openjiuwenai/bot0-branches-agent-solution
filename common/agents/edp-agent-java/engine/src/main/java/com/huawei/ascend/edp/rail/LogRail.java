@@ -68,7 +68,7 @@ import java.util.Optional;
  * </pre>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class LogRail extends AgentRail {
@@ -77,7 +77,7 @@ public class LogRail extends AgentRail {
 
     /**
      * EDP 专有配置，当前预留给后续日志脱敏、采样和开关控制使用。
-      *
+     *
      */
 
     private final EdpConfig edpConfig;
@@ -88,7 +88,7 @@ public class LogRail extends AgentRail {
      * @param edpConfig EDP 专有配置
      *
      * @return result
-      *
+     *
      */
 
     public LogRail(EdpConfig edpConfig) {
@@ -102,12 +102,14 @@ public class LogRail extends AgentRail {
      * 模型调用前回调。
      *
      * @param ctx OpenJiuwen 回调上下文，包含模型入参
-      *
+     *
      */
 
     @Override
     /**
      * Before model call.
+     *
+     * @param ctx the ctx value
      */
     public void beforeModelCall(AgentCallbackContext ctx) {
         // 关键判断：只有模型调用上下文才记录模型输入。
@@ -130,12 +132,14 @@ public class LogRail extends AgentRail {
      * 执行，确保持久化的是合法 JSON。</p>
      *
      * @param ctx OpenJiuwen 回调上下文，包含模型响应
-      *
+     *
      */
 
     @Override
     /**
      * After model call.
+     *
+     * @param ctx the ctx value
      */
     public void afterModelCall(AgentCallbackContext ctx) {
         // 关键判断：非模型调用上下文只记录完成事件，不读取模型响应。
@@ -183,12 +187,14 @@ public class LogRail extends AgentRail {
      * 工具调用后回调。
      *
      * @param ctx OpenJiuwen 回调上下文，包含工具调用信息
-      *
+     *
      */
 
     @Override
     /**
      * After tool call.
+     *
+     * @param ctx the ctx value
      */
     public void afterToolCall(AgentCallbackContext ctx) {
         // 关键判断：只有工具调用上下文才记录工具名。
@@ -203,7 +209,8 @@ public class LogRail extends AgentRail {
      * <p>对齐 Python {@code LogRail._repair_tool_call_arguments}：遍历未闭合的 {@code { // no-op } / {@code [}
      * 栈底，按相反顺序补齐 {@code }} / {@code ]}。对"丢末尾 }"这种最常见的 LLM streaming quirk 100% 生效。
      * 命中时打 WARNING；修复后仍非法（极罕见）时打 ERROR。</p>
-      *
+     *
+     * @param response the response value
      */
 
     private static void repairToolCallArguments(AssistantMessage response) {
@@ -269,7 +276,8 @@ public class LogRail extends AgentRail {
      * 按栈逆序补齐闭合符号。对齐 Python {@code AbilityManager._repair_tool_arguments_json}。
      *
      * @return 修复后的 JSON 字符串；输入为空或无未闭合括号时返回 Optional.empty()
-      *
+     *
+     * @param json the json value
      */
 
     private static Optional<String> repairMalformedJson(String json) {

@@ -36,7 +36,7 @@ import org.springframework.context.annotation.Bean;
  * （它们本身已有 @Component 注解，此处为 Spring Boot Auto-Configuration 规范保底）。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 @AutoConfiguration
@@ -47,7 +47,8 @@ public class EdpaSandboxAutoConfiguration {
 
     /**
      * Sandbox init hook.
-      *
+     *
+     * @return the result
      */
     @Bean
     @ConditionalOnMissingBean(SandboxInitHook.class)
@@ -58,7 +59,8 @@ public class EdpaSandboxAutoConfiguration {
 
     /**
      * Sandbox shutdown hook.
-      *
+     *
+     * @return the result
      */
     @Bean
     @ConditionalOnMissingBean(SandboxShutdownHook.class)

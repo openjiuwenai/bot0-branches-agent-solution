@@ -60,7 +60,7 @@ import java.util.Optional;
  * 创建 SysOperation 双模式门面并注册到 AgentLifecycleContext。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 @Component
@@ -82,6 +82,8 @@ public class SandboxInitHook implements AgentInitHook {
     @Override
     /**
      * On init.
+     *
+     * @param context the context value
      */
     public void onInit(AgentLifecycleContext context) throws Exception {
         SandboxConfig config = springBootConfig.getSandbox();
@@ -210,7 +212,7 @@ public class SandboxInitHook implements AgentInitHook {
      *
      * @param skillDeployPath 技能部署路径（如 /app/skills）
      * @return extraParams Map，包含 policy 和 policy_mode
-      *
+     *
      */
 
     private static Map<String, Object> buildSandboxPolicyExtraParams(String skillDeployPath) {
@@ -252,7 +254,7 @@ public class SandboxInitHook implements AgentInitHook {
      *
      * @param decoratedClient DecoratingSandboxClient 实例
      * @param skillDeployPath 技能部署路径（如 /app/skills）
-      *
+     *
      */
 
     private void injectFilesystemPolicyIntoDelegate(SandboxClient decoratedClient, String skillDeployPath) {
@@ -270,6 +272,9 @@ public class SandboxInitHook implements AgentInitHook {
 
     /**
      * 包装 SandboxOperationSupport.resolveIsolationKey 以简化异常处理
+     *
+     * @param config the config value
+     * @return the result
      */
     private String resolveIsolationKey(SandboxGatewayConfig config) {
         try {
@@ -289,7 +294,8 @@ public class SandboxInitHook implements AgentInitHook {
      * @param sysOp SysOperation 双模式门面
      * @param gatewayConfig 沙箱网关配置（用于解析技能目录路径）
      * @param config 沙箱配置（含 skillDeployPath）
-      *
+     *
+     * @param decoratedClient the decoratedClient value
      */
 
     private void deploySkillsToSandbox(SysOperation sysOp, SandboxGatewayConfig gatewayConfig, SandboxConfig config,
@@ -339,6 +345,8 @@ public class SandboxInitHook implements AgentInitHook {
 
     /**
      * 从 springBootConfig.scenarioHome 解析技能目录路径
+     *
+     * @return the result
      */
     private Optional<Path> resolveSkillsDir() {
         String scenarioHome = springBootConfig.getScenarioHome();

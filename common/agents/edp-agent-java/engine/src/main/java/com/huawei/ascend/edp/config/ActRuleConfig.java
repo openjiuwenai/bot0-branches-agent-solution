@@ -31,7 +31,7 @@ import java.util.Map;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class ActRuleConfig {
@@ -57,7 +57,7 @@ public class ActRuleConfig {
 
     /** Skill 加载模式（从 skills.mode 迁移）。
      * 可选值：all（列出所有 Skill）、auto_list（动态搜索 Skill）、none（关闭 Skill 系统）。
-      *
+     *
      */
 
     private String skillMode;
@@ -81,6 +81,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the max subtasks.
+     *
+     * @return the result
      */
     public Integer getMaxSubtasks() {
         return maxSubtasks;
@@ -88,6 +90,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the max subtasks.
+     *
+     * @param maxSubtasks the maxSubtasks value
      */
     public void setMaxSubtasks(Integer maxSubtasks) {
         this.maxSubtasks = maxSubtasks;
@@ -95,6 +99,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the max steps.
+     *
+     * @return the result
      */
     public Integer getMaxSteps() {
         return maxSteps;
@@ -102,6 +108,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the max steps.
+     *
+     * @param maxSteps the maxSteps value
      */
     public void setMaxSteps(Integer maxSteps) {
         this.maxSteps = maxSteps;
@@ -109,6 +117,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the allowed tools.
+     *
+     * @return the result
      */
     public List<String> getAllowedTools() {
         return allowedTools;
@@ -116,6 +126,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the allowed tools.
+     *
+     * @param allowedTools the allowedTools value
      */
     public void setAllowedTools(List<String> allowedTools) {
         this.allowedTools = allowedTools;
@@ -123,6 +135,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the enable task loop.
+     *
+     * @return the result
      */
     public Boolean getEnableTaskLoop() {
         return enableTaskLoop;
@@ -130,6 +144,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the enable task loop.
+     *
+     * @param enableTaskLoop the enableTaskLoop value
      */
     public void setEnableTaskLoop(Boolean enableTaskLoop) {
         this.enableTaskLoop = enableTaskLoop;
@@ -137,6 +153,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the skill mode.
+     *
+     * @return the result
      */
     public String getSkillMode() {
         return skillMode;
@@ -144,6 +162,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the skill mode.
+     *
+     * @param skillMode the skillMode value
      */
     public void setSkillMode(String skillMode) {
         this.skillMode = skillMode;
@@ -151,6 +171,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the tool limits.
+     *
+     * @return the result
      */
     public Map<String, Integer> getToolLimits() {
         return toolLimits;
@@ -158,6 +180,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the tool limits.
+     *
+     * @param toolLimits the toolLimits value
      */
     public void setToolLimits(Map<String, Integer> toolLimits) {
         this.toolLimits = toolLimits;
@@ -165,6 +189,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the todolist entries.
+     *
+     * @return the result
      */
     public List<TodolistEntry> getTodolistEntries() {
         return todolistEntries;
@@ -172,6 +198,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the todolist entries.
+     *
+     * @param entries the entries value
      */
     public void setTodolistEntries(List<TodolistEntry> entries) {
         this.todolistEntries = entries;
@@ -179,6 +207,8 @@ public class ActRuleConfig {
 
     /**
      * Gets the todolist dynamic paths.
+     *
+     * @return the result
      */
     public List<TodolistPath> getTodolistDynamicPaths() {
         return todolistDynamicPaths;
@@ -186,6 +216,8 @@ public class ActRuleConfig {
 
     /**
      * Sets the todolist dynamic paths.
+     *
+     * @param paths the paths value
      */
     public void setTodolistDynamicPaths(List<TodolistPath> paths) {
         this.todolistDynamicPaths = paths;
@@ -193,7 +225,7 @@ public class ActRuleConfig {
 
     /**
      * 任务定义（catalog_id 为内部主键）。
-      *
+     *
      */
 
     public static class TodolistEntry {
@@ -205,6 +237,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the catalog id.
+         *
+         * @return the result
          */
         public String getCatalogId() {
             return catalogId;
@@ -212,6 +246,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the catalog id.
+         *
+         * @param catalogId the catalogId value
          */
         public void setCatalogId(String catalogId) {
             this.catalogId = catalogId;
@@ -219,6 +255,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the content.
+         *
+         * @return the result
          */
         public String getContent() {
             return content;
@@ -226,6 +264,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the content.
+         *
+         * @param content the content value
          */
         public void setContent(String content) {
             this.content = content;
@@ -233,6 +273,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the description.
+         *
+         * @return the result
          */
         public String getDescription() {
             return description;
@@ -240,6 +282,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the description.
+         *
+         * @param description the description value
          */
         public void setDescription(String description) {
             this.description = description;
@@ -247,6 +291,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the depends on.
+         *
+         * @return the result
          */
         public List<String> getDependsOn() {
             return dependsOn;
@@ -254,6 +300,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the depends on.
+         *
+         * @param dependsOn the dependsOn value
          */
         public void setDependsOn(List<String> dependsOn) {
             this.dependsOn = dependsOn;
@@ -261,6 +309,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the skill.
+         *
+         * @return the result
          */
         public String getSkill() {
             return skill;
@@ -268,6 +318,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the skill.
+         *
+         * @param skill the skill value
          */
         public void setSkill(String skill) {
             this.skill = skill;
@@ -276,7 +328,7 @@ public class ActRuleConfig {
 
     /**
      * 动态路径规则（LLM 根据业务结果自主判断是否切换）。
-      *
+     *
      */
 
     public static class TodolistPath {
@@ -288,6 +340,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the path id.
+         *
+         * @return the result
          */
         public String getPathId() {
             return pathId;
@@ -295,6 +349,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the path id.
+         *
+         * @param pathId the pathId value
          */
         public void setPathId(String pathId) {
             this.pathId = pathId;
@@ -302,6 +358,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the description.
+         *
+         * @return the result
          */
         public String getDescription() {
             return description;
@@ -309,6 +367,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the description.
+         *
+         * @param description the description value
          */
         public void setDescription(String description) {
             this.description = description;
@@ -316,6 +376,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the trigger.
+         *
+         * @return the result
          */
         public String getTrigger() {
             return trigger;
@@ -323,6 +385,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the trigger.
+         *
+         * @param trigger the trigger value
          */
         public void setTrigger(String trigger) {
             this.trigger = trigger;
@@ -330,6 +394,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the skip steps.
+         *
+         * @return the result
          */
         public List<String> getSkipSteps() {
             return skipSteps;
@@ -337,6 +403,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the skip steps.
+         *
+         * @param skipSteps the skipSteps value
          */
         public void setSkipSteps(List<String> skipSteps) {
             this.skipSteps = skipSteps;
@@ -344,6 +412,8 @@ public class ActRuleConfig {
 
         /**
          * Gets the redirect.
+         *
+         * @return the result
          */
         public String getRedirect() {
             return redirect;
@@ -351,6 +421,8 @@ public class ActRuleConfig {
 
         /**
          * Sets the redirect.
+         *
+         * @param redirect the redirect value
          */
         public void setRedirect(String redirect) {
             this.redirect = redirect;

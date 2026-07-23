@@ -25,7 +25,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 控制沙箱模式的开关、超时、降级策略等行为。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 @ConfigurationProperties(prefix = "edpa.agent.sandbox")
@@ -87,6 +87,8 @@ public class SandboxConfig {
 
     /**
      * Checks whether enabled.
+     *
+     * @return the result
      */
     public boolean isEnabled() {
         return enabled;
@@ -94,6 +96,8 @@ public class SandboxConfig {
 
     /**
      * Sets the enabled.
+     *
+     * @param enabled the enabled value
      */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
@@ -101,6 +105,8 @@ public class SandboxConfig {
 
     /**
      * Gets the service url.
+     *
+     * @return the result
      */
     public String getServiceUrl() {
         return serviceUrl;
@@ -108,6 +114,8 @@ public class SandboxConfig {
 
     /**
      * Sets the service url.
+     *
+     * @param serviceUrl the serviceUrl value
      */
     public void setServiceUrl(String serviceUrl) {
         this.serviceUrl = serviceUrl;
@@ -115,6 +123,8 @@ public class SandboxConfig {
 
     /**
      * Gets the sandbox id prefix.
+     *
+     * @return the result
      */
     public String getSandboxIdPrefix() {
         return sandboxIdPrefix;
@@ -122,6 +132,8 @@ public class SandboxConfig {
 
     /**
      * Sets the sandbox id prefix.
+     *
+     * @param sandboxIdPrefix the sandboxIdPrefix value
      */
     public void setSandboxIdPrefix(String sandboxIdPrefix) {
         this.sandboxIdPrefix = sandboxIdPrefix;
@@ -129,6 +141,8 @@ public class SandboxConfig {
 
     /**
      * Gets the create timeout seconds.
+     *
+     * @return the result
      */
     public int getCreateTimeoutSeconds() {
         return createTimeoutSeconds;
@@ -136,6 +150,8 @@ public class SandboxConfig {
 
     /**
      * Sets the create timeout seconds.
+     *
+     * @param createTimeoutSeconds the createTimeoutSeconds value
      */
     public void setCreateTimeoutSeconds(int createTimeoutSeconds) {
         this.createTimeoutSeconds = createTimeoutSeconds;
@@ -143,6 +159,8 @@ public class SandboxConfig {
 
     /**
      * Gets the exec timeout seconds.
+     *
+     * @return the result
      */
     public int getExecTimeoutSeconds() {
         return execTimeoutSeconds;
@@ -150,6 +168,8 @@ public class SandboxConfig {
 
     /**
      * Sets the exec timeout seconds.
+     *
+     * @param execTimeoutSeconds the execTimeoutSeconds value
      */
     public void setExecTimeoutSeconds(int execTimeoutSeconds) {
         this.execTimeoutSeconds = execTimeoutSeconds;
@@ -157,6 +177,8 @@ public class SandboxConfig {
 
     /**
      * Gets the skill deploy path.
+     *
+     * @return the result
      */
     public String getSkillDeployPath() {
         return skillDeployPath;
@@ -164,6 +186,8 @@ public class SandboxConfig {
 
     /**
      * Sets the skill deploy path.
+     *
+     * @param skillDeployPath the skillDeployPath value
      */
     public void setSkillDeployPath(String skillDeployPath) {
         this.skillDeployPath = skillDeployPath;
@@ -171,6 +195,8 @@ public class SandboxConfig {
 
     /**
      * Checks whether auto create on startup.
+     *
+     * @return the result
      */
     public boolean isAutoCreateOnStartup() {
         return autoCreateOnStartup;
@@ -178,6 +204,8 @@ public class SandboxConfig {
 
     /**
      * Sets the auto create on startup.
+     *
+     * @param autoCreateOnStartup the autoCreateOnStartup value
      */
     public void setAutoCreateOnStartup(boolean autoCreateOnStartup) {
         this.autoCreateOnStartup = autoCreateOnStartup;
@@ -185,6 +213,8 @@ public class SandboxConfig {
 
     /**
      * Gets the on stop.
+     *
+     * @return the result
      */
     public String getOnStop() {
         return onStop;
@@ -192,6 +222,8 @@ public class SandboxConfig {
 
     /**
      * Sets the on stop.
+     *
+     * @param onStop the onStop value
      */
     public void setOnStop(String onStop) {
         this.onStop = onStop;
@@ -199,6 +231,8 @@ public class SandboxConfig {
 
     /**
      * Checks whether fallback on failure.
+     *
+     * @return the result
      */
     public boolean isFallbackOnFailure() {
         return fallbackOnFailure;
@@ -206,6 +240,8 @@ public class SandboxConfig {
 
     /**
      * Sets the fallback on failure.
+     *
+     * @param fallbackOnFailure the fallbackOnFailure value
      */
     public void setFallbackOnFailure(boolean fallbackOnFailure) {
         this.fallbackOnFailure = fallbackOnFailure;
@@ -213,6 +249,8 @@ public class SandboxConfig {
 
     /**
      * Gets the excluded commands.
+     *
+     * @return the result
      */
     public String getExcludedCommands() {
         return excludedCommands;
@@ -220,6 +258,8 @@ public class SandboxConfig {
 
     /**
      * Sets the excluded commands.
+     *
+     * @param excludedCommands the excludedCommands value
      */
     public void setExcludedCommands(String excludedCommands) {
         this.excludedCommands = excludedCommands;
@@ -227,6 +267,8 @@ public class SandboxConfig {
 
     /**
      * Gets the container scope.
+     *
+     * @return the result
      */
     public String getContainerScope() {
         return containerScope;
@@ -234,6 +276,8 @@ public class SandboxConfig {
 
     /**
      * Sets the container scope.
+     *
+     * @param containerScope the containerScope value
      */
     public void setContainerScope(String containerScope) {
         this.containerScope = containerScope;

@@ -46,7 +46,7 @@ import java.util.Optional;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 @Configuration(proxyBeanMethods = false)
@@ -66,7 +66,8 @@ public class EdpEngineConfiguration {
      *
      * @param config EDPAgent 合并后配置属性（含 scenarioHome/model/versatile/mcpsse）
      * @return 已初始化的 AgentHandler Bean
-      *
+     *
+     * @param ("${openjiuwen.service.a2a.agent-name:EDPAgent}" the ("${openjiuwen.service.a2a.agent-name:EDPAgent}" value
      */
 
     @Bean
@@ -110,7 +111,7 @@ public class EdpEngineConfiguration {
      *
      * @param provider Spring ObjectProvider，可能不存在
      * @return DecoratingSandboxClient 实例，或 null（降级到需求1直接模式）
-      *
+     *
      */
 
     private static Optional<SandboxClient> resolveDecoratedSandboxClient(ObjectProvider<AgentCoreSandboxClientFactory> provider) {

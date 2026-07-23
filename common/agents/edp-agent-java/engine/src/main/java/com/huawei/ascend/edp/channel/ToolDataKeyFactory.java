@@ -26,7 +26,7 @@ import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
  * ToolDataChannel 四元组隔离键工厂。
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public final class ToolDataKeyFactory {
@@ -39,6 +39,11 @@ public final class ToolDataKeyFactory {
 
     /**
      * Creates a key from the callback context.
+     *
+     * @param ctx the ctx value
+     * @param edpConfig the edpConfig value
+     * @param defaultAgentId the defaultAgentId value
+     * @return the result
      */
     public static ToolDataKey fromContext(AgentCallbackContext ctx, EdpConfig edpConfig, String defaultAgentId) {
         String tenantId = resolveFromExtra(ctx, "tenantId", "tenant_id");

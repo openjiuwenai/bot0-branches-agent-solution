@@ -28,7 +28,7 @@ import java.util.List;
  * 设计参考：FEAT_EDPA Redis 存储设计方案 §2.2.1。</p>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 @ConfigurationProperties(prefix = "edpa.agent.redis")
@@ -70,16 +70,22 @@ public class TodoRedisProperties {
 
     /**
      * 哨兵模式配置。
+     *
+     * @return the result
      */
     private SentinelConfig sentinel = new SentinelConfig();
 
     /**
      * 集群模式配置。
+     *
+     * @return the result
      */
     private ClusterConfig cluster = new ClusterConfig();
 
     /**
      * TodoStore 配置。
+     *
+     * @return the result
      */
     private TodoConfig todo = new TodoConfig();
 
@@ -90,6 +96,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the mode.
+     *
+     * @return the result
      */
     public String getMode() {
         return mode;
@@ -97,6 +105,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the mode.
+     *
+     * @param mode the mode value
      */
     public void setMode(String mode) {
         this.mode = mode;
@@ -104,6 +114,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the host.
+     *
+     * @return the result
      */
     public String getHost() {
         return host;
@@ -111,6 +123,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the host.
+     *
+     * @param host the host value
      */
     public void setHost(String host) {
         this.host = host;
@@ -118,6 +132,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the port.
+     *
+     * @return the result
      */
     public int getPort() {
         return port;
@@ -125,6 +141,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the port.
+     *
+     * @param port the port value
      */
     public void setPort(int port) {
         this.port = port;
@@ -132,6 +150,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the password.
+     *
+     * @return the result
      */
     public String getPassword() {
         return password;
@@ -139,6 +159,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the password.
+     *
+     * @param password the password value
      */
     public void setPassword(String password) {
         this.password = password;
@@ -146,6 +168,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the database.
+     *
+     * @return the result
      */
     public int getDatabase() {
         return database;
@@ -153,6 +177,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the database.
+     *
+     * @param database the database value
      */
     public void setDatabase(int database) {
         this.database = database;
@@ -160,6 +186,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the connect timeout ms.
+     *
+     * @return the result
      */
     public int getConnectTimeoutMs() {
         return connectTimeoutMs;
@@ -167,6 +195,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the connect timeout ms.
+     *
+     * @param connectTimeoutMs the connectTimeoutMs value
      */
     public void setConnectTimeoutMs(int connectTimeoutMs) {
         this.connectTimeoutMs = connectTimeoutMs;
@@ -174,6 +204,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the socket timeout ms.
+     *
+     * @return the result
      */
     public int getSocketTimeoutMs() {
         return socketTimeoutMs;
@@ -181,6 +213,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the socket timeout ms.
+     *
+     * @param socketTimeoutMs the socketTimeoutMs value
      */
     public void setSocketTimeoutMs(int socketTimeoutMs) {
         this.socketTimeoutMs = socketTimeoutMs;
@@ -188,6 +222,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the sentinel.
+     *
+     * @return the result
      */
     public SentinelConfig getSentinel() {
         return sentinel;
@@ -195,6 +231,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the sentinel.
+     *
+     * @param sentinel the sentinel value
      */
     public void setSentinel(SentinelConfig sentinel) {
         this.sentinel = sentinel;
@@ -202,6 +240,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the cluster.
+     *
+     * @return the result
      */
     public ClusterConfig getCluster() {
         return cluster;
@@ -209,6 +249,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the cluster.
+     *
+     * @param cluster the cluster value
      */
     public void setCluster(ClusterConfig cluster) {
         this.cluster = cluster;
@@ -216,6 +258,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the todo.
+     *
+     * @return the result
      */
     public TodoConfig getTodo() {
         return todo;
@@ -223,6 +267,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the todo.
+     *
+     * @param todo the todo value
      */
     public void setTodo(TodoConfig todo) {
         this.todo = todo;
@@ -230,6 +276,8 @@ public class TodoRedisProperties {
 
     /**
      * Gets the checkpointer ttl minutes.
+     *
+     * @return the result
      */
     public int getCheckpointerTtlMinutes() {
         return checkpointerTtlMinutes;
@@ -237,6 +285,8 @@ public class TodoRedisProperties {
 
     /**
      * Sets the checkpointer ttl minutes.
+     *
+     * @param checkpointerTtlMinutes the checkpointerTtlMinutes value
      */
     public void setCheckpointerTtlMinutes(int checkpointerTtlMinutes) {
         this.checkpointerTtlMinutes = checkpointerTtlMinutes;
@@ -263,6 +313,8 @@ public class TodoRedisProperties {
 
         /**
          * Gets the key prefix.
+         *
+         * @return the result
          */
         public String getKeyPrefix() {
             return keyPrefix;
@@ -270,6 +322,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the key prefix.
+         *
+         * @param keyPrefix the keyPrefix value
          */
         public void setKeyPrefix(String keyPrefix) {
             this.keyPrefix = keyPrefix;
@@ -277,6 +331,8 @@ public class TodoRedisProperties {
 
         /**
          * Gets the ttl seconds.
+         *
+         * @return the result
          */
         public long getTtlSeconds() {
             return ttlSeconds;
@@ -284,6 +340,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the ttl seconds.
+         *
+         * @param ttlSeconds the ttlSeconds value
          */
         public void setTtlSeconds(long ttlSeconds) {
             this.ttlSeconds = ttlSeconds;
@@ -291,6 +349,8 @@ public class TodoRedisProperties {
 
         /**
          * Checks whether refresh on read.
+         *
+         * @return the result
          */
         public boolean isRefreshOnRead() {
             return refreshOnRead;
@@ -298,6 +358,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the refresh on read.
+         *
+         * @param refreshOnRead the refreshOnRead value
          */
         public void setRefreshOnRead(boolean refreshOnRead) {
             this.refreshOnRead = refreshOnRead;
@@ -315,6 +377,8 @@ public class TodoRedisProperties {
 
         /**
          * 哨兵节点列表（host:port）。
+         *
+         * @return the result
          */
         private List<String> nodes = new ArrayList<>();
 
@@ -325,6 +389,8 @@ public class TodoRedisProperties {
 
         /**
          * Gets the master.
+         *
+         * @return the result
          */
         public String getMaster() {
             return master;
@@ -332,6 +398,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the master.
+         *
+         * @param master the master value
          */
         public void setMaster(String master) {
             this.master = master;
@@ -339,6 +407,8 @@ public class TodoRedisProperties {
 
         /**
          * Gets the nodes.
+         *
+         * @return the result
          */
         public List<String> getNodes() {
             return nodes;
@@ -346,6 +416,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the nodes.
+         *
+         * @param nodes the nodes value
          */
         public void setNodes(List<String> nodes) {
             this.nodes = nodes;
@@ -353,6 +425,8 @@ public class TodoRedisProperties {
 
         /**
          * Gets the password.
+         *
+         * @return the result
          */
         public String getPassword() {
             return password;
@@ -360,6 +434,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the password.
+         *
+         * @param password the password value
          */
         public void setPassword(String password) {
             this.password = password;
@@ -372,6 +448,8 @@ public class TodoRedisProperties {
     public static class ClusterConfig {
         /**
          * 集群节点列表（host:port）。
+         *
+         * @return the result
          */
         private List<String> nodes = new ArrayList<>();
 
@@ -382,6 +460,8 @@ public class TodoRedisProperties {
 
         /**
          * Gets the nodes.
+         *
+         * @return the result
          */
         public List<String> getNodes() {
             return nodes;
@@ -389,6 +469,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the nodes.
+         *
+         * @param nodes the nodes value
          */
         public void setNodes(List<String> nodes) {
             this.nodes = nodes;
@@ -396,6 +478,8 @@ public class TodoRedisProperties {
 
         /**
          * Gets the max redirects.
+         *
+         * @return the result
          */
         public int getMaxRedirects() {
             return maxRedirects;
@@ -403,6 +487,8 @@ public class TodoRedisProperties {
 
         /**
          * Sets the max redirects.
+         *
+         * @param maxRedirects the maxRedirects value
          */
         public void setMaxRedirects(int maxRedirects) {
             this.maxRedirects = maxRedirects;

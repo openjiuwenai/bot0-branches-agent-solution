@@ -52,7 +52,7 @@ import java.util.Map;
  * </pre>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 @ConfigurationProperties(prefix = "edpa.agent")
@@ -84,6 +84,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Gets the scenario home.
+     *
+     * @return the result
      */
     public String getScenarioHome() {
         return scenarioHome;
@@ -91,6 +93,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Sets the scenario home.
+     *
+     * @param scenarioHome the scenarioHome value
      */
     public void setScenarioHome(String scenarioHome) {
         this.scenarioHome = scenarioHome;
@@ -98,6 +102,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Gets the model.
+     *
+     * @return the result
      */
     public ModelConfig getModel() {
         return model;
@@ -105,6 +111,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Sets the model.
+     *
+     * @param model the model value
      */
     public void setModel(ModelConfig model) {
         this.model = model;
@@ -112,6 +120,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Gets the versatile.
+     *
+     * @return the result
      */
     public VersatileConfig getVersatile() {
         return versatile;
@@ -119,6 +129,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Sets the versatile.
+     *
+     * @param versatile the versatile value
      */
     public void setVersatile(VersatileConfig versatile) {
         this.versatile = versatile;
@@ -126,6 +138,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Gets the mcpsse.
+     *
+     * @return the result
      */
     public McpSseConfig getMcpsse() {
         return mcpsse;
@@ -133,6 +147,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Sets the mcpsse.
+     *
+     * @param mcpsse the mcpsse value
      */
     public void setMcpsse(McpSseConfig mcpsse) {
         this.mcpsse = mcpsse;
@@ -140,6 +156,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Gets the sandbox.
+     *
+     * @return the result
      */
     public SandboxConfig getSandbox() {
         return sandbox;
@@ -147,6 +165,8 @@ public class EdpaSpringBootConfig {
 
     /**
      * Sets the sandbox.
+     *
+     * @param sandbox the sandbox value
      */
     public void setSandbox(SandboxConfig sandbox) {
         this.sandbox = sandbox;
@@ -154,7 +174,7 @@ public class EdpaSpringBootConfig {
 
     /**
      * 模型后端配置。
-      *
+     *
      */
 
     public static class ModelConfig {
@@ -180,6 +200,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the provider.
+         *
+         * @return the result
          */
         public String getProvider() {
             return provider;
@@ -187,6 +209,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the provider.
+         *
+         * @param provider the provider value
          */
         public void setProvider(String provider) {
             this.provider = provider;
@@ -194,6 +218,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the name.
+         *
+         * @return the result
          */
         public String getName() {
             return name;
@@ -201,6 +227,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the name.
+         *
+         * @param name the name value
          */
         public void setName(String name) {
             this.name = name;
@@ -208,6 +236,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the base url.
+         *
+         * @return the result
          */
         public String getBaseUrl() {
             return baseUrl;
@@ -215,6 +245,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the base url.
+         *
+         * @param baseUrl the baseUrl value
          */
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
@@ -222,6 +254,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the api key.
+         *
+         * @return the result
          */
         public String getApiKey() {
             return apiKey;
@@ -229,6 +263,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the api key.
+         *
+         * @param apiKey the apiKey value
          */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
@@ -237,7 +273,7 @@ public class EdpaSpringBootConfig {
 
     /**
      * Versatile 服务配置。
-      *
+     *
      */
 
     public static class VersatileConfig {
@@ -258,21 +294,29 @@ public class EdpaSpringBootConfig {
 
         /**
          * URL 路径变量占位。
+         *
+         * @return the result
          */
         private Map<String, String> urlVariables = new LinkedHashMap<>();
 
         /**
          * 查询参数。
+         *
+         * @return the result
          */
         private Map<String, String> queryParams = new LinkedHashMap<>();
 
         /**
          * 请求头。
+         *
+         * @return the result
          */
         private Map<String, String> headers = new LinkedHashMap<>();
 
         /**
          * Gets the url.
+         *
+         * @return the result
          */
         public String getUrl() {
             return url;
@@ -280,6 +324,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the url.
+         *
+         * @param url the url value
          */
         public void setUrl(String url) {
             this.url = url;
@@ -287,6 +333,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the adapter a2a url.
+         *
+         * @return the result
          */
         public String getAdapterA2aUrl() {
             return adapterA2aUrl;
@@ -294,6 +342,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the adapter a2a url.
+         *
+         * @param adapterA2aUrl the adapterA2aUrl value
          */
         public void setAdapterA2aUrl(String adapterA2aUrl) {
             this.adapterA2aUrl = adapterA2aUrl;
@@ -301,6 +351,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the timeout.
+         *
+         * @return the result
          */
         public String getTimeout() {
             return timeout;
@@ -308,6 +360,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the timeout.
+         *
+         * @param timeout the timeout value
          */
         public void setTimeout(String timeout) {
             this.timeout = timeout;
@@ -315,6 +369,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the url variables.
+         *
+         * @return the result
          */
         public Map<String, String> getUrlVariables() {
             return urlVariables;
@@ -322,6 +378,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the url variables.
+         *
+         * @param urlVariables the urlVariables value
          */
         public void setUrlVariables(Map<String, String> urlVariables) {
             this.urlVariables = urlVariables != null ? urlVariables : new LinkedHashMap<>();
@@ -329,6 +387,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the query params.
+         *
+         * @return the result
          */
         public Map<String, String> getQueryParams() {
             return queryParams;
@@ -336,6 +396,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the query params.
+         *
+         * @param queryParams the queryParams value
          */
         public void setQueryParams(Map<String, String> queryParams) {
             this.queryParams = queryParams != null ? queryParams : new LinkedHashMap<>();
@@ -343,6 +405,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the headers.
+         *
+         * @return the result
          */
         public Map<String, String> getHeaders() {
             return headers;
@@ -350,6 +414,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the headers.
+         *
+         * @param headers the headers value
          */
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : new LinkedHashMap<>();
@@ -358,7 +424,7 @@ public class EdpaSpringBootConfig {
 
     /**
      * MCP SSE 连接配置。
-      *
+     *
      */
 
     public static class McpSseConfig {
@@ -384,6 +450,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the master url.
+         *
+         * @return the result
          */
         public String getMasterUrl() {
             return masterUrl;
@@ -391,6 +459,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the master url.
+         *
+         * @param masterUrl the masterUrl value
          */
         public void setMasterUrl(String masterUrl) {
             this.masterUrl = masterUrl;
@@ -398,6 +468,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the standby url.
+         *
+         * @return the result
          */
         public String getStandbyUrl() {
             return standbyUrl;
@@ -405,6 +477,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the standby url.
+         *
+         * @param standbyUrl the standbyUrl value
          */
         public void setStandbyUrl(String standbyUrl) {
             this.standbyUrl = standbyUrl;
@@ -412,6 +486,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the access token.
+         *
+         * @return the result
          */
         public String getAccessToken() {
             return accessToken;
@@ -419,6 +495,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the access token.
+         *
+         * @param accessToken the accessToken value
          */
         public void setAccessToken(String accessToken) {
             this.accessToken = accessToken;
@@ -426,6 +504,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Gets the app name.
+         *
+         * @return the result
          */
         public String getAppName() {
             return appName;
@@ -433,6 +513,8 @@ public class EdpaSpringBootConfig {
 
         /**
          * Sets the app name.
+         *
+         * @param appName the appName value
          */
         public void setAppName(String appName) {
             this.appName = appName;

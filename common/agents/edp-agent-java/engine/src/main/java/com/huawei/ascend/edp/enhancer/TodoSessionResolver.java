@@ -45,13 +45,16 @@ import java.util.Map;
  * </ul>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public final class TodoSessionResolver {
 
     /**
      * sessionId 为空时的兜底值。
+     *
+     * @param TodoSessionResolver.class the TodoSessionResolver.class value
+     * @return the result
      */
     private static final Logger LOGGER = LoggerFactory.getLogger(TodoSessionResolver.class);
 
@@ -64,6 +67,8 @@ public final class TodoSessionResolver {
 
     /**
      * 解析 LLM 原始 JSON 字符串形式 toolArgs（Core 经 ToolCallInputs 暴露给 rail 的是 String）。
+     *
+     * @return the result
      */
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
@@ -78,7 +83,7 @@ public final class TodoSessionResolver {
      * @return true 表示 session_id 被注入（有变化），false 表示无需注入
      *
      * @param Map<String description
-      *
+     *
      */
 
     public static boolean injectFromContext(AgentCallbackContext ctx, Map<String, Object> args) {
@@ -96,7 +101,7 @@ public final class TodoSessionResolver {
      *
      * @param inputs 工具调用输入
      * @return 转义后的 session_id，未配置时返回 "default"
-      *
+     *
      */
 
     public static String resolveFromInputs(ToolCallInputs inputs) {
@@ -116,7 +121,7 @@ public final class TodoSessionResolver {
      *
      * @param sessionId 原始 sessionId（可能含冒号等非法路径字符）
      * @return 转义后的合法路径段
-      *
+     *
      */
 
     public static String sanitizeSessionId(String sessionId) {
@@ -132,12 +137,15 @@ public final class TodoSessionResolver {
      *
      * @param rawArgs 原始参数（String 或 Map）
      * @return 可变 Map（空 Map 表示解析失败或空参数）
-      *
+     *
      */
 
     @SuppressWarnings("unchecked")
     /**
      * Normalizes raw arguments into a map.
+     *
+     * @param rawArgs the rawArgs value
+     * @return the result
      */
     public static Map<String, Object> normalizeArgs(Object rawArgs) {
         if (rawArgs instanceof Map<?, ?> map) {

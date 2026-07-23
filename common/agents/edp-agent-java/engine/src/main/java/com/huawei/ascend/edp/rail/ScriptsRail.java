@@ -59,7 +59,7 @@ import java.util.Optional;
  * </ol>
  *
  * @since 2024-01-01
-  *
+ *
  */
 
 public class ScriptsRail extends DeepAgentRail {
@@ -86,7 +86,7 @@ public class ScriptsRail extends DeepAgentRail {
      * @param scripts 话术配置
      *
      * @return result
-      *
+     *
      */
 
     public ScriptsRail(SysScriptsConfig scripts) {
@@ -100,7 +100,7 @@ public class ScriptsRail extends DeepAgentRail {
      * @param edpConfig EDP 配置（UC-C04 scope 已通过 PlanrulePromptBuilder 注入 prompt，此处不使用）
      *
      * @return result
-      *
+     *
      */
 
     public ScriptsRail(SysScriptsConfig scripts, com.huawei.ascend.edp.config.EdpConfig edpConfig) {
@@ -110,6 +110,8 @@ public class ScriptsRail extends DeepAgentRail {
     @Override
     /**
      * Priority.
+     *
+     * @return the result
      */
     public int priority() {
         return 50;
@@ -122,6 +124,8 @@ public class ScriptsRail extends DeepAgentRail {
     @Override
     /**
      * Before invoke.
+     *
+     * @param ctx the ctx value
      */
     public void beforeInvoke(AgentCallbackContext ctx) {
         // request_start 不作为独立事件发射（对齐 Python 理念）。
@@ -138,6 +142,8 @@ public class ScriptsRail extends DeepAgentRail {
     @Override
     /**
      * Before tool call.
+     *
+     * @param ctx the ctx value
      */
     public void beforeToolCall(AgentCallbackContext ctx) {
         if (scripts == null || !(ctx.getInputs() instanceof ToolCallInputs inputs)) {
@@ -158,7 +164,9 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * <p>reason 参数值需与 ScriptConstants 常量名一致（如 {@code "task_cancelled"}），
      * 内部通过 {@link SysScriptsConfig#resolveScriptKey(String)} 映射到实际配置键。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @param args the args value
      */
 
     private void resolveCancelScript(AgentCallbackContext ctx, Map<String, Object> args) {
@@ -189,6 +197,8 @@ public class ScriptsRail extends DeepAgentRail {
     @Override
     /**
      * After tool call.
+     *
+     * @param ctx the ctx value
      */
     public void afterToolCall(AgentCallbackContext ctx) {
         // 互斥判断：有进度提示时跳过标准话术（5.5.5）
@@ -208,6 +218,8 @@ public class ScriptsRail extends DeepAgentRail {
     @Override
     /**
      * After invoke.
+     *
+     * @param ctx the ctx value
      */
     public void afterInvoke(AgentCallbackContext ctx) {
         // 出口 interrupt_start 已由 EdpaEventRail.afterInvoke（priority=80）在 conversation_end 之前发射。
@@ -238,7 +250,8 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * <p>注意：{@code _edp_last_script_key} 存储的是解析后的实际键名（非常量名），
      * 所以此处使用 {@link SysScriptsConfig#has(String)} 而非 {@link SysScriptsConfig#hasScript(String)}。</p>
-      *
+     *
+     * @param ctx the ctx value
      */
 
     private void complianceGate(AgentCallbackContext ctx) {
@@ -259,6 +272,8 @@ public class ScriptsRail extends DeepAgentRail {
     @Override
     /**
      * Init.
+     *
+     * @param agent the agent value
      */
     public void init(Object agent) {
         if (scripts == null || !(agent instanceof ReActAgent reActAgent)) {
@@ -274,6 +289,8 @@ public class ScriptsRail extends DeepAgentRail {
     @Override
     /**
      * Uninit.
+     *
+     * @param agent the agent value
      */
     public void uninit(Object agent) {
         if (!(agent instanceof ReActAgent reActAgent)) {
@@ -300,7 +317,9 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * <p>Python 用 checkpoint/cascade；EventFlow 首轮信号来源待确认。本处保守判定：当
      * {@code ctx.getExtra()} 无 resume 标记时视为首轮。生产联调后可改为基于 session 历史。</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @return the result
      */
 
     private boolean isFirstTurn(AgentCallbackContext ctx) {
@@ -317,7 +336,9 @@ public class ScriptsRail extends DeepAgentRail {
      * 发射 progress_hint chunk 到前端（与 think_chunk 并行推送）（5.5.4）。
      *
      * <p>格式: {type: "progress_hint", data: {text: hintText}}</p>
-      *
+     *
+     * @param ctx the ctx value
+     * @param hintText the hintText value
      */
 
     private void emitProgressChunk(AgentCallbackContext ctx, String hintText) {
@@ -339,7 +360,10 @@ public class ScriptsRail extends DeepAgentRail {
 
     /**
      * 发射话术事件（北向 SSE，复用 EdpaEventRail.emit 同款格式）。
-      *
+     *
+     * @param ctx the ctx value
+     * @param eventType the eventType value
+     * @param text the text value
      */
 
     private void emitScript(AgentCallbackContext ctx, String eventType, String text) {
