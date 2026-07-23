@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.huawei.ascend.client.example</groupId>
+        <artifactId>cloud-client-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <!--
+      ★ SDK 交付物模块。
+      公共 API 与 SPI（api / tool.spi / spi / state.spi / transport.spi）不泄漏任何第三方类型。
+      Jackson 仅在 transport.a2a 内部使用（编解码 A2A JSON-RPC 报文），属于实现细节。
+    -->
+    <artifactId>agent-client-sdk</artifactId>
+    <packaging>jar</packaging>
+    <name>agent-client-sdk (SDK deliverable)</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>agent-client-sdk</finalName>
+    </build>
+</project>

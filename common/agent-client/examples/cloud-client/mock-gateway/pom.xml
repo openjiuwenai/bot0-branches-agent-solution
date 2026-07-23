@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.huawei.ascend.client.example</groupId>
+        <artifactId>cloud-client-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <!--
+      ◇ 仅用于验证：模拟 gateway + runtime 的 A2A 入口。
+      使用纯 JDK 内置 com.sun.net.httpserver，不引入任何 Web 框架。
+      SDK（agent-client-sdk）对本模块零依赖；本模块可独立 java -jar 运行为一个小微服务。
+    -->
+    <artifactId>mock-gateway</artifactId>
+    <packaging>jar</packaging>
+    <name>mock-gateway (verification-only)</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>mock-gateway</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.huawei.ascend.mockgateway.MockGatewayServer</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
