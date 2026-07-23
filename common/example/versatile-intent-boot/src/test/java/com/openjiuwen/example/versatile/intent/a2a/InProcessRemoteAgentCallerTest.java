@@ -5,6 +5,7 @@
 package com.openjiuwen.example.versatile.intent.a2a;
 
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCall;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentException;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.AgentHandler;
@@ -81,7 +82,7 @@ class InProcessRemoteAgentCallerTest {
                     @Override public void onError(Throwable e) { errorRef.set(e); }
                     @Override public boolean isCancelled() { return false; }
                 });
-        assertThat(errorRef.get()).isInstanceOf(IllegalStateException.class)
+        assertThat(errorRef.get()).isInstanceOf(RemoteAgentException.class)
                 .hasMessageContaining("VERSATILE_INPROCESS_AGENT_NOT_FOUND");
     }
 
