@@ -458,8 +458,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         SysScriptsConfig sysScriptsConfig = loadSysScripts(result, yamlDir, skillsDir);
 
         // 第十二、十三步：注册内置业务工具和 Rails，并强制完成 DeepAgent 初始化。
-        setupEnhanceContext(result, config, actrule, skillsDir, edpaTodolist, sysScriptsConfig, agentName,
-                decoratedSandboxClient);
+        setupEnhanceContext(result, new EnhanceSetupParams(config, actrule, skillsDir, edpaTodolist,
+                sysScriptsConfig, agentName, decoratedSandboxClient));
         result.getDeepAgent().ensureInitialized();
         result.setAgentInstance(result.getDeepAgent().getAgent());
         LOGGER.info("EdpaExtHandler performInit completed, agentId={}, deepAgent initialized={}, scenarioHome={}",
@@ -602,39 +602,62 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * @param actrule Governance 的 actrule 配置，可为 null
      * @param skillsDir 场景 Skill 目录，可为 null
      * @param edpaTodolist Todo 数据层，可为 null
-     * @param sysScriptsConfig 已加载的话术配置
-     * @param agentName Agent 名称
-     * @param decoratedSandboxClient 已装饰的沙箱客户端
+     * @param result the InitResult to populate
+     * @param params the enhance setup parameters
      */
-    private static void setupEnhanceContext(InitResult result, EdpaSpringBootConfig config, ActRuleConfig actrule,
-            Path skillsDir, EdpaTodolist edpaTodolist, SysScriptsConfig sysScriptsConfig, String agentName,
-            SandboxClient decoratedSandboxClient) {
+    private static void setupEnhanceContext(InitResult result, EnhanceSetupParams params) {
         // --- 第十二步：注册 EDPAgent 内置业务工具和业务 Rails（13参数版，含沙箱）。
         result.setVersatilePassthroughBuffer(new VersatilePassthroughBuffer());
 
         // --- 沙箱特性：创建SysOperation双模式门面 ---
-        if (config.getSandbox() != null && config.getSandbox().isEnabled()) {
-            result.setSandboxGatewayConfig(buildSandboxGatewayConfig(config.getSandbox()));
+        if (params.config.getSandbox() != null && params.config.getSandbox().isEnabled()) {
+            result.setSandboxGatewayConfig(buildSandboxGatewayConfig(params.config.getSandbox()));
         }
-        result.setSysOperation(createSysOperationIfNeeded(config, result.getSandboxGatewayConfig()).orElse(null));
-        result.setDecoratedSandboxClient(decoratedSandboxClient);
+        result.setSysOperation(createSysOperationIfNeeded(params.config, result.getSandboxGatewayConfig())
+                .orElse(null));
+        result.setDecoratedSandboxClient(params.decoratedSandboxClient);
 
         // --- enhance调用合并 ---
         EdpaAgentEnhancer.EnhanceContext enhanceCtx = new EdpaAgentEnhancer.EnhanceContext();
         enhanceCtx.setEdpConfig(result.getEdpConfig());
-        enhanceCtx.setSpringBootConfig(config);
-        enhanceCtx.setActrule(actrule);
+        enhanceCtx.setSpringBootConfig(params.config);
+        enhanceCtx.setActrule(params.actrule);
         enhanceCtx.setToolDataChannel(new ToolDataChannel());
-        enhanceCtx.setSkillsDir(skillsDir);
+        enhanceCtx.setSkillsDir(params.skillsDir);
         enhanceCtx.setPassthroughBuffer(result.getVersatilePassthroughBuffer());
         enhanceCtx.setDeepAgent(result.getDeepAgent());
-        enhanceCtx.setEdpaTodolist(edpaTodolist);
-        enhanceCtx.setScripts(sysScriptsConfig);
-        enhanceCtx.setAgentName(agentName);
+        enhanceCtx.setEdpaTodolist(params.edpaTodolist);
+        enhanceCtx.setScripts(params.sysScriptsConfig);
+        enhanceCtx.setAgentName(params.agentName);
         enhanceCtx.setSysOp(result.getSysOperation());
         enhanceCtx.setGatewayConfig(result.getSandboxGatewayConfig());
-        enhanceCtx.setDecoratedSandboxClient(decoratedSandboxClient);
+        enhanceCtx.setDecoratedSandboxClient(params.decoratedSandboxClient);
         EdpaAgentEnhancer.enhance(result.getDeepAgent(), enhanceCtx);
+    }
+
+    /**
+     * 封装 setupEnhanceContext 所需的参数。
+     */
+    private static final class EnhanceSetupParams {
+        private final EdpaSpringBootConfig config;
+        private final ActRuleConfig actrule;
+        private final Path skillsDir;
+        private final EdpaTodolist edpaTodolist;
+        private final SysScriptsConfig sysScriptsConfig;
+        private final String agentName;
+        private final SandboxClient decoratedSandboxClient;
+
+        EnhanceSetupParams(EdpaSpringBootConfig config, ActRuleConfig actrule, Path skillsDir,
+                EdpaTodolist edpaTodolist, SysScriptsConfig sysScriptsConfig, String agentName,
+                SandboxClient decoratedSandboxClient) {
+            this.config = config;
+            this.actrule = actrule;
+            this.skillsDir = skillsDir;
+            this.edpaTodolist = edpaTodolist;
+            this.sysScriptsConfig = sysScriptsConfig;
+            this.agentName = agentName;
+            this.decoratedSandboxClient = decoratedSandboxClient;
+        }
     }
 
     /**
