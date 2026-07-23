@@ -113,10 +113,13 @@ public class MockA2AGatewayController {
         String sampled = request.getHeader("X-B3-Sampled");
         String bizTag = request.getHeader("X-Biz-Tag");
 
-        log.info("Mock A2A Gateway inbound agentId={} query={} contextId={} token={} userId={} "
+        log.info("Mock A2A Gateway inbound agentId={} query={} contextId={} tokenPresent={} userId={} "
                         + "versionNode={} traceId={} spanId={} parentSpanId={} sampled={} bizTag={}",
-                agentId, query, contextId, token, userId, versionNode,
+                agentId, query, contextId, token != null && !token.isBlank(), userId, versionNode,
                 traceId, spanId, parentSpanId, sampled, bizTag);
+        if (log.isDebugEnabled() && token != null) {
+            log.debug("Mock A2A Gateway inbound token (debug only) len={}", token.length());
+        }
 
         String targetBase = ROUTING.get(agentId);
         if (targetBase == null) {

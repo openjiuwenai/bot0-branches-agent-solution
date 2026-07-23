@@ -52,7 +52,8 @@ public class VersatileAgentHandler implements AgentHandler {
         Map<String, Object> result = resolveQueryResult(request, invokeForQuery(request));
         QueryResponse response = new QueryResponse(result, request.getConversationId());
         log.info("Completed Versatile query conversation_id={} content_present={}",
-                request.getConversationId(), !String.valueOf(result.get("content")).isEmpty());
+                request.getConversationId(), result.get("content") != null
+                        && !String.valueOf(result.get("content")).isEmpty());
         log.debug("Versatile query response conversation_id={} result={}",
                 request.getConversationId(), result);
         return response;

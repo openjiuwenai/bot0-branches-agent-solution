@@ -61,6 +61,11 @@ public class A2AGatewayProperties {
      * Whether to use A2A streaming ({@code message/stream} SSE) for cross-layer
      * calls. Defaults to {@code true}. Set to {@code false} for gateways that
      * only support sync {@code message/send} (single JSON-RPC response).
+     *
+     * <p>部署约束：gateway 必须支持 A2A {@code message/stream} SSE 才能置
+     * {@code true}；若 gateway 仅支持 sync {@code message/send}（如本仓库
+     * {@code MockA2AGatewayController}），必须置 {@code false}，否则 SDK 会
+     * 等待不存在的 SSE 流直至超时。
      */
     private boolean streaming = true;
 

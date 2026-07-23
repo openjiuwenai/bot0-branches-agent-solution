@@ -348,6 +348,13 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
      * </ul>
      *
      * <p>A WARN is logged once per agentId to surface this assumption.
+     *
+     * <p>此简化对应 L2 §4.9.6 落地范围：gateway 路由模式 URL 模板为
+     * {@code gatewayBaseUrl + "/" + agentId + jsonRpcPath}，
+     * {@code A2AGatewayCardResolver.resolveCardUrl} 永远返回空串，故
+     * FEAT-015 card fetch 与协议版本协商在 gateway 路由模式下被刻意跳过。
+     * 若部署需要能力/技能过滤或目标 Agent 协议版本低于 CURRENT，应切换到
+     * Default 路由模式或扩展 resolver 支持 real card fetch。
      */
     AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl) {
         if (ephemeralCardWarnedAgents.add(agentId)) {
@@ -423,10 +430,14 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
         if (raw.isEmpty()) {
             return;
         }
-        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, raw));
-        RemoteAgentAnswerExtractor.extractAnswer(raw).ifPresent(answer -> {
+        String answer = RemoteAgentAnswerExtractor.extractAnswer(raw).orElse(raw);
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("output", answer);
+        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
+        RemoteAgentAnswerExtractor.extractAnswer(raw).ifPresent(ans -> {
             if (!result.isDone()) {
-                result.complete(answer);
+                result.complete(ans);
             }
         });
     }
@@ -466,7 +477,11 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                     }
                     String raw = extractText(a.parts());
                     if (!raw.isEmpty()) {
-                        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, raw));
+                        String answer = RemoteAgentAnswerExtractor.extractAnswer(raw).orElse(raw);
+                        Map<String, Object> envelope = new LinkedHashMap<>();
+                        envelope.put("type", "answer");
+                        envelope.put("output", answer);
+                        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
                     }
                 }
             }
