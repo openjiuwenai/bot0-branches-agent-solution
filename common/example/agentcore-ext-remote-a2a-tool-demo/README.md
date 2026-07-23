@@ -681,41 +681,82 @@ Agent A/Agent B 端口仍分别是 `18090`、`18091`。
 
 每次独立测试请使用新的 `contextId`/`conversation_id`，避免 Versatile mock 中已有会话状态影响结果；同一次测试的三轮请求必须复用该值，第二、三轮同时复用第一轮返回的父 `taskId`。三轮都必须保留 `params.metadata`，尤其是 Versatile endpoint 必需的 `query.workspace_id` 和 `query.type`。
 
+以下三段代码按顺序在同一个 PowerShell 中执行。第一段同时定义本示例使用的发送函数，不依赖前文的公共函数。
+
 第一轮请求：
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "parallel-balance-1",
-  "method": "SendStreamingMessage",
-  "params": {
-    "message": {
-      "role": "ROLE_USER",
-      "contextId": "parallel-balance-conversation-1",
-      "parts": [
-        {
-          "text": "请并行查询三个人的银行卡余额：张三尾号4241、李四尾号7816、王五尾号3058。三个人互不依赖，请为每个人分别调用一次远端银行能力。"
-        }
-      ]
-    },
-    "metadata": {
-      "body": {
-        "agent_id": "main_planner",
-        "conversation_id": "parallel-balance-conversation-1",
-        "stream": true
-      },
-      "headers": {
-        "stream": "true",
-        "x-invoke-mode": "DEBUG",
-        "x-language": "zh-cn"
-      },
-      "query": {
-        "workspace_id": "11",
-        "type": "controller"
-      }
+```powershell
+$a2aUrl = "http://127.0.0.1:18090/a2a/"
+$parallelConversationId = "parallel-balance-conversation-$(Get-Date -Format 'yyyyMMddHHmmss')"
+
+function Send-ParallelBalanceRequestJson {
+  param([Parameter(Mandatory = $true)] [string] $RequestJson)
+
+  Write-Host "Request body:"
+  $RequestJson
+  Write-Host ""
+
+  $response = Invoke-WebRequest `
+    -UseBasicParsing `
+    -Uri $a2aUrl `
+    -Method Post `
+    -ContentType "application/json; charset=utf-8" `
+    -Headers @{
+      Accept = "text/event-stream"
+      stream = "true"
+      "x-invoke-mode" = "DEBUG"
+      "x-language" = "zh-cn"
+    } `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($RequestJson))
+
+  Write-Host "HTTP $($response.StatusCode)"
+  $response.RawContentStream.Position = 0
+  $reader = New-Object System.IO.StreamReader(
+    $response.RawContentStream,
+    [System.Text.Encoding]::UTF8
+  )
+  $reader.ReadToEnd()
+}
+
+function New-ParallelBalanceMetadata {
+  [ordered]@{
+    body = [ordered]@{
+      agent_id = "main_planner"
+      conversation_id = $parallelConversationId
+      stream = $true
+    }
+    headers = [ordered]@{
+      stream = "true"
+      "x-invoke-mode" = "DEBUG"
+      "x-language" = "zh-cn"
+    }
+    query = [ordered]@{
+      workspace_id = "11"
+      type = "controller"
     }
   }
 }
+
+$parallelBalanceRequest1 = [ordered]@{
+  jsonrpc = "2.0"
+  id = "parallel-balance-1"
+  method = "SendStreamingMessage"
+  params = [ordered]@{
+    message = [ordered]@{
+      role = "ROLE_USER"
+      contextId = $parallelConversationId
+      parts = @(
+        [ordered]@{
+          text = "请并行查询三个人的银行卡余额：张三尾号4241、李四尾号7816、王五尾号3058。三个人互不依赖，请为每个人分别调用一次远端银行能力。"
+        }
+      )
+    }
+    metadata = (New-ParallelBalanceMetadata)
+  }
+}
+
+$parallelBalanceRequestJson1 = $parallelBalanceRequest1 | ConvertTo-Json -Depth 100
+Send-ParallelBalanceRequestJson $parallelBalanceRequestJson1
 ```
 
 第一轮预期返回三个独立成员进度，并以一个父 Task `INPUT_REQUIRED` 收口。记录响应中的父 `taskId` 和三个 `toolCallId`；下面使用示例值：
@@ -743,98 +784,125 @@ Agent A/Agent B 端口仍分别是 `18090`、`18091`。
 
 第二轮在一条标准 A2A Message 中放三个 TextPart。每个 Part 的 `metadata.toolCallId` 指向一个 pending member；客户端不传 `batchId`：
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "parallel-balance-2",
-  "method": "SendStreamingMessage",
-  "params": {
-    "message": {
-      "role": "ROLE_USER",
-      "taskId": "parent-task-from-round-1",
-      "contextId": "parallel-balance-conversation-1",
-      "parts": [
-        {
-          "text": "{\"query\":\"[{\\\"cardNum\\\":\\\"6222021816044054241\\\",\\\"regAcctType\\\":\\\"011\\\"}]\",\"intent\":\"LATEST\"}",
-          "metadata": {"toolCallId": "call-zhang"}
-        },
-        {
-          "text": "{\"query\":\"[{\\\"cardNum\\\":\\\"6222021816044057816\\\",\\\"regAcctType\\\":\\\"011\\\"}]\",\"intent\":\"LATEST\"}",
-          "metadata": {"toolCallId": "call-li"}
-        },
-        {
-          "text": "{\"query\":\"[{\\\"cardNum\\\":\\\"6222021816044053058\\\",\\\"regAcctType\\\":\\\"011\\\"}]\",\"intent\":\"LATEST\"}",
-          "metadata": {"toolCallId": "call-wang"}
+```powershell
+# 使用第一轮实际响应中的父 taskId 和三个 toolCallId 替换下面的示例值。
+$parentTaskId = "parent-task-from-round-1"
+$zhangToolCallId = "call-zhang"
+$liToolCallId = "call-li"
+$wangToolCallId = "call-wang"
+
+$zhangCardQuery = ConvertTo-Json -InputObject @(
+  [ordered]@{ cardNum = "6222021816044054241"; regAcctType = "011" }
+) -Compress -Depth 100
+$liCardQuery = ConvertTo-Json -InputObject @(
+  [ordered]@{ cardNum = "6222021816044057816"; regAcctType = "011" }
+) -Compress -Depth 100
+$wangCardQuery = ConvertTo-Json -InputObject @(
+  [ordered]@{ cardNum = "6222021816044053058"; regAcctType = "011" }
+) -Compress -Depth 100
+
+$parallelBalanceRequest2 = [ordered]@{
+  jsonrpc = "2.0"
+  id = "parallel-balance-2"
+  method = "SendStreamingMessage"
+  params = [ordered]@{
+    message = [ordered]@{
+      role = "ROLE_USER"
+      taskId = $parentTaskId
+      contextId = $parallelConversationId
+      parts = @(
+        [ordered]@{
+          text = ([ordered]@{ query = $zhangCardQuery; intent = "LATEST" } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $zhangToolCallId }
         }
-      ]
-    },
-    "metadata": {
-      "body": {
-        "agent_id": "main_planner",
-        "conversation_id": "parallel-balance-conversation-1",
-        "stream": true
-      },
-      "headers": {
-        "stream": "true",
-        "x-invoke-mode": "DEBUG",
-        "x-language": "zh-cn"
-      },
-      "query": {
-        "workspace_id": "11",
-        "type": "controller"
-      }
+        [ordered]@{
+          text = ([ordered]@{ query = $liCardQuery; intent = "LATEST" } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $liToolCallId }
+        }
+        [ordered]@{
+          text = ([ordered]@{ query = $wangCardQuery; intent = "LATEST" } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $wangToolCallId }
+        }
+      )
     }
+    metadata = (New-ParallelBalanceMetadata)
   }
 }
+
+$parallelBalanceRequestJson2 = $parallelBalanceRequest2 | ConvertTo-Json -Depth 100
+Send-ParallelBalanceRequestJson $parallelBalanceRequestJson2
 ```
 
 如果三个远端流程都还需要余额查询结果，第二轮再次返回同一父 Task 的三个 `INPUT_REQUIRED` item。若只回答其中一个，另外两个必须继续保持 pending；不允许默认广播。
 
 第三轮仍按相同方式携带三个定向 Part。这里省略每个人完整的 `responseData.pageData`，实际验证时替换为 Versatile 返回的完整 JSON：
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "parallel-balance-3",
-  "method": "SendStreamingMessage",
-  "params": {
-    "message": {
-      "role": "ROLE_USER",
-      "taskId": "parent-task-from-round-1",
-      "contextId": "parallel-balance-conversation-1",
-      "parts": [
-        {
-          "text": "{\"query\":\"{\\\"bankCardBalanceList\\\":[{\\\"bankCardNumber\\\":\\\"6222021816044054241\\\",\\\"currencyBalanceList\\\":[{\\\"balance\\\":\\\"1500.92\\\"}]}]}\",\"intent\":\"LATEST\"}",
-          "metadata": {"toolCallId": "call-zhang"}
-        },
-        {
-          "text": "{\"query\":\"{\\\"bankCardBalanceList\\\":[{\\\"bankCardNumber\\\":\\\"6222021816044057816\\\",\\\"currencyBalanceList\\\":[{\\\"balance\\\":\\\"2088.10\\\"}]}]}\",\"intent\":\"LATEST\"}",
-          "metadata": {"toolCallId": "call-li"}
-        },
-        {
-          "text": "{\"query\":\"{\\\"bankCardBalanceList\\\":[{\\\"bankCardNumber\\\":\\\"6222021816044053058\\\",\\\"currencyBalanceList\\\":[{\\\"balance\\\":\\\"936.44\\\"}]}]}\",\"intent\":\"LATEST\"}",
-          "metadata": {"toolCallId": "call-wang"}
-        }
-      ]
-    },
-    "metadata": {
-      "body": {
-        "agent_id": "main_planner",
-        "conversation_id": "parallel-balance-conversation-1",
-        "stream": true
-      },
-      "headers": {
-        "stream": "true",
-        "x-invoke-mode": "DEBUG",
-        "x-language": "zh-cn"
-      },
-      "query": {
-        "workspace_id": "11",
-        "type": "controller"
-      }
+```powershell
+# 实际验证时，把三个对象替换为 Versatile 返回的完整 JSON 数据。
+$zhangBalanceResult = [ordered]@{
+  bankCardBalanceList = @(
+    [ordered]@{
+      bankCardNumber = "6222021816044054241"
+      currencyBalanceList = @([ordered]@{ balance = "1500.92" })
     }
+  )
+}
+$liBalanceResult = [ordered]@{
+  bankCardBalanceList = @(
+    [ordered]@{
+      bankCardNumber = "6222021816044057816"
+      currencyBalanceList = @([ordered]@{ balance = "2088.10" })
+    }
+  )
+}
+$wangBalanceResult = [ordered]@{
+  bankCardBalanceList = @(
+    [ordered]@{
+      bankCardNumber = "6222021816044053058"
+      currencyBalanceList = @([ordered]@{ balance = "936.44" })
+    }
+  )
+}
+
+$parallelBalanceRequest3 = [ordered]@{
+  jsonrpc = "2.0"
+  id = "parallel-balance-3"
+  method = "SendStreamingMessage"
+  params = [ordered]@{
+    message = [ordered]@{
+      role = "ROLE_USER"
+      taskId = $parentTaskId
+      contextId = $parallelConversationId
+      parts = @(
+        [ordered]@{
+          text = ([ordered]@{
+            query = ($zhangBalanceResult | ConvertTo-Json -Compress -Depth 100)
+            intent = "LATEST"
+          } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $zhangToolCallId }
+        }
+        [ordered]@{
+          text = ([ordered]@{
+            query = ($liBalanceResult | ConvertTo-Json -Compress -Depth 100)
+            intent = "LATEST"
+          } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $liToolCallId }
+        }
+        [ordered]@{
+          text = ([ordered]@{
+            query = ($wangBalanceResult | ConvertTo-Json -Compress -Depth 100)
+            intent = "LATEST"
+          } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $wangToolCallId }
+        }
+      )
+    }
+    metadata = (New-ParallelBalanceMetadata)
   }
 }
+
+$parallelBalanceRequestJson3 = $parallelBalanceRequest3 | ConvertTo-Json -Depth 100
+Send-ParallelBalanceRequestJson $parallelBalanceRequestJson3
 ```
 
 最终响应应在三个成员都完成后才恢复 Agent A。即使远端完成顺序是王五、张三、李四，最终语义仍必须按各自的 `toolCallId` 归位，例如：
