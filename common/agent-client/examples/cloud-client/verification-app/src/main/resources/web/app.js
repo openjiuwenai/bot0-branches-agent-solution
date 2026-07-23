@@ -18,7 +18,8 @@
   // 每个会话的断言：sessionId -> [{scenarioId, ok, message}]
   const assertionsBySession = {};
   // 当前会话正在流式拼接的 assistant 气泡元素（按 invocationRef）
-  const streamingBubbles = {};
+  // 用 let：renderDialog 切换会话时会整体重置为 {}
+  let streamingBubbles = {};
   // 跟踪后端运行状态，用于 pollStatus 检测 true→false 转换并解锁按钮
   let wasRunning = false;
 
