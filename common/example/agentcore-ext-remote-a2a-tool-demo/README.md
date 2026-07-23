@@ -268,7 +268,7 @@ Send-AgentARequestJson $requestJson3
 Agent A DeepAgent
   -> LLM calls the matching injected remote A2A tool
   -> RemoteA2aInterruptRail throws a2a_delegate interrupt
-  -> A2AEnabledServeOrchestrator calls Agent B with streaming A2A client
+  -> A2AEnabledServeOrchestrator calls Agent B in the configured mode (non-streaming by default)
   -> Agent B VersatileAgentHandler calls VERSATILE_URL
   -> remote result resumes Agent A as tool result
 ```
@@ -674,3 +674,182 @@ Send-CustomRestRequestJson $syncRequestJson
 
 最后继续执行本文前面的 A2A 三轮请求和 `/v1/query` REST 三轮请求。三组入口应同时可用，
 Agent A/Agent B 端口仍分别是 `18090`、`18091`。
+
+## 并发查询三个人的余额：A2A 三轮示例
+
+下面的请求验证同一轮三个独立 remote ToolCall。Agent A 必须在同一个 assistant turn 中调用三次 `versatile-agent`，不能把三个人合并成一次远端调用。三个 Agent B Task 各自多轮推进，Runtime 使用 `toolCallId` 关联结果，不能依赖完成顺序。
+
+每次独立测试请使用新的 `contextId`/`conversation_id`，避免 Versatile mock 中已有会话状态影响结果；同一次测试的三轮请求必须复用该值，第二、三轮同时复用第一轮返回的父 `taskId`。三轮都必须保留 `params.metadata`，尤其是 Versatile endpoint 必需的 `query.workspace_id` 和 `query.type`。
+
+第一轮请求：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "parallel-balance-1",
+  "method": "SendStreamingMessage",
+  "params": {
+    "message": {
+      "role": "ROLE_USER",
+      "contextId": "parallel-balance-conversation-1",
+      "parts": [
+        {
+          "text": "请并行查询三个人的银行卡余额：张三尾号4241、李四尾号7816、王五尾号3058。三个人互不依赖，请为每个人分别调用一次远端银行能力。"
+        }
+      ]
+    },
+    "metadata": {
+      "body": {
+        "agent_id": "main_planner",
+        "conversation_id": "parallel-balance-conversation-1",
+        "stream": true
+      },
+      "headers": {
+        "stream": "true",
+        "x-invoke-mode": "DEBUG",
+        "x-language": "zh-cn"
+      },
+      "query": {
+        "workspace_id": "11",
+        "type": "controller"
+      }
+    }
+  }
+}
+```
+
+第一轮预期返回三个独立成员进度，并以一个父 Task `INPUT_REQUIRED` 收口。记录响应中的父 `taskId` 和三个 `toolCallId`；下面使用示例值：
+
+```json
+{
+  "status": {
+    "state": "TASK_STATE_INPUT_REQUIRED",
+    "message": {
+      "metadata": {
+        "_interrupt": {
+          "message": "Multiple remote agents require input",
+          "items": [
+            {"toolCallId": "call-zhang", "message": "请选择张三的银行卡"},
+            {"toolCallId": "call-li", "message": "请选择李四的银行卡"},
+            {"toolCallId": "call-wang", "message": "请选择王五的银行卡"}
+          ]
+        }
+      }
+    }
+  },
+  "id": "parent-task-from-round-1"
+}
+```
+
+第二轮在一条标准 A2A Message 中放三个 TextPart。每个 Part 的 `metadata.toolCallId` 指向一个 pending member；客户端不传 `batchId`：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "parallel-balance-2",
+  "method": "SendStreamingMessage",
+  "params": {
+    "message": {
+      "role": "ROLE_USER",
+      "taskId": "parent-task-from-round-1",
+      "contextId": "parallel-balance-conversation-1",
+      "parts": [
+        {
+          "text": "{\"query\":\"[{\\\"cardNum\\\":\\\"6222021816044054241\\\",\\\"regAcctType\\\":\\\"011\\\"}]\",\"intent\":\"LATEST\"}",
+          "metadata": {"toolCallId": "call-zhang"}
+        },
+        {
+          "text": "{\"query\":\"[{\\\"cardNum\\\":\\\"6222021816044057816\\\",\\\"regAcctType\\\":\\\"011\\\"}]\",\"intent\":\"LATEST\"}",
+          "metadata": {"toolCallId": "call-li"}
+        },
+        {
+          "text": "{\"query\":\"[{\\\"cardNum\\\":\\\"6222021816044053058\\\",\\\"regAcctType\\\":\\\"011\\\"}]\",\"intent\":\"LATEST\"}",
+          "metadata": {"toolCallId": "call-wang"}
+        }
+      ]
+    },
+    "metadata": {
+      "body": {
+        "agent_id": "main_planner",
+        "conversation_id": "parallel-balance-conversation-1",
+        "stream": true
+      },
+      "headers": {
+        "stream": "true",
+        "x-invoke-mode": "DEBUG",
+        "x-language": "zh-cn"
+      },
+      "query": {
+        "workspace_id": "11",
+        "type": "controller"
+      }
+    }
+  }
+}
+```
+
+如果三个远端流程都还需要余额查询结果，第二轮再次返回同一父 Task 的三个 `INPUT_REQUIRED` item。若只回答其中一个，另外两个必须继续保持 pending；不允许默认广播。
+
+第三轮仍按相同方式携带三个定向 Part。这里省略每个人完整的 `responseData.pageData`，实际验证时替换为 Versatile 返回的完整 JSON：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "parallel-balance-3",
+  "method": "SendStreamingMessage",
+  "params": {
+    "message": {
+      "role": "ROLE_USER",
+      "taskId": "parent-task-from-round-1",
+      "contextId": "parallel-balance-conversation-1",
+      "parts": [
+        {
+          "text": "{\"query\":\"{\\\"bankCardBalanceList\\\":[{\\\"bankCardNumber\\\":\\\"6222021816044054241\\\",\\\"currencyBalanceList\\\":[{\\\"balance\\\":\\\"1500.92\\\"}]}]}\",\"intent\":\"LATEST\"}",
+          "metadata": {"toolCallId": "call-zhang"}
+        },
+        {
+          "text": "{\"query\":\"{\\\"bankCardBalanceList\\\":[{\\\"bankCardNumber\\\":\\\"6222021816044057816\\\",\\\"currencyBalanceList\\\":[{\\\"balance\\\":\\\"2088.10\\\"}]}]}\",\"intent\":\"LATEST\"}",
+          "metadata": {"toolCallId": "call-li"}
+        },
+        {
+          "text": "{\"query\":\"{\\\"bankCardBalanceList\\\":[{\\\"bankCardNumber\\\":\\\"6222021816044053058\\\",\\\"currencyBalanceList\\\":[{\\\"balance\\\":\\\"936.44\\\"}]}]}\",\"intent\":\"LATEST\"}",
+          "metadata": {"toolCallId": "call-wang"}
+        }
+      ]
+    },
+    "metadata": {
+      "body": {
+        "agent_id": "main_planner",
+        "conversation_id": "parallel-balance-conversation-1",
+        "stream": true
+      },
+      "headers": {
+        "stream": "true",
+        "x-invoke-mode": "DEBUG",
+        "x-language": "zh-cn"
+      },
+      "query": {
+        "workspace_id": "11",
+        "type": "controller"
+      }
+    }
+  }
+}
+```
+
+最终响应应在三个成员都完成后才恢复 Agent A。即使远端完成顺序是王五、张三、李四，最终语义仍必须按各自的 `toolCallId` 归位，例如：
+
+```json
+{
+  "status": {"state": "TASK_STATE_COMPLETED"},
+  "artifacts": [
+    {
+      "parts": [
+        {
+          "text": "张三可用余额1500.92元；李四可用余额2088.10元；王五可用余额936.44元。"
+        }
+      ]
+    }
+  ]
+}
+```
