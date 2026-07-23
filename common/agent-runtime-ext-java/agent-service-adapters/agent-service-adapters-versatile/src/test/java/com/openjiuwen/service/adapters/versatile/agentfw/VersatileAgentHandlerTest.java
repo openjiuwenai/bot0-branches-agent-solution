@@ -172,7 +172,9 @@ class VersatileAgentHandlerTest {
         assertThat(response.getResult()).isInstanceOf(Map.class);
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) response.getResult();
-        assertThat(result).containsEntry("response_content", "酒店预订")
+        assertThat(result).containsEntry("role", "assistant")
+                .containsEntry("content", "酒店预订")
+                .containsEntry("response_content", "酒店预订")
                 .containsEntry("intent_id", "intent_L1_hotel")
                 .containsEntry("agent_id", "agent_card_L2_hotel");
     }

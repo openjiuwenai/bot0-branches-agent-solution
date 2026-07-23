@@ -200,11 +200,28 @@ final class VersatileResponseExtractor {
             if (node == null || node.isMissingNode() || node.isNull()) {
                 continue;
             }
+            String match = rule.getMatch();
+            if ("agent_id".equals(match) && node.isArray()) {
+                hasFailed = true;
+                error = "{\"code\":\"VERSATILE_INTENT_AGENT_ID_NOT_UNIQUE\","
+                        + "\"reason\":\"agent_id must be a single string, got array\"}";
+                return;
+            }
+            if (isThreeField(match) && !node.isTextual()) {
+                hasFailed = true;
+                error = "{\"code\":\"VERSATILE_INTENT_RESULT_TYPE\","
+                        + "\"reason\":\"" + match + " must be a string\"}";
+                return;
+            }
             String value = node.isTextual() ? node.asText() : node.toString();
             if (hasText(value)) {
-                extractedFields.put(rule.getMatch(), value);
+                extractedFields.put(match, value);
             }
         }
+    }
+
+    private static boolean isThreeField(String match) {
+        return "response_content".equals(match) || "intent_id".equals(match) || "agent_id".equals(match);
     }
 
     private Optional<Map<String, Object>> buildThreeFieldEnvelope() {

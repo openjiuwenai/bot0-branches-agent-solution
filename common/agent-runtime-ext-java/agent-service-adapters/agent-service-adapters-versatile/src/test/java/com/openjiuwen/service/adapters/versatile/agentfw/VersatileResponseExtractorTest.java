@@ -290,6 +290,47 @@ class VersatileResponseExtractorTest {
         props.getResultExtractions().add(extraction);
     }
 
+    @Test
+    void emitsAgentIdNotUniqueErrorWhenAgentIdIsArray() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"酒店预订\","
+                + "\"intent_id\":\"intent_L1_hotel\",\"agent_id\":[\"agent_a\",\"agent_b\"]}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = extractor.finish();
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_ERROR);
+        assertThat(String.valueOf(chunks.get(chunks.size() - 1).getData()))
+                .contains("VERSATILE_INTENT_AGENT_ID_NOT_UNIQUE");
+    }
+
+    @Test
+    void emitsResultTypeErrorWhenIntentIdIsNonString() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"酒店预订\","
+                + "\"intent_id\":42,\"agent_id\":\"agent_card_L2_hotel\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = extractor.finish();
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_ERROR);
+        assertThat(String.valueOf(chunks.get(chunks.size() - 1).getData()))
+                .contains("VERSATILE_INTENT_RESULT_TYPE")
+                .contains("intent_id");
+    }
+
     private static void assertAnswerEnvelope(QueryChunk chunk, String expectedOutput) {
         assertThat(chunk.getData()).isInstanceOf(Map.class);
         Map<?, ?> envelope = (Map<?, ?>) chunk.getData();
