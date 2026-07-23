@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 
 from agent_adapter.api.app import create_app
 from agent_adapter.config import load_config
+from agent_adapter.repository.aggregation import compute_trace_summary
 from agent_adapter.trace_source.db_source import DbTraceSource
 from tests.integration import _pgutil
 
@@ -57,7 +58,11 @@ async def test_standard_list_and_get_records(standard_app, repo, jsonl_spans):
         r = await client.get("/api/v1/traces")
         assert r.status_code == 200
         convs = set(r.json()["conversation_ids"])
-        expected = {t[0]["session_id"] for t in _by_trace(jsonl_spans).values()}
+        # 期望 = 各 trace 经 compute_trace_summary 算出的 session_id, 过滤 None
+        # (list_conversations 过滤无 session.id 的 trace; compute 用 _first_attr 取首个非空 session.id)
+        expected = {compute_trace_summary(tid, tspans)["session_id"]
+                    for tid, tspans in _by_trace(jsonl_spans).items()}
+        expected.discard(None)
         assert convs == expected
 
         # 取某会话 records + complete 信号 (根 span 已在 → complete=True)

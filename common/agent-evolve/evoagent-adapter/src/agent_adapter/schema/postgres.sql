@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_spans_attr       ON spans USING gin (attributes);
 -- traces: 应用层汇总 (非 OTel 标准), 消费者写 spans 时 upsert
 CREATE TABLE IF NOT EXISTS traces (
     trace_id            text PRIMARY KEY,
-    session_id          text NOT NULL,                -- 从 attributes."session.id" 提升 (与 spans.session_id 对齐)
+    session_id          text,                        -- 从 attributes."session.id" 提升 (可空: 部分 trace EDPAgent 未上报 session.id)
     root_span_id        text,
     service_name        text,
     start_time          timestamptz,

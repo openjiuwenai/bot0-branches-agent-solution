@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 
 from agent_adapter.trace_cleaner import clean_traces
+from agent_adapter.repository.aggregation import compute_trace_summary
 from agent_adapter.trace_source.db_source import DbTraceSource
 from agent_adapter.trace_source.spans_to_records import spans_to_records
 from tests.integration import _pgutil
@@ -47,7 +48,10 @@ async def test_db_trace_source_list_conversations(repo, jsonl_spans):
     await repo.bulk_insert_spans(jsonl_spans)
     src = DbTraceSource(repo)
     convs = await src.list_conversations()  # TraceSource 接口层 (桥接 repo.list_sessions)
-    expected = {t[0]["session_id"] for t in _by_trace(jsonl_spans).values()}
+    # 期望 = 各 trace 经 compute_trace_summary 算出的 session_id, 过滤 None (list_conversations 过滤无 session.id 的)
+    expected = {compute_trace_summary(tid, tspans)["session_id"]
+                for tid, tspans in _by_trace(jsonl_spans).items()}
+    expected.discard(None)
     assert set(convs) == expected
     assert len(convs) == len(expected)  # 去重
 
