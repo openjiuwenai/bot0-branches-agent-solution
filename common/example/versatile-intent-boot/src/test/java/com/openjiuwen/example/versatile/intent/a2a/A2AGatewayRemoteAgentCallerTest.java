@@ -203,7 +203,7 @@ class A2AGatewayRemoteAgentCallerTest {
     void buildEphemeralCardUsesUppercaseJsonrpcProtocolBinding() {
         A2AGatewayRemoteAgentCaller caller = new A2AGatewayRemoteAgentCaller(props, resolver);
         AgentCard card = caller.buildEphemeralCard("agent_card_L2_hotel",
-                "https://gateway.example.com/a2a/agent_card_L2_hotel");
+                "https://gateway.example.com/a2a/agent_card_L2_hotel", true);
 
         assertThat(card.supportedInterfaces()).hasSize(1);
         AgentInterface iface = card.supportedInterfaces().get(0);
@@ -283,7 +283,7 @@ class A2AGatewayRemoteAgentCallerTest {
             req.setMetadata(Map.of("trace", "abc"));
             req.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
             CapturingObserver observer = new CapturingObserver();
-            caller.call(new RemoteAgentCall("agent_card_L2_hotel", req, "一层输出", null, null), observer);
+            caller.call(new RemoteAgentCall("agent_card_L2_hotel", req, "一层输出", null, null, null, false), observer);
 
             // The SDK generates UUIDs for id/messageId/contextId; assert only on stable fields.
             wireMock.verify(postRequestedFor(urlPathMatching("/a2a/agent_card_L2_hotel"))

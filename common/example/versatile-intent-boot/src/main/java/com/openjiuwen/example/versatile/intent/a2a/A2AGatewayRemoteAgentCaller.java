@@ -145,18 +145,27 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
 
     @Override
     public void call(RemoteAgentCall call, QueryStreamObserver observer) {
+        boolean streaming = call.streaming();
         if (properties.getToken() == null || properties.getToken().isBlank()) {
-            observer.onError(new RemoteAgentException(
+            RemoteAgentException ex = new RemoteAgentException(
                     "A2AGatewayRemoteAgentCaller: openjiuwen.service.a2a-gateway.token is not configured",
-                    null));
-            return;
+                    null);
+            if (streaming) {
+                observer.onError(ex);
+                return;
+            }
+            throw ex;
         }
         String jsonRpcUrl = cardResolver.resolveJsonRpcUrl(call.agentId());
         if (jsonRpcUrl == null || jsonRpcUrl.isBlank()) {
-            observer.onError(new RemoteAgentException(
+            RemoteAgentException ex = new RemoteAgentException(
                     "A2AGatewayRemoteAgentCaller: cannot resolve JSON-RPC URL for agentId=" + call.agentId(),
-                    null));
-            return;
+                    null);
+            if (streaming) {
+                observer.onError(ex);
+                return;
+            }
+            throw ex;
         }
 
         ServeRequest forwarded = ForwardedServeRequests.build(call.serveRequest(), call.responseContent());
@@ -184,8 +193,8 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 .metadata(forwarded.getMetadata())
                 .build();
 
-        AgentCard card = buildEphemeralCard(call.agentId(), jsonRpcUrl);
-        Client client = getOrCreateClient(card);
+        AgentCard card = buildEphemeralCard(call.agentId(), jsonRpcUrl, streaming);
+        Client client = getOrCreateClient(card, streaming);
         ClientCallContext context = new ClientCallContext(Map.of(), buildHeaders(forwarded.getUserId()));
 
         CompletableFuture<String> result = new CompletableFuture<>();
@@ -206,9 +215,13 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 }
             }), result::completeExceptionally, context);
         } catch (RuntimeException ex) {
-            observer.onError(new RemoteAgentException(
-                    "A2AGateway call failed for agentId=" + call.agentId(), ex));
-            return;
+            RemoteAgentException rae = new RemoteAgentException(
+                    "A2AGateway call failed for agentId=" + call.agentId(), ex);
+            if (streaming) {
+                observer.onError(rae);
+                return;
+            }
+            throw rae;
         }
 
         long timeoutSeconds = properties.getCallTimeoutSeconds();
@@ -221,25 +234,43 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 observer.onComplete();
             }
         } catch (TimeoutException e) {
-            observer.onError(new RemoteAgentException(
+            RemoteAgentException rae = new RemoteAgentException(RemoteAgentException.CODE_REMOTE_TIMEOUT,
                     "A2AGateway call timed out for agentId=" + call.agentId()
-                            + " after " + timeoutSeconds + "s", e));
+                            + " after " + timeoutSeconds + "s", e);
+            if (streaming) {
+                observer.onError(rae);
+                return;
+            }
+            throw rae;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            observer.onError(new RemoteAgentException(
-                    "A2AGateway call interrupted for agentId=" + call.agentId(), e));
+            RemoteAgentException rae = new RemoteAgentException(
+                    "A2AGateway call interrupted for agentId=" + call.agentId(), e);
+            if (streaming) {
+                observer.onError(rae);
+                return;
+            }
+            throw rae;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RemoteInputRequiredException rie) {
-                observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
-                        Map.of("message", rie.getMessage() == null ? "" : rie.getMessage(),
-                                "remote_task_id", rie.getRemoteTaskId() == null ? "" : rie.getRemoteTaskId())));
-                if (!observer.isCancelled()) {
-                    observer.onComplete();
+                if (streaming) {
+                    observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
+                            Map.of("message", rie.getMessage() == null ? "" : rie.getMessage(),
+                                    "remote_task_id", rie.getRemoteTaskId() == null ? "" : rie.getRemoteTaskId())));
+                    if (!observer.isCancelled()) {
+                        observer.onComplete();
+                    }
+                    return;
                 }
-            } else {
-                observer.onError(new RemoteAgentException(
-                        "A2AGateway call failed for agentId=" + call.agentId(), e.getCause()));
+                throw rie;
             }
+            RemoteAgentException rae = new RemoteAgentException(
+                    "A2AGateway call failed for agentId=" + call.agentId(), e.getCause());
+            if (streaming) {
+                observer.onError(rae);
+                return;
+            }
+            throw rae;
         }
     }
 
@@ -356,7 +387,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
      * 若部署需要能力/技能过滤或目标 Agent 协议版本低于 CURRENT，应切换到
      * Default 路由模式或扩展 resolver 支持 real card fetch。
      */
-    AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl) {
+    AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl, boolean streaming) {
         if (ephemeralCardWarnedAgents.add(agentId)) {
             log.warn("A2AGateway caller using ephemeral AgentCard for agentId={} "
                     + "(protocol version pinned to CURRENT; FEAT-015 card fetch skipped)", agentId);
@@ -366,7 +397,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 .description("A2A Gateway route to " + agentId)
                 .version("0.1.0")
                 .url(jsonRpcUrl)
-                .capabilities(AgentCapabilities.builder().streaming(properties.isStreaming()).build())
+                .capabilities(AgentCapabilities.builder().streaming(streaming).build())
                 .skills(List.of())
                 .defaultInputModes(List.of())
                 .defaultOutputModes(List.of())
@@ -376,11 +407,12 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 .build();
     }
 
-    private Client getOrCreateClient(AgentCard card) {
+    private Client getOrCreateClient(AgentCard card, boolean streaming) {
+        String cacheKey = card.name() + ":" + streaming;
         return withApplicationClassLoader(() -> clientCache.computeIfAbsent(
-                card.name(),
+                cacheKey,
                 k -> Client.builder(card)
-                        .clientConfig(new ClientConfig.Builder().setStreaming(properties.isStreaming()).build())
+                        .clientConfig(new ClientConfig.Builder().setStreaming(streaming).build())
                         .withTransport(JSONRPCTransport.class, new JSONRPCTransportConfig(httpClient))
                         .build()));
     }

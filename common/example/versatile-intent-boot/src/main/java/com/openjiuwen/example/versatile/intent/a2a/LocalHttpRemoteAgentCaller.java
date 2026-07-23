@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentException;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
@@ -66,19 +67,24 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
 
     @Override
     public void call(RemoteAgentCall call, QueryStreamObserver observer) {
+        boolean streaming = call.streaming();
         String a2aUrl = registry.resolveUrl(call.agentId());
         if (a2aUrl == null || a2aUrl.isBlank()) {
-            observer.onError(new IllegalStateException(
-                    "LocalHttpRemoteAgentCaller: no local mapping for agentId=" + call.agentId()));
-            return;
+            RemoteAgentException ex = new RemoteAgentException(
+                    "LocalHttpRemoteAgentCaller: no local mapping for agentId=" + call.agentId(), null);
+            if (streaming) {
+                observer.onError(ex);
+                return;
+            }
+            throw ex;
         }
         String queryUrl = a2aUrl.endsWith(A2A_SUFFIX)
                 ? a2aUrl.substring(0, a2aUrl.length() - A2A_SUFFIX.length()) + QUERY_PATH
                 : a2aUrl + QUERY_PATH;
         ServeRequest forwarded = ForwardedServeRequests.build(call.serveRequest(), call.responseContent());
 
-        log.info("LocalHttp call agent={} url={} appendedMessages={}",
-                call.agentId(), queryUrl,
+        log.info("LocalHttp call agent={} url={} streaming={} appendedMessages={}",
+                call.agentId(), queryUrl, streaming,
                 forwarded.getMessages().size() - call.serveRequest().getMessages().size());
 
         try {
@@ -91,17 +97,25 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                observer.onError(new IllegalStateException(
+                RemoteAgentException ex = new RemoteAgentException(
                         "LocalHttp call to " + queryUrl + " failed: HTTP " + response.statusCode()
-                                + " body=" + response.body()));
-                return;
+                                + " body=" + response.body(), null);
+                if (streaming) {
+                    observer.onError(ex);
+                    return;
+                }
+                throw ex;
             }
             Map<?, ?> responseJson = MAPPER.readValue(response.body(), Map.class);
             Object resultObj = responseJson.get("result");
             if (!(resultObj instanceof Map<?, ?> resultMap)) {
-                observer.onError(new IllegalStateException(
-                        "LocalHttp response from " + queryUrl + " has no result map"));
-                return;
+                RemoteAgentException ex = new RemoteAgentException(
+                        "LocalHttp response from " + queryUrl + " has no result map", null);
+                if (streaming) {
+                    observer.onError(ex);
+                    return;
+                }
+                throw ex;
             }
             Map<String, Object> envelope = new LinkedHashMap<>();
             envelope.put("type", "answer");
@@ -110,9 +124,20 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
             if (!observer.isCancelled()) {
                 observer.onComplete();
             }
+        } catch (RemoteAgentException e) {
+            if (streaming) {
+                observer.onError(e);
+                return;
+            }
+            throw e;
         } catch (Exception e) {
-            observer.onError(new IllegalStateException(
-                    "LocalHttp call to " + queryUrl + " failed", e));
+            RemoteAgentException ex = new RemoteAgentException(
+                    "LocalHttp call to " + queryUrl + " failed", e);
+            if (streaming) {
+                observer.onError(ex);
+                return;
+            }
+            throw ex;
         }
     }
 
