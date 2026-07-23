@@ -115,10 +115,10 @@ public class EdpaAgentEnhancer {
 
     public static void enhance(DeepAgent agent, EdpConfig edpConfig) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.toolDataChannel = new ToolDataChannel();
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setToolDataChannel(new ToolDataChannel());
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
 
@@ -131,11 +131,11 @@ public class EdpaAgentEnhancer {
      */
     public static void enhance(DeepAgent agent, EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.springBootConfig = springBootConfig;
-        ctx.toolDataChannel = new ToolDataChannel();
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setSpringBootConfig(springBootConfig);
+        ctx.setToolDataChannel(new ToolDataChannel());
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
 
@@ -150,11 +150,11 @@ public class EdpaAgentEnhancer {
     public static void enhance(DeepAgent agent, EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.springBootConfig = springBootConfig;
-        ctx.toolDataChannel = toolDataChannel;
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setSpringBootConfig(springBootConfig);
+        ctx.setToolDataChannel(toolDataChannel);
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
 
@@ -170,12 +170,12 @@ public class EdpaAgentEnhancer {
     public static void enhance(DeepAgent agent, EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel, Path skillsDir) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.springBootConfig = springBootConfig;
-        ctx.toolDataChannel = toolDataChannel;
-        ctx.skillsDir = skillsDir;
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setSpringBootConfig(springBootConfig);
+        ctx.setToolDataChannel(toolDataChannel);
+        ctx.setSkillsDir(skillsDir);
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
 
@@ -193,15 +193,15 @@ public class EdpaAgentEnhancer {
             throw new IllegalArgumentException("DeepAgent instance must not be null");
         }
         LOGGER.info("EdpaAgentEnhancer.enhance() start, edpConfig scope={}, sandbox={}",
-                ctx.edpConfig.getScope() != null ? ctx.edpConfig.getScope().getAllowed() : "null",
-                ctx.sysOp != null ? ctx.sysOp.getMode() : "disabled");
+                ctx.getEdpConfig().getScope() != null ? ctx.getEdpConfig().getScope().getAllowed() : "null",
+                ctx.getSysOp() != null ? ctx.getSysOp().getMode() : "disabled");
 
         // 先注册工具，确保模型工具列表和后续 Rail 拦截逻辑具备目标工具。
-        registerBusinessTools(agent, ctx.edpConfig, ctx.actrule);
+        registerBusinessTools(agent, ctx.getEdpConfig(), ctx.getActrule());
 
         // deepAgent 缺省回退为 agent 自身，确保 EdpaTodoRail/EdpaEventRail 能访问 workspace。
-        if (ctx.deepAgent == null) {
-            ctx.deepAgent = agent;
+        if (ctx.getDeepAgent() == null) {
+            ctx.setDeepAgent(agent);
         }
 
         // 再注册 Rails，确保模型调用、工具调用、记忆、日志等回调进入执行链路。
@@ -238,10 +238,10 @@ public class EdpaAgentEnhancer {
 
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.toolDataChannel = new ToolDataChannel();
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setToolDataChannel(new ToolDataChannel());
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
 
@@ -254,11 +254,11 @@ public class EdpaAgentEnhancer {
      */
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.springBootConfig = springBootConfig;
-        ctx.toolDataChannel = new ToolDataChannel();
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setSpringBootConfig(springBootConfig);
+        ctx.setToolDataChannel(new ToolDataChannel());
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
 
@@ -273,11 +273,11 @@ public class EdpaAgentEnhancer {
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.springBootConfig = springBootConfig;
-        ctx.toolDataChannel = toolDataChannel;
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setSpringBootConfig(springBootConfig);
+        ctx.setToolDataChannel(toolDataChannel);
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
 
@@ -293,12 +293,12 @@ public class EdpaAgentEnhancer {
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel, Path skillsDir) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.springBootConfig = springBootConfig;
-        ctx.toolDataChannel = toolDataChannel;
-        ctx.skillsDir = skillsDir;
-        ctx.passthroughBuffer = new VersatilePassthroughBuffer();
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setSpringBootConfig(springBootConfig);
+        ctx.setToolDataChannel(toolDataChannel);
+        ctx.setSkillsDir(skillsDir);
+        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
+        ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
 
@@ -315,12 +315,12 @@ public class EdpaAgentEnhancer {
     public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
             ToolDataChannel toolDataChannel, Path skillsDir, VersatilePassthroughBuffer passthroughBuffer) {
         EnhanceContext ctx = new EnhanceContext();
-        ctx.edpConfig = edpConfig;
-        ctx.springBootConfig = springBootConfig;
-        ctx.toolDataChannel = toolDataChannel;
-        ctx.skillsDir = skillsDir;
-        ctx.passthroughBuffer = passthroughBuffer;
-        ctx.agentName = "EDPAgent";
+        ctx.setEdpConfig(edpConfig);
+        ctx.setSpringBootConfig(springBootConfig);
+        ctx.setToolDataChannel(toolDataChannel);
+        ctx.setSkillsDir(skillsDir);
+        ctx.setPassthroughBuffer(passthroughBuffer);
+        ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
 
@@ -333,57 +333,62 @@ public class EdpaAgentEnhancer {
      */
 
     public static List<AgentRail> buildBusinessRails(EnhanceContext ctx) {
-        ToolDataChannel sharedChannel = ctx.toolDataChannel != null ? ctx.toolDataChannel : new ToolDataChannel();
-        VersatilePassthroughBuffer sharedPassthroughBuffer = ctx.passthroughBuffer != null
-                ? ctx.passthroughBuffer
+        ToolDataChannel sharedChannel =
+                ctx.getToolDataChannel() != null ? ctx.getToolDataChannel() : new ToolDataChannel();
+        VersatilePassthroughBuffer sharedPassthroughBuffer = ctx.getPassthroughBuffer() != null
+                ? ctx.getPassthroughBuffer()
                 : new VersatilePassthroughBuffer();
         List<AgentRail> rails = new ArrayList<>();
 
         // 取消类 Rail 优先注册，使取消信号尽早生效。
-        rails.add(new CancelRail(ctx.edpConfig));
+        rails.add(new CancelRail(ctx.getEdpConfig()));
 
         // 增强 Rail（catalog_id 补全 + 依赖闭环 + PLAN_FIRST 守卫），仅当 todolist 非空时注册。
-        if (ctx.deepAgent != null && ctx.edpaTodolist != null) {
-            rails.add(new EdpaTodoRail(ctx.deepAgent, ctx.edpaTodolist, ctx.redisTodoStore, ctx.actrule));
+        if (ctx.getDeepAgent() != null && ctx.getEdpaTodolist() != null) {
+            rails.add(new EdpaTodoRail(ctx.getDeepAgent(), ctx.getEdpaTodolist(), ctx.getRedisTodoStore(),
+                    ctx.getActrule()));
         }
 
         // 执行限制 Rail 负责阻断失控循环。
-        rails.add(new ExecutionLimitRail(ctx.actrule));
+        rails.add(new ExecutionLimitRail(ctx.getActrule()));
 
         // 沙箱中断 Rail（SANDBOX模式拦截call_mcp，LOCAL模式放行给McpInterruptRail处理）
-        if (ctx.sysOp != null && ctx.springBootConfig != null && ctx.springBootConfig.getSandbox() != null
-                && ctx.springBootConfig.getSandbox().isEnabled()) {
-            rails.add(new SandboxInterruptRail(ctx.sysOp, ctx.springBootConfig.getSandbox(), ctx.gatewayConfig,
-                    ctx.decoratedSandboxClient));
-            LOGGER.info("Registered SandboxInterruptRail (sandbox mode={}, governed={})", ctx.sysOp.getMode(),
-                    ctx.decoratedSandboxClient != null);
+        if (ctx.getSysOp() != null && ctx.getSpringBootConfig() != null
+                && ctx.getSpringBootConfig().getSandbox() != null
+                && ctx.getSpringBootConfig().getSandbox().isEnabled()) {
+            rails.add(new SandboxInterruptRail(ctx.getSysOp(), ctx.getSpringBootConfig().getSandbox(),
+                    ctx.getGatewayConfig(), ctx.getDecoratedSandboxClient()));
+            LOGGER.info("Registered SandboxInterruptRail (sandbox mode={}, governed={})", ctx.getSysOp().getMode(),
+                    ctx.getDecoratedSandboxClient() != null);
         }
 
         // MCP / VA / ask_user Rail 负责工具调用前后的业务中断和参数增强。
         // SANDBOX 模式下传递 skillDeployPath，使 McpInterruptRail 在 SANDBOX 分支使用 cwd + 相对路径。
-        String skillDeployPath = (ctx.springBootConfig != null && ctx.springBootConfig.getSandbox() != null
-                && ctx.springBootConfig.getSandbox().isEnabled())
-                        ? ctx.springBootConfig.getSandbox().getSkillDeployPath()
+        String skillDeployPath = (ctx.getSpringBootConfig() != null
+                && ctx.getSpringBootConfig().getSandbox() != null
+                && ctx.getSpringBootConfig().getSandbox().isEnabled())
+                        ? ctx.getSpringBootConfig().getSandbox().getSkillDeployPath()
                         : null;
-        rails.add(new McpInterruptRail(ctx.edpConfig, sharedChannel, ctx.skillsDir, ctx.springBootConfig,
-                ctx.agentName, ctx.sysOp, skillDeployPath, ctx.decoratedSandboxClient));
+        rails.add(new McpInterruptRail(ctx.getEdpConfig(), sharedChannel, ctx.getSkillsDir(),
+                ctx.getSpringBootConfig(), ctx.getAgentName(), ctx.getSysOp(), skillDeployPath,
+                ctx.getDecoratedSandboxClient()));
         rails.add(
-                new VersatileInterruptRail(ctx.edpConfig,
-                        ctx.springBootConfig != null ? ctx.springBootConfig.getVersatile() : null,
-                        sharedChannel, sharedPassthroughBuffer, ctx.skillsDir, ctx.scripts, ctx.agentName, ctx.sysOp,
-                        skillDeployPath, ctx.decoratedSandboxClient));
-        rails.add(new AskUserTemplateRail(ctx.edpConfig, ctx.scripts));
+                new VersatileInterruptRail(ctx.getEdpConfig(),
+                        ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,
+                        sharedChannel, sharedPassthroughBuffer, ctx.getSkillsDir(), ctx.getScripts(),
+                        ctx.getAgentName(), ctx.getSysOp(), skillDeployPath, ctx.getDecoratedSandboxClient()));
+        rails.add(new AskUserTemplateRail(ctx.getEdpConfig(), ctx.getScripts()));
 
         // Log Rail 负责观测日志。
-        rails.add(new LogRail(ctx.edpConfig));
+        rails.add(new LogRail(ctx.getEdpConfig()));
 
         // 思维链事件发射 Rail（todo/tool/think/final_answer 事件流），需要 deepAgent。
-        if (ctx.deepAgent != null) {
-            rails.add(new EdpaEventRail(ctx.deepAgent, ctx.scripts, ctx.redisTodoStore));
+        if (ctx.getDeepAgent() != null) {
+            rails.add(new EdpaEventRail(ctx.getDeepAgent(), ctx.getScripts(), ctx.getRedisTodoStore()));
         }
 
         // 话术出口 Rail（B 面：首轮/业务话术/出口/合规/Prompt）。
-        rails.add(new ScriptsRail(ctx.scripts, ctx.edpConfig));
+        rails.add(new ScriptsRail(ctx.getScripts(), ctx.getEdpConfig()));
 
         return rails;
     }
@@ -415,7 +420,7 @@ public class EdpaAgentEnhancer {
 
     private static void registerBusinessRails(DeepAgent agent, EnhanceContext ctx) {
         // 从 Spring 容器获取 RedisTodoStore（非 Spring 管理类通过静态持有访问）
-        ctx.redisTodoStore = RedisConfig.getRedisTodoStore();
+        ctx.setRedisTodoStore(RedisConfig.getRedisTodoStore());
         List<AgentRail> rails = buildBusinessRails(ctx);
         for (AgentRail rail : rails) {
             // Rail 注册在底层 BaseAgent 上，ReAct 执行循环会按事件和优先级触发回调。
@@ -436,58 +441,170 @@ public class EdpaAgentEnhancer {
         /**
          * EDP 专有配置。
          */
-        public EdpConfig edpConfig;
+        private EdpConfig edpConfig;
         /**
          * model / versatile 配置。
          */
-        public EdpaSpringBootConfig springBootConfig;
+        private EdpaSpringBootConfig springBootConfig;
         /**
          * 行为治理配置（含 allowed_tools，驱动工具注册）。
          */
-        public ActRuleConfig actrule;
+        private ActRuleConfig actrule;
         /**
          * 工具数据通道。
          */
-        public ToolDataChannel toolDataChannel;
+        private ToolDataChannel toolDataChannel;
         /**
          * 技能目录。
          */
-        public Path skillsDir;
+        private Path skillsDir;
         /**
          * Versatile 透传缓冲。
          */
-        public VersatilePassthroughBuffer passthroughBuffer;
+        private VersatilePassthroughBuffer passthroughBuffer;
         /**
          * DeepAgent 引用（供 Rail 访问 workspace）。
          */
-        public DeepAgent deepAgent;
+        private DeepAgent deepAgent;
         /**
          * Todo 数据层（catalog entries + dynamic paths）。
          */
-        public EdpaTodolist edpaTodolist;
+        private EdpaTodolist edpaTodolist;
         /**
          * 话术配置（注入 EdpaEventRail A 面 + ScriptsRail B 面）。
          */
-        public SysScriptsConfig scripts;
+        private SysScriptsConfig scripts;
         /**
          * Redis Todo 存储（UC-03~UC-11 主路径；null 时 Rail 内部回落文件/缓存）。
          */
-        public RedisTodoStore redisTodoStore;
+        private RedisTodoStore redisTodoStore;
         /**
          * Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）。
          */
-        public String agentName;
+        private String agentName;
         /**
          * SysOperation 双模式门面（可为 null，sandbox.enabled=false 时使用原有 ProcessBuilder）。
          */
-        public SysOperation sysOp;
+        private SysOperation sysOp;
         /**
          * 沙箱网关配置。
          */
-        public SandboxGatewayConfig gatewayConfig;
+        private SandboxGatewayConfig gatewayConfig;
         /**
          * 治理装饰 SandboxClient（需求2路径，可为 null）。
          */
-        public SandboxClient decoratedSandboxClient;
+        private SandboxClient decoratedSandboxClient;
+
+        public EdpConfig getEdpConfig() {
+            return edpConfig;
+        }
+
+        public void setEdpConfig(EdpConfig edpConfig) {
+            this.edpConfig = edpConfig;
+        }
+
+        public EdpaSpringBootConfig getSpringBootConfig() {
+            return springBootConfig;
+        }
+
+        public void setSpringBootConfig(EdpaSpringBootConfig springBootConfig) {
+            this.springBootConfig = springBootConfig;
+        }
+
+        public ActRuleConfig getActrule() {
+            return actrule;
+        }
+
+        public void setActrule(ActRuleConfig actrule) {
+            this.actrule = actrule;
+        }
+
+        public ToolDataChannel getToolDataChannel() {
+            return toolDataChannel;
+        }
+
+        public void setToolDataChannel(ToolDataChannel toolDataChannel) {
+            this.toolDataChannel = toolDataChannel;
+        }
+
+        public Path getSkillsDir() {
+            return skillsDir;
+        }
+
+        public void setSkillsDir(Path skillsDir) {
+            this.skillsDir = skillsDir;
+        }
+
+        public VersatilePassthroughBuffer getPassthroughBuffer() {
+            return passthroughBuffer;
+        }
+
+        public void setPassthroughBuffer(VersatilePassthroughBuffer passthroughBuffer) {
+            this.passthroughBuffer = passthroughBuffer;
+        }
+
+        public DeepAgent getDeepAgent() {
+            return deepAgent;
+        }
+
+        public void setDeepAgent(DeepAgent deepAgent) {
+            this.deepAgent = deepAgent;
+        }
+
+        public EdpaTodolist getEdpaTodolist() {
+            return edpaTodolist;
+        }
+
+        public void setEdpaTodolist(EdpaTodolist edpaTodolist) {
+            this.edpaTodolist = edpaTodolist;
+        }
+
+        public SysScriptsConfig getScripts() {
+            return scripts;
+        }
+
+        public void setScripts(SysScriptsConfig scripts) {
+            this.scripts = scripts;
+        }
+
+        public RedisTodoStore getRedisTodoStore() {
+            return redisTodoStore;
+        }
+
+        public void setRedisTodoStore(RedisTodoStore redisTodoStore) {
+            this.redisTodoStore = redisTodoStore;
+        }
+
+        public String getAgentName() {
+            return agentName;
+        }
+
+        public void setAgentName(String agentName) {
+            this.agentName = agentName;
+        }
+
+        public SysOperation getSysOp() {
+            return sysOp;
+        }
+
+        public void setSysOp(SysOperation sysOp) {
+            this.sysOp = sysOp;
+        }
+
+        public SandboxGatewayConfig getGatewayConfig() {
+            return gatewayConfig;
+        }
+
+        public void setGatewayConfig(SandboxGatewayConfig gatewayConfig) {
+            this.gatewayConfig = gatewayConfig;
+        }
+
+        public SandboxClient getDecoratedSandboxClient() {
+            return decoratedSandboxClient;
+        }
+
+        public void setDecoratedSandboxClient(SandboxClient decoratedSandboxClient) {
+            this.decoratedSandboxClient = decoratedSandboxClient;
+        }
     }
 }

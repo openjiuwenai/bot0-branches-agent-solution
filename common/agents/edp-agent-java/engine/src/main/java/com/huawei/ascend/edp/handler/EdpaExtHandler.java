@@ -535,19 +535,19 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         // --- enhance调用合并 ---
         EdpaAgentEnhancer.EnhanceContext enhanceCtx = new EdpaAgentEnhancer.EnhanceContext();
-        enhanceCtx.edpConfig = result.getEdpConfig();
-        enhanceCtx.springBootConfig = config;
-        enhanceCtx.actrule = actrule;
-        enhanceCtx.toolDataChannel = new ToolDataChannel();
-        enhanceCtx.skillsDir = skillsDir;
-        enhanceCtx.passthroughBuffer = result.getVersatilePassthroughBuffer();
-        enhanceCtx.deepAgent = result.getDeepAgent();
-        enhanceCtx.edpaTodolist = edpaTodolist;
-        enhanceCtx.scripts = sysScriptsConfig;
-        enhanceCtx.agentName = agentName;
-        enhanceCtx.sysOp = result.getSysOperation();
-        enhanceCtx.gatewayConfig = result.getSandboxGatewayConfig();
-        enhanceCtx.decoratedSandboxClient = decoratedSandboxClient;
+        enhanceCtx.setEdpConfig(result.getEdpConfig());
+        enhanceCtx.setSpringBootConfig(config);
+        enhanceCtx.setActrule(actrule);
+        enhanceCtx.setToolDataChannel(new ToolDataChannel());
+        enhanceCtx.setSkillsDir(skillsDir);
+        enhanceCtx.setPassthroughBuffer(result.getVersatilePassthroughBuffer());
+        enhanceCtx.setDeepAgent(result.getDeepAgent());
+        enhanceCtx.setEdpaTodolist(edpaTodolist);
+        enhanceCtx.setScripts(sysScriptsConfig);
+        enhanceCtx.setAgentName(agentName);
+        enhanceCtx.setSysOp(result.getSysOperation());
+        enhanceCtx.setGatewayConfig(result.getSandboxGatewayConfig());
+        enhanceCtx.setDecoratedSandboxClient(decoratedSandboxClient);
         EdpaAgentEnhancer.enhance(result.getDeepAgent(), enhanceCtx);
 
         // 第十三步：强制完成 DeepAgent 初始化。
