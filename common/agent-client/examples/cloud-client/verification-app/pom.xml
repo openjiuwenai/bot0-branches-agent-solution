@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.huawei.ascend.client.example</groupId>
+        <artifactId>cloud-client-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+    </parent>
+
+    <!--
+      ◇ 仅用于验证：注册本地工具的业务样例 + 可执行自校验用例。
+      通过 SDK 对 mock-gateway 发起真实 HTTP（STREAMING/BLOCKING/续传/取消），断言全部通过则退出码 0。
+      注意：本模块依赖 mock-gateway 只是为了"一条命令内嵌启动网关做端到端自检"；
+      真正的 SDK（agent-client-sdk）对 mock-gateway 零依赖。
+    -->
+    <artifactId>verification-app</artifactId>
+    <packaging>jar</packaging>
+    <name>verification-app (verification-only)</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.huawei.ascend.client.example</groupId>
+            <artifactId>agent-client-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huawei.ascend.client.example</groupId>
+            <artifactId>mock-gateway</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>verification-app</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.huawei.ascend.client.verify.CloudClientVerification</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

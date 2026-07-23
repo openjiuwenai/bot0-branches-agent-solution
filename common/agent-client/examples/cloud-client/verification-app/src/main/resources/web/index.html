@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>agent-client 对话式验证控制台</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 左栏：会话列表 -->
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h2>会话</h2>
+        <button id="newSessionBtn" type="button" class="ghost small">+ 新建</button>
+      </div>
+      <ul id="sessionList" class="session-list"></ul>
+      <div class="sidebar-foot">
+        <p class="eyebrow">verification-app · 非 SDK 交付</p>
+        <p class="muted">点 query 按钮发起调用；串行组在同一会话连续追加。</p>
+      </div>
+    </aside>
+
+    <!-- 中栏：query 按钮栏 + 对话流 -->
+    <main class="chat">
+      <header class="chat-head">
+        <h1>agent-client 对话式验证</h1>
+        <div class="status">
+          <span id="statusBadge" class="badge idle">待命</span>
+        </div>
+      </header>
+
+      <section class="query-bar" aria-label="query 按钮">
+        <div class="query-group" data-group="SERIAL">
+          <div class="query-group-head">
+            <span class="group-label">串行组（同一对话连续发送）</span>
+            <button type="button" class="ghost small serial-all" data-serial="s1,s2,s4,s5">串行发送整组</button>
+          </div>
+          <div class="query-buttons"></div>
+        </div>
+        <div class="query-group" data-group="SOLO">
+          <div class="query-group-head">
+            <span class="group-label">单独组（各自独立会话）</span>
+          </div>
+          <div class="query-buttons"></div>
+        </div>
+        <div class="query-group" data-group="DEMO">
+          <div class="query-group-head">
+            <span class="group-label">口语化 demo（独立会话）</span>
+          </div>
+          <div class="query-buttons"></div>
+        </div>
+      </section>
+
+      <section class="dialog" id="dialog" aria-live="polite">
+        <div class="empty-hint" id="emptyHint">
+          <p>选择左侧 query 按钮发起一次调用。</p>
+          <p class="muted">对话消息会实时流式追加到这里，右侧同步显示断言结果。</p>
+        </div>
+      </section>
+
+      <footer class="chat-foot">
+        <span id="footerStatus" class="muted">就绪。CLI 模式：去掉 <code>--ui</code> 即可无界面跑断言。</span>
+      </footer>
+    </main>
+
+    <!-- 右栏：断言详情 -->
+    <aside class="assertions">
+      <div class="assertions-head">
+        <h2>断言详情</h2>
+        <button id="clearAssertionsBtn" type="button" class="ghost small">清空</button>
+      </div>
+      <div id="assertionSummary" class="assertion-summary">
+        <p class="muted">尚未运行任何场景。</p>
+      </div>
+      <ul id="assertionList" class="assertion-list"></ul>
+    </aside>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
