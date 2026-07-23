@@ -106,7 +106,7 @@ public class A2aController {
                 switch (idem.outcome()) {
                     case NEW, SKIP -> { /* proceed */ }
                     case REPLAY -> {
-                        return ResponseEntity.ok(idem.result());
+                        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());
                     }
                     case CONFLICT -> throw new GovernanceException(HttpStatus.CONFLICT,
                             "IDEMPOTENCY_PAYLOAD_MISMATCH",
@@ -126,21 +126,28 @@ public class A2aController {
 
         if (context.taskId() == null) {
             if ("SendStreamingMessage".equals(context.method())) {
+                String firstFrame;
                 try {
                     Stream<String> frames = router.routeStream(context);
                     // Stream frames synchronously; release happens when consumed or the
                     // client disconnects (writeSse throws IOException).
                     response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
                     response.setCharacterEncoding("UTF-8");
-                    sseBridge.writeSse(response.getOutputStream(), frames);
+                    firstFrame = sseBridge.writeSse(response.getOutputStream(), frames);
                 } catch (GovernanceException | IOException ex) {
-                    // release the in-flight idempotency record so a same-key retry re-attempts
+                    // failure -> release the in-flight record (P0-1); never complete a failure.
                     idempotencyRule.abort(context.tenantId(), context.messageId());
                     if (ex instanceof GovernanceException ge) {
                         ge.setTraceId(context.traceId());
                     }
                     throw ex;
                 }
+                // stream consumed normally -> complete (approach A, TD-8): store the first
+                // frame (task-accept/result surface) as the replayable result; empty stream
+                // -> stable summary. A same-key retry REPLAYs this as a single JSON body.
+                String replayResult = firstFrame != null ? firstFrame
+                        : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
+                idempotencyRule.complete(context.tenantId(), context.messageId(), replayResult);
                 return null;
             }
             String runtimeResponse;

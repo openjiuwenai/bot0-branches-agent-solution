@@ -1,6 +1,6 @@
 # FEAT-011 开发进展报告（最终，审核用）
 
-> **状态：全部 12 个切片完成，76/76 测试 GREEN（审核必修 #1/#2 + P0-1 in-flight 释放已修），未 push。** 请审核。
+> **状态：全部 12 个切片完成，79/79 测试 GREEN（审核必修 #1/#2 + P0-1 + P1 TD-8 流式幂等短路已修），未 push。** 请审核。
 > 分支：`feat/feat-011-direct-route`（base `origin/common` `8770d87`）。
 > 真源：`/Users/kevin/Work/temp/spring-ai-ascend-claude-011/.../Feat-Func-011-...md`（L2，#440）。
 > 实现仓：`/Users/kevin/Work/agent-solution/common/agent-gateway`（新建模块）。
@@ -89,7 +89,7 @@
 | TD-5 | 无 ArchUnit 模块边界/纯度测试 | 收尾期可参考 registry 加 ports 纯度守护 |
 | TD-6 | 模块集成测手工 `@Import` 装配治理/routing 组件 | 切片已多，可引入共享 test 切片配置收敛 |
 | TD-7 | G4 in-flight 重复命中返回 409 `IDEMPOTENCY_IN_FLIGHT`（L2 允许"实现选定"） | 后续可细化为 200+进行中语义 |
-| TD-8 | 流式创建不调 `complete()`（流式无单一可重放结果）→ 同键重试会 IN_FLIGHT 409；流式幂等短路 730 未支持 | 后续设计（P1 决策中）；**同步路径已完整**（`complete()` 已接线 + facade REPLAY 测试通过）。注：SSE sticky 从首帧 taskId 写入仍正常工作 |
+| TD-8 | 流式创建幂等短路 | ✅ **P1 已修（口径 A）**：流式正常消费完（writeSse 正常返回）调 `complete()`，result=**首 SSE 帧**（task 接受/结果面；流空则稳定摘要 `{"jsonrpc":"2.0","result":{"status":"completed"}}`）；同键重试 REPLAY 该 result 为 200 JSON、**不二次开流**（测 `streamingCreateReplaysFirstFrameWithoutSecondStream`）。流进行中同键仍 IN_FLIGHT 409；失败仍走 P0-1 abort（不 complete 失败结果）；同步路径不变 |
 | TD-9 | 创建失败未释放 IN_FLIGHT（功能正确性，挡重试） | ✅ **P0-1 已修**：`IdempotencyRule.abort()` + controller 失败路径调用；3 测覆盖（abort 单测 ×2 + facade 重试测） |
 
 ## 7. 730 交付边界确认
@@ -112,4 +112,4 @@
 
 - 审核已通过（必修项 #1/#2 已落地，复审 73/73 GREEN）。
 - push + 开 MR（gitcode）。
-- 联调期补真实 RDC/runtime e2e（见 §8，不在本仓单测范围）；流式幂等短路（TD-8）730 未支持、已记录，**不必再等一轮复审**；按需处理 TD-1/5/6。
+- 联调期补真实 RDC/runtime e2e（见 §8，不在本仓单测范围）；TD-8（流式幂等短路）已修（口径 A）。剩余非阻塞：TD-1/3/4/5/6/7 按需处理。

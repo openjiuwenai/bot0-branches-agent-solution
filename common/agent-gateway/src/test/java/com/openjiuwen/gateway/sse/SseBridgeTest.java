@@ -45,4 +45,16 @@ class SseBridgeTest {
         assertThat(out.toByteArray()).isEmpty();
         assertThat(closed).isTrue();
     }
+
+    @Test
+    void returnsFirstFrameForReplay() throws IOException {
+        String first = bridge.writeSse(new ByteArrayOutputStream(),
+                Stream.of("{\"result\":{\"id\":\"t1\"}}", "{\"result\":{\"status\":\"working\"}}"));
+        assertThat(first).isEqualTo("{\"result\":{\"id\":\"t1\"}}");
+    }
+
+    @Test
+    void returnsNullForEmptyStream() throws IOException {
+        assertThat(bridge.writeSse(new ByteArrayOutputStream(), Stream.empty())).isNull();
+    }
 }

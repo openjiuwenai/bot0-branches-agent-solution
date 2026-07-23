@@ -358,6 +358,24 @@ class A2aControllerWebMvcTest {
         assertThat(sticky.find("task-s")).contains("h1");
     }
 
+    @Test
+    void streamingCreateReplaysFirstFrameWithoutSecondStream() throws Exception {
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-s\"}}", "{\"result\":{\"status\":\"working\"}}"));
+        // first streaming create consumes the stream and completes the idempotency record
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(STREAM_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_EVENT_STREAM));
+        runtime.reset();
+        // same-key retry -> REPLAY the stored first frame as a single JSON body;
+        // must NOT open a second downstream stream
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(STREAM_CREATE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value("task-s"));
+        assertThat(runtime.lastEndpoint()).isNull();
+    }
+
     // --- S3 resume (sticky) ---
 
     @Test

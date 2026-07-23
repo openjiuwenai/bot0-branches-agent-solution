@@ -180,4 +180,6 @@ common/agent-gateway/
 
 拓扑清洗口径（730，option B）：Gateway **不向响应/错误体添加** routeHandle/endpoint；Gateway 自控的错误体（GatewayError + FORWARD_FAILED）已去拓扑（FORWARD_FAILED 不带 endpointUrl，有测）。成功响应透传 runtime body，依赖 runtime（FEAT-001）不回物理拓扑（gateway 不做正文 strip，避免与 runtime 契约重复）。已加"成功响应不含 routeHandle/endpoint"断言。
 
-功能债 P0-1（已修，76 测）：创建失败后 `IdempotencyRule.abort()` 释放 IN_FLIGHT，使同键重试可再 NEW（不卡 `IDEMPOTENCY_IN_FLIGHT`）；测 `createFailureReleasesInFlightSoRetryCanProceed`（失败后重试可达 runtime）+ `abortReleasesInFlightSoNextCheckIsNew` / `abortIsNoOpForSkipAndAbsentAndCompleted`。
+功能债 P0-1（已修）：创建失败后 `IdempotencyRule.abort()` 释放 IN_FLIGHT，使同键重试可再 NEW（不卡 `IDEMPOTENCY_IN_FLIGHT`）；测 `createFailureReleasesInFlightSoRetryCanProceed`（失败后重试可达 runtime）+ `abortReleasesInFlightSoNextCheckIsNew` / `abortIsNoOpForSkipAndAbsentAndCompleted`。
+
+功能债 P1 / TD-8（已修，79 测，口径 A）：流式正常消费完调 `complete()`，result=首 SSE 帧（task 面；流空则摘要）；同键重试 REPLAY 该 result 为 200 JSON、不二次开流（测 `streamingCreateReplaysFirstFrameWithoutSecondStream`）；流进行中同键仍 IN_FLIGHT 409，失败仍 abort。`SseBridge.writeSse` 现返回首帧。

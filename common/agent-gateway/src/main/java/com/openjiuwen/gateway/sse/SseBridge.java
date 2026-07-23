@@ -27,16 +27,23 @@ public class SseBridge {
      *
      * @param out    client output stream
      * @param frames runtime SSE data payloads (closed on return / on failure)
+     * @return the first frame written (the task-accept/result surface), or {@code null}
+     *         if the stream was empty — used as the idempotency REPLAY body (approach A)
      * @throws IOException if writing to the client fails (e.g. disconnect)
      */
-    public void writeSse(OutputStream out, Stream<String> frames) throws IOException {
+    public String writeSse(OutputStream out, Stream<String> frames) throws IOException {
+        String firstFrame = null;
         try (Stream<String> stream = frames) {
             for (var it = stream.iterator(); it.hasNext(); ) {
                 String frame = it.next();
+                if (firstFrame == null) {
+                    firstFrame = frame;
+                }
                 out.write(("event: jsonrpc\ndata: " + frame + "\n\n")
                         .getBytes(StandardCharsets.UTF_8));
                 out.flush();
             }
         }
+        return firstFrame;
     }
 }
