@@ -24,7 +24,7 @@ public class BusControlForwarder {
         this.outboxPort = outboxPort;
     }
 
-    public ForwardingReceipt forward(GovernanceContext ctx, String routeHandleValue,
+    public ForwardingEnvelope forward(GovernanceContext ctx, String routeHandleValue,
                                      String targetServiceId, String sourceServiceId,
                                      long deadlineMillisEpoch) {
         String payloadRef = null;
@@ -38,7 +38,8 @@ public class BusControlForwarder {
                 routeHandleValue, targetServiceId, sourceServiceId,
                 payloadRef, deadlineMillisEpoch);
         try {
-            return outboxPort.enqueue(envelope, sourceServiceId, targetServiceId, System.currentTimeMillis());
+            outboxPort.enqueue(envelope, sourceServiceId, targetServiceId, System.currentTimeMillis());
+            return envelope;
         } catch (Exception ex) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ENQUEUE_FAILED",
                     "Bus enqueue failed", ex);
