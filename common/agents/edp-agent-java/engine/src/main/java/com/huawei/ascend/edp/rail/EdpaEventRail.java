@@ -335,7 +335,7 @@ public class EdpaEventRail extends DeepAgentRail {
         // ★ 缓存用户原始 query 文本（供 afterModelCall 的 think_chunk query_patterns 匹配使用）
         if (ctx.getInputs() instanceof ModelCallInputs inputs) {
             List<?> messages = inputs.getMessages();
-            String text = findLastUserMessageText(messages);
+            String text = findLastUserMessageText(messages).orElse(null);
             if (text != null) {
                 ctx.getExtra().put("_edp_user_input", text);
             }
@@ -1531,6 +1531,8 @@ public class EdpaEventRail extends DeepAgentRail {
                 } catch (JsonProcessingException ignore) {
                     // 非 JSON
                 }
+            } else {
+                LOGGER.warn("unexpected args type: {}", args == null ? "null" : args.getClass());
             }
         }
         return "";
@@ -1555,7 +1557,7 @@ public class EdpaEventRail extends DeepAgentRail {
             var modelContext = ctx.getContext();
             if (modelContext != null) {
                 var messages = modelContext.getMessages();
-                String text = findLastUserMessageText(messages);
+                String text = findLastUserMessageText(messages).orElse(null);
                 if (text != null) {
                     ctx.getExtra().put("_edp_user_input", text);
                     return text;
@@ -1567,9 +1569,9 @@ public class EdpaEventRail extends DeepAgentRail {
         return "";
     }
 
-    private static String findLastUserMessageText(List<?> messages) {
+    private static Optional<String> findLastUserMessageText(List<?> messages) {
         if (messages == null || messages.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         for (int i = messages.size() - 1; i >= 0; i--) {
             var msg = messages.get(i);
@@ -1579,11 +1581,11 @@ public class EdpaEventRail extends DeepAgentRail {
             if (msg instanceof UserMessage um) {
                 String text = um.getContentAsString();
                 if (text != null && !text.isBlank()) {
-                    return text;
+                    return Optional.of(text);
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**

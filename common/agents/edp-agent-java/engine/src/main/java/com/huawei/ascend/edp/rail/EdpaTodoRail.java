@@ -965,6 +965,8 @@ public class EdpaTodoRail extends DeepAgentRail {
             m.forEach((k, v) -> meta.put(String.valueOf(k), v));
         } else if (existing instanceof String s && !s.isBlank()) {
             LOGGER.debug("EdpaTodoRail.enrichArgs: meta_data is a JSON string, skip parsing");
+        } else {
+            LOGGER.warn("unexpected meta_data type: {}", existing == null ? "null" : existing.getClass());
         }
         boolean metaChanged = false;
         if (entry.getCatalogId() != null && !meta.containsKey("catalog_id")) {

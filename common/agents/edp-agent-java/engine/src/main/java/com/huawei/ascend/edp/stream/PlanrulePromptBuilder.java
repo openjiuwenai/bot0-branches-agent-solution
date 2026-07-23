@@ -94,6 +94,8 @@ public class PlanrulePromptBuilder {
         } else if (isNotEmpty(planrule.getScenarioName())) {
             // scenarioDescription 为空时也保证空行分隔
             sb.append("\n");
+        } else {
+            LOGGER.warn("no scenario description or scenario name provided");
         }
 
         // 4. 业务范围（scope字段）

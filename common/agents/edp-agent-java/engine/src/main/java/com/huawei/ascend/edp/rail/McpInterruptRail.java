@@ -698,6 +698,9 @@ public class McpInterruptRail extends AgentRail {
             }
         } else if (mcpRequired instanceof Map<?, ?> mcpRequiredMap) {
             return extractWapGrayFlagFromMap(mcpRequiredMap);
+        } else {
+            LOGGER.warn("unexpected mcp_required_params type: {}",
+                    mcpRequired == null ? "null" : mcpRequired.getClass());
         }
         return Optional.empty();
     }

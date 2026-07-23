@@ -640,6 +640,8 @@ public class SysScriptsConfig {
                 keywords.add(e.getValue());
             } else if ("scripts".equals(field)) {
                 scripts.add(e.getValue());
+            } else {
+                LOGGER.warn("unexpected field type: {}", field);
             }
         }
     }
@@ -717,6 +719,8 @@ public class SysScriptsConfig {
                 templates.put(key, joinList(list));
             } else if (value != null) {
                 templates.put(key, String.valueOf(value));
+            } else {
+                LOGGER.warn("unexpected value type for key: {}", key);
             }
         }
     }

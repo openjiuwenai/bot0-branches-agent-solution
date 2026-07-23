@@ -110,7 +110,7 @@ public class SandboxInitHook implements AgentInitHook {
                 .gatewayConfig(gatewayConfig).build();
 
         // 5. 创建 SysOperation 和治理装饰 SandboxClient
-        SandboxClient decoratedClient = createDecoratedSandboxClientIfNeeded(config);
+        SandboxClient decoratedClient = createDecoratedSandboxClientIfNeeded(config).orElse(null);
         SysOperation sysOp = new SysOperation(sysOpCard);
         SandboxRegistryBootstrap.ensureInitialized();
 
@@ -126,10 +126,10 @@ public class SandboxInitHook implements AgentInitHook {
                 sandboxClientFactory != null ? "governed" : "direct");
     }
 
-    private SandboxClient createDecoratedSandboxClientIfNeeded(SandboxConfig config) {
+    private Optional<SandboxClient> createDecoratedSandboxClientIfNeeded(SandboxConfig config) {
         if (sandboxClientFactory == null) {
             LOGGER.info("[EDP-SANDBOX] Path 1: SysOperation with direct SandboxClient");
-            return null;
+            return Optional.empty();
         }
         LOGGER.info("[EDP-SANDBOX] Path 2: Using AgentCoreSandboxClientFactory (governed)");
         try {
@@ -141,11 +141,11 @@ public class SandboxInitHook implements AgentInitHook {
             // 确保 DecoratingSandboxClient 创建沙箱时传递正确的 filesystem_policy。
             injectFilesystemPolicyIntoDelegate(decoratedClient, config.getSkillDeployPath());
             LOGGER.info("[EDP-SANDBOX] DecoratingSandboxClient created and filesystem_policy injected");
-            return decoratedClient;
+            return Optional.of(decoratedClient);
         } catch (IllegalStateException e) {
             LOGGER.warn("[EDP-SANDBOX] Failed to create DecoratingSandboxClient, using direct mode: {}",
                     e.getMessage());
-            return null;
+            return Optional.empty();
         }
     }
 

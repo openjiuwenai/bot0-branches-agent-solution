@@ -513,6 +513,8 @@ public final class ScriptResolver {
                     trimmed = trimmed.substring(2);
                 } else if (trimmed.startsWith("-")) {
                     trimmed = trimmed.substring(1).trim();
+                } else {
+                    // no-op: line without list marker, keep as-is
                 }
                 if (!trimmed.isEmpty()) {
                     result.add(trimmed);

@@ -300,6 +300,8 @@ public class LogRail extends AgentRail {
                     escaped = true;
                 } else if (ch == stringDelimiter) {
                     inString = false;
+                } else {
+                    // no-op: normal character inside string
                 }
                 continue;
             }
@@ -315,6 +317,8 @@ public class LogRail extends AgentRail {
                 if (!stack.isEmpty() && stack.peek() == expectedOpen) {
                     stack.pop();
                 }
+            } else {
+                // no-op: normal character, no bracket tracking needed
             }
         }
 

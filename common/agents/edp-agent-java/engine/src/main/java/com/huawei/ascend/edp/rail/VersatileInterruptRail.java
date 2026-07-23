@@ -340,6 +340,8 @@ public class VersatileInterruptRail extends AgentRail {
                 ctx.getExtra().put(ScriptConstants.KEY_UI_NOTICE, output.uiNotice);
             } else if (output.status != null) {
                 applyResponseTemplate(ctx, versatileArgs, output);
+            } else {
+                LOGGER.warn("no ui_notice or status in normalize output");
             }
             Map<String, Object> normalizedResult = output.data;
             inputs.setToolResult(normalizedResult);
@@ -922,7 +924,7 @@ public class VersatileInterruptRail extends AgentRail {
         Object mcpProductsData = toolDataChannel.getObject(channelKey,
                 McpInterruptRail.DEFAULT_MCP_PRODUCTS_KEY).orElse(null);
         if (mcpProductsData instanceof Map<?, ?> productsMap && !productsMap.isEmpty()) {
-            String constructedQuery = buildQueryFromProducts(productsMap);
+            String constructedQuery = buildQueryFromProducts(productsMap).orElse(null);
             if (constructedQuery != null) {
                 return constructedQuery;
             }
@@ -942,10 +944,10 @@ public class VersatileInterruptRail extends AgentRail {
         return "";
     }
 
-    private String buildQueryFromProducts(Map<?, ?> productsMap) {
+    private Optional<String> buildQueryFromProducts(Map<?, ?> productsMap) {
         Object productsList = productsMap.get("products");
         if (!(productsList instanceof List<?> list) || list.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         StringBuilder queryBuilder = new StringBuilder("理财产品推荐数据：");
         for (Object item : list) {
@@ -965,13 +967,13 @@ public class VersatileInterruptRail extends AgentRail {
         }
         String constructedQuery = queryBuilder.toString();
         if ("理财产品推荐数据：".equals(constructedQuery)) {
-            return null;
+            return Optional.empty();
         }
         LOGGER.warn(
                 "[VersatileInterruptRail] fallback query from mcp_products_data, "
                         + "length={} (non-primary path)",
                 constructedQuery.length());
-        return constructedQuery;
+        return Optional.of(constructedQuery);
     }
 
     private String resolveUrl(String conversationId) {
@@ -1480,6 +1482,8 @@ public class VersatileInterruptRail extends AgentRail {
                 if (depth == 0) {
                     return Optional.of(source.substring(braceStart, i + 1));
                 }
+            } else {
+                // no-op: normal character, no bracket tracking needed
             }
         }
         return Optional.empty();
