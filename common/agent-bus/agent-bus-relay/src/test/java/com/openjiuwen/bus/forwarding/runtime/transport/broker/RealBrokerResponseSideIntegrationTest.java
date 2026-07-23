@@ -125,6 +125,10 @@ class RealBrokerResponseSideIntegrationTest {
 
     /**
      * P-06: extract a {@code key=value} token from a response inlinePayload (A2A response content).
+     *
+     * @param body the response inlinePayload (nullable; null/blank → null)
+     * @param key the token key to match
+     * @return the token value, or {@code null} if absent
      */
     private static String inlineToken(String body, String key) {
         String result = null;
@@ -547,6 +551,8 @@ class RealBrokerResponseSideIntegrationTest {
                 String traceId, String idempotencyKey, String routeHandle, String capability) {
             /**
              * Direct-injection defaults (UC-6/D9): source=RUNTIME, target=GATEWAY, standard control.
+             *
+             * @return a response routing with standard control fields
              */
             static ResponseRouting defaults() {
                 return new ResponseRouting(TENANT, RUNTIME, GATEWAY, TRACE, "idem-stub", ROUTE_INVOCATION, "a2a");
@@ -634,6 +640,11 @@ class RealBrokerResponseSideIntegrationTest {
         /**
          * P-06: build a response routing triple (source=RUNTIME, target=the request's source) carrying
          * the request's first-class control, so produceResponse call sites stay short (G.FMT.10).
+         *
+         * @param tenant the tenant scope
+         * @param target the response target (original caller serviceId)
+         * @param req the inbound request carrying first-class control
+         * @return a ResponseRouting with source=RUNTIME + the request's control fields
          */
         private ResponseRouting routing(String tenant, String target, BrokerInboundMessage req) {
             return new ResponseRouting(tenant, RUNTIME, target, req.traceId(), req.idempotencyKey(),

@@ -487,6 +487,10 @@ public final class TempRuntimeMain {
 
     /**
      * Truncate a (possibly null) body for logging so a large inline payload doesn't flood the log.
+     *
+     * @param body the inline payload body (nullable; null → "null")
+     * @param max the maximum length before truncation
+     * @return the (possibly truncated) body string for logging
      */
     private static String abbreviate(String body, int max) {
         if (body == null) {

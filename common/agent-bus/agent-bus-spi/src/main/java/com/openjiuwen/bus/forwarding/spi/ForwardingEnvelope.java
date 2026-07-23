@@ -96,21 +96,23 @@ public record ForwardingEnvelope(
         Objects.requireNonNull(payloadPolicy, "payloadPolicy is required");
         // P-06: tenant continuity + data-channel invariants (payloadRef / inlinePayload / originalCaller)
         // — extracted so the compact constructor stays under the 50-line method limit (G.MET.01).
-        validatePayloadAndRouting(tenantId, routeHandle, payloadPolicy, payloadRef, inlinePayload,
-                originalCaller);
+        validateTenant(tenantId, routeHandle);
+        validatePayload(payloadPolicy, payloadRef, inlinePayload, originalCaller);
     }
 
-    private static void validatePayloadAndRouting(String tenantId, ForwardingRouteHandle routeHandle,
-            PayloadPolicy payloadPolicy, String payloadRef, String inlinePayload, String originalCaller) {
+    private static void validateTenant(String tenantId, ForwardingRouteHandle routeHandle) {
         // tenant isolation: envelope tenant must equal the route's tenant scope (R-C.c)
         if (!tenantId.equals(routeHandle.tenantScope())) {
             throw new IllegalArgumentException(
                     "tenant_mismatch: envelope tenantId '" + tenantId
                     + "' must equal routeHandle tenantScope '" + routeHandle.tenantScope() + "'");
         }
+    }
+
+    private static void validatePayload(PayloadPolicy payloadPolicy, String payloadRef,
+            String inlinePayload, String originalCaller) {
         // P-06: data reference (payloadRef) and bounded inline body (inlinePayload) are SEPARATE data
-        // channels — neither is a control-descriptor token. DATA_BEARING requires AT LEAST ONE of them
-        // (a large/multimodal payload takes the payloadRef reference path; a small body may inline).
+        // channels — neither is a control-descriptor token. DATA_BEARING requires AT LEAST ONE of them.
         if (payloadPolicy == PayloadPolicy.DATA_BEARING) {
             boolean hasRef = payloadRef != null && !payloadRef.isBlank();
             boolean hasInline = inlinePayload != null && !inlinePayload.isBlank();
