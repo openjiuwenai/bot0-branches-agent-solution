@@ -1,6 +1,6 @@
-"""otlp_parser 单测: 用 otel_spans_v2.jsonl 反构 OTLP 信封, 解析回扁平 dict, 断言字段一致。
+"""otlp_parser 单测: 用 synthetic spans 反构 OTLP 信封, 解析回扁平 dict, 断言字段一致。
 
-验证 adapter 消费 kafka (OTLP 信封) 后得到的 span 形状与参考 jsonl (模拟 EDPAgent 数据) 一致 ——
+验证 adapter 消费 kafka (OTLP 信封) 后得到的 span 形状与通用测试数据一致 ——
 即设计文档点 7 "数据一致性" 在解析层的保证。
 """
 
@@ -11,22 +11,11 @@ from datetime import datetime, timezone
 
 from agent_adapter.kafka_consumer.otlp_parser import parse_otlp_envelope
 
-from tests._testdata import otel_spans_jsonl
+from tests._testdata import otel_spans
 
 
-def _load_jsonl_spans() -> list[dict]:
-    raw = otel_spans_jsonl().read_text(encoding="utf-8")
-    dec = json.JSONDecoder()
-    i, n, spans = 0, len(raw), []
-    while i < n:
-        while i < n and raw[i].isspace():
-            i += 1
-        if i >= n:
-            break
-        obj, end = dec.raw_decode(raw, i)
-        spans.append(obj)
-        i = end
-    return spans
+def _load_spans() -> list[dict]:
+    return otel_spans()
 
 
 # ---- 反向映射: 扁平 span dict → OTLP 信封 (仅测试用) ----
@@ -111,9 +100,9 @@ def _assert_span_roundtrips(orig: dict, parsed: dict) -> None:
     assert parsed["trace_state"] == orig.get("trace_state", "")
 
 
-def test_roundtrip_all_jsonl_spans():
-    spans = _load_jsonl_spans()
-    assert len(spans) > 0, "jsonl 未加载到 span"
+def test_roundtrip_all_synthetic_spans():
+    spans = _load_spans()
+    assert len(spans) > 0, "synthetic fixture 未生成 span"
     for orig in spans:
         envelope = _flat_to_otlp(orig)
         parsed_list = parse_otlp_envelope(json.dumps(envelope))
@@ -122,14 +111,14 @@ def test_roundtrip_all_jsonl_spans():
 
 
 def test_bytes_input():
-    spans = _load_jsonl_spans()
+    spans = _load_spans()
     env = json.dumps(_flat_to_otlp(spans[0])).encode("utf-8")
     parsed = parse_otlp_envelope(env)
     assert parsed[0]["trace_id"] == spans[0]["trace_id"]
 
 
 def test_multi_spans_in_one_envelope():
-    spans = _load_jsonl_spans()[:3]
+    spans = _load_spans()[:3]
     # 合并 3 个 span 到一个 resourceSpans (同 resource)
     res_attrs = _dict_to_attrs(spans[0].get("resource_attributes") or {})
     otlp_spans = []
