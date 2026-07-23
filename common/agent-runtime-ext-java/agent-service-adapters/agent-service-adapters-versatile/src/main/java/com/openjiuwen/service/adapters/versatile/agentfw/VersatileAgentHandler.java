@@ -236,16 +236,48 @@ public class VersatileAgentHandler implements AgentHandler {
         }
     }
 
-    private static Map<String, Object> logServeRequest(ServeRequest request) {
+    private Map<String, Object> logServeRequest(ServeRequest request) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("conversation_id", request.getConversationId());
         data.put("stream", request.isStream());
         data.put("user_id", request.getUserId());
         data.put("space_id", request.getSpaceId());
         data.put("tenant_id", request.getTenantId());
-        data.put("messages", request.getMessages());
-        data.put("metadata", request.getMetadata());
+        if (properties.isLogMaskSensitive()) {
+            data.put("messages", maskMessages(request.getMessages()));
+            data.put("metadata", maskMetadata(request.getMetadata()));
+        } else {
+            data.put("messages", request.getMessages());
+            data.put("metadata", request.getMetadata());
+        }
         return data;
+    }
+
+    private static List<Map<String, Object>> maskMessages(List<Map<String, Object>> messages) {
+        if (messages == null) {
+            return null;
+        }
+        List<Map<String, Object>> masked = new ArrayList<>(messages.size());
+        for (Map<String, Object> msg : messages) {
+            Map<String, Object> copy = new LinkedHashMap<>(msg);
+            Object content = copy.get("content");
+            if (content != null) {
+                copy.put("content", "***masked***");
+            }
+            masked.add(copy);
+        }
+        return masked;
+    }
+
+    private static Map<String, Object> maskMetadata(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        Map<String, Object> masked = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+            masked.put(entry.getKey(), "***masked***");
+        }
+        return masked;
     }
 
     private void logRemoteRequest(
@@ -253,7 +285,13 @@ public class VersatileAgentHandler implements AgentHandler {
         log.info("{} conversation_id={} url={} headers={} params={} body_keys={}",
                 message, request.getConversationId(), remoteRequest.url(),
                 remoteRequest.headers().size(), remoteRequest.params().size(), remoteRequest.body().keySet());
-        log.debug("Versatile remote request conversation_id={} request={}",
-                request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+        if (properties.isLogMaskSensitive()) {
+            log.debug("Versatile remote request conversation_id={} url={} headers_keys={} params_keys={} body_keys={}",
+                    request.getConversationId(), remoteRequest.url(),
+                    remoteRequest.headers().keySet(), remoteRequest.params().keySet(), remoteRequest.body().keySet());
+        } else {
+            log.debug("Versatile remote request conversation_id={} request={}",
+                    request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+        }
     }
 }
