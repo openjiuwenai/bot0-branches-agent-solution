@@ -91,7 +91,8 @@ class VersatileIntentFlowIntegrationTest {
         ActiveStreamRegistry streamRegistry = new ActiveStreamRegistry();
 
         A2AEnabledServeOrchestrator orchestrator = new A2AEnabledServeOrchestrator(
-                l1Handler, new InMemoryTaskStore(), inProcess, resolver, streamRegistry, "agent-L1");
+                l1Handler, new InMemoryTaskStore(), inProcess, resolver, streamRegistry, "agent-L1",
+                new ThreeFieldForwardStrategy());
 
         // 6. Send user request to L1 orchestrator.
         ServeRequest request = new ServeRequest();
