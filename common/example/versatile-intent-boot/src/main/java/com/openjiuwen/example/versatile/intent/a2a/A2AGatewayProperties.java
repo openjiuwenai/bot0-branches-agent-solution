@@ -23,8 +23,6 @@ public class A2AGatewayProperties {
     private String baseUrl;
     private String agentCardPath = "/{agentCard}/.well-known/agent-card.json";
     private String jsonRpcPath = "/{agentCard}/a2a";
-    private String defaultCardUrlSuffix = "/.well-known/agent-card.json";
-    private String defaultJsonRpcSuffix = "/a2a";
 
     public boolean isEnabled() {
         return enabled;
@@ -56,21 +54,5 @@ public class A2AGatewayProperties {
 
     public void setJsonRpcPath(String jsonRpcPath) {
         this.jsonRpcPath = jsonRpcPath;
-    }
-
-    public String getDefaultCardUrlSuffix() {
-        return defaultCardUrlSuffix;
-    }
-
-    public void setDefaultCardUrlSuffix(String defaultCardUrlSuffix) {
-        this.defaultCardUrlSuffix = defaultCardUrlSuffix;
-    }
-
-    public String getDefaultJsonRpcSuffix() {
-        return defaultJsonRpcSuffix;
-    }
-
-    public void setDefaultJsonRpcSuffix(String defaultJsonRpcSuffix) {
-        this.defaultJsonRpcSuffix = defaultJsonRpcSuffix;
     }
 }

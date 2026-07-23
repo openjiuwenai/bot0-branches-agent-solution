@@ -4,6 +4,7 @@
 
 package com.openjiuwen.example.versatile.intent.a2a;
 
+import com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCardResolver;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -20,9 +21,15 @@ import org.springframework.context.annotation.Bean;
  * {@code DefaultRemoteAgentCaller} / {@code DefaultCardResolver} beans remain
  * active (wired via {@code @ConditionalOnMissingBean} in {@code A2AAutoConfiguration}).
  *
+ * <p>Declared to load <em>before</em> {@link A2AAutoConfiguration} so the gateway
+ * beans register first and the {@code @ConditionalOnMissingBean} guards on the
+ * {@code Default*} beans skip cleanly. Without this explicit ordering the
+ * override would depend on Spring Boot's tie-breaking sorter, which is fragile
+ * against classpath or version changes.
+ *
  * @since 0.1.0
  */
-@AutoConfiguration
+@AutoConfiguration(before = A2AAutoConfiguration.class)
 @EnableConfigurationProperties(A2AGatewayProperties.class)
 @ConditionalOnProperty(prefix = "openjiuwen.service.a2a-gateway", name = "enabled", havingValue = "true")
 public class A2AGatewayAutoConfiguration {
