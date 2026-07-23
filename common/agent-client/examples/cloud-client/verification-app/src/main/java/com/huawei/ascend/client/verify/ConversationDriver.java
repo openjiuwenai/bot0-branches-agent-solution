@@ -15,7 +15,6 @@ import com.huawei.ascend.client.tool.spi.ToolExposurePolicy;
 import com.huawei.ascend.client.tool.spi.ToolInvocation;
 import com.huawei.ascend.client.transport.a2a.A2aHttpTransportProvider;
 import com.huawei.ascend.client.transport.spi.CredentialProvider;
-import com.huawei.ascend.mockgateway.MockGatewayServer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -44,21 +43,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class ConversationDriver {
 
     private final String gatewayUrl;
-    private final MockGatewayServer embedded;
     private final ChatBroadcaster broadcaster;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionSeq = new AtomicInteger();
 
-    ConversationDriver(String gatewayUrl, MockGatewayServer embedded, ChatBroadcaster broadcaster) {
+    ConversationDriver(String gatewayUrl, ChatBroadcaster broadcaster) {
         this.gatewayUrl = gatewayUrl;
-        this.embedded = embedded;
         this.broadcaster = broadcaster;
     }
 
     /** 启动时广播网关信息。 */
     void announceGateway() {
-        broadcaster.broadcast(ChatMessage.info(null, "网关: " + gatewayUrl
-                + (embedded != null ? " (embedded)" : " (external)")));
+        broadcaster.broadcast(ChatMessage.info(null, "网关: " + gatewayUrl + " (external)"));
     }
 
     /** 创建一个新会话，返回 sessionId。 */

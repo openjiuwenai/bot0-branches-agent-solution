@@ -7,6 +7,7 @@
   const assertionList = $("assertionList");
   const assertionSummary = $("assertionSummary");
   const emptyHint = $("emptyHint");
+  const gatewayInfo = $("gatewayInfo");
 
   let queries = [];
   let sessions = [];
@@ -18,6 +19,8 @@
   const assertionsBySession = {};
   // 当前会话正在流式拼接的 assistant 气泡元素（按 invocationRef）
   const streamingBubbles = {};
+  // 跟踪后端运行状态，用于 pollStatus 检测 true→false 转换并解锁按钮
+  let wasRunning = false;
 
   // ---------- 初始化 ----------
   async function init() {
@@ -472,11 +475,18 @@
       const body = await res.json();
       if (!res.ok || !body.accepted) {
         footerStatus.textContent = "无法启动: " + (body.message || res.status);
-        setBadge("fail", "启动失败");
+        setBadge("idle", "待命");
+        setButtonsDisabled(false);
+        wasRunning = false;
+      } else {
+        // 已被后端受理：标记为运行中，pollStatus 据此在转为空闲时解锁
+        wasRunning = true;
       }
     } catch (e) {
       footerStatus.textContent = "请求失败: " + e.message;
-      setBadge("fail", "请求失败");
+      setBadge("idle", "待命");
+      setButtonsDisabled(false);
+      wasRunning = false;
     }
   }
 
@@ -497,11 +507,17 @@
       const body = await res.json();
       if (!res.ok || !body.accepted) {
         footerStatus.textContent = "无法启动串行: " + (body.message || res.status);
-        setBadge("fail", "启动失败");
+        setBadge("idle", "待命");
+        setButtonsDisabled(false);
+        wasRunning = false;
+      } else {
+        wasRunning = true;
       }
     } catch (e) {
       footerStatus.textContent = "请求失败: " + e.message;
-      setBadge("fail", "请求失败");
+      setBadge("idle", "待命");
+      setButtonsDisabled(false);
+      wasRunning = false;
     }
   }
 
@@ -533,23 +549,28 @@
     try {
       const res = await fetch("/api/status");
       const body = await res.json();
-      if (!body.running) {
-        if (statusBadge.classList.contains("running")) {
-          // 从运行中转为空闲，判定结果
-          const asserts = assertionsBySession[currentSessionId] || [];
-          const anyFail = asserts.some((a) => !a.ok);
-          if (asserts.length > 0) {
-            setBadge(anyFail ? "fail" : "pass", anyFail ? "存在失败" : "全部通过");
-          } else {
-            setBadge("idle", "待命");
-          }
-          setButtonsDisabled(false);
-        }
+      // 更新网关信息
+      if (body.gatewayUrl) {
+        gatewayInfo.textContent = "网关：" + body.gatewayUrl + "（外接）";
+        gatewayInfo.classList.add("external");
       }
+      const running = !!body.running;
+      if (!running && wasRunning) {
+        // 从运行中转为空闲：判定结果并解锁按钮
+        const asserts = assertionsBySession[currentSessionId] || [];
+        const anyFail = asserts.some((a) => !a.ok);
+        if (asserts.length > 0) {
+          setBadge(anyFail ? "fail" : "pass", anyFail ? "存在失败" : "全部通过");
+        } else {
+          setBadge("idle", "待命");
+        }
+        setButtonsDisabled(false);
+      }
+      wasRunning = running;
     } catch (e) {
       // 忽略
     }
-    setTimeout(pollStatus, 800);
+    setTimeout(pollStatus, 400);
   }
 
   // ---------- 辅助 ----------

@@ -184,12 +184,26 @@ body {
   background: var(--workbench-chrome);
   flex-shrink: 0;
 }
+.chat-head-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .chat-head h1 {
   margin: 0;
   font-size: var(--text-xl);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.01em;
+}
+.gateway-info {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.gateway-info.external {
+  color: #6b5b7e;
+  font-weight: 600;
 }
 
 /* ===== query 按钮栏：纵向完整展示，不压缩、不滚动 ===== */
