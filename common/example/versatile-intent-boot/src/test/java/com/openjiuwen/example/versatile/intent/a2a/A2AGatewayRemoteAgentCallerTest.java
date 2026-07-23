@@ -248,7 +248,11 @@ class A2AGatewayRemoteAgentCallerTest {
             assertThat(observer.completed).isTrue();
             assertThat(observer.chunks).hasSize(1);
             assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_CHUNK);
-            assertThat(observer.chunks.get(0).getData()).isEqualTo("酒店预订成功：上海今晚五星");
+            Object data = observer.chunks.get(0).getData();
+            assertThat(data).isInstanceOf(Map.class);
+            Map<?, ?> envelope = (Map<?, ?>) data;
+            assertThat(envelope.get("type")).isEqualTo("answer");
+            assertThat(envelope.get("output")).isEqualTo("酒店预订成功：上海今晚五星");
         } finally {
             wireMock.stop();
         }
