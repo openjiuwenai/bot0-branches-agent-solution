@@ -272,6 +272,37 @@ def test_export_validation_publishes_manifest_then_success_marker(tmp_path: Path
     }
 
 
+def test_export_noop_validation_has_explicit_unchanged_semantics(tmp_path: Path) -> None:
+    """no-op epoch 不能伪造 candidate 分数，但仍发布完整 validation artifact。"""
+    exporter = ArtifactExporter(str(tmp_path), score_threshold=0.6)
+    batch = EvaluationBatchResult(())
+    gate = GateEvaluationRecord(
+        base_score=0.7,
+        candidate_score=None,
+        decision="unchanged",
+        kind="no_op",
+        reason="no_selected_edits",
+    )
+
+    exporter.export_gate_result(2, gate=gate, selected_batch=batch)
+    exporter.export_validation(2, batch, gate)
+
+    epoch = tmp_path / "epoch_2"
+    gate_data = json.loads((epoch / "gate_result.json").read_text(encoding="utf-8"))
+    assert gate_data["kind"] == "no_op"
+    assert gate_data["decision"] == "unchanged"
+    assert gate_data["reason"] == "no_selected_edits"
+    assert gate_data["base_score"] == 0.7
+    assert gate_data["candidate_score"] is None
+    assert gate_data["improvement"] is None
+
+    validation = epoch / "validation"
+    assert (validation / "_SUCCESS").exists()
+    manifest = json.loads((validation / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["kind"] == "no_op"
+    assert manifest["decision"] == "unchanged"
+
+
 def test_export_validation_failure_is_invalid_and_never_publishes_success(
     tmp_path: Path,
 ) -> None:

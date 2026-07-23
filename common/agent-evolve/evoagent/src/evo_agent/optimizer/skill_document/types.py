@@ -71,18 +71,26 @@ class SlowUpdateResult:
 
 @dataclass(frozen=True)
 class GateEvaluationRecord:
-    """Complete gate scores and tie re-evaluation provenance for one epoch."""
+    """Validation decision and provenance for one epoch.
+
+    Comparison epochs contain both base and candidate scores. A no-op epoch has
+    no candidate score and explicitly retains the unchanged state.
+    """
 
     base_score: float
-    candidate_score: float
-    decision: Literal["base", "candidate"]
+    candidate_score: float | None
+    decision: Literal["base", "candidate", "unchanged"]
     tie_revalued: bool = False
     candidate_score_first: float | None = None
     candidate_score_reval: float | None = None
+    kind: Literal["comparison", "no_op"] = "comparison"
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
 class GateEpochArtifactInput:
+    """Complete validation artifact input for comparison and no-op epochs."""
+
     gate: GateEvaluationRecord
     base_batch: EvaluationBatchResult
     candidate_batches: tuple[EvaluationBatchResult, ...]
