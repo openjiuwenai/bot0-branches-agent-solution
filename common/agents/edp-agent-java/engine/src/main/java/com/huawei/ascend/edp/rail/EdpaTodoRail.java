@@ -263,16 +263,56 @@ public class EdpaTodoRail extends DeepAgentRail {
         Map<String, Object> args = TodoSessionResolver.normalizeArgs(inputs.getToolArgs());
         String realSid = TodoSessionResolver
                 .sanitizeSessionId(ctx.getSession() != null ? ctx.getSession().getSessionId() : null);
-        boolean sidChanged = false;
+        boolean sidChanged = injectRealSessionId(args, realSid);
+        boolean enriched = enrichAndValidateTasks(inputs, args, toolName, ctx);
+
+        if (sidChanged || enriched) {
+            // 传 Map：railedExecuteSingleToolCall 会序列化为 toolCall.arguments 供 Core 执行。
+            inputs.setToolArgs(args);
+            if (sidChanged) {
+                LOGGER.info("[EDPA-DIAG] INJECT tool={} session_id={} (real session, path escaped)", toolName, realSid);
+            }
+        }
+    }
+
+    /**
+     * Inject the real (sanitized) session id into tool args when the LLM omitted session_id.
+     *
+     * <p>Core TaskPlanningRail reads session_id from toolArgs; if absent it falls back to "default",
+     * causing all sessions to share .todo/default/ and overwrite each other. This injects the
+     * escaped real sessionId so Core persists per-real-session.</p>
+     *
+     * @param args    the normalized tool arguments (mutated in place)
+     * @param realSid the sanitized real session id, may be null
+     * @return true if session_id was injected (args changed)
+     */
+    private boolean injectRealSessionId(Map<String, Object> args, String realSid) {
         Object prevSid = args.get("session_id");
         if ((prevSid == null || String.valueOf(prevSid).isBlank()) && realSid != null) {
             args.put("session_id", realSid);
-            sidChanged = true;
+            return true;
         }
+        return false;
+    }
 
-        // catalog_id 参数enriched：todo_create 的 catalog_id 嵌在 tasks[].catalog_id（非顶层），
-        // 遍历每个 task 打 meta_data.catalog_id anchor + 补 content/description/skill。
-        // dependency closure（afterToolCall buildAnchors）依赖此 meta_data.catalog_id anchor做 catalog_id→UUID 映射。
+    /**
+     * Enrich todo_create tasks with catalog_id anchors and validate subtask count limits.
+     *
+     * <p>For todo_create, walks each task in tasks[] to stamp meta_data.catalog_id anchor and
+     * fill content/description/skill via enrichArgs. The anchor is used by afterToolCall
+     * buildAnchors for catalog_id->UUID dependency mapping.</p>
+     *
+     * <p>Also enforces actrule.max_subtasks: if exceeded, sets KEY_SKIP_TOOL and a synthetic
+     * MAX_SUBTASKS_EXCEEDED tool result, blocking execution.</p>
+     *
+     * @param inputs   the tool call inputs
+     * @param args     the normalized tool arguments (tasks[] read from here)
+     * @param toolName the tool name
+     * @param ctx      the agent callback context
+     * @return true if tasks were enriched
+     */
+    private boolean enrichAndValidateTasks(ToolCallInputs inputs, Map<String, Object> args,
+            String toolName, AgentCallbackContext ctx) {
         boolean enriched = false;
         if (todolist != null && TOOL_TODO_CREATE.equals(toolName)) {
             enriched = enrichTasks(args.get("tasks"));
@@ -281,7 +321,6 @@ public class EdpaTodoRail extends DeepAgentRail {
             }
         }
 
-        // 子任务数量上限校验（actrule.max_subtasks）
         if (actrule != null && actrule.getMaxSubtasks() != null && actrule.getMaxSubtasks() > 0
                 && TOOL_TODO_CREATE.equals(toolName)) {
             int taskCount = countTasks(args.get("tasks"));
@@ -296,17 +335,10 @@ public class EdpaTodoRail extends DeepAgentRail {
                 ToolCall tc = inputs.getToolCall();
                 String callId = tc != null ? tc.getId() : "";
                 inputs.setToolMsg(ToolMessage.builder().content(synthetic).toolCallId(callId).build());
-                return;
             }
         }
 
-        if (sidChanged || enriched) {
-            // 传 Map：railedExecuteSingleToolCall 会序列化为 toolCall.arguments 供 Core 执行。
-            inputs.setToolArgs(args);
-            if (sidChanged) {
-                LOGGER.info("[EDPA-DIAG] INJECT tool={} session_id={} (real session, path escaped)", toolName, realSid);
-            }
-        }
+        return enriched;
     }
 
     /**
