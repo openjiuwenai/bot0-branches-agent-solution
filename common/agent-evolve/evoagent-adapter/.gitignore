@@ -52,3 +52,10 @@ deployment/bundle/
 
 # 合并冲突残留
 *.orig
+
+# API suite reports may contain remote skill inventories / env specifics
+tests/sandbox_mode/reports/
+
+# Local test docs (md/html) — keep out of commit scope
+tests/**/*.md
+tests/**/*.html
