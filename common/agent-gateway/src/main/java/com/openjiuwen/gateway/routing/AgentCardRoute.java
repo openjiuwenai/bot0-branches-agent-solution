@@ -18,5 +18,10 @@ package com.openjiuwen.gateway.routing;
  * @param routeHandle opaque route reference (forward layer resolves it)
  * @since 0.1.0
  */
-public record AgentCardRoute(String routeHandle) {
+public record AgentCardRoute(String routeHandle, String targetServiceId) {
+
+    /** Backward-compat constructor for DIRECT (011) — targetServiceId not needed. */
+    public AgentCardRoute(String routeHandle) {
+        this(routeHandle, null);
+    }
 }

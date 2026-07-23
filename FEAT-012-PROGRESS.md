@@ -20,11 +20,19 @@
 - 验收映射：AC-CFG-1（path-mode 对 client 不可见）。
 - **98/98 GREEN**（+18 新测）。
 
+### B2 — bus/control 出站 ✅
+
+- **TDD 流程**：按 TEST-SPEC §B2 写 12 单元测 → RED（编译失败类不存在）→ 实现 → GREEN。
+- 实现：`PayloadStore`(端口) + `InMemoryPayloadStore`(@Component) + `EnvelopeBuilder`(@Component，构造 ForwardingEnvelope + 自生成 correlationId/messageId) + `BusControlForwarder`(orchestrator: stash body→payloadRef→build envelope→enqueue；失败→ENQUEUE_FAILED)。`AgentCardRoute` 扩展加 `targetServiceId`（向后兼容）。`FakeForwardingOutboxPort`(测试桩)。
+- 验收映射：T-S2-B9（produce 失败→ENQUEUE_FAILED）、AC-CFG-2。
+- `BusControlForwarder` 暂不 `@Component`（B4 facade 接线时再加，避免全量上下文测缺 ForwardingOutboxPort bean）。
+- **111/111 GREEN**（+12 新测 + RouterTest +1 因 AgentCardRoute 扩展）。
+
 ## 剩余切片
 
 | 切片 | 用例数（spec） | 状态 |
 |---|---|---|
-| B2 control 出站 | 12 | ⏳ 下一片 |
+| ~~B2 control 出站~~ | ~~12~~ | ✅ 完成 |
 | B3 wait+projection 五态 | 27 | 待办 |
 | B4 facade BUS 同步 | 12 | 待办 |
 | B5 流式 STREAM_READY | 10 | 待办 |
