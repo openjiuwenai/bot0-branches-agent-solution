@@ -385,7 +385,7 @@ public class McpInterruptRail extends AgentRail {
 
     private Future<?> readAsync(java.io.InputStream inputStream, StringBuilder target) {
         ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r);
+            Thread t = Executors.defaultThreadFactory().newThread(r);
             t.setDaemon(true);
             t.setUncaughtExceptionHandler((thread, e) -> {
                 LOGGER.error("McpInterruptRail: unexpected error in async read thread", e);

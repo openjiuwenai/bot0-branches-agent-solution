@@ -43,7 +43,6 @@ package com.huawei.ascend.edp.config;
  */
 
 public final class ScriptConstants {
-
     // ── ctx.getExtra() 内的 key（话术载体 + 控制信号）──
     /** 话术载体键：本请求内业务话术文本（供 EdpaEventRail.interrupt_start 与 ScriptsRail 出口读取）。 */
     public static final String KEY_RESPONSE_TEMPLATE = "_edp_response_template";

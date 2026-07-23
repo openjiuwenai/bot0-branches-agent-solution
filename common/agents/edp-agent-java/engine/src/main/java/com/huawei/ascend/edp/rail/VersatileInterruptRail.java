@@ -106,14 +106,6 @@ public class VersatileInterruptRail extends AgentRail {
     static final String GUARD_STATE_KEY_PREFIX = "_pre_delegate_guard:";
 
     /**
-     * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
-     *
-     * @param "(62\\d{14,17} the "(62\\d{14,17} value
-     * @return the result
-     */
-    private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
-
-    /**
      * history_info 字段名。与 {@link McpInterruptRail#HISTORY_INFO_KEY} 同名，
      * 保证 call_versatile 写入的 history_info 能被下一次 call_mcp 的 buildSkillInput 读到，
      * 形成跨工具的会话级持久化闭环（对齐 Python {@code session.state["history_info"]}）。
@@ -121,6 +113,11 @@ public class VersatileInterruptRail extends AgentRail {
      */
 
     static final String HISTORY_INFO_KEY = "history_info";
+
+    /**
+     * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
+     */
+    private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -354,14 +351,14 @@ public class VersatileInterruptRail extends AgentRail {
                     }
                 }
             }
-            toolResult = output.data;
-            inputs.setToolResult(toolResult);
-            inputs.setToolMsg(ToolMessage.builder().content(toJson(toolResult))
+            Map<String, Object> normalizedResult = output.data;
+            inputs.setToolResult(normalizedResult);
+            inputs.setToolMsg(ToolMessage.builder().content(toJson(normalizedResult))
                     .toolCallId(inputs.getToolCall() != null ? inputs.getToolCall().getId() : "call_versatile")
                     .build());
-            if (output.uiNotice != null && toolResult instanceof Map) {
+            if (output.uiNotice != null && normalizedResult instanceof Map) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> trMap = (Map<String, Object>) toolResult;
+                Map<String, Object> trMap = (Map<String, Object>) normalizedResult;
                 trMap.put("ui_notice", output.uiNotice);
                 inputs.setToolResult(trMap);
             }
@@ -483,14 +480,14 @@ public class VersatileInterruptRail extends AgentRail {
                     : callVersatileDirect(versatileInputs, conversationId);
             storePassthroughNodes(conversationId, result);
             return result;
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             LOGGER.warn("VersatileInterruptRail: direct call failed: {}", e.getMessage());
             return failedResult(e.getMessage());
         }
     }
 
     private Map<String, Object> callVersatileDirect(Map<String, Object> versatileInputs, String conversationId)
-            throws Exception {
+            throws JsonProcessingException, IOException, InterruptedException {
         String url = resolveUrl(conversationId);
         Map<String, Object> body = Map.of("inputs", versatileInputs, "stream", true);
         String bodyJson = OBJECT_MAPPER.writeValueAsString(body);
@@ -532,10 +529,12 @@ public class VersatileInterruptRail extends AgentRail {
      * @param versatileInputs the versatileInputs value
      * @param conversationId the conversationId value
      * @return the result
-     * @throws Exception the exception description
+     * @throws JsonProcessingException the json processing exception
+     * @throws IOException the io exception
+     * @throws InterruptedException the interrupted exception
      */
     private Map<String, Object> callVersatileAdapterA2a(Map<String, Object> versatileInputs, String conversationId)
-            throws Exception {
+            throws JsonProcessingException, IOException, InterruptedException {
         String adapterUrl = versatileConfig.getAdapterA2aUrl();
 
         // 扁平化字段到顶层，确保 query 和 intent 同时以两个键名存在，
@@ -590,10 +589,9 @@ public class VersatileInterruptRail extends AgentRail {
      *
      * @param body the body value
      * @return the result
-     * @throws Exception the exception description
+     * @throws JsonProcessingException the json processing exception
      */
-
-    private Map<String, Object> normalizeA2aAdapterResponse(String body) throws Exception {
+    private Map<String, Object> normalizeA2aAdapterResponse(String body) throws JsonProcessingException {
         List<String> passthroughNodes = new ArrayList<>();
         String completedContent = "";
         String state = "";
@@ -1004,7 +1002,7 @@ public class VersatileInterruptRail extends AgentRail {
         return Duration.parse(timeout);
     }
 
-    private String normalizeContent(String body) throws Exception {
+    private String normalizeContent(String body) throws JsonProcessingException {
         String raw = body != null ? body.trim() : "";
         if (raw.isBlank()) {
             return "{}";
@@ -1022,7 +1020,7 @@ public class VersatileInterruptRail extends AgentRail {
         throw new IllegalArgumentException("versatile content is not standard JSON object or array");
     }
 
-    private JsonNode extractFromSse(String raw) throws Exception {
+    private JsonNode extractFromSse(String raw) throws JsonProcessingException {
         JsonNode lastJson = null;
         for (String line : raw.split("\\R")) {
             String trimmed = line.trim();
@@ -1051,7 +1049,7 @@ public class VersatileInterruptRail extends AgentRail {
         return lastJson;
     }
 
-    private JsonNode extractStandardJsonContent(JsonNode node) throws Exception {
+    private JsonNode extractStandardJsonContent(JsonNode node) throws JsonProcessingException {
         if (node.has("content")) {
             return parseJsonNodeOrReturn(node.get("content"));
         }
@@ -1085,7 +1083,7 @@ public class VersatileInterruptRail extends AgentRail {
         }
     }
 
-    private JsonNode parseJsonNodeOrReturn(JsonNode node) throws Exception {
+    private JsonNode parseJsonNodeOrReturn(JsonNode node) throws JsonProcessingException {
         if (node == null || node.isNull()) {
             return OBJECT_MAPPER.createObjectNode();
         }
