@@ -194,6 +194,8 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 .url(jsonRpcUrl)
                 .capabilities(AgentCapabilities.builder().streaming(true).build())
                 .skills(List.of())
+                .defaultInputModes(List.of())
+                .defaultOutputModes(List.of())
                 .supportedInterfaces(List.of(
                         new AgentInterface("jsonrpc", jsonRpcUrl, null, AgentInterface.CURRENT_PROTOCOL_VERSION)))
                 .build();

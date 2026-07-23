@@ -1,0 +1,24 @@
+# Profile: mock-versatile
+# Activated together with layer1/layer2/downstream + dev for L2 §5.5.3 方案 B
+# local 联调. Each process hosts its own MockVersatileController; cross-layer
+# forwarding routes via local-mapping → DefaultRemoteAgentCaller → localhost.
+#
+# The e2e script overrides versatile.url-template per process to point at the
+# process's own mock endpoint. This file only carries the card-resolver
+# local-mapping that all three processes share.
+openjiuwen:
+  service:
+    a2a-gateway:
+      enabled: false
+    card-resolver:
+      local-mapping:
+        # L1 forwards to L2 (intent_L1_hotel → agent_card_L2_hotel)
+        agent_card_L2_hotel: http://localhost:8082
+        agent_card_L2_flight: http://localhost:8082
+        agent_card_L2_fallback: http://localhost:8082
+        # L2 forwards to downstream
+        agent_card_biz_hotel_domestic: http://localhost:8083
+        agent_card_biz_hotel_international: http://localhost:8083
+        agent_card_biz_flight_domestic: http://localhost:8083
+        # Reclassification: downstream forwards back to L1
+        agent_L1: http://localhost:8081
