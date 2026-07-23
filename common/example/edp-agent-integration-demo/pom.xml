@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ============================================================ -->
+    <!-- 客户集成示例：将 edp-agent-engine 作为 Maven 依赖嵌入自有应用 -->
+    <!-- ============================================================ -->
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.6</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.customer</groupId>
+    <artifactId>customer-agent-app</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <java.version>17</java.version>
+        <edp-agent-engine.version>0.1.0-SNAPSHOT</edp-agent-engine.version>
+        <agent-core-java.version>0.1.13</agent-core-java.version>
+    </properties>
+
+    <dependencies>
+        <!-- ============================================================ -->
+        <!-- EDPAgent 引擎依赖（plain JAR，非 fat jar）                    -->
+        <!-- 前置条件：edp-agent-engine 及 OpenJiuwen 三件套已在本地仓库  -->
+        <!-- ============================================================ -->
+        <dependency>
+            <groupId>com.huawei.ascend</groupId>
+            <artifactId>edp-agent-engine</artifactId>
+            <version>${edp-agent-engine.version}</version>
+        </dependency>
+
+        <!-- OpenJiuwen agent-core-java（提供 AgentRail/DeepAgentRail/Session 等 SPI） -->
+        <!-- 必须使用 JDK17 构建的 0.1.13，切勿改用旧的裸 0.1.12（部分仓库为缺包的旧构建），会导致编译失败 -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-core-java</artifactId>
+            <version>${agent-core-java.version}</version>
+        </dependency>
+
+        <!-- OpenJiuwen agent-service-app（A2A Runtime） -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-app</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+
+        <!-- OpenJiuwen agent-service-adapters-agentcore-ext（扩展适配器） -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- OpenJiuwen agent-service-spec（SPI 接口） -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-spec</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Data Redis -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Jackson YAML（governance YAML 解析） -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+        </dependency>
+
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot 打包插件：将客户应用打成可执行 fat jar -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>${java.version}</release>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
