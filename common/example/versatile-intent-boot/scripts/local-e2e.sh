@@ -1,63 +1,68 @@
 #!/usr/bin/env bash
 #
 # Local end-to-end runbook for the Versatile intent deployment module.
+# Implements L2 §5.5.3 方案 B (multi-port local runtime) with the
+# mock-versatile profile, and exercises all three L2 §6.2 scenarios.
 #
-# Starts three versatile-intent-boot processes (layer1 / layer2 / downstream)
-# on ports 8081 / 8082 / 8083, waits for health, then sends a sample query
-# to the layer1 entry point and prints the response.
+# Architecture:
+#   - Each layer runs as a separate versatile-intent-boot process.
+#   - The mock-versatile profile activates MockVersatileController inside
+#     every process, serving canned SSE keyed by (agentId, query content).
+#   - Cross-layer forwarding uses DefaultRemoteAgentCaller over HTTP, routed
+#     by LocalMappingCardRegistrar (card-resolver.local-mapping → localhost).
 #
-# L2 §5.5.5 lists this script under "联调脚本 — 启动三个本地进程，发送 curl
-# 请求验证全链路". Per L2 §5.5.6 边界:
-#   - The dev profile disables the A2A Gateway; each layer's Versatile adapter
-#     is exercised independently. Full-chain L1->L2->downstream forwarding
-#     over HTTP requires either the A2A Gateway (staging/production) or a
-#     local card-resolver mapping (not yet implemented in this module).
-#   - For in-process full-chain verification (L1->L2 with messages append),
-#     run VersatileIntentFlowIntegrationTest — it covers the forwarding path
-#     without HTTP.
+# Scenarios (L2 §6.2):
+#   Round 1:
+#     §6.2.1  L1→L2→downstream  curl L1 "订酒店"      → "酒店预订成功"
+#     §6.2.3  explicit interrupt  curl L1 "中断"        → _interrupt payload
+#   Round 2:
+#     §6.2.2  reclassification    curl downstream "重分类" → "重新分类：国内酒店"
 #
-# Prerequisites:
-#   - Java 17 on PATH.
-#   - A reachable Versatile-compatible SSE endpoint. Set VERSATILE_URL to
-#     point to it (real Versatile or a local mock such as WireMock). The
-#     default points at a placeholder that will not resolve — override it.
+# Each round starts the processes it needs with the right mode (three-field
+# vs legacy) and stops them before the next round begins.
 #
 # Usage:
-#   VERSATILE_URL=http://localhost:9090/mock/versatile/{conversation_id} \
-#     ./scripts/local-e2e.sh
+#   ./scripts/local-e2e.sh            # build if needed, run all scenarios
+#   SKIP_BUILD=1 ./scripts/local-e2e.sh   # skip build (use existing jar)
 #
-# Override ports / jar location via env (see defaults below).
+# Prerequisites: Java 17 on PATH.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-LAYER1_PORT="${LAYER1_PORT:-8081}"
-LAYER2_PORT="${LAYER2_PORT:-8082}"
+L1_PORT="${L1_PORT:-8081}"
+L2_PORT="${L2_PORT:-8082}"
 DOWNSTREAM_PORT="${DOWNSTREAM_PORT:-8083}"
-VERSATILE_URL="${VERSATILE_URL:-http://versatile-host:3001/v1/{project_id}/agents/agent_L1/conversations/{conversation_id}}"
-HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-60}"
-
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 JAR_FILE="$MODULE_DIR/target/versatile-intent-boot-0.1.0.jar"
 
 PIDS=()
+LOG_DIR="$MODULE_DIR/target"
+
+mkdir -p "$LOG_DIR"
 
 cleanup() {
     echo
-    echo "==> Cleaning up processes: ${PIDS[*]:-<none>}"
+    echo "==> Stopping processes: ${PIDS[*]:-<none>}"
     for pid in "${PIDS[@]:-}"; do
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null || true
         fi
     done
+    PIDS=()
     wait 2>/dev/null || true
 }
 trap cleanup EXIT
 
 build_if_needed() {
+    if [ "${SKIP_BUILD:-0}" = "1" ]; then
+        echo "==> SKIP_BUILD=1, using existing jar"
+        return
+    fi
     if [ ! -f "$JAR_FILE" ]; then
-        echo "==> Jar not found, building: $JAR_FILE"
+        echo "==> Building jar: $JAR_FILE"
         (cd "$MODULE_DIR" && mvn -q package -DskipTests)
     else
         echo "==> Using existing jar: $JAR_FILE"
@@ -68,82 +73,140 @@ wait_for_health() {
     local port="$1"
     local name="$2"
     local deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
-    echo "==> Waiting for $name on port $port (up to ${HEALTH_TIMEOUT_SECONDS}s)"
+    printf "    %-12s " "$name:"
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        if curl -sf "http://localhost:${port}/actuator/health" >/dev/null 2>&1; then
-            echo "    $name is UP (port $port)"
+        if curl -sf "http://localhost:${port}/health" >/dev/null 2>&1; then
+            echo "UP (port $port)"
             return 0
         fi
+        printf "."
         sleep 1
     done
-    echo "ERROR: $name did not become healthy on port $port within ${HEALTH_TIMEOUT_SECONDS}s" >&2
+    echo " TIMEOUT"
+    echo "ERROR: $name did not become healthy on port $port" >&2
+    tail -30 "$LOG_DIR/${name}.log" 2>/dev/null || true
     return 1
 }
 
-start_layer() {
-    local profile="$1"
-    local port="$2"
-    local name="$3"
-    local log="$MODULE_DIR/target/${name}.log"
-    echo "==> Starting $name (profile=$profile, port=$port) -> $log"
+# Starts a process. Args: name port profiles agent_segment [extra java args...]
+start_process() {
+    local name="$1" port="$2" profiles="$3" agent_segment="$4"
+    shift 4
+    local log="$LOG_DIR/${name}.log"
+    echo "==> Starting $name (profiles=$profiles, port=$port)"
     java -jar "$JAR_FILE" \
-        --spring.profiles.active="${profile},dev" \
+        --spring.profiles.active="$profiles" \
         --server.port="$port" \
-        --openjiuwen.service.versatile.url-template="$VERSATILE_URL" \
+        --openjiuwen.service.versatile.url-template="http://localhost:${port}/v1/proj/agents/${agent_segment}/conversations/{conversation_id}" \
+        "$@" \
         >"$log" 2>&1 &
-    local pid=$!
-    PIDS+=("$pid")
-    echo "    pid=$pid"
+    PIDS+=("$!")
+    echo "    pid=${PIDS[-1]} log=$log"
 }
 
-send_sample_query() {
-    local port="$1"
-    local label="$2"
-    echo
-    echo "==> Sending sample query to $label (port $port)"
-    local body
-    body='{"conversation_id":"e2e-c-1","stream":false,"messages":[{"role":"user","content":"我要订酒店"}]}'
-    echo "    POST http://localhost:${port}/v1/query"
-    echo "    body: $body"
-    local resp
-    if resp=$(curl -s -X POST "http://localhost:${port}/v1/query" \
+stop_all() {
+    cleanup
+}
+
+send_query() {
+    local port="$1" conv_id="$2" content="$3"
+    curl -s -X POST "http://localhost:${port}/v1/query" \
         -H "Content-Type: application/json" \
-        -d "$body" 2>&1); then
-        echo "    response:"
-        echo "$resp" | sed 's/^/      /'
-    else
-        echo "    curl failed: $resp" >&2
-        return 1
+        -d "{\"conversation_id\":\"${conv_id}\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"${content}\"}]}"
+}
+
+assert_contains() {
+    local label="$1" body="$2" pattern="$3"
+    if echo "$body" | grep -q "$pattern"; then
+        echo "    PASS: $label contains '$pattern'"
+        return 0
     fi
+    echo "    FAIL: $label expected to contain '$pattern'" >&2
+    echo "    body: $body" >&2
+    return 1
+}
+
+# ─── Round 1: Scenario 1 (L1→L2→downstream) + Scenario 3 (interrupt) ───
+
+run_round_one() {
+    echo
+    echo "==================== Round 1: §6.2.1 + §6.2.3 ===================="
+
+    # L1: three-field mode (layer1 profile) — has interrupt config for scenario 3
+    start_process layer1 "$L1_PORT" "layer1,dev,mock-versatile" "agent_L1"
+
+    # L2: three-field mode (layer2 profile)
+    start_process layer2 "$L2_PORT" "layer2,dev,mock-versatile" "agent_L2"
+
+    # Downstream: legacy mode (no result-extractions → returns final answer)
+    start_process downstream "$DOWNSTREAM_PORT" "dev,mock-versatile" "agent_biz" \
+        --openjiuwen.service.versatile.result-node-name=AnswerNode \
+        --openjiuwen.service.versatile.messages.required=true
+
+    wait_for_health "$L1_PORT" layer1
+    wait_for_health "$L2_PORT" layer2
+    wait_for_health "$DOWNSTREAM_PORT" downstream
+
+    echo
+    echo "--- §6.2.1 两层识别 + 下游业务 (L1→L2→downstream) ---"
+    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 订酒店}]"
+    local resp1
+    resp1=$(send_query "$L1_PORT" "c1-scenario1" "订酒店")
+    echo "    response: $(echo "$resp1" | head -c 500)"
+    assert_contains "scenario1" "$resp1" "酒店预订成功"
+
+    echo
+    echo "--- §6.2.3 工作流显式用户交互 (interrupt) ---"
+    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 中断}]"
+    local resp3
+    resp3=$(send_query "$L1_PORT" "c5-scenario3" "中断")
+    echo "    response: $(echo "$resp3" | head -c 500)"
+    assert_contains "scenario3-interrupt" "$resp3" "_interrupt"
+    assert_contains "scenario3-resume-token" "$resp3" "tok-123"
+
+    echo
+    echo "==> Round 1 complete, stopping processes"
+    stop_all
+}
+
+# ─── Round 2: Scenario 2 (reclassification downstream→L1) ───
+
+run_round_two() {
+    echo
+    echo "==================== Round 2: §6.2.2 重新分类 ===================="
+
+    # Downstream: three-field mode (downstream profile) — returns agent_id pointing to L1
+    start_process downstream "$DOWNSTREAM_PORT" "downstream,dev,mock-versatile" "agent_biz"
+
+    # L1: legacy mode — returns final reclassification answer
+    start_process layer1 "$L1_PORT" "dev,mock-versatile" "agent_L1" \
+        --openjiuwen.service.versatile.result-node-name=AnswerNode \
+        --openjiuwen.service.versatile.messages.required=true
+
+    wait_for_health "$DOWNSTREAM_PORT" downstream
+    wait_for_health "$L1_PORT" layer1
+
+    echo
+    echo "--- §6.2.2 分类错误重新分类 (downstream→L1) ---"
+    echo "    POST http://localhost:${DOWNSTREAM_PORT}/v1/query  messages=[{user, 重分类}]"
+    local resp
+    resp=$(send_query "$DOWNSTREAM_PORT" "c4-scenario2" "重分类")
+    echo "    response: $(echo "$resp" | head -c 500)"
+    assert_contains "scenario2" "$resp" "重新分类：国内酒店"
+
+    echo
+    echo "==> Round 2 complete, stopping processes"
+    stop_all
 }
 
 main() {
-    echo "==> VERSATILE_URL=$VERSATILE_URL"
-    if [[ "$VERSATILE_URL" == *versatile-host* ]]; then
-        echo "WARNING: VERSATILE_URL still points at the placeholder versatile-host." >&2
-        echo "         Override with VERSATILE_URL=<reachable endpoint> for a real run." >&2
-    fi
-
+    echo "==> L2 §5.5.3 方案 B mock 联调 (three scenarios)"
     build_if_needed
-
-    start_layer layer1 "$LAYER1_PORT" layer1
-    start_layer layer2 "$LAYER2_PORT" layer2
-    start_layer downstream "$DOWNSTREAM_PORT" downstream
-
-    wait_for_health "$LAYER1_PORT" layer1
-    wait_for_health "$LAYER2_PORT" layer2
-    wait_for_health "$DOWNSTREAM_PORT" downstream
-
-    send_sample_query "$LAYER1_PORT" layer1
-
+    run_round_one
+    run_round_two
     echo
-    echo "==> Per-layer verification complete."
-    echo "==> NOTE: full-chain L1->L2->downstream HTTP forwarding is not exercised here."
-    echo "    See script header (L2 §5.5.6) for why — use VersatileIntentFlowIntegrationTest"
-    echo "    for in-process chain verification, or staging for end-to-end."
-    echo "==> Logs: $MODULE_DIR/target/{layer1,layer2,downstream}.log"
-    echo "==> Press Ctrl-C to stop the three processes."
-    wait
+    echo "==> All scenarios passed."
+    echo "    Logs: $LOG_DIR/{layer1,layer2,downstream}.log"
 }
 
 main "$@"
