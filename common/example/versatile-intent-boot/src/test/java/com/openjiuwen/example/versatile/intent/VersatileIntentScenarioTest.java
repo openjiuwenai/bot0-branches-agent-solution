@@ -90,21 +90,22 @@ class VersatileIntentScenarioTest {
         VersatileAgentHandler downstreamHandler = new VersatileAgentHandler(legacyProps("agent_biz"));
         A2AEnabledServeOrchestrator downstreamOrch = new A2AEnabledServeOrchestrator(
                 downstreamHandler, new InMemoryTaskStore(), mock(RemoteAgentCaller.class),
-                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-downstream");
+                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-downstream",
+                new ThreeFieldForwardStrategy());
 
         VersatileAgentHandler l2Handler = new VersatileAgentHandler(l2Props());
         RemoteAgentCaller l2Caller = new InProcessRemoteAgentCaller(
                 Map.of("agent_card_biz_hotel_domestic", asHandler(downstreamOrch)));
         A2AEnabledServeOrchestrator l2Orch = new A2AEnabledServeOrchestrator(
                 l2Handler, new InMemoryTaskStore(), l2Caller, mock(RemoteAgentCardResolver.class),
-                new ActiveStreamRegistry(), "agent-L2");
+                new ActiveStreamRegistry(), "agent-L2", new ThreeFieldForwardStrategy());
 
         VersatileAgentHandler l1Handler = new VersatileAgentHandler(l1Props());
         RemoteAgentCaller l1Caller = new InProcessRemoteAgentCaller(
                 Map.of("agent_card_L2_hotel", asHandler(l2Orch)));
         A2AEnabledServeOrchestrator l1Orch = new A2AEnabledServeOrchestrator(
                 l1Handler, new InMemoryTaskStore(), l1Caller, mock(RemoteAgentCardResolver.class),
-                new ActiveStreamRegistry(), "agent-L1");
+                new ActiveStreamRegistry(), "agent-L1", new ThreeFieldForwardStrategy());
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c1");
@@ -138,14 +139,16 @@ class VersatileIntentScenarioTest {
         VersatileAgentHandler l1Handler = new VersatileAgentHandler(legacyProps("agent_L1"));
         A2AEnabledServeOrchestrator l1Orch = new A2AEnabledServeOrchestrator(
                 l1Handler, new InMemoryTaskStore(), mock(RemoteAgentCaller.class),
-                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-L1");
+                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-L1",
+                new ThreeFieldForwardStrategy());
 
         VersatileAgentHandler downstreamHandler = new VersatileAgentHandler(downstreamReclassifyProps());
         RemoteAgentCaller downstreamCaller = new InProcessRemoteAgentCaller(
                 Map.of("agent_L1", asHandler(l1Orch)));
         A2AEnabledServeOrchestrator downstreamOrch = new A2AEnabledServeOrchestrator(
                 downstreamHandler, new InMemoryTaskStore(), downstreamCaller,
-                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-downstream");
+                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-downstream",
+                new ThreeFieldForwardStrategy());
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c4");
@@ -171,7 +174,8 @@ class VersatileIntentScenarioTest {
         VersatileAgentHandler l1Handler = new VersatileAgentHandler(interruptProps());
         A2AEnabledServeOrchestrator l1Orch = new A2AEnabledServeOrchestrator(
                 l1Handler, new InMemoryTaskStore(), mock(RemoteAgentCaller.class),
-                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-L1");
+                mock(RemoteAgentCardResolver.class), new ActiveStreamRegistry(), "agent-L1",
+                new ThreeFieldForwardStrategy());
 
         ServeRequest request = new ServeRequest();
         request.setConversationId("c1");
