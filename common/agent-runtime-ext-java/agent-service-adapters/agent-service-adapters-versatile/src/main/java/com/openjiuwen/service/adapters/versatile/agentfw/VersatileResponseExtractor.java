@@ -249,11 +249,17 @@ final class VersatileResponseExtractor {
      * {@code context} map (see {@code A2AEnabledServeOrchestrator.resolveInterruptData}).
      * The handler enriches this payload with {@code message} and {@code _stream_mode}
      * before emitting the result to the orchestrator.
+     *
+     * <p>{@code resume=false} signals that the orchestrator must NOT re-invoke
+     * this layer's agent after the remote returns — the three-field result was
+     * the layer's final output, and the remote's answer is this layer's
+     * terminal answer. See {@code InterruptData.resume} in the runtime.
      */
     private static QueryChunk buildA2aDelegateInterrupt(Map<String, Object> envelope) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("agentName", envelope.get("agent_id"));
         payload.put("responseContent", envelope.get("response_content"));
+        payload.put("resume", false);
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("_interrupt_kind", "a2a_delegate");
         payload.put("context", context);
