@@ -32,6 +32,8 @@ public class DefaultAgentResolver {
     }
 
     /**
+     * Resolve the configured default logical agent id.
+     *
      * @return the configured default agent id
      * @throws GovernanceException 500 {@code DEFAULT_AGENT_UNCONFIGURED} if not configured
      */

@@ -31,6 +31,7 @@ import java.util.stream.Stream;
 @Component
 public class HttpAgentRuntimeClient implements AgentRuntimeClient {
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
+
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
 
     @Override
@@ -47,9 +48,7 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
             // Pass the body through (A2A errors arrive as 200 + JSON-RPC error; we don't fake success).
             return resp.body();
         } catch (IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+            // G.CON.10 forbids Thread.interrupt(); map transport failure to FORWARD_FAILED.
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                     "Cannot reach runtime", ex);
         }
@@ -71,9 +70,7 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                     .map(line -> line.substring("data:".length()).strip())
                     .filter(data -> !data.isEmpty());
         } catch (IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+            // G.CON.10 forbids Thread.interrupt(); map transport failure to FORWARD_FAILED.
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                     "Cannot open runtime stream", ex);
         }

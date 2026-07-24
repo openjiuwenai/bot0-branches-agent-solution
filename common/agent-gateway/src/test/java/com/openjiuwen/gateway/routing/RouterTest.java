@@ -21,15 +21,16 @@ import java.util.List;
  * DefaultAgentResolver.
  */
 class RouterTest {
+    private static final String ENDPOINT = "http://runtime-1:8000";
+    private static final String TASK_BODY =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"kind\":\"task\",\"id\":\"task-7\","
+                    + "\"contextId\":\"c1\"}}";
+
     private final FakeRdcRouteClient rdc = new FakeRdcRouteClient();
     private final FakeAgentRuntimeClient runtime = new FakeAgentRuntimeClient();
     private final StickyIndex sticky = new StickyIndex();
     private final DefaultAgentResolver defaultAgent = new DefaultAgentResolver("default-agent-1");
     private final Router router = new Router(rdc, runtime, sticky, defaultAgent);
-
-    private static final String ENDPOINT = "http://runtime-1:8000";
-    private static final String TASK_BODY =
-            "{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"kind\":\"task\",\"id\":\"task-7\",\"contextId\":\"c1\"}}";
 
     private static GovernanceContext createCtx(String agentId) {
         GovernanceContext ctx = new GovernanceContext();
@@ -148,7 +149,8 @@ class RouterTest {
         rdc.setCandidates(List.of(new AgentCardRoute("h1")));
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
         runtime.setFrames(java.util.List.of(
-                "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"status-update\",\"taskId\":\"task-a2a\",\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}"));
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"status-update\",\"taskId\":\"task-a2a\","
+                        + "\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}"));
         router.routeStream(createCtx("agent-9")).toList();
         assertThat(sticky.find("task-a2a")).contains("h1");
     }
@@ -186,7 +188,8 @@ class RouterTest {
     void resumePassesThroughRuntimeAssociationError() {
         sticky.put("task-7", "h1");
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
-        runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"error\":{\"code\":-32001,\"message\":\"Task not found\"}}");
+        runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"error\":{\"code\":-32001,"
+                + "\"message\":\"Task not found\"}}");
         String resp = router.routeResume(resumeCtx("task-7"));
         // association error passed through as-is, not transformed into a new create
         assertThat(resp).contains("-32001");

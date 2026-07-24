@@ -46,7 +46,8 @@ class HttpAgentRuntimeClientTest {
 
     @Test
     void forwardsBodyToA2aAndReturnsResponse() throws InterruptedException {
-        server.enqueue(new MockResponse().setBody("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"id\":\"task-1\"}}")
+        server.enqueue(new MockResponse()
+                .setBody("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"id\":\"task-1\"}}")
                 .addHeader("Content-Type", "application/json"));
         String resp = client.invokeSync(endpoint, "{\"jsonrpc\":\"2.0\",\"method\":\"SendMessage\"}");
         assertThat(resp).contains("\"id\":\"task-1\"");

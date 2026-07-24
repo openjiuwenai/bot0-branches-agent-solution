@@ -79,9 +79,7 @@ public class HttpRdcRouteClient implements RdcRouteClient {
             }
             return out;
         } catch (IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+            // G.CON.10 forbids Thread.interrupt(); wrap as route resolution failure.
             throw new RouteResolutionException("RDC search failed for " + agentId, ex);
         }
     }
@@ -114,9 +112,7 @@ public class HttpRdcRouteClient implements RdcRouteClient {
         } catch (RouteResolutionException ex) {
             throw ex;
         } catch (IOException | InterruptedException ex) {
-            if (ex instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+            // G.CON.10 forbids Thread.interrupt(); wrap as route resolution failure.
             throw new RouteResolutionException("RDC resolve failed", ex);
         }
     }

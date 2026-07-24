@@ -16,8 +16,6 @@ import org.junit.jupiter.api.Test;
  * Unit tests for G3 {@link ParamValidator} (FEAT-011 L2 §3.5 T-G3-1..T-G3-6).
  */
 class ParamValidatorTest {
-    private final ParamValidator validator = new ParamValidator();
-
     private static final String CREATE_NO_AGENT =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
@@ -37,6 +35,8 @@ class ParamValidatorTest {
     private static final String STREAMING =
             "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendStreamingMessage\","
                     + "\"params\":{\"message\":{\"messageId\":\"m3\",\"parts\":[{\"text\":\"hi\"}]}}}";
+
+    private final ParamValidator validator = new ParamValidator();
 
     private static GovernanceContext validate(ParamValidator v, String body) {
         GovernanceContext ctx = new GovernanceContext();

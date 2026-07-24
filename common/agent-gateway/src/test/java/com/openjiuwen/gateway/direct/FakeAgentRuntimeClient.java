@@ -40,6 +40,8 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     }
 
     /**
+     * Return the endpoint recorded from the last invokeSync/openStream call.
+     *
      * @return the endpoint of the last invokeSync
      */
     public String lastEndpoint() {
@@ -47,6 +49,8 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     }
 
     /**
+     * Return the body recorded from the last invokeSync/openStream call.
+     *
      * @return the body of the last invokeSync (after tenant injection)
      */
     public String lastBody() {

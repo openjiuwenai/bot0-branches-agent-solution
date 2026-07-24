@@ -30,5 +30,8 @@ public record AuditEvent(String traceId, String principalId, String tenantId, St
     /**
      * Governance outcome.
      */
-    public enum Outcome { PASSED, REJECTED }
+    public enum Outcome {
+        PASSED,
+        REJECTED
+    }
 }

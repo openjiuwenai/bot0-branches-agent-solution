@@ -26,6 +26,9 @@ class AuthRuleTest {
 
     /**
      * Runs an action that must throw a GovernanceException and returns it typed.
+     *
+     * @param action callable expected to throw GovernanceException
+     * @return the thrown GovernanceException
      */
     private static GovernanceException govern(Runnable action) {
         Throwable thrown = catchThrowable(action::run);

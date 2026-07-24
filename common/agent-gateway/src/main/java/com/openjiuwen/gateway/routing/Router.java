@@ -151,6 +151,10 @@ public class Router {
 
     /**
      * Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10).
+     *
+     * @param rawBody  original JSON-RPC body
+     * @param tenantId authoritative tenant from G2
+     * @return body with {@code params.metadata.tenantId} set, or the original body if not an object
      */
     String injectTenantId(String rawBody, String tenantId) {
         try {

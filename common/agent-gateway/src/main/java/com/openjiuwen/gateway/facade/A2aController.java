@@ -103,20 +103,21 @@ public class A2aController {
             context.setTenantId(tenantId);
             if (context.taskId() == null) {
                 IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(), jsonRpcBody);
-                switch (idem.outcome()) {
-                    case NEW, SKIP -> {
-                        // proceed to later stages
-                    }
-                    case REPLAY -> {
-                        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());
-                    }
-                    case CONFLICT -> throw new GovernanceException(HttpStatus.CONFLICT,
+                IdempotencyRule.Outcome outcome = idem.outcome();
+                if (outcome == IdempotencyRule.Outcome.REPLAY) {
+                    return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());
+                }
+                if (outcome == IdempotencyRule.Outcome.CONFLICT) {
+                    throw new GovernanceException(HttpStatus.CONFLICT,
                             "IDEMPOTENCY_PAYLOAD_MISMATCH",
                             "Create idempotency key conflict: payload differs from the first attempt");
-                    case IN_FLIGHT_DUPLICATE -> throw new GovernanceException(HttpStatus.CONFLICT,
+                }
+                if (outcome == IdempotencyRule.Outcome.IN_FLIGHT_DUPLICATE) {
+                    throw new GovernanceException(HttpStatus.CONFLICT,
                             "IDEMPOTENCY_IN_FLIGHT",
                             "A create with this idempotency key is already in progress");
                 }
+                // NEW / SKIP: proceed to later stages
             }
         } catch (GovernanceException ex) {
             ex.setTraceId(context.traceId());

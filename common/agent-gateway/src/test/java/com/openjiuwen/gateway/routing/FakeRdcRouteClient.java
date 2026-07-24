@@ -38,6 +38,8 @@ public class FakeRdcRouteClient implements RdcRouteClient {
     }
 
     /**
+     * Return the tenant id recorded from the last search call.
+     *
      * @return the tenant id of the last search
      */
     public String lastTenantId() {
@@ -45,6 +47,8 @@ public class FakeRdcRouteClient implements RdcRouteClient {
     }
 
     /**
+     * Return the agent id recorded from the last search call.
+     *
      * @return the agent id of the last search
      */
     public String lastAgentId() {

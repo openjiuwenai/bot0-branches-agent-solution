@@ -57,9 +57,12 @@ class GovernanceAuditorTest {
 
     @Test
     void rejectedStageInferredForAllGovernanceCodes() {
-        auditor.auditRejected(passedContext(), new GovernanceException(HttpStatus.FORBIDDEN, "TENANT_UNRESOLVED", "x"));
-        auditor.auditRejected(passedContext(), new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_METHOD", "x"));
-        auditor.auditRejected(passedContext(), new GovernanceException(HttpStatus.CONFLICT, "IDEMPOTENCY_PAYLOAD_MISMATCH", "x"));
+        auditor.auditRejected(passedContext(),
+                new GovernanceException(HttpStatus.FORBIDDEN, "TENANT_UNRESOLVED", "x"));
+        auditor.auditRejected(passedContext(),
+                new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_METHOD", "x"));
+        auditor.auditRejected(passedContext(),
+                new GovernanceException(HttpStatus.CONFLICT, "IDEMPOTENCY_PAYLOAD_MISMATCH", "x"));
         assertThat(captured).extracting(AuditEvent::rejectStage, AuditEvent::code)
                 .containsExactly(
                         tuple("G2", "TENANT_UNRESOLVED"),

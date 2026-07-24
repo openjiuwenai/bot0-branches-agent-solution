@@ -29,38 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 public class IdempotencyRule {
-    /**
-     * G4 outcome for the controller.
-     */
-    public enum Outcome {
-        /**
-         * No messageId present -> skip dedup, proceed.
-         */
-        SKIP,
-        /**
-         * First occurrence -> registered in-flight, proceed.
-         */
-        NEW,
-        /**
-         * Completed prior create with same fingerprint -> short-circuit prior result.
-         */
-        REPLAY,
-        /**
-         * Same key but different fingerprint -> 409 payload mismatch.
-         */
-        CONFLICT,
-        /**
-         * Same key, same fingerprint, still in-flight -> do not open a second delivery.
-         */
-        IN_FLIGHT_DUPLICATE
-    }
-
-    /**
-     * G4 decision returned to the controller.
-     */
-    public record Decision(Outcome outcome, String result) {
-    }
-
     private record Entry(String fingerprint, boolean completed, String result) {
     }
 
@@ -69,8 +37,8 @@ public class IdempotencyRule {
     /**
      * Check / register a create against the idempotency window.
      *
-     * @param tenantId   authoritative tenant (G2)
-     * @param messageId  create idempotency key (may be blank -> SKIP)
+     * @param tenantId    authoritative tenant (G2)
+     * @param messageId   create idempotency key (may be blank -> SKIP)
      * @param fingerprint create body fingerprint (raw body)
      * @return decision telling the controller how to proceed
      */
@@ -134,7 +102,11 @@ public class IdempotencyRule {
     }
 
     /**
-     * Test/observability peek.
+     * Peek whether a create key is completed (test / observability helper).
+     *
+     * @param tenantId  authoritative tenant
+     * @param messageId create idempotency key
+     * @return empty if unknown; otherwise whether the record is completed
      */
     public Optional<Boolean> isCompleted(String tenantId, String messageId) {
         Entry e = store.get(key(tenantId, messageId));
@@ -143,5 +115,40 @@ public class IdempotencyRule {
 
     private static String key(String tenantId, String messageId) {
         return tenantId + ":" + messageId;
+    }
+
+    /**
+     * G4 outcome for the controller.
+     */
+    public enum Outcome {
+        /**
+         * No messageId present -> skip dedup, proceed.
+         */
+        SKIP,
+        /**
+         * First occurrence -> registered in-flight, proceed.
+         */
+        NEW,
+        /**
+         * Completed prior create with same fingerprint -> short-circuit prior result.
+         */
+        REPLAY,
+        /**
+         * Same key but different fingerprint -> 409 payload mismatch.
+         */
+        CONFLICT,
+        /**
+         * Same key, same fingerprint, still in-flight -> do not open a second delivery.
+         */
+        IN_FLIGHT_DUPLICATE
+    }
+
+    /**
+     * G4 decision returned to the controller.
+     *
+     * @param outcome decision outcome
+     * @param result  prior result body when outcome is REPLAY; otherwise null
+     */
+    public record Decision(Outcome outcome, String result) {
     }
 }
