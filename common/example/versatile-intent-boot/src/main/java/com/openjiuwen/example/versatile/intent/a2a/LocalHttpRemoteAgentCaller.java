@@ -7,12 +7,14 @@ package com.openjiuwen.example.versatile.intent.a2a;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentException;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+import org.a2aproject.sdk.spec.TaskState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +25,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Local HTTP {@link RemoteAgentCaller} for L2 §5.5.3 方案 B 联调.
@@ -35,14 +40,10 @@ import java.util.Map;
  * JSON-RPC URL ({@code http://localhost:PORT/a2a}) is rewritten to
  * {@code http://localhost:PORT/v1/query}.
  *
- * <p>Uses {@link ForwardedServeRequests#build} to append the upstream
- * {@code response_content} as an assistant message, matching the forwarding
- * semantics of {@link A2AGatewayRemoteAgentCaller}.
- *
- * <p>The response {@code result} Map is emitted as a single {@code TYPE_CHUNK}
- * with {@code type=answer} so the orchestrator's
- * {@code RemoteCallCaptureObserver} captures the business text and any
- * {@code agent_id} for further forwarding.
+ * <p>Builds a minimal {@link ServeRequest} from the {@link RemoteCall} fields
+ * and POSTs it as JSON. The response {@code result} Map is emitted as a
+ * single {@code TYPE_CHUNK} with {@code type=answer} so the orchestrator's
+ * batch coordinator captures the business text for the caller.
  *
  * @since 0.1.0
  */
@@ -52,6 +53,7 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
             .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     private static final String A2A_SUFFIX = "/a2a";
     private static final String QUERY_PATH = "/v1/query";
+    private static final String METADATA_KEY_USER_ID = "userId";
 
     private final A2ARemoteAgentCardRegistry registry;
     private final HttpClient httpClient;
@@ -65,27 +67,24 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     @Override
-    public void call(RemoteAgentCall call, QueryStreamObserver observer) {
-        boolean streaming = call.streaming();
-        String a2aUrl = registry.resolveUrl(call.agentId());
+    public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call,
+            QueryStreamObserver streamObserver, Consumer<String> remoteTaskIdObserver) {
+        String agentName = call.agentName();
+        String a2aUrl = registry.resolveUrl(agentName);
         if (a2aUrl == null || a2aUrl.isBlank()) {
-            RemoteAgentException ex = new RemoteAgentException(
-                    "LocalHttpRemoteAgentCaller: no local mapping for agentId=" + call.agentId(), null);
-            if (streaming) {
-                observer.onError(ex);
-                return;
-            }
-            throw ex;
+            return CompletableFuture.failedFuture(new RemoteAgentException(
+                    "LocalHttpRemoteAgentCaller: no local mapping for agentId=" + agentName, null));
         }
         String queryUrl = a2aUrl.endsWith(A2A_SUFFIX)
                 ? a2aUrl.substring(0, a2aUrl.length() - A2A_SUFFIX.length()) + QUERY_PATH
                 : a2aUrl + QUERY_PATH;
-        ServeRequest forwarded = ForwardedServeRequests.build(call.serveRequest(), call.responseContent());
+        ServeRequest forwarded = buildForwardedRequest(call);
 
-        log.info("LocalHttp call agent={} url={} streaming={} appendedMessages={}",
-                call.agentId(), queryUrl, streaming,
-                forwarded.getMessages().size() - call.serveRequest().getMessages().size());
+        log.info("LocalHttp call agent={} url={} messageLen={}",
+                agentName, queryUrl,
+                call.message() != null ? call.message().length() : 0);
 
+        CompletableFuture<RemoteCallOutcome> result = new CompletableFuture<>();
         try {
             String body = MAPPER.writeValueAsString(forwarded);
             HttpRequest request = HttpRequest.newBuilder()
@@ -94,55 +93,72 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                     .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                RemoteAgentException ex = new RemoteAgentException(
-                        "LocalHttp call to " + queryUrl + " failed: HTTP " + response.statusCode()
-                                + " body=" + response.body(), null);
-                if (streaming) {
-                    observer.onError(ex);
-                    return;
-                }
-                throw ex;
-            }
-            Map<?, ?> responseJson = MAPPER.readValue(response.body(), Map.class);
-            Object resultObj = responseJson.get("result");
-            if (!(resultObj instanceof Map<?, ?> resultMap)) {
-                RemoteAgentException ex = new RemoteAgentException(
-                        "LocalHttp response from " + queryUrl + " has no result map", null);
-                if (streaming) {
-                    observer.onError(ex);
-                    return;
-                }
-                throw ex;
-            }
-            Map<String, Object> envelope = new LinkedHashMap<>();
-            envelope.put("type", "answer");
-            envelope.putAll((Map<String, Object>) toObjectType(resultMap));
-            observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
-            if (!observer.isCancelled()) {
-                observer.onComplete();
-            }
-        } catch (RemoteAgentException e) {
-            if (streaming) {
-                observer.onError(e);
-                return;
-            }
-            throw e;
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                    .whenComplete((response, ex) -> {
+                        if (ex != null) {
+                            result.completeExceptionally(new RemoteAgentException(
+                                    "LocalHttp call to " + queryUrl + " failed", ex));
+                            return;
+                        }
+                        handleResponse(response, queryUrl, agentName, result, streamObserver);
+                    });
         } catch (Exception e) {
-            RemoteAgentException ex = new RemoteAgentException(
-                    "LocalHttp call to " + queryUrl + " failed", e);
-            if (streaming) {
-                observer.onError(ex);
-                return;
-            }
-            throw ex;
+            result.completeExceptionally(new RemoteAgentException(
+                    "LocalHttp call to " + queryUrl + " failed", e));
         }
+        return result;
     }
 
     @Override
-    public boolean supported(String agentId) {
-        return agentId != null && registry.get(agentId).isPresent();
+    public boolean supported(String agentName) {
+        return agentName != null && registry.get(agentName).isPresent();
+    }
+
+    private static ServeRequest buildForwardedRequest(RemoteCall call) {
+        ServeRequest forwarded = new ServeRequest();
+        forwarded.setConversationId(call.contextId());
+        forwarded.setStream(false);
+        Object userId = call.metadata() != null ? call.metadata().get(METADATA_KEY_USER_ID) : null;
+        if (userId instanceof String uid && !uid.isBlank()) {
+            forwarded.setUserId(uid);
+        }
+        forwarded.setMetadata(call.metadata());
+        String messageText = call.message() != null ? call.message() : "";
+        forwarded.setMessages(List.of(Map.of("role", "user", "content", messageText)));
+        return forwarded;
+    }
+
+    private void handleResponse(HttpResponse<String> response, String queryUrl, String agentName,
+            CompletableFuture<RemoteCallOutcome> result, QueryStreamObserver observer) {
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            result.completeExceptionally(new RemoteAgentException(
+                    "LocalHttp call to " + queryUrl + " failed: HTTP " + response.statusCode()
+                            + " body=" + response.body(), null));
+            return;
+        }
+        try {
+            Map<?, ?> responseJson = MAPPER.readValue(response.body(), Map.class);
+            Object resultObj = responseJson.get("result");
+            if (!(resultObj instanceof Map<?, ?> resultMap)) {
+                result.completeExceptionally(new RemoteAgentException(
+                        "LocalHttp response from " + queryUrl + " has no result map", null));
+                return;
+            }
+            Map<String, Object> envelope = new LinkedHashMap<>();
+            envelope.put("type", "answer");
+            envelope.putAll(toObjectType(resultMap));
+            if (observer != null) {
+                observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
+            }
+            String answerText = resultMap.get("text") instanceof String text ? text
+                    : (resultMap.get("response_content") instanceof String rc ? rc
+                            : resultMap.toString());
+            result.complete(new RemoteCallOutcome(null, TaskState.TASK_STATE_COMPLETED,
+                    "COMPLETED", answerText, null));
+        } catch (Exception e) {
+            result.completeExceptionally(new RemoteAgentException(
+                    "LocalHttp call to " + queryUrl + " failed to parse response", e));
+        }
     }
 
     @SuppressWarnings("unchecked")
