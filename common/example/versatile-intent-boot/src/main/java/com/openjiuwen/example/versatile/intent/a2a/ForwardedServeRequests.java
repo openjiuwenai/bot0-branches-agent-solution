@@ -14,8 +14,8 @@ import java.util.Map;
 /**
  * Builds forwarded {@link ServeRequest} instances for cross-layer A2A calls.
  *
- * <p>Shared by {@link A2AGatewayRemoteAgentCaller} (production form) and
- * {@link InProcessRemoteAgentCaller} (dev/test form) to append the upstream
+ * <p>Shared by {@link A2AGatewayRemoteAgentCaller} and
+ * {@link LocalHttpRemoteAgentCaller} to append the upstream
  * {@code response_content} as an {@code assistant} message to the messages
  * array while preserving {@code lastUserQuery()} (per L2 §4.9.3).
  *

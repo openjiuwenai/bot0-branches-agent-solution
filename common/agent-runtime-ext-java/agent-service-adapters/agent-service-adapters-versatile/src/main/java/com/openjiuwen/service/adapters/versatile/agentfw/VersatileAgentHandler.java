@@ -80,28 +80,40 @@ public class VersatileAgentHandler implements AgentHandler {
         boolean isInterrupted = false;
         Map<String, Object> interruptPayload = null;
         List<String> interruptMessages = new ArrayList<>();
-        Map<String, Object> threeFieldEnvelope = null;
+        Map<String, Object> a2aDelegatePayload = null;
+        Object legacyAnswerContent = null;
         for (QueryChunk chunk : chunks) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
                         request.getConversationId(), chunk.getData());
                 throw new IllegalStateException(String.valueOf(chunk.getData()));
             }
-            Optional<Map<String, Object>> envelope = answerEnvelope(chunk.getData());
-            if (envelope.isPresent()) {
-                threeFieldEnvelope = envelope.get();
-                continue;
-            }
             if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType())) {
+                if (chunk.getData() instanceof Map<?, ?> m && isA2aDelegate(m)) {
+                    a2aDelegatePayload = copyToStringMap(m);
+                    continue;
+                }
                 isInterrupted = true;
                 interruptPayload = chunk.getData() instanceof Map<?, ?> m
                         ? copyToStringMap(m) : null;
-            } else {
-                interruptMessages.add(String.valueOf(chunk.getData()));
+                continue;
             }
+            Optional<Map<String, Object>> envelope = answerEnvelope(chunk.getData());
+            if (envelope.isPresent()) {
+                Object content = envelope.get().get("response_content");
+                if (content == null) {
+                    content = envelope.get().get("output");
+                }
+                legacyAnswerContent = content;
+                continue;
+            }
+            interruptMessages.add(String.valueOf(chunk.getData()));
         }
-        if (threeFieldEnvelope != null) {
-            return threeFieldResult(threeFieldEnvelope);
+        if (a2aDelegatePayload != null) {
+            return a2aDelegateResult(request, a2aDelegatePayload);
+        }
+        if (legacyAnswerContent != null) {
+            return assistantResult(legacyAnswerContent);
         }
         if (isInterrupted) {
             Map<String, Object> result = assistantResult(
@@ -117,6 +129,25 @@ public class VersatileAgentHandler implements AgentHandler {
         return assistantResult(interruptMessage(interruptMessages));
     }
 
+    private static boolean isA2aDelegate(Map<?, ?> data) {
+        Object context = data.get("context");
+        if (!(context instanceof Map<?, ?> ctx)) {
+            return false;
+        }
+        return "a2a_delegate".equals(ctx.get("_interrupt_kind"));
+    }
+
+    private static Map<String, Object> a2aDelegateResult(ServeRequest request, Map<String, Object> payload) {
+        Object rc = payload.get("responseContent");
+        String responseContent = rc instanceof String s ? s : "";
+        Map<String, Object> result = assistantResult(responseContent);
+        Map<String, Object> interrupt = new LinkedHashMap<>(payload);
+        interrupt.put("message", request.lastUserQuery());
+        interrupt.put("_stream_mode", request.isStream() ? "sse" : "");
+        result.put("_interrupt", interrupt);
+        return result;
+    }
+
     private static Optional<Map<String, Object>> answerEnvelope(Object data) {
         if (!(data instanceof Map<?, ?> envelope) || !"answer".equals(envelope.get("type"))) {
             return Optional.empty();
@@ -129,24 +160,6 @@ public class VersatileAgentHandler implements AgentHandler {
             typed.put(String.valueOf(entry.getKey()), entry.getValue());
         }
         return Optional.of(typed);
-    }
-
-    private static Map<String, Object> threeFieldResult(Map<String, Object> envelope) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("role", "assistant");
-        Object responseContent = envelope.get("response_content");
-        Object contentText = responseContent != null ? responseContent : envelope.get("output");
-        result.put("content", String.valueOf(contentText));
-        if (responseContent != null) {
-            result.put("response_content", responseContent);
-        }
-        if (envelope.get("intent_id") != null) {
-            result.put("intent_id", envelope.get("intent_id"));
-        }
-        if (envelope.get("agent_id") != null) {
-            result.put("agent_id", envelope.get("agent_id"));
-        }
-        return result;
     }
 
     private static Map<String, Object> copyToStringMap(Map<?, ?> source) {
@@ -214,7 +227,7 @@ public class VersatileAgentHandler implements AgentHandler {
             if (observer != null && observer.isCancelled()) {
                 throw new CancellationException();
             }
-            List<QueryChunk> finalEvents = responseExtractor.finish();
+            List<QueryChunk> finalEvents = enrichDelegateInterrupts(responseExtractor.finish(), request);
             emit(finalEvents, observer);
             return finalEvents;
         } catch (CancellationException exception) {
@@ -235,6 +248,34 @@ public class VersatileAgentHandler implements AgentHandler {
             }
             observer.onNext(chunk);
         }
+    }
+
+    /**
+     * Enriches {@code a2a_delegate} interrupt chunks produced by the extractor
+     * with {@code message} (from the current request's last user query) and
+     * {@code _stream_mode}. The extractor cannot supply these because it only
+     * sees SSE lines; the handler has the {@link ServeRequest}. Without this
+     * enrichment, the orchestrator's streaming recursive-forward path would
+     * lack the user query to forward to the next layer.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static List<QueryChunk> enrichDelegateInterrupts(List<QueryChunk> chunks, ServeRequest request) {
+        if (chunks == null || chunks.isEmpty()) {
+            return chunks;
+        }
+        List<QueryChunk> result = new ArrayList<>(chunks.size());
+        for (QueryChunk chunk : chunks) {
+            if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType()) && chunk.getData() instanceof Map<?, ?> m
+                    && isA2aDelegate(m)) {
+                Map<String, Object> enriched = new LinkedHashMap<>((Map) m);
+                enriched.put("message", request.lastUserQuery());
+                enriched.put("_stream_mode", request.isStream() ? "sse" : "");
+                result.add(new QueryChunk(QueryChunk.TYPE_INTERRUPT, enriched));
+            } else {
+                result.add(chunk);
+            }
+        }
+        return result;
     }
 
     private Map<String, Object> logServeRequest(ServeRequest request) {

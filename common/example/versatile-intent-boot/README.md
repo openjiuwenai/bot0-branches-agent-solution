@@ -140,10 +140,8 @@ mvn -DskipTests package   # 仅打包（联调脚本会用这个 jar）
 
 测试覆盖：
 
-- `VersatileIntentFlowIntegrationTest` / `VersatileIntentScenarioTest` — 三字段识别 + 转发 + 中断的集成测试（WireMock + InProcess caller）
 - `ProfileLayer1LoadTest` / `ProfileLayer2LoadTest` / `ProfileDownstreamLoadTest` — 各 profile 配置加载断言
 - `A2AGatewayRemoteAgentCallerTest` / `A2AGatewayCardResolverTest` — Gateway 模式 caller 单元测试
-- `InProcessRemoteAgentCallerTest` — 进程内 caller（测试用）
 
 ## 模块结构
 
@@ -159,7 +157,6 @@ src/main/java/com/openjiuwen/example/versatile/intent/
 │   ├── LocalMappingCardRegistrar.java    # Local HTTP 模式路由注册
 │   ├── LocalMappingProperties.java
 │   ├── LocalHttpRemoteAgentCaller.java   # Local HTTP caller（@ConditionalOnProperty enabled=false）
-│   ├── InProcessRemoteAgentCaller.java   # 进程内 caller（dev/test 链路验证）
 │   └── ForwardedServeRequests.java       # 把 response_content 作为 assistant message 追加到转发请求
 └── mock/
     ├── MockVersatileController.java      # mock Versatile SSE 端点
