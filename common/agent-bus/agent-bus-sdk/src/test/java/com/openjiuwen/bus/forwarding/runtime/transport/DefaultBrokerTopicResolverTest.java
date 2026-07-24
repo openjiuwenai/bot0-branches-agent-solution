@@ -104,6 +104,7 @@ class DefaultBrokerTopicResolverTest {
                 AgentBusEventType.INVOCATION_REJECTED,
                 AgentBusEventType.INVOCATION_FAILED,
                 AgentBusEventType.INVOCATION_RESPONSE,
+                AgentBusEventType.INVOCATION_INPUT_REQUIRED,
                 AgentBusEventType.INVOCATION_STREAM_READY,
                 AgentBusEventType.INVOCATION_TERMINAL
         };
@@ -119,6 +120,7 @@ class DefaultBrokerTopicResolverTest {
                 AgentBusEventType.A2A_CALL_REJECTED,
                 AgentBusEventType.A2A_CALL_FAILED,
                 AgentBusEventType.A2A_CALL_RESPONSE,
+                AgentBusEventType.A2A_CALL_INPUT_REQUIRED,
                 AgentBusEventType.A2A_STREAM_READY,
                 AgentBusEventType.A2A_CALL_TERMINAL
         };

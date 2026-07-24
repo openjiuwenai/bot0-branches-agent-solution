@@ -88,7 +88,14 @@ final class ForwardingSqlCodec {
                 // FEAT-013 V3: correlation_id recovered from the column (null for pre-FEAT-013 rows).
                 rs.getString("correlation_id"),
                 // FEAT-013 V3: event_type recovered → AgentBusEventType (null for pre-FEAT-013 rows).
-                decodeEventType(rs.getString("event_type")).orElse(null));
+                decodeEventType(rs.getString("event_type")).orElse(null),
+                // P-06 V4: first-class control plane + inlinePayload + originalCaller (null for pre-P-06 rows).
+                rs.getString("trace_id"),
+                rs.getString("idempotency_key"),
+                rs.getString("capability"),
+                nullableLongOrDefault(rs, "deadline_millis_epoch", Long.MAX_VALUE),
+                rs.getString("inline_payload"),
+                rs.getString("original_caller"));
     }
 
     static ForwardingInboxRecord mapInbox(ResultSet rs) throws SQLException {

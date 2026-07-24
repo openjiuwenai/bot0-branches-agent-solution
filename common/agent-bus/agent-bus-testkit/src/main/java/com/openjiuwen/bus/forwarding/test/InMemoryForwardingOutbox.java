@@ -318,7 +318,13 @@ public final class InMemoryForwardingOutbox
                 e.lastFailureCode,
                 e.lease,
                 e.envelope.correlationId(),     // FEAT-013 cross-hop correlation (mirrored from envelope, §2.3.1)
-                e.envelope.eventType());         // FEAT-013/014 event-type (mirrored from envelope)
+                e.envelope.eventType(),         // FEAT-013/014 event-type (mirrored from envelope)
+                e.envelope.traceId(),          // P-06: control plane mirrored envelope→record (first-class)
+                e.envelope.idempotencyKey(),
+                e.envelope.capability(),
+                e.envelope.deadlineMillisEpoch(),
+                e.envelope.inlinePayload(),   // P-06 (2b): bounded small body mirrored (first-class data)
+                e.envelope.originalCaller()); // P-06: original caller serviceId mirrored (response routing)
     }
 
     private Entry requireEntry(ForwardingMessageId id, String tenantId) {
