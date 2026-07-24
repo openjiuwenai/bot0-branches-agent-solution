@@ -4,10 +4,10 @@
 
 package com.openjiuwen.gateway.governance.auth;
 
-import java.util.Optional;
-
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 /**
  * 730 configuration-backed {@link CredentialDirectory}: a single agreed test

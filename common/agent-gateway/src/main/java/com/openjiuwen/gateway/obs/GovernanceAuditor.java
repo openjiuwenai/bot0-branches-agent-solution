@@ -4,12 +4,12 @@
 
 package com.openjiuwen.gateway.obs;
 
-import java.time.Instant;
+import com.openjiuwen.gateway.governance.GovernanceContext;
+import com.openjiuwen.gateway.governance.GovernanceException;
 
 import org.springframework.stereotype.Component;
 
-import com.openjiuwen.gateway.governance.GovernanceContext;
-import com.openjiuwen.gateway.governance.GovernanceException;
+import java.time.Instant;
 
 /**
  * Builds {@link AuditEvent}s from the governance context and dispatches them to

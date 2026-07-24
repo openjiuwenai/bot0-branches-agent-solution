@@ -4,14 +4,14 @@
 
 package com.openjiuwen.gateway.governance.validate;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
@@ -40,7 +40,9 @@ import java.util.Set;
  */
 @Component
 public class ParamValidator {
-    /** 730 method whitelist (L2 §3.5.1). */
+    /**
+     * 730 method whitelist (L2 §3.5.1).
+     */
     private static final Set<String> WHITELIST = Set.of("SendMessage", "SendStreamingMessage");
 
     private final ObjectMapper mapper = new ObjectMapper();

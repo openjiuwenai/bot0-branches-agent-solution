@@ -4,18 +4,6 @@
 
 package com.openjiuwen.gateway.facade;
 
-import java.io.IOException;
-import java.util.UUID;
-import java.util.stream.Stream;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.auth.AuthRule;
@@ -28,6 +16,18 @@ import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.sse.SseBridge;
 
 import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * A2A JSON-RPC facade entry — {@code POST /a2a} (FEAT-011 L2 §1.1 / §4.9 GW-1).
@@ -104,7 +104,9 @@ public class A2aController {
             if (context.taskId() == null) {
                 IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(), jsonRpcBody);
                 switch (idem.outcome()) {
-                    case NEW, SKIP -> { /* proceed */ }
+                    case NEW, SKIP -> { 
+                        // proceed to later stages
+                    }
                     case REPLAY -> {
                         return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());
                     }

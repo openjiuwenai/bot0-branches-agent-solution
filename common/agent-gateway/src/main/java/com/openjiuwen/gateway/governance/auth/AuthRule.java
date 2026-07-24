@@ -4,10 +4,10 @@
 
 package com.openjiuwen.gateway.governance.auth;
 
+import com.openjiuwen.gateway.governance.GovernanceException;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-
-import com.openjiuwen.gateway.governance.GovernanceException;
 
 /**
  * G1 — authentication (FEAT-011 L2 §3.3). Every HTTP request to the A2A facade
@@ -26,7 +26,9 @@ import com.openjiuwen.gateway.governance.GovernanceException;
  */
 @Component
 public class AuthRule {
-    /** Bearer scheme prefix (case-sensitive per L2 §3.3.1). */
+    /**
+     * Bearer scheme prefix (case-sensitive per L2 §3.3.1).
+     */
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final CredentialDirectory directory;

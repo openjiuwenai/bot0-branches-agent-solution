@@ -4,6 +4,11 @@
 
 package com.openjiuwen.gateway.direct;
 
+import com.openjiuwen.gateway.governance.GovernanceException;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -11,11 +16,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.stream.Stream;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
-import com.openjiuwen.gateway.governance.GovernanceException;
 
 /**
  * 730 default {@link AgentRuntimeClient}: forwards synchronously to the runtime

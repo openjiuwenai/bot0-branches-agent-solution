@@ -5,24 +5,10 @@
 package com.openjiuwen.gateway.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-
-import java.util.List;
-import java.util.Optional;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
 
 import com.openjiuwen.gateway.direct.FakeAgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceErrorHandler;
@@ -35,13 +21,27 @@ import com.openjiuwen.gateway.governance.validate.ParamValidator;
 import com.openjiuwen.gateway.obs.AuditEvent;
 import com.openjiuwen.gateway.obs.AuditSink;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
+import com.openjiuwen.gateway.routing.AgentCardRoute;
 import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
+import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.routing.StickyIndex;
-import com.openjiuwen.gateway.routing.AgentCardRoute;
-import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.sse.SseBridge;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Module-integration test for the A2A facade: governance G1–G5 + the create

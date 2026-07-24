@@ -27,6 +27,8 @@ import java.time.Instant;
  */
 public record AuditEvent(String traceId, String principalId, String tenantId, String method,
                          Outcome outcome, String rejectStage, String code, Instant timestamp) {
-    /** Governance outcome. */
+    /**
+     * Governance outcome.
+     */
     public enum Outcome { PASSED, REJECTED }
 }

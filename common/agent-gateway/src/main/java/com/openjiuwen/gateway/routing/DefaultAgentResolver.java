@@ -4,11 +4,11 @@
 
 package com.openjiuwen.gateway.routing;
 
+import com.openjiuwen.gateway.governance.GovernanceException;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-
-import com.openjiuwen.gateway.governance.GovernanceException;
 
 /**
  * Resolves the effective logical agent when a create carries no {@code agentId}

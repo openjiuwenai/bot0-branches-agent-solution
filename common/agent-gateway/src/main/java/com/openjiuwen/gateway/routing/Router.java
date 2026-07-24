@@ -4,15 +4,15 @@
 
 package com.openjiuwen.gateway.routing;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.gateway.direct.AgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -146,7 +146,9 @@ public class Router {
         return runtime.invokeSync(resolved.endpointUrl(), outbound);
     }
 
-    /** Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10). */
+    /**
+     * Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10).
+     */
     String injectTenantId(String rawBody, String tenantId) {
         try {
             JsonNode root = mapper.readTree(rawBody);
@@ -192,11 +194,13 @@ public class Router {
 
     private static ObjectNode withObject(JsonNode parent, String field) {
         JsonNode child = parent.path(field);
-        if (child.isObject()) {
-            return (ObjectNode) child;
+        if (child instanceof ObjectNode objectChild) {
+            return objectChild;
         }
-        ObjectNode created = ((ObjectNode) parent).putObject(field);
-        return created;
+        if (parent instanceof ObjectNode objectParent) {
+            return objectParent.putObject(field);
+        }
+        throw new ClassCastException("parent JsonNode is not an ObjectNode: " + parent.getNodeType());
     }
 
     private static String text(JsonNode parent, String field) {

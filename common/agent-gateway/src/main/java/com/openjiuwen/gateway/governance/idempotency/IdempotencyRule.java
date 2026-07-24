@@ -29,21 +29,35 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 public class IdempotencyRule {
-    /** G4 outcome for the controller. */
+    /**
+     * G4 outcome for the controller.
+     */
     public enum Outcome {
-        /** No messageId present -> skip dedup, proceed. */
+        /**
+         * No messageId present -> skip dedup, proceed.
+         */
         SKIP,
-        /** First occurrence -> registered in-flight, proceed. */
+        /**
+         * First occurrence -> registered in-flight, proceed.
+         */
         NEW,
-        /** Completed prior create with same fingerprint -> short-circuit prior result. */
+        /**
+         * Completed prior create with same fingerprint -> short-circuit prior result.
+         */
         REPLAY,
-        /** Same key but different fingerprint -> 409 payload mismatch. */
+        /**
+         * Same key but different fingerprint -> 409 payload mismatch.
+         */
         CONFLICT,
-        /** Same key, same fingerprint, still in-flight -> do not open a second delivery. */
+        /**
+         * Same key, same fingerprint, still in-flight -> do not open a second delivery.
+         */
         IN_FLIGHT_DUPLICATE
     }
 
-    /** G4 decision returned to the controller. */
+    /**
+     * G4 decision returned to the controller.
+     */
     public record Decision(Outcome outcome, String result) {
     }
 
@@ -112,12 +126,16 @@ public class IdempotencyRule {
         }
     }
 
-    /** Clear all idempotency state (test / admin helper). */
+    /**
+     * Clear all idempotency state (test / admin helper).
+     */
     public void clear() {
         store.clear();
     }
 
-    /** Test/observability peek. */
+    /**
+     * Test/observability peek.
+     */
     public Optional<Boolean> isCompleted(String tenantId, String messageId) {
         Entry e = store.get(key(tenantId, messageId));
         return e == null ? Optional.empty() : Optional.of(e.completed);

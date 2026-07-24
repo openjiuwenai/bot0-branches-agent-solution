@@ -6,13 +6,13 @@ package com.openjiuwen.gateway.sse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
-
-import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link SseBridge} (FEAT-011 L2 §4 P3b / SC-2).

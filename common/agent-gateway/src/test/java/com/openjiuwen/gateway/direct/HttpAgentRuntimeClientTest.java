@@ -7,18 +7,18 @@ package com.openjiuwen.gateway.direct;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import java.io.IOException;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.openjiuwen.gateway.governance.GovernanceException;
 
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import okhttp3.mockwebserver.SocketPolicy;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
 
 /**
  * Tests {@link HttpAgentRuntimeClient} against a {@link MockWebServer}: asserts
@@ -61,9 +61,16 @@ class HttpAgentRuntimeClientTest {
         server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START));
         Throwable thrown = catchThrowable(() -> client.invokeSync(endpoint, "{}"));
         assertThat(thrown).isInstanceOf(GovernanceException.class);
-        GovernanceException ge = (GovernanceException) thrown;
+        GovernanceException ge = asGovernanceException(thrown);
         assertThat(ge.code()).isEqualTo("FORWARD_FAILED");
         // topology must not leak in the gateway-controlled error message
         assertThat(ge.getMessage()).doesNotContain(endpoint);
+    }
+
+    private static GovernanceException asGovernanceException(Throwable thrown) {
+        if (thrown instanceof GovernanceException ge) {
+            return ge;
+        }
+        throw new AssertionError("expected GovernanceException but got: " + thrown);
     }
 }
