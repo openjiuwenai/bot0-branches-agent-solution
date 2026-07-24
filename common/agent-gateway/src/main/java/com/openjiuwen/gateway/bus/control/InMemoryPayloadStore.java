@@ -1,13 +1,21 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.gateway.bus.control;
+
+import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.springframework.stereotype.Component;
-
-/** 730 in-memory PayloadStore (D4 single-machine). */
+/**
+ * In-memory PayloadStore (D4 single-machine).
+ *
+ * @since 2026-07-24
+ */
 @Component
 public class InMemoryPayloadStore implements PayloadStore {
     private final Map<String, String> store = new ConcurrentHashMap<>();

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * client-visible. The facade consults this to dispatch DIRECT (FEAT-011) vs
  * BUS (FEAT-012).
  *
- * @since 0.1.0
+ * @since 2026-07-24
  */
 @Component
 public class PathSelector {
@@ -28,17 +28,23 @@ public class PathSelector {
         this.mode = PathMode.fromConfig(mode);
     }
 
-    /** @return the configured path mode */
+    /**
+     * @return the configured path mode
+     */
     public PathMode mode() {
         return mode;
     }
 
-    /** @return true if the BUS path is active */
+    /**
+     * @return {@code true} if the BUS path is active
+     */
     public boolean isBus() {
         return mode == PathMode.BUS;
     }
 
-    /** @return true if the DIRECT path is active */
+    /**
+     * @return {@code true} if the DIRECT path is active
+     */
     public boolean isDirect() {
         return mode == PathMode.DIRECT;
     }

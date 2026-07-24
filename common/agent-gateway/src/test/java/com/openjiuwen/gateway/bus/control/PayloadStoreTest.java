@@ -1,9 +1,18 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.gateway.bus.control;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Unit tests for {@link PayloadStore} / {@link InMemoryPayloadStore}.
+ *
+ * @since 2026-07-24
+ */
 class PayloadStoreTest {
     private final PayloadStore store = new InMemoryPayloadStore();
 

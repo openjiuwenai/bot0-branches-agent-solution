@@ -20,7 +20,11 @@ package com.openjiuwen.gateway.routing;
  */
 public record AgentCardRoute(String routeHandle, String targetServiceId) {
 
-    /** Backward-compat constructor for DIRECT (011) — targetServiceId not needed. */
+    /**
+     * Backward-compat constructor for DIRECT (011) — targetServiceId not needed.
+     *
+     * @param routeHandle opaque route reference
+     */
     public AgentCardRoute(String routeHandle) {
         this(routeHandle, null);
     }

@@ -17,10 +17,10 @@ import org.springframework.boot.test.context.SpringBootTest;
  *
  * <p>Default config (no property) → DIRECT is covered by the full-context smoke
  * ({@code A2aRouteSmokeTest}); this class verifies the {@code bus} override.
+ * @since 2026-07-24
  */
 @SpringBootTest(properties = "gateway.path-mode=bus")
 class PathSelectorWiringTest {
-
     @Autowired
     private PathSelector pathSelector;
 

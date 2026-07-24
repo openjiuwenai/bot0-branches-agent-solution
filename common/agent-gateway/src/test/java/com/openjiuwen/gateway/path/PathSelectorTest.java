@@ -17,10 +17,9 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p>Covers: config parsing (direct/bus/case-insensitive/whitespace/blank/null
  * → DIRECT / invalid → fail-fast), selector mode/isBus/isDirect for both modes.
+ * @since 2026-07-24
  */
 class PathSelectorTest {
-
-    // --- PathMode.fromConfig: valid values ---
 
     @ParameterizedTest
     @CsvSource({
@@ -30,13 +29,11 @@ class PathSelectorTest {
             "Direct,   DIRECT",
             "bus,      BUS",
             "BUS,      BUS",
-            "' Bus ',  BUS",
+            "' Bus ',  BUS"
     })
     void fromConfigAcceptsValidModes(String input, PathMode expected) {
         assertThat(PathMode.fromConfig(input)).isEqualTo(expected);
     }
-
-    // --- PathMode.fromConfig: blank/null → DIRECT (lenient default) ---
 
     @Test
     void fromConfigBlankOrNullDefaultsDirect() {
@@ -44,8 +41,6 @@ class PathSelectorTest {
         assertThat(PathMode.fromConfig("")).isEqualTo(PathMode.DIRECT);
         assertThat(PathMode.fromConfig("   ")).isEqualTo(PathMode.DIRECT);
     }
-
-    // --- PathMode.fromConfig: invalid → fail-fast ---
 
     @ParameterizedTest
     @ValueSource(strings = {"tube", "highway", "DIRECT_PATH", "bus!", "123", "null"})
@@ -55,8 +50,6 @@ class PathSelectorTest {
                 .hasMessageContaining("gateway.path-mode");
     }
 
-    // --- PathSelector: BUS mode ---
-
     @Test
     void selectorBusMode() {
         PathSelector selector = new PathSelector("bus");
@@ -64,8 +57,6 @@ class PathSelectorTest {
         assertThat(selector.isBus()).isTrue();
         assertThat(selector.isDirect()).isFalse();
     }
-
-    // --- PathSelector: DIRECT mode (explicit + default) ---
 
     @Test
     void selectorDirectModeExplicit() {

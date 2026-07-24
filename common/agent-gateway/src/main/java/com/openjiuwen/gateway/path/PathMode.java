@@ -14,7 +14,7 @@ package com.openjiuwen.gateway.path;
  *       before point-to-point SSE).</li>
  * </ul>
  *
- * @since 0.1.0
+ * @since 2026-07-24
  */
 public enum PathMode {
     DIRECT,
