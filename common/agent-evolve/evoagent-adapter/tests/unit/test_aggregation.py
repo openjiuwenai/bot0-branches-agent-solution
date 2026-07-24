@@ -1,6 +1,6 @@
 """repository.aggregation 纯函数单测 — 无 PG, 无 asyncpg。
 
-用代码内生成的通用 synthetic OTel spans 做基准, 钉住:
+用 otel_spans.jsonl (真实 EDPAgent OTel 上报) 做基准, 钉住:
 - 根 span 判定 (kind=SERVER 且 parent 为空)
 - status 取最差 (ERROR > OK > UNSET)
 - traces 汇总聚合 (span_count / 起止时间 / root 字段 / summary, 与插入顺序无关)
@@ -11,34 +11,48 @@
 
 from __future__ import annotations
 
+import json
+
 from agent_adapter.repository.aggregation import (
+    backfill_session_id,
     build_trace_tree,
     compute_trace_summary,
     is_root_span,
     worst_status,
 )
 
-from tests._testdata import otel_spans
+from tests._testdata import otel_spans_jsonl
 
 
-def _load_spans() -> list[dict]:
-    """加载 synthetic spans 并提升 service_name/conversation_id。"""
-    spans = otel_spans()
+def _load_jsonl_spans() -> list[dict]:
+    """加载 jsonl 并提升 service_name/session_id (对齐 parse_span 输出形状)。"""
+    p = otel_spans_jsonl()
+    raw = p.read_text(encoding="utf-8")
+    dec = json.JSONDecoder()
+    i, n, spans = 0, len(raw), []
+    while i < n:
+        while i < n and raw[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        obj, end = dec.raw_decode(raw, i)
+        spans.append(obj)
+        i = end
     # 提升字段 (mimic parse_span): service_name ← resource_attributes.service.name
-    # conversation_id ← attributes.session.id
+    # session_id ← attributes.session.id (夹具已含, setdefault 兜底)
     for s in spans:
         s.setdefault("service_name", (s.get("resource_attributes") or {}).get("service.name"))
-        s.setdefault("conversation_id", (s.get("attributes") or {}).get("session.id"))
+        s.setdefault("session_id", (s.get("attributes") or {}).get("session.id"))
     return spans
 
 
 # ---- 根 span 判定 ----
 
-def test_is_root_span_matches_synthetic_spans():
-    spans = _load_spans()
+def test_is_root_span_matches_jsonl():
+    spans = _load_jsonl_spans()
     roots = [s for s in spans if is_root_span(s)]
-    # synthetic fixture: 3 trace, 每个 1 个 http.request SERVER 根 span
-    assert len(roots) == 3
+    # 每条 trace 1 个 http.request SERVER 根 span (数量随数据集变, 不写死)
+    assert len(roots) > 0
     assert {r["name"] for r in roots} == {"http.request"}
     assert all(r["kind"] == "SERVER" for r in roots)
     assert all(not r.get("parent_span_id") for r in roots)
@@ -83,30 +97,37 @@ def _by_trace(spans: list[dict]) -> dict[str, list[dict]]:
     return groups
 
 
-def test_compute_trace_summary_synthetic_spans():
-    spans = _load_spans()
+def test_compute_trace_summary_jsonl():
+    spans = _load_jsonl_spans()
     for trace_id, tspans in _by_trace(spans).items():
-        root = next(s for s in tspans if is_root_span(s))
-        rattrs = root.get("attributes") or {}
+        root = next((s for s in tspans if is_root_span(s)), None)   # V3 部分 trace 无 http 根
+        chain = next((s for s in tspans if (s.get("name") or "").startswith("chain.")), None)
         summ = compute_trace_summary(trace_id, tspans)
 
         assert summ["trace_id"] == trace_id
         assert summ["span_count"] == len(tspans)
-        assert summ["status"] == "OK"  # fixture 全 OK
-        assert summ["root_span_id"] == root["span_id"]
-        assert summ["conversation_id"] == rattrs["session.id"]
-        assert summ["user_id"] == rattrs["user.id"]
-        assert summ["openjiuwen_trace_id"] == rattrs["openjiuwen.trace.id"]
-        assert summ["request_summary"] == rattrs["openjiuwen.http.request_body"]
-        assert summ["response_summary"] == rattrs["openjiuwen.http.response_summary"]
-        assert summ["service_name"] == root.get("service_name")
+        assert summ["status"] == worst_status([s.get("status_code", "UNSET") for s in tspans])
+        assert summ["root_span_id"] == (root["span_id"] if root else None)
+        # session_id: 根优先, 否则首 span (夹具每 span 均已提升 session_id)
+        assert summ["session_id"] == (root or tspans[0]).get("session_id")
+        # request_summary 取自 http 根的 request_body (无根则 None)
+        assert summ["request_summary"] == (
+            (root.get("attributes") or {}).get("openjiuwen.http.request_body") if root else None)
+        # response_summary 取自 chain span 的 agent.outputs (决策 A; 无 chain 则 None)
+        assert summ["response_summary"] == (
+            (chain.get("attributes") or {}).get("openjiuwen.agent.outputs") if chain else None)
+        assert summ["service_name"] == (root or tspans[0]).get("service_name")
         assert summ["start_time"] == min(s["start_time"] for s in tspans)
         assert summ["end_time"] == max(s["end_time"] for s in tspans)
+        # 决策 A: user_id / openjiuwen_trace_id 已从 summary 移除
+        assert "user_id" not in summ
+        assert "openjiuwen_trace_id" not in summ
+        assert "conversation_id" not in summ
 
 
 def test_compute_trace_summary_order_independent():
     """乱序插入 (kafka 可能根 span 后到) 不影响汇总。"""
-    spans = _load_spans()
+    spans = _load_jsonl_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     baseline = compute_trace_summary(trace_id, tspans)
     # 逆序 (根 span 移到末尾) + 旋转一位, 覆盖根 span 后到的场景
@@ -116,27 +137,38 @@ def test_compute_trace_summary_order_independent():
 
 def test_compute_trace_summary_error_propagates_from_non_root():
     """任一 span (含非根) ERROR → trace status ERROR。"""
-    spans = _load_spans()
-    trace_id, tspans = next(iter(_by_trace(spans).items()))
-    # 把一个非根 span 标 ERROR
-    non_root = next(s for s in tspans if not is_root_span(s))
+    spans = _load_jsonl_spans()
+    # V3 有 1-span 纯根 trace (无非根 span), 需选含非根 span 的 trace
+    picked = None
+    for trace_id, tspans in _by_trace(spans).items():
+        non_roots = [s for s in tspans if not is_root_span(s)]
+        if non_roots:
+            picked = (trace_id, tspans, non_roots[0])
+            break
+    assert picked is not None, "jsonl 无含非根 span 的 trace"
+    trace_id, tspans, non_root = picked
     non_root = {**non_root, "status_code": "ERROR"}
     altered = [non_root if s["span_id"] == non_root["span_id"] else s for s in tspans]
     assert compute_trace_summary(trace_id, altered)["status"] == "ERROR"
 
 
 def test_compute_trace_summary_no_root():
-    """无 SERVER 根 span: root_span_id / summary / user_id 为 None, 其余仍聚合。"""
-    spans = _load_spans()
+    """无 SERVER 根 span: root_span_id / request_summary 为 None, 其余仍聚合。
+
+    response_summary 现取自 chain span (决策 A), 不依赖 http 根, 故无根时仍可能有值。
+    """
+    spans = _load_jsonl_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     no_root = [{**s, "kind": "INTERNAL"} for s in tspans]  # 抹掉 SERVER
     summ = compute_trace_summary(trace_id, no_root)
     assert summ["root_span_id"] is None
-    assert summ["request_summary"] is None
-    assert summ["response_summary"] is None
-    assert summ["user_id"] is None
+    assert summ["request_summary"] is None  # 无 http 根 → 无 request_body
+    chain = next((s for s in no_root if (s.get("name") or "").startswith("chain.")), None)
+    assert summ["response_summary"] == (
+        (chain.get("attributes") or {}).get("openjiuwen.agent.outputs") if chain else None)
     assert summ["span_count"] == len(tspans)
-    assert summ["status"] == "OK"
+    assert "user_id" not in summ
+    assert "openjiuwen_trace_id" not in summ
 
 
 def test_compute_trace_summary_empty_raises():
@@ -146,10 +178,56 @@ def test_compute_trace_summary_empty_raises():
         compute_trace_summary("t", [])
 
 
-# ---- build_trace_tree ----
+# ---- backfill_session_id (批内回填, A 段) ----
+
+def test_backfill_session_id_fills_from_sibling_leaves_orphan():
+    """同 trace 内空 session_id 用兄弟非空值回填; 孤儿 trace (整 trace 无 session) 保留空。
+
+    用 otel_spans.jsonl 钉死当前夹具: 13 条空 session, 11 条可从同 trace 兄弟回填,
+    2 条孤儿 (整 trace 无任何 session, trace_id 见 f27a9831...) 回填不了, 保留空。
+    """
+    spans = _load_jsonl_spans()
+    before_empty = [s for s in spans if not s.get("session_id")]
+    assert len(before_empty) == 13  # 当前夹具的空 session span 数
+
+    # 记录回填前的同 trace 兄弟 session (回填后应等于它)
+    trace_session = {}
+    for s in spans:
+        if s.get("session_id") and s.get("trace_id") not in trace_session:
+            trace_session[s["trace_id"]] = s["session_id"]
+
+    spans = backfill_session_id(spans)  # 非原地, 用返回值
+
+    after_empty = [s for s in spans if not s.get("session_id")]
+    assert len(after_empty) == 2  # 仅孤儿 trace 的 2 条留空
+
+    # 回填后的值都等于同 trace 兄弟的非空 session
+    for s in spans:
+        if s.get("session_id") and s["trace_id"] in trace_session:
+            assert s["session_id"] == trace_session[s["trace_id"]]
+
+    # 不变量: 回填后, 任一 trace 内 session 唯一 (非空 session 全等), 或整 trace 全空 (孤儿)
+    # 且"仍为空的 span"恰属于孤儿 trace (不凭空造值)
+    orphan_tids: set[str] = set()
+    for tid, tspans in _by_trace(spans).items():
+        sessions = {s.get("session_id") for s in tspans}
+        nonempty = {x for x in sessions if x}
+        if nonempty:  # 非孤儿: 回填后同 trace session 唯一, 且无残留空 span
+            assert len(nonempty) == 1, f"trace {tid} session 不唯一: {nonempty}"
+            assert None not in sessions, f"trace {tid} 仍有空 session span"
+        else:  # 孤儿: 整 trace 全空
+            assert sessions == {None}, f"trace {tid} 应为孤儿(全空), 实际 {sessions}"
+            orphan_tids.add(tid)
+
+    # 留空 span 恰属孤儿 trace, 且当前夹具唯一孤儿 (f27a9831..., 不写死全 id 防脆)
+    assert {s["trace_id"] for s in after_empty} == orphan_tids
+    assert orphan_tids == {next(iter(orphan_tids))}  # 唯一孤儿
+    assert next(iter(orphan_tids)).startswith("f27a9831")
+
+
 
 def test_build_trace_tree_nests_by_parent():
-    spans = _load_spans()
+    spans = _load_jsonl_spans()
     trace_id, tspans = next(iter(_by_trace(spans).items()))
     tree = build_trace_tree(tspans)
     assert tree is not None

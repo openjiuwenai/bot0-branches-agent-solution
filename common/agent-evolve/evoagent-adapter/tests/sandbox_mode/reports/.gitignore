@@ -1,3 +1,0 @@
-# Ignore local scratch; keep dated JSON reports tracked if committed intentionally.
-__pycache__/
-*.pyc
