@@ -150,7 +150,7 @@ public class SkillHubManager {
      * threads on the SAME agent could all pass the "not processed" check and
      * each call installer.install(agent, paths). Because agent-core's
      * SkillManager is non-thread-safe, this caused duplicate registrations
-     * (issue #31). The per-agent lock with double-checked snapshot ensures
+     * The per-agent lock with double-checked snapshot ensures
      * only the first thread installs; followers observe the updated
      * processed-set under the agent lock and become no-ops.
      */
@@ -211,7 +211,7 @@ public class SkillHubManager {
                 startBackgroundRetry();
             }
         } catch (SkillHubException ex) {
-            // Layered failure semantics (PR #415 / issue #29):
+            // Layered failure semantics:
             // fatal categories (auth/access/not-found) propagate to block Agent ready;
             // degradable categories (download/checksum) are swallowed + retried.
             if (isFatal(ex.category())) {
@@ -270,7 +270,7 @@ public class SkillHubManager {
     public void register(Object agent) {
         // Acquire the per-agent lock under listLock, then release listLock
         // and run install under the agent lock. This closes the race window
-        // (issue #31): follower threads on the SAME agent block on the agent
+        // follower threads on the SAME agent block on the agent
         // lock and, once they enter, the double-checked snapshot sees the
         // paths already processed and returns without calling install.
         Object agentLock;
@@ -585,7 +585,7 @@ public class SkillHubManager {
     }
 
     /**
-     * Whether a category is fatal (fail-fast) for required skills per PR #415.
+     * Whether a category is fatal (fail-fast) for required skills.
      * Fatal categories block Agent ready; degradable categories allow the
      * Agent to become ready with skills unavailable and trigger background retry.
      *

@@ -50,6 +50,8 @@ public class SkillHubException extends IllegalStateException {
     }
 
     /**
+     * Returns the structured error category carried by this exception.
+     *
      * @return the structured error category; never null
      */
     public SkillHubErrorCategory category() {

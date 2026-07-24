@@ -43,7 +43,7 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     }
 
     public JiuwenCoreAgentExtHandler(Object agent, MiddlewareAdapterRegistrar middlewareAdapterRegistrar,
-                                     ExternalSvcAdapterRegistrar externalSvcAdapterRegistrar) {
+            ExternalSvcAdapterRegistrar externalSvcAdapterRegistrar) {
         super(requireAgentInstance(agent), middlewareAdapterRegistrar, externalSvcAdapterRegistrar);
     }
 
@@ -66,7 +66,7 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Override
     public void start() {
         if (skillHubManager != null) {
-            // Layered failure semantics (PR #415 / issue #29):
+            // Layered failure semantics:
             //   - provider.start() config failures: thrown (fail fast)
             //   - required auth/access/lookup failures: thrown (fail fast)
             //   - download/integrity-check failures: degraded + retried in
