@@ -1,13 +1,21 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.gateway.bus.control;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import org.junit.jupiter.api.Test;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 
+import org.junit.jupiter.api.Test;
+
+/**
+ * Unit tests for {@link EnvelopeBuilder}.
+ *
+ * @since 2026-07-24
+ */
 class EnvelopeBuilderTest {
     private final EnvelopeBuilder builder = new EnvelopeBuilder();
 
@@ -29,7 +37,6 @@ class EnvelopeBuilderTest {
 
     @Test
     void tenantConsistency() {
-        // Builder always sets routeHandle.tenantScope = tenantId (consistency by construction).
         ForwardingEnvelope env = builder.buildEnvelope(
                 "T1", "trace-1", "idem-1", "handle-1", "svc-target", "svc-gw", "REF-1", 99999L);
         assertThat(env.routeHandle().tenantScope()).isEqualTo(env.tenantId());

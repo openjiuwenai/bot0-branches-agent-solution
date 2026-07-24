@@ -1,8 +1,16 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.gateway.bus.wait;
 
 import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 
-/** Dual-window (accept/response) per-invocation wait (FEAT-012 §1.5.1 / §4.6). */
+/**
+ * Dual-window (accept/response) per-invocation wait (FEAT-012 §1.5.1 / §4.6).
+ *
+ * @since 2026-07-24
+ */
 public class WaitWindow {
     private final long acceptDeadlineMillis;
     private final long responseWindowMillis;
@@ -11,14 +19,29 @@ public class WaitWindow {
     private InvocationResponseStatus folded;
     private boolean released;
 
+    /**
+     * Opens a wait window from the given start instant and configured durations.
+     *
+     * @param startMillis invocation start (epoch millis)
+     * @param acceptWindowMillis accept-phase timeout
+     * @param responseWindowMillis response-phase timeout after accept
+     */
     public WaitWindow(long startMillis, long acceptWindowMillis, long responseWindowMillis) {
         this.acceptDeadlineMillis = startMillis + acceptWindowMillis;
         this.responseWindowMillis = responseWindowMillis;
     }
 
-    /** Feed a folded projection status into the window. */
+    /**
+     * Feeds a folded projection status into the window.
+     *
+     * @param status folded projection status
+     * @param taskId task id when status is ACCEPTED_WITH_TASK
+     * @param nowMillis current instant (epoch millis)
+     */
     public void onProjection(InvocationResponseStatus status, String taskId, long nowMillis) {
-        if (folded != null || released) return;
+        if (folded != null || released) {
+            return;
+        }
         if (status == InvocationResponseStatus.ACCEPTED_WITH_TASK && this.taskId == null) {
             this.taskId = taskId;
             this.acceptedAtMillis = nowMillis;
@@ -28,21 +51,57 @@ public class WaitWindow {
         }
     }
 
-    /** @return the folded status if terminal or timed-out; null if still waiting. */
+    /**
+     * Returns the folded status if terminal or timed-out; {@code null} if still waiting.
+     *
+     * @param nowMillis current instant (epoch millis)
+     * @return terminal or timeout status, or {@code null} while waiting
+     */
     public InvocationResponseStatus checkTimeout(long nowMillis) {
-        if (released) return null;
-        if (folded != null) return folded;
+        if (released) {
+            return null;
+        }
+        if (folded != null) {
+            return folded;
+        }
         if (taskId == null) {
-            if (nowMillis >= acceptDeadlineMillis) return InvocationResponseStatus.UNKNOWN;
+            if (nowMillis >= acceptDeadlineMillis) {
+                return InvocationResponseStatus.UNKNOWN;
+            }
         } else {
             long respDeadline = acceptedAtMillis + responseWindowMillis;
-            if (nowMillis >= respDeadline) return InvocationResponseStatus.ACCEPTED_WITH_TASK;
+            if (nowMillis >= respDeadline) {
+                return InvocationResponseStatus.ACCEPTED_WITH_TASK;
+            }
         }
         return null;
     }
 
-    public String taskId() { return taskId; }
-    public InvocationResponseStatus folded() { return folded; }
-    public void release() { this.released = true; }
-    public boolean isReleased() { return released; }
+    /**
+     * @return the task id captured on accept, or {@code null}
+     */
+    public String taskId() {
+        return taskId;
+    }
+
+    /**
+     * @return the folded terminal status, or {@code null}
+     */
+    public InvocationResponseStatus folded() {
+        return folded;
+    }
+
+    /**
+     * Releases the window (e.g. client disconnect); subsequent polls return {@code null}.
+     */
+    public void release() {
+        this.released = true;
+    }
+
+    /**
+     * @return whether the window has been released
+     */
+    public boolean isReleased() {
+        return released;
+    }
 }
