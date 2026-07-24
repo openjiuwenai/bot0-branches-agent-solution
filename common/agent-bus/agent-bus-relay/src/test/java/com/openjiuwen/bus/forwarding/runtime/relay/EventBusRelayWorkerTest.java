@@ -5,6 +5,7 @@
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
@@ -25,11 +26,10 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Unit tests for {@link EventBusRelayWorker} — the consume→govern→re-produce relay.
@@ -83,21 +83,39 @@ class EventBusRelayWorkerTest {
     }
 
     static final class FakeInbox implements ForwardingInboxPort {
-        final Set<String> seen = new HashSet<>();      // tenant|messageId|consumer
+        /** tenant|messageId|consumer -> current inbox status (mirrors InMemoryForwardingInbox). */
+        final Map<String, ForwardingStatus.Inbox> seen = new HashMap<>();
         final List<ForwardingMessageId> consumed = new ArrayList<>();
         final List<ForwardingMessageId> rejected = new ArrayList<>();
+        /**
+         * Test seam: when set, the next {@link #markConsumed} throws to simulate a crash after
+         * hop2 is produced + acked but before markConsumed/commit (W4) — leaving outbox ACKED,
+         * inbox RECEIVED, hop1 uncommitted.
+         */
+        boolean throwNextMarkConsumed;
 
         @Override
         public ForwardingStatus.Inbox receive(ForwardingEnvelope env, String consumerServiceId,
                 long nowMillisEpoch) {
-            String key = env.tenantId() + "|" + env.messageId().value() + "|" + consumerServiceId;
-            return seen.add(key) ? ForwardingStatus.Inbox.RECEIVED
+            String key = key(env.tenantId(), env.messageId().value(), consumerServiceId);
+            ForwardingStatus.Inbox prior = seen.putIfAbsent(key, ForwardingStatus.Inbox.RECEIVED);
+            if (prior == null) {
+                return ForwardingStatus.Inbox.RECEIVED;                       // first arrival
+            }
+            // Re-arrival: in-flight RECEIVED -> re-process; terminal -> suppress (row untouched).
+            return prior == ForwardingStatus.Inbox.RECEIVED
+                    ? ForwardingStatus.Inbox.RECEIVED
                     : ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED;
         }
 
         @Override
         public ForwardingStatus.Inbox markConsumed(ForwardingMessageId id, String tenantId,
                 String consumerServiceId) {
+            if (throwNextMarkConsumed) {
+                throwNextMarkConsumed = false;
+                throw new IllegalStateException("simulated crash before commit (W4)");
+            }
+            seen.put(key(tenantId, id.value(), consumerServiceId), ForwardingStatus.Inbox.CONSUMED);
             consumed.add(id);
             return ForwardingStatus.Inbox.CONSUMED;
         }
@@ -105,6 +123,11 @@ class EventBusRelayWorkerTest {
         @Override
         public ForwardingStatus.Inbox markRejected(ForwardingMessageId id, String tenantId,
                 String consumerServiceId, ForwardingFailureCode code) {
+            String key = key(tenantId, id.value(), consumerServiceId);
+            ForwardingStatus.Inbox prior = seen.get(key);
+            if (prior == null || prior == ForwardingStatus.Inbox.RECEIVED) {
+                seen.put(key, ForwardingStatus.Inbox.REJECTED);
+            }
             rejected.add(id);
             return ForwardingStatus.Inbox.REJECTED;
         }
@@ -112,7 +135,12 @@ class EventBusRelayWorkerTest {
         @Override
         public ForwardingStatus.Inbox statusOf(ForwardingMessageId id, String tenantId,
                 String consumerServiceId) {
-            return ForwardingStatus.Inbox.RECEIVED;
+            return seen.getOrDefault(key(tenantId, id.value(), consumerServiceId),
+                    ForwardingStatus.Inbox.RECEIVED);
+        }
+
+        private static String key(String tenantId, String messageId, String consumerServiceId) {
+            return tenantId + "|" + messageId + "|" + consumerServiceId;
         }
     }
 
@@ -281,6 +309,42 @@ class EventBusRelayWorkerTest {
         assertEquals(1, c.rejected.size());           // hop1 rejected → broker redelivers
         assertEquals(ForwardingFailureCode.RECEIVER_UNAVAILABLE, c.rejected.get(0).getValue());
         assertEquals(0, inbox.consumed.size());      // not CONSUMED (not terminal)
+    }
+
+    @Test
+    void recoversAckedHop2AfterCrashBeforeCommitWithoutLoop() {
+        // P-00: a prior crashed attempt produced + acked hop2 but died before markConsumed/commit
+        // (outbox ACKED, inbox RECEIVED, hop1 uncommitted). The broker redelivers hop1; the relay
+        // must recover idempotently — re-receive the in-flight RECEIVED row (returns RECEIVED, not
+        // DUPLICATE_SUPPRESSED), find nothing claimable (ACKED is terminal), short-circuit on
+        // outbox.statusOf==ACKED, markConsumed + commit — no second produce, no reject→redeliver
+        // loop. Pre-fix this looped forever against the terminal ACKED row (or over-suppressed,
+        // leaving inbox RECEIVED).
+        FakeConsumer c = new FakeConsumer();
+        FakeInbox inbox = new FakeInbox();
+        InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
+        FakeRelay relay = new FakeRelay();
+        EventBusRelayWorker w = newWorker(c, inbox, outbox, relay);
+
+        c.queue.add(hop1Request("t1", "m1", "c1", "route-1", "runtime-1"));
+        inbox.throwNextMarkConsumed = true;
+        assertThrows(IllegalStateException.class, () -> w.runOnce("t1", 100L, 5));
+        assertEquals(1, relay.produced.size());      // hop2 produced + acked before the crash
+        assertEquals(0, c.committed.size());         // hop1 NOT committed (crash before commit)
+        assertEquals(ForwardingStatus.Inbox.RECEIVED, inbox.statusOf(
+                new ForwardingMessageId("eb-m1"), "t1", "event-bus"));   // inbox stuck RECEIVED
+
+        // redeliver the SAME hop1 (at-least-once): recover idempotently.
+        c.queue.add(hop1Request("t1", "m1", "c1", "route-1", "runtime-1"));
+        EventBusRelayWorker.RelayTickResult r2 = w.runOnce("t1", 200L, 5);
+
+        assertEquals(1, r2.relayed());
+        assertEquals(0, r2.dedupSuppressed());
+        assertEquals(1, relay.produced.size());       // still ONE hop2 — no re-produce
+        assertEquals(1, c.committed.size());          // hop1 committed (recovered)
+        assertEquals(0, c.rejected.size());           // no reject→redeliver loop
+        assertEquals(ForwardingStatus.Inbox.CONSUMED, inbox.statusOf(
+                new ForwardingMessageId("eb-m1"), "t1", "event-bus"));
     }
 
     @Test

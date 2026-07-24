@@ -62,11 +62,20 @@ import java.util.Set;
  *       commit + inbox REJECTED (non-retryable poison; a broker redelivery cannot fix a missing
  *       control field). Replaces the pre-P-06 descriptor decode + correlation-match: there is now a
  *       single first-class correlationId, so no header/descriptor mismatch is possible.</li>
- *   <li><b>inbox dedup</b> — {@link ForwardingInboxPort#receive} returns
- *       {@link ForwardingStatus.Inbox#DUPLICATE_SUPPRESSED} on a replayed
- *       {@code (tenantId, messageId, consumerServiceId)}; the relay commits without
- *       re-publishing, so an at-least-once redelivery of hop1 never double-produces
- *       hop2.</li>
+ *   <li><b>inbox dedup</b> — {@link ForwardingInboxPort#receive} splits a redelivery:
+ *       an in-flight {@code RECEIVED} row (crash between receive and markConsumed) returns
+ *       {@link ForwardingStatus.Inbox#RECEIVED} (legal {@code ARRIVE_REDELIVER} self-loop —
+ *       the relay re-publishes; outbox deterministic-messageId idempotency prevents a double
+ *       hop2, so at-least-once never loses); a terminal row returns
+ *       {@link ForwardingStatus.Inbox#DUPLICATE_SUPPRESSED} — the relay commits without
+ *       re-publishing, so a redelivery after a completed forward never re-executes.</li>
+ *   <li><b>crash recovery</b> — when nothing is claimable ({@code claimDue} returned empty),
+ *       a prior crashed attempt may have already produced + acked hop2
+ *       ({@code outbox.statusOf} == {@code ACKED}); the relay then
+ *       {@link ForwardingInboxPort#markConsumed markConsumed}s + commits idempotently instead
+ *       of reject→redeliver, which would loop against the terminal, never-re-claimable ACKED
+ *       row. A {@code DISPATCHING} (active self-lease) row still rejects, so the lease/claim
+ *       machinery re-drives produce after expiry.</li>
  *   <li><b>audit</b> — {@link ForwardingInboxPort#markConsumed} (success) /
  *       {@link ForwardingInboxPort#markRejected} (governance failure) record the
  *       terminal inbox state for observability.</li>
@@ -298,8 +307,26 @@ public final class EventBusRelayWorker {
                     env.sourceServiceId(), env.targetServiceId(), env.routeHandle().value());
             return MessageOutcome.RELAYED;
         }
-        // produce UNAVAILABLE / ROUTE_NOT_FOUND (or nothing claimed): reject → redeliver; the agent-bus
-        // retry policy owns when, and rejecting leaves the hop1 message visible for operator intervention.
+        // Nothing claimable now (outcome == null): a prior crashed attempt may have already produced +
+        // acked hop2 (outbox now ACKED) but died before markConsumed/commit. If so, complete idempotently
+        // — markConsumed (the inbox row is RECEIVED, since receive returned RECEIVED to enter republish)
+        // + commit — instead of reject→redeliver, which would loop forever against an ACKED (terminal,
+        // never re-claimable) outbox row. A DISPATCHING row (active self-lease from a prior in-flight
+        // produce) or PENDING / RETRY_SCHEDULED falls through to reject: the lease/claim machinery
+        // re-drives produce after lease expiry.
+        if (outcome == null) {
+            ForwardingStatus.Outbox hop2 = outbox.statusOf(env.messageId(), tenantId);
+            if (hop2 == ForwardingStatus.Outbox.ACKED) {
+                inbox.markConsumed(env.messageId(), tenantId, consumerServiceId);
+                consumer.commit(msg);
+                log.info("[{}] RECOVER hop2 already-ACKED (prior crashed attempt) messageId={}",
+                        role, msg.messageId());
+                return MessageOutcome.RELAYED;
+            }
+        }
+        // produce UNAVAILABLE / ROUTE_NOT_FOUND (or nothing claimable + not ACKED): reject → redeliver;
+        // the agent-bus retry policy owns when, and rejecting leaves the hop1 message visible for
+        // operator intervention.
         ForwardingFailureCode code = (outcome != null && outcome.failureCode() != null)
                 ? outcome.failureCode()
                 : ForwardingFailureCode.RECEIVER_UNAVAILABLE;

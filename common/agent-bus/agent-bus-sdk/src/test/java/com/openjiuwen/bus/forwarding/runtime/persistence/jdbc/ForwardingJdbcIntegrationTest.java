@@ -362,16 +362,28 @@ class ForwardingJdbcIntegrationTest {
     }
 
     @Test
-    void inbox_receive_dedups_then_consumes() {
+    void inbox_receive_reprocesses_in_flight_and_suppresses_terminal() {
         String t = tenant();
         ForwardingEnvelope env = envelope(t, "i1");
         long now = System.currentTimeMillis();
+
+        // first arrival → RECEIVED
         assertThat(inbox.receive(env, "consumer-1", now)).isEqualTo(ForwardingStatus.Inbox.RECEIVED);
-        assertThat(inbox.receive(env, "consumer-1", now))
-                .isEqualTo(ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED);
+
+        // re-arrival while still in-flight (RECEIVED, not yet consumed — a crash between receive and
+        // markConsumed) → RECEIVED (re-process, at-least-once; row untouched). Pre-fix this returned
+        // DUPLICATE_SUPPRESSED, which suppressed the re-drive and could lose an un-produced hop2.
+        assertThat(inbox.receive(env, "consumer-1", now)).isEqualTo(ForwardingStatus.Inbox.RECEIVED);
+
+        // consume → CONSUMED (terminal)
         assertThat(inbox.markConsumed(id("i1"), t, "consumer-1"))
                 .isEqualTo(ForwardingStatus.Inbox.CONSUMED);
-        // a distinct consumer dedups independently.
+
+        // re-arrival after consume (terminal) → DUPLICATE_SUPPRESSED (suppress, no re-execution).
+        assertThat(inbox.receive(env, "consumer-1", now))
+                .isEqualTo(ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED);
+
+        // a distinct consumer dedups independently (its own inbox row).
         assertThat(inbox.receive(env, "consumer-2", now)).isEqualTo(ForwardingStatus.Inbox.RECEIVED);
     }
 
