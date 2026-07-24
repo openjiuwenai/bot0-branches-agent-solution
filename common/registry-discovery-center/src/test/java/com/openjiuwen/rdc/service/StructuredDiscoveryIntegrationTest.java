@@ -17,6 +17,7 @@ import com.openjiuwen.rdc.model.DiscoveryConstraints;
 import com.openjiuwen.rdc.model.DiscoveryOutcome;
 import com.openjiuwen.rdc.model.DiscoveryResult;
 import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
 import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
@@ -31,6 +32,7 @@ import java.time.Instant;
 import java.util.Set;
 
 import javax.sql.DataSource;
+
 /**
  * Integration tests for Feat-015 0713 structured {@code DiscoverAgentCards}.
  *
@@ -152,10 +154,12 @@ class StructuredDiscoveryIntegrationTest {
                 null);
 
         assertThatThrownBy(() -> controller.discover(request, null, null, "trace-missing-tenant"))
-                .isInstanceOf(com.openjiuwen.rdc.model.InvalidDiscoveryQueryException.class)
-                .satisfies(ex -> assertThat(
-                        ((com.openjiuwen.rdc.model.InvalidDiscoveryQueryException) ex).failureCode())
-                        .isEqualTo("INVALID_QUERY"));
+                .isInstanceOf(InvalidDiscoveryQueryException.class)
+                .satisfies(ex -> {
+                    if (ex instanceof InvalidDiscoveryQueryException iq) {
+                        assertThat(iq.failureCode()).isEqualTo("INVALID_QUERY");
+                    }
+                });
     }
 
     private static AgentCardDiscoveryResult discoverAgentCards(String tenantId, String agentId, String serviceId,
