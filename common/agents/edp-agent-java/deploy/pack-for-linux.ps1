@@ -7,10 +7,10 @@
   不包含 adapter、mock、deploy-all，也绝不打包 deploy/.env 中的密钥。
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File common\agent\edp-agent-java\deploy\pack-for-linux.ps1
+  powershell -ExecutionPolicy Bypass -File common\agents\edp-agent-java\deploy\pack-for-linux.ps1
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File common\agent\edp-agent-java\deploy\pack-for-linux.ps1 -SkipBuild
+  powershell -ExecutionPolicy Bypass -File common\agents\edp-agent-java\deploy\pack-for-linux.ps1 -SkipBuild
 #>
 [CmdletBinding()]
 param(
