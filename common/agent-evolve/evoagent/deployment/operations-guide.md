@@ -75,24 +75,25 @@ cat README.md         # 项目简介
 ### 2.3 目录速览
 
 ```
-agent-solution/
-└── community/
-    └── EvoAgent/
-        ├── deployment/          # ← 本指南所在目录
-        │   ├── Dockerfile
-        │   ├── build.sh
-        │   ├── run.sh
-        │   ├── stop.sh
-        │   ├── export-bundle.sh
-        │   ├── import-bundle.sh
-        │   └── config/
-        │       └── .env.example
-        ├── src/evo_agent/       # 主源码
-        ├── examples/scenarios/           # 业务场景（edp_agent 等）
-        ├── skills/              # Agent Skill
-        ├── pyproject.toml
-        ├── Makefile
-        └── README.md
+agent-solution/                       # git clone 的根目录
+└── common/
+    └── agent-evolve/
+        └── evoagent/
+            ├── deployment/          # ← 本指南所在目录
+            │   ├── Dockerfile
+            │   ├── build.sh
+            │   ├── run.sh
+            │   ├── stop.sh
+            │   ├── export-bundle.sh
+            │   ├── import-bundle.sh
+            │   └── config/
+            │       └── .env.example
+            ├── src/evo_agent/       # 主源码
+            ├── examples/scenarios/  # 业务场景（edp_agent 等）
+            ├── skills/              # Agent Skill
+            ├── pyproject.toml
+            ├── Makefile
+            └── README.md
 ```
 
 ---
@@ -186,8 +187,8 @@ vim config/.env        # 或使用其他编辑器
 | `EVO_ADAPTER_URL` | `http://124.71.234.237:8900` | **Adapter Sidecar 地址**（不填则 `POST /optimize` 返回 500） |
 | `EVO_LLM_API_KEY` | `sk-xxxxxx` | **LLM API 密钥** |
 | `EVO_LLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | LLM base URL |
-| `EVO_OPTIMIZER_MODEL` | `qwen3-max` | optimizer 用的模型 |
-| `EVO_TARGET_MODEL` | `qwen3-max` | 目标 Agent 用的模型 |
+| `EVO_OPTIMIZER_MODEL` | `qwen3.7-max` | optimizer 用的模型 |
+| `EVO_TARGET_MODEL` | `qwen3.7-max` | 目标 Agent 用的模型 |
 
 ### 4.3 数据路径白名单（重要）
 
@@ -209,14 +210,33 @@ EVO_ALLOWED_DATA_ROOTS=/tmp/evo_agent,/data/evo_agent,/home/evolution/evoagent-s
 ### 4.4 可选项（默认值已可用）
 
 ```env
-EVO_REMOTE_TIMEOUT=300.0      # 远程调用超时（秒）
-EVO_DEFAULT_EPOCHS=3          # 默认训练轮数
-EVO_DEFAULT_BATCH_SIZE=4      # 默认 batch
-EVO_SCORE_THRESHOLD=0.5       # 成功/失败分界线
-EVO_PARALLELISM=4             # 并发度
-EVO_MANAGED_DOC_APPLY_DEADLINE=600 # managed-doc 模式须 ≥ Adapter max_task_seconds + 10
+# ── 远程通信（AdapterClient） ──
+EVO_REMOTE_TIMEOUT=300.0        # 远程调用超时（秒）
+EVO_REMOTE_MAX_RETRIES=2        # 失败重试次数
+EVO_REMOTE_PARALLEL=4           # 远程并发数
+
+# ── 优化超参数 ──
+EVO_DEFAULT_EPOCHS=3            # 默认训练轮数
+EVO_DEFAULT_BATCH_SIZE=4        # 默认 batch
+EVO_ACCUMULATION=2              # 梯度累积
+EVO_MINIBATCH_SIZE=8            # minibatch 大小
+EVO_EDIT_BUDGET=10              # 每轮编辑预算
+EVO_SCHEDULER_MODE=constant     # 学习率调度
+EVO_UPDATE_MODE=patch           # 更新模式（patch/overwrite）
+EVO_USE_SLOW_UPDATE=true        # 慢更新（全量重写）
+EVO_USE_META_SKILL=true         # 启用 meta skill
+EVO_SCORE_THRESHOLD=0.5         # 成功/失败分界线
+EVO_PARALLELISM=4               # 并发度
+
+# ── managed-doc 模式 ──
+EVO_MANAGED_DOC_APPLY_DEADLINE=600          # 须 ≥ Adapter max_task_seconds + 10
 EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE=900 # 必须大于 apply deadline
-EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db # 必须位于持久卷
+
+# ── 路径（容器内，通常无需修改） ──
+EVO_WORKSPACE_ROOT=./workspace
+EVO_OUTPUT_ROOT=./workspace/outputs
+EVO_ARTIFACT_DIR=./workspace/artifacts
+EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db  # 必须位于持久卷
 ```
 
 完整变量含义参见项目根目录的 `docs/api/optimization-api-reference.md`。
@@ -460,9 +480,9 @@ cd deployment
 # 1. 先正常构建镜像
 ./build.sh --local
 
-# 2. 导出镜像+脚本+配置为 tar.gz
+# 2. 导出镜像+脚本+配置为 zip
 ./export-bundle.sh evoagent:latest
-# 产物：../evoagent-offline-YYYYMMDD.tar.gz
+# 产物：../evoagent-offline-YYYYMMDD.zip
 ```
 
 `export-bundle.sh` 会将以下内容打包：
@@ -474,18 +494,19 @@ cd deployment
 ### 10.2 传输到离线机器
 
 ```bash
-scp evoagent-offline-YYYYMMDD.tar.gz user@offline-host:/opt/
+scp evoagent-offline-YYYYMMDD.zip user@offline-host:/opt/
 ```
 
 ### 10.3 离线机器：导入并启动
 
 ```bash
 cd /opt
-tar xzf evoagent-offline-YYYYMMDD.tar.gz
+unzip evoagent-offline-YYYYMMDD.zip
 cd evoagent-offline-YYYYMMDD
 
-# 1. 导入镜像
-./import-bundle.sh evoagent.latest.YYYYMMDD.tar
+# 1. 导入镜像（文件名含镜像 tag，用 ls 查看实际文件名）
+ls *.tar
+./import-bundle.sh <镜像tar文件>
 
 # 2. 配置环境变量
 cp config/.env.example config/.env

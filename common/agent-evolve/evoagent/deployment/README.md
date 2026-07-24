@@ -46,7 +46,7 @@ deployment/
 cd deployment
 
 # 2. 构建镜像（--local 从 PyPI 下载 openjiuwen agent-core wheel，最简模式）
-HOME=/home/evolution/build EVOAGENT_SOLUTION_REPO=https://gitcode.com/AE-TEAM/agent-solution.git EVOAGENT_SOLUTION_BRANCH=common EVOAGENT_IMAGE_TAG=evoagent:latest ./build.sh --local
+HOME=/home/evolution/build EVOAGENT_SOLUTION_REPO=https://gitcode.com/openJiuwen/agent-solution.git EVOAGENT_SOLUTION_BRANCH=common EVOAGENT_IMAGE_TAG=evoagent:latest ./build.sh --local
 
 # 3. 配置环境变量
 cp config/.env.example config/.env
@@ -68,7 +68,7 @@ curl http://localhost:8000/openapi.json
 ### 方式 A：手动 clone（推荐首次了解项目）
 
 ```bash
-git clone --branch {{EVOAGENT_SOLUTION_BRANCH}} {{EVOAGENT_SOLUTION_REPO}} ~/EvoAgent/agent-solution
+git clone --branch common https://gitcode.com/openJiuwen/agent-solution.git ~/EvoAgent/agent-solution
 cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
 ```
 
@@ -97,7 +97,7 @@ cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
 ./build.sh --local
 
 # 指定 agent-solution 仓库地址 + 仓库分支 + 自定义镜像 tag
-HOME=/home/evolution/build EVOAGENT_SOLUTION_REPO=https://gitcode.com/AE-TEAM/agent-solution.git EVOAGENT_SOLUTION_BRANCH=common EVOAGENT_IMAGE_TAG=evoagent:v0.0.5 ./build.sh --local
+HOME=/home/evolution/build EVOAGENT_SOLUTION_REPO=https://gitcode.com/openJiuwen/agent-solution.git EVOAGENT_SOLUTION_BRANCH=common EVOAGENT_IMAGE_TAG=evoagent:v0.0.5 ./build.sh --local
 
 # 已 clone 代码，仅构建镜像
 ./build.sh --skip-pull --local
@@ -143,8 +143,8 @@ vim config/.env
 | `EVO_ADAPTER_URL` | `http://124.71.234.237:8900` | **Adapter Sidecar 地址**（未配置时 `POST /optimize` 返回 500） |
 | `EVO_LLM_API_KEY` | `sk-xxxxxx` | **LLM API 密钥** |
 | `EVO_LLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | LLM base URL |
-| `EVO_OPTIMIZER_MODEL` | `qwen3-max` | optimizer 用的模型 |
-| `EVO_TARGET_MODEL` | `qwen3-max` | 目标 Agent 用的模型 |
+| `EVO_OPTIMIZER_MODEL` | `qwen3.7-max` | optimizer 用的模型 |
+| `EVO_TARGET_MODEL` | `qwen3.7-max` | 目标 Agent 用的模型 |
 
 #### 3.2.1 自定义 SSE 模式
 
@@ -181,17 +181,36 @@ EVO_ALLOWED_DATA_ROOTS=/tmp/evo_agent,/data/evo_agent,/home/evolution/evoagent-s
 ### 3.4 可选项（默认值已可用）
 
 ```env
-EVO_REMOTE_TIMEOUT=300.0      # 远程调用超时（秒）
-EVO_DEFAULT_EPOCHS=3          # 默认训练轮数
-EVO_DEFAULT_BATCH_SIZE=4      # 默认 batch
-EVO_SCORE_THRESHOLD=0.5       # 成功/失败分界线
-EVO_PARALLELISM=4             # 并发度
-EVO_MANAGED_DOC_APPLY_DEADLINE=600 # AgentRule apply 总等待时限
+# ── 远程通信（AdapterClient） ──
+EVO_REMOTE_TIMEOUT=300.0        # 远程调用超时（秒）
+EVO_REMOTE_MAX_RETRIES=2        # 失败重试次数
+EVO_REMOTE_PARALLEL=4           # 远程并发数
+
+# ── 优化超参数 ──
+EVO_DEFAULT_EPOCHS=3            # 默认训练轮数
+EVO_DEFAULT_BATCH_SIZE=4        # 默认 batch
+EVO_ACCUMULATION=2              # 梯度累积
+EVO_MINIBATCH_SIZE=8            # minibatch 大小
+EVO_EDIT_BUDGET=10              # 每轮编辑预算
+EVO_SCHEDULER_MODE=constant     # 学习率调度
+EVO_UPDATE_MODE=patch           # 更新模式（patch/overwrite）
+EVO_USE_SLOW_UPDATE=true        # 慢更新（全量重写）
+EVO_USE_META_SKILL=true         # 启用 meta skill
+EVO_SCORE_THRESHOLD=0.5         # 成功/失败分界线
+EVO_PARALLELISM=4               # 并发度
+
+# ── managed-doc 模式 ──
+EVO_MANAGED_DOC_APPLY_DEADLINE=600          # AgentRule apply 总等待时限
 EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE=900 # 必须大于 apply deadline
-EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db # 必须位于持久卷
+
+# ── 路径（容器内，通常无需修改） ──
+EVO_WORKSPACE_ROOT=./workspace
+EVO_OUTPUT_ROOT=./workspace/outputs
+EVO_ARTIFACT_DIR=./workspace/artifacts
+EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db  # 必须位于持久卷
 ```
 
-完整字段见 [config/.env.example](./config/.env.example)。
+完整字段见 [config/.env.example](./config/.env.example)，详细解释见 [operations-guide.md §4.4](./operations-guide.md)。
 
 ---
 
@@ -313,6 +332,7 @@ ls -lh deployment/workspace/artifacts/
 | `422 Dataset path must be under allowed roots` | `dataset_path` 不在 `EVO_ALLOWED_DATA_ROOTS` 白名单下 |
 | `422 Dataset file not found` | 文件不存在；注意容器内 `/data` 对应宿主机 `/home/evolution/data` |
 | 容器一直 `starting` 不转 `healthy` | 等待 15 秒启动期后查 `docker logs evoagent`，多为 `.env` 配置缺失 |
+| 优化任务超时 | 调大 `EVO_REMOTE_TIMEOUT` 或检查 Adapter Sidecar 健康 |
 | `docker build` 拉 wheel 失败 | 切换 `PIP_INDEX_URL` 为可用源，或改用 `--local` 模式 |
 
 ---
@@ -344,16 +364,17 @@ ls -lh deployment/workspace/artifacts/
 ```bash
 ./build.sh --local                          # 1. 构建镜像
 ./export-bundle.sh evoagent:latest          # 2. 导出离线包
-# 产物：../evoagent-offline-YYYYMMDD.tar.gz
+# 产物：../evoagent-offline-YYYYMMDD.zip
 ```
 
 ### 离线机器
 
 ```bash
-tar xzf evoagent-offline-YYYYMMDD.tar.gz
+unzip evoagent-offline-YYYYMMDD.zip
 cd evoagent-offline-YYYYMMDD
 
-./import-bundle.sh evoagent.latest.YYYYMMDD.tar    # 导入镜像
+ls *.tar                                    # 查看镜像 tar 文件名
+./import-bundle.sh <镜像tar文件>             # 导入镜像
 cp config/.env.example config/.env && vim config/.env
 ./run.sh
 curl http://localhost:8000/openapi.json            # 验证
