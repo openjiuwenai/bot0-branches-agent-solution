@@ -602,17 +602,17 @@ class SkillHubManagerTest {
         R apply(T t) throws IOException;
     }
 
-    // ----- Issue #29: layered failure semantics -----
+    // ----- layered failure semantics -----
 
     /**
-     * Issue #29: required auth failure thrown from provider.download() must
+     * Required auth failure thrown from provider.download() must
      * NOT be degraded to background retry. Manager.start() must rethrow so
-     * the handler chain blocks Agent ready (fail fast per PR #415).
+     * the handler chain blocks Agent ready (fail fast).
      *
      * @param tempDir the temporary local dir for fake skill files
      */
     @Test
-    void requiredAuthFailureFromDownloadFailsFast_Issue29(@TempDir Path tempDir) {
+    void requiredAuthFailureFromDownloadFailsFast(@TempDir Path tempDir) {
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> {
             throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
@@ -630,13 +630,13 @@ class SkillHubManagerTest {
     }
 
     /**
-     * Issue #29: required access-denied failure from provider.download() must
+     * Required access-denied failure from provider.download() must
      * also fail fast (no degrade, no background retry).
      *
      * @param tempDir the temporary local dir for fake skill files
      */
     @Test
-    void requiredAccessDeniedFailureFromDownloadFailsFast_Issue29(@TempDir Path tempDir) {
+    void requiredAccessDeniedFailureFromDownloadFailsFast(@TempDir Path tempDir) {
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> {
             throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
@@ -651,13 +651,13 @@ class SkillHubManagerTest {
     }
 
     /**
-     * Issue #29: required skill not-found failure from provider.download()
+     * Required skill not-found failure from provider.download()
      * must also fail fast (the skill was declared required and is missing).
      *
      * @param tempDir the temporary local dir for fake skill files
      */
     @Test
-    void requiredNotFoundFailureFromDownloadFailsFast_Issue29(@TempDir Path tempDir) {
+    void requiredNotFoundFailureFromDownloadFailsFast(@TempDir Path tempDir) {
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> {
             throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
@@ -672,14 +672,14 @@ class SkillHubManagerTest {
     }
 
     /**
-     * Issue #29: download failure (transient) must still degrade — Agent ready
+     * Download failure (transient) must still degrade — Agent ready
      * with skill unavailable + background retry. This is the existing behavior
      * and must be preserved by the layered fix.
      *
      * @param tempDir the temporary local dir for fake skill files
      */
     @Test
-    void downloadFailureDegradesAndStartsBackgroundRetry_Issue29(@TempDir Path tempDir) {
+    void downloadFailureDegradesAndStartsBackgroundRetry(@TempDir Path tempDir) {
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> {
             throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
@@ -694,12 +694,12 @@ class SkillHubManagerTest {
     }
 
     /**
-     * Issue #29: checksum mismatch must degrade (background retry), not fail fast.
+     * Checksum mismatch must degrade (background retry), not fail fast.
      *
      * @param tempDir the temporary local dir for fake skill files
      */
     @Test
-    void checksumMismatchDegrades_Issue29(@TempDir Path tempDir) {
+    void checksumMismatchDegrades(@TempDir Path tempDir) {
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> {
             throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
@@ -712,81 +712,84 @@ class SkillHubManagerTest {
         assertThat(manager.isBackgroundRetryActiveForTest()).isTrue();
     }
 
-    // ----- Issue #31: concurrent register on the same agent must not duplicate-install -----
+    // ----- concurrent register on the same agent must not duplicate-install -----
 
     /**
-     * Issue #31: when 4 concurrent request threads call register() on the SAME
-     * agent instance, installer.install(agent, ...) must be invoked exactly
-     * once. The historical two-state (processed/not-processed) bookkeeping
-     * released the listLock before install, so all 4 threads could pass the
-     * "not processed" check and each call install. The fix uses a per-agent
-     * lock with double-checked snapshot so only the first thread installs.
+     * When 4 concurrent request threads call register() on the SAME agent
+     * instance, installer.install(agent, ...) must be invoked exactly once.
+     * The per-agent lock with double-checked snapshot ensures only the
+     * first thread installs.
      *
      * @param tempDir the temporary local dir for fake skill files
+     * @throws Exception if the test fails
      */
     @Test
-    void concurrentRegisterSameAgentInstallsOnce_Issue31(@TempDir Path tempDir) throws Exception {
+    void concurrentRegisterSameAgentInstallsOnce(@TempDir Path tempDir) throws Exception {
         CapturingProvider provider = new CapturingProvider();
         provider.downloadBehavior = cfg -> {
             createFakeSkillDir(tempDir, "skill-a");
             return true;
         };
         provider.verifyBehavior = path -> true;
-        // Spy installer that counts install() invocations.
-        java.util.concurrent.atomic.AtomicInteger installCount =
-                new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger installCount = new java.util.concurrent.atomic.AtomicInteger();
         SkillHubInstaller spyInstaller = new SkillHubInstaller() {
             @Override
             public void install(Object agent, List<Path> skillPaths) {
                 installCount.incrementAndGet();
-                // Simulate a small delay so the race window is wide enough
-                // to surface the bug deterministically (before the fix this
-                // makes the duplicate-install count reliably > 1).
                 try {
                     Thread.sleep(50);
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
+                } catch (InterruptedException e) {
+                    // In test context, simply stop sleeping.
                 }
             }
         };
         manager = new SkillHubManager(provider, spyInstaller, newConfig(tempDir), "");
         manager.start();
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
+        runConcurrentRegister(manager, new Object(), 4, installCount);
+    }
 
-        // 4 threads, SAME agent instance.
-        Object agent = new Object();
-        int threads = 4;
-        java.util.concurrent.CountDownLatch startLatch =
-                new java.util.concurrent.CountDownLatch(threads);
-        java.util.concurrent.CountDownLatch doneLatch =
-                new java.util.concurrent.CountDownLatch(threads);
-        java.util.concurrent.atomic.AtomicReference<Throwable> firstError =
-                new java.util.concurrent.atomic.AtomicReference<>();
-        java.util.List<Thread> workers = new ArrayList<>();
-        for (int i = 0; i < threads; i++) {
-            Thread t = new Thread(() -> {
-                startLatch.countDown();
-                try {
-                    startLatch.await();
-                    manager.register(agent);
-                } catch (Throwable ex) {
-                    firstError.compareAndSet(null, ex);
-                } finally {
-                    doneLatch.countDown();
-                }
-            });
-            workers.add(t);
-            t.start();
+    /**
+     * Spawns {@code n} concurrent worker tasks via a thread pool, each calling
+     * {@code manager.register(agent)} on the SAME agent instance. Asserts all
+     * workers finish within 10s and installer.install was called exactly once.
+     *
+     * @param manager the SkillHubManager under test
+     * @param agent the shared agent instance
+     * @param n number of concurrent workers
+     * @param installCount the shared install invocation counter
+     * @throws Exception if the test fails
+     */
+    private static void runConcurrentRegister(SkillHubManager manager, Object agent, int n,
+            java.util.concurrent.atomic.AtomicInteger installCount) throws Exception {
+        java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(n);
+        java.util.concurrent.CountDownLatch doneLatch = new java.util.concurrent.CountDownLatch(n);
+        java.util.concurrent.atomic.AtomicReference<Exception> firstError = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(n);
+        try {
+            for (int i = 0; i < n; i++) {
+                pool.submit(() -> {
+                    startLatch.countDown();
+                    try {
+                        startLatch.await();
+                        manager.register(agent);
+                    } catch (Exception ex) {
+                        firstError.compareAndSet(null, ex);
+                    } finally {
+                        doneLatch.countDown();
+                    }
+                });
+            }
+            assertThat(doneLatch.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                    .as("all workers should finish within 10s").isTrue();
+            if (firstError.get() != null) {
+                throw new AssertionError("worker threw", firstError.get());
+            }
+            assertThat(installCount.get()).as(
+                    "installer.install must be called exactly once for the same agent " + "under concurrent register")
+                    .isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
         }
-        assertThat(doneLatch.await(10, java.util.concurrent.TimeUnit.SECONDS))
-                .as("all workers should finish within 10s")
-                .isTrue();
-        if (firstError.get() != null) {
-            throw new AssertionError("worker threw", firstError.get());
-        }
-        assertThat(installCount.get())
-                .as("installer.install must be called exactly once for the same agent "
-                        + "under concurrent register (issue #31)")
-                .isEqualTo(1);
     }
 }

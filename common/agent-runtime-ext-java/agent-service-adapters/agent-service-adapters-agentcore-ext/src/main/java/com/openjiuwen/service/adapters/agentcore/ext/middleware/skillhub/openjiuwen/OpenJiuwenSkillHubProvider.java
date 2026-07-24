@@ -118,6 +118,24 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         if (this.httpClient == null) {
             throw error(SkillHubErrorCategory.CONNECT_FAILED, "provider not started", null);
         }
+        Path localRoot = resolveLocalRoot(config);
+        List<SkillSummary> skills = listAllPublicSkills();
+        java.util.concurrent.atomic.AtomicBoolean allSucceeded = new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicReference<SkillHubException> fatalFailure = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
+        for (SkillSummary summary : skills) {
+            futures.add(
+                    downloadPool.submit(() -> downloadOneAndCollect(summary, localRoot, allSucceeded, fatalFailure)));
+        }
+        drainFutures(futures, allSucceeded);
+        SkillHubException fatal = fatalFailure.get();
+        if (fatal != null) {
+            throw fatal;
+        }
+        return allSucceeded.get();
+    }
+
+    private Path resolveLocalRoot(SkillHubConfig config) {
         String localDir = config.getLocalDir();
         if (localDir == null || localDir.isBlank()) {
             throw error(SkillHubErrorCategory.CONNECT_FAILED, "localDir not configured", null);
@@ -129,47 +147,35 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "cannot create localDir path=" + sanitizePath(localRoot),
                     ex);
         }
+        return localRoot;
+    }
 
-        List<SkillSummary> skills = listAllPublicSkills();
-        java.util.concurrent.atomic.AtomicBoolean allSucceeded = new java.util.concurrent.atomic.AtomicBoolean(true);
-        // Aggregate the first fatal (auth/access/not-found) failure so it can
-        // be rethrown from the caller thread after all parallel tasks drain.
-        // Degradable failures (download/checksum) only flip allSucceeded and
-        // let other tasks complete (issue #29 §4.2).
-        java.util.concurrent.atomic.AtomicReference<SkillHubException> fatalFailure = new java.util.concurrent.atomic.AtomicReference<>();
-        // 4-way bounded parallel download. Single-skill failure is isolated:
-        // downloadOne throws → caught per-task → allSucceeded flips false → other tasks continue.
-        // Pool is owned by the Provider (created in start(), closed in stop()) so
-        // repeated background-retry calls don't churn threads.
-        java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
-        for (SkillSummary summary : skills) {
-            futures.add(downloadPool.submit(() -> {
-                try {
-                    downloadOne(summary, localRoot);
-                } catch (SkillHubException ex) {
-                    SkillHubErrorCategory cat = ex.category();
-                    if (isFatal(cat)) {
-                        // Capture the first fatal failure; other tasks continue
-                        // draining so we don't leak threads. Rethrown after drain.
-                        fatalFailure.compareAndSet(null, ex);
-                    }
-                    allSucceeded.set(false);
-                    log.warn("SkillHub skill download failed skillId={} required=true category={} reason={}",
-                            summary.assetId(), cat, ex.getMessage(), ex);
-                } catch (IllegalStateException ex) {
-                    // Legacy/unclassified — degrade only.
-                    allSucceeded.set(false);
-                    log.warn("SkillHub skill download failed skillId={} required=true category={} reason={}",
-                            summary.assetId(), categoryOf(ex), ex.getMessage(), ex);
-                }
-            }));
+    private void downloadOneAndCollect(SkillSummary summary, Path localRoot,
+            java.util.concurrent.atomic.AtomicBoolean allSucceeded,
+            java.util.concurrent.atomic.AtomicReference<SkillHubException> fatalFailure) {
+        try {
+            downloadOne(summary, localRoot);
+        } catch (SkillHubException ex) {
+            SkillHubErrorCategory cat = ex.category();
+            if (isFatal(cat)) {
+                fatalFailure.compareAndSet(null, ex);
+            }
+            allSucceeded.set(false);
+            log.warn("SkillHub skill download failed skillId={} required=true category={} reason={}", summary.assetId(),
+                    cat, ex.getMessage(), ex);
+        } catch (IllegalStateException ex) {
+            allSucceeded.set(false);
+            log.warn("SkillHub skill download failed skillId={} required=true category={} reason={}", summary.assetId(),
+                    categoryOf(ex), ex.getMessage(), ex);
         }
+    }
+
+    private void drainFutures(java.util.List<java.util.concurrent.Future<?>> futures,
+            java.util.concurrent.atomic.AtomicBoolean allSucceeded) {
         for (java.util.concurrent.Future<?> f : futures) {
             try {
                 f.get();
             } catch (InterruptedException ie) {
-                // Do not call Thread.interrupt(); record the interrupt
-                // via the shared success flag and continue draining remaining futures.
                 allSucceeded.set(false);
                 log.warn("SkillHub skill download wait interrupted reason={}", ie.getMessage());
             } catch (java.util.concurrent.ExecutionException ee) {
@@ -178,13 +184,6 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                         ee.getCause() != null ? ee.getCause().getMessage() : ee.getMessage());
             }
         }
-        // After all parallel tasks have drained, propagate the first fatal
-        // failure so SkillHubManager.start() can fail fast (issue #29 §4.2).
-        SkillHubException fatal = fatalFailure.get();
-        if (fatal != null) {
-            throw fatal;
-        }
-        return allSucceeded.get();
     }
 
     @Override
@@ -584,7 +583,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     }
 
     /**
-     * Whether a category is fatal (fail-fast) per PR #415. Kept in sync with
+     * Whether a category is fatal (fail-fast). Kept in sync with
      * {@code SkillHubManager#isFatal} — fatal categories (auth/access/not-found)
      * propagate to block Agent ready; degradable categories (download/checksum)
      * allow the Agent to become ready with skills unavailable.

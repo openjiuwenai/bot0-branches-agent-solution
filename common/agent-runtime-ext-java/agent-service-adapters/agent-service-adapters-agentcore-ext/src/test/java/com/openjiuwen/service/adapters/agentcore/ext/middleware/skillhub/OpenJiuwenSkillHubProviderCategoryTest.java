@@ -24,7 +24,7 @@ import java.nio.file.Path;
 
 /**
  * Unit tests for {@link OpenJiuwenSkillHubProvider} error-category preservation
- * (issue #29). Uses a JDK {@link HttpServer} as a mock Skill Hub so we can
+ * Uses a JDK {@link HttpServer} as a mock Skill Hub so we can
  * assert that 401/403/404 responses surface as the original
  * {@link SkillHubErrorCategory} instead of being overwritten by the call-site
  * catch blocks.
@@ -62,37 +62,35 @@ class OpenJiuwenSkillHubProviderCategoryTest {
     }
 
     /**
-     * Issue #29: when Skill Hub returns 401 on the plugins list endpoint,
+     * When Skill Hub returns 401 on the plugins list endpoint,
      * download() must throw {@link SkillHubException} with category
      * {@link SkillHubErrorCategory#AUTH_FAILED} — NOT the historical
      * {@code CONNECT_FAILED} that the listAllPublicSkills catch block used to
      * overwrite it with.
      */
     @Test
-    void listSkills401SurfacesAsAuthFailed_Issue29() {
+    void listSkills401SurfacesAsAuthFailed() {
         mountStatus("/api/v1/plugins", 401, "application/json",
                 "{\"detail\":{\"code\":401,\"message\":\"unauthorized\"}}");
-        assertThatThrownBy(() -> provider.download(config, "dummy-token"))
-                .isInstanceOf(SkillHubException.class)
+        assertThatThrownBy(() -> provider.download(config, "dummy-token")).isInstanceOf(SkillHubException.class)
                 .hasMessageContaining("SkillHub[AUTH_FAILED]");
     }
 
     /**
-     * Issue #29: 403 on plugins list must surface as AUTH_FAILED (the SPI does
+     * 403 on plugins list must surface as AUTH_FAILED (the SPI does
      * not yet distinguish ACCESS_DENIED from AUTH_FAILED at HTTP layer; both
      * 401/403 map to AUTH_FAILED in sendJson).
      */
     @Test
-    void listSkills403SurfacesAsAuthFailed_Issue29() {
+    void listSkills403SurfacesAsAuthFailed() {
         mountStatus("/api/v1/plugins", 403, "application/json",
                 "{\"detail\":{\"code\":403,\"message\":\"forbidden\"}}");
-        assertThatThrownBy(() -> provider.download(config, "dummy-token"))
-                .isInstanceOf(SkillHubException.class)
+        assertThatThrownBy(() -> provider.download(config, "dummy-token")).isInstanceOf(SkillHubException.class)
                 .hasMessageContaining("SkillHub[AUTH_FAILED]");
     }
 
     /**
-     * Issue #29: 404 on the artifacts endpoint (required skill not found) must
+     * 404 on the artifacts endpoint (required skill not found) must
      * surface as NOT_FOUND — NOT be overwritten by the fetchArtifactInfo catch
      * block. Because the list returns an empty array, download() succeeds with
      * no skills; to exercise fetchArtifactInfo we need a list response with at
@@ -100,11 +98,10 @@ class OpenJiuwenSkillHubProviderCategoryTest {
      * is intentionally minimal — it asserts the list-level 404 case.
      */
     @Test
-    void listSkills404SurfacesAsNotFound_Issue29() {
+    void listSkills404SurfacesAsNotFound() {
         mountStatus("/api/v1/plugins", 404, "application/json",
                 "{\"detail\":{\"code\":404,\"message\":\"not found\"}}");
-        assertThatThrownBy(() -> provider.download(config, "dummy-token"))
-                .isInstanceOf(SkillHubException.class)
+        assertThatThrownBy(() -> provider.download(config, "dummy-token")).isInstanceOf(SkillHubException.class)
                 .hasMessageContaining("SkillHub[NOT_FOUND]");
     }
 
