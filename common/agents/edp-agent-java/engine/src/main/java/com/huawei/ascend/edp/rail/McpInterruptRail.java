@@ -214,50 +214,70 @@ public class McpInterruptRail extends AgentRail {
             return;
         }
 
-        // ── 对齐 Python MCPInterruptRail L136-181: no_result_tip 逻辑 ──
-        // 当 MCP 返回 total=0 或 mcp_error 非空时，设置 response_template 为 empty_result_template_key 对应的话术。
-        // 这样 VersatileInterruptRail 在随后执行 call_versatile 成功获取产品时会覆盖此值（Python 行为一致），
-        // 但当 versatile 也失败或未调用时，用户会看到 MCP 无结果结果的提示而非默认 success 话术。
-        boolean noResultTip = true;
-        Object total = result.get("total");
-        if (total instanceof Number n && n.intValue() != 0) {
-            noResultTip = false;
-        }
-        Object mcpError = result.get("mcp_error");
-        if (mcpError instanceof String s && !s.isBlank()) {
-            noResultTip = true;
-        }
-        if (noResultTip && scripts != null) {
-            // 从 script_params 中提取 empty_result_template_key
-            Map<String, Object> args = normalizeArgs(inputs);
-            Object scriptParamsObj = args.get("script_params");
-            String emptyResultTemplateKey = "";
-            if (scriptParamsObj instanceof String spStr && !spStr.isBlank()) {
-                try {
-                    JsonNode spNode = OBJECT_MAPPER.readTree(spStr);
-                    if (spNode != null && spNode.has("empty_result_template_key")) {
-                        emptyResultTemplateKey = spNode.get("empty_result_template_key").asText("");
-                    }
-                } catch (Exception e) {
-                    LOGGER.debug("McpInterruptRail: failed to parse script_params for empty_result_template_key", e);
-                }
-            } else if (scriptParamsObj instanceof Map<?, ?> spMap) {
-                Object keyVal = spMap.get("empty_result_template_key");
-                emptyResultTemplateKey = keyVal != null ? keyVal.toString() : "";
-            }
-            if (!emptyResultTemplateKey.isBlank()) {
-                String tipText = scripts.getTemplate(emptyResultTemplateKey).orElse(null);
-                if (tipText != null && !tipText.isBlank()) {
-                    ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, tipText);
-                    ctx.getExtra().put(ScriptConstants.KEY_LAST_SCRIPT, emptyResultTemplateKey);
-                    LOGGER.info("[MCPInterruptRail] no_result_tip: response_template injected, key={}, tipText={}",
-                            emptyResultTemplateKey, abbreviate(tipText, 80));
-                }
-            }
-        }
+        injectEmptyResultTip(ctx, inputs, result);
 
         persistMcpResult(ctx, result);
         updateToolMessage(inputs, result);
+    }
+
+    /**
+     * Inject empty result tip when MCP returns total=0 or mcp_error.
+     *
+     * @param ctx the agent callback context
+     * @param inputs the tool call inputs
+     * @param result the normalized MCP result
+     */
+    private void injectEmptyResultTip(AgentCallbackContext ctx, ToolCallInputs inputs, Map<String, Object> result) {
+        boolean emptyResultTip = true;
+        Object total = result.get("total");
+        if (total instanceof Number n && n.intValue() != 0) {
+            emptyResultTip = false;
+        }
+        Object mcpError = result.get("mcp_error");
+        if (mcpError instanceof String s && !s.isBlank()) {
+            emptyResultTip = true;
+        }
+        if (!emptyResultTip || scripts == null) {
+            return;
+        }
+        Map<String, Object> args = normalizeArgs(inputs);
+        Object scriptParamsObj = args.get("script_params");
+        String emptyResultTemplateKey = extractEmptyResultTemplateKey(scriptParamsObj);
+        if (emptyResultTemplateKey.isBlank()) {
+            return;
+        }
+        String tipText = scripts.getTemplate(emptyResultTemplateKey).orElse(null);
+        if (tipText != null && !tipText.isBlank()) {
+            ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, tipText);
+            ctx.getExtra().put(ScriptConstants.KEY_LAST_SCRIPT, emptyResultTemplateKey);
+            LOGGER.info("[MCPInterruptRail] empty_result_tip: response_template injected, key={}, tipText={}",
+                    emptyResultTemplateKey, abbreviate(tipText, 80));
+        }
+    }
+
+    /**
+     * Extract empty_result_template_key from script_params (String JSON or Map).
+     *
+     * @param scriptParamsObj the script_params object
+     * @return the template key, or empty string if not found
+     */
+    private String extractEmptyResultTemplateKey(Object scriptParamsObj) {
+        if (scriptParamsObj instanceof String spStr && !spStr.isBlank()) {
+            try {
+                JsonNode spNode = OBJECT_MAPPER.readTree(spStr);
+                if (spNode != null && spNode.has("empty_result_template_key")) {
+                    return spNode.get("empty_result_template_key").asText("");
+                }
+            } catch (JsonProcessingException e) {
+                LOGGER.debug("McpInterruptRail: failed to parse script_params for empty_result_template_key", e);
+            }
+        } else if (scriptParamsObj instanceof Map<?, ?> spMap) {
+            Object keyVal = spMap.get("empty_result_template_key");
+            return keyVal != null ? keyVal.toString() : "";
+        } else {
+            LOGGER.debug("McpInterruptRail: script_params is neither String nor Map, skip empty_result_template_key");
+        }
+        return "";
     }
 
     void persistMcpResult(AgentCallbackContext ctx, Map<String, Object> result) {

@@ -265,7 +265,7 @@ public class EdpaTodoRail extends DeepAgentRail {
                 .sanitizeSessionId(ctx.getSession() != null ? ctx.getSession().getSessionId() : null);
         boolean sidChanged = injectRealSessionId(args, realSid);
 
-        // todo_modify 参数兼容：LLM 有时用 updates[].task_id 而非 todos[].id，
+        // 参数兼容：LLM 有时用 updates[].task_id 而非 todos[].id，
         // Core TodoTool 只处理 todos，需将 updates 转换为 todos 格式。
         boolean normalized = normalizeTodoModifyArgs(inputs, args, toolName);
 
