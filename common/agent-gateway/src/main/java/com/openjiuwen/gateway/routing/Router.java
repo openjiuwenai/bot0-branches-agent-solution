@@ -163,14 +163,26 @@ public class Router {
         }
     }
 
-    /** Extract the task id from a runtime response (result.id or result.task.id). */
+    /**
+     * Extract the task id from a runtime response / SSE frame.
+     * Accepts A2A shapes used in the wild: {@code result.id}, {@code result.taskId},
+     * {@code result.task.id}, and nested {@code result.statusUpdate.taskId}
+     * (FEAT-001 / status-update frames). Missing any of these left sticky unbound
+     * so tool/user-input resume failed with {@code RESUME_OWNER_UNKNOWN}.
+     */
     String extractTaskId(String response) {
         try {
             JsonNode root = mapper.readTree(response);
             JsonNode result = root.path("result");
             String id = text(result, "id");
             if (id == null || id.isBlank()) {
+                id = text(result, "taskId");
+            }
+            if (id == null || id.isBlank()) {
                 id = text(result.path("task"), "id");
+            }
+            if (id == null || id.isBlank()) {
+                id = text(result.path("statusUpdate"), "taskId");
             }
             return id;
         } catch (Exception ex) {

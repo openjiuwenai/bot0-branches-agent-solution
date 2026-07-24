@@ -139,6 +139,17 @@ class RouterTest {
         assertThat(sticky.find("task-stream")).contains("h1");
     }
 
+    @Test
+    void routeStreamWritesStickyFromResultTaskIdField() {
+        // Real A2A status-update frames use result.taskId (not result.id).
+        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
+        rdc.setResolved(new ResolvedRoute(ENDPOINT));
+        runtime.setFrames(java.util.List.of(
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"status-update\",\"taskId\":\"task-a2a\",\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}"));
+        router.routeStream(createCtx("agent-9")).toList();
+        assertThat(sticky.find("task-a2a")).contains("h1");
+    }
+
     private static GovernanceContext resumeCtx(String taskId) {
         GovernanceContext ctx = new GovernanceContext();
         ctx.setTenantId("tenant-1");
