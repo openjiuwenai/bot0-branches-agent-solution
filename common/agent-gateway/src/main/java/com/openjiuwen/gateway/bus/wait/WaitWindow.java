@@ -6,6 +6,8 @@ package com.openjiuwen.gateway.bus.wait;
 
 import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 
+import java.util.Optional;
+
 /**
  * Dual-window (accept/response) per-invocation wait (FEAT-012 §1.5.1 / §4.6).
  *
@@ -52,29 +54,29 @@ public class WaitWindow {
     }
 
     /**
-     * Returns the folded status if terminal or timed-out; {@code null} if still waiting.
+     * Returns the folded status if terminal or timed-out; empty if still waiting.
      *
      * @param nowMillis current instant (epoch millis)
-     * @return terminal or timeout status, or {@code null} while waiting
+     * @return terminal or timeout status, or empty while waiting / after release
      */
-    public InvocationResponseStatus checkTimeout(long nowMillis) {
+    public Optional<InvocationResponseStatus> checkTimeout(long nowMillis) {
         if (released) {
-            return null;
+            return Optional.empty();
         }
         if (folded != null) {
-            return folded;
+            return Optional.of(folded);
         }
         if (taskId == null) {
             if (nowMillis >= acceptDeadlineMillis) {
-                return InvocationResponseStatus.UNKNOWN;
+                return Optional.of(InvocationResponseStatus.UNKNOWN);
             }
         } else {
             long respDeadline = acceptedAtMillis + responseWindowMillis;
             if (nowMillis >= respDeadline) {
-                return InvocationResponseStatus.ACCEPTED_WITH_TASK;
+                return Optional.of(InvocationResponseStatus.ACCEPTED_WITH_TASK);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -92,7 +94,7 @@ public class WaitWindow {
     }
 
     /**
-     * Releases the window (e.g. client disconnect); subsequent polls return {@code null}.
+     * Releases the window (e.g. client disconnect); subsequent polls return empty.
      */
     public void release() {
         this.released = true;

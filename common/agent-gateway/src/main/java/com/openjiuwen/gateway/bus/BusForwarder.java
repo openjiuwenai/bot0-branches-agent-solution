@@ -85,8 +85,9 @@ public class BusForwarder {
 
         int maxPolls = 100;
         for (int i = 0; i < maxPolls; i++) {
-            InvocationResponseStatus status = window.checkTimeout(System.currentTimeMillis());
-            if (status != null) {
+            var timedOut = window.checkTimeout(System.currentTimeMillis());
+            if (timedOut.isPresent()) {
+                InvocationResponseStatus status = timedOut.get();
                 g4w.onFold(status, ctx.tenantId(), ctx.messageId(), statusBody(status));
                 return ResponseEntity.ok().body(statusBody(status));
             }

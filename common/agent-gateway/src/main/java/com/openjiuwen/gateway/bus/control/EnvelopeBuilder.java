@@ -22,7 +22,7 @@ import java.util.UUID;
 public class EnvelopeBuilder {
 
     /**
-     * Builds a CLIENT_INVOCATION_REQUESTED envelope with gateway-generated ids.
+     * Inputs for {@link #buildEnvelope(BuildRequest)} (ICD §4.4 P3 fields).
      *
      * @param tenantId tenant scope
      * @param traceId trace id
@@ -32,22 +32,36 @@ public class EnvelopeBuilder {
      * @param sourceServiceId gateway service identity
      * @param payloadRef optional stashed body ref
      * @param deadlineMillisEpoch enqueue deadline (epoch millis)
+     */
+    public record BuildRequest(
+            String tenantId,
+            String traceId,
+            String idempotencyKey,
+            String routeHandleValue,
+            String targetServiceId,
+            String sourceServiceId,
+            String payloadRef,
+            long deadlineMillisEpoch) {
+    }
+
+    /**
+     * Builds a CLIENT_INVOCATION_REQUESTED envelope with gateway-generated ids.
+     *
+     * @param request envelope field bundle
      * @return the forwarding envelope ready for outbox enqueue
      */
-    public ForwardingEnvelope buildEnvelope(
-            String tenantId, String traceId, String idempotencyKey,
-            String routeHandleValue, String targetServiceId, String sourceServiceId,
-            String payloadRef, long deadlineMillisEpoch) {
+    public ForwardingEnvelope buildEnvelope(BuildRequest request) {
         String correlationId = "gw-correlation-" + UUID.randomUUID();
         ForwardingMessageId messageId = new ForwardingMessageId("gw-" + UUID.randomUUID());
-        ForwardingRouteHandle routeHandle = new ForwardingRouteHandle(routeHandleValue, tenantId);
-        ForwardingEnvelope.PayloadPolicy policy = payloadRef != null
+        ForwardingRouteHandle routeHandle = new ForwardingRouteHandle(
+                request.routeHandleValue(), request.tenantId());
+        ForwardingEnvelope.PayloadPolicy policy = request.payloadRef() != null
                 ? ForwardingEnvelope.PayloadPolicy.DATA_BEARING
                 : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY;
         return new ForwardingEnvelope(
                 messageId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-                tenantId, traceId, correlationId, idempotencyKey,
-                routeHandle, "client-invocation", sourceServiceId, targetServiceId,
-                deadlineMillisEpoch, policy, payloadRef);
+                request.tenantId(), request.traceId(), correlationId, request.idempotencyKey(),
+                routeHandle, "client-invocation", request.sourceServiceId(), request.targetServiceId(),
+                request.deadlineMillisEpoch(), policy, request.payloadRef());
     }
 }

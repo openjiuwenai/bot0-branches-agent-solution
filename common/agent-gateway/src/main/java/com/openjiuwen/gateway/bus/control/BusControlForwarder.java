@@ -56,14 +56,15 @@ public class BusControlForwarder {
         }
         String idempotencyKey = ctx.messageId() != null && !ctx.messageId().isBlank()
                 ? ctx.messageId() : "gw-idem-" + UUID.randomUUID();
-        ForwardingEnvelope envelope = envelopeBuilder.buildEnvelope(
+        ForwardingEnvelope envelope = envelopeBuilder.buildEnvelope(new EnvelopeBuilder.BuildRequest(
                 ctx.tenantId(), ctx.traceId(), idempotencyKey,
                 routeHandleValue, targetServiceId, sourceServiceId,
-                payloadRef, deadlineMillisEpoch);
+                payloadRef, deadlineMillisEpoch));
         try {
             outboxPort.enqueue(envelope, sourceServiceId, targetServiceId, System.currentTimeMillis());
             return envelope;
-        } catch (Exception ex) {
+        } catch (IllegalStateException | IllegalArgumentException ex) {
+            // Outbox adapters map enqueue failures to these types (see FakeForwardingOutboxPort).
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ENQUEUE_FAILED",
                     "Bus enqueue failed", ex);
         }
