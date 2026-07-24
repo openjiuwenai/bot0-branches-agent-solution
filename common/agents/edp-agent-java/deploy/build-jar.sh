@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在 Linux（x86）上直接从 git 代码仓构建 EDP Agent 运行 jar。
+# 在 64 位 Linux（amd64/arm64）上直接从 git 代码仓构建 EDP Agent 运行 jar。
 # 等价于 pack-for-linux.ps1 的构建部分，但不打 tar：在 Linux 上就地构建，
 # 随后用 build-image.sh 以 edp-agent-java 为上下文构建镜像，无需任何 Windows 步骤。
 #

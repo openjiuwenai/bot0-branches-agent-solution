@@ -2,11 +2,26 @@
 
 本目录只负责 `adapter-versatile-agent-java` 镜像及其容器。它不依赖 `deploy-all` 或 Docker Compose，也不会启动、停止或删除 EDP Agent、Redis、Versatile mock 和共享网络。
 
-## 0. 从零开始：x86 Linux 一键部署（推荐）
+## 0. 从零开始：64 位 Linux（amd64/arm64）一键部署（推荐）
 
-本手册所有 `.sh` 脚本均为 Linux 原生 bash，可在 x86 Linux 上仅凭本代码仓完成“构建 jar → 构建镜像 → 建网络 → 起容器 → 验证”，**无需任何 Windows / PowerShell 步骤**。
+本手册所有 `.sh` 脚本均为 Linux 原生 bash，可在 64 位 amd64 或 arm64 Linux 上仅凭本代码仓完成“构建 jar → 构建镜像 → 建网络 → 起容器 → 验证”，**无需任何 Windows / PowerShell 步骤**。构建服务器和部署服务器为同一台时，`docker build` 会自动按当前服务器架构构建对应镜像，不需要 `buildx` 或手工指定 `--platform`。
 
 前置：Linux 上已装 `git`、`docker`、`JDK 17`、`Maven 3.8+`。
+
+ARM64 服务器在部署前先确认操作系统、Docker 和基础镜像均为 64 位 ARM：
+
+```bash
+uname -m
+getconf LONG_BIT
+docker info --format '{{.Architecture}}'
+
+docker pull eclipse-temurin:21-jre-jammy
+docker image inspect \
+  --format '{{.RepoTags}} -> {{.Os}}/{{.Architecture}}' \
+  eclipse-temurin:21-jre-jammy
+```
+
+预期 `uname -m` 为 `aarch64` 或 `arm64`，`getconf LONG_BIT` 为 `64`，基础镜像为 `linux/arm64`。本手册不覆盖 32 位 ARM（如 `armv7l`）。如果镜像来自企业私有仓库或镜像代理，还必须确认该仓库实际同步了 arm64 版本。
 
 ```bash
 # 1) 拉取代码仓
@@ -23,7 +38,7 @@ bash deploy/deploy.sh
 
 `deploy.sh` 会自动调用 `build-jar.sh`（Maven 构建）与 `build-image.sh`（Docker 构建），因此从干净 clone 即可直接部署。若镜像已从镜像仓库拉取，用 `bash deploy/deploy.sh --skip-build` 跳过 jar 与镜像构建。
 
-> **重要（Java 版本）**：本 adapter 依赖的共享模块 `agent-runtime-ext-java` 使用 `com.openjiuwen:agent-core-java:0.1.13`（为 JDK 17 发布的构建）。请勿改用旧的裸 `0.1.12`，否则在 x86 Linux 上会出现 `package com.openjiuwen.harness.deep_agent does not exist`、`cannot find symbol DeepAgent/InterruptRequest` 等编译错误。详见文末“常见问题”。
+> **重要（Java 版本）**：本 adapter 依赖的共享模块 `agent-runtime-ext-java` 使用 `com.openjiuwen:agent-core-java:0.1.13`（为 JDK 17 发布的构建）。请勿改用旧的裸 `0.1.12`，否则在 Linux 上会出现 `package com.openjiuwen.harness.deep_agent does not exist`、`cannot find symbol DeepAgent/InterruptRequest` 等编译错误。详见文末“常见问题”。
 
 ## 先理解两个 Docker 动作
 
