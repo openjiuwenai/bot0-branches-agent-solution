@@ -13,6 +13,7 @@ import com.openjiuwen.gateway.governance.GovernanceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -67,11 +68,11 @@ public class ParamValidator {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
                     "JSON-RPC body must be an object");
         }
-        if (!"2.0".equals(text(root, "jsonrpc"))) {
+        if (!"2.0".equals(text(root, "jsonrpc").orElse(null))) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
                     "jsonrpc must be \"2.0\"");
         }
-        String method = text(root, "method");
+        String method = text(root, "method").orElse(null);
         if (method == null || method.isBlank()) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
                     "Missing method");
@@ -83,13 +84,13 @@ public class ParamValidator {
         ctx.setMethod(method);
 
         JsonNode message = root.path("params").path("message");
-        String taskId = text(message, "taskId");
+        String taskId = text(message, "taskId").orElse(null);
         if (taskId != null && !taskId.isBlank()) {
             // resume
             ctx.setTaskId(taskId);
         } else {
             // create — agentId optional but empty-string is illegal
-            String agentId = text(root.path("params").path("metadata"), "agentId");
+            String agentId = text(root.path("params").path("metadata"), "agentId").orElse(null);
             if (agentId != null && agentId.isBlank()) {
                 throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_AGENT_ID",
                         "agentId must not be empty");
@@ -99,18 +100,18 @@ public class ParamValidator {
             }
         }
 
-        String messageId = text(message, "messageId");
+        String messageId = text(message, "messageId").orElse(null);
         if (messageId != null && !messageId.isBlank()) {
             ctx.setMessageId(messageId);
         }
-        String contextId = text(message, "contextId");
+        String contextId = text(message, "contextId").orElse(null);
         if (contextId != null && !contextId.isBlank()) {
             ctx.setContextId(contextId);
         }
     }
 
-    private static String text(JsonNode parent, String field) {
+    private static Optional<String> text(JsonNode parent, String field) {
         JsonNode node = parent.path(field);
-        return (node.isMissingNode() || node.isNull()) ? null : node.asText();
+        return (node.isMissingNode() || node.isNull()) ? Optional.empty() : Optional.of(node.asText());
     }
 }

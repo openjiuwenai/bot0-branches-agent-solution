@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
@@ -77,10 +78,8 @@ public class Router {
         }
         String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
         String response = runtime.invokeSync(resolved.endpointUrl(), outbound);
-        String taskId = extractTaskId(response);
-        if (taskId != null && !taskId.isBlank()) {
-            stickyIndex.put(taskId, chosen.routeHandle());
-        }
+        extractTaskId(response).filter(s -> !s.isBlank()).ifPresent(
+                taskId -> stickyIndex.put(taskId, chosen.routeHandle()));
         return response;
     }
 
@@ -114,10 +113,13 @@ public class Router {
         AtomicBoolean stickyWritten = new AtomicBoolean();
         return frames.peek(frame -> {
             if (!stickyWritten.get()) {
-                String taskId = extractTaskId(frame);
-                if (taskId != null && !taskId.isBlank() && stickyWritten.compareAndSet(false, true)) {
-                    stickyIndex.put(taskId, chosen.routeHandle());
-                }
+                extractTaskId(frame)
+                        .filter(s -> !s.isBlank())
+                        .ifPresent(taskId -> {
+                            if (stickyWritten.compareAndSet(false, true)) {
+                                stickyIndex.put(taskId, chosen.routeHandle());
+                            }
+                        });
             }
         });
     }
@@ -173,23 +175,27 @@ public class Router {
      * (FEAT-001 / status-update frames). Missing any of these left sticky unbound
      * so tool/user-input resume failed with {@code RESUME_OWNER_UNKNOWN}.
      */
-    String extractTaskId(String response) {
+    /**
+     * Extract the task id from a runtime response / SSE frame.
+     * Accepts A2A shapes used in the wild: {@code result.id}, {@code result.taskId},
+     * {@code result.task.id}, and nested {@code result.statusUpdate.taskId}
+     * (FEAT-001 / status-update frames). Missing any of these left sticky unbound
+     * so tool/user-input resume failed with {@code RESUME_OWNER_UNKNOWN}.
+     *
+     * @param response runtime JSON-RPC body or SSE frame
+     * @return the extracted task id, or empty if not found / unparseable
+     */
+    Optional<String> extractTaskId(String response) {
         try {
             JsonNode root = mapper.readTree(response);
             JsonNode result = root.path("result");
-            String id = text(result, "id");
-            if (id == null || id.isBlank()) {
-                id = text(result, "taskId");
-            }
-            if (id == null || id.isBlank()) {
-                id = text(result.path("task"), "id");
-            }
-            if (id == null || id.isBlank()) {
-                id = text(result.path("statusUpdate"), "taskId");
-            }
-            return id;
+            return text(result, "id")
+                    .filter(s -> !s.isBlank())
+                    .or(() -> text(result, "taskId").filter(s -> !s.isBlank()))
+                    .or(() -> text(result.path("task"), "id").filter(s -> !s.isBlank()))
+                    .or(() -> text(result.path("statusUpdate"), "taskId").filter(s -> !s.isBlank()));
         } catch (JsonProcessingException ex) {
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -204,8 +210,8 @@ public class Router {
         throw new ClassCastException("parent JsonNode is not an ObjectNode: " + parent.getNodeType());
     }
 
-    private static String text(JsonNode parent, String field) {
+    private static Optional<String> text(JsonNode parent, String field) {
         JsonNode node = parent.path(field);
-        return (node.isMissingNode() || node.isNull()) ? null : node.asText();
+        return (node.isMissingNode() || node.isNull()) ? Optional.empty() : Optional.of(node.asText());
     }
 }

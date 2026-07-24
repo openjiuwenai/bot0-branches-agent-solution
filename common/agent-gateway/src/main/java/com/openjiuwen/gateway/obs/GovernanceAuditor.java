@@ -10,6 +10,7 @@ import com.openjiuwen.gateway.governance.GovernanceException;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.Optional;
 
 /**
  * Builds {@link AuditEvent}s from the governance context and dispatches them to
@@ -51,25 +52,25 @@ public class GovernanceAuditor {
      */
     public void auditRejected(GovernanceContext ctx, GovernanceException ex) {
         sink.record(new AuditEvent(ctx.traceId(), ctx.principalId(), ctx.tenantId(), ctx.method(),
-                AuditEvent.Outcome.REJECTED, stageFromCode(ex.code()), ex.code(), Instant.now()));
+                AuditEvent.Outcome.REJECTED, stageFromCode(ex.code()).orElse(null), ex.code(), Instant.now()));
     }
 
-    private static String stageFromCode(String code) {
+    private static Optional<String> stageFromCode(String code) {
         if (code == null) {
-            return null;
+            return Optional.empty();
         }
         if (code.startsWith("AUTH_")) {
-            return "G1";
+            return Optional.of("G1");
         }
         if (code.startsWith("TENANT_")) {
-            return "G2";
+            return Optional.of("G2");
         }
         if (code.startsWith("VALIDATION_")) {
-            return "G3";
+            return Optional.of("G3");
         }
         if (code.startsWith("IDEMPOTENCY_")) {
-            return "G4";
+            return Optional.of("G4");
         }
-        return null;
+        return Optional.empty();
     }
 }
