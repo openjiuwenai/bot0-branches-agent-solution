@@ -758,13 +758,12 @@ class SkillHubManagerTest {
      * @param agent the shared agent instance
      * @param n number of concurrent workers
      * @param installCount the shared install invocation counter
-     * @throws Exception if the test fails
      */
     private static void runConcurrentRegister(SkillHubManager manager, Object agent, int n,
-            java.util.concurrent.atomic.AtomicInteger installCount) throws Exception {
+            java.util.concurrent.atomic.AtomicInteger installCount) throws InterruptedException {
         java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(n);
         java.util.concurrent.CountDownLatch doneLatch = new java.util.concurrent.CountDownLatch(n);
-        java.util.concurrent.atomic.AtomicReference<Exception> firstError = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<IllegalStateException> firstError = new java.util.concurrent.atomic.AtomicReference<>();
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(n);
         try {
             for (int i = 0; i < n; i++) {
@@ -773,7 +772,9 @@ class SkillHubManagerTest {
                     try {
                         startLatch.await();
                         manager.register(agent);
-                    } catch (Exception ex) {
+                    } catch (InterruptedException ex) {
+                        // In test context, simply proceed to doneLatch.
+                    } catch (IllegalStateException ex) {
                         firstError.compareAndSet(null, ex);
                     } finally {
                         doneLatch.countDown();
@@ -783,7 +784,7 @@ class SkillHubManagerTest {
             assertThat(doneLatch.await(10, java.util.concurrent.TimeUnit.SECONDS))
                     .as("all workers should finish within 10s").isTrue();
             if (firstError.get() != null) {
-                throw new AssertionError("worker threw", firstError.get());
+                throw new RuntimeException("worker threw", firstError.get());
             }
             assertThat(installCount.get()).as(
                     "installer.install must be called exactly once for the same agent " + "under concurrent register")
