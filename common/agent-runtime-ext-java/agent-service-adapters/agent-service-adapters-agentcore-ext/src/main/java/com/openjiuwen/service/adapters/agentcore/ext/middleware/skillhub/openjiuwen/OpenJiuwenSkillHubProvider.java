@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory;
+import com.openjiuwen.service.spec.ext.skillhub.SkillHubException;
 import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
 
 import org.slf4j.Logger;
@@ -95,52 +96,47 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     public void start(SkillHubConfig config, String decryptedToken) {
         // Connection params are captured from constructor in practice; config is the source
         // of truth for localDir at download time. Build the HTTP client here.
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(CONNECT_TIMEOUT)
-                .build();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         // Reuse the pool across download() calls to avoid thread churn during
         // background retry. Use ThreadPoolExecutor directly with a
         // daemon thread factory that installs an uncaught-exception handler.
         ThreadFactory downloadFactory = r -> {
             Thread t = new Thread(r, "skillhub-download");
             t.setDaemon(true);
-            t.setUncaughtExceptionHandler((thr, ex) ->
-                    log.error("SkillHub download thread uncaught exception thread={} reason={}",
-                            thr.getName(), ex.toString()));
+            t.setUncaughtExceptionHandler((thr, ex) -> log.error(
+                    "SkillHub download thread uncaught exception thread={} reason={}", thr.getName(), ex.toString()));
             return t;
         };
-        this.downloadPool = new ThreadPoolExecutor(
-                DOWNLOAD_CONCURRENCY, DOWNLOAD_CONCURRENCY,
-                0L, TimeUnit.MILLISECONDS,
-                new java.util.concurrent.LinkedBlockingQueue<>(),
-                downloadFactory);
-        log.info("SkillHub provider started endpoint={} authType={} credential={}",
-                sanitizeEndpoint(this.endpoint), this.authType,
-                this.token.isEmpty() ? "absent" : "provided");
+        this.downloadPool = new ThreadPoolExecutor(DOWNLOAD_CONCURRENCY, DOWNLOAD_CONCURRENCY, 0L,
+                TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<>(), downloadFactory);
+        log.info("SkillHub provider started endpoint={} authType={} credential={}", sanitizeEndpoint(this.endpoint),
+                this.authType, this.token.isEmpty() ? "absent" : "provided");
     }
 
     @Override
     public boolean download(SkillHubConfig config, String decryptedToken) {
         if (this.httpClient == null) {
-            throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                    "provider not started", null);
+            throw error(SkillHubErrorCategory.CONNECT_FAILED, "provider not started", null);
         }
         String localDir = config.getLocalDir();
         if (localDir == null || localDir.isBlank()) {
-            throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                    "localDir not configured", null);
+            throw error(SkillHubErrorCategory.CONNECT_FAILED, "localDir not configured", null);
         }
         Path localRoot = Paths.get(localDir);
         try {
             Files.createDirectories(localRoot);
         } catch (IOException ex) {
-            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
-                    "cannot create localDir path=" + sanitizePath(localRoot), ex);
+            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "cannot create localDir path=" + sanitizePath(localRoot),
+                    ex);
         }
 
         List<SkillSummary> skills = listAllPublicSkills();
-        java.util.concurrent.atomic.AtomicBoolean allSucceeded =
-                new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicBoolean allSucceeded = new java.util.concurrent.atomic.AtomicBoolean(true);
+        // Aggregate the first fatal (auth/access/not-found) failure so it can
+        // be rethrown from the caller thread after all parallel tasks drain.
+        // Degradable failures (download/checksum) only flip allSucceeded and
+        // let other tasks complete (issue #29 §4.2).
+        java.util.concurrent.atomic.AtomicReference<SkillHubException> fatalFailure = new java.util.concurrent.atomic.AtomicReference<>();
         // 4-way bounded parallel download. Single-skill failure is isolated:
         // downloadOne throws → caught per-task → allSucceeded flips false → other tasks continue.
         // Pool is owned by the Provider (created in start(), closed in stop()) so
@@ -150,7 +146,18 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             futures.add(downloadPool.submit(() -> {
                 try {
                     downloadOne(summary, localRoot);
+                } catch (SkillHubException ex) {
+                    SkillHubErrorCategory cat = ex.category();
+                    if (isFatal(cat)) {
+                        // Capture the first fatal failure; other tasks continue
+                        // draining so we don't leak threads. Rethrown after drain.
+                        fatalFailure.compareAndSet(null, ex);
+                    }
+                    allSucceeded.set(false);
+                    log.warn("SkillHub skill download failed skillId={} required=true category={} reason={}",
+                            summary.assetId(), cat, ex.getMessage(), ex);
                 } catch (IllegalStateException ex) {
+                    // Legacy/unclassified — degrade only.
                     allSucceeded.set(false);
                     log.warn("SkillHub skill download failed skillId={} required=true category={} reason={}",
                             summary.assetId(), categoryOf(ex), ex.getMessage(), ex);
@@ -171,6 +178,12 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                         ee.getCause() != null ? ee.getCause().getMessage() : ee.getMessage());
             }
         }
+        // After all parallel tasks have drained, propagate the first fatal
+        // failure so SkillHubManager.start() can fail fast (issue #29 §4.2).
+        SkillHubException fatal = fatalFailure.get();
+        if (fatal != null) {
+            throw fatal;
+        }
         return allSucceeded.get();
     }
 
@@ -184,8 +197,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         }
         if (!Files.isDirectory(skillPath)) {
             log.warn("SkillHub skill verify failed skillPath={} category=CHECKSUM_MISMATCH"
-                    + " reason=not-directory-or-missing",
-                    sanitizePath(skillPath));
+                    + " reason=not-directory-or-missing", sanitizePath(skillPath));
             return false;
         }
         java.util.Optional<Path> skillMdOpt = resolveSkillMd(skillPath);
@@ -210,8 +222,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             String content = Files.readString(skillMd, StandardCharsets.UTF_8);
             if (!hasFrontMatter(content)) {
                 log.warn("SkillHub skill verify failed skillPath={} category=CHECKSUM_MISMATCH"
-                        + " reason=missing-yaml-front-matter",
-                        sanitizePath(skillPath));
+                        + " reason=missing-yaml-front-matter", sanitizePath(skillPath));
                 return false;
             }
         } catch (IOException ex) {
@@ -220,8 +231,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             return false;
         }
         log.info("SkillHub skill verified skillPath={} method=extracted-dir-has-SKILL.md-with-front-matter"
-                + " verified=true",
-                sanitizePath(skillPath));
+                + " verified=true", sanitizePath(skillPath));
         return true;
     }
 
@@ -261,7 +271,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
      * @return the path wrapped in Optional, empty if not found.
      */
     private static java.util.Optional<Path> resolveSkillMd(Path dir) {
-        for (String name : new String[]{"SKILL.md", "Skill.md"}) {
+        for (String name : new String[] {"SKILL.md", "Skill.md"}) {
             Path candidate = dir.resolve(name);
             if (Files.isReadable(candidate)) {
                 return java.util.Optional.of(candidate);
@@ -295,15 +305,18 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         List<SkillSummary> all = new ArrayList<>();
         int page = 1;
         while (true) {
-            String path = String.format(java.util.Locale.ROOT,
-                    "/api/v1/plugins?plugin_type=skill&page=%d&page_size=%d",
+            String path = String.format(java.util.Locale.ROOT, "/api/v1/plugins?plugin_type=skill&page=%d&page_size=%d",
                     page, DEFAULT_PAGE_SIZE);
             JsonNode data;
             try {
                 data = sendJson(buildGet(path));
+            } catch (SkillHubException ex) {
+                // Already classified (AUTH_FAILED/NOT_FOUND/CONNECT_FAILED) by
+                // sendJson() — preserve the original category, don't overwrite.
+                throw ex;
             } catch (IllegalStateException ex) {
-                throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                        "list skills page=" + page, ex);
+                // Unclassified — wrap as CONNECT_FAILED.
+                throw error(SkillHubErrorCategory.CONNECT_FAILED, "list skills page=" + page, ex);
             }
             JsonNode items = data.path("items");
             if (!items.isArray() || items.isEmpty()) {
@@ -335,18 +348,14 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         try {
             Files.createDirectories(skillDir);
         } catch (IOException ex) {
-            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
-                    "create skill dir assetId=" + assetId, ex);
+            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "create skill dir assetId=" + assetId, ex);
         }
 
         ArtifactInfo info = fetchArtifactInfo(assetId, version);
         if (info == null || info.downloadUrl() == null || info.downloadUrl().isBlank()) {
-            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
-                    "no download_url assetId=" + assetId, null);
+            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "no download_url assetId=" + assetId, null);
         }
-        String zipName = (info.name() != null && !info.name().isBlank())
-                ? info.name()
-                : assetId;
+        String zipName = (info.name() != null && !info.name().isBlank()) ? info.name() : assetId;
         // Ensure the zip file path ends with .zip so it doesn't collide with the
         // extracted dir path (which is zipName without .zip). The skillhub /artifacts
         // response's name field has no extension, so we append .zip here.
@@ -364,10 +373,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 } catch (IOException ignored) {
                     // best-effort cleanup
                 }
-                throw error(SkillHubErrorCategory.CHECKSUM_MISMATCH,
-                        "download sha256 mismatch assetId=" + assetId
-                                + " expected=" + maskHash(expected)
-                                + " actual=" + maskHash(actual), null);
+                throw error(SkillHubErrorCategory.CHECKSUM_MISMATCH, "download sha256 mismatch assetId=" + assetId
+                        + " expected=" + maskHash(expected) + " actual=" + maskHash(actual), null);
             }
         }
 
@@ -377,8 +384,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         try {
             extractZip(zipPath, extractDir);
         } catch (IOException ex) {
-            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
-                    "extract zip failed assetId=" + assetId, ex);
+            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "extract zip failed assetId=" + assetId, ex);
         }
 
         // Remove the zip + sidecar; only the extracted directory is needed for registration.
@@ -388,8 +394,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             // best-effort; zip is harmless once extracted
         }
 
-        log.info("SkillHub skill download succeeded skillId={} version={} size={} extracted={}",
-                assetId, version, info.fileSize(), sanitizePath(extractDir));
+        log.info("SkillHub skill download succeeded skillId={} version={} size={} extracted={}", assetId, version,
+                info.fileSize(), sanitizePath(extractDir));
     }
 
     /**
@@ -425,36 +431,32 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     }
 
     private ArtifactInfo fetchArtifactInfo(String assetId, String version) {
-        String path = version == null || version.isBlank()
-                ? "/api/v1/artifacts/" + assetId
+        String path = version == null || version.isBlank() ? "/api/v1/artifacts/" + assetId
                 : "/api/v1/artifacts/" + assetId + "?version=" + version;
         JsonNode data;
         try {
             data = sendJson(buildGet(path));
+        } catch (SkillHubException ex) {
+            // sendJson() already classified 404/401/403/CONNECT_FAILED —
+            // preserve the original category, don't overwrite to NOT_FOUND.
+            throw ex;
         } catch (IllegalStateException ex) {
-            throw error(SkillHubErrorCategory.NOT_FOUND,
-                    "artifacts lookup assetId=" + assetId, ex);
+            // Unclassified — wrap as NOT_FOUND (artifact lookup failure is the
+            // closest existing category for unexpected parse/IO errors here).
+            throw error(SkillHubErrorCategory.NOT_FOUND, "artifacts lookup assetId=" + assetId, ex);
         }
-        return new ArtifactInfo(
-                textOrEmpty(data, "download_url"),
-                textOrEmpty(data, "checksum_sha256"),
-                data.path("file_size").asLong(0L),
-                textOrEmpty(data, "name"),
-                textOrEmpty(data, "version"));
+        return new ArtifactInfo(textOrEmpty(data, "download_url"), textOrEmpty(data, "checksum_sha256"),
+                data.path("file_size").asLong(0L), textOrEmpty(data, "name"), textOrEmpty(data, "version"));
     }
 
     private void httpDownloadFile(String downloadUrl, Path target) {
         try {
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(downloadUrl))
-                    .timeout(DOWNLOAD_TIMEOUT)
-                    .GET()
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(downloadUrl)).timeout(DOWNLOAD_TIMEOUT).GET()
                     .build();
             // Stream directly to file to avoid loading the entire zip into the
             // JVM heap. Large skill packages under DOWNLOAD_TIMEOUT=10min
             // could otherwise OOM.
-            HttpResponse<Path> resp = httpClient.send(req,
-                    HttpResponse.BodyHandlers.ofFile(target));
+            HttpResponse<Path> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofFile(target));
             int status = resp.statusCode();
             if (status < 200 || status >= 300) {
                 // Body handler may have created an empty/partial file on failure.
@@ -463,8 +465,7 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 } catch (IOException ignored) {
                     // Ignore cleanup failure as file may not exist
                 }
-                throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
-                        "download status=" + status, null);
+                throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "download status=" + status, null);
             }
             // ofFile writes the body to disk as it arrives; size check catches
             // the empty-body case without materializing bytes in memory.
@@ -480,21 +481,17 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                 } catch (IOException ignored) {
                     // Ignore cleanup failure as file may not exist
                 }
-                throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
-                        "download empty body", null);
+                throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "download empty body", null);
             }
         } catch (IOException | InterruptedException ex) {
-            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED,
-                    "download io error", ex);
+            throw error(SkillHubErrorCategory.DOWNLOAD_FAILED, "download io error", ex);
         }
     }
 
     // ----- HTTP helpers -----
 
     private HttpRequest buildGet(String path) {
-        HttpRequest.Builder b = HttpRequest.newBuilder()
-                .uri(URI.create(this.endpoint + path))
-                .timeout(REQUEST_TIMEOUT)
+        HttpRequest.Builder b = HttpRequest.newBuilder().uri(URI.create(this.endpoint + path)).timeout(REQUEST_TIMEOUT)
                 .GET();
         if (!this.token.isEmpty()) {
             if ("bearer".equalsIgnoreCase(this.authType)) {
@@ -513,35 +510,28 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             int status = resp.statusCode();
             if (status == 401 || status == 403) {
-                throw error(SkillHubErrorCategory.AUTH_FAILED,
-                        "status=" + status, null);
+                throw error(SkillHubErrorCategory.AUTH_FAILED, "status=" + status, null);
             }
             if (status == 404) {
-                throw error(SkillHubErrorCategory.NOT_FOUND,
-                        "status=404", null);
+                throw error(SkillHubErrorCategory.NOT_FOUND, "status=404", null);
             }
             if (status < 200 || status >= 300) {
-                throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                        "status=" + status, null);
+                throw error(SkillHubErrorCategory.CONNECT_FAILED, "status=" + status, null);
             }
             String body = resp.body();
             if (body == null || body.isEmpty()) {
-                throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                        "empty body", null);
+                throw error(SkillHubErrorCategory.CONNECT_FAILED, "empty body", null);
             }
             JsonNode root = MAPPER.readTree(body);
             JsonNode data = root.path("data");
             if (data.isMissingNode() || data.isNull()) {
-                throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                        "missing data field", null);
+                throw error(SkillHubErrorCategory.CONNECT_FAILED, "missing data field", null);
             }
             return data;
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-            throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                    "json parse error", ex);
+            throw error(SkillHubErrorCategory.CONNECT_FAILED, "json parse error", ex);
         } catch (IOException | InterruptedException ex) {
-            throw error(SkillHubErrorCategory.CONNECT_FAILED,
-                    "http error", ex);
+            throw error(SkillHubErrorCategory.CONNECT_FAILED, "http error", ex);
         }
     }
 
@@ -559,8 +549,8 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             }
             return toHex(md.digest());
         } catch (IOException | java.security.NoSuchAlgorithmException ex) {
-            throw error(SkillHubErrorCategory.CHECKSUM_MISMATCH,
-                    "sha256 compute failed path=" + sanitizePath(path), ex);
+            throw error(SkillHubErrorCategory.CHECKSUM_MISMATCH, "sha256 compute failed path=" + sanitizePath(path),
+                    ex);
         }
     }
 
@@ -574,20 +564,12 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
 
     // ----- error/sanitization helpers -----
 
-    private static IllegalStateException error(SkillHubErrorCategory category,
-                                               String reason, Throwable cause) {
-        String safe = reason == null ? "" : reason;
-        IllegalStateException ex = new IllegalStateException(
-                "SkillHub[" + category + "] " + safe);
-        if (cause != null) {
-            ex.initCause(cause);
-        }
-        return ex;
+    private static SkillHubException error(SkillHubErrorCategory category, String reason, Throwable cause) {
+        return new SkillHubException(category, reason, cause);
     }
 
     private static SkillHubErrorCategory categoryOf(IllegalStateException ex) {
-        if (ex.getMessage() != null
-                && ex.getMessage().startsWith("SkillHub[")) {
+        if (ex.getMessage() != null && ex.getMessage().startsWith("SkillHub[")) {
             try {
                 int start = "SkillHub[".length();
                 int end = ex.getMessage().indexOf(']', start);
@@ -599,6 +581,22 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
             }
         }
         return SkillHubErrorCategory.UNKNOWN;
+    }
+
+    /**
+     * Whether a category is fatal (fail-fast) per PR #415. Kept in sync with
+     * {@code SkillHubManager#isFatal} — fatal categories (auth/access/not-found)
+     * propagate to block Agent ready; degradable categories (download/checksum)
+     * allow the Agent to become ready with skills unavailable.
+     *
+     * @param category the resolved error category
+     * @return true if the category must fail fast
+     */
+    private static boolean isFatal(SkillHubErrorCategory category) {
+        return switch (category) {
+        case AUTH_FAILED, ACCESS_DENIED, NOT_FOUND -> true;
+        default -> false;
+        };
     }
 
     private static String textOrEmpty(JsonNode node, String field) {
@@ -654,9 +652,10 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
     }
 
     /** Internal view of a skill summary from {@code /plugins}. */
-    private record SkillSummary(String assetId, String name, String latestVersion) { }
+    private record SkillSummary(String assetId, String name, String latestVersion) {
+    }
 
     /** Internal view of artifact info from {@code /artifacts/{id}}. */
-    private record ArtifactInfo(String downloadUrl, String checksumSha256,
-            long fileSize, String name, String version) { }
+    private record ArtifactInfo(String downloadUrl, String checksumSha256, long fileSize, String name, String version) {
+    }
 }
