@@ -1,0 +1,140 @@
+# ============================================================
+# 客户应用配置 — 覆盖 edp-agent-engine 内置默认值
+# ============================================================
+
+server:
+  port: 8190
+
+spring:
+  application:
+    name: customer-agent-app
+
+edpa:
+  agent:
+    # 场景目录（wealth-demo: 理财购买场景, hz-zhidaitong: 智贷通场景）
+    scenario-home: ${EDP_AGENT_SCENARIO_HOME:./scenarios/wealth-demo}
+
+    # LLM 模型配置（必填）
+    model:
+      provider: ${EDP_AGENT_MODEL_PROVIDER:OpenAI}
+      name: ${EDP_AGENT_MODEL_NAME:deepseek-v4-pro}
+      base-url: ${EDP_AGENT_MODEL_BASE_URL:https://api.deepseek.com/v1}
+      api-key: ${EDP_AGENT_MODEL_API_KEY:sk-xxx}
+
+    # Redis 配置（用于 Todo 持久化和会话中断恢复）
+    redis:
+      mode: ${EDPA_REDIS_MODE:single}
+      host: ${EDPA_REDIS_HOST:localhost}
+      port: ${EDPA_REDIS_PORT:6379}
+      password: ${EDPA_REDIS_PASSWORD:}
+      database: ${EDPA_REDIS_DB:0}
+      connect-timeout-ms: ${EDPA_REDIS_CONNECT_TIMEOUT:5000}
+      socket-timeout-ms: ${EDPA_REDIS_SOCKET_TIMEOUT:10000}
+      checkpointer-ttl-minutes: ${EDPA_REDIS_CHECKPOINTER_TTL:60}
+      todo:
+        key-prefix: ${EDPA_REDIS_KEY_PREFIX:edpa}
+        ttl-seconds: ${EDPA_REDIS_TODO_TTL:3600}
+        refresh-on-read: ${EDPA_REDIS_REFRESH_ON_READ:true}
+
+    # Versatile 适配器（可选，用于委托外部业务系统）
+    versatile:
+      url: ${EDP_AGENT_VERSATILE_URL:http://localhost:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}}
+      adapter-a2a-url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191/a2a}
+      timeout: ${EDP_AGENT_VERSATILE_TIMEOUT:30s}
+      url-variables:
+        workflow_id: customer_workflow
+      query-params:
+        type: controller
+        workspace_id: "10"
+      headers:
+        content-type: application/json
+        stream: "true"
+
+    # MCP SSE 配置（可选，用于 MCP 脚本工具调用）
+    mcpsse:
+      master-url: ${EDP_MCP_MASTER_URL:http://localhost:8000/sse}
+      standby-url: ${EDP_MCP_STANDBY_URL:http://localhost:8000/sse}
+      access-token: ${EDP_MCP_ACCESS_TOKEN:}
+      app-name: ${EDP_MCP_APP_NAME:customer_app}
+
+    # 沙箱配置（可选，用于 MCP 脚本安全执行）
+    # enabled=false 时 MCP 脚本在本地直接执行
+    sandbox:
+      enabled: ${EDPA_SANDBOX_ENABLED:false}
+      service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}
+      sandbox-id-prefix: ${EDPA_SANDBOX_ID_PREFIX:edp}
+      exec-timeout-seconds: ${EDPA_SANDBOX_EXEC_TIMEOUT:60}
+      skill-deploy-path: ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+      auto-create-on-startup: ${EDPA_SANDBOX_AUTO_CREATE:true}
+      on-stop: ${EDPA_SANDBOX_ON_STOP:delete}
+      fallback-on-failure: ${EDPA_SANDBOX_FALLBACK_ON_FAILURE:true}
+      excluded-commands: ${EDPA_SANDBOX_EXCLUDED_COMMANDS:whoami,hostname}
+      container-scope: ${EDPA_SANDBOX_CONTAINER_SCOPE:SESSION}
+      create-timeout-seconds: ${EDPA_SANDBOX_CREATE_TIMEOUT:30}
+
+# A2A Agent Card
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "WealthAdvisor"
+      agent-description: "理财顾问 Agent — 基于 EDPAgent 引擎 + Layer2 深度定制"
+      provider-organization: "Customer"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "product_recommend"
+          name: "Product Recommend"
+          description: "理财产品推荐"
+          tags: ["wealth", "recommend"]
+          examples: ["推荐理财产品", "有什么好的理财"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+        - id: "fund_planning"
+          name: "Fund Planning"
+          description: "资金筹划与购买"
+          tags: ["wealth", "planning"]
+          examples: ["帮我规划资金", "购买理财产品"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+    external:
+      sandbox:
+        enabled: false
+        timeout-ms: 60000
+        retry:
+          max: 2
+          backoff-ms: 1000
+        circuit-breaker:
+          enabled: true
+          failure-threshold: 5
+          reset-timeout-ms: 30000
+        servers:
+          - server-id: default
+            service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}
+            sandbox-type: jiuwenbox
+            launcher-type: pre_deploy
+            on-stop: delete
+            root-path: .
+            idle-ttl-seconds: 300
+            extra-params:
+              policy:
+                filesystem_policy:
+                  read_write:
+                    - ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+                  directories:
+                    - path: ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+                      permissions: "0755"
+              policy_mode: append
+
+# 日志级别
+logging:
+  level:
+    com.huawei.ascend.edp: DEBUG
+    com.customer.agent: DEBUG
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG

@@ -23,8 +23,11 @@ public class DeepAgentLlmProperties {
     private String apiBase = "https://api.deepseek.com";
     private String modelName = "deepseek-chat";
     private boolean isSslVerify = true;
-    private String systemPrompt = "You are Agent A. When the user asks for remote business processing, "
-            + "call the remote A2A tool.";
+    private String systemPrompt = "You are Agent A. When the user asks for remote business processing, call the "
+            + "remote A2A tool. For a request containing multiple independent people, issue one independent remote "
+            + "tool call per person in the same assistant turn. Each multi-person remoteInput must be a JSON string "
+            + "with query and intent fields; query contains only that person's request and intent is "
+            + "\"\u67e5\u8be2\u8d26\u6237\u4f59\u989d\". A single-person request must still use one call.";
     private Double temperature = 0.2;
     private Double topP = 0.8;
     private Duration timeout = Duration.ofSeconds(120);

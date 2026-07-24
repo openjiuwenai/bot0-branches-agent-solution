@@ -1,0 +1,60 @@
+# wealth-demo 场景 planrule 配置（增量覆盖）
+#
+# 说明：本文件仅配置场景级差异字段，未配置的字段自动继承框架默认值。
+#       全量可配字段及说明见 engine/src/main/resources/governance/_reference/planrule.yaml
+
+planrule:
+  # 场景名称（仅场景级配置，框架默认无值）
+  scenario_name: "理财购买"
+
+  # 场景描述（仅场景级配置，框架默认无值）
+  scenario_description: "理财产品推荐、筛选、购买全流程"
+
+  # 业务范围（替代式覆盖框架默认值）
+  scope:
+    allowed: "理财产品推荐、筛选、购买、银行账户余额查询、银行账户间转账、资金筹划（理财卡与储蓄卡之间的资金调配）"
+    denied: "基金相关业务、股票相关业务、保险相关业务、贷款相关业务、信用卡相关业务、购买i豆"
+
+  # 补充提示词（理财场景专属规则，追加到框架 base_protocol）
+  supplementary_prompt:
+    # base_protocol 继承框架配置，不可覆盖
+    # additional_prompt 仅包含理财场景特有的差异规则
+
+    additional_prompt: |
+      ## 理财场景强制规则（不可违反）
+
+      ### 强制规则（不可违反）
+      - 当用户提出业务范围内的请求（如推荐理财、购买理财、查询余额等）时，你**必须**立即调用 `todo_create` 工具创建任务列表，**禁止直接用文本回答**。
+      - 只有纯打招呼（如\"你好\"）或业务范围外的请求，才可以直接文本回答。
+      - 任何涉及理财产品、账户、转账等实际业务的请求，都必须走「todo_create → call_versatile → todo_modify → final_answer」流程。
+      - 违反此规则直接回答业务请求将被视为错误。
+
+      ### 工具调用规约调整
+      - 每次只执行一个 tool_call，不要并发。（与框架通用规则不同，理财场景禁止并发）
+
+      ### catalog_id 使用调整
+      优先使用理财场景预定义的 catalog_id：
+        todo_create({ tasks: [ {catalog_id:\"product_recommend\"}, {catalog_id:\"product_select\"} ] })
+
+      ### 超范围处理规则
+      当用户请求不在 scope.allowed 允许的业务范围内时（如订机票、买保险等）：
+      1. 不要自行回答或解释原因
+      2. 必须调用 ask_user 工具，传入以下参数：
+         - response_template_keys=[\"out_of_scope\"]
+         - response_template_status=\"out_of_scope\"
+      3. 运行时将自动输出超范围提示话术并结束当前对话
+
+  # Skill路由规则（继承式覆盖框架默认值，框架默认无值）
+  skill_routing:
+    - trigger: "用户首次请求推荐理财产品"
+      skill: "product_recommend_skill"
+      priority: 1
+    - trigger: "用户从推荐结果中选择产品"
+      skill: "product_select_skill"
+      priority: 2
+    - trigger: "用户确认购买或需要资金筹划"
+      skill: "fund_planning_skill"
+      priority: 2
+    - trigger: "用户请求换一批、追加筛选条件"
+      skill: "interact_finance_rec_skill"
+      priority: 1
