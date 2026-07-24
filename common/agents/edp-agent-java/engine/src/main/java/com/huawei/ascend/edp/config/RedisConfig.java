@@ -26,6 +26,7 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.protocol.ProtocolVersion;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +70,18 @@ public class RedisConfig {
      */
     private static volatile RedisTodoStore singletonStore;
 
+    /**
+     * 静态持有 StringRedisTemplate 实例，供 ExecutionLimitRail 取用。
+     */
+    private static volatile StringRedisTemplate singletonTemplate;
+
+    /**
+     * 静态持有 TodoRedisProperties 实例，供 ExecutionLimitRail 取用。
+     */
+    private static volatile TodoRedisProperties singletonProps;
+
+    private volatile LettuceConnectionFactory redisFactory;
+
     private final TodoRedisProperties props;
 
     public RedisConfig(TodoRedisProperties props) {
@@ -83,6 +96,24 @@ public class RedisConfig {
 
     public static RedisTodoStore getRedisTodoStore() {
         return singletonStore;
+    }
+
+    /**
+     * 获取已注册的 StringRedisTemplate（未启动 Redis 时返回 null）。
+     *
+     * @return StringRedisTemplate 实例或 null
+     */
+    public static StringRedisTemplate getStringRedisTemplate() {
+        return singletonTemplate;
+    }
+
+    /**
+     * 获取已注册的 TodoRedisProperties（未启动时返回 null）。
+     *
+     * @return TodoRedisProperties 实例或 null
+     */
+    public static TodoRedisProperties getRedisProperties() {
+        return singletonProps;
     }
 
     /**
@@ -153,9 +184,21 @@ public class RedisConfig {
         LettuceConnectionFactory factory = new LettuceConnectionFactory(
                 redisConfig, clientBuilder.build());
         factory.afterPropertiesSet();
+        this.redisFactory = factory;
         LOGGER.info("[EDPA-DIAG] REDIS_CONFIG mode={} host={} port={} db={} resp2=true", mode, props.getHost(),
                 props.getPort(), props.getDatabase());
         return factory;
+    }
+
+    /**
+     * 显式关闭 Redis 连接池，确保在 Spring 容器关闭阶段、沙箱 Hook 之前销毁连接。
+     */
+    @PreDestroy
+    public void destroyRedis() {
+        if (redisFactory != null) {
+            LOGGER.info("[EDP-REDIS] Closing Redis connection factory");
+            redisFactory.destroy();
+        }
     }
 
     /**
@@ -166,7 +209,10 @@ public class RedisConfig {
      */
     @Bean
     public StringRedisTemplate stringRedisTemplate(LettuceConnectionFactory factory) {
-        return new StringRedisTemplate(factory);
+        StringRedisTemplate template = new StringRedisTemplate(factory);
+        singletonTemplate = template;
+        singletonProps = props;
+        return template;
     }
 
     /**
