@@ -337,6 +337,14 @@ public class EdpaEventRail extends DeepAgentRail {
             List<?> messages = inputs.getMessages();
             String text = findLastUserMessageText(messages).orElse(null);
             if (text != null) {
+                // ★ 检测新用户请求：与上次缓存的 _edp_user_input 不同时，重置 turnCount
+                // 对齐 Python is_first_thinking_round：每次新用户请求入口时为 True（turnCount=0 → planning）
+                Object prevInput = ctx.getExtra().get("_edp_user_input");
+                if (prevInput instanceof String prev && !prev.equals(text)) {
+                    ctx.getExtra().put(KEY_THINK_TURN_COUNT, 0);
+                    LOGGER.info("[EDPA-DIAG] new user input detected, reset think_turn_count to 0 (prev={}, new={})",
+                            abbreviate(prev, 30), abbreviate(text, 30));
+                }
                 ctx.getExtra().put("_edp_user_input", text);
             }
         }
@@ -469,10 +477,10 @@ public class EdpaEventRail extends DeepAgentRail {
                 ? "interrupt-handled"
                 : "real-exec";
 
-        // 缓存 call_versatile 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，
+        // 缓存 call_versatile/call_mcp 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，
         // 对齐 Python _last_query_intent）
         String queryIntent = "";
-        if (TOOL_CALL_VERSATILE.equals(toolName)) {
+        if (TOOL_CALL_VERSATILE.equals(toolName) || TOOL_CALL_MCP.equals(toolName)) {
             Map<String, Object> args = normalizeToolArgs(inputs.getToolArgs());
             queryIntent = String.valueOf(args.getOrDefault("query_intent", ""));
             if (!queryIntent.isBlank() && !"null".equals(queryIntent)) {
@@ -590,6 +598,23 @@ public class EdpaEventRail extends DeepAgentRail {
         if ("todo_end".equals(uiNoticeEvent)) {
             emit(ctx, EdpaEventType.TODO_END, Map.of("content", uiNoticeText, "status", "done"));
         }
+
+        // call_versatile 中断恢复：cascade inputRequired 导致的 interrupt 在下一轮恢复后，
+        // 需要发 interrupt_end 清除 interruptActive，否则 afterInvoke 跳过 response_template 的 exit interrupt_start。
+        if (TOOL_CALL_VERSATILE.equals(toolName) && interruptActive.getOrDefault(sid, false)) {
+            String interruptId = interruptIdMap.remove(sid);
+            LOGGER.info(
+                    "[EDPA-DIAG] afterToolCall tool=call_versatile interrupt active "
+                            + "-> emit interrupt_end(interrupt_id={})",
+                    interruptId);
+            Map<String, Object> endPayload = new java.util.LinkedHashMap<>();
+            endPayload.put("tool", toolName);
+            endPayload.put("interrupt_id", interruptId != null ? interruptId : "");
+            emit(ctx, EdpaEventType.INTERRUPT_END, endPayload);
+            interruptActive.remove(sid);
+            ctx.getExtra().put(KEY_JUST_RESUMED, true);
+        }
+
         toolOpen.put(sid, false);
     }
 

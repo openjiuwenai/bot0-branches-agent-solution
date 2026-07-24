@@ -463,6 +463,12 @@ public final class ScriptResolver {
                 if ("false".equalsIgnoreCase(enableResume)) {
                     return List.of();
                 }
+                // 先走 query_patterns 关键词匹配（与 planning 阶段一致）
+                List<String> resumeMatched = cfg.matchQueryPatterns(userQuery);
+                if (!resumeMatched.isEmpty()) {
+                    return resumeMatched;
+                }
+                // 未匹配关键词时降级到 resume_scripts
                 List<String> resumeScripts = parseScriptList(cfg.getTemplate(FK_PREFIX
                     + "resume_scripts").orElse(null));
                 if (!resumeScripts.isEmpty()) {

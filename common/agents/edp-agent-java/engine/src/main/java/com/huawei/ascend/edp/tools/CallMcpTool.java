@@ -48,7 +48,9 @@ public final class CallMcpTool {
         return EdpaBusinessTools.localTool(EdpaBusinessTools.TOOL_CALL_MCP,
                 "声明 MCP 沙箱脚本调用意图，执行和数据通道写入由 McpInterruptRail 负责。",
                 EdpaBusinessTools.objectSchema(Map.of("script_command", EdpaBusinessTools.stringProp("待执行的 MCP 脚本或命令"),
-                        "script_params", EdpaBusinessTools.objectProp("脚本入参")), List.of("script_command")),
+                        "script_params", EdpaBusinessTools.objectProp("脚本入参"),
+                        "query_intent", EdpaBusinessTools.stringProp("意图标签，用于匹配话术。调用时固定传 mcp_recommend")),
+                        List.of("script_command")),
                 inputs -> Map.of("tool", EdpaBusinessTools.TOOL_CALL_MCP, "status", "mcp_intent", "input", inputs));
     }
 }
