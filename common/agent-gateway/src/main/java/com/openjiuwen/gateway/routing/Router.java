@@ -174,13 +174,6 @@ public class Router {
      * {@code result.task.id}, and nested {@code result.statusUpdate.taskId}
      * (FEAT-001 / status-update frames). Missing any of these left sticky unbound
      * so tool/user-input resume failed with {@code RESUME_OWNER_UNKNOWN}.
-     */
-    /**
-     * Extract the task id from a runtime response / SSE frame.
-     * Accepts A2A shapes used in the wild: {@code result.id}, {@code result.taskId},
-     * {@code result.task.id}, and nested {@code result.statusUpdate.taskId}
-     * (FEAT-001 / status-update frames). Missing any of these left sticky unbound
-     * so tool/user-input resume failed with {@code RESUME_OWNER_UNKNOWN}.
      *
      * @param response runtime JSON-RPC body or SSE frame
      * @return the extracted task id, or empty if not found / unparseable
