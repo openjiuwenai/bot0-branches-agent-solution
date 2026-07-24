@@ -94,7 +94,7 @@ def spans_to_records(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """扁平 spans → log-mode archive records (按 span start_time 升序)。
 
     clean_traces 只消费 GENERATION; TOOL/TRACE 仅为 /traces raw 端点保真, 不影响 cleaned。
-    llm.* 按前缀匹配 (V3 真实名形如 llm.MiniMax-M2.7 / llm.deepseek-ai/DeepSeek-V4-Flash)。
+    llm.* 按前缀匹配 (span 名形如 llm.model-sample)。
     """
     records: list[dict[str, Any]] = []
     for span in sorted(spans, key=lambda s: s.get("start_time") or ""):
