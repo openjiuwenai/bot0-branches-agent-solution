@@ -23,48 +23,71 @@ import java.util.List;
  * HTTP contract). Asserts both the returned values and the wire requests.
  */
 class HttpRdcRouteClientTest {
-    private MockWebServer server;
+    private MockWebServer mockRdc;
     private HttpRdcRouteClient client;
 
     @BeforeEach
     void setUp() throws IOException {
-        server = new MockWebServer();
-        server.start();
-        String base = server.url("").toString();
-        client = new HttpRdcRouteClient(base.endsWith("/") ? base.substring(0, base.length() - 1) : base);
+        client = openMockRdcClient();
     }
 
     @AfterEach
     void tearDown() throws IOException {
-        server.shutdown();
+        closeMockRdc();
+    }
+
+    /**
+     * Starts an in-process RDC stand-in and returns a client aimed at it.
+     *
+     * @return client whose base URL matches the stand-in
+     * @throws IOException when the stand-in fails to bind
+     */
+    private HttpRdcRouteClient openMockRdcClient() throws IOException {
+        mockRdc = new MockWebServer();
+        mockRdc.start();
+        String root = mockRdc.url("/").toString();
+        String baseUrl = root.endsWith("/") ? root.substring(0, root.length() - 1) : root;
+        return new HttpRdcRouteClient(baseUrl);
+    }
+
+    /**
+     * Stops the in-process RDC stand-in if it was started.
+     *
+     * @throws IOException when shutdown fails
+     */
+    private void closeMockRdc() throws IOException {
+        if (mockRdc != null) {
+            mockRdc.shutdown();
+            mockRdc = null;
+        }
     }
 
     @Test
     void searchReturnsCandidatesFromRdcArray() throws InterruptedException {
-        server.enqueue(new MockResponse()
+        mockRdc.enqueue(new MockResponse()
                 .setBody("[{\"routeHandle\":\"h1\"},{\"routeHandle\":\"h2\"}]")
                 .addHeader("Content-Type", "application/json"));
         List<AgentCardRoute> result = client.searchInstancesByAgentId("tenant-1", "agent-9");
         assertThat(result).extracting(AgentCardRoute::routeHandle).containsExactly("h1", "h2");
-        RecordedRequest req = server.takeRequest();
+        RecordedRequest req = mockRdc.takeRequest();
         assertThat(req.getMethod()).isEqualTo("GET");
         assertThat(req.getPath()).endsWith("/api/registry/instances/tenant-1/agent-9");
     }
 
     @Test
     void searchEmptyArrayReturnsEmpty() {
-        server.enqueue(new MockResponse().setBody("[]").addHeader("Content-Type", "application/json"));
+        mockRdc.enqueue(new MockResponse().setBody("[]").addHeader("Content-Type", "application/json"));
         assertThat(client.searchInstancesByAgentId("t", "a")).isEmpty();
     }
 
     @Test
     void resolveReturnsEndpointAndPostsHandleAndTenant() throws Exception {
-        server.enqueue(new MockResponse()
+        mockRdc.enqueue(new MockResponse()
                 .setBody("{\"endpointUrl\":\"http://runtime-1:8000\"}")
                 .addHeader("Content-Type", "application/json"));
         ResolvedRoute resolved = client.resolveRouteHandle("v2:abc", "tenant-1");
         assertThat(resolved.endpointUrl()).isEqualTo("http://runtime-1:8000");
-        RecordedRequest req = server.takeRequest();
+        RecordedRequest req = mockRdc.takeRequest();
         assertThat(req.getMethod()).isEqualTo("POST");
         assertThat(req.getPath()).endsWith("/api/registry/route-handle/resolve");
         String body = req.getBody().readUtf8();
@@ -73,14 +96,14 @@ class HttpRdcRouteClientTest {
 
     @Test
     void resolveErrorThrowsRouteResolutionException() {
-        server.enqueue(new MockResponse().setResponseCode(404));
+        mockRdc.enqueue(new MockResponse().setResponseCode(404));
         Throwable thrown = catchThrowable(() -> client.resolveRouteHandle("v2:gone", "t"));
         assertThat(thrown).isInstanceOf(RouteResolutionException.class);
     }
 
     @Test
     void resolveMissingEndpointThrows() {
-        server.enqueue(new MockResponse().setBody("{\"endpointUrl\":\"\"}")
+        mockRdc.enqueue(new MockResponse().setBody("{\"endpointUrl\":\"\"}")
                 .addHeader("Content-Type", "application/json"));
         Throwable thrown = catchThrowable(() -> client.resolveRouteHandle("v2:x", "t"));
         assertThat(thrown).isInstanceOf(RouteResolutionException.class);
