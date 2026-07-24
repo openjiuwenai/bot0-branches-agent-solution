@@ -5,6 +5,7 @@
 package com.openjiuwen.rdc.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.controller.MvpRegistryController;
@@ -30,7 +31,6 @@ import java.time.Instant;
 import java.util.Set;
 
 import javax.sql.DataSource;
-
 /**
  * Integration tests for Feat-015 0713 structured {@code DiscoverAgentCards}.
  *
@@ -137,6 +137,25 @@ class StructuredDiscoveryIntegrationTest {
 
         assertThat(result.outcome()).isEqualTo(DiscoveryOutcome.SUCCESS);
         assertThat(result.candidates()).isNotEmpty();
+    }
+
+    @Test
+    void http_discover_missing_tenant_id_raises_invalid_query() {
+        MvpRegistryController.DiscoverRequest request = new MvpRegistryController.DiscoverRequest(
+                new MvpRegistryController.ContextRequest(null, "test-client", "req-1",
+                        Instant.now().plusSeconds(30)),
+                "agent-http",
+                null,
+                null,
+                null,
+                10,
+                null);
+
+        assertThatThrownBy(() -> controller.discover(request, null, null, "trace-missing-tenant"))
+                .isInstanceOf(com.openjiuwen.rdc.model.InvalidDiscoveryQueryException.class)
+                .satisfies(ex -> assertThat(
+                        ((com.openjiuwen.rdc.model.InvalidDiscoveryQueryException) ex).failureCode())
+                        .isEqualTo("INVALID_QUERY"));
     }
 
     private static AgentCardDiscoveryResult discoverAgentCards(String tenantId, String agentId, String serviceId,
