@@ -120,8 +120,10 @@ public class OpenJiuwenSkillHubProvider implements SkillHubProvider {
         }
         Path localRoot = resolveLocalRoot(config);
         List<SkillSummary> skills = listAllPublicSkills();
-        java.util.concurrent.atomic.AtomicBoolean allSucceeded = new java.util.concurrent.atomic.AtomicBoolean(true);
-        java.util.concurrent.atomic.AtomicReference<SkillHubException> fatalFailure = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicBoolean allSucceeded =
+                new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.atomic.AtomicReference<SkillHubException> fatalFailure =
+                new java.util.concurrent.atomic.AtomicReference<>();
         java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
         for (SkillSummary summary : skills) {
             futures.add(
