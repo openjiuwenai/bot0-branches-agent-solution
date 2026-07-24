@@ -78,8 +78,6 @@ public class HttpRdcRouteClient implements RdcRouteClient {
                 }
             }
             return out;
-        } catch (RouteResolutionException ex) {
-            throw ex;
         } catch (IOException | InterruptedException ex) {
             if (ex instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
