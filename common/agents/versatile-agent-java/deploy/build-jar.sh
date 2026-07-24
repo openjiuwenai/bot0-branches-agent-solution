@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在 Linux（x86）上直接从 git 代码仓构建 adapter 运行 jar。
+# 在 64 位 Linux（amd64/arm64）上直接从 git 代码仓构建 adapter 运行 jar。
 # 等价于 pack-for-linux.ps1 的构建部分，但不打 tar：在 Linux 上直接就地构建，
 # 随后用 build-image.sh 以本项目为上下文构建镜像即可，无需任何 Windows 步骤。
 #
