@@ -371,7 +371,7 @@ public class EdpaAgentEnhancer {
                         : null;
         rails.add(new McpInterruptRail(ctx.getEdpConfig(), sharedChannel, ctx.getSkillsDir(),
                 ctx.getSpringBootConfig(), ctx.getAgentName(), ctx.getSysOp(), skillDeployPath,
-                ctx.getDecoratedSandboxClient()));
+                ctx.getDecoratedSandboxClient(), ctx.getScripts()));
         rails.add(
                 new VersatileInterruptRail(ctx.getEdpConfig(),
                         ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,

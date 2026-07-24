@@ -264,9 +264,14 @@ public class EdpaTodoRail extends DeepAgentRail {
         String realSid = TodoSessionResolver
                 .sanitizeSessionId(ctx.getSession() != null ? ctx.getSession().getSessionId() : null);
         boolean sidChanged = injectRealSessionId(args, realSid);
+
+        // todo_modify 参数兼容：LLM 有时用 updates[].task_id 而非 todos[].id，
+        // Core TodoTool 只处理 todos，需将 updates 转换为 todos 格式。
+        boolean normalized = normalizeTodoModifyArgs(inputs, args, toolName);
+
         boolean enriched = enrichAndValidateTasks(inputs, args, toolName, ctx);
 
-        if (sidChanged || enriched) {
+        if (sidChanged || enriched || normalized) {
             // 传 Map：railedExecuteSingleToolCall 会序列化为 toolCall.arguments 供 Core 执行。
             inputs.setToolArgs(args);
             if (sidChanged) {
@@ -293,6 +298,43 @@ public class EdpaTodoRail extends DeepAgentRail {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Normalize todo_modify args: convert updates[].task_id to todos[].id format.
+     *
+     * <p>LLM sometimes uses updates[].task_id instead of todos[].id. Core TodoTool only
+     * processes todos, so we need to convert updates to todos format. Also remaps
+     * task_id key to id within each item.</p>
+     *
+     * @param inputs   the tool call inputs
+     * @param args     the normalized tool arguments (mutated in place)
+     * @param toolName the tool name
+     * @return true if args were normalized (updates→todos conversion happened)
+     */
+    private boolean normalizeTodoModifyArgs(ToolCallInputs inputs, Map<String, Object> args, String toolName) {
+        if (!TOOL_TODO_MODIFY.equals(toolName) || !args.containsKey("updates") || args.containsKey("todos")) {
+            return false;
+        }
+        Object updatesObj = args.get("updates");
+        if (!(updatesObj instanceof List<?> updates)) {
+            return false;
+        }
+        List<Map<String, Object>> todos = new ArrayList<>();
+        for (Object u : updates) {
+            if (u instanceof Map<?, ?> raw) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> e : raw.entrySet()) {
+                    String key = "task_id".equals(e.getKey()) ? "id" : String.valueOf(e.getKey());
+                    m.put(key, e.getValue());
+                }
+                todos.add(m);
+            }
+        }
+        args.put("todos", todos);
+        inputs.setToolArgs(args);
+        LOGGER.info("[EDPA-DIAG] NORMALIZE tool=todo_modify updates->todos items={}", todos.size());
+        return true;
     }
 
     /**
@@ -742,7 +784,7 @@ public class EdpaTodoRail extends DeepAgentRail {
             return false;
         }
         TodoStatus s = todo.getStatus();
-        return s == TodoStatus.COMPLETED || s == TodoStatus.DONE;
+        return s == TodoStatus.COMPLETED || s == TodoStatus.DONE || s == TodoStatus.CANCELLED;
     }
 
     /**
@@ -1134,7 +1176,7 @@ public class EdpaTodoRail extends DeepAgentRail {
                 sb.append("\n");
             }
 
-            long active = todos.stream().filter(t -> !isCompletedLike(t) && t.getStatus() != TodoStatus.CANCELLED)
+            long active = todos.stream().filter(t -> !isCompletedLike(t))
                     .count();
             if (active > 0) {
                 sb.append("请使用 todo_modify 推进任务，不要重新 todo_create。");

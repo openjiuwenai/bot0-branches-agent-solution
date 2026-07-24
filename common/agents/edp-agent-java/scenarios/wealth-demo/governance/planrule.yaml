@@ -40,9 +40,15 @@ planrule:
         - 含产品名称 + "XX元" → product_select_skill
       - 此规则优先级高于 skill_routing 中的其他规则。
 
+      ### ★ call_versatile query_intent 强制规则（不可违反）
+      - 执行 `product_recommend_skill`（推荐理财）时，call_versatile 的 `query_intent` **必须**为 `"理财推荐"`，*禁止*使用 `"理财选品购买"` 或其他值。
+      - 执行 `product_select_skill`（选品购买）时，call_versatile 的 `query_intent` **必须**为 `"理财选品购买"`。
+      - query_intent 决定 tool_start/tool_end 话术，错误值会导致用户看到错误的话术提示。
+
       ### 工具调用规约调整
       - 每次只执行一个 tool_call，不要并发。（与框架通用规则不同，理财场景禁止并发）
       - **禁止用文本代替工具调用**：当你判断需要调用某工具（skill_tool / ask_user / call_versatile 等）时，**必须生成 tool_call**，禁止只在思考/文本中描述"需要调用 XX"而不生成实际 tool_call。
+      - **call_mcp 必须传 query_intent**：调用 call_mcp 工具时，必须传入 `query_intent: "mcp_recommend"` 参数，用于匹配话术。
 
       ### ★★ todo_create 规划规则（强制执行，不可违反）
       理财场景**必须一次性创建完整的4步任务列表**，禁止只创建1个或2个任务。
@@ -103,7 +109,16 @@ planrule:
       - \"购买1号 BGA0088\" → 序号与代码不一致 → **invalid**
       - \"购买第五支\" → 序号>列表长度 → **invalid**
       - \"购买ABC产品\" → 名称不存在 → **invalid**
+      - \"购买1号 abc元\" → 金额含非数字字符，无法解析 → **invalid**（而非 missing_amount）
+      - \"购买1号 xyz元\" → 金额无法识别 → **invalid**
       - \"购买1号 5元\" → 1号=DXXJ1339，一致且金额有效 → **confirm**
+
+      #### 6. 金额格式校验（invalid vs missing_amount 的区别）
+      当用户输入中包含金额表达（带"元"/"块"等单位，或紧跟在产品后的值），但该值*无法解析为有效数字*时：
+      - **必须走 `invalid` 分支**（用户提供了金额但格式错误），输出"抱歉没有理解您的意思，请重新输入"
+      - **严禁走 `missing_amount` 分支**（missing_amount 仅适用于金额完全缺失的场景）
+      - 判定规则：输入含金额单位（元/块/块钱）但其前面的值不是有效数字（阿拉伯数字或中文数字）→ invalid
+      - 示例："abc元" → invalid、"xyz块" → invalid、"购买1号产品"（无金额）→ missing_amount
 
       ### 超范围处理规则
       当用户请求不在 scope.allowed 允许的业务范围内时（如订机票、买保险等）：

@@ -22,6 +22,7 @@ import com.huawei.ascend.edp.channel.ToolDataKeyFactory;
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
+import com.huawei.ascend.edp.config.SysScriptsConfig;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -97,52 +98,65 @@ public class McpInterruptRail extends AgentRail {
      */
     private final SandboxClient decoratedClient;
 
+    /**
+     * 话术配置（用于 no_result_tip 查找 empty_result_template_key 话术）。可为 null。
+     */
+    private final SysScriptsConfig scripts;
+
     public McpInterruptRail(EdpConfig edpConfig) {
-        this(edpConfig, new ToolDataChannel(), null, null, "EDPAgent", null, null, null);
+        this(edpConfig, new ToolDataChannel(), null, null, "EDPAgent", null, null, null, null);
     }
 
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel) {
-        this(edpConfig, toolDataChannel, null, null, "EDPAgent", null, null, null);
+        this(edpConfig, toolDataChannel, null, null, "EDPAgent", null, null, null, null);
     }
 
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir) {
-        this(edpConfig, toolDataChannel, skillsDir, null, "EDPAgent", null, null, null);
+        this(edpConfig, toolDataChannel, skillsDir, null, "EDPAgent", null, null, null, null);
     }
 
     // 4参数版（兼容旧调用）
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir,
             EdpaSpringBootConfig springBootConfig) {
-        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, "EDPAgent", null, null, null);
+        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, "EDPAgent", null, null, null, null);
     }
 
     // 5参数版（agentName）
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir,
             EdpaSpringBootConfig springBootConfig, String agentName) {
-        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, agentName, null, null, null);
+        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, agentName, null, null, null, null);
     }
 
     // 5参数版（sysOp, sandbox original）
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir,
             EdpaSpringBootConfig springBootConfig, SysOperation sysOp) {
-        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, "EDPAgent", sysOp, null, null);
+        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, "EDPAgent", sysOp, null, null, null);
     }
 
     // 6参数版（agentName + sysOp, legacy）
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir,
             EdpaSpringBootConfig springBootConfig, String agentName, SysOperation sysOp) {
-        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, agentName, sysOp, null, null);
+        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, agentName, sysOp, null, null, null);
     }
 
     // 7参数版（含 skillDeployPath）
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir,
             EdpaSpringBootConfig springBootConfig, String agentName, SysOperation sysOp, String skillDeployPath) {
-        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, agentName, sysOp, skillDeployPath, null);
+        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, agentName, sysOp, skillDeployPath, null, null);
     }
 
-    // 8参数版（全参构造，含 skillDeployPath + decoratedClient）
+    // 8参数版（含 skillDeployPath + decoratedClient）
     public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir,
             EdpaSpringBootConfig springBootConfig, String agentName, SysOperation sysOp, String skillDeployPath,
             SandboxClient decoratedClient) {
+        this(edpConfig, toolDataChannel, skillsDir, springBootConfig, agentName, sysOp, skillDeployPath,
+                decoratedClient, null);
+    }
+
+    // 9参数版（全参构造，含 skillDeployPath + decoratedClient + scripts）
+    public McpInterruptRail(EdpConfig edpConfig, ToolDataChannel toolDataChannel, Path skillsDir,
+            EdpaSpringBootConfig springBootConfig, String agentName, SysOperation sysOp, String skillDeployPath,
+            SandboxClient decoratedClient, SysScriptsConfig scripts) {
         this.edpConfig = edpConfig;
         this.toolDataChannel = toolDataChannel != null ? toolDataChannel : new ToolDataChannel();
         this.skillsDir = skillsDir != null ? skillsDir.toAbsolutePath().normalize() : null;
@@ -151,6 +165,7 @@ public class McpInterruptRail extends AgentRail {
         this.sysOp = sysOp;
         this.skillDeployPath = skillDeployPath;
         this.decoratedClient = decoratedClient;
+        this.scripts = scripts;
         setPriority(85);
     }
 
@@ -198,6 +213,49 @@ public class McpInterruptRail extends AgentRail {
             LOGGER.debug("McpInterruptRail: call_mcp result is empty, skip ToolDataChannel write");
             return;
         }
+
+        // ── 对齐 Python MCPInterruptRail L136-181: no_result_tip 逻辑 ──
+        // 当 MCP 返回 total=0 或 mcp_error 非空时，设置 response_template 为 empty_result_template_key 对应的话术。
+        // 这样 VersatileInterruptRail 在随后执行 call_versatile 成功获取产品时会覆盖此值（Python 行为一致），
+        // 但当 versatile 也失败或未调用时，用户会看到 MCP 无结果结果的提示而非默认 success 话术。
+        boolean noResultTip = true;
+        Object total = result.get("total");
+        if (total instanceof Number n && n.intValue() != 0) {
+            noResultTip = false;
+        }
+        Object mcpError = result.get("mcp_error");
+        if (mcpError instanceof String s && !s.isBlank()) {
+            noResultTip = true;
+        }
+        if (noResultTip && scripts != null) {
+            // 从 script_params 中提取 empty_result_template_key
+            Map<String, Object> args = normalizeArgs(inputs);
+            Object scriptParamsObj = args.get("script_params");
+            String emptyResultTemplateKey = "";
+            if (scriptParamsObj instanceof String spStr && !spStr.isBlank()) {
+                try {
+                    JsonNode spNode = OBJECT_MAPPER.readTree(spStr);
+                    if (spNode != null && spNode.has("empty_result_template_key")) {
+                        emptyResultTemplateKey = spNode.get("empty_result_template_key").asText("");
+                    }
+                } catch (Exception e) {
+                    LOGGER.debug("McpInterruptRail: failed to parse script_params for empty_result_template_key", e);
+                }
+            } else if (scriptParamsObj instanceof Map<?, ?> spMap) {
+                Object keyVal = spMap.get("empty_result_template_key");
+                emptyResultTemplateKey = keyVal != null ? keyVal.toString() : "";
+            }
+            if (!emptyResultTemplateKey.isBlank()) {
+                String tipText = scripts.getTemplate(emptyResultTemplateKey).orElse(null);
+                if (tipText != null && !tipText.isBlank()) {
+                    ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, tipText);
+                    ctx.getExtra().put(ScriptConstants.KEY_LAST_SCRIPT, emptyResultTemplateKey);
+                    LOGGER.info("[MCPInterruptRail] no_result_tip: response_template injected, key={}, tipText={}",
+                            emptyResultTemplateKey, abbreviate(tipText, 80));
+                }
+            }
+        }
+
         persistMcpResult(ctx, result);
         updateToolMessage(inputs, result);
     }
