@@ -130,7 +130,8 @@ function New-AgentARequestJson {
   param(
     [string] $Id,
     [string] $Query,
-    [string] $Intent
+    [string] $Intent,
+    [string] $TaskId
   )
 
   $messageText = @{
@@ -138,20 +139,25 @@ function New-AgentARequestJson {
     intent = $Intent
   } | ConvertTo-Json -Compress -Depth 100
 
+  $message = [ordered]@{
+    role = "ROLE_USER"
+    contextId = $Id
+    parts = @(
+      [ordered]@{
+        text = $messageText
+      }
+    )
+  }
+  if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
+    $message.taskId = $TaskId
+  }
+
   $request = [ordered]@{
     jsonrpc = "2.0"
     id = $Id
     method = "SendStreamingMessage"
     params = [ordered]@{
-      message = [ordered]@{
-        role = "ROLE_USER"
-        contextId = $Id
-        parts = @(
-          [ordered]@{
-            text = $messageText
-          }
-        )
-      }
+      message = $message
       metadata = [ordered]@{
         body = [ordered]@{
           agent_id = "main_planner"
@@ -230,7 +236,7 @@ function Send-AgentARequestJson {
 ```powershell
 $requestJson1 = New-AgentARequestJson `
   -Id "agentcore-ext-remote-a2a-tool-demo-1" `
-  -Query "先查询尾号为4241的银行卡余额，再转账5元给李四" `
+  -Query "先查询张三尾号4241的银行卡余额" `
   -Intent "查询账户余额"
 
 Send-AgentARequestJson $requestJson1
@@ -239,10 +245,14 @@ Send-AgentARequestJson $requestJson1
 第二轮仍然请求 Agent A；预期由 Agent A 直接转发到 Agent B 的 shadow task：
 
 ```powershell
+# 填写第一轮响应中 Agent A 的父 Task ID（不是 Agent B 的远端 Task ID）。
+$parentTaskId = "<第一轮响应中的父 taskId>"
+
 $requestJson2 = New-AgentARequestJson `
   -Id "agentcore-ext-remote-a2a-tool-demo-1" `
   -Query '[{"cardNum":"6222021816044054241","regAcctType":"011","cardAlias":""}]' `
-  -Intent "LATEST"
+  -Intent "LATEST" `
+  -TaskId $parentTaskId
 
 Send-AgentARequestJson $requestJson2
 ```
@@ -257,7 +267,8 @@ $round3Query = @'
 $requestJson3 = New-AgentARequestJson `
   -Id "agentcore-ext-remote-a2a-tool-demo-1" `
   -Query $round3Query `
-  -Intent "LATEST"
+  -Intent "LATEST" `
+  -TaskId $parentTaskId
 
 Send-AgentARequestJson $requestJson3
 ```
