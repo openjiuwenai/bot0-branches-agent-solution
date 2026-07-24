@@ -25,8 +25,15 @@ import java.time.Instant;
  * @param timestamp    event time
  * @since 0.1.0
  */
-public record AuditEvent(String traceId, String principalId, String tenantId, String method,
-                         Outcome outcome, String rejectStage, String code, Instant timestamp) {
+public record AuditEvent(
+        String traceId,
+        String principalId,
+        String tenantId,
+        String method,
+        Outcome outcome,
+        String rejectStage,
+        String code,
+        Instant timestamp) {
     /**
      * Governance outcome.
      */

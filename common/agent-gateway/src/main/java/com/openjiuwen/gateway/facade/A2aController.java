@@ -135,6 +135,11 @@ public class A2aController {
 
     /**
      * Forward a create call: streaming (SSE) or sync (JSON), with idempotency complete/abort.
+     *
+     * @param context  governance context after G1–G4
+     * @param response servlet response (used when streaming)
+     * @return sync JSON body, or {@code null} when an SSE stream has been written
+     * @throws IOException if writing the SSE stream fails
      */
     private Object forwardCreate(GovernanceContext context, HttpServletResponse response) throws IOException {
         if ("SendStreamingMessage".equals(context.method())) {
@@ -154,6 +159,11 @@ public class A2aController {
 
     /**
      * Stream SSE frames to the client; complete with first frame on success, abort on failure.
+     *
+     * @param context  governance context after G1–G4
+     * @param response servlet response used to write {@code text/event-stream}
+     * @return {@code null} after the SSE stream has been committed (Spring MVC contract)
+     * @throws IOException if writing the SSE stream fails
      */
     private Object forwardStreaming(GovernanceContext context, HttpServletResponse response) throws IOException {
         String firstFrame;
@@ -177,6 +187,9 @@ public class A2aController {
 
     /**
      * Forward a resume call to the original Task owner via the sticky index.
+     *
+     * @param context governance context with taskId bound
+     * @return sync JSON response from the sticky owner runtime
      */
     private Object forwardResume(GovernanceContext context) {
         try {

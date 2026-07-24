@@ -29,10 +29,10 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 public class IdempotencyRule {
+    private final Map<String, Entry> store = new ConcurrentHashMap<>();
+
     private record Entry(String fingerprint, boolean completed, String result) {
     }
-
-    private final Map<String, Entry> store = new ConcurrentHashMap<>();
 
     /**
      * Check / register a create against the idempotency window.
