@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
+import com.openjiuwen.gateway.bus.control.EnvelopeBuilder.BuildRequest;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,10 +20,14 @@ import org.junit.jupiter.api.Test;
 class EnvelopeBuilderTest {
     private final EnvelopeBuilder builder = new EnvelopeBuilder();
 
+    private static BuildRequest req(String payloadRef, long deadline) {
+        return new BuildRequest(
+                "T1", "trace-1", "idem-1", "handle-1", "svc-target", "svc-gw", payloadRef, deadline);
+    }
+
     @Test
     void buildsCreateEnvelopeWithAllRequiredFields() {
-        ForwardingEnvelope env = builder.buildEnvelope(
-                "T1", "trace-1", "idem-1", "handle-1", "svc-target", "svc-gw", "REF-1", 99999L);
+        ForwardingEnvelope env = builder.buildEnvelope(req("REF-1", 99999L));
         assertThat(env.eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
         assertThat(env.tenantId()).isEqualTo("T1");
         assertThat(env.routeHandle().value()).isEqualTo("handle-1");
@@ -37,31 +42,30 @@ class EnvelopeBuilderTest {
 
     @Test
     void tenantConsistency() {
-        ForwardingEnvelope env = builder.buildEnvelope(
-                "T1", "trace-1", "idem-1", "handle-1", "svc-target", "svc-gw", "REF-1", 99999L);
+        ForwardingEnvelope env = builder.buildEnvelope(req("REF-1", 99999L));
         assertThat(env.routeHandle().tenantScope()).isEqualTo(env.tenantId());
     }
 
     @Test
     void correlationIdSelfGenerated() {
-        ForwardingEnvelope env1 = builder.buildEnvelope("T1", "t1", "k1", "h1", "svc", "gw", "REF", 1L);
-        ForwardingEnvelope env2 = builder.buildEnvelope("T1", "t2", "k2", "h2", "svc", "gw", "REF", 2L);
+        ForwardingEnvelope env1 = builder.buildEnvelope(new BuildRequest(
+                "T1", "t1", "k1", "h1", "svc", "gw", "REF", 1L));
+        ForwardingEnvelope env2 = builder.buildEnvelope(new BuildRequest(
+                "T1", "t2", "k2", "h2", "svc", "gw", "REF", 2L));
         assertThat(env1.correlationId()).isNotEqualTo(env2.correlationId());
         assertThat(env1.correlationId()).startsWith("gw-correlation-");
     }
 
     @Test
     void resumeEnvelopeCarriesTaskIdInPayloadRef() {
-        ForwardingEnvelope env = builder.buildEnvelope(
-                "T1", "trace-1", "idem-1", "handle-1", "svc-target", "svc-gw", "REF-task7", 99999L);
+        ForwardingEnvelope env = builder.buildEnvelope(req("REF-task7", 99999L));
         assertThat(env.eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
         assertThat(env.payloadRef()).isEqualTo("REF-task7");
     }
 
     @Test
     void payloadPolicyControlOnlyWhenNoBody() {
-        ForwardingEnvelope env = builder.buildEnvelope(
-                "T1", "trace-1", "idem-1", "handle-1", "svc-target", "svc-gw", null, 99999L);
+        ForwardingEnvelope env = builder.buildEnvelope(req(null, 99999L));
         assertThat(env.payloadPolicy()).isEqualTo(ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY);
         assertThat(env.payloadRef()).isNull();
     }
