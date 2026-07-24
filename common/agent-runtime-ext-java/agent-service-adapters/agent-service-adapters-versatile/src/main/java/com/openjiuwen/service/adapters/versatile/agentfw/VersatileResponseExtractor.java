@@ -244,11 +244,26 @@ final class VersatileResponseExtractor {
 
     /**
      * Builds the {@code a2a_delegate} interrupt chunk consumed by the runtime
-     * orchestrator. The orchestrator reads {@code agentName}/{@code responseContent}
-     * at the top level and {@code _interrupt_kind=a2a_delegate} from the nested
-     * {@code context} map (see {@code A2AEnabledServeOrchestrator.resolveInterruptData}).
-     * The handler enriches this payload with {@code message} and {@code _stream_mode}
-     * before emitting the result to the orchestrator.
+     * orchestrator's {@code RemoteInvocationBatchCoordinator}.
+     *
+     * <p>Contract (per {@code A2AEnabledServeOrchestrator.isCoordinatorInterrupt}
+     * and {@code RemoteInvocationBatchCoordinator.parseBatch}):
+     * <ul>
+     *   <li>Top-level {@code type="__interaction__"} and non-blank {@code toolCallId}
+     *       so the orchestrator classifies this as a coordinator interrupt
+     *       (single-item batch form). The {@code toolCallId} is a synthetic UUID
+     *       because the versatile delegate is not a real tool call — it is a
+     *       one-shot forward whose result replaces this layer's answer.</li>
+     *   <li>Nested {@code context} map carrying
+     *       {@code _interrupt_kind="a2a_delegate"}, the target
+     *       {@code agentName} (read by {@code parseBatch} to build
+     *       {@code RemoteCall.agentName}), and {@code resume=false}.</li>
+     *   <li>Top-level {@code responseContent} preserved so
+     *       {@code VersatileAgentHandler.a2aDelegateResult} can set the
+     *       assistant message content; the new SPI does not forward it to the
+     *       caller — the {@code message} field (added by the handler) is what
+     *       the batch coordinator passes as {@code RemoteCall.message}.</li>
+     * </ul>
      *
      * <p>{@code resume=false} signals that the orchestrator must NOT re-invoke
      * this layer's agent after the remote returns — the three-field result was
@@ -256,12 +271,17 @@ final class VersatileResponseExtractor {
      * terminal answer. See {@code InterruptData.resume} in the runtime.
      */
     private static QueryChunk buildA2aDelegateInterrupt(Map<String, Object> envelope) {
+        String agentName = envelope.get("agent_id") instanceof String s ? s : "";
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("agentName", envelope.get("agent_id"));
+        payload.put("type", "__interaction__");
+        payload.put("toolCallId", "versatile-delegate-" + java.util.UUID.randomUUID());
+        payload.put("agentName", agentName);
         payload.put("responseContent", envelope.get("response_content"));
         payload.put("resume", false);
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("_interrupt_kind", "a2a_delegate");
+        context.put("agentName", agentName);
+        context.put("resume", false);
         payload.put("context", context);
         return new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload);
     }
