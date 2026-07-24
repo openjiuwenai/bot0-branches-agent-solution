@@ -9,12 +9,14 @@ import com.openjiuwen.gateway.governance.GovernanceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
 /**
@@ -45,7 +47,10 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             // Pass the body through (A2A errors arrive as 200 + JSON-RPC error; we don't fake success).
             return resp.body();
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                     "Cannot reach runtime", ex);
         }
@@ -66,7 +71,10 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                     .filter(line -> line.startsWith("data:"))
                     .map(line -> line.substring("data:".length()).strip())
                     .filter(data -> !data.isEmpty());
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                     "Cannot open runtime stream", ex);
         }

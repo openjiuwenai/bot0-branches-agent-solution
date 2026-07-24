@@ -4,6 +4,7 @@
 
 package com.openjiuwen.gateway.routing;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -159,7 +160,7 @@ public class Router {
                 return mapper.writeValueAsString(root);
             }
             return rawBody;
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
                     "Cannot inject tenant into body");
         }
@@ -187,7 +188,7 @@ public class Router {
                 id = text(result.path("statusUpdate"), "taskId");
             }
             return id;
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             return null;
         }
     }

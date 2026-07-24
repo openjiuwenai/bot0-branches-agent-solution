@@ -104,7 +104,7 @@ public class A2aController {
             if (context.taskId() == null) {
                 IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(), jsonRpcBody);
                 switch (idem.outcome()) {
-                    case NEW, SKIP -> { 
+                    case NEW, SKIP -> {
                         // proceed to later stages
                     }
                     case REPLAY -> {
