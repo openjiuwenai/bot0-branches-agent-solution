@@ -12,7 +12,6 @@ import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
  * @since 2026-07-24
  */
 public class SyncDisconnectHandler {
-
     /**
      * Releases the wait window and aborts G4; does not auto-cancel the task.
      *

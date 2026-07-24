@@ -15,13 +15,17 @@ public class FakeStreamRefResolver implements StreamRefResolver {
     private String endpoint = "http://rt:8000";
 
     /**
+     * Overrides the resolved endpoint URL.
+     *
      * @param endpoint resolved endpoint URL
      */
     public void setEndpoint(String endpoint) {
         this.endpoint = endpoint;
     }
 
-    /** Simulates resolution failure by clearing the endpoint. */
+    /**
+     * Simulates resolution failure by clearing the endpoint.
+     */
     public void setFail() {
         this.endpoint = null;
     }

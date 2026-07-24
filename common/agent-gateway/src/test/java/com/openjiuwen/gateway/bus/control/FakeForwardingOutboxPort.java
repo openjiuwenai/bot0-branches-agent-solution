@@ -23,12 +23,20 @@ public class FakeForwardingOutboxPort implements ForwardingOutboxPort {
     private final List<ForwardingEnvelope> enqueued = new ArrayList<>();
     private boolean failNext = false;
 
-    /** @return enqueued envelopes in order */
+    /**
+     * Returns envelopes recorded by enqueue, in order.
+     *
+     * @return enqueued envelopes in order
+     */
     public List<ForwardingEnvelope> enqueued() {
         return enqueued;
     }
 
-    /** @param failNext when {@code true}, the next enqueue throws */
+    /**
+     * Configures the next enqueue call to fail.
+     *
+     * @param failNext when {@code true}, the next enqueue throws
+     */
     public void setFailNext(boolean failNext) {
         this.failNext = failNext;
     }

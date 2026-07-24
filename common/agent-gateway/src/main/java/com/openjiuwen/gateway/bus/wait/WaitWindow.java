@@ -80,6 +80,8 @@ public class WaitWindow {
     }
 
     /**
+     * Returns the task id captured on accept.
+     *
      * @return the task id captured on accept, or {@code null}
      */
     public String taskId() {
@@ -87,6 +89,8 @@ public class WaitWindow {
     }
 
     /**
+     * Returns the folded terminal status when known.
+     *
      * @return the folded terminal status, or {@code null}
      */
     public InvocationResponseStatus folded() {
@@ -101,6 +105,8 @@ public class WaitWindow {
     }
 
     /**
+     * Whether this wait window has been released.
+     *
      * @return whether the window has been released
      */
     public boolean isReleased() {

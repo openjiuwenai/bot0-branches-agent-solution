@@ -13,7 +13,6 @@ import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
  * @since 2026-07-24
  */
 public final class FiveStateFolder {
-
     /**
      * Folds a bus projection event type to the client-facing response status.
      *
@@ -32,6 +31,8 @@ public final class FiveStateFolder {
     }
 
     /**
+     * Whether the status is a terminal fold (response/rejected/failed).
+     *
      * @param s invocation response status
      * @return {@code true} when the status is a terminal fold (response/rejected/failed)
      */

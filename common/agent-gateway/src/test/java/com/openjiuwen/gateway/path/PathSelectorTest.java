@@ -17,10 +17,10 @@ import org.junit.jupiter.params.provider.ValueSource;
  *
  * <p>Covers: config parsing (direct/bus/case-insensitive/whitespace/blank/null
  * → DIRECT / invalid → fail-fast), selector mode/isBus/isDirect for both modes.
+ *
  * @since 2026-07-24
  */
 class PathSelectorTest {
-
     @ParameterizedTest
     @CsvSource({
             "direct,   DIRECT",
