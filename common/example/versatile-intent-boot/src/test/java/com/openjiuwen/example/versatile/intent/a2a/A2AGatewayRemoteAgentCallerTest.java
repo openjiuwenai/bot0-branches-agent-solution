@@ -5,12 +5,13 @@
 package com.openjiuwen.example.versatile.intent.a2a;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCall;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import org.a2aproject.sdk.spec.AgentCard;
 import org.a2aproject.sdk.spec.AgentInterface;
+import org.a2aproject.sdk.spec.TaskState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
@@ -28,6 +33,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class A2AGatewayRemoteAgentCallerTest {
     private A2AGatewayProperties props;
@@ -62,68 +68,6 @@ class A2AGatewayRemoteAgentCallerTest {
                 return upstreamHeaders.get(name);
             }
         };
-    }
-
-    @Test
-    void appendsResponseContentAsAssistantMessageWhenPresent() {
-        ServeRequest original = new ServeRequest();
-        original.setConversationId("c-1");
-        original.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
-
-        ServeRequest forwarded = ForwardedServeRequests.build(original, "一层输出");
-
-        assertThat(forwarded.getMessages()).hasSize(2);
-        assertThat(forwarded.getMessages().get(0))
-                .containsEntry("role", "user")
-                .containsEntry("content", "订酒店");
-        assertThat(forwarded.getMessages().get(1))
-                .containsEntry("role", "assistant")
-                .containsEntry("content", "一层输出");
-        assertThat(forwarded.lastUserQuery()).isEqualTo("订酒店");
-    }
-
-    @Test
-    void doesNotAppendWhenResponseContentIsNull() {
-        ServeRequest original = new ServeRequest();
-        original.setConversationId("c-1");
-        original.setMessages(List.of(Map.of("role", "user", "content", "hi")));
-
-        ServeRequest forwarded = ForwardedServeRequests.build(original, null);
-
-        assertThat(forwarded.getMessages()).hasSize(1);
-        assertThat(forwarded.lastUserQuery()).isEqualTo("hi");
-    }
-
-    @Test
-    void doesNotAppendWhenResponseContentIsBlank() {
-        ServeRequest original = new ServeRequest();
-        original.setConversationId("c-1");
-        original.setMessages(List.of(Map.of("role", "user", "content", "hi")));
-
-        ServeRequest forwarded = ForwardedServeRequests.build(original, "   ");
-
-        assertThat(forwarded.getMessages()).hasSize(1);
-    }
-
-    @Test
-    void preservesConversationIdUserIdTenantIdMetadata() {
-        ServeRequest original = new ServeRequest();
-        original.setConversationId("c-1");
-        original.setUserId("u-1");
-        original.setSpaceId("s-1");
-        original.setTenantId("t-1");
-        original.setStream(true);
-        original.setMessages(List.of(Map.of("role", "user", "content", "hi")));
-        original.setMetadata(Map.of("k", "v"));
-
-        ServeRequest forwarded = ForwardedServeRequests.build(original, "context");
-
-        assertThat(forwarded.getConversationId()).isEqualTo("c-1");
-        assertThat(forwarded.getUserId()).isEqualTo("u-1");
-        assertThat(forwarded.getSpaceId()).isEqualTo("s-1");
-        assertThat(forwarded.getTenantId()).isEqualTo("t-1");
-        assertThat(forwarded.isStream()).isTrue();
-        assertThat(forwarded.getMetadata()).containsEntry("k", "v");
     }
 
     @Test
@@ -212,7 +156,7 @@ class A2AGatewayRemoteAgentCallerTest {
     }
 
     @Test
-    void callPostsToGatewayA2AUrlWithRequiredHeaders() throws Exception {
+    void callOutcomePostsToGatewayA2AUrlWithRequiredHeaders() throws Exception {
         WireMockServer wireMock = new WireMockServer(options().dynamicPort());
         try {
             wireMock.start();
@@ -231,12 +175,11 @@ class A2AGatewayRemoteAgentCallerTest {
                                     + "\"artifacts\":[{\"artifactId\":\"art-1\",\"parts\":[{\"text\":\"酒店预订成功：上海今晚五星\",\"metadata\":{},\"filename\":\"\",\"mediaType\":\"\"}]}]"
                                     + "}}}")));
 
-            ServeRequest req = new ServeRequest();
-            req.setConversationId("c-1");
-            req.setUserId("u-42");
-            req.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
+            RemoteCall call = new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null,
+                    Map.of("userId", "u-42"));
             CapturingObserver observer = new CapturingObserver();
-            caller.call(new RemoteAgentCall("agent_card_L2_hotel", req, null, null, null), observer);
+            RemoteCallOutcome outcome = caller.callOutcome(call, observer, null)
+                    .get(10, TimeUnit.SECONDS);
 
             wireMock.verify(postRequestedFor(urlPathMatching("/a2a/agent_card_L2_hotel"))
                     .withHeader("token", equalTo("tok-abc"))
@@ -244,8 +187,8 @@ class A2AGatewayRemoteAgentCallerTest {
                     .withHeader("versionNode", equalTo("v1.2.3"))
                     .withHeader("Content-Type", equalTo("application/json")));
 
-            assertThat(observer.error).isNull();
-            assertThat(observer.completed).isTrue();
+            assertThat(outcome.remoteState()).isEqualTo(TaskState.TASK_STATE_COMPLETED);
+            assertThat(outcome.result()).isEqualTo("酒店预订成功：上海今晚五星");
             assertThat(observer.chunks).hasSize(1);
             assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_CHUNK);
             Object data = observer.chunks.get(0).getData();
@@ -259,7 +202,7 @@ class A2AGatewayRemoteAgentCallerTest {
     }
 
     @Test
-    void callSendsJsonRpcMessageSendEnvelope() throws Exception {
+    void callOutcomeSendsJsonRpcMessageSendEnvelope() throws Exception {
         WireMockServer wireMock = new WireMockServer(options().dynamicPort());
         try {
             wireMock.start();
@@ -277,13 +220,10 @@ class A2AGatewayRemoteAgentCallerTest {
                                     + "\"status\":{\"state\":\"TASK_STATE_COMPLETED\"}"
                                     + "}}}")));
 
-            ServeRequest req = new ServeRequest();
-            req.setConversationId("c-1");
-            req.setUserId("u-42");
-            req.setMetadata(Map.of("trace", "abc"));
-            req.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
+            RemoteCall call = new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null,
+                    Map.of("trace", "abc"));
             CapturingObserver observer = new CapturingObserver();
-            caller.call(new RemoteAgentCall("agent_card_L2_hotel", req, "一层输出", null, null, null, false), observer);
+            caller.callOutcome(call, observer, null).get(10, TimeUnit.SECONDS);
 
             // The SDK generates UUIDs for id/messageId/contextId; assert only on stable fields.
             wireMock.verify(postRequestedFor(urlPathMatching("/a2a/agent_card_L2_hotel"))
@@ -297,7 +237,7 @@ class A2AGatewayRemoteAgentCallerTest {
     }
 
     @Test
-    void callEmitsInterruptForInputRequiredState() throws Exception {
+    void callOutcomeCompletesWithInputRequiredForInterruptedTask() throws Exception {
         WireMockServer wireMock = new WireMockServer(options().dynamicPort());
         try {
             wireMock.start();
@@ -318,15 +258,14 @@ class A2AGatewayRemoteAgentCallerTest {
                                     + "\"metadata\":{},\"extensions\":[],\"referenceTaskIds\":[]}}"
                                     + "}}}")));
 
-            ServeRequest req = new ServeRequest();
-            req.setConversationId("c-1");
-            req.setUserId("u-42");
-            req.setMessages(List.of(Map.of("role", "user", "content", "订酒店")));
+            RemoteCall call = new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null, null);
             CapturingObserver observer = new CapturingObserver();
-            caller.call(new RemoteAgentCall("agent_card_L2_hotel", req, null, null, null), observer);
+            RemoteCallOutcome outcome = caller.callOutcome(call, observer, null)
+                    .get(10, TimeUnit.SECONDS);
 
-            assertThat(observer.error).isNull();
-            assertThat(observer.completed).isTrue();
+            assertThat(outcome.remoteState()).isEqualTo(TaskState.TASK_STATE_INPUT_REQUIRED);
+            assertThat(outcome.inputPrompt()).isEqualTo("请提供入住日期");
+            assertThat(outcome.remoteTaskId()).isEqualTo("task-99");
             assertThat(observer.chunks).hasSize(1);
             QueryChunk interrupt = observer.chunks.get(0);
             assertThat(interrupt.getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
@@ -340,18 +279,17 @@ class A2AGatewayRemoteAgentCallerTest {
     }
 
     @Test
-    void callFailsFastWhenTokenMissing() {
+    void callOutcomeFailsFastWhenTokenMissing() {
         props.setToken(null);
         A2AGatewayRemoteAgentCaller caller = new A2AGatewayRemoteAgentCaller(props, resolver);
 
-        ServeRequest req = new ServeRequest();
-        req.setConversationId("c-1");
-        req.setMessages(List.of(Map.of("role", "user", "content", "hi")));
+        RemoteCall call = new RemoteCall("agent_card_L2_hotel", "hi", "c-1", null, null);
         CapturingObserver observer = new CapturingObserver();
-        caller.call(new RemoteAgentCall("agent_card_L2_hotel", req, null, null, null), observer);
+        CompletableFuture<RemoteCallOutcome> future = caller.callOutcome(call, observer, null);
 
-        assertThat(observer.error).isNotNull();
-        assertThat(observer.error.getMessage()).contains("token is not configured");
+        assertThatThrownBy(() -> future.get(10, TimeUnit.SECONDS))
+                .isInstanceOf(ExecutionException.class)
+                .hasMessageContaining("token is not configured");
     }
 
     private static final class CapturingObserver implements QueryStreamObserver {
