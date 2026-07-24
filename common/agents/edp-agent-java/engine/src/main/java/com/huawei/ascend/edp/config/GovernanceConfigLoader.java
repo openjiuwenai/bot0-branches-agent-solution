@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -66,16 +67,34 @@ public class GovernanceConfigLoader {
     /**
      * 从指定governance目录加载配置。
      *
+     * <p>加载策略：文件系统优先，classpath 回退。</p>
+     * <ul>
+     *     <li>文件系统路径存在 → 从文件系统加载（开发态，CWD 下有 governance 目录）</li>
+     *     <li>文件系统路径不存在 → 从 classpath 加载（集成态，引擎 JAR 内有 governance 目录）</li>
+     * </ul>
+     *
      * @param governanceDir governance目录路径（包含三个yaml文件）
-     * @return 解析后的 GovernanceConfig；文件不存在时返回默认对象
+     * @return 解析后的 GovernanceConfig；文件系统和classpath均不存在时返回默认对象
      */
 
     public static GovernanceConfig load(Path governanceDir) {
-        if (governanceDir == null || !Files.exists(governanceDir)) {
-            LOGGER.info("Governance directory not found at {}, using defaults", governanceDir);
-            return new GovernanceConfig();
+        // 1. 优先从文件系统加载
+        if (governanceDir != null && Files.exists(governanceDir)) {
+            return loadFromFilesystem(governanceDir);
         }
+        // 2. 文件系统路径不存在 → 回退到 classpath
+        LOGGER.info("Governance directory not found at {}, falling back to classpath", governanceDir);
+        return loadFromClasspath();
+    }
 
+    /**
+     * 从文件系统加载governance配置（内部方法）。
+     *
+     * @param governanceDir governance目录路径
+     * @return 解析后的 GovernanceConfig
+     */
+
+    private static GovernanceConfig loadFromFilesystem(Path governanceDir) {
         GovernanceConfig config = new GovernanceConfig();
 
         // 加载planrule.yaml
@@ -130,6 +149,69 @@ public class GovernanceConfigLoader {
     }
 
     /**
+     * 从classpath加载governance配置（引擎 JAR 内的默认配置）。
+     *
+     * <p>适用于集成态：当文件系统路径不存在时，从引擎 JAR 内的 governance/ 目录加载
+     * actrule.yaml、planrule.yaml、scriptconfig.yaml。</p>
+     *
+     * @return 解析后的 GovernanceConfig；classpath中无可用资源时字段为null
+     */
+
+    private static GovernanceConfig loadFromClasspath() {
+        GovernanceConfig config = new GovernanceConfig();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = GovernanceConfigLoader.class.getClassLoader();
+        }
+
+        // classpath 搜索路径需覆盖多种打包形态
+        String[] basePathPrefixes = {"", "BOOT-INF/classes/", "classes/"};
+
+        config.setPlanrule(
+                loadYamlFromClasspath(cl, basePathPrefixes, "governance/planrule.yaml", "planrule", PlanRuleConfig.class));
+        config.setActrule(
+                loadYamlFromClasspath(cl, basePathPrefixes, "governance/actrule.yaml", "actrule", ActRuleConfig.class));
+        config.setScriptconfig(
+                loadYamlFromClasspath(cl, basePathPrefixes, "governance/scriptconfig.yaml", "scriptconfig",
+                        ScriptConfig.class));
+
+        return config;
+    }
+
+    /**
+     * 从classpath加载单个yaml配置文件。
+     *
+     * @param cl ClassLoader
+     * @param prefixes classpath路径前缀列表（覆盖多种打包形态）
+     * @param resourcePath 相对资源路径（如 "governance/actrule.yaml"）
+     * @param rootNodeName yaml根节点名（如 "actrule"）
+     * @param targetType 目标反序列化类型
+     * @return 解析后的配置对象；classpath中无可用资源时返回null
+     */
+
+    private static <T> T loadYamlFromClasspath(ClassLoader cl, String[] prefixes,
+            String resourcePath, String rootNodeName, Class<T> targetType) {
+        for (String prefix : prefixes) {
+            try (InputStream is = cl.getResourceAsStream(prefix + resourcePath)) {
+                if (is != null) {
+                    JsonNode root = YAML_MAPPER.readTree(is);
+                    JsonNode node = root.get(rootNodeName);
+                    if (node != null) {
+                        T result = YAML_MAPPER.treeToValue(node, targetType);
+                        LOGGER.info("Loaded {} from classpath: {}", rootNodeName, prefix + resourcePath);
+                        return result;
+                    }
+                }
+            } catch (IOException e) {
+                LOGGER.debug("Failed to load {} from classpath {}: {}", rootNodeName, prefix + resourcePath,
+                        e.getMessage());
+            }
+        }
+        LOGGER.info("{} not found in classpath, using defaults", rootNodeName);
+        return null;
+    }
+
+    /**
      * 优先加载场景级配置，再合并框架级配置（场景级优先）。
      *
      * <p>配置优先级：</p>
@@ -163,20 +245,24 @@ public class GovernanceConfigLoader {
     /**
      * 从classpath加载框架级默认配置。
      *
-     * <p>框架级配置路径：engine/src/main/resources/governance/</p>
+     * <p>加载策略：文件系统优先，classpath 回退。</p>
+     * <ul>
+     *     <li>文件系统路径存在 → 从文件系统加载（开发态，CWD 下有 src/main/resources/governance）</li>
+     *     <li>文件系统路径不存在 → 从 classpath 加载（集成态，引擎 JAR 内有 governance）</li>
+     * </ul>
      *
      * @return 框架级默认 GovernanceConfig
      */
 
     public static GovernanceConfig loadDefaultFromClasspath() {
-        try {
-            // 从classpath读取governance目录
-            Path defaultGovernancePath = Path.of("src/main/resources/governance").toAbsolutePath();
-            return load(defaultGovernancePath);
-        } catch (InvalidPathException e) {
-            LOGGER.warn("Failed to load default governance config from classpath: {}", e.getMessage());
-            return new GovernanceConfig();
+        Path defaultGovernancePath = Path.of("src/main/resources/governance").toAbsolutePath();
+        // 1. 文件系统优先（开发态，CWD 下有 src/main/resources/governance）
+        if (Files.exists(defaultGovernancePath)) {
+            return loadFromFilesystem(defaultGovernancePath);
         }
+        // 2. 文件系统不存在 → classpath 回退（集成态，引擎 JAR 内有 governance）
+        LOGGER.info("Default governance path not found at {}, falling back to classpath", defaultGovernancePath);
+        return loadFromClasspath();
     }
 
     /**

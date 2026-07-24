@@ -52,10 +52,10 @@ edpa:
 
     # MCP SSE 配置（可选，用于 MCP 脚本工具调用）
     mcpsse:
-      master-url: ${EDP_MCP_MASTER_URL:http://localhost:8000/sse}
-      standby-url: ${EDP_MCP_STANDBY_URL:http://localhost:8000/sse}
-      access-token: ${EDP_MCP_ACCESS_TOKEN:}
-      app-name: ${EDP_MCP_APP_NAME:customer_app}
+      master-url: ${EDP_MCP_MASTER_URL:http://106.15.62.172:8000/sse}
+      standby-url: ${EDP_MCP_STANDBY_URL:http://106.15.62.172:8000/sse}
+      access-token: ${EDP_MCP_ACCESS_TOKEN:test_token}
+      app-name: ${EDP_MCP_APP_NAME:test_app}
 
     # 沙箱配置（可选，用于 MCP 脚本安全执行）
     # enabled=false 时 MCP 脚本在本地直接执行
@@ -102,6 +102,11 @@ openjiuwen:
           examples: ["帮我规划资金", "购买理财产品"]
           input-modes: ["text", "text/plain"]
           output-modes: ["text", "text/plain"]
+    # Custom REST 协议适配配置（GHZHY 网关）
+    # 配置 query-path 后激活适配器，注释掉或删除此行即可关闭
+    custom-rest:
+      query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
+
     external:
       sandbox:
         enabled: false
