@@ -1,15 +1,23 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.rdc.model;
-
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class RegistryRequestContextTest {
+import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+
+/**
+ * RegistryRequestContext validation coverage (null/blank → INVALID_QUERY).
+ *
+ * @since 0.1.0 (2026)
+ */
+class RegistryRequestContextTest {
     @Test
     void validate_passes_when_all_fields_present() {
         RegistryRequestContext ctx = new RegistryRequestContext(
@@ -24,9 +32,10 @@ class RegistryRequestContextTest {
         assertThatThrownBy(ctx::validate)
                 .isInstanceOf(InvalidDiscoveryQueryException.class)
                 .satisfies(ex -> {
-                    InvalidDiscoveryQueryException iq = (InvalidDiscoveryQueryException) ex;
-                    assertThat(iq.failureCode()).isEqualTo("INVALID_QUERY");
-                    assertThat(iq.getMessage()).contains("tenantId");
+                    if (ex instanceof InvalidDiscoveryQueryException iq) {
+                        assertThat(iq.failureCode()).isEqualTo("INVALID_QUERY");
+                        assertThat(iq.getMessage()).contains("tenantId");
+                    }
                 });
     }
 
@@ -36,7 +45,10 @@ class RegistryRequestContextTest {
                 "  ", "gateway", "trace-1", "req-1", Instant.now().plusSeconds(30));
         assertThatThrownBy(ctx::validate)
                 .isInstanceOf(InvalidDiscoveryQueryException.class)
-                .satisfies(ex -> assertThat(((InvalidDiscoveryQueryException) ex).failureCode())
-                        .isEqualTo("INVALID_QUERY"));
+                .satisfies(ex -> {
+                    if (ex instanceof InvalidDiscoveryQueryException iq) {
+                        assertThat(iq.failureCode()).isEqualTo("INVALID_QUERY");
+                    }
+                });
     }
 }
