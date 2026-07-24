@@ -1,6 +1,6 @@
 # event-bus (agent-bus) E2E 联调编排:Postgres + RocketMQ(name server + broker + topic init).
 # 用法:
-#   cd common/agent-bus/e2e
+#   cd common/agent-bus/agent-bus-relay/src/test/java/com/openjiuwen/bus/conf
 #   docker compose up -d                         # 启动 4 个容器
 #   docker compose logs rocketmq-init | tail -20 # 看 8 个 topic 是否建好
 #   docker compose down                          # 停止(数据保留在 volume)

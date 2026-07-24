@@ -87,6 +87,7 @@ class EventBusRelayWorkerTest {
         final Map<String, ForwardingStatus.Inbox> seen = new HashMap<>();
         final List<ForwardingMessageId> consumed = new ArrayList<>();
         final List<ForwardingMessageId> rejected = new ArrayList<>();
+
         /**
          * Test seam: when set, the next {@link #markConsumed} throws to simulate a crash after
          * hop2 is produced + acked but before markConsumed/commit (W4) — leaving outbox ACKED,
