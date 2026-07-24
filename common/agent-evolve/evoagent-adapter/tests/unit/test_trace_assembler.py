@@ -175,7 +175,7 @@ class TestTraceAssemblerFeed:
         assembler = TraceAssembler()
         assembler.feed(_make_record(
             "TAG_LLM_CALL_START",
-            message={"id": "call-001", "type": "GENERATION", "model": "glm-5",
+            message={"id": "call-001", "type": "GENERATION", "model": "model-sample",
                      "input": {"messages": [{"role": "user", "content": "hello"}]}},
         ))
         results = assembler.feed(_make_record(
@@ -186,7 +186,7 @@ class TestTraceAssemblerFeed:
         record = results[0]
         assert record["id"] == "call-001"
         assert record["type"] == "GENERATION"
-        assert record["model"] == "glm-5"
+        assert record["model"] == "model-sample"
         assert record["start_time"] == "2026-06-10 14:30:15.123"
         assert record["end_time"] == "2026-06-10 14:30:15.123"
         assert record["input"]["messages"][0]["content"] == "hello"

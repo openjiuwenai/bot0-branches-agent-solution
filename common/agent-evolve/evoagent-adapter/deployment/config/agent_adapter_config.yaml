@@ -36,11 +36,8 @@ pair_timeout: 300                        # START→END pair timeout in seconds
 output_dir: "data/output"                     # Output directory path (absolute or relative to adapter root)
 offset_file: "data/offsets.json"  # Offset state file path (absolute or relative to adapter root)
 
-# ── Skill storage ──
-# Layout (local backend): {skills_root}/{agent_name}/{skill_name}/SKILL.md
-# 沙箱模式 (skill_backend=jiuwenbox)：本地 skills_root 只存 .meta 快照；
-# 运行时正文在沙箱 remote_skills_dir。详见 agents[].skill_backend 段与
-# deployment/sandbox-experiment/README.md
+# ── Skill storage (bind-mount from business agent containers) ──
+# Layout: {skills_root}/{agent_name}/{skill_name}/SKILL.md
 # See docs/skills-storage-design.md
 skills_root: "data/skills"
 
@@ -85,42 +82,23 @@ agents:
   - name: "edp_agent"
     log_dir: "/data/logs/edp_agent"           # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
     skills_dir: "/data/skills/edp_agent"      # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
-                                              # 沙箱模式下 skills_dir 仅存 .meta 快照（restore 用）；
-                                              # 运行时 SKILL.md 真源在 jiuwenbox 沙箱 remote_skills_dir
+    # ── Skill backend（可选；默认 local 走宿主 bind-mount；切 jiuwenbox 走沙箱文件 API）──
+    # skill_backend: jiuwenbox          # local(默认,宿主共享挂载) | jiuwenbox(沙箱文件 API,需配 jiuwenbox_url)
+    # jiuwenbox_url: http://host.docker.internal:8321   # jiuwenbox 管理 API base URL; skill_backend=jiuwenbox 时必填; 相同 URL 的 agent 共享 HTTP client
+    # sandbox_id_resolve: from_logs     # fixed | list_ready | from_logs(默认); 确定 EDPAgent 所在 sandbox_id 的方式(不改 EDPAgent)
+    #                                   #   from_logs: 从 log_dir 日志解析 "sandbox_id=...",找不到回退 list_ready(推荐)
+    #                                   #   fixed: 用 sandbox_id(需同时配 sandbox_id); list_ready: 挑唯一 ready 沙箱,多个则报错
+    # remote_skills_dir: /tmp/skills    # 沙箱内 skill 目录路径,须与 EDPAgent SKILL_TARGET_PATH 对齐; 默认 /tmp/skills
     # log_pattern: "process*.log"            # Optional: defaults to top-level log_pattern
-                                              # 沙箱实验样例曾用 process_*.log；生产建议 process*.log
-                                              # 以同时覆盖 process.log / process_*.log
     # output_dir: "data/output/edp_agent"     # Optional: defaults to data/output/{name}
     # offset_file: "data/offsets/edp_agent.json"  # Optional: defaults to data/offsets/{name}.json
     agent_url: "http://192.168.1.10:8090"     # 不可用 localhost/127.0.0.1（指向容器自身）。
-                                              # 同 Docker 网络可写服务名，如 http://edpagent:8090
-                                              # 端口发布到宿主机可写 http://host.docker.internal:18001
-                                              # （需 --add-host host.docker.internal:host-gateway）
+                                              # 业务 Agent 若把端口发布到宿主机，可写
+                                              # http://host.docker.internal:8090
+                                              # （需启动脚本/compose 已注入 --add-host host.docker.internal:host-gateway）
     project_id: "proj_001"                    # URL path segment: /v1/{project_id}/agents/{agent_id}/...
-                                              # 沙箱实验样例曾用 default；按 EDP 实际 project 填写
     agent_id: "edp_agent"                     # URL path segment: /v1/{project_id}/agents/{agent_id}/...
     timeout: 300                              # Call timeout in seconds
-
-    # ── Skill 热更：沙箱模式（jiuwenbox File API）──
-    # 来源：deployment/sandbox-experiment/agent_adapter_config.yaml + README
-    # 旧模式 skill_backend: local —— 三方共享挂载 HOST_SKILLS，Adapter 直接改本地文件
-    # 新模式 skill_backend: jiuwenbox —— Adapter 经 File API 写沙箱内 SKILL.md
-    #   EDPAgent ──SANDBOX_URL──► jiuwenbox 创建 sandbox，skills 落在 remote_skills_dir
-    #   EvoAgent ──► Adapter POST /api/v1/skills ──upload──► 同一 sandbox
-    # 必须与 EDPAgent 使用同一个 sandbox；EDP 侧常见环境变量：
-    #   SANDBOX_URL=http://jiuwenbox:8321（或 host.docker.internal:8321）
-    #   SKILL_TARGET_PATH=/tmp  → 沙箱内 skills 目录一般为 /tmp/skills
-    skill_backend: jiuwenbox
-    jiuwenbox_url: "http://jiuwenbox:8321"   # 与 EDP SANDBOX_URL 一致；跨主机可用
-                                              # http://host.docker.internal:8321
-    # sandbox_id 发现（推荐顺序 from_logs > fixed > list_ready）：
-    #   from_logs  — 从 agent log_dir 解析 "sandbox_id=..."；失败退回 list_ready
-    #   fixed      — 使用下方 sandbox_id（多 ready 沙箱的共享环境建议改用 fixed）
-    #   list_ready — 要求 jiuwenbox 上恰好一个 ready；多个会报错
-    sandbox_id_resolve: from_logs
-    # sandbox_id: "<sandbox-id>"             # 仅 sandbox_id_resolve: fixed 时必填
-    remote_skills_dir: /tmp/skills            # 沙箱内路径 = {SKILL_TARGET_PATH}/skills
-
     # ── Managed-doc（可选，需优化 AgentRule.md 等"焙进单例、改文件不热加载"的文档）──
     # 详见离线包 README 的 AgentRule managed-doc 章节。apply=restart 时由部署侧提供 restart_cmd + health 探测；
     # adapter async 执行 restart_cmd + health-watch，重启窗口内不阻塞事件循环。
@@ -134,16 +112,16 @@ agents:
     #     health_url: "http://host.docker.internal:8090/health"
     #     # Docker 部署还需显式挂 socket：start.sh 设置
     #     # ADAPTER_ENABLE_DOCKER_RESTART=true；Compose 叠加 managed-doc override。
-    # ── 业务 Agent 请求透传（可选 body/header/URL 自定义）──
-    # 需要透传部署侧稳定字段（如 role_id/role_name）时配置。
+    # ── EDPAgent 请求透传（客户现场 body/header/URL 自定义）──
+    # 需要透传 role_id/role_name/custom_data.user_profile 等客户环境绑定字段时配置。
     # request_template 为稳定 body 底模（深合并到最终请求体；调用方 extra_data 仍合并进
     # custom_data.inputs）。extra_headers 稳定请求头，值支持 ${ENV_VAR} 从环境变量读取
     # （如 token）。url_query_params 拼 conversation URL 后的 query 参数。
-    # 示例（请按目标 Agent 契约改成中性/通用字段名，勿提交真实客户协议字段）：
+    # 示例（按客户现场实际字段填写）：
     # request_template:
     #   timeout: 300
     #   role_id: "1"
-    #   role_name: "demo_agent"
+    #   role_name: "示例智能体"
     #   custom_data:
     #     user_profile:
     #       enable_extract: true
@@ -151,10 +129,14 @@ agents:
     # extra_headers:
     #   X-Invoke-Mode: "debug"
     #   X-Language: "zh-cn"
-    #   X-Auth-Token: "${ADAPTER_AGENT_TOKEN}"   # 敏感值走 env，勿入 yaml
+    #   projectname: "null"
+    #   region: "null"
+    #   stream: "true"
+    #   cftk: "${ADAPTER_AGENT_TOKEN}"          # 敏感值走 env，勿入 yaml
+    #   cf2-cftk: "${ADAPTER_AGENT_TOKEN}"
     # url_query_params:
-    #   mode: "default"
-    #   workspace_id: "ws_001"
+    #   type: "controller"
+    #   workspace_id: "191"
 
   - name: "other_agent"
     log_dir: "/data/logs/other_agent"

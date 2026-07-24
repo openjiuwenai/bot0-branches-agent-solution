@@ -14,8 +14,8 @@ class TestAdapterConfigDefaults:
         config = AdapterConfig()
         assert config.log_dir == "logs"
         assert config.log_pattern == "process_*.log"
-        assert config.poll_interval == 5
-        assert config.start_from == "head"
+        assert config.poll_interval == 60
+        assert config.start_from == "tail"
         assert config.match_tags == [
             "TAG_HTTP_REQUEST_START",
             "TAG_HTTP_REQUEST_END",
@@ -93,7 +93,7 @@ class TestAdapterConfigFromYaml:
         assert config.log_dir == "/custom/logs"
         assert config.poll_interval == 3
         # Missing fields fall back to defaults
-        assert config.start_from == "head"
+        assert config.start_from == "tail"
         assert config.pair_timeout == 300
         assert config.port == 8900
 
@@ -105,7 +105,7 @@ class TestAdapterConfigFromYaml:
         config = load_config(nonexistent)
         # Paths are resolved to adapter root even when config file doesn't exist
         assert config.log_dir == str(_ADAPTER_ROOT / "logs")
-        assert config.poll_interval == 5
+        assert config.poll_interval == 60
 
     def test_start_from_validates_values(self):
         with pytest.raises(ValueError):
