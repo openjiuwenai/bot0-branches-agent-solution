@@ -25,6 +25,8 @@ public class BusControlForwarder {
     private final ForwardingOutboxPort outboxPort;
 
     /**
+     * Creates a forwarder with envelope, stash, and outbox dependencies.
+     *
      * @param envelopeBuilder envelope factory
      * @param payloadStore body stash for HD4 payload refs
      * @param outboxPort durable outbox port

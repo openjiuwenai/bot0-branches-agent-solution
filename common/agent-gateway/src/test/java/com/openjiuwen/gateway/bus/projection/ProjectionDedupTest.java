@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
  * @since 2026-07-24
  */
 class ProjectionDedupTest {
-
     @Test
     void duplicateProjectionIgnored() {
         var t = new ProjectionTracker();

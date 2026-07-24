@@ -29,6 +29,8 @@ public class PathSelector {
     }
 
     /**
+     * Returns the configured path mode.
+     *
      * @return the configured path mode
      */
     public PathMode mode() {
@@ -36,6 +38,8 @@ public class PathSelector {
     }
 
     /**
+     * Whether the BUS path is active.
+     *
      * @return {@code true} if the BUS path is active
      */
     public boolean isBus() {
@@ -43,6 +47,8 @@ public class PathSelector {
     }
 
     /**
+     * Whether the DIRECT path is active.
+     *
      * @return {@code true} if the DIRECT path is active
      */
     public boolean isDirect() {

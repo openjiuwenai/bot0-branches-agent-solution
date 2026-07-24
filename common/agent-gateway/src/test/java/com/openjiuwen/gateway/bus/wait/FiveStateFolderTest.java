@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
  * @since 2026-07-24
  */
 class FiveStateFolderTest {
-
     @Test
     void responseToCompleted() {
         assertThat(FiveStateFolder.fold(AgentBusEventType.INVOCATION_RESPONSE))

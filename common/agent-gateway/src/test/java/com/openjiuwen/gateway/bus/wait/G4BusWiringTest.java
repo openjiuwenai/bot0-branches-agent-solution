@@ -20,6 +20,7 @@ class G4BusWiringTest {
     private static final String T = "T1";
     private static final String M = "m1";
     private static final String FP = "fp";
+
     private final IdempotencyRule g4 = new IdempotencyRule();
     private final G4BusWiring wiring = new G4BusWiring(g4);
 

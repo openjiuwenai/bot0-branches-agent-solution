@@ -20,7 +20,6 @@ import java.util.UUID;
  */
 @Component
 public class EnvelopeBuilder {
-
     /**
      * Inputs for {@link #buildEnvelope(BuildRequest)} (ICD §4.4 P3 fields).
      *

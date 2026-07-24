@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
  * @since 2026-07-24
  */
 class BusSpiClasspathTest {
-
     @Test
     void forwardingSpiTypesAreReachable() {
         assertThat(AgentBusEventType.CLIENT_INVOCATION_REQUESTED).isNotNull();

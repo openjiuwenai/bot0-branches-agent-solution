@@ -21,6 +21,8 @@ public class ProjectionTracker {
     private boolean terminalClosed = false;
 
     /**
+     * Decides whether an inbound projection should be processed.
+     *
      * @param correlationId gateway correlation id
      * @param eventType inbound projection event type
      * @param payloadDigest optional payload digest for dedup key
@@ -42,6 +44,8 @@ public class ProjectionTracker {
     }
 
     /**
+     * Whether a terminal projection has closed further processing.
+     *
      * @return whether a terminal projection has closed further processing
      */
     public boolean isTerminalClosed() {

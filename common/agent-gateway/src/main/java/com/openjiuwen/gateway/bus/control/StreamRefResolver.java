@@ -12,8 +12,9 @@ import java.util.Optional;
  * @since 2026-07-24
  */
 public interface StreamRefResolver {
-
     /**
+     * Resolves a stream reference to a runtime SSE endpoint.
+     *
      * @param streamRef opaque stream reference from projection
      * @return resolved SSE endpoint URL, or empty when unavailable
      */

@@ -99,9 +99,8 @@ public class BusForwarder {
                     window.onProjection(folded, event.taskId(), System.currentTimeMillis());
                 } else if (FiveStateFolder.isTerminal(folded)) {
                     window.onProjection(folded, null, System.currentTimeMillis());
-                } else {
-                    /* no-op: exhaustive for current PathMode */
                 }
+                // non-terminal non-accept (e.g. STREAM_READY): keep polling
             }
         }
         g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), null);

@@ -16,6 +16,8 @@ public class G4BusWiring {
     private final IdempotencyRule g4;
 
     /**
+     * Creates wiring over the given G4 idempotency rule.
+     *
      * @param g4 idempotency rule wired for BUS sync path
      */
     public G4BusWiring(IdempotencyRule g4) {

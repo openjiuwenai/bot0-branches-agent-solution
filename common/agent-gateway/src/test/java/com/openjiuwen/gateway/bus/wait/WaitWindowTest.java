@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
  * @since 2026-07-24
  */
 class WaitWindowTest {
-
     @Test
     void acceptWindowTimeoutToUnknown() {
         var w = new WaitWindow(0L, 30_000L, 60_000L);

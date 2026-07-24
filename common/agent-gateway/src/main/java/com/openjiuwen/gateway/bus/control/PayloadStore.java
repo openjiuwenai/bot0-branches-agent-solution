@@ -12,14 +12,17 @@ import java.util.Optional;
  * @since 2026-07-24
  */
 public interface PayloadStore {
-
     /**
+     * Stashes a raw A2A body and returns an opaque reference.
+     *
      * @param body raw A2A request body
      * @return opaque payload reference
      */
     String stash(String body);
 
     /**
+     * Fetches a previously stashed body by reference.
+     *
      * @param ref payload reference from stash
      * @return stored body, or empty when unknown
      */

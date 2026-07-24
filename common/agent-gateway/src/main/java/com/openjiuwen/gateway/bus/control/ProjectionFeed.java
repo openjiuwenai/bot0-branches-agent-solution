@@ -14,7 +14,6 @@ import java.util.Optional;
  * @since 2026-07-24
  */
 public interface ProjectionFeed {
-
     /**
      * Polls the next projection matching the correlation id.
      *
