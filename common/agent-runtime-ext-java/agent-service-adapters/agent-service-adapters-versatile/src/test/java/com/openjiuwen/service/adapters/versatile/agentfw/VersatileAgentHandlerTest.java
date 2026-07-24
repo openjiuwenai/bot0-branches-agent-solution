@@ -173,10 +173,14 @@ class VersatileAgentHandlerTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) response.getResult();
         assertThat(result).containsEntry("role", "assistant")
-                .containsEntry("content", "酒店预订")
-                .containsEntry("response_content", "酒店预订")
-                .containsEntry("intent_id", "intent_L1_hotel")
-                .containsEntry("agent_id", "agent_card_L2_hotel");
+                .containsEntry("content", "酒店预订");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> interrupt = (Map<String, Object>) result.get("_interrupt");
+        assertThat(interrupt).isNotNull();
+        assertThat(interrupt).containsEntry("agentName", "agent_card_L2_hotel")
+                .containsEntry("responseContent", "酒店预订");
+        Map<?, ?> context = (Map<?, ?>) interrupt.get("context");
+        assertThat(context.get("_interrupt_kind")).isEqualTo("a2a_delegate");
     }
 
     @Test
@@ -207,8 +211,47 @@ class VersatileAgentHandlerTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) response.getResult();
-        assertThat(result).containsEntry("agent_id", "agent_card_L2_hotel")
-                .containsEntry("intent_id", "intent_L1_hotel");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> interrupt = (Map<String, Object>) result.get("_interrupt");
+        assertThat(interrupt).isNotNull();
+        assertThat(interrupt).containsEntry("agentName", "agent_card_L2_hotel")
+                .containsEntry("responseContent", "酒店预订");
+    }
+
+    @Test
+    void writesA2aDelegateWithEmptyResponseContentWhenWorkflowOmitsIt() throws Exception {
+        // Reference scenario: intent recognition node returns only intent_id + agent_id,
+        // no response_content. Adapter must still produce a2a_delegate with empty
+        // responseContent (Caller will not append an assistant message).
+        VersatileProperties properties = propertiesWithServer(List.of(
+                "{\"data\":{\"node_name\":\"AnswerNode\",\"node_type\":\"Code\","
+                        + "\"outputs\":{\"intent_id\":\"intent_L1_hotel\","
+                        + "\"agent_id\":\"agent_card_L2_hotel\"}}}",
+                "{\"data\":{\"node_type\":\"End\"}}"
+        ));
+        properties.setResultNodeName("AnswerNode");
+        VersatileProperties.ResultExtraction ii = new VersatileProperties.ResultExtraction();
+        ii.setMatch("intent_id");
+        ii.setGet("/data/outputs/intent_id");
+        properties.getResultExtractions().add(ii);
+        VersatileProperties.ResultExtraction ai = new VersatileProperties.ResultExtraction();
+        ai.setMatch("agent_id");
+        ai.setGet("/data/outputs/agent_id");
+        properties.getResultExtractions().add(ai);
+
+        VersatileAgentHandler handler = new VersatileAgentHandler(properties);
+
+        QueryResponse response = handler.query(request());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> interrupt = (Map<String, Object>) result.get("_interrupt");
+        assertThat(interrupt).isNotNull();
+        assertThat(interrupt).containsEntry("agentName", "agent_card_L2_hotel")
+                .containsEntry("responseContent", "");
+        Map<?, ?> context = (Map<?, ?>) interrupt.get("context");
+        assertThat(context.get("_interrupt_kind")).isEqualTo("a2a_delegate");
     }
 
     private static ServeRequest request() {

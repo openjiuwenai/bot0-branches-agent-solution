@@ -37,8 +37,7 @@ import java.util.Map;
  *
  * <p>Uses {@link ForwardedServeRequests#build} to append the upstream
  * {@code response_content} as an assistant message, matching the forwarding
- * semantics of {@link InProcessRemoteAgentCaller} and
- * {@link A2AGatewayRemoteAgentCaller}.
+ * semantics of {@link A2AGatewayRemoteAgentCaller}.
  *
  * <p>The response {@code result} Map is emitted as a single {@code TYPE_CHUNK}
  * with {@code type=answer} so the orchestrator's

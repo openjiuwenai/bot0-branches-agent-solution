@@ -68,11 +68,6 @@ final class VersatileResponseExtractor {
                 }
             } else {
                 extractResultFields(json.get());
-                if (!hasText(extractedFields.get("response_content"))) {
-                    hasFailed = true;
-                    error = "{\"code\":\"VERSATILE_INTENT_RESULT_CONTRACT\","
-                            + "\"reason\":\"missing response_content in three-field result\"}";
-                }
             }
             return new ArrayList<>();
         }
@@ -111,7 +106,7 @@ final class VersatileResponseExtractor {
                 try {
                     Optional<Map<String, Object>> envelope = buildThreeFieldEnvelope();
                     if (envelope.isPresent()) {
-                        return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope.get()));
+                        return List.of(buildA2aDelegateInterrupt(envelope.get()));
                     }
                     return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
                             "{\"code\":\"VERSATILE_INTENT_RESULT_CONTRACT\","
@@ -231,7 +226,7 @@ final class VersatileResponseExtractor {
         String responseContent = extractedFields.get("response_content");
         String intentId = extractedFields.get("intent_id");
         String workflowAgentId = extractedFields.get("agent_id");
-        if (!hasText(responseContent) || !hasText(intentId)) {
+        if (!hasText(intentId)) {
             return Optional.empty();
         }
         String agentId = agentResolver.resolve(intentId, workflowAgentId)
@@ -240,11 +235,29 @@ final class VersatileResponseExtractor {
                                 + " workflow_agent_id=" + workflowAgentId));
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("type", "answer");
-        envelope.put("output", responseContent);
-        envelope.put("response_content", responseContent);
+        envelope.put("output", responseContent != null ? responseContent : "");
+        envelope.put("response_content", responseContent != null ? responseContent : "");
         envelope.put("intent_id", intentId);
         envelope.put("agent_id", agentId);
         return Optional.of(envelope);
+    }
+
+    /**
+     * Builds the {@code a2a_delegate} interrupt chunk consumed by the runtime
+     * orchestrator. The orchestrator reads {@code agentName}/{@code responseContent}
+     * at the top level and {@code _interrupt_kind=a2a_delegate} from the nested
+     * {@code context} map (see {@code A2AEnabledServeOrchestrator.resolveInterruptData}).
+     * The handler enriches this payload with {@code message} and {@code _stream_mode}
+     * before emitting the result to the orchestrator.
+     */
+    private static QueryChunk buildA2aDelegateInterrupt(Map<String, Object> envelope) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("agentName", envelope.get("agent_id"));
+        payload.put("responseContent", envelope.get("response_content"));
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("_interrupt_kind", "a2a_delegate");
+        payload.put("context", context);
+        return new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload);
     }
 
     private boolean containsNodeTypeEnd(JsonNode json) {

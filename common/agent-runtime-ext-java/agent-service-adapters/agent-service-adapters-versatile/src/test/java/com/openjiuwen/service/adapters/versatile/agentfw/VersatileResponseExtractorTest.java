@@ -145,18 +145,50 @@ class VersatileResponseExtractorTest {
         chunks.addAll(extractor.finish());
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .contains(QueryChunk.TYPE_CHUNK);
-        QueryChunk answer = chunks.stream()
-                .filter(c -> c.getData() instanceof Map<?, ?> m && "answer".equals(m.get("type")))
+                .contains(QueryChunk.TYPE_INTERRUPT);
+        QueryChunk delegate = chunks.stream()
+                .filter(c -> QueryChunk.TYPE_INTERRUPT.equals(c.getType()))
                 .findFirst().orElseThrow();
-        Map<?, ?> envelope = (Map<?, ?>) answer.getData();
-        assertThat(envelope.get("response_content")).isEqualTo("酒店预订");
-        assertThat(envelope.get("intent_id")).isEqualTo("intent_L1_hotel");
-        assertThat(envelope.get("agent_id")).isEqualTo("agent_card_L2_hotel");
+        Map<?, ?> payload = (Map<?, ?>) delegate.getData();
+        assertThat(payload.get("agentName")).isEqualTo("agent_card_L2_hotel");
+        assertThat(payload.get("responseContent")).isEqualTo("酒店预订");
+        Map<?, ?> context = (Map<?, ?>) payload.get("context");
+        assertThat(context.get("_interrupt_kind")).isEqualTo("a2a_delegate");
     }
 
     @Test
-    void emitsErrorWhenResponseContentMissing() {
+    void emitsA2aDelegateWithEmptyResponseContentWhenWorkflowOmitsResponseContent() {
+        // Reference scenario from production: intent node returns only intent_id + agent_id.
+        // response_content is now optional — the a2a_delegate interrupt carries an empty
+        // responseContent so the Caller skips appending an assistant message.
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\","
+                + "\"intent_id\":\"intent_L1_hotel\",\"agent_id\":\"agent_card_L2_hotel\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_INTERRUPT);
+        QueryChunk delegate = chunks.stream()
+                .filter(c -> QueryChunk.TYPE_INTERRUPT.equals(c.getType()))
+                .findFirst().orElseThrow();
+        Map<?, ?> payload = (Map<?, ?>) delegate.getData();
+        assertThat(payload.get("agentName")).isEqualTo("agent_card_L2_hotel");
+        assertThat(payload.get("responseContent")).isEqualTo("");
+    }
+
+    @Test
+    void emitsAgentIdUnmappedErrorWhenResponseContentMissingAndNoMapping() {
+        // response_content missing AND agent_id missing AND no intent-agent-mapping
+        // → resolver still throws UNMAPPED (response_content being optional doesn't
+        // rescue an unresolvable agent_id).
         VersatileProperties props = props("AnswerNode");
         addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
         addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
@@ -165,12 +197,14 @@ class VersatileResponseExtractorTest {
         assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
                 + "\"data\":{\"node_type\":\"QA\",\"intent_id\":\"intent_L1_hotel\"}}}"))
                 .isEmpty();
-        List<QueryChunk> chunks = extractor.finish();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_ERROR);
-        assertThat(String.valueOf(chunks.get(0).getData()))
-                .contains("VERSATILE_INTENT_RESULT_CONTRACT");
+                .contains(QueryChunk.TYPE_ERROR);
+        assertThat(String.valueOf(chunks.get(chunks.size() - 1).getData()))
+                .contains("VERSATILE_INTENT_AGENT_ID_UNMAPPED");
     }
 
     @Test
