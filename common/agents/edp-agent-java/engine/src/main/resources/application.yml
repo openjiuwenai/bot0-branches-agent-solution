@@ -89,7 +89,7 @@ edpa:
       provider: ${EDP_AGENT_MODEL_PROVIDER:OpenAI}
       name: ${EDP_AGENT_MODEL_NAME:deepseek-v4-pro}
       base-url: ${EDP_AGENT_MODEL_BASE_URL:https://api.deepseek.com/v1}
-      api-key: ${EDP_AGENT_MODEL_API_KEY:sk-xxxxx}
+      api-key: ${EDP_AGENT_MODEL_API_KEY:sk-xxxx}
     versatile:
       url: ${EDP_AGENT_VERSATILE_URL:http://localhost:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}}
       adapter-a2a-url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191/a2a}
@@ -121,6 +121,8 @@ edpa:
       create-timeout-seconds: ${EDPA_SANDBOX_CREATE_TIMEOUT:30}
 
 logging:
+  file:
+    name: logs/run/run.log
   level:
     com.huawei.ascend.edp: DEBUG
     com.openjiuwen.service.adapters.agentcore.ext: DEBUG
