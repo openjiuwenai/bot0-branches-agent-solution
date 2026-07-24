@@ -14,7 +14,6 @@ import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import jakarta.annotation.PreDestroy;
-import jakarta.servlet.http.HttpServletRequest;
 
 import org.a2aproject.sdk.client.Client;
 import org.a2aproject.sdk.client.ClientEvent;
