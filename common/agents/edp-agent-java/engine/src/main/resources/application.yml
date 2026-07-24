@@ -89,7 +89,7 @@ edpa:
       provider: ${EDP_AGENT_MODEL_PROVIDER:OpenAI}
       name: ${EDP_AGENT_MODEL_NAME:deepseek-v4-pro}
       base-url: ${EDP_AGENT_MODEL_BASE_URL:https://api.deepseek.com/v1}
-      api-key: ${EDP_AGENT_MODEL_API_KEY:sk-d5965710955f4d7489747f2615437af9}
+      api-key: ${EDP_AGENT_MODEL_API_KEY:sk-xxxxx}
     versatile:
       url: ${EDP_AGENT_VERSATILE_URL:http://localhost:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}}
       adapter-a2a-url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191/a2a}
