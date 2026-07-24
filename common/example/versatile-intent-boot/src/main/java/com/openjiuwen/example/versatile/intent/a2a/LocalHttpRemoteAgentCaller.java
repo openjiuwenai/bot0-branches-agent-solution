@@ -4,6 +4,7 @@
 
 package com.openjiuwen.example.versatile.intent.a2a;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
@@ -14,6 +15,7 @@ import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
 import org.a2aproject.sdk.spec.TaskState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,7 +104,7 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
                         }
                         handleResponse(response, queryUrl, agentName, result, streamObserver);
                     });
-        } catch (Exception e) {
+        } catch (JsonProcessingException | IllegalArgumentException e) {
             result.completeExceptionally(new RemoteAgentException(
                     "LocalHttp call to " + queryUrl + " failed", e));
         }
@@ -155,7 +157,7 @@ public class LocalHttpRemoteAgentCaller implements RemoteAgentCaller {
                             : resultMap.toString());
             result.complete(new RemoteCallOutcome(null, TaskState.TASK_STATE_COMPLETED,
                     "COMPLETED", answerText, null));
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             result.completeExceptionally(new RemoteAgentException(
                     "LocalHttp call to " + queryUrl + " failed to parse response", e));
         }

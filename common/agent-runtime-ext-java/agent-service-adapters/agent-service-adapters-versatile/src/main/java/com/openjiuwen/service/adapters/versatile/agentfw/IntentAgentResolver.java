@@ -67,28 +67,30 @@ final class IntentAgentResolver {
                     .filter(IntentAgentResolver::hasValidAgentCard)
                     .min(java.util.Comparator.comparingInt(MappingCandidate::getPriority))
                     .map(MappingCandidate::getAgentCard)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "VERSATILE_INTENT_AGENT_ID_UNMAPPED: strategy=PRIORITY no valid agentCard for intent_id=" + intentId));
+                    .orElseThrow(() -> unmappedError("PRIORITY", intentId));
         }
         if (strategy == VersatileProperties.IntentAgentMappingStrategy.ROUND_ROBIN) {
             List<MappingCandidate> valid = candidates.stream()
                     .filter(IntentAgentResolver::hasValidAgentCard)
                     .toList();
             if (valid.isEmpty()) {
-                throw new IllegalStateException(
-                        "VERSATILE_INTENT_AGENT_ID_UNMAPPED: strategy=ROUND_ROBIN no valid agentCard for intent_id=" + intentId);
+                throw unmappedError("ROUND_ROBIN", intentId);
             }
             AtomicInteger cursor = roundRobinCursors.computeIfAbsent(intentId, k -> new AtomicInteger(0));
             int index = Math.floorMod(cursor.getAndIncrement(), valid.size());
             return valid.get(index).getAgentCard();
         }
-        // FIRST (default)
         return candidates.stream()
                 .filter(IntentAgentResolver::hasValidAgentCard)
                 .findFirst()
                 .map(MappingCandidate::getAgentCard)
-                .orElseThrow(() -> new IllegalStateException(
-                        "VERSATILE_INTENT_AGENT_ID_UNMAPPED: strategy=FIRST no valid agentCard for intent_id=" + intentId));
+                .orElseThrow(() -> unmappedError("FIRST", intentId));
+    }
+
+    private static IllegalStateException unmappedError(String strategy, String intentId) {
+        return new IllegalStateException(
+                "VERSATILE_INTENT_AGENT_ID_UNMAPPED: strategy=" + strategy
+                        + " no valid agentCard for intent_id=" + intentId);
     }
 
     private static boolean hasValidAgentCard(MappingCandidate candidate) {

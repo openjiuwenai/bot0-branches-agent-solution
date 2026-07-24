@@ -8,6 +8,7 @@ import com.openjiuwen.service.adapters.versatile.agentfw.VersatileAgentHandler;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.app.autoconfigure.AgentServiceAutoConfiguration;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -34,7 +35,6 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnClass(VersatileAgentHandler.class)
 @ConditionalOnProperty(prefix = "openjiuwen.service.versatile", name = "url-template")
 public class VersatileIntentAutoConfiguration {
-
     /**
      * Creates the Versatile agent handler bean.
      *

@@ -4,11 +4,14 @@
 
 package com.openjiuwen.example.versatile.intent.mock;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import jakarta.servlet.http.HttpServletRequest;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
@@ -19,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -70,9 +74,6 @@ import java.util.Map;
 @Profile("mock-a2a-gateway")
 @RestController
 public class MockA2AGatewayController {
-    private static final Logger log = LoggerFactory.getLogger(MockA2AGatewayController.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     /**
      * agentCard → target runtime base URL. Mirrors the local-mapping in
      * application-mock-versatile.yml. The mock gateway uses this to route
@@ -88,6 +89,8 @@ public class MockA2AGatewayController {
             "agent_card_biz_flight_domestic", "http://localhost:8083",
             "agent_L1", "http://localhost:8081");
 
+    private static final Logger log = LoggerFactory.getLogger(MockA2AGatewayController.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String QUERY_PATH = "/v1/query";
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -95,6 +98,15 @@ public class MockA2AGatewayController {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
+    /**
+     * Handles an inbound mock A2A Gateway JSON-RPC request, forwarding it to
+     * the mapped target runtime and returning a synthetic JSON-RPC completion.
+     *
+     * @param agentId the path variable agent identifier (mapped via {@link #ROUTING})
+     * @param request the servlet request, source of propagated headers
+     * @param body    the raw JSON-RPC request body (may be {@code null})
+     * @return a {@code 200 OK} with JSON-RPC completion or error envelope
+     */
     @PostMapping("/a2a/{agentId}")
     public ResponseEntity<String> handle(
             @PathVariable String agentId,
@@ -103,7 +115,23 @@ public class MockA2AGatewayController {
         String query = extractMessageText(body);
         String contextId = extractContextId(body);
         String jsonRpcId = extractJsonRpcId(body);
+        logInbound(agentId, query, contextId, request);
 
+        String targetBase = ROUTING.get(agentId);
+        if (targetBase == null) {
+            log.error("Mock A2A Gateway: no routing entry for agentId={}", agentId);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorJson(jsonRpcId, "no routing for agentId=" + agentId));
+        }
+
+        String targetUrl = targetBase + QUERY_PATH;
+        String queryBody = buildQueryBody(contextId, query, request.getHeader("userId"));
+        log.info("Mock A2A Gateway forwarding agentId={} -> {} body={}", agentId, targetUrl, queryBody);
+        return forwardAndBuildResponse(agentId, targetUrl, queryBody, jsonRpcId);
+    }
+
+    private void logInbound(String agentId, String query, String contextId, HttpServletRequest request) {
         String token = request.getHeader("token");
         String userId = request.getHeader("userId");
         String versionNode = request.getHeader("versionNode");
@@ -120,19 +148,10 @@ public class MockA2AGatewayController {
         if (log.isDebugEnabled() && token != null) {
             log.debug("Mock A2A Gateway inbound token (debug only) len={}", token.length());
         }
+    }
 
-        String targetBase = ROUTING.get(agentId);
-        if (targetBase == null) {
-            log.error("Mock A2A Gateway: no routing entry for agentId={}", agentId);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(errorJson(jsonRpcId, "no routing for agentId=" + agentId));
-        }
-
-        String targetUrl = targetBase + QUERY_PATH;
-        String queryBody = buildQueryBody(contextId, query, userId);
-        log.info("Mock A2A Gateway forwarding agentId={} -> {} body={}", agentId, targetUrl, queryBody);
-
+    private ResponseEntity<String> forwardAndBuildResponse(String agentId, String targetUrl,
+            String queryBody, String jsonRpcId) {
         try {
             HttpRequest forwardReq = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))
@@ -158,7 +177,7 @@ public class MockA2AGatewayController {
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(jsonRpcResponse);
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException | IllegalArgumentException e) {
             log.error("Mock A2A Gateway: forward to {} failed", targetUrl, e);
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
@@ -181,7 +200,7 @@ public class MockA2AGatewayController {
         return body.toString();
     }
 
-    private static String buildAnswerEnvelope(String targetResponseBody) throws Exception {
+    private static String buildAnswerEnvelope(String targetResponseBody) throws JsonProcessingException {
         JsonNode root = MAPPER.readTree(targetResponseBody);
         JsonNode result = root.path("result");
 
@@ -195,6 +214,8 @@ public class MockA2AGatewayController {
             intentId = textOrEmpty(result, "intent_id");
         } else if (result.isTextual()) {
             content = result.asText();
+        } else {
+            log.warn("Mock A2A Gateway: unexpected result node type={}", result.getNodeType());
         }
 
         ObjectNode envelope = MAPPER.createObjectNode();
@@ -240,7 +261,7 @@ public class MockA2AGatewayController {
                     return text.asText();
                 }
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // fall through
         }
         return "";
@@ -255,7 +276,7 @@ public class MockA2AGatewayController {
             if (node.isTextual()) {
                 return node.asText();
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // fall through
         }
         return "";
@@ -273,7 +294,7 @@ public class MockA2AGatewayController {
             if (node.isNumber()) {
                 return node.asText();
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // fall through
         }
         return "1";
@@ -310,8 +331,8 @@ public class MockA2AGatewayController {
     private static String writeJson(ObjectNode root) {
         try {
             return MAPPER.writeValueAsString(root);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize JSON-RPC response", e);
         }
     }
 }

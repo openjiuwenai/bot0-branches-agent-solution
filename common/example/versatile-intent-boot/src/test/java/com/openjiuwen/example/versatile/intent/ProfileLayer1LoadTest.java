@@ -4,16 +4,17 @@
 
 package com.openjiuwen.example.versatile.intent;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.example.versatile.intent.a2a.A2AGatewayCardResolver;
 import com.openjiuwen.example.versatile.intent.a2a.A2AGatewayRemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCardResolver;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Smoke test: verify the Spring context loads under the {@code layer1} profile

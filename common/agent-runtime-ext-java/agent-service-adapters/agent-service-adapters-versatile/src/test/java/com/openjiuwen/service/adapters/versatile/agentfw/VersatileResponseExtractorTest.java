@@ -4,16 +4,17 @@
 
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.dto.QueryChunk;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests Versatile streaming response extraction rules.
@@ -33,7 +34,8 @@ class VersatileResponseExtractorTest {
 
     @Test
     void emitsErrorWhenStreamEndsBeforeEndSignal() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"), resolver(props("AnswerNode")));
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(
+                props("AnswerNode"), resolver(props("AnswerNode")));
 
         List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine("data: {\"event\":\"message\"}"));
         chunks.addAll(extractor.finish());
@@ -66,7 +68,8 @@ class VersatileResponseExtractorTest {
 
     @Test
     void emitsErrorWhenResultNodeArrivesWithoutEndSignal() {
-        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props("AnswerNode"), resolver(props("AnswerNode")));
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(
+                props("AnswerNode"), resolver(props("AnswerNode")));
 
         assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
                 + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
@@ -157,7 +160,7 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void emitsA2aDelegateWithEmptyResponseContentWhenWorkflowOmitsResponseContent() {
+    void emitsA2aDelegateEmptyContentWhenWorkflowOmitsContent() {
         // Reference scenario from production: intent node returns only intent_id + agent_id.
         // response_content is now optional — the a2a_delegate interrupt carries an empty
         // responseContent so the Caller skips appending an assistant message.

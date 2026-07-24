@@ -7,6 +7,7 @@ package com.openjiuwen.example.versatile.intent.a2a;
 import com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCardResolver;
+
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

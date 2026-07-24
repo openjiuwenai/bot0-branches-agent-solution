@@ -4,8 +4,10 @@
 
 package com.openjiuwen.example.versatile.intent.mock;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
@@ -40,6 +42,14 @@ public class MockVersatileController {
     private static final Logger log = LoggerFactory.getLogger(MockVersatileController.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /**
+     * Handles a mock Versatile SSE request, selecting a canned response by query keyword.
+     *
+     * @param agentId        the path variable agent identifier
+     * @param conversationId the path variable conversation identifier
+     * @param body           the raw request body (may be {@code null})
+     * @return a {@code 200 OK} with {@code text/event-stream} body containing canned SSE
+     */
     @PostMapping("/v1/proj/agents/{agentId}/conversations/{conversationId}")
     public ResponseEntity<String> mockVersatile(
             @PathVariable String agentId,
@@ -62,7 +72,7 @@ public class MockVersatileController {
             JsonNode root = MAPPER.readTree(body);
             JsonNode queryNode = root.path("inputs").path("query");
             return queryNode.isTextual() ? queryNode.asText() : "";
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return "";
         }
     }

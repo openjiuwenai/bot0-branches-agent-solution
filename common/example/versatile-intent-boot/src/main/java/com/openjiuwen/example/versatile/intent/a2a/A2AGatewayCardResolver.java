@@ -36,6 +36,9 @@ public class A2AGatewayCardResolver implements RemoteAgentCardResolver {
     /**
      * Always returns the empty string: the gateway caller uses an ephemeral
      * Agent Card and never fetches one over HTTP.
+     *
+     * @param agentId the runtime agent identifier (ignored by this implementation)
+     * @return the empty string, since the gateway caller never fetches a card URL
      */
     @Override
     public String resolveCardUrl(String agentId) {

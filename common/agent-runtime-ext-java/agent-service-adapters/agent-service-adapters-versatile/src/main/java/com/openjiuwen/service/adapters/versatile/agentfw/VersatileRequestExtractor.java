@@ -47,14 +47,8 @@ final class VersatileRequestExtractor {
         if (hasText(semanticInput.intent())) {
             inputs.put("intent", semanticInput.intent());
         }
-        String intentsJson = serializeIntents();
-        if (intentsJson != null) {
-            inputs.put("intents", intentsJson);
-        }
-        String messagesJson = serializeMessages(request);
-        if (messagesJson != null) {
-            inputs.put("messages", messagesJson);
-        }
+        serializeIntents().ifPresent(json -> inputs.put("intents", json));
+        serializeMessages(request).ifPresent(json -> inputs.put("messages", json));
         if (!inputs.isEmpty()) {
             remoteBody.put("inputs", inputs);
         }
@@ -94,10 +88,10 @@ final class VersatileRequestExtractor {
         return new SemanticInput(query, intent);
     }
 
-    private String serializeIntents() {
+    private Optional<String> serializeIntents() {
         List<VersatileProperties.Intent> intents = properties.getIntents();
         if (intents == null || intents.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         for (int i = 0; i < intents.size(); i++) {
             VersatileProperties.Intent intent = intents.get(i);
@@ -107,13 +101,13 @@ final class VersatileRequestExtractor {
             }
         }
         try {
-            return OBJECT_MAPPER.writeValueAsString(intents);
+            return Optional.of(OBJECT_MAPPER.writeValueAsString(intents));
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("VERSATILE_INTENT_CONFIG_MISSING: failed to serialize intents", ex);
         }
     }
 
-    private String serializeMessages(ServeRequest request) {
+    private Optional<String> serializeMessages(ServeRequest request) {
         List<Map<String, Object>> messages = request.getMessages();
         boolean required = properties.getMessages() != null && properties.getMessages().isRequired();
         if (messages == null || messages.isEmpty()) {
@@ -121,7 +115,7 @@ final class VersatileRequestExtractor {
                 throw new IllegalArgumentException(
                         "VERSATILE_INTENT_INPUT_MISSING: ServeRequest.messages must be non-empty");
             }
-            return null;
+            return Optional.empty();
         }
         List<Map<String, String>> serialized = new ArrayList<>();
         for (int i = 0; i < messages.size(); i++) {
@@ -149,10 +143,10 @@ final class VersatileRequestExtractor {
                 throw new IllegalArgumentException(
                         "VERSATILE_INTENT_INPUT_MISSING: ServeRequest.messages has no valid role/content entries");
             }
-            return null;
+            return Optional.empty();
         }
         try {
-            return OBJECT_MAPPER.writeValueAsString(serialized);
+            return Optional.of(OBJECT_MAPPER.writeValueAsString(serialized));
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("VERSATILE_INTENT_INPUT_MISSING: failed to serialize messages", ex);
         }

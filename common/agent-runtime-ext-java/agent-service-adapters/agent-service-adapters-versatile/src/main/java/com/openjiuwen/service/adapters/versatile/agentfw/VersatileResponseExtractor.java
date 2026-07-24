@@ -150,9 +150,9 @@ final class VersatileResponseExtractor {
 
     private void extractInterruptFields(JsonNode json) {
         VersatileProperties.Interrupt interrupt = properties.getInterrupt();
-        interruptPrompt = readPath(json, interrupt.getPromptGet());
-        interruptInputRequirement = readPath(json, interrupt.getInputRequirementGet());
-        interruptResumeToken = readPath(json, interrupt.getResumeTokenGet());
+        interruptPrompt = readPath(json, interrupt.getPromptGet()).orElse(null);
+        interruptInputRequirement = readPath(json, interrupt.getInputRequirementGet()).orElse(null);
+        interruptResumeToken = readPath(json, interrupt.getResumeTokenGet()).orElse(null);
         pendingInterrupt = hasText(interruptPrompt)
                 && hasText(interruptInputRequirement)
                 && hasText(interruptResumeToken);
@@ -162,15 +162,15 @@ final class VersatileResponseExtractor {
         return interruptSignalSeen && !pendingInterrupt;
     }
 
-    private static String readPath(JsonNode json, String path) {
+    private static Optional<String> readPath(JsonNode json, String path) {
         if (json == null || !hasText(path)) {
-            return null;
+            return Optional.empty();
         }
         JsonNode node = json.at(path);
         if (node == null || node.isMissingNode() || node.isNull()) {
-            return null;
+            return Optional.empty();
         }
-        return node.isTextual() ? node.asText() : node.toString();
+        return Optional.of(node.isTextual() ? node.asText() : node.toString());
     }
 
     private Optional<String> extractLegacyText(JsonNode json) {
@@ -269,6 +269,9 @@ final class VersatileResponseExtractor {
      * this layer's agent after the remote returns — the three-field result was
      * the layer's final output, and the remote's answer is this layer's
      * terminal answer. See {@code InterruptData.resume} in the runtime.
+     *
+     * @param envelope the three-field answer envelope (response_content, intent_id, agent_id)
+     * @return the constructed {@code a2a_delegate} interrupt chunk
      */
     private static QueryChunk buildA2aDelegateInterrupt(Map<String, Object> envelope) {
         String agentName = envelope.get("agent_id") instanceof String s ? s : "";

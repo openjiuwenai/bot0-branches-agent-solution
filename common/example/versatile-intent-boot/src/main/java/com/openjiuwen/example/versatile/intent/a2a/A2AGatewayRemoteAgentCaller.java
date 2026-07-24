@@ -12,6 +12,10 @@ import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
+import jakarta.annotation.PreDestroy;
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.a2aproject.sdk.client.Client;
 import org.a2aproject.sdk.client.ClientEvent;
 import org.a2aproject.sdk.client.TaskEvent;
@@ -39,12 +43,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import jakarta.annotation.PreDestroy;
-import jakarta.servlet.http.HttpServletRequest;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -102,8 +104,6 @@ import java.util.function.Supplier;
  * @since 0.1.0
  */
 public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
-    private static final Logger log = LoggerFactory.getLogger(A2AGatewayRemoteAgentCaller.class);
-
     /**
      * Metadata key carrying the upstream {@code userId} when the orchestrator
      * propagates it via {@link RemoteCall#metadata()}.
@@ -118,6 +118,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
      */
     static final String PROTOCOL_BINDING_JSONRPC = "JSONRPC";
 
+    private static final Logger log = LoggerFactory.getLogger(A2AGatewayRemoteAgentCaller.class);
     private static final String HEADER_TOKEN = "token";
     private static final String HEADER_USER_ID = "userId";
     private static final String HEADER_VERSION_NODE = "versionNode";
@@ -167,10 +168,10 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 ? call.contextId()
                 : UUID.randomUUID().toString();
         String messageText = call.message() != null ? call.message() : "";
-        String userId = resolveUserId(call);
+        Optional<String> userId = resolveUserId(call);
 
         log.info("A2AGateway call agent={} url={} userId={} messageLen={}",
-                agentName, jsonRpcUrl, userId, messageText.length());
+                agentName, jsonRpcUrl, userId.orElse(null), messageText.length());
 
         Message.Builder msgBuilder = Message.builder()
                 .role(Message.Role.ROLE_USER)
@@ -187,7 +188,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
 
         AgentCard card = buildEphemeralCard(agentName, jsonRpcUrl, streaming);
         Client client = getOrCreateClient(card, streaming);
-        ClientCallContext context = new ClientCallContext(Map.of(), buildHeaders(userId));
+        ClientCallContext context = new ClientCallContext(Map.of(), buildHeaders(userId.orElse(null)));
 
         CompletableFuture<RemoteCallOutcome> result = new CompletableFuture<>();
         result.orTimeout(properties.getCallTimeoutSeconds(), TimeUnit.SECONDS);
@@ -196,7 +197,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
         try {
             client.sendMessage(params, List.of(eventConsumer),
                     error -> completeOnStreamEnd(agentName, result, error), context);
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException | IllegalArgumentException ex) {
             result.completeExceptionally(new RemoteAgentException(
                     "A2AGateway call failed for agentId=" + agentName, ex));
         }
@@ -210,13 +211,13 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 && properties.getToken() != null && !properties.getToken().isBlank();
     }
 
-    private static String resolveUserId(RemoteCall call) {
+    private static Optional<String> resolveUserId(RemoteCall call) {
         Map<String, Object> metadata = call.metadata();
         if (metadata == null) {
-            return null;
+            return Optional.empty();
         }
         Object value = metadata.get(METADATA_KEY_USER_ID);
-        return value instanceof String uid && !uid.isBlank() ? uid : null;
+        return value instanceof String uid && !uid.isBlank() ? Optional.of(uid) : Optional.empty();
     }
 
     private void handleClientEvent(ClientEvent event, String agentName,
@@ -233,9 +234,14 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 handleArtifact(aue, result, streamObserver);
             } else if (tue.getUpdateEvent() instanceof TaskStatusUpdateEvent sue) {
                 handleStatusUpdate(sue, result, streamObserver, remoteTaskIdObserver);
+            } else {
+                log.debug("A2AGateway caller: unrecognized TaskUpdateEvent payload class={}",
+                        tue.getUpdateEvent() != null ? tue.getUpdateEvent().getClass().getName() : "null");
             }
         } else if (event instanceof TaskEvent te) {
             handleTaskEvent(te, result, streamObserver, remoteTaskIdObserver);
+        } else {
+            log.debug("A2AGateway caller: unrecognized ClientEvent class={}", event.getClass().getName());
         }
     }
 
@@ -276,25 +282,21 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
             headers.put(HEADER_VERSION_NODE, properties.getVersionNode());
         }
 
-        String upstreamTraceId = resolveUpstreamHeader(HEADER_B3_TRACE_ID);
-        if (upstreamTraceId != null && !upstreamTraceId.isBlank()) {
-            headers.put(HEADER_B3_TRACE_ID, upstreamTraceId);
-        }
+        resolveUpstreamHeader(HEADER_B3_TRACE_ID)
+                .filter(s -> !s.isBlank())
+                .ifPresent(v -> headers.put(HEADER_B3_TRACE_ID, v));
 
-        String upstreamSampled = resolveUpstreamHeader(HEADER_B3_SAMPLED);
-        if (upstreamSampled != null && !upstreamSampled.isBlank()) {
-            headers.put(HEADER_B3_SAMPLED, upstreamSampled);
-        }
+        resolveUpstreamHeader(HEADER_B3_SAMPLED)
+                .filter(s -> !s.isBlank())
+                .ifPresent(v -> headers.put(HEADER_B3_SAMPLED, v));
 
-        String upstreamBizTag = resolveUpstreamHeader(HEADER_BIZ_TAG);
-        if (upstreamBizTag != null && !upstreamBizTag.isBlank()) {
-            headers.put(HEADER_BIZ_TAG, upstreamBizTag);
-        }
+        resolveUpstreamHeader(HEADER_BIZ_TAG)
+                .filter(s -> !s.isBlank())
+                .ifPresent(v -> headers.put(HEADER_BIZ_TAG, v));
 
-        String upstreamSpanId = resolveUpstreamHeader(HEADER_B3_SPAN_ID);
-        if (upstreamSpanId != null && !upstreamSpanId.isBlank()) {
-            headers.put(HEADER_B3_PARENT_SPAN_ID, upstreamSpanId);
-        }
+        resolveUpstreamHeader(HEADER_B3_SPAN_ID)
+                .filter(s -> !s.isBlank())
+                .ifPresent(v -> headers.put(HEADER_B3_PARENT_SPAN_ID, v));
 
         headers.put(HEADER_B3_SPAN_ID, generateSpanId());
 
@@ -309,23 +311,22 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
      * a servlet request scope).
      *
      * @param name the header name (case-insensitive per servlet spec)
-     * @return the header value, or {@code null} if no upstream request is
-     *         bound or the header is absent
+     * @return the header value, or empty if no upstream request is bound or the header is absent
      */
-    String resolveUpstreamHeader(String name) {
-        ServletRequestAttributes attrs =
-                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attrs == null) {
-            return null;
+    Optional<String> resolveUpstreamHeader(String name) {
+        Object attrsObj = RequestContextHolder.getRequestAttributes();
+        if (!(attrsObj instanceof ServletRequestAttributes attrs)) {
+            return Optional.empty();
         }
-        HttpServletRequest request = attrs.getRequest();
-        return request.getHeader(name);
+        return Optional.ofNullable(attrs.getRequest().getHeader(name));
     }
 
     /**
      * Generates a fresh span id for this outbound call. Uses
      * {@link UUID#randomUUID()} with dashes stripped (32 hex chars), as
      * permitted by the B3 extension spec for 128-bit span ids.
+     *
+     * @return a 32-character hex span id with no dashes
      */
     String generateSpanId() {
         return UUID.randomUUID().toString().replace("-", "");
@@ -357,6 +358,11 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
      * FEAT-015 card fetch 与协议版本协商在 gateway 路由模式下被刻意跳过。
      * 若部署需要能力/技能过滤或目标 Agent 协议版本低于 CURRENT，应切换到
      * Default 路由模式或扩展 resolver 支持 real card fetch。
+     *
+     * @param agentId the agent identifier to route to
+     * @param jsonRpcUrl the full JSON-RPC URL for the gateway route
+     * @param streaming whether the caller requested streaming transport
+     * @return an ephemeral {@link AgentCard} for the A2A Gateway route
      */
     AgentCard buildEphemeralCard(String agentId, String jsonRpcUrl, boolean streaming) {
         if (ephemeralCardWarnedAgents.add(agentId)) {
@@ -398,7 +404,7 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
         for (Client client : clientCache.values()) {
             try {
                 client.close();
-            } catch (RuntimeException ex) {
+            } catch (IllegalStateException ex) {
                 log.debug("A2AGateway caller: error closing cached client", ex);
             }
         }
@@ -469,6 +475,8 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                     null, inputPrompt));
         } else if (state.isFinal()) {
             result.complete(new RemoteCallOutcome(sue.taskId(), state, resultCategory(state), "", null));
+        } else {
+            log.debug("A2AGateway caller: non-terminal status update state={}", state);
         }
     }
 
@@ -496,22 +504,28 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
             String text = "";
             if (task.artifacts() != null && !task.artifacts().isEmpty()) {
                 text = extractText(task.artifacts().get(0).parts());
-                for (Artifact a : task.artifacts()) {
-                    if (a == null || a.parts() == null) {
-                        continue;
-                    }
-                    String raw = extractText(a.parts());
-                    if (!raw.isEmpty() && observer != null) {
-                        String answer = RemoteAgentAnswerExtractor.extractAnswer(raw).orElse(raw);
-                        Map<String, Object> envelope = new LinkedHashMap<>();
-                        envelope.put("type", "answer");
-                        envelope.put("output", answer);
-                        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
-                    }
-                }
+                emitArtifactsAsChunks(task.artifacts(), observer);
             }
             String answer = RemoteAgentAnswerExtractor.extractAnswer(text).orElse(text);
             result.complete(new RemoteCallOutcome(task.id(), state, resultCategory(state), answer, null));
+        } else {
+            log.debug("A2AGateway caller: non-terminal task event state={}", state);
+        }
+    }
+
+    private static void emitArtifactsAsChunks(List<Artifact> artifacts, QueryStreamObserver observer) {
+        for (Artifact a : artifacts) {
+            if (a == null || a.parts() == null) {
+                continue;
+            }
+            String raw = extractText(a.parts());
+            if (!raw.isEmpty() && observer != null) {
+                String answer = RemoteAgentAnswerExtractor.extractAnswer(raw).orElse(raw);
+                Map<String, Object> envelope = new LinkedHashMap<>();
+                envelope.put("type", "answer");
+                envelope.put("output", answer);
+                observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
+            }
         }
     }
 
