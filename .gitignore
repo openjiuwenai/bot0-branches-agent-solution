@@ -44,6 +44,10 @@ logs/
 .cache/
 *.cache
 
+# EDPA runtime artifacts (todo store, checkstyle report)
+.todo/
+checkstyle-result.xml
+
 # MR description working copies (not production code)
 MR_*.md
 

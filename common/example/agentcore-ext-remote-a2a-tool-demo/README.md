@@ -130,7 +130,8 @@ function New-AgentARequestJson {
   param(
     [string] $Id,
     [string] $Query,
-    [string] $Intent
+    [string] $Intent,
+    [string] $TaskId
   )
 
   $messageText = @{
@@ -138,20 +139,25 @@ function New-AgentARequestJson {
     intent = $Intent
   } | ConvertTo-Json -Compress -Depth 100
 
+  $message = [ordered]@{
+    role = "ROLE_USER"
+    contextId = $Id
+    parts = @(
+      [ordered]@{
+        text = $messageText
+      }
+    )
+  }
+  if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
+    $message.taskId = $TaskId
+  }
+
   $request = [ordered]@{
     jsonrpc = "2.0"
     id = $Id
     method = "SendStreamingMessage"
     params = [ordered]@{
-      message = [ordered]@{
-        role = "ROLE_USER"
-        contextId = $Id
-        parts = @(
-          [ordered]@{
-            text = $messageText
-          }
-        )
-      }
+      message = $message
       metadata = [ordered]@{
         body = [ordered]@{
           agent_id = "main_planner"
@@ -230,7 +236,7 @@ function Send-AgentARequestJson {
 ```powershell
 $requestJson1 = New-AgentARequestJson `
   -Id "agentcore-ext-remote-a2a-tool-demo-1" `
-  -Query "先查询尾号为4241的银行卡余额，再转账5元给李四" `
+  -Query "先查询张三尾号4241的银行卡余额" `
   -Intent "查询账户余额"
 
 Send-AgentARequestJson $requestJson1
@@ -239,10 +245,14 @@ Send-AgentARequestJson $requestJson1
 第二轮仍然请求 Agent A；预期由 Agent A 直接转发到 Agent B 的 shadow task：
 
 ```powershell
+# 填写第一轮响应中 Agent A 的父 Task ID（不是 Agent B 的远端 Task ID）。
+$parentTaskId = "<第一轮响应中的父 taskId>"
+
 $requestJson2 = New-AgentARequestJson `
   -Id "agentcore-ext-remote-a2a-tool-demo-1" `
   -Query '[{"cardNum":"6222021816044054241","regAcctType":"011","cardAlias":""}]' `
-  -Intent "LATEST"
+  -Intent "LATEST" `
+  -TaskId $parentTaskId
 
 Send-AgentARequestJson $requestJson2
 ```
@@ -257,7 +267,8 @@ $round3Query = @'
 $requestJson3 = New-AgentARequestJson `
   -Id "agentcore-ext-remote-a2a-tool-demo-1" `
   -Query $round3Query `
-  -Intent "LATEST"
+  -Intent "LATEST" `
+  -TaskId $parentTaskId
 
 Send-AgentARequestJson $requestJson3
 ```
@@ -268,7 +279,7 @@ Send-AgentARequestJson $requestJson3
 Agent A DeepAgent
   -> LLM calls the matching injected remote A2A tool
   -> RemoteA2aInterruptRail throws a2a_delegate interrupt
-  -> A2AEnabledServeOrchestrator calls Agent B with streaming A2A client
+  -> A2AEnabledServeOrchestrator calls Agent B in the configured mode (non-streaming by default)
   -> Agent B VersatileAgentHandler calls VERSATILE_URL
   -> remote result resumes Agent A as tool result
 ```
@@ -674,3 +685,234 @@ Send-CustomRestRequestJson $syncRequestJson
 
 最后继续执行本文前面的 A2A 三轮请求和 `/v1/query` REST 三轮请求。三组入口应同时可用，
 Agent A/Agent B 端口仍分别是 `18090`、`18091`。
+
+## 并发查询三个人的余额：A2A 三轮示例
+
+下面的请求验证同一轮三个独立 remote ToolCall。Agent A 必须在同一个 assistant turn 中调用三次 `versatile-agent`，不能把三个人合并成一次远端调用。三个 Agent B Task 各自多轮推进，Runtime 使用 `toolCallId` 关联结果，不能依赖完成顺序。
+
+每次独立测试请使用新的 `contextId`/`conversation_id`，避免 Versatile mock 中已有会话状态影响结果；同一次测试的三轮请求必须复用该值，第二、三轮同时复用第一轮返回的父 `taskId`。三轮都必须保留 `params.metadata`，尤其是 Versatile endpoint 必需的 `query.workspace_id` 和 `query.type`。
+
+以下三段代码按顺序在同一个 PowerShell 中执行。第一段同时定义本示例使用的发送函数，不依赖前文的公共函数。
+
+第一轮请求：
+
+```powershell
+$a2aUrl = "http://127.0.0.1:18090/a2a/"
+$parallelConversationId = "parallel-balance-conversation-$(Get-Date -Format 'yyyyMMddHHmmss')"
+
+function Send-ParallelBalanceRequestJson {
+  param([Parameter(Mandatory = $true)] [string] $RequestJson)
+
+  Write-Host "Request body:"
+  $RequestJson
+  Write-Host ""
+
+  $response = Invoke-WebRequest `
+    -UseBasicParsing `
+    -Uri $a2aUrl `
+    -Method Post `
+    -ContentType "application/json; charset=utf-8" `
+    -Headers @{
+      Accept = "text/event-stream"
+      stream = "true"
+      "x-invoke-mode" = "DEBUG"
+      "x-language" = "zh-cn"
+    } `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($RequestJson))
+
+  Write-Host "HTTP $($response.StatusCode)"
+  $response.RawContentStream.Position = 0
+  $reader = New-Object System.IO.StreamReader(
+    $response.RawContentStream,
+    [System.Text.Encoding]::UTF8
+  )
+  $reader.ReadToEnd()
+}
+
+function New-ParallelBalanceMetadata {
+  [ordered]@{
+    body = [ordered]@{
+      agent_id = "main_planner"
+      conversation_id = $parallelConversationId
+      stream = $true
+    }
+    headers = [ordered]@{
+      stream = "true"
+      "x-invoke-mode" = "DEBUG"
+      "x-language" = "zh-cn"
+    }
+    query = [ordered]@{
+      workspace_id = "11"
+      type = "controller"
+    }
+  }
+}
+
+$parallelBalanceRequest1 = [ordered]@{
+  jsonrpc = "2.0"
+  id = "parallel-balance-1"
+  method = "SendStreamingMessage"
+  params = [ordered]@{
+    message = [ordered]@{
+      role = "ROLE_USER"
+      contextId = $parallelConversationId
+      parts = @(
+        [ordered]@{
+          text = "请并行查询三个人的银行卡余额：张三尾号4241、李四尾号7816、王五尾号3058。三个人互不依赖，请为每个人分别调用一次远端银行能力。"
+        }
+      )
+    }
+    metadata = (New-ParallelBalanceMetadata)
+  }
+}
+
+$parallelBalanceRequestJson1 = $parallelBalanceRequest1 | ConvertTo-Json -Depth 100
+Send-ParallelBalanceRequestJson $parallelBalanceRequestJson1
+```
+
+第一轮预期返回三个独立成员进度，并以一个父 Task `INPUT_REQUIRED` 收口。记录响应中的父 `taskId` 和三个 `toolCallId`；下面使用示例值：
+
+```json
+{
+  "status": {
+    "state": "TASK_STATE_INPUT_REQUIRED",
+    "message": {
+      "metadata": {
+        "_interrupt": {
+          "message": "Multiple remote agents require input",
+          "items": [
+            {"toolCallId": "call-zhang", "message": "请选择张三的银行卡"},
+            {"toolCallId": "call-li", "message": "请选择李四的银行卡"},
+            {"toolCallId": "call-wang", "message": "请选择王五的银行卡"}
+          ]
+        }
+      }
+    }
+  },
+  "id": "parent-task-from-round-1"
+}
+```
+
+第二轮在一条标准 A2A Message 中放三个 TextPart。每个 Part 的 `metadata.toolCallId` 指向一个 pending member；客户端不传 `batchId`：
+
+```powershell
+# 使用第一轮实际响应中的父 taskId 和三个 toolCallId 替换下面的示例值。
+$parentTaskId = "parent-task-from-round-1"
+$zhangToolCallId = "call-zhang"
+$liToolCallId = "call-li"
+$wangToolCallId = "call-wang"
+
+$zhangCardQuery = ConvertTo-Json -InputObject @(
+  [ordered]@{ cardNum = "6222021816044054241"; regAcctType = "011" }
+) -Compress -Depth 100
+$liCardQuery = ConvertTo-Json -InputObject @(
+  [ordered]@{ cardNum = "6222021816044057816"; regAcctType = "011" }
+) -Compress -Depth 100
+$wangCardQuery = ConvertTo-Json -InputObject @(
+  [ordered]@{ cardNum = "6222021816044053058"; regAcctType = "011" }
+) -Compress -Depth 100
+
+$parallelBalanceRequest2 = [ordered]@{
+  jsonrpc = "2.0"
+  id = "parallel-balance-2"
+  method = "SendStreamingMessage"
+  params = [ordered]@{
+    message = [ordered]@{
+      role = "ROLE_USER"
+      taskId = $parentTaskId
+      contextId = $parallelConversationId
+      parts = @(
+        [ordered]@{
+          text = ([ordered]@{ query = $zhangCardQuery; intent = "LATEST" } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $zhangToolCallId }
+        }
+        [ordered]@{
+          text = ([ordered]@{ query = $liCardQuery; intent = "LATEST" } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $liToolCallId }
+        }
+        [ordered]@{
+          text = ([ordered]@{ query = $wangCardQuery; intent = "LATEST" } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $wangToolCallId }
+        }
+      )
+    }
+    metadata = (New-ParallelBalanceMetadata)
+  }
+}
+
+$parallelBalanceRequestJson2 = $parallelBalanceRequest2 | ConvertTo-Json -Depth 100
+Send-ParallelBalanceRequestJson $parallelBalanceRequestJson2
+```
+
+如果三个远端流程都还需要余额查询结果，第二轮再次返回同一父 Task 的三个 `INPUT_REQUIRED` item。若只回答其中一个，另外两个必须继续保持 pending；不允许默认广播。
+
+第三轮仍按相同方式携带三个定向 Part。与第二轮相同，每个 Part 的 `text` 放一份完整报文，并通过 `metadata.toolCallId` 定向到对应的 pending member：
+
+```powershell
+$zhangRound3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044054241","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"1500.92"}]}],"responseData":[{"answer":"已为您查询账户余额","readme":"已为您查询账户余额","pageData":"","type":"1"},{"answer":"","readme":"","pageData":{"id":"queryBalance","bankBalanceData":[{"layouttype":"1","actionFun_click":{"menu":{"param":"returnFlag=3","needLogin":"false","menuId":"account_1"}},"actionType_click":"menu","bankIoc":{"titleValueColor":"","titleValue":"","type":"pic","bgColor":"","bgPic":"","actionFun_click":"","actionType_click":""},"areaName":{"titleValueColor":"F4E1B3","titleValue":"广州","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardTypeDesc":{"titleValueColor":"F4E1B3","titleValue":"借记卡（I类）","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"alias":{"titleValueColor":"F4E1B3","titleValue":"","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardNumLast":{"titleValueColor":"F4E1B3","titleValue":"6222****4241","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balanceList":[{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"1970.23","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}},{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币可用余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"1500.92","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}}],"showCardNumBtn":{"type":"button","btnId":"tttt","btnName":"查看","bgColor":null,"actionFun_click":"abc","actionType_click":"4"},"showAccountBalanceBtn":{"type":"button","btnId":"qqqq","btnName":"点击查询","bgColor":null,"actionFun_click":"def","actionType_click":"4"}}],"queryStatus":"成功","failCause":"","type":"7"}}]}
+'@
+$liRound3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044057816","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"2088.10"}]}],"responseData":[{"answer":"已为您查询账户余额","readme":"已为您查询账户余额","pageData":"","type":"1"},{"answer":"","readme":"","pageData":{"id":"queryBalance","bankBalanceData":[{"layouttype":"1","actionFun_click":{"menu":{"param":"returnFlag=3","needLogin":"false","menuId":"account_1"}},"actionType_click":"menu","bankIoc":{"titleValueColor":"","titleValue":"","type":"pic","bgColor":"","bgPic":"","actionFun_click":"","actionType_click":""},"areaName":{"titleValueColor":"F4E1B3","titleValue":"广州","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardTypeDesc":{"titleValueColor":"F4E1B3","titleValue":"借记卡（I类）","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"alias":{"titleValueColor":"F4E1B3","titleValue":"","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardNumLast":{"titleValueColor":"F4E1B3","titleValue":"6222****7816","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balanceList":[{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"2088.10","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}},{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币可用余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"2088.10","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}}],"showCardNumBtn":{"type":"button","btnId":"tttt","btnName":"查看","bgColor":null,"actionFun_click":"abc","actionType_click":"4"},"showAccountBalanceBtn":{"type":"button","btnId":"qqqq","btnName":"点击查询","bgColor":null,"actionFun_click":"def","actionType_click":"4"}}],"queryStatus":"成功","failCause":"","type":"7"}}]}
+'@
+$wangRound3Query = @'
+{"bankCardBalanceList":[{"bankCardNumber":"6222021816044053058","mediumStatus":"0","currencyBalanceList":[{"currencyCode":"001","currencyName":"人民币可用余额","balance":"936.44"}]}],"responseData":[{"answer":"已为您查询账户余额","readme":"已为您查询账户余额","pageData":"","type":"1"},{"answer":"","readme":"","pageData":{"id":"queryBalance","bankBalanceData":[{"layouttype":"1","actionFun_click":{"menu":{"param":"returnFlag=3","needLogin":"false","menuId":"account_1"}},"actionType_click":"menu","bankIoc":{"titleValueColor":"","titleValue":"","type":"pic","bgColor":"","bgPic":"","actionFun_click":"","actionType_click":""},"areaName":{"titleValueColor":"F4E1B3","titleValue":"广州","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardTypeDesc":{"titleValueColor":"F4E1B3","titleValue":"借记卡（I类）","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"alias":{"titleValueColor":"F4E1B3","titleValue":"","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"cardNumLast":{"titleValueColor":"F4E1B3","titleValue":"6222****3058","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balanceList":[{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"936.44","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}},{"balanceTitle":{"titleValueColor":"C3B9A1","titleValue":"人民币可用余额","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null},"balance":{"titleValueColor":"F4E1B3","titleValue":"936.44","type":"text","bgColor":null,"actionFun_click":null,"actionType_click":null}}],"showCardNumBtn":{"type":"button","btnId":"tttt","btnName":"查看","bgColor":null,"actionFun_click":"abc","actionType_click":"4"},"showAccountBalanceBtn":{"type":"button","btnId":"qqqq","btnName":"点击查询","bgColor":null,"actionFun_click":"def","actionType_click":"4"}}],"queryStatus":"成功","failCause":"","type":"7"}}]}
+'@
+
+$parallelBalanceRequest3 = [ordered]@{
+  jsonrpc = "2.0"
+  id = "parallel-balance-3"
+  method = "SendStreamingMessage"
+  params = [ordered]@{
+    message = [ordered]@{
+      role = "ROLE_USER"
+      taskId = $parentTaskId
+      contextId = $parallelConversationId
+      parts = @(
+        [ordered]@{
+          text = ([ordered]@{
+            query = $zhangRound3Query
+            intent = "LATEST"
+          } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $zhangToolCallId }
+        }
+        [ordered]@{
+          text = ([ordered]@{
+            query = $liRound3Query
+            intent = "LATEST"
+          } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $liToolCallId }
+        }
+        [ordered]@{
+          text = ([ordered]@{
+            query = $wangRound3Query
+            intent = "LATEST"
+          } | ConvertTo-Json -Compress -Depth 100)
+          metadata = [ordered]@{ toolCallId = $wangToolCallId }
+        }
+      )
+    }
+    metadata = (New-ParallelBalanceMetadata)
+  }
+}
+
+$parallelBalanceRequestJson3 = $parallelBalanceRequest3 | ConvertTo-Json -Depth 100
+Send-ParallelBalanceRequestJson $parallelBalanceRequestJson3
+```
+
+最终响应应在三个成员都完成后才恢复 Agent A。即使远端完成顺序是王五、张三、李四，最终语义仍必须按各自的 `toolCallId` 归位，例如：
+
+```json
+{
+  "status": {"state": "TASK_STATE_COMPLETED"},
+  "artifacts": [
+    {
+      "parts": [
+        {
+          "text": "张三可用余额1500.92元；李四可用余额2088.10元；王五可用余额936.44元。"
+        }
+      ]
+    }
+  ]
+}
+```
