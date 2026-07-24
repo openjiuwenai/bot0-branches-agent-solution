@@ -51,6 +51,6 @@ async def repo(test_db):
 
 
 @pytest.fixture(scope="session")
-def synthetic_spans() -> list[dict]:
-    """session 级生成合成 spans 一次（只读；用例需改动请拷贝）。"""
-    return _pgutil.load_spans()
+def jsonl_spans() -> list[dict]:
+    """session 级加载 otel_spans.jsonl 一次（只读；用例需改动请拷贝）。"""
+    return _pgutil.load_jsonl_spans()

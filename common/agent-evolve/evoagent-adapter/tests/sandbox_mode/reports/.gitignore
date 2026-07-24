@@ -1,4 +1,0 @@
-# Local API/E2E run reports may contain host IPs and live skill inventories.
-# Do not commit dated JSON reports.
-*
-!.gitignore
