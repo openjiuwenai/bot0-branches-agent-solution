@@ -83,126 +83,126 @@ public class EdpAgentConfig {
     private Skills skills;
 
     /**
-     * Gets the name.
+     * 获取 Agent 名称。
      *
-     * @return the result
+     * @return Agent 名称字符串
      */
     public String getName() {
         return name;
     }
 
     /**
-     * Sets the name.
+     * 设置 Agent 名称。
      *
-     * @param name the name value
+     * @param name Agent 名称
      */
     public void setName(String name) {
         this.name = name;
     }
 
     /**
-     * Gets the description.
+     * 获取 Agent 描述信息。
      *
-     * @return the result
+     * @return Agent 描述
      */
     public String getDescription() {
         return description;
     }
 
     /**
-     * Sets the description.
+     * 设置 Agent 描述信息。
      *
-     * @param description the description value
+     * @param description Agent 描述
      */
     public void setDescription(String description) {
         this.description = description;
     }
 
     /**
-     * Gets the framework.
+     * 获取框架配置节点。
      *
-     * @return the result
+     * @return 框架配置对象
      */
     public Framework getFramework() {
         return framework;
     }
 
     /**
-     * Sets the framework.
+     * 设置框架配置节点。
      *
-     * @param framework the framework value
+     * @param framework 框架配置对象
      */
     public void setFramework(Framework framework) {
         this.framework = framework;
     }
 
     /**
-     * Gets the model.
+     * 获取模型配置节点。
      *
-     * @return the result
+     * @return 模型配置对象
      */
     public Model getModel() {
         return model;
     }
 
     /**
-     * Sets the model.
+     * 设置模型配置节点。
      *
-     * @param model the model value
+     * @param model 模型配置对象
      */
     public void setModel(Model model) {
         this.model = model;
     }
 
     /**
-     * Gets the versatile.
+     * 获取 Versatile 服务配置节点。
      *
-     * @return the result
+     * @return Versatile 配置对象
      */
     public Versatile getVersatile() {
         return versatile;
     }
 
     /**
-     * Sets the versatile.
+     * 设置 Versatile 服务配置节点。
      *
-     * @param versatile the versatile value
+     * @param versatile Versatile 配置对象
      */
     public void setVersatile(Versatile versatile) {
         this.versatile = versatile;
     }
 
     /**
-     * Gets the prompt.
+     * 获取 Prompt 配置节点。
      *
-     * @return the result
+     * @return Prompt 配置对象
      */
     public Prompt getPrompt() {
         return prompt;
     }
 
     /**
-     * Sets the prompt.
+     * 设置 Prompt 配置节点。
      *
-     * @param prompt the prompt value
+     * @param prompt Prompt 配置对象
      */
     public void setPrompt(Prompt prompt) {
         this.prompt = prompt;
     }
 
     /**
-     * Gets the skills.
+     * 获取 Skill 配置节点。
      *
-     * @return the result
+     * @return Skill 配置对象
      */
     public Skills getSkills() {
         return skills;
     }
 
     /**
-     * Sets the skills.
+     * 设置 Skill 配置节点。
      *
-     * @param skills the skills value
+     * @param skills Skill 配置对象
      */
     public void setSkills(Skills skills) {
         this.skills = skills;
@@ -220,18 +220,18 @@ public class EdpAgentConfig {
         private Options options;
 
         /**
-         * Gets the options.
+         * 获取框架运行选项。
          *
-         * @return the result
+         * @return 框架运行选项对象
          */
         public Options getOptions() {
             return options;
         }
 
         /**
-         * Sets the options.
+         * 设置框架运行选项。
          *
-         * @param options the options value
+         * @param options 框架运行选项对象
          */
         public void setOptions(Options options) {
             this.options = options;
@@ -255,36 +255,36 @@ public class EdpAgentConfig {
         private boolean enableTaskLoop;
 
         /**
-         * Gets the max iterations.
+         * 获取 ReAct 最大迭代次数。
          *
-         * @return the result
+         * @return 最大迭代次数
          */
         public int getMaxIterations() {
             return maxIterations;
         }
 
         /**
-         * Sets the max iterations.
+         * 设置 ReAct 最大迭代次数。
          *
-         * @param maxIterations the maxIterations value
+         * @param maxIterations 最大迭代次数
          */
         public void setMaxIterations(int maxIterations) {
             this.maxIterations = maxIterations;
         }
 
         /**
-         * Checks whether enable task loop.
+         * 判断是否启用 task loop。
          *
-         * @return the result
+         * @return 启用返回 true，否则返回 false
          */
         public boolean isEnableTaskLoop() {
             return enableTaskLoop;
         }
 
         /**
-         * Sets the enable task loop.
+         * 设置是否启用 task loop。
          *
-         * @param enableTaskLoop the enableTaskLoop value
+         * @param enableTaskLoop 是否启用 task loop
          */
         public void setEnableTaskLoop(boolean enableTaskLoop) {
             this.enableTaskLoop = enableTaskLoop;
@@ -318,72 +318,72 @@ public class EdpAgentConfig {
         private String apiKey;
 
         /**
-         * Gets the provider.
+         * 获取模型 provider 类型。
          *
-         * @return the result
+         * @return provider 类型字符串
          */
         public String getProvider() {
             return provider;
         }
 
         /**
-         * Sets the provider.
+         * 设置模型 provider 类型。
          *
-         * @param provider the provider value
+         * @param provider provider 类型，如 openai-compatible
          */
         public void setProvider(String provider) {
             this.provider = provider;
         }
 
         /**
-         * Gets the name.
+         * 获取模型名称。
          *
-         * @return the result
+         * @return 模型名称
          */
         public String getName() {
             return name;
         }
 
         /**
-         * Sets the name.
+         * 设置模型名称。
          *
-         * @param name the name value
+         * @param name 模型名称，如 deepseek-v4-pro
          */
         public void setName(String name) {
             this.name = name;
         }
 
         /**
-         * Gets the base url.
+         * 获取模型服务 baseUrl。
          *
-         * @return the result
+         * @return baseUrl 地址
          */
         public String getBaseUrl() {
             return baseUrl;
         }
 
         /**
-         * Sets the base url.
+         * 设置模型服务 baseUrl。
          *
-         * @param baseUrl the baseUrl value
+         * @param baseUrl 模型服务地址
          */
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
         }
 
         /**
-         * Gets the api key.
+         * 获取模型 API Key。
          *
-         * @return the result
+         * @return API Key 字符串
          */
         public String getApiKey() {
             return apiKey;
         }
 
         /**
-         * Sets the api key.
+         * 设置模型 API Key。
          *
-         * @param apiKey the apiKey value
+         * @param apiKey API Key
          */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
@@ -414,108 +414,108 @@ public class EdpAgentConfig {
         private Map<String, String> headers = new LinkedHashMap<>();
 
         /**
-         * Gets the url.
+         * 获取 Versatile REST 直连地址。
          *
-         * @return the result
+         * @return REST 地址，含路径占位符
          */
         public String getUrl() {
             return url;
         }
 
         /**
-         * Sets the url.
+         * 设置 Versatile REST 直连地址。
          *
-         * @param url the url value
+         * @param url REST 地址，含 {conversation_id} 等占位符
          */
         public void setUrl(String url) {
             this.url = url;
         }
 
         /**
-         * Gets the adapter a2a url.
+         * 获取 adapter A2A SSE 入口地址。
          *
-         * @return the result
+         * @return A2A 入口地址
          */
         public String getAdapterA2aUrl() {
             return adapterA2aUrl;
         }
 
         /**
-         * Sets the adapter a2a url.
+         * 设置 adapter A2A SSE 入口地址。
          *
-         * @param adapterA2aUrl the adapterA2aUrl value
+         * @param adapterA2aUrl A2A 入口地址，配置后优先于 url 直连
          */
         public void setAdapterA2aUrl(String adapterA2aUrl) {
             this.adapterA2aUrl = adapterA2aUrl;
         }
 
         /**
-         * Gets the timeout.
+         * 获取超时时间配置。
          *
-         * @return the result
+         * @return 超时时间字符串，如 "30s"
          */
         public String getTimeout() {
             return timeout;
         }
 
         /**
-         * Sets the timeout.
+         * 设置超时时间。
          *
-         * @param timeout the timeout value
+         * @param timeout 超时时间，如 "30s"
          */
         public void setTimeout(String timeout) {
             this.timeout = timeout;
         }
 
         /**
-         * Gets the url variables.
+         * 获取 URL 路径变量映射。
          *
-         * @return the result
+         * @return 路径变量键值对
          */
         public Map<String, String> getUrlVariables() {
             return urlVariables;
         }
 
         /**
-         * Sets the url variables.
+         * 设置 URL 路径变量映射。
          *
-         * @param urlVariables the urlVariables value
+         * @param urlVariables 路径变量键值对
          */
         public void setUrlVariables(Map<String, String> urlVariables) {
             this.urlVariables = urlVariables != null ? urlVariables : new LinkedHashMap<>();
         }
 
         /**
-         * Gets the query params.
+         * 获取查询参数映射。
          *
-         * @return the result
+         * @return 查询参数键值对
          */
         public Map<String, String> getQueryParams() {
             return queryParams;
         }
 
         /**
-         * Sets the query params.
+         * 设置查询参数映射。
          *
-         * @param queryParams the queryParams value
+         * @param queryParams 查询参数键值对
          */
         public void setQueryParams(Map<String, String> queryParams) {
             this.queryParams = queryParams != null ? queryParams : new LinkedHashMap<>();
         }
 
         /**
-         * Gets the headers.
+         * 获取自定义请求头映射。
          *
-         * @return the result
+         * @return 请求头键值对
          */
         public Map<String, String> getHeaders() {
             return headers;
         }
 
         /**
-         * Sets the headers.
+         * 设置自定义请求头映射。
          *
-         * @param headers the headers value
+         * @param headers 请求头键值对
          */
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : new LinkedHashMap<>();
@@ -532,36 +532,36 @@ public class EdpAgentConfig {
         private String mode = "all";
 
         /**
-         * Gets the directories.
+         * 获取 Skill 目录列表。
          *
-         * @return the result
+         * @return Skill 目录路径列表
          */
         public List<String> getDirectories() {
             return directories;
         }
 
         /**
-         * Sets the directories.
+         * 设置 Skill 目录列表。
          *
-         * @param directories the directories value
+         * @param directories Skill 目录路径列表
          */
         public void setDirectories(List<String> directories) {
             this.directories = directories != null ? directories : new ArrayList<>();
         }
 
         /**
-         * Gets the mode.
+         * 获取 Skill 加载模式。
          *
-         * @return the result
+         * @return 加载模式，如 "all"
          */
         public String getMode() {
             return mode;
         }
 
         /**
-         * Sets the mode.
+         * 设置 Skill 加载模式。
          *
-         * @param mode the mode value
+         * @param mode 加载模式，如 "all"
          */
         public void setMode(String mode) {
             this.mode = mode;
@@ -580,18 +580,18 @@ public class EdpAgentConfig {
         private String system;
 
         /**
-         * Gets the system.
+         * 获取系统提示词内容。
          *
-         * @return the result
+         * @return 系统提示词字符串
          */
         public String getSystem() {
             return system;
         }
 
         /**
-         * Sets the system.
+         * 设置系统提示词内容。
          *
-         * @param system the system value
+         * @param system 系统提示词
          */
         public void setSystem(String system) {
             this.system = system;
@@ -633,90 +633,90 @@ public class EdpAgentConfig {
         private String versatileUrl;
 
         /**
-         * Gets the api key.
+         * 获取模型 API Key 环境覆盖值。
          *
-         * @return the result
+         * @return API Key
          */
         public String getApiKey() {
             return apiKey;
         }
 
         /**
-         * Sets the api key.
+         * 设置模型 API Key 环境覆盖值。
          *
-         * @param apiKey the apiKey value
+         * @param apiKey API Key
          */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
         }
 
         /**
-         * Gets the model provider.
+         * 获取模型 provider 环境覆盖值。
          *
-         * @return the result
+         * @return provider 类型
          */
         public String getModelProvider() {
             return modelProvider;
         }
 
         /**
-         * Sets the model provider.
+         * 设置模型 provider 环境覆盖值。
          *
-         * @param modelProvider the modelProvider value
+         * @param modelProvider provider 类型
          */
         public void setModelProvider(String modelProvider) {
             this.modelProvider = modelProvider;
         }
 
         /**
-         * Gets the model name.
+         * 获取模型名称环境覆盖值。
          *
-         * @return the result
+         * @return 模型名称
          */
         public String getModelName() {
             return modelName;
         }
 
         /**
-         * Sets the model name.
+         * 设置模型名称环境覆盖值。
          *
-         * @param modelName the modelName value
+         * @param modelName 模型名称
          */
         public void setModelName(String modelName) {
             this.modelName = modelName;
         }
 
         /**
-         * Gets the model base url.
+         * 获取模型 baseUrl 环境覆盖值。
          *
-         * @return the result
+         * @return 模型服务地址
          */
         public String getModelBaseUrl() {
             return modelBaseUrl;
         }
 
         /**
-         * Sets the model base url.
+         * 设置模型 baseUrl 环境覆盖值。
          *
-         * @param modelBaseUrl the modelBaseUrl value
+         * @param modelBaseUrl 模型服务地址
          */
         public void setModelBaseUrl(String modelBaseUrl) {
             this.modelBaseUrl = modelBaseUrl;
         }
 
         /**
-         * Gets the versatile url.
+         * 获取 Versatile URL 环境覆盖值。
          *
-         * @return the result
+         * @return Versatile 服务地址
          */
         public String getVersatileUrl() {
             return versatileUrl;
         }
 
         /**
-         * Sets the versatile url.
+         * 设置 Versatile URL 环境覆盖值。
          *
-         * @param versatileUrl the versatileUrl value
+         * @param versatileUrl Versatile 服务地址
          */
         public void setVersatileUrl(String versatileUrl) {
             this.versatileUrl = versatileUrl;
