@@ -26,7 +26,7 @@ docker image inspect \
 ```bash
 # 1) 拉取代码仓
 git clone <你们的仓库地址> && cd agent-solution
-cd common/agents/adapter-versatile-agent-java
+cd common/agents/versatile-agent-java
 
 # 2) 准备配置（必须填写真实 VERSATILE_URL）
 cp deploy/.env.example deploy/.env
@@ -92,7 +92,7 @@ bash deploy/deploy.sh
 在代码仓内执行（脚本会先 `install` 共享依赖 `agent-runtime-ext-java`，再只构建 adapter，不构建 edp-agent）：
 
 ```bash
-cd common/agents/adapter-versatile-agent-java
+cd common/agents/versatile-agent-java
 bash deploy/build-jar.sh
 ```
 
@@ -116,7 +116,7 @@ mvn -f pom.xml clean package -DskipTests
 在 Windows 仓库中打 tar 包再上传 Linux：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File common\agents\adapter-versatile-agent-java\deploy\pack-for-linux.ps1
+powershell -ExecutionPolicy Bypass -File common\agents\versatile-agent-java\deploy\pack-for-linux.ps1
 # jar 已存在时可加 -SkipBuild 复用
 ```
 
