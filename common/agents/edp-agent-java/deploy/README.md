@@ -7,11 +7,30 @@
 
 共享网络 `agent-net` 是 EDP 与 adapter 的运行契约。两个团队的启动脚本都可以创建或复用它，但任何一方的停止脚本都不删除它。
 
-## 0. 从零开始：x86 Linux 一键部署（推荐）
+## 0. 从零开始：64 位 Linux（amd64/arm64）一键部署（推荐）
 
-本手册所有 `.sh` 脚本均为 Linux 原生 bash，可在 x86 Linux 上仅凭本代码仓完成“构建 jar → 构建镜像 → 建网络 → 起容器 → 验证”，**无需任何 Windows / PowerShell 步骤**。
+本手册所有 `.sh` 脚本均为 Linux 原生 bash，可在 64 位 amd64 或 arm64 Linux 上仅凭本代码仓完成“构建 jar → 构建镜像 → 建网络 → 起容器 → 验证”，**无需任何 Windows / PowerShell 步骤**。构建服务器和部署服务器为同一台时，`docker build` 会自动按当前服务器架构构建对应镜像，不需要 `buildx` 或手工指定 `--platform`。
 
 前置：Linux 上已装 `git`、`docker`、`JDK 17`、`Maven 3.8+`（构建镜像必须 Docker；构建 jar 必须 JDK17+Maven）。
+
+ARM64 服务器在部署前先确认操作系统、Docker 和基础镜像均为 64 位 ARM：
+
+```bash
+uname -m
+getconf LONG_BIT
+docker info --format '{{.Architecture}}'
+
+docker pull eclipse-temurin:21-jre-jammy
+docker pull python:3.11-slim
+docker pull redis:7-alpine
+docker image inspect \
+  --format '{{.RepoTags}} -> {{.Os}}/{{.Architecture}}' \
+  eclipse-temurin:21-jre-jammy \
+  python:3.11-slim \
+  redis:7-alpine
+```
+
+预期 `uname -m` 为 `aarch64` 或 `arm64`，`getconf LONG_BIT` 为 `64`，三个基础镜像均为 `linux/arm64`。本手册不覆盖 32 位 ARM（如 `armv7l`）。如果镜像来自企业私有仓库或镜像代理，还必须确认该仓库实际同步了 arm64 版本；使用 external Redis 时无需拉取本地 Redis 镜像。
 
 ```bash
 # 1) 拉取代码仓
@@ -385,7 +404,7 @@ bash common/agents/edp-agent-java/deploy/verify.sh
   - 确认 `common/agent-runtime-ext-java/pom.xml` 与 `common/agents/edp-agent-java/pom.xml` 中 `agent-core-java` 版本均为 `0.1.13`（为 JDK 17 发布的构建）；
   - 确认该构件可从你们的 Maven 仓库/镜像解析（`mvn -q dependency:get -Dartifact=com.openjiuwen:agent-core-java:0.1.13`）；
   - 若本机 `~/.m2` 里曾缓存过坏的 `0.1.12`，可删除 `~/.m2/repository/com/openjiuwen/agent-core-java` 后重试，让 Maven 重新下载正确构件。
-  - 说明：裸版本号 `0.1.12` 在部分仓库里对应缺包、且 `BaseInterruptRail` 为旧 4 参数签名的历史构建，这正是同事在 x86 Linux 上编译失败的根因。
+  - 说明：裸版本号 `0.1.12` 在部分仓库里对应缺包、且 `BaseInterruptRail` 为旧 4 参数签名的历史构建，这正是此前在 Linux 上编译失败的根因。
 - **Linux 上执行 `.sh` 报 `bad interpreter: ...^M` 或 `no such file or directory`**：脚本被存成了 CRLF（多因在 Windows 上编辑/提交）。仓库已加入 `.gitattributes` 强制 `*.sh` 为 LF；若仍遇到，重新 clone，或执行 `sed -i 's/\r$//' common/agents/edp-agent-java/deploy/*.sh`。
 - API Key 为空：编辑 `deploy/.env`，填写 `EDP_AGENT_MODEL_API_KEY`。
 - Redis 启动失败：local 查看 `docker logs edp-redis`；external 检查 DNS、端口、密码、版本和 ACL。
