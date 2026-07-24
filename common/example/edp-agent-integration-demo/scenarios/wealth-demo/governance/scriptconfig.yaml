@@ -1,0 +1,73 @@
+# wealth-demo 场景话术
+#
+# 本配置适配财富管理场景（理财推荐、购买、查询等业务）
+# 话术键映射自动推断，无需显式声明
+
+scriptconfig:
+  # ── UC-C02: interrupt 追问内容来源开关 ──
+  # script（默认）：追问内容必须来自脚本，LLM 生成内容被拒绝
+  # llm：追问内容可由 LLM 生成
+  interrupt_source: "script"
+
+  # ── 生命周期事件话术（EdpaEventRail 发射时填充）──
+  general_scripts:
+    tool_start: "正在调用：{tool_name}"
+    tool_end: "{tool_name} 执行完成"
+    todo_start: "开始执行：{title}"
+    todo_end: "{title} 已完成"
+    todolist_start: "已生成任务规划"
+    todolist_end: "任务规划完成"
+    interrupt_start: "需要您确认以下信息"
+    request_start: "您的请求已收到。"
+    planning_start: "我们正在为您进行规划。"
+    task_cancelled: "好的，已为您取消当前操作。如需其他帮助，请随时告诉我。"
+    cancel_confirm: "确认要取消当前操作吗？"
+    out_of_scope: "当前请求暂不在可处理范围内。"
+
+  # ── 工具级话术匹配模板 ──
+  query_intent_tool_text:
+    "查询账户余额":
+      tool_start: "正在查询账户余额..."
+      tool_end: "已查询账户余额"
+    "快速转账":
+      tool_start: "正在执行资金转账..."
+      tool_end: "资金转账结束"
+    "理财购买":
+      tool_start: "正在办理理财产品购买..."
+      tool_end: "理财产品购买流程结束"
+    "理财选品购买":
+      tool_start: "正在办理理财产品购买..."
+      tool_end: "理财产品购买流程结束"
+    "理财推荐":
+      tool_start: "正在获取理财产品列表..."
+      tool_end: "已获取理财产品列表"
+
+  # ── 固定帧话术配置 ──
+  think_chunk_scripts:
+    think_chunk_fixed_scripts:
+      chars_per_frame: 4
+      tokens_between_frames: 2
+      min_interval_ms: 50
+
+      query_patterns:
+        - keywords: ["推荐", "理财", "产品", "筛选"]
+          scripts:
+            - "正在搜索理财产品..."
+        - keywords: ["购买", "买", "下单", "确认"]
+          scripts:
+            - "正在确认购买信息..."
+        - keywords: ["余额", "查询", "账户", "转账"]
+          scripts:
+            - "正在查询账户信息..."
+
+      default_scripts:
+        - "正在分析您的需求..."
+
+      execution_scripts:
+        - "正在分析执行结果..."
+
+      enable_resume_scripts: false
+
+  # ── ask_user 中断确认话术（UC-C02: interrupt_source=script 时追问内容来源）──
+  # 业务话术已迁移至各 SKILL.yaml 的 scripts 字段，由 SkillScriptsCollector 收集
+  # 此处仅保留场景级覆盖（如需覆盖 SKILL.yaml 中的话术，在此声明同名键）
