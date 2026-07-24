@@ -4,16 +4,22 @@
 
 package com.openjiuwen.service.adapters.versatile.agentfw;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+/**
+ * Unit tests for {@link IntentAgentResolver}.
+ *
+ * @since 0.1.0
+ */
 class IntentAgentResolverTest {
     @Test
     void prefersWorkflowReturnedAgentId() {

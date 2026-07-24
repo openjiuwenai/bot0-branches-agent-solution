@@ -4,11 +4,22 @@
 
 package com.openjiuwen.example.versatile.intent.a2a;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
 import org.a2aproject.sdk.spec.AgentCard;
 import org.a2aproject.sdk.spec.AgentInterface;
 import org.a2aproject.sdk.spec.TaskState;
@@ -20,21 +31,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.containing;
-import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
-import static com.github.tomakehurst.wiremock.client.WireMock.post;
-import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
-import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+/**
+ * Unit tests for {@link A2AGatewayRemoteAgentCaller}, covering header
+ * propagation, ephemeral card construction, and JSON-RPC {@code message/send}
+ * dispatch against a WireMock-hosted A2A Gateway.
+ *
+ * @since 0.1.0
+ */
 class A2AGatewayRemoteAgentCallerTest {
     private A2AGatewayProperties props;
     private A2AGatewayCardResolver resolver;
@@ -60,12 +68,14 @@ class A2AGatewayRemoteAgentCallerTest {
      * Builds a caller that resolves upstream headers from the in-test map
      * instead of {@link org.springframework.web.context.request.RequestContextHolder},
      * so unit tests can exercise trace propagation without a servlet scope.
+     *
+     * @return a caller wired to the test's upstream header map
      */
     private A2AGatewayRemoteAgentCaller newCaller() {
         return new A2AGatewayRemoteAgentCaller(props, resolver) {
             @Override
-            String resolveUpstreamHeader(String name) {
-                return upstreamHeaders.get(name);
+            Optional<String> resolveUpstreamHeader(String name) {
+                return Optional.ofNullable(upstreamHeaders.get(name));
             }
         };
     }
@@ -172,7 +182,8 @@ class A2AGatewayRemoteAgentCallerTest {
                                     + "\"id\":\"task-1\","
                                     + "\"contextId\":\"ctx-1\","
                                     + "\"status\":{\"state\":\"TASK_STATE_COMPLETED\"},"
-                                    + "\"artifacts\":[{\"artifactId\":\"art-1\",\"parts\":[{\"text\":\"酒店预订成功：上海今晚五星\",\"metadata\":{},\"filename\":\"\",\"mediaType\":\"\"}]}]"
+                                    + "\"artifacts\":[{\"artifactId\":\"art-1\",\"parts\":[{\"text\":\"酒店预订成功：上海今晚五星\","
+                                    + "\"metadata\":{},\"filename\":\"\",\"mediaType\":\"\"}]}]"
                                     + "}}}")));
 
             RemoteCall call = new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null,
@@ -254,7 +265,8 @@ class A2AGatewayRemoteAgentCallerTest {
                                     + "\"contextId\":\"ctx-1\","
                                     + "\"status\":{\"state\":\"TASK_STATE_INPUT_REQUIRED\",\"message\":{"
                                     + "\"messageId\":\"msg-1\",\"contextId\":\"ctx-1\",\"taskId\":\"task-99\","
-                                    + "\"role\":\"ROLE_AGENT\",\"parts\":[{\"text\":\"请提供入住日期\",\"metadata\":{},\"filename\":\"\",\"mediaType\":\"\"}],"
+                                    + "\"role\":\"ROLE_AGENT\",\"parts\":[{\"text\":\"请提供入住日期\","
+                                    + "\"metadata\":{},\"filename\":\"\",\"mediaType\":\"\"}],"
                                     + "\"metadata\":{},\"extensions\":[],\"referenceTaskIds\":[]}}"
                                     + "}}}")));
 

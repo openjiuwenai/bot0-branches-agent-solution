@@ -4,11 +4,16 @@
 
 package com.openjiuwen.example.versatile.intent.a2a;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * Unit tests for {@link A2AGatewayCardResolver}.
+ *
+ * @since 0.1.0
+ */
 class A2AGatewayCardResolverTest {
     private A2AGatewayProperties props;
     private A2AGatewayCardResolver resolver;

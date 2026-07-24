@@ -4,14 +4,14 @@
 
 package com.openjiuwen.service.adapters.versatile.autoconfigure;
 
+import static java.util.Map.entry;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 import java.util.Map;
-
-import static java.util.Map.entry;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Tests {@link VersatileProperties} binding for the intent workflow config tree.
@@ -26,10 +26,12 @@ class VersatilePropertiesTest {
                 entry("openjiuwen.service.versatile.intents[0].id", "intent_L1_hotel"),
                 entry("openjiuwen.service.versatile.intents[0].name", "酒店"),
                 entry("openjiuwen.service.versatile.messages.required", "true"),
-                entry("openjiuwen.service.versatile.intent-agent-mapping.intent_L1_hotel[0].agent-card", "agent_card_L2_hotel"),
+                entry("openjiuwen.service.versatile.intent-agent-mapping.intent_L1_hotel[0].agent-card",
+                        "agent_card_L2_hotel"),
                 entry("openjiuwen.service.versatile.intent-agent-mapping-strategy", "first"),
                 entry("openjiuwen.service.versatile.result-extractions[0].match", "response_content"),
-                entry("openjiuwen.service.versatile.result-extractions[0].get", "/custom_rsp_data/data/response_content"),
+                entry("openjiuwen.service.versatile.result-extractions[0].get",
+                        "/custom_rsp_data/data/response_content"),
                 entry("openjiuwen.service.versatile.interrupt.signal-match", "need_user_input"),
                 entry("openjiuwen.service.versatile.interrupt.prompt-get", "/data/question"),
                 entry("openjiuwen.service.versatile.interrupt.input-requirement-get", "/data/input_schema"),

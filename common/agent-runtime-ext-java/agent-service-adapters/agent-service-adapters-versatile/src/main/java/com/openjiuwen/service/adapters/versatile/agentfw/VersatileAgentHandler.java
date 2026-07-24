@@ -257,8 +257,11 @@ public class VersatileAgentHandler implements AgentHandler {
      * sees SSE lines; the handler has the {@link ServeRequest}. Without this
      * enrichment, the orchestrator's streaming recursive-forward path would
      * lack the user query to forward to the next layer.
+     *
+     * @param chunks the chunks emitted by the response extractor before completion
+     * @param request the current serve request, source of the user query and stream mode
+     * @return the enriched chunk list (same size as the input when non-empty)
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private static List<QueryChunk> enrichDelegateInterrupts(List<QueryChunk> chunks, ServeRequest request) {
         if (chunks == null || chunks.isEmpty()) {
             return chunks;
@@ -267,7 +270,7 @@ public class VersatileAgentHandler implements AgentHandler {
         for (QueryChunk chunk : chunks) {
             if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType()) && chunk.getData() instanceof Map<?, ?> m
                     && isA2aDelegate(m)) {
-                Map<String, Object> enriched = new LinkedHashMap<>((Map) m);
+                Map<String, Object> enriched = copyToStringMap(m);
                 enriched.put("message", request.lastUserQuery());
                 enriched.put("_stream_mode", request.isStream() ? "sse" : "");
                 result.add(new QueryChunk(QueryChunk.TYPE_INTERRUPT, enriched));
@@ -297,7 +300,7 @@ public class VersatileAgentHandler implements AgentHandler {
 
     private static List<Map<String, Object>> maskMessages(List<Map<String, Object>> messages) {
         if (messages == null) {
-            return null;
+            return List.of();
         }
         List<Map<String, Object>> masked = new ArrayList<>(messages.size());
         for (Map<String, Object> msg : messages) {
@@ -313,7 +316,7 @@ public class VersatileAgentHandler implements AgentHandler {
 
     private static Map<String, Object> maskMetadata(Map<String, Object> metadata) {
         if (metadata == null) {
-            return null;
+            return Map.of();
         }
         Map<String, Object> masked = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : metadata.entrySet()) {

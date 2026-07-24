@@ -6,6 +6,9 @@ package com.openjiuwen.example.versatile.intent.a2a;
 
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
+
+import jakarta.annotation.PostConstruct;
+
 import org.a2aproject.sdk.spec.AgentCapabilities;
 import org.a2aproject.sdk.spec.AgentCard;
 import org.a2aproject.sdk.spec.AgentInterface;
@@ -18,7 +21,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
-import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.Map;
 

@@ -27,6 +27,13 @@ public class VersatileProperties {
     private Set<String> forwardHeaderWhitelist = new LinkedHashSet<>();
     private String resultNodeName;
     private List<Endpoint> endpoints = new ArrayList<>();
+    private List<Intent> intents = new ArrayList<>();
+    private Messages messages = new Messages();
+    private Map<String, List<MappingCandidate>> intentAgentMapping = new LinkedHashMap<>();
+    private IntentAgentMappingStrategy intentAgentMappingStrategy = IntentAgentMappingStrategy.FIRST;
+    private List<ResultExtraction> resultExtractions = new ArrayList<>();
+    private Interrupt interrupt = new Interrupt();
+    private boolean logMaskSensitive = true;
 
     public String getUrlTemplate() {
         return urlTemplate;
@@ -76,14 +83,6 @@ public class VersatileProperties {
     public void setEndpoints(List<Endpoint> endpoints) {
         this.endpoints = endpoints != null ? new ArrayList<>(endpoints) : new ArrayList<>();
     }
-
-    private List<Intent> intents = new ArrayList<>();
-    private Messages messages = new Messages();
-    private Map<String, List<MappingCandidate>> intentAgentMapping = new LinkedHashMap<>();
-    private IntentAgentMappingStrategy intentAgentMappingStrategy = IntentAgentMappingStrategy.FIRST;
-    private List<ResultExtraction> resultExtractions = new ArrayList<>();
-    private Interrupt interrupt = new Interrupt();
-    private boolean logMaskSensitive = true;
 
     public List<Intent> getIntents() {
         return intents;
