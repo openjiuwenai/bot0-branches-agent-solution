@@ -10,12 +10,16 @@ import com.openjiuwen.core.sysop.result.ExecuteCodeData;
 import com.openjiuwen.core.sysop.result.ExecuteCodeResult;
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import com.openjiuwen.example.deepresearch.DeepResearchAgentFactory;
+import com.openjiuwen.example.deepresearch.customrest.DeepResearchCustomRestAdapter;
 import com.openjiuwen.example.deepresearch.rail.ExecResult;
 import com.openjiuwen.example.deepresearch.rail.SandboxOps;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClientFactory;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
+import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringApplication;
@@ -76,6 +80,21 @@ public class DeepResearchRuntimeApplication {
         return new JiuwenCoreAgentExtHandler(
                 DeepResearchAgentFactory.build(properties, sandboxOpsSupplier),
                 registrar.getIfAvailable());
+    }
+
+    /**
+     * Registers the Custom REST protocol adapter that maps deep-research's business
+     * envelope to the internal A2A Task pipeline. Auto-configuration activates only
+     * when {@code openjiuwen.service.custom-rest.query-path} is set in
+     * {@code application.yml}, so the {@code /a2a/} and {@code /v1/query}
+     * entrypoints remain the primary access paths.
+     *
+     * @param objectMapper Spring's default Jackson mapper (auto-configured)
+     * @return the deep-research adapter implementing {@code CustomRestProtocolAdapter}
+     */
+    @Bean
+    CustomRestProtocolAdapter deepResearchCustomRestAdapter(ObjectMapper objectMapper) {
+        return new DeepResearchCustomRestAdapter(objectMapper);
     }
 
     private static Optional<SandboxOps> resolveSandboxOps(AgentCoreSandboxClientFactory factory) {
