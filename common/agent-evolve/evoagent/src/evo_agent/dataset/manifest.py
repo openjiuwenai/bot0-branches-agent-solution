@@ -15,7 +15,6 @@ from typing import Any, cast
 
 import yaml
 from openjiuwen.agent_evolving.dataset import Case, CaseLoader
-from openjiuwen.agent_evolving.evaluator.metrics.exact_match import ExactMatchMetric
 
 from evo_agent.evaluator.evaluators.llm import LLMEvaluator
 from evo_agent.evaluator.evaluators.metric import MetricEvaluator
@@ -203,21 +202,19 @@ def _build_llm_evaluator(config: dict[str, Any], runtime: dict[str, Any]) -> LLM
 
 
 def _build_metric_evaluator(config: dict[str, Any]) -> MetricEvaluator:
-    """构建 MetricEvaluator（确定性评估器，不需要 runtime 注入）。"""
-    metric_name = config.get("metric", "exact_match")
+    """构建 MetricEvaluator（确定性评估器，不需要 runtime 注入）。
 
-    if metric_name == "exact_match":
-        metric = ExactMatchMetric(normalize=False)
-    elif metric_name == "normalized_exact_match":
-        metric = ExactMatchMetric(normalize=True)
-    else:
-        raise ValueError(
-            f"Unknown metric: {metric_name!r}. "
-            f"Supported metrics: 'exact_match', 'normalized_exact_match'."
-        )
+    支持 ``extract``：从 answer 文本中抽取配置字段后再 exact_match。
+    与 ``evo_agent.evaluator.factory.create_evaluator`` 行为对齐。
+    """
+    from evo_agent.evaluator.factory import create_evaluator
 
-    aggregate = config.get("aggregate", "mean")
-    return MetricEvaluator(metrics=metric, aggregate=aggregate)
+    payload = dict(config)
+    payload.setdefault("type", "metric")
+    evaluator = create_evaluator(payload)
+    if not isinstance(evaluator, MetricEvaluator):
+        raise TypeError(f"expected MetricEvaluator, got {type(evaluator).__name__}")
+    return evaluator
 
 
 def _build_custom_evaluator(config: dict[str, Any], runtime: dict[str, Any]) -> Any:
@@ -248,6 +245,8 @@ def build_dataset_from_request(
     val_split: float,
     eval_runtime: dict[str, Any],
     seed: int | None = None,
+    *,
+    evaluator_config: dict[str, Any] | None = None,
 ) -> DatasetSpec:
     """从 API 请求参数直接构建 DatasetSpec，不依赖 dataset.yaml。
 
@@ -256,7 +255,8 @@ def build_dataset_from_request(
     data_path:
         原始数据文件路径（已通过 path validator 校验）。
     evaluator_prompt:
-        评估 prompt（来自 evaluator_template.prompt）。
+        评估 prompt（来自 evaluator_template.prompt）；``type=llm`` 时注入
+        ``prompt_template``。保留该参数以兼容旧调用方。
     train_split:
         训练集比例。
     val_split:
@@ -265,6 +265,9 @@ def build_dataset_from_request(
         运行时 LLM 配置（model_config, model_client_config）。
     seed:
         随机种子，用于可复现的 train/val 切分。None 时使用随机种子。
+    evaluator_config:
+        评估器配置。缺省 ``{"type": "metric"}``。支持 ``llm`` / ``metric``
+        （与 CLI ``dataset.yaml`` 对齐）。
     """
     # 1. 加载 cases
     cases = _load_cases(data_path)
@@ -293,11 +296,20 @@ def build_dataset_from_request(
             f"val_split={val_split}). Increase dataset size."
         )
 
-    # 4. 构建 evaluator（固定 LLM 类型）
-    evaluator_config: dict[str, Any] = {"type": "llm"}
-    if evaluator_prompt:
-        evaluator_config["prompt_template"] = evaluator_prompt
-    evaluator = _build_evaluator(evaluator_config, eval_runtime=eval_runtime)
+    # 4. 构建 evaluator（api 可指定 llm / metric；默认 metric）
+    cfg: dict[str, Any] = dict(evaluator_config) if evaluator_config else {"type": "metric"}
+    eval_type = str(cfg.get("type", "metric")).strip() or "metric"
+    if eval_type not in {"llm", "metric"}:
+        raise ValueError(
+            f"Unsupported evaluator type for API dataset: {eval_type!r}. "
+            "Supported: 'llm', 'metric'."
+        )
+    cfg["type"] = eval_type
+    if eval_type == "llm":
+        # prompt 优先级：显式 prompt_template > evaluator_prompt 参数
+        if "prompt_template" not in cfg and evaluator_prompt:
+            cfg["prompt_template"] = evaluator_prompt
+    evaluator = _build_evaluator(cfg, eval_runtime=eval_runtime)
 
     return DatasetSpec(
         name=data_path.stem,

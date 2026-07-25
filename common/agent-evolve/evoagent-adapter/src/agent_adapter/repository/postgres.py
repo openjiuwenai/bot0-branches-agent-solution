@@ -14,28 +14,32 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import asyncpg
 
-from agent_adapter.repository.aggregation import build_trace_tree, compute_trace_summary
-
-# spans 表列序 (与 _SPAN_SQL 对齐) —— 19 列, 对齐 schema/postgres.sql
-_SPAN_COLUMNS = (
-    "trace_id", "span_id", "parent_span_id", "trace_state", "name", "kind",
-    "start_time", "end_time", "duration_ns", "service_name", "scope_name",
-    "scope_version", "status_code", "status_message", "attributes",
-    "resource_attributes", "events", "links", "conversation_id",
+from agent_adapter.repository.aggregation import (
+    backfill_session_id,
+    build_trace_tree,
+    compute_trace_summary,
 )
 
-# $7/$8 timestamptz, $15-18 jsonb
+# spans 表列序 (与 _SPAN_SQL 对齐) —— 18 列, 对齐 schema/postgres.sql (无 duration_ns, session_id)
+_SPAN_COLUMNS = (
+    "trace_id", "span_id", "parent_span_id", "trace_state", "name", "kind",
+    "start_time", "end_time", "service_name", "scope_name", "scope_version",
+    "status_code", "status_message", "attributes",
+    "resource_attributes", "events", "links", "session_id",
+)
+
+# $7/$8 timestamptz, $14-17 jsonb
 _SPAN_PLACEHOLDERS = (
     "$1", "$2", "$3", "$4", "$5", "$6",
     "$7::timestamptz", "$8::timestamptz", "$9", "$10", "$11",
-    "$12", "$13", "$14",
-    "$15::jsonb", "$16::jsonb", "$17::jsonb", "$18::jsonb", "$19",
+    "$12", "$13",
+    "$14::jsonb", "$15::jsonb", "$16::jsonb", "$17::jsonb", "$18",
 )
 
 _SPAN_SQL = f"""
@@ -48,7 +52,6 @@ ON CONFLICT (trace_id, span_id) DO UPDATE SET
     kind               = EXCLUDED.kind,
     start_time         = EXCLUDED.start_time,
     end_time           = EXCLUDED.end_time,
-    duration_ns        = EXCLUDED.duration_ns,
     service_name       = EXCLUDED.service_name,
     scope_name         = EXCLUDED.scope_name,
     scope_version      = EXCLUDED.scope_version,
@@ -58,26 +61,24 @@ ON CONFLICT (trace_id, span_id) DO UPDATE SET
     resource_attributes = EXCLUDED.resource_attributes,
     events             = EXCLUDED.events,
     links              = EXCLUDED.links,
-    conversation_id    = EXCLUDED.conversation_id
+    session_id         = EXCLUDED.session_id
 """
 
 _TRACE_SQL = """
-INSERT INTO traces (trace_id, conversation_id, user_id, root_span_id, service_name,
-    start_time, end_time, span_count, status, request_summary, response_summary, openjiuwen_trace_id)
-VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9, $10::jsonb, $11::jsonb, $12)
+INSERT INTO traces (trace_id, session_id, root_span_id, service_name,
+    start_time, end_time, span_count, status, request_summary, response_summary)
+VALUES ($1, $2, $3, $4, $5::timestamptz, $6::timestamptz, $7, $8, $9::jsonb, $10::jsonb)
 ON CONFLICT (trace_id) DO UPDATE SET
-    conversation_id     = EXCLUDED.conversation_id,
-    user_id             = EXCLUDED.user_id,
-    root_span_id        = EXCLUDED.root_span_id,
-    service_name        = EXCLUDED.service_name,
-    start_time          = EXCLUDED.start_time,
-    end_time            = EXCLUDED.end_time,
-    span_count          = EXCLUDED.span_count,
-    status              = EXCLUDED.status,
-    request_summary     = EXCLUDED.request_summary,
-    response_summary    = EXCLUDED.response_summary,
-    openjiuwen_trace_id = EXCLUDED.openjiuwen_trace_id,
-    updated_at          = now()
+    session_id      = EXCLUDED.session_id,
+    root_span_id    = EXCLUDED.root_span_id,
+    service_name    = EXCLUDED.service_name,
+    start_time      = EXCLUDED.start_time,
+    end_time        = EXCLUDED.end_time,
+    span_count      = EXCLUDED.span_count,
+    status          = EXCLUDED.status,
+    request_summary = EXCLUDED.request_summary,
+    response_summary = EXCLUDED.response_summary,
+    updated_at      = now()
 """
 
 _SCHEMA_SQL = Path(__file__).resolve().parent.parent / "schema" / "postgres.sql"
@@ -88,16 +89,31 @@ def _null_text(v: Any) -> str | None:
     return None if v in (None, "") else v
 
 
-def _to_dt(v: Any) -> datetime | None:
-    """ISO 字符串 → timezone-aware datetime (asyncpg 的 timestamptz 参数要求 datetime 对象)。
+def _nano_to_dt(nano: int) -> datetime:
+    """unix 纳秒 → timezone-aware datetime (UTC)。"""
+    seconds = nano // 1_000_000_000
+    micros = (nano % 1_000_000_000) // 1000
+    return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(microsecond=micros)
 
-    parse_span/compute_trace_summary 产出 ISO 字符串; 此处还原为 datetime 交给 asyncpg。
+
+def _to_dt(v: Any) -> datetime | None:
+    """入表时间格式校验并转换 → timezone-aware datetime (asyncpg timestamptz 参数要求 datetime 对象)。
+
+    接受: ISO 8601 字符串 / unix 纳秒 (int 或纯数字字符串) / datetime 对象。
+    空值返回 None; 无法识别的格式抛 ValueError (脏数据不静默入库)。
     """
     if v is None or v == "":
         return None
     if isinstance(v, datetime):
         return v
-    return datetime.fromisoformat(v)
+    if isinstance(v, (int, float)):
+        return _nano_to_dt(int(v))
+    if isinstance(v, str):
+        s = v.strip()
+        if s.isdigit():  # 纯数字串 → unix 纳秒
+            return _nano_to_dt(int(s))
+        return datetime.fromisoformat(s)
+    raise ValueError(f"_to_dt: 无法识别的时间格式 {v!r}")
 
 
 def _span_params(span: dict[str, Any]) -> tuple:
@@ -111,7 +127,6 @@ def _span_params(span: dict[str, Any]) -> tuple:
         span.get("kind"),
         _to_dt(span.get("start_time")),
         _to_dt(span.get("end_time")),
-        span.get("duration_ns"),
         span.get("service_name"),
         span.get("scope_name"),
         _null_text(span.get("scope_version")),
@@ -121,7 +136,7 @@ def _span_params(span: dict[str, Any]) -> tuple:
         json.dumps(span.get("resource_attributes") or {}, ensure_ascii=False),
         json.dumps(span.get("events") or [], ensure_ascii=False),
         json.dumps(span.get("links") or [], ensure_ascii=False),
-        span.get("conversation_id"),
+        span.get("session_id"),
     )
 
 
@@ -129,8 +144,7 @@ def _trace_params(trace: dict[str, Any]) -> tuple:
     """trace 汇总 dict → traces UPSERT 参数 (对齐 _TRACE_SQL)。summary 字段 json.dumps。"""
     return (
         trace.get("trace_id"),
-        trace.get("conversation_id"),
-        trace.get("user_id"),
+        trace.get("session_id"),
         trace.get("root_span_id"),
         trace.get("service_name"),
         _to_dt(trace.get("start_time")),
@@ -139,7 +153,6 @@ def _trace_params(trace: dict[str, Any]) -> tuple:
         trace.get("status"),
         json.dumps(trace.get("request_summary"), ensure_ascii=False) if trace.get("request_summary") is not None else None,
         json.dumps(trace.get("response_summary"), ensure_ascii=False) if trace.get("response_summary") is not None else None,
-        trace.get("openjiuwen_trace_id"),
     )
 
 
@@ -154,7 +167,6 @@ def _row_to_span(row: asyncpg.Record) -> dict[str, Any]:
         "kind": row["kind"],
         "start_time": row["start_time"].isoformat() if row["start_time"] else None,
         "end_time": row["end_time"].isoformat() if row["end_time"] else None,
-        "duration_ns": row["duration_ns"],
         "service_name": row["service_name"],
         "scope_name": row["scope_name"],
         "scope_version": row["scope_version"] or "",
@@ -164,7 +176,7 @@ def _row_to_span(row: asyncpg.Record) -> dict[str, Any]:
         "resource_attributes": json.loads(row["resource_attributes"]) if row["resource_attributes"] else {},
         "events": json.loads(row["events"]) if row["events"] else [],
         "links": json.loads(row["links"]) if row["links"] else [],
-        "conversation_id": row["conversation_id"],
+        "session_id": row["session_id"],
     }
 
 
@@ -172,8 +184,7 @@ def _trace_row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
     """traces 行 → 汇总 dict (时间 ISO, summary JSONB 解码)。"""
     return {
         "trace_id": row["trace_id"],
-        "conversation_id": row["conversation_id"],
-        "user_id": row["user_id"],
+        "session_id": row["session_id"],
         "root_span_id": row["root_span_id"],
         "service_name": row["service_name"],
         "start_time": row["start_time"].isoformat() if row["start_time"] else None,
@@ -182,7 +193,6 @@ def _trace_row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
         "status": row["status"],
         "request_summary": json.loads(row["request_summary"]) if row["request_summary"] else None,
         "response_summary": json.loads(row["response_summary"]) if row["response_summary"] else None,
-        "openjiuwen_trace_id": row["openjiuwen_trace_id"],
     }
 
 
@@ -233,14 +243,23 @@ class PostgresTraceRepository:
                 await self._reupsert_trace(conn, span["trace_id"])
 
     async def bulk_insert_spans(self, spans: list[dict[str, Any]]) -> None:
-        """批量插 spans + 按涉及的 trace_id 各重算汇总 (一个事务)。"""
+        """批量插 spans + 按涉及的 trace_id 各重算汇总 (一个事务)。
+
+        session_id 回填两段式:
+          A. 批内: backfill_session_id (aggregation 纯函数) 用本批兄弟的非空 session 就地回填;
+          B. 跨批: _backfill_session_id_for_trace 用 DB 内同 trace 的 session 回填本批晚到空 span
+                 (session 兄弟可能在前一批已入库, 本批 in-memory 看不到)。
+        B 在 _reupsert_trace 之前跑, 使 traces 汇总读到回填后的 session_id 列。
+        """
         assert self.pool is not None, "start() 未调用"
         if not spans:
             return
+        spans = backfill_session_id(spans)  # A: 批内回填 (非原地, 返回新列表)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.executemany(_SPAN_SQL, [_span_params(s) for s in spans])
                 for trace_id in {s["trace_id"] for s in spans}:
+                    await self._backfill_session_id_for_trace(conn, trace_id)  # B: 跨批兜底
                     await self._reupsert_trace(conn, trace_id)
 
     async def upsert_trace(self, trace: dict[str, Any]) -> None:
@@ -259,6 +278,51 @@ class PostgresTraceRepository:
         summary = compute_trace_summary(trace_id, [_row_to_span(r) for r in rows])
         await conn.execute(_TRACE_SQL, *_trace_params(summary))
 
+    async def _backfill_session_id_for_trace(
+        self, conn: asyncpg.Connection, trace_id: str
+    ) -> None:
+        """同 trace 内用首个非空 session_id 回填空 session_id 行 (跨批兜底, B 段, 幂等)。
+
+        晚到 span 的 session 兄弟可能在前一批已入库 → 批内回填 (A) 看不到, 在此用 DB
+        现有行的 session 补齐。孤儿 trace (DB 内无任何 session) → src.sid 为 NULL,
+        `AND src.sid IS NOT NULL` 守门, 不更新, 保留空。
+        """
+        await conn.execute(
+            """
+            UPDATE spans
+            SET session_id = src.sid
+            FROM (SELECT MIN(session_id) AS sid
+                  FROM spans
+                  WHERE trace_id = $1 AND session_id IS NOT NULL) src
+            WHERE trace_id = $1 AND session_id IS NULL AND src.sid IS NOT NULL
+            """,
+            trace_id,
+        )
+
+    async def backfill_session_id(self) -> int:
+        """全表回填空 session_id (按 trace 取首个非空 session 补齐; 孤儿不动)。返回受影响行数。
+
+        一次性维护用: 部署本回填逻辑后, 对历史已入库的空 session span 做一次性补齐。
+        常规摄取路径无需调用 (bulk_insert_spans 已含 per-trace 兜底)。
+        """
+        assert self.pool is not None, "start() 未调用"
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                WITH filled AS (
+                    UPDATE spans s
+                    SET session_id = sub.sid
+                    FROM (SELECT trace_id, MIN(session_id) AS sid
+                          FROM spans
+                          WHERE session_id IS NOT NULL
+                          GROUP BY trace_id) sub
+                    WHERE s.trace_id = sub.trace_id AND s.session_id IS NULL
+                    RETURNING 1
+                )
+                SELECT count(*) FROM filled
+                """
+            ) or 0
+
     # ---- 读 ----
 
     async def get_spans_by_trace(self, trace_id: str) -> list[dict[str, Any]]:
@@ -268,10 +332,10 @@ class PostgresTraceRepository:
         )
         return [_row_to_span(r) for r in rows]
 
-    async def get_spans_by_conversation(self, conversation_id: str) -> list[dict[str, Any]]:
+    async def get_spans_by_session(self, session_id: str) -> list[dict[str, Any]]:
         assert self.pool is not None, "start() 未调用"
         rows = await self.pool.fetch(
-            "SELECT * FROM spans WHERE conversation_id=$1 ORDER BY start_time", conversation_id
+            "SELECT * FROM spans WHERE session_id=$1 ORDER BY start_time", session_id
         )
         return [_row_to_span(r) for r in rows]
 
@@ -279,17 +343,17 @@ class PostgresTraceRepository:
         spans = await self.get_spans_by_trace(trace_id)
         return build_trace_tree(spans)
 
-    async def get_root_span(self, conversation_id: str) -> dict[str, Any] | None:
+    async def get_root_span(self, session_id: str) -> dict[str, Any] | None:
         """会话根 span: kind=SERVER 且 parent 为空 (镜像 aggregation.is_root_span)。"""
         assert self.pool is not None, "start() 未调用"
         row = await self.pool.fetchrow(
-            "SELECT * FROM spans WHERE conversation_id=$1 AND kind='SERVER' "
+            "SELECT * FROM spans WHERE session_id=$1 AND kind='SERVER' "
             "AND (parent_span_id IS NULL OR parent_span_id='') ORDER BY start_time LIMIT 1",
-            conversation_id,
+            session_id,
         )
         return _row_to_span(row) if row else None
 
-    async def list_conversations(self, agent_name: str | None = None) -> list[dict[str, Any]]:
+    async def list_sessions(self, agent_name: str | None = None) -> list[dict[str, Any]]:
         assert self.pool is not None, "start() 未调用"
         if agent_name is not None:
             rows = await self.pool.fetch(

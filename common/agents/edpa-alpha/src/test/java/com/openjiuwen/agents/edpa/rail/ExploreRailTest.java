@@ -122,14 +122,16 @@ class ExploreRailTest {
     void exploreRoundIncrementedPerPush() {
         ExploreRail rail = newRailWithRecordingExplorer();
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
+        AgentCallbackContext ctx = ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq);
 
-        assertThat(rail.getExploreRound()).isZero();
+        rail.afterModelCall(ctx);
+        assertThat(rail.getExploreRound(ctx))
+                .as("first tool-call round must increment exploreRound to 1").isEqualTo(1);
 
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq));
-        assertThat(rail.getExploreRound()).as("first tool-call round must increment exploreRound to 1").isEqualTo(1);
-
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t2", "{}"), sq));
-        assertThat(rail.getExploreRound()).as("second tool-call round must increment exploreRound to 2").isEqualTo(2);
+        setResponse(ctx, assistantWithToolCall("t2", "{}"));
+        rail.afterModelCall(ctx);
+        assertThat(rail.getExploreRound(ctx))
+                .as("second tool-call round must increment exploreRound to 2").isEqualTo(2);
         // mutation-RED: strip exploreRound++ → stays 0 → window never exhausts → RED
     }
 
@@ -150,7 +152,7 @@ class ExploreRailTest {
 
         assertThat(explorer.callCount.get()).as("final-answer round must NOT invoke explorer").isEqualTo(0);
         assertThat(sq.captured).as("final-answer round must NOT push steering").isEmpty();
-        assertThat(rail.getExploreRound()).as("exploreRound must stay 0 on final-answer round").isZero();
+        assertThat(rail.getExploreRound(ctx)).as("exploreRound must stay 0 on final-answer round").isZero();
         // mutation-RED: strip toolCalls-empty check → explore runs on final answer → RED
     }
 
@@ -164,19 +166,23 @@ class ExploreRailTest {
         ExploreBudget budget = new ExploreBudget(2, 3, 60_000);
         ExploreRail rail = new ExploreRail(explorer, budget);
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
+        AgentCallbackContext ctx = ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq);
 
         // Two explores exhaust the window (maxRounds=2)
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq));
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t2", "{}"), sq));
-        assertThat(rail.getExploreRound()).as("precondition: window should be exhausted after 2 explores").isEqualTo(2);
+        rail.afterModelCall(ctx);
+        setResponse(ctx, assistantWithToolCall("t2", "{}"));
+        rail.afterModelCall(ctx);
+        assertThat(rail.getExploreRound(ctx))
+                .as("precondition: window should be exhausted after 2 explores").isEqualTo(2);
         assertThat(explorer.callCount.get()).isEqualTo(2);
 
         // Third tool-call round → window exhausted, no further explore
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t3", "{}"), sq));
+        setResponse(ctx, assistantWithToolCall("t3", "{}"));
+        rail.afterModelCall(ctx);
 
         assertThat(explorer.callCount.get()).as("window exhausted must NOT invoke explorer again").isEqualTo(2);
         assertThat(sq.captured).as("window exhausted must NOT push steering").hasSize(2);
-        assertThat(rail.getExploreRound()).as("exploreRound must not exceed maxRounds").isEqualTo(2);
+        assertThat(rail.getExploreRound(ctx)).as("exploreRound must not exceed maxRounds").isEqualTo(2);
         // mutation-RED: strip exploreRound >= maxRounds check → 3rd explore runs → RED
     }
 
@@ -189,11 +195,12 @@ class ExploreRailTest {
         Explorer explorer = (q, b) -> null;
         ExploreRail rail = new ExploreRail(explorer, ExploreBudget.DEFAULT);
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
+        AgentCallbackContext ctx = ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq);
 
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq));
+        rail.afterModelCall(ctx);
 
         assertThat(sq.captured).as("null ExplorationResult must not push steering").isEmpty();
-        assertThat(rail.getExploreRound()).as("null result must not increment exploreRound").isZero();
+        assertThat(rail.getExploreRound(ctx)).as("null result must not increment exploreRound").isZero();
     }
 
     @Test
@@ -201,11 +208,12 @@ class ExploreRailTest {
         Explorer explorer = (q, b) -> new ExplorationResult("", APPROACHES);
         ExploreRail rail = new ExploreRail(explorer, ExploreBudget.DEFAULT);
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
+        AgentCallbackContext ctx = ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq);
 
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq));
+        rail.afterModelCall(ctx);
 
         assertThat(sq.captured).as("empty findings must not push steering").isEmpty();
-        assertThat(rail.getExploreRound()).as("empty findings must not increment exploreRound").isZero();
+        assertThat(rail.getExploreRound(ctx)).as("empty findings must not increment exploreRound").isZero();
     }
 
     @Test
@@ -237,7 +245,7 @@ class ExploreRailTest {
         rail.afterModelCall(ctx);
 
         assertThat(sq.captured).as("explorer exception must not push steering").isEmpty();
-        assertThat(rail.getExploreRound()).as("explorer exception must not increment exploreRound").isZero();
+        assertThat(rail.getExploreRound(ctx)).as("explorer exception must not increment exploreRound").isZero();
     }
 
     // ============================================================
@@ -248,11 +256,10 @@ class ExploreRailTest {
     void beforeModelCallPublishesExploreRoundToExtra() {
         ExploreRail rail = newRailWithRecordingExplorer();
         CaptureSteeringQueue sq = new CaptureSteeringQueue();
-        AgentCallbackContext ctx = ctxWithContext(new AssistantMessage("ans"), sq);
+        AgentCallbackContext ctx = ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq);
 
-        // Simulate one explore round
-        rail.afterModelCall(ctxWithToolResult(assistantWithToolCall("t1", "{}"), sq));
-        assertThat(rail.getExploreRound()).isEqualTo(1);
+        rail.afterModelCall(ctx);
+        assertThat(rail.getExploreRound(ctx)).isEqualTo(1);
 
         rail.beforeModelCall(ctx);
 
@@ -287,7 +294,7 @@ class ExploreRailTest {
 
         rail.afterModelCall(ctx);
 
-        assertThat(rail.getExploreRound()).isZero();
+        assertThat(rail.getExploreRound(ctx)).isZero();
     }
 
     @Test
@@ -303,7 +310,7 @@ class ExploreRailTest {
 
         rail.afterModelCall(ctx);
 
-        assertThat(rail.getExploreRound()).as("non-AssistantMessage response must not explore").isZero();
+        assertThat(rail.getExploreRound(ctx)).as("non-AssistantMessage response must not explore").isZero();
     }
 
     // ============================================================
@@ -373,6 +380,19 @@ class ExploreRailTest {
 
     private static AgentCallbackContext ctxWithToolResult(AssistantMessage toolMsg, SteeringQueue sq) {
         return ctxWithContext(toolMsg, sq);
+    }
+
+    /**
+     * Updates the response on an existing ctx (for multi-round tests that need
+     * shared RailInvocationState across afterModelCall calls).
+     *
+     * @param ctx      the context to mutate
+     * @param response the new assistant message response
+     */
+    private static void setResponse(AgentCallbackContext ctx, AssistantMessage response) {
+        if (ctx.getInputs() instanceof ModelCallInputs inputs) {
+            inputs.setResponse(response);
+        }
     }
 
     /**

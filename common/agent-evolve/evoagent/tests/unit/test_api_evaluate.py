@@ -183,6 +183,16 @@ class TestValidationError:
         resp = await client.post("/evaluate", json=body)
         assert resp.status_code == 422
 
+    async def test_unknown_client_provider_returns_422(
+        self, client: AsyncClient, tmp_path: Path
+    ) -> None:
+        """未知 client_provider → 422（openjiuwen 在 ModelClientConfig 构造时拒绝），非 500。"""
+        body = _request_body(_trajectory_json(tmp_path))
+        body["llm_config"]["client_provider"] = "UnknownProvider"
+        resp = await client.post("/evaluate", json=body)
+        assert resp.status_code == 422
+        assert "UnknownProvider" in resp.text
+
     async def test_invalid_trajectory_format_returns_422(
         self, client: AsyncClient, tmp_path: Path
     ) -> None:

@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from openjiuwen.agent_evolving.dataset import Case
 
 from evo_agent.dataset.manifest import DatasetSpec, load_dataset_manifest
 
@@ -179,6 +180,41 @@ evaluator:
 
     spec = load_dataset_manifest(yaml_path)
     assert spec.evaluator is not None
+
+
+def test_build_evaluator_type_metric_with_extract(tmp_path: Path) -> None:
+    """extract 配置接通后，从 <answer> JSON 字段 exact_match。"""
+    _write_items(tmp_path)
+
+    yaml_content = """\
+schema_version: "1.0"
+name: test
+cases: items.json
+evaluator:
+  type: metric
+  metric: exact_match
+  extract:
+    strategy: answer_tag_json_field
+    source: answer
+    field: responsibility
+    prefer_values:
+      - "无责"
+      - "有责"
+"""
+    yaml_path = tmp_path / "dataset.yaml"
+    yaml_path.write_text(yaml_content, encoding="utf-8")
+
+    spec = load_dataset_manifest(yaml_path)
+    case = Case(
+        case_id="x",
+        inputs={"query": "q"},
+        label={"expected_result": "有责"},
+    )
+    evaluated = spec.evaluator.evaluate(
+        case,
+        {"answer": '<answer>{"responsibility": "有责"}</answer>'},
+    )
+    assert evaluated.score == 1.0
 
 
 def test_build_evaluator_type_custom(tmp_path: Path) -> None:

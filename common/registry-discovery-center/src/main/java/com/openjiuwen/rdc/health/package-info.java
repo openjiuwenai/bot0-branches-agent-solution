@@ -31,4 +31,5 @@
  *
  * <p>Authority: ADR-0160 + HD3-004 + Rule R-C.c (Stage 24 RLS wiring).
  */
+
 package com.openjiuwen.rdc.health;

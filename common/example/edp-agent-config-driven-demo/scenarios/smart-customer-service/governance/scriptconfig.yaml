@@ -1,0 +1,36 @@
+## ================================================================
+## scriptconfig.yaml - 话术配置
+## ================================================================
+## 配置 Agent 的回复话术模板，支持场景级增量覆盖
+## 框架级已有默认话术，这里只写需要覆盖的部分
+## ================================================================
+
+scriptconfig:
+  ## --- 通用话术（覆盖框架默认值） ---
+  general_scripts:
+    tool_start: "正在为您处理：{tool_name}"
+    tool_end: "{tool_name} 处理完成"
+    todo_start: "开始执行：{title}"
+    todolist_start: "正在为您规划服务流程"
+    todolist_end: "服务流程规划完成"
+    interrupt_start: "需要您确认以下信息，以便我更好地为您服务"
+    planning_start: "正在为您制定服务方案。"
+    task_cancelled: "已为您取消当前操作。请问还有什么可以帮到您？"
+    out_of_scope: "抱歉，该业务暂不在服务范围内。如需帮助，我可以为您转接人工客服。"
+
+  ## --- 思维链话术 ---
+  think_chunk_scripts:
+    ## real_stream: 真实 LLM 流式推送
+    ## fixed_script: 固定话术帧模拟流式
+    think_chunk_mode: "real_stream"
+    ## 以下为 fixed_script 模式参数（real_stream 模式下不生效）
+    think_chunk_fixed_scripts:
+      enabled: false
+      chars_per_frame: 4
+      tokens_between_frames: 2
+      min_interval_ms: 50
+
+  ## --- 确认话术（对象格式，非数组） ---
+  ask_user_confirm:
+    purchase_confirm: "确认要执行此操作吗？"
+    cancel_confirm: "确认要取消当前操作吗？"

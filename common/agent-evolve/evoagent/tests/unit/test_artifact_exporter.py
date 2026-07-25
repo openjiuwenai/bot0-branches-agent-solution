@@ -33,6 +33,49 @@ def test_write_json_preserves_chinese(tmp_path: Path) -> None:
     assert json.loads(raw)["reason"] == "失败原因：产品推荐错误"
 
 
+def test_export_experience_library_writes_epoch_snapshot(tmp_path: Path) -> None:
+    """TF-GRPO 经验库按 epoch 落盘，中文可读。"""
+    exporter = ArtifactExporter(str(tmp_path), score_threshold=0.5)
+    exporter.export_experience_library(
+        epoch=1,
+        library={
+            "domain": "markdown",
+            "max_experiences": 10,
+            "experiences": [
+                {
+                    "content": "优先校验期间冲突再调工具",
+                    "domain": "markdown",
+                    "confidence": 0.9,
+                    "created_at": "2026-07-21T00:00:00+00:00",
+                    "last_used": "2026-07-21T00:00:00+00:00",
+                    "success_count": 1,
+                    "failure_count": 0,
+                }
+            ],
+        },
+    )
+
+    path = tmp_path / "epoch_1" / "experience_library.json"
+    raw = path.read_text(encoding="utf-8")
+    assert "期间冲突" in raw
+    data = json.loads(raw)
+    assert data["schema_version"] == 1
+    assert data["epoch"] == 1
+    assert data["operator_id"] is None
+    assert len(data["experiences"]) == 1
+    assert data["experiences"][0]["content"] == "优先校验期间冲突再调工具"
+
+
+def test_export_experience_library_multi_operator_filename(tmp_path: Path) -> None:
+    exporter = ArtifactExporter(str(tmp_path), score_threshold=0.5)
+    exporter.export_experience_library(
+        epoch=0,
+        library={"domain": "markdown", "max_experiences": 5, "experiences": []},
+        operator_id="demo_skill",
+    )
+    assert (tmp_path / "epoch_0" / "experience_library_demo_skill.json").is_file()
+
+
 def test_export_eval_results_preserves_chinese(tmp_path: Path) -> None:
     """eval_results.json 中文可读。"""
     exporter = ArtifactExporter(str(tmp_path), score_threshold=0.5)
@@ -227,6 +270,37 @@ def test_export_validation_publishes_manifest_then_success_marker(tmp_path: Path
     assert {row["case_id"] for row in results["results"]} == {
         outcome.case_id for outcome in batch.outcomes
     }
+
+
+def test_export_noop_validation_has_explicit_unchanged_semantics(tmp_path: Path) -> None:
+    """no-op epoch 不能伪造 candidate 分数，但仍发布完整 validation artifact。"""
+    exporter = ArtifactExporter(str(tmp_path), score_threshold=0.6)
+    batch = EvaluationBatchResult(())
+    gate = GateEvaluationRecord(
+        base_score=0.7,
+        candidate_score=None,
+        decision="unchanged",
+        kind="no_op",
+        reason="no_selected_edits",
+    )
+
+    exporter.export_gate_result(2, gate=gate, selected_batch=batch)
+    exporter.export_validation(2, batch, gate)
+
+    epoch = tmp_path / "epoch_2"
+    gate_data = json.loads((epoch / "gate_result.json").read_text(encoding="utf-8"))
+    assert gate_data["kind"] == "no_op"
+    assert gate_data["decision"] == "unchanged"
+    assert gate_data["reason"] == "no_selected_edits"
+    assert gate_data["base_score"] == 0.7
+    assert gate_data["candidate_score"] is None
+    assert gate_data["improvement"] is None
+
+    validation = epoch / "validation"
+    assert (validation / "_SUCCESS").exists()
+    manifest = json.loads((validation / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["kind"] == "no_op"
+    assert manifest["decision"] == "unchanged"
 
 
 def test_export_validation_failure_is_invalid_and_never_publishes_success(

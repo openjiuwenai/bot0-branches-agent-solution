@@ -4,12 +4,16 @@
 
 package com.openjiuwen.rdc.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.card.AgentCardFetcher;
+import com.openjiuwen.rdc.config.RegistryObjectMapper;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
-import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
+import com.openjiuwen.rdc.security.CallerAuthorizationPolicy;
+import com.openjiuwen.rdc.security.RdcCardFetchOptions;
+import com.openjiuwen.rdc.security.RegistrySecurityProperties;
 import com.openjiuwen.rdc.tenant.TenantContext;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -21,8 +25,8 @@ import org.springframework.context.annotation.Configuration;
 import javax.sql.DataSource;
 
 /**
- * Runtime bean wiring for the registry-discovery-center standalone Spring Boot application
- * (ADR-0160 decision 7 — registry-discovery-center ships as a runnable application, not a
+ * Runtime bean wiring for the registry-discovery-center standalone Spring Boot
+ * application (ADR-0160 decision 7 — ships as a runnable application, not a
  * library jar).
  *
  * <p>Provides the beans that {@code main()} startup needs but that no
@@ -71,7 +75,7 @@ import javax.sql.DataSource;
  *
  * <p>Authority: ADR-0160 decision 7 + REQ-2026-002 VR-2 / VR-7.
  *
- * @since 2026-07-10
+ * @since 0.1.0
  */
 @Configuration
 public class RegistryRuntimeBeanConfig {
@@ -138,7 +142,34 @@ public class RegistryRuntimeBeanConfig {
      */
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        return RegistryObjectMapper.createJackson2();
+    }
+
+    /**
+     * agentCardFetcher.
+     *
+     * @param cardFetchOptions cardFetchOptions
+     * @return result
+     * @since 0.1.0
+     */
+    @Bean
+    public AgentCardFetcher agentCardFetcher(RdcCardFetchOptions cardFetchOptions) {
+        return AgentCardFetcher.fromSecurity(cardFetchOptions);
+    }
+
+    /**
+     * callerAuthorizationPolicy.
+     *
+     * @param securityProperties securityProperties
+     * @return result
+     * @since 0.1.0
+     */
+    @Bean
+    public CallerAuthorizationPolicy callerAuthorizationPolicy(RegistrySecurityProperties securityProperties) {
+        if (securityProperties.isAllowlistConfigured()) {
+            return new CallerAuthorizationPolicy.Allowlist(securityProperties);
+        }
+        return new CallerAuthorizationPolicy.Permissive();
     }
 
     /**

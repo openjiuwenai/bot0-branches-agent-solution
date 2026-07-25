@@ -89,7 +89,7 @@ def test_build_dataset_too_few_cases(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_build_dataset_evaluator_prompt(cases_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """evaluator_prompt 传递给 _build_evaluator。"""
+    """显式 llm + evaluator_prompt 传递给 _build_evaluator。"""
     runtime = _mock_eval_runtime()
     with patch("evo_agent.dataset.manifest._build_evaluator") as mock_build:
         mock_build.return_value = MagicMock()
@@ -99,6 +99,7 @@ def test_build_dataset_evaluator_prompt(cases_file: Path, monkeypatch: pytest.Mo
             train_split=0.8,
             val_split=0.2,
             eval_runtime=runtime,
+            evaluator_config={"type": "llm"},
         )
     call_args = mock_build.call_args
     evaluator_config = call_args.args[0]
@@ -107,7 +108,7 @@ def test_build_dataset_evaluator_prompt(cases_file: Path, monkeypatch: pytest.Mo
 
 
 def test_build_dataset_no_prompt(cases_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """evaluator_prompt 为空时不传 prompt_template。"""
+    """默认 metric：不传 evaluator_config 时 type=metric。"""
     runtime = _mock_eval_runtime()
     with patch("evo_agent.dataset.manifest._build_evaluator") as mock_build:
         mock_build.return_value = MagicMock()
@@ -120,7 +121,74 @@ def test_build_dataset_no_prompt(cases_file: Path, monkeypatch: pytest.MonkeyPat
         )
     call_args = mock_build.call_args
     evaluator_config = call_args.args[0]
+    assert evaluator_config["type"] == "metric"
     assert "prompt_template" not in evaluator_config
+
+
+def test_build_dataset_llm_empty_prompt_omits_template(
+    cases_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """type=llm 且 prompt 为空时不传 prompt_template。"""
+    runtime = _mock_eval_runtime()
+    with patch("evo_agent.dataset.manifest._build_evaluator") as mock_build:
+        mock_build.return_value = MagicMock()
+        build_dataset_from_request(
+            data_path=cases_file,
+            evaluator_prompt="",
+            train_split=0.8,
+            val_split=0.2,
+            eval_runtime=runtime,
+            evaluator_config={"type": "llm"},
+        )
+    evaluator_config = mock_build.call_args.args[0]
+    assert evaluator_config["type"] == "llm"
+    assert "prompt_template" not in evaluator_config
+
+
+def test_build_dataset_metric_with_extract(
+    cases_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """API metric + extract 配置完整传给 _build_evaluator。"""
+    runtime = _mock_eval_runtime()
+    extract = {
+        "strategy": "answer_tag_json_field",
+        "source": "answer",
+        "fields": ["responsibility"],
+        "prefer_values": ["无责", "有责"],
+    }
+    with patch("evo_agent.dataset.manifest._build_evaluator") as mock_build:
+        mock_build.return_value = MagicMock()
+        build_dataset_from_request(
+            data_path=cases_file,
+            evaluator_prompt="",
+            train_split=0.8,
+            val_split=0.2,
+            eval_runtime=runtime,
+            evaluator_config={
+                "type": "metric",
+                "metric": "exact_match",
+                "aggregate": "mean",
+                "extract": extract,
+            },
+        )
+    evaluator_config = mock_build.call_args.args[0]
+    assert evaluator_config["type"] == "metric"
+    assert evaluator_config["metric"] == "exact_match"
+    assert evaluator_config["extract"] == extract
+
+
+def test_build_dataset_rejects_unsupported_type(
+    cases_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.raises(ValueError, match="Unsupported evaluator type"):
+        build_dataset_from_request(
+            data_path=cases_file,
+            evaluator_prompt="",
+            train_split=0.8,
+            val_split=0.2,
+            eval_runtime=_mock_eval_runtime(),
+            evaluator_config={"type": "filtered"},
+        )
 
 
 def test_build_dataset_evo_format(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

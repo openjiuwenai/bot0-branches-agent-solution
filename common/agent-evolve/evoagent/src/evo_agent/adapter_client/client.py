@@ -184,7 +184,7 @@ class AdapterClient:
         *,
         skill_name: str,
         skill_content: str,
-    ) -> None:
+    ) -> dict[str, Any]:
         """推送 skill 文档给业务 Agent（同步 httpx）。
 
         POST /api/v1/skills  action=update_skill
@@ -192,6 +192,12 @@ class AdapterClient:
         使用同步 httpx.Client（非 async），因为此方法在 operator callback
         （on_parameter_updated）中被同步调用。
         与 async 方法保持一致，对 502/503 和网络错误自动重试。
+
+        Returns
+        -------
+        dict
+            Adapter 成功响应，含 ``skill_name`` / ``revision``（内容哈希），
+            便于调用方在热更后强制使用新 conversation_id。
 
         Raises
         ------
@@ -214,7 +220,7 @@ class AdapterClient:
                         data.get("message", "update_skill failed"),
                         status_code=response.status_code,
                     )
-                return
+                return data
             except AdapterError as e:
                 if e.status_code in (502, 503) and attempt < self._max_retries:
                     last_error = e
@@ -406,13 +412,18 @@ class AdapterClient:
     def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
         """统一响应处理：成功返回 JSON body，失败抛出 AdapterError。
 
-        错误格式遵循 FastAPI 标准：``{"detail": "..."}``
+        错误格式优先读契约 ``{"error":{"code","message"}}``，
+        并兼容旧版 FastAPI ``{"detail": "..."}``。
         """
         if response.status_code >= 400:
             try:
                 body = response.json()
-                message = body.get("detail", response.text)
-            except (ValueError, KeyError):
+                err = body.get("error")
+                if isinstance(err, dict) and err.get("message"):
+                    message = str(err["message"])
+                else:
+                    message = body.get("detail", response.text)
+            except (ValueError, KeyError, TypeError):
                 message = response.text
             raise AdapterError(message, status_code=response.status_code)
 

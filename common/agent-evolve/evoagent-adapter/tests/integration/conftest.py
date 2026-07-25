@@ -52,5 +52,5 @@ async def repo(test_db):
 
 @pytest.fixture(scope="session")
 def jsonl_spans() -> list[dict]:
-    """session 级加载 jsonl 一次 (只读; 用例需改动请拷贝)。"""
+    """session 级加载 otel_spans.jsonl 一次（只读；用例需改动请拷贝）。"""
     return _pgutil.load_jsonl_spans()

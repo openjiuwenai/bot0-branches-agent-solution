@@ -111,23 +111,23 @@ class TestConsumeSSEStream:
                 "interrupt_start",
                 "请确认您的选择",
                 **{
-                    "interrupt_intent": "理财推荐",
-                    "interrupt_description": "推荐低风险理财产品",
+                    "interrupt_intent": "确认选择",
+                    "interrupt_description": "请确认示例产品选项",
                 },
             ),
             _wrap_event("conversation_end"),
         ]
         response = _consume_sse_stream("conv1", events)
         assert response.interrupted is True
-        assert response.interrupt_intent == "理财推荐"
-        assert response.interrupt_description == "推荐低风险理财产品"
+        assert response.interrupt_intent == "确认选择"
+        assert response.interrupt_description == "请确认示例产品选项"
 
     def test_events_collection(self):
         """All events are collected into a simplified events list."""
         events = [
             _wrap_event("think_start", "思考中..."),
-            _wrap_event("tool_start", "调用工具", **{"plugin": "call_versatile"}),
-            _wrap_event("tool_end", "工具完成", **{"plugin": "call_versatile"}),
+            _wrap_event("tool_start", "调用工具", **{"plugin": "call_demo_tool"}),
+            _wrap_event("tool_end", "工具完成", **{"plugin": "call_demo_tool"}),
             _wrap_event("summary", "最终回答"),
             _wrap_event("conversation_end"),
         ]
@@ -136,7 +136,7 @@ class TestConsumeSSEStream:
         assert len(response.events) == 5
         assert response.events[0].type == "think_start"
         assert response.events[1].type == "tool_start"
-        assert response.events[1].plugin == "call_versatile"
+        assert response.events[1].plugin == "call_demo_tool"
         assert response.events[2].type == "tool_end"
         assert response.events[3].type == "summary"
 
@@ -214,13 +214,29 @@ class TestAgentClientBuildRequest:
             agent_id="edp_agent",
             timeout=300,
         )
-        body = client._build_request_body("你好", "conv123", extra_data={"UNION_NO": "12345"})
+        body = client._build_request_body("你好", "conv123", extra_data={"customer_id": "12345"})
         assert body["agent_id"] == "edp_agent"
         assert body["input"]["query"] == "你好"
         assert body["conversation_id"] == "conv123"
         assert body["stream"] is True
         assert body["custom_data"]["inputs"]["query"] == "你好"
-        assert body["custom_data"]["inputs"]["UNION_NO"] == "12345"
+        assert body["custom_data"]["inputs"]["customer_id"] == "12345"
+
+    def test_build_request_body_forwards_temperature_in_extra_data(self):
+        """TF-GRPO may pass temperature via extra_data for rollout diversity."""
+        client = AgentClient(
+            agent_url="http://localhost:8090",
+            project_id="proj_001",
+            agent_id="edp_agent",
+            timeout=300,
+        )
+        body = client._build_request_body(
+            "你好",
+            "conv123",
+            extra_data={"temperature": 0.7, "run_id": "r1"},
+        )
+        assert body["custom_data"]["inputs"]["temperature"] == 0.7
+        assert body["custom_data"]["inputs"]["run_id"] == "r1"
 
     def test_build_request_body_no_extra_data(self):
         client = AgentClient(
@@ -240,12 +256,12 @@ class TestAgentClientBuildRequest:
             project_id="proj_001",
             agent_id="edp_agent",
             timeout=300,
-            url_query_params={"type": "controller", "workspace_id": "191"},
+            url_query_params={"mode": "default", "workspace_id": "ws_001"},
         )
         url = client._build_url("conv123")
         assert url == (
             "http://localhost:8090/v1/proj_001/agents/edp_agent"
-            "/conversations/conv123?type=controller&workspace_id=191"
+            "/conversations/conv123?mode=default&workspace_id=ws_001"
         )
 
     def test_build_url_without_query_params(self):
@@ -269,15 +285,15 @@ class TestAgentClientBuildRequest:
             request_template={
                 "timeout": 300,
                 "role_id": "1",
-                "role_name": "示例贷款场景",
+                "role_name": "demo_agent",
                 "custom_data": {
                     "user_profile": {"enable_extract": True, "enable_retrieve": True},
                 },
             },
         )
-        body = client._build_request_body("帮小米科技做行业分类", "conv123")
+        body = client._build_request_body("处理测试请求", "conv123")
         assert body["role_id"] == "1"
-        assert body["role_name"] == "示例贷款场景"
+        assert body["role_name"] == "demo_agent"
         assert body["timeout"] == 300
         assert body["custom_data"]["user_profile"] == {
             "enable_extract": True,
@@ -287,7 +303,7 @@ class TestAgentClientBuildRequest:
         assert body["agent_id"] == "edp_agent"
         assert body["conversation_id"] == "conv123"
         assert body["stream"] is True
-        assert body["input"]["query"] == "帮小米科技做行业分类"
+        assert body["input"]["query"] == "处理测试请求"
 
     def test_build_request_body_template_user_profile_not_clobbered_by_extra_data(self):
         """extra_data 合并进 custom_data.inputs，不覆盖 template 的 custom_data.user_profile。"""
@@ -300,7 +316,7 @@ class TestAgentClientBuildRequest:
                 "role_id": "1",
                 "custom_data": {
                     "user_profile": {"enable_extract": True, "enable_retrieve": True},
-                    "inputs": {"ZRTtype": "3"},  # template 预置稳定 inputs
+                    "inputs": {"demo_flag": "3"},  # template 预置稳定 inputs
                 },
             },
         )
@@ -310,14 +326,14 @@ class TestAgentClientBuildRequest:
             "enable_extract": True,
             "enable_retrieve": True,
         }
-        # inputs：template 的 ZRTtype + adapter 补的 query + extra_data 的 run_id
-        assert body["custom_data"]["inputs"]["ZRTtype"] == "3"
+        # inputs：template 的 demo_flag + adapter 补的 query + extra_data 的 run_id
+        assert body["custom_data"]["inputs"]["demo_flag"] == "3"
         assert body["custom_data"]["inputs"]["run_id"] == "r_001"
         assert body["custom_data"]["inputs"]["query"] == "query"
 
     def test_build_request_body_template_not_mutated_across_calls(self):
         """深拷贝：多次调用不污染 template 原对象。"""
-        template = {"role_id": "1", "custom_data": {"inputs": {"ZRTtype": "3"}}}
+        template = {"role_id": "1", "custom_data": {"inputs": {"demo_flag": "3"}}}
         client = AgentClient(
             agent_url="http://localhost:8090",
             project_id="proj_001",
@@ -328,7 +344,7 @@ class TestAgentClientBuildRequest:
         client._build_request_body("q1", "conv1", extra_data={"run_id": "r1"})
         client._build_request_body("q2", "conv2", extra_data={"run_id": "r2"})
         # template 原对象不被污染
-        assert template["custom_data"]["inputs"] == {"ZRTtype": "3"}
+        assert template["custom_data"]["inputs"] == {"demo_flag": "3"}
         assert "run_id" not in template["custom_data"]["inputs"]
         assert "query" not in template["custom_data"]["inputs"]
 
@@ -342,14 +358,14 @@ class TestAgentClientBuildRequest:
             timeout=300,
             extra_headers={
                 "X-Invoke-Mode": "debug",
-                "cftk": "${ADAPTER_AGENT_TOKEN}",
-                "cf2-cftk": "${UNSET_VAR}",
+                "X-Auth-Token": "${ADAPTER_AGENT_TOKEN}",
+                "X-Auth-Token-Alt": "${UNSET_VAR}",
             },
         )
         headers = client._build_headers()
         assert headers["X-Invoke-Mode"] == "debug"
-        assert headers["cftk"] == "tok_abc"
-        assert headers["cf2-cftk"] == ""
+        assert headers["X-Auth-Token"] == "tok_abc"
+        assert headers["X-Auth-Token-Alt"] == ""
 
     def test_build_request_body_backward_compat_no_template(self):
         """无 request_template 时行为与历史一致（向后兼容）。"""
@@ -359,13 +375,13 @@ class TestAgentClientBuildRequest:
             agent_id="edp_agent",
             timeout=300,
         )
-        body = client._build_request_body("你好", "conv123", extra_data={"UNION_NO": "12345"})
+        body = client._build_request_body("你好", "conv123", extra_data={"customer_id": "12345"})
         assert body == {
             "agent_id": "edp_agent",
             "input": {"query": "你好"},
             "conversation_id": "conv123",
             "stream": True,
-            "custom_data": {"inputs": {"query": "你好", "UNION_NO": "12345"}},
+            "custom_data": {"inputs": {"query": "你好", "customer_id": "12345"}},
         }
 
 
@@ -421,7 +437,7 @@ class TestIterSSEStream:
             timeout=300,
             request_template={"role_id": "1"},
             extra_headers={"X-Invoke-Mode": "debug"},
-            url_query_params={"type": "controller"},
+            url_query_params={"mode": "default"},
         )
 
     def _patch_httpx(
@@ -492,9 +508,9 @@ class TestIterSSEStream:
             lambda **_: _CapturingClient(),
         )
         client = self._make_client()
-        _ = [c async for c in client.iter_sse_stream("c1", "q", extra_data={"ZRTtype": "3"})]
+        _ = [c async for c in client.iter_sse_stream("c1", "q", extra_data={"demo_flag": "3"})]
 
-        assert "type=controller" in captured["url"]
+        assert "mode=default" in captured["url"]
         assert captured["body"]["role_id"] == "1"
-        assert captured["body"]["custom_data"]["inputs"]["ZRTtype"] == "3"
+        assert captured["body"]["custom_data"]["inputs"]["demo_flag"] == "3"
         assert captured["headers"]["X-Invoke-Mode"] == "debug"

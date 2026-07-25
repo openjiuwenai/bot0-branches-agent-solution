@@ -28,20 +28,25 @@ class EvolveConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="EVO_")
 
     # ── LLM ──
-    llm_provider: str = "OpenAI"  # "OpenAI" | "ICBC"，EVO_LLM_PROVIDER
+    llm_provider: str = "OpenAI"  # "OpenAI" | "CustomSSE"，EVO_LLM_PROVIDER
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"
     optimizer_model: str = "gpt-4o"
+    # LLM 评估器模型；空字符串时回退到 optimizer_model（保持旧行为）。
+    evaluator_model: str = ""
     target_model: str = "gpt-4o"
-    # ICBC 内网 provider 凭证（仅 llm_provider=="ICBC" 时必填）
-    icbc_token: str = ""  # EVO_ICBC_TOKEN（JWT，走 Secret）
-    icbc_user_id: str = ""  # EVO_ICBC_USER_ID（固定值）
-    icbc_endpoint: str = ""  # EVO_ICBC_ENDPOINT（chat/completions URL）
-    icbc_timeout: float = 120.0  # EVO_ICBC_TIMEOUT，流式 read 超时（秒）
-    icbc_context_window_tokens: int | None = None
-    icbc_output_reserve_tokens: int = 2048
-    icbc_chars_per_token: float = 2.0
-    icbc_completion_signal: Literal["done", "eof", "either"] = "done"
+    # LLM HTTP 调用超时（秒）。大 prompt / 慢模型需调大（对齐 bank 150 / 建议 300）。
+    # openjiuwen Model 默认 60s 易 408。EVO_LLM_TIMEOUT。
+    llm_timeout: float = 300.0
+    # 自定义 SSE provider 凭证（仅 llm_provider=="CustomSSE" 时必填）
+    custom_sse_token: str = ""  # EVO_CUSTOM_SSE_TOKEN（走 Secret 注入）
+    custom_sse_user_id: str = ""  # EVO_CUSTOM_SSE_USER_ID（端点分配的用户标识）
+    custom_sse_endpoint: str = ""  # EVO_CUSTOM_SSE_ENDPOINT（chat/completions URL）
+    custom_sse_timeout: float = 120.0  # EVO_CUSTOM_SSE_TIMEOUT，流式 read 超时（秒）
+    custom_sse_context_window_tokens: int | None = None
+    custom_sse_output_reserve_tokens: int = 2048
+    custom_sse_chars_per_token: float = 2.0
+    custom_sse_completion_signal: Literal["done", "eof", "either"] = "done"
 
     # Local prompt/output planning applies to every provider and stage.
     llm_context_window_tokens: int = 32768
@@ -49,7 +54,7 @@ class EvolveConfig(BaseSettings):
     llm_safety_margin_tokens: int = 512
     llm_chars_per_token: float = 2.0
     llm_stage_output_reserve_tokens: dict[str, int] = Field(
-        default_factory=lambda: {"evaluator": 1200, "reflect": 3000}
+        default_factory=lambda: {"evaluator": 1200, "reflect": 4096}
     )
 
     # ── 远程通信（AdapterClient 使用） ──
@@ -85,6 +90,10 @@ class EvolveConfig(BaseSettings):
         default=Path("./workspace/evoagent-control.db"),
         validation_alias="EVOAGENT_CONTROL_DB_PATH",
     )
+    # golden_data 工具的持久化知识库根：离线建 GU 的最终产物（global_understanding/
+    # 下 index.md / system_wide.md / per_skill/<skill>.md 等）落此，多次 build 累积/覆盖。
+    # builder 的 run workspace（中间结果）仍走 artifact_dir，与此分离。EVO_GOLDEN_DATA_DIR。
+    golden_data_dir: Path = Path("./workspace/golden_data")
 
     # ── Wave 8: 平台 API 配置 ──
     adapter_url: str = ""  # EVO_ADAPTER_URL — Adapter sidecar 地址
@@ -127,30 +136,30 @@ class EvolveConfig(BaseSettings):
         return data
 
     @model_validator(mode="after")
-    def _validate_icbc_config(self) -> Self:
-        """ICBC 模式 fail-fast：provider 凭证与 context window 必填。
+    def _validate_custom_sse_config(self) -> Self:
+        """CustomSSE 模式 fail-fast：provider 凭证与 context window 必填。
 
-        ``llm_provider`` 大小写归一（``icbc`` → ``ICBC``），避免填小写被
-        静默走 OpenAI 默认路径。OpenAI 模式不校验 ICBC 字段，保持
+        ``llm_provider`` 大小写归一（``custom_sse`` → ``CustomSSE``），避免填小写被
+        静默走 OpenAI 默认路径。OpenAI 模式不校验 CustomSSE 字段，保持
         ``llm_api_key`` 允许空的现状。
         """
         provider = self.llm_provider.strip()
-        if provider.casefold() == "icbc":
-            object.__setattr__(self, "llm_provider", "ICBC")
+        if provider.casefold().replace("_", "") == "customsse":
+            object.__setattr__(self, "llm_provider", "CustomSSE")
             missing = [
                 name
                 for name in (
-                    "icbc_token",
-                    "icbc_user_id",
-                    "icbc_endpoint",
-                    "icbc_context_window_tokens",
+                    "custom_sse_token",
+                    "custom_sse_user_id",
+                    "custom_sse_endpoint",
+                    "custom_sse_context_window_tokens",
                 )
                 if not getattr(self, name)
             ]
             if missing:
                 raise ValueError(
-                    f"ICBC 模式下必填字段缺失: {missing}"
-                    "（设 llm_provider='OpenAI' 或补齐 EVO_ICBC_*）"
+                    f"CustomSSE 模式下必填字段缺失: {missing}"
+                    "（设 llm_provider='OpenAI' 或补齐 EVO_CUSTOM_SSE_*）"
                 )
         else:
             object.__setattr__(self, "llm_provider", provider)

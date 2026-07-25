@@ -46,6 +46,7 @@ workspace/
 /docs/rules/
 /docs/spec/
 /docs/superpowers/
+/docs/tf_grpo/
 /docs/ROADMAP.md
 /docs/api/evaluate-client.md
 /docs/api/evaluate.md

@@ -127,14 +127,14 @@ class AgentEntryConfig(BaseModel):
     project_id: str | None = None
     agent_id: str | None = None
     timeout: int = 300
-    # ── EDPAgent 请求透传（客户现场 body/header/URL 自定义）──
+    # ── 业务 Agent 请求透传（可选 body/header/URL 自定义）──
     # request_template: 稳定 body 字段底模（深合并到最终 body，调用方 extra_data
-    #   仍合并进 custom_data.inputs）。用于 role_id/role_name/timeout/custom_data.user_profile
-    #   等客户环境绑定字段，避免 evo_agent 懂业务 body 语义。
+    #   仍合并进 custom_data.inputs）。用于 role_id/role_name/timeout 等部署侧字段，
+    #   避免 evo_agent 懂业务 body 语义。
     request_template: dict[str, Any] | None = None
     # extra_headers: 稳定请求头。值支持 ${ENV_VAR} 语法从环境变量读取（如 token）。
     extra_headers: dict[str, str] | None = None
-    # url_query_params: URL query 参数（如 type=controller&workspace_id=191）。
+    # url_query_params: URL query 参数（如 mode=default&workspace_id=ws_001）。
     url_query_params: dict[str, str] | None = None
     # ── Skill backend (local shared FS vs jiuwenbox sandbox FS) ──
     # skill_backend: "local" (default, host/shared mount) | "jiuwenbox" (upload API)
@@ -240,10 +240,12 @@ class AdapterConfig(BaseSettings):
     # ── Trace source (设计文档 §5): log 读归档 | standard 读 PG (经 kafka 消费) ──
     trace_source: Literal["log", "standard"] = "log"
     # ── DB (Repository 工厂, standard 模式用; 复用 collector 的 otel 库) ──
+    # 默认值对齐容器部署 (start.sh): pg_host=postgres 容器别名, pg_db=agent_adapter 独立库。
+    # 本地开发连宿主 PG 时设 ADAPTER_PG_HOST=127.0.0.1 覆写。
     db_type: Literal["postgres"] = "postgres"
-    pg_host: str = "127.0.0.1"
+    pg_host: str = "postgres"
     pg_port: int = 5432
-    pg_db: str = "otel_db"
+    pg_db: str = "agent_adapter"
     pg_user: str = "otel_user"
     pg_password: str = "otel_password"
     # ── Kafka (standard 模式消费 otlp_traces) ──

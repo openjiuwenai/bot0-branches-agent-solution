@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 
-from evo_agent import llm  # noqa: F401 — import 副作用：注册 llm_ICBC provider
+from evo_agent import llm  # noqa: F401 — import 副作用：注册 llm_CustomSSE provider
 from evo_agent.adapter_client.client import AdapterClient
 from evo_agent.adapter_client.remote_agent import RemoteAgent
 from evo_agent.config import EvolveConfig

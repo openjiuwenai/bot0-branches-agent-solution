@@ -31,7 +31,7 @@
 
 ### 0.3 现状说明
 
-`optimizer_runner.run_optimization()` 是核心编排函数，当前**唯一生产调用点是 `api/routes/optimize.py`**。`scripts/` 下只有 `smoke_icbc.py`（ICBC 冒烟），无优化任务脚本。如需 python 脚本入口，见附录 §A 的 `scripts/run_optimize.py` 模板（需自行落地）。
+`optimizer_runner.run_optimization()` 是核心编排函数，当前**唯一生产调用点是 `api/routes/optimize.py`**。仓库暂未提供独立的优化任务脚本；如需 Python 脚本入口，见附录 §A 的 `scripts/run_optimize.py` 模板（需自行落地）。
 
 ---
 
@@ -49,7 +49,7 @@
 │  │ /api/v1/*     │  HTTP    │  EVO_ADAPTER_URL ────┘      │
 │  └──────┬───────┘  出站      │                            │
 │         │                    │  评估器/反思器/优化器 LLM    │
-│         │                    │  走 ICBC / OpenAI          │
+│         │                    │  走 CustomSSE / OpenAI          │
 │         ▼                    └──────────────────────┘      │
 │  /data/skills (宿主)            ▲                          │
 │  /data/logs  (宿主)            │ 宿主机 curl/平台          │
@@ -108,7 +108,7 @@ docker network create evo-net
 | Docker | 20.10+ |
 | 磁盘 | ≥ 5 GB（镜像 ~350MB × 2 + workspace 产物） |
 | Adapter 镜像 | 已构建或离线包已导入 |
-| LLM | ICBC 内网端点 或 OpenAI 兼容公网端点 |
+| LLM | 自定义 SSE端点 或 OpenAI 兼容公网端点 |
 
 两个容器**必须同时可用**，EvoAgent 单独跑不起来（`POST /optimize` 会 500 `EVO_ADAPTER_URL not configured` 或 rollout 失败）。
 
@@ -196,8 +196,8 @@ vim config/.env
 
 ```env
 # ===== LLM provider 开关 =====
-# "OpenAI"（公网）| "ICBC"（客户内网）
-EVO_LLM_PROVIDER=ICBC
+# "OpenAI"（公网）| "CustomSSE"（私有部署）
+EVO_LLM_PROVIDER=CustomSSE
 
 # ── OpenAI 模式（provider=OpenAI 时必填）──
 # EVO_LLM_API_KEY=sk-xxx
@@ -205,12 +205,12 @@ EVO_LLM_PROVIDER=ICBC
 # EVO_OPTIMIZER_MODEL=gpt-4o
 # EVO_TARGET_MODEL=gpt-4o
 
-# ── ICBC 模式（provider=ICBC 时必填，启动 fail-fast 校验）──
-EVO_ICBC_TOKEN=<JWT,Secret 注入,勿写明文>
-EVO_ICBC_USER_ID=<工行分配的固定 userId>
-EVO_ICBC_ENDPOINT=http://aigc.sdc.cs.icbc/mlpmodelservice/aigc/chat/completions
-EVO_ICBC_CONTEXT_WINDOW_TOKENS=32768
-EVO_ICBC_TIMEOUT=120.0
+# ── CustomSSE 模式（provider=CustomSSE 时必填，启动 fail-fast 校验）──
+EVO_CUSTOM_SSE_TOKEN=<TOKEN,Secret 注入,勿写明文>
+EVO_CUSTOM_SSE_USER_ID=<私有部署分配的固定 userId>
+EVO_CUSTOM_SSE_ENDPOINT=https://llm-gateway.example.com/v1/chat/completions
+EVO_CUSTOM_SSE_CONTEXT_WINDOW_TOKENS=32768
+EVO_CUSTOM_SSE_TIMEOUT=120.0
 
 # ===== Adapter sidecar 地址（API 模式必填）=====
 # 同机：host.docker.internal；跨机：Adapter 机器 IP
@@ -251,7 +251,7 @@ EVO_ARTIFACT_DIR=./workspace/artifacts
 |---|---|
 | 始终 | `EVO_ADAPTER_URL` |
 | `EVO_LLM_PROVIDER=OpenAI` | `EVO_LLM_API_KEY` / `EVO_LLM_BASE_URL` / `EVO_OPTIMIZER_MODEL` / `EVO_TARGET_MODEL` |
-| `EVO_LLM_PROVIDER=ICBC` | `EVO_ICBC_TOKEN` / `EVO_ICBC_USER_ID` / `EVO_ICBC_ENDPOINT` / `EVO_ICBC_CONTEXT_WINDOW_TOKENS`（其余 LLM_* 被忽略） |
+| `EVO_LLM_PROVIDER=CustomSSE` | `EVO_CUSTOM_SSE_TOKEN` / `EVO_CUSTOM_SSE_USER_ID` / `EVO_CUSTOM_SSE_ENDPOINT` / `EVO_CUSTOM_SSE_CONTEXT_WINDOW_TOKENS`（其余 LLM_* 被忽略） |
 
 ### 5.3 启动
 
@@ -392,7 +392,7 @@ cp config/.env.example config/.env && vim config/.env
 ./start.sh
 ```
 
-> 离线机器需预装 Docker 20.10+，且 ICBC 端点 / Adapter 端口在内网可达。
+> 离线机器需预装 Docker 20.10+，且 CustomSSE 端点 / Adapter 端口在内网可达。
 
 ---
 
@@ -438,9 +438,9 @@ ls -lh deployment/workspace/artifacts/   # 训练过程产物（skill patches、
 | rollout 阶段连不上 Adapter | 同机检查 `EVO_ADAPTER_URL=http://host.docker.internal:8900` 且 Adapter `-p 8900:8900`；跨机用真实 IP |
 | `422 Dataset path must be under allowed roots` | `dataset_path` 不在 `EVO_ALLOWED_DATA_ROOTS` 下，或宿主/容器路径映射搞反 |
 | `422 Dataset file not found` | 容器内 `/data` ← 宿主 `/home/evolution/data`，文件要放对地方 |
-| 容器一直 `starting` 不转 `healthy` | 等 15s 启动期后 `docker logs evoagent`，多为 `.env` 缺必填或 ICBC 凭证错 |
-| ICBC 模式启动 fail-fast 报必填缺失 | `EVO_LLM_PROVIDER=ICBC` 时 `EVO_ICBC_TOKEN/USER_ID/ENDPOINT/CONTEXT_WINDOW_TOKENS` 四项不能空 |
-| `ICBCTokenExpiredError` | JWT 过期，需找客户换 token 后改 `.env` 重启 |
+| 容器一直 `starting` 不转 `healthy` | 等 15s 启动期后 `docker logs evoagent`，多为 `.env` 缺必填或 CustomSSE 凭证错 |
+| CustomSSE 模式启动 fail-fast 报必填缺失 | `EVO_LLM_PROVIDER=CustomSSE` 时 `EVO_CUSTOM_SSE_TOKEN/USER_ID/ENDPOINT/CONTEXT_WINDOW_TOKENS` 四项不能空 |
+| `EndpointCredentialExpiredError` | 访问令牌过期，需更新 token 后改 `.env` 重启 |
 | `docker build` 拉 wheel 失败 | 换 `PIP_INDEX_URL` 为可用源，或离线包导入 |
 | Adapter 与 EvoAgent 数据集路径不一致 | EvoAgent 把数据集路径传给 Adapter，两边挂载要协调（skill 文件通常由 Adapter 的 `HOST_SKILLS_DIR` 管） |
 
@@ -546,4 +546,4 @@ if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
 ```
 
-> 注意：此脚本绕过 JobManager/SSE/进度回调，无并发隔离。落地后建议加 `--skill-scores` 等输出开关，并用 ICBC 模式跑通一次。
+> 注意：此脚本绕过 JobManager/SSE/进度回调，无并发隔离。落地后建议加 `--skill-scores` 等输出开关，并用 CustomSSE 模式跑通一次。

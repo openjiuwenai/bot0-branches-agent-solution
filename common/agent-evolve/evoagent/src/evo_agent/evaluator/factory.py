@@ -13,6 +13,11 @@ from evo_agent.evaluator.evaluators.metric import MetricEvaluator
 from evo_agent.evaluator.filters.base import TrajectoryFilter
 from evo_agent.evaluator.filters.tool_failure import ToolFailureFilter
 from evo_agent.evaluator.filters.user_feedback import UserFeedbackFilter
+from evo_agent.evaluator.metrics.extract import (
+    AnswerFieldExtractConfig,
+    parse_extract_config,
+)
+from evo_agent.evaluator.metrics.field_exact_match import FieldExtractExactMatchMetric
 from evo_agent.evaluator.metrics.registry import get_batch_metric, get_metric
 
 
@@ -90,7 +95,8 @@ def _create_metric_evaluator(config: dict[str, Any]) -> MetricEvaluator:
     else:
         raise TypeError(f"'metric' must be a str or list[str], got {type(metric_spec).__name__}")
 
-    metrics = [get_metric(name)() for name in metric_names]
+    extract_cfg = parse_extract_config(config.get("extract"))
+    metrics = [_build_metric_instance(name, extract_cfg) for name in metric_names]
 
     aggregate = config.get("aggregate", "mean")
 
@@ -116,6 +122,21 @@ def _create_metric_evaluator(config: dict[str, Any]) -> MetricEvaluator:
         aggregate=aggregate,
         batch_metrics=batch_metrics,
         batch_score=batch_score,
+    )
+
+
+def _build_metric_instance(name: str, extract_cfg: AnswerFieldExtractConfig | None) -> Any:
+    """Build one metric; wrap exact_match with field extract when configured."""
+    if extract_cfg is None:
+        return get_metric(name)()
+
+    if name == "exact_match":
+        return FieldExtractExactMatchMetric(extract_cfg, normalize=False)
+    if name == "normalized_exact_match":
+        return FieldExtractExactMatchMetric(extract_cfg, normalize=True)
+
+    raise ValueError(
+        f"extract is only supported for exact_match / normalized_exact_match, got {name!r}"
     )
 
 

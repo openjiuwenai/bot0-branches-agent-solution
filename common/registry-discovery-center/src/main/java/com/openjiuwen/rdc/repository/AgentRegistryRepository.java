@@ -99,6 +99,7 @@ public interface AgentRegistryRepository {
      *                        {@code ServiceIdCodec.applyTo(entry)} +
      *                        {@code InstanceIdCodec.applyTo(entry)} before
      *                        invoking upsert.
+     *
      * @param a2aAgentCardJson pre-serialized JSON of
      *                        {@link AgentRegistryEntry#getA2aAgentCard()};
      *                        {@code null} when the entry carries no A2A card.
@@ -166,6 +167,7 @@ public interface AgentRegistryRepository {
      *
      * @param staleBeforeMillis epoch-millis cutoff; rows whose
      *                          {@code last_heartbeat} is older are returned
+     *
      * @param limit             max number of rows to return
      * @return immutable list of {@link ProbeTarget}; empty list on no match
      */
@@ -191,6 +193,15 @@ public interface AgentRegistryRepository {
      * Immutable status-update request for {@link #updateStatus(StatusUpdate)}.
      * Carries the 4-field registry PK plus the new lifecycle status and the
      * heartbeat-refresh flag.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param newStatus newStatus
+     * @param shouldRefreshHeartbeat shouldRefreshHeartbeat
+     * @return result
+     * @since 0.1.0
      */
     record StatusUpdate(
             String tenantId,
@@ -199,6 +210,7 @@ public interface AgentRegistryRepository {
             String instanceId,
             String newStatus,
             boolean shouldRefreshHeartbeat) {
+
     }
 
     /**
@@ -218,6 +230,7 @@ public interface AgentRegistryRepository {
      * @param contractVersion nullable contract version filter; {@code null}
      *                        = no filter; non-null = SQL
      *                        {@code AND contract_version = :contractVersion}
+     *
      * @return immutable list of {@link RegistryRow}, one per matching
      *         instance; empty list if no ONLINE/DEGRADED/DRAINING entry
      *         matches (never {@code null})
@@ -292,6 +305,22 @@ public interface AgentRegistryRepository {
      * the encoded route handle. FEAT-016 adds {@code instanceId} (2nd field,
      * server-derived host-port) and {@code capabilities} (last field,
      * {@code List<String>} from the VARCHAR(64)[] column).
+     *
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param agentId agentId
+     * @param agentName agentName
+     * @param frameworkType frameworkType
+     * @param routeKey routeKey
+     * @param contractVersion contractVersion
+     * @param capabilityVersion capabilityVersion
+     * @param weight weight
+     * @param region region
+     * @param maxConcurrency maxConcurrency
+     * @param status status
+     * @param capabilities capabilities
+     * @return result
+     * @since 0.1.0
      */
     record RegistryRow(
             String serviceId,
@@ -315,6 +344,12 @@ public interface AgentRegistryRepository {
      * needs to deliver. Mirrors {@code RouteResolution} but lives inside the
      * persistence port so the discovery service can map between them without
      * exposing JDBC types at the SPI boundary.
+     *
+     * @param endpointUrl endpointUrl
+     * @param routeKey routeKey
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
      */
     record EndpointEntry(String endpointUrl, String routeKey, String contractVersion) {
     }
@@ -325,9 +360,420 @@ public interface AgentRegistryRepository {
      * then call {@link #updateStatus} with the right instance scope.
      * FEAT-016 adds {@code instanceId} so the scheduler can target a specific
      * concrete instance.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param endpointUrl endpointUrl
+     * @return result
+     * @since 0.1.0
      */
     record ProbeTarget(
             String tenantId, String agentId, String serviceId,
             String instanceId, String endpointUrl) {
+
+    }
+    // ---- Feat-015 structured discovery + reconciliation -------------------
+
+    /**
+     * List registry rows matching the target selector for structured discovery.
+     * Does not apply lifecycle, lease, version, tag, or health filters — the
+     * discovery service applies those to compute {@code DiscoveryOutcome}.
+     *
+     * @param filter filter
+     * @return result
+     * @since 0.1.0
+     */
+    List<DiscoveryRow> queryByTargetSelector(DiscoveryFilter filter);
+
+    record DiscoveryFilter(
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String a2aSkillId,
+            int limit
+    ) {
+    }
+
+    record DiscoveryRow(
+            String serviceId,
+            String agentId,
+            String deploymentServiceId,
+            String agentName,
+            FrameworkType frameworkType,
+            String routeKey,
+            String contractVersion,
+            String capabilityVersion,
+            String cardDigest,
+            int weight,
+            String region,
+            int maxConcurrency,
+            String lifecycleStatus,
+            String effectiveHealth,
+            String freshness,
+            java.time.Instant lastValidatedAt,
+            java.time.Instant leaseExpiresAt,
+            String a2aAgentCardJson
+    ) {
+
+    }
+
+    /**
+     * reconcileUpsert.
+     *
+     * @param command command
+     * @since 0.1.0
+     */
+    void reconcileUpsert(ReconcileUpsertCommand command);
+
+    /**
+     * listInstanceKeysBySource.
+     *
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
+    List<InstanceKey> listInstanceKeysBySource(String sourceId);
+
+    /**
+     * markDraining.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
+    void markDraining(String tenantId, String agentId, String serviceId);
+
+    /**
+     * markRemoved.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
+    void markRemoved(String tenantId, String agentId, String serviceId);
+
+    /**
+     * markSourceStale.
+     *
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
+    void markSourceStale(String sourceId);
+
+    /**
+     * markSourceFresh.
+     *
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
+    void markSourceFresh(String sourceId);
+
+    /**
+     * listDrainingPastGrace.
+     *
+     * @param cutoff cutoff
+     * @return result
+     * @since 0.1.0
+     */
+    List<InstanceKey> listDrainingPastGrace(java.time.Instant cutoff);
+
+    /**
+     * listExpiredLeases.
+     *
+     * @param now now
+     * @return result
+     * @since 0.1.0
+     */
+    List<InstanceKey> listExpiredLeases(java.time.Instant now);
+
+    /**
+     * getLastProcessedRevision.
+     *
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
+    long getLastProcessedRevision(String sourceId);
+
+    /**
+     * updateLastProcessedRevision.
+     *
+     * @param sourceId sourceId
+     * @param revision revision
+     * @since 0.1.0
+     */
+    void updateLastProcessedRevision(String sourceId, long revision);
+
+    /**
+     * updateLastProcessedRevision.
+     *
+     * @param sourceId sourceId
+     * @param revision revision
+     * @param snapshotFingerprint snapshotFingerprint
+     * @since 0.1.0
+     */
+    void updateLastProcessedRevision(String sourceId, long revision, String snapshotFingerprint);
+
+    /**
+     * getSnapshotFingerprint.
+     *
+     * @param sourceId sourceId
+     * @return result
+     * @since 0.1.0
+     */
+    java.util.Optional<String> getSnapshotFingerprint(String sourceId);
+
+    /**
+     * findCardDigest.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @return result
+     * @since 0.1.0
+     */
+    java.util.Optional<String> findCardDigest(String tenantId, String agentId, String serviceId);
+
+    /**
+     * reconcilePending.
+     *
+     * @param command command
+     * @since 0.1.0
+     */
+    void reconcilePending(ReconcilePendingCommand command);
+
+    /**
+     * markRefreshDegraded.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @since 0.1.0
+     */
+    void markRefreshDegraded(String tenantId, String agentId, String serviceId);
+
+    /**
+     * Resolve endpoint with lifecycle + lease facts for trusted routing (4-field PK).
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @return result
+     * @since 0.1.0
+     */
+    java.util.Optional<ResolveRow> findForResolve(
+            String tenantId, String agentId, String serviceId, String instanceId);
+
+    record ResolveRow(
+            String endpointUrl,
+            String routeKey,
+            String contractVersion,
+            String capabilityVersion,
+            String lifecycleStatus,
+            java.time.Instant leaseExpiresAt
+    ) {
+    }
+
+    record ReconcilePendingCommand(
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String instanceId,
+            String deploymentServiceId,
+            String sourceId,
+            long sourceRevision,
+            String endpointUrl,
+            FrameworkType frameworkType,
+            String region
+    ) {
+    }
+
+    record InstanceKey(String tenantId, String agentId, String serviceId, String instanceId) {
+    }
+
+    record ReconcileUpsertCommand(
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String instanceId,
+            String deploymentServiceId,
+            String sourceId,
+            long sourceRevision,
+            String agentName,
+            FrameworkType frameworkType,
+            String routeKey,
+            String contractVersion,
+            String capabilityVersion,
+            String endpointUrl,
+            int maxConcurrency,
+            int weight,
+            String region,
+            String a2aAgentCardJson,
+            String cardDigest,
+            String routeTargetJson,
+            String lifecycleStatus,
+            String effectiveHealth,
+            String freshness,
+            String status
+    ) {
+    }
+
+    // ---- Feat-015 logical AgentCardRegistration catalog --------------------
+
+    record LogicalRegistrationRow(
+            java.util.UUID registrationId,
+            String tenantId,
+            String agentId,
+            String serviceId,
+            String cardDigest,
+            String contractVersion,
+            String capabilityVersion,
+            String registrationStatus,
+            String freshness,
+            java.time.Instant lastValidatedAt,
+            long revision,
+            String a2aAgentCardJson
+    ) {
+    }
+
+    record UpsertSourceRefCommand(
+            String tenantId,
+            String deploymentServiceId,
+            String instanceId,
+            String sourceId,
+            long sourceRevision,
+            String internalBaseUrl,
+            String deploymentVersion,
+            String readiness,
+            java.util.UUID registrationId
+    ) {
+    }
+
+    record UpsertLogicalRegistrationCommand(
+            String tenantId,
+            String agentId,
+            String deploymentServiceId,
+            String cardDigest,
+            String contractVersion,
+            String capabilityVersion,
+            String registrationStatus,
+            String freshness,
+            String a2aAgentCardJson
+    ) {
+    }
+
+    record RelinkLogicalSourceRefCommand(
+            String tenantId,
+            String deploymentServiceId,
+            String instanceId,
+            String cardDigest,
+            String sourceId,
+            long sourceRevision,
+            String internalBaseUrl
+    ) {
+    }
+
+    /**
+     * upsertLogicalRegistration.
+     *
+     * @param command command
+     * @return result
+     * @since 0.1.0
+     */
+    default java.util.UUID upsertLogicalRegistration(UpsertLogicalRegistrationCommand command) {
+        return java.util.UUID.randomUUID();
+    }
+
+    /**
+     * upsertSourceRef.
+     *
+     * @param command command
+     * @since 0.1.0
+     */
+    default void upsertSourceRef(UpsertSourceRefCommand command) {
+    }
+
+    /**
+     * removeSourceRef.
+     *
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param instanceId instanceId
+     * @since 0.1.0
+     */
+    default void removeSourceRef(String tenantId, String deploymentServiceId, String instanceId) {
+    }
+
+    /**
+     * recomputeRegistrationStatus.
+     *
+     * @param registrationId registrationId
+     * @since 0.1.0
+     */
+    default void recomputeRegistrationStatus(java.util.UUID registrationId) {
+    }
+
+    /**
+     * markLogicalRegistrationsStaleSource.
+     *
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
+    default void markLogicalRegistrationsStaleSource(String sourceId) {
+    }
+
+    /**
+     * markLogicalRegistrationStaleCard.
+     *
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param capabilityVersion capabilityVersion
+     * @param cardDigest cardDigest
+     * @since 0.1.0
+     */
+    default void markLogicalRegistrationStaleCard(
+            String tenantId, String deploymentServiceId, String capabilityVersion, String cardDigest) {
+    }
+
+    /**
+     * Clears {@code STALE_CARD} on logical registration after a successful re-validation
+     * when Card digest is unchanged (Feat-015 §5.1.3 last-valid snapshot recovery).
+     *
+     * @param tenantId tenantId
+     * @param deploymentServiceId deploymentServiceId
+     * @param cardDigest cardDigest
+     * @since 0.1.0
+     */
+    default void clearLogicalRegistrationStaleCard(
+            String tenantId, String deploymentServiceId, String cardDigest) {
+    }
+
+    /**
+     * Re-link an instance source_ref to the logical registration for {@code cardDigest}
+     * after a successful same-digest re-validation. Returns {@code false} when no
+     * matching registration exists (caller should fall through to full upsert).
+     *
+     * @param command command
+     * @return result
+     * @since 0.1.0
+     */
+    default boolean relinkLogicalSourceRef(RelinkLogicalSourceRefCommand command) {
+        return false;
+    }
+
+    /**
+     * queryLogicalByTargetSelector.
+     *
+     * @param filter filter
+     * @return result
+     * @since 0.1.0
+     */
+    default List<LogicalRegistrationRow> queryLogicalByTargetSelector(DiscoveryFilter filter) {
+        return List.of();
     }
 }

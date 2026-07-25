@@ -43,8 +43,8 @@ def _make_args(**overrides: object) -> argparse.Namespace:
         "skills": None,
         "managed_doc_kind": None,
         "agent_name": None,
-        "epochs": 3,
-        "batch_size": 4,
+        "epochs": None,
+        "batch_size": None,
     }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -247,6 +247,19 @@ def test_resolve_full_scenario_config() -> None:
     assert request.num_epochs == 5
     assert request.batch_size == 8
     assert request.dataset_manifest_path == Path("data/custom.yaml")
+
+
+def test_resolve_epochs_batch_size_deferred_when_unset() -> None:
+    """未传 --epochs/--batch-size 时留给 ConfigResolver 读 scenario.yaml。"""
+    args = _make_args()
+    config = _make_config()
+
+    with patch.object(_run_optimize, "ScenarioRegistry") as mock_reg:
+        mock_reg.return_value.load_scenario_config.return_value = config
+        request = resolve_params(args)
+
+    assert request.num_epochs is None
+    assert request.batch_size is None
 
 
 # --- W8.8: 新 OptimizeRequest 字段 ---

@@ -4,15 +4,15 @@
 
 package com.openjiuwen.rdc.pull;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.config.RegistryOpContext;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.config.RegistryOpAudit;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
 import com.openjiuwen.rdc.model.FrameworkType;
 import com.openjiuwen.rdc.model.InstanceIdCodec;
 import com.openjiuwen.rdc.model.ServiceIdCodec;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +21,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
 import java.util.Map;
@@ -29,6 +30,10 @@ import java.util.UUID;
 
 /**
  * Pull-based agent registration bootstrap (REQ-2026-004).
+ *
+ * <p><strong>Deprecated.</strong> Prefer {@code rdc.deployment-discovery.*}
+ * (Feat-015). Cannot be enabled together with deployment-discovery
+ * ({@link com.openjiuwen.rdc.config.RegistrationPathGuard}).
  *
  * <p>Listens for {@link ApplicationReadyEvent} and serially HTTP GETs each
  * configured runtime's A2A AgentCard, constructs an
@@ -50,8 +55,10 @@ import java.util.UUID;
  * {@code org.springframework.jdbc.*} — runtime.pull is NOT a JDBC package
  * (ADR-0160 decision 4 unchanged).
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
+ * @deprecated Use {@code rdc.deployment-discovery} instead; forRemoval planned.
  */
+@Deprecated(forRemoval = true, since = "0.1.0")
 @Component
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
         prefix = "rdc.pull-registration",
@@ -82,6 +89,12 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
                 .build();
     }
 
+    /**
+     * onApplicationEvent.
+     *
+     * @param event event
+     * @since 0.1.0
+     */
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
         runBootstrap();
@@ -90,6 +103,8 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
     /**
      * Package-private entry point for tests — avoids constructing a real
      * {@link ApplicationReadyEvent} (whose source must be non-null).
+     *
+     * @since 0.1.0
      */
     void runBootstrap() {
         if (!properties.isEnabled() || properties.getRuntimes().isEmpty()) {
@@ -101,11 +116,7 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
             MDC.put("traceId", traceId);
             try {
                 pullOne(runtime, traceId);
-            } catch (IllegalStateException | IllegalArgumentException
-                     | org.springframework.web.client.RestClientException
-                     | org.springframework.dao.DataAccessException ex) {
-                // A single runtime failure must not abort the whole bootstrap;
-                // log + continue so the remaining runtimes still register.
+            } catch (RestClientException | IllegalStateException ex) {
                 LOG.warn("pull-bootstrap runtime {} failed: {}", runtime.getBaseUrl(), ex.getMessage(), ex);
             } finally {
                 MDC.remove("traceId");
@@ -140,16 +151,14 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
             LOG.info("pull-bootstrap registered tenant={} agent={} baseUrl={}",
                     entry.getTenantId(), entry.getAgentId(), entry.getEndpointUrl());
             outcome = "success";
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JsonProcessingException ex) {
             throw new IllegalStateException("pull-bootstrap failed: " + ex.getMessage(), ex);
         } finally {
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
-            RegistryOpContext ctx = RegistryOpContext.of(traceId, runtime.getTenantId(), runtime.getAgentId())
-                    .contractVersion(runtime.getContractVersion())
-                    .capabilityVersion(runtime.getCapabilityVersion())
-                    .health("ONLINE")
-                    .build();
-            observability.observeRegister(ctx, outcome, latencyMs);
+            observability.observeRegister(new RegistryOpAudit(
+                    traceId, runtime.getTenantId(), runtime.getAgentId(),
+                    runtime.getContractVersion(), runtime.getCapabilityVersion(),
+                    "ONLINE", null, outcome, latencyMs));
         }
     }
 
@@ -163,38 +172,27 @@ public class PullRegistrationBootstrap implements ApplicationListener<Applicatio
         }
     }
 
-    static AgentRegistryEntry buildEntry(PullRegistrationProperties.RuntimeEntry runtime,
-                                        String agentName) {
-        AgentRegistryEntry entry = new AgentRegistryEntry();
-        entry.setTenantId(runtime.getTenantId());
-        entry.setAgentId(runtime.getAgentId());
-        entry.setAgentName(agentName);
-        entry.setFrameworkType(runtime.getFrameworkType());
-        entry.setRouteKey(runtime.getRouteKey());
-        entry.setContractVersion(runtime.getContractVersion());
-        entry.setCapabilityVersion(runtime.getCapabilityVersion());
-        entry.setEndpointUrl(runtime.getBaseUrl());
-        entry.setRegion(runtime.getRegion());
-        entry.setMaxConcurrency(runtime.getMaxConcurrency() != null
-                ? runtime.getMaxConcurrency()
-                : PullRegistrationProperties.DEFAULT_MAX_CONCURRENCY);
-        entry.setWeight(runtime.getWeight() != null
-                ? runtime.getWeight()
-                : PullRegistrationProperties.DEFAULT_WEIGHT);
-        // FEAT-016: capabilities caller-optional; default to empty so the
-        // capabilities VARCHAR(64)[] column (V6 migration) is never null.
-        entry.setCapabilities(runtime.getCapabilities() != null
-                ? runtime.getCapabilities()
-                : java.util.List.of());
-        // FEAT-016: serviceId caller-optional; derive from baseUrl host
-        // (host-only, logical service identifier) when the operator omits it.
-        if (runtime.getServiceId() != null && !runtime.getServiceId().isBlank()) {
-            entry.setServiceId(runtime.getServiceId());
-        } else {
+    private static AgentRegistryEntry buildEntry(PullRegistrationProperties.RuntimeEntry runtime,
+                                                  String agentName) {
+            AgentRegistryEntry entry = new AgentRegistryEntry();
+            entry.setTenantId(runtime.getTenantId());
+            entry.setAgentId(runtime.getAgentId());
+            entry.setAgentName(agentName);
+            entry.setFrameworkType(runtime.getFrameworkType());
+            entry.setRouteKey(runtime.getRouteKey());
+            entry.setContractVersion(runtime.getContractVersion());
+            entry.setCapabilityVersion(runtime.getCapabilityVersion());
+            entry.setEndpointUrl(runtime.getBaseUrl());
+            entry.setRegion(runtime.getRegion());
+            entry.setMaxConcurrency(runtime.getMaxConcurrency() != null
+            ? runtime.getMaxConcurrency()
+            : PullRegistrationProperties.DEFAULT_MAX_CONCURRENCY);
+            entry.setWeight(runtime.getWeight() != null
+            ? runtime.getWeight()
+            : PullRegistrationProperties.DEFAULT_WEIGHT);
             ServiceIdCodec.applyTo(entry);
+            entry.setCapabilities(java.util.List.of());
+            InstanceIdCodec.applyTo(entry);
+            return entry;
         }
-        // instanceId always server-derived (host-port) — caller cannot forge.
-        InstanceIdCodec.applyTo(entry);
-        return entry;
-    }
 }

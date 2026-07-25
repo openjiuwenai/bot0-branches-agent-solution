@@ -109,6 +109,9 @@ class EdpaRealLlmE2eTest {
         assertThat(String.valueOf(result)).as("EDPA output must be non-empty (data channel proof)").isNotEmpty();
         assertThat(userInputRef.get()).as("UserInputCaptureRail must have captured the user query").isNotNull()
                 .isNotEmpty();
+        assertThat(exploreCallCount.get())
+                .as("LLM must dispatch the explore tool at least once (Species E tool-driven Explore proof)")
+                .isGreaterThan(0);
     }
 
     /**
