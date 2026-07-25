@@ -38,3 +38,15 @@ openjiuwen:
           examples: ["北京有什么酒店"]
           input-modes: ["text", "text/plain"]
           output-modes: ["text", "text/plain"]
+
+---
+# Suppress agent-core logs that can expose SKILL.md content in the FEAT-005 scenario.
+spring:
+  config:
+    activate:
+      on-profile: skillhub-remote
+
+logging:
+  level:
+    tool: WARN
+    llm: WARN
