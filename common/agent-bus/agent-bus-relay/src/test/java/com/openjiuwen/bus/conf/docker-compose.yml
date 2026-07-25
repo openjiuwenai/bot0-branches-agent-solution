@@ -1,0 +1,72 @@
+# event-bus (agent-bus) E2E 联调编排:Postgres + RocketMQ(name server + broker + topic init).
+# 用法:
+#   cd common/agent-bus/agent-bus-relay/src/test/java/com/openjiuwen/bus/conf
+#   docker compose up -d                         # 启动 4 个容器
+#   docker compose logs rocketmq-init | tail -20 # 看 8 个 topic 是否建好
+#   docker compose down                          # 停止(数据保留在 volume)
+#   docker compose down -v                       # 停止并清空数据
+#
+# 镜像/参数与迁移前 spring-ai-ascend 仓保持一致(apache/rocketmq:5.3.1 + postgres:16.2).
+
+services:
+  postgres:
+    image: postgres:16.2
+    container_name: agentbus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agentbus
+      POSTGRES_USER: agentbus
+      POSTGRES_PASSWORD: agentbus
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentbus -d agentbus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rocketmq-nameserver:
+    image: apache/rocketmq:5.3.1
+    container_name: agentbus-rocketmq-nameserver
+    restart: unless-stopped
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    environment:
+      JAVA_OPT_EXT: "-server -Xms512m -Xmx512m -Xmn128m"
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.1
+    container_name: agentbus-rocketmq-broker
+    restart: unless-stopped
+    # 必须以 -c 加载 broker.conf,否则 enablePropertyFilter 不生效.
+    command: sh mqbroker -c /etc/rocketmq/broker.conf
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      NAMESRV_ADDR: rocketmq-nameserver:9876
+      JAVA_OPT_EXT: "-server -Xms512m -Xmx512m -Xmn128m"
+    volumes:
+      - ./broker.conf:/etc/rocketmq/broker.conf:ro
+    depends_on:
+      - rocketmq-nameserver
+
+  rocketmq-init:
+    image: apache/rocketmq:5.3.1
+    container_name: agentbus-rocketmq-init
+    # 一次性容器:等 broker 注册 nameserver 后,建 8 个 topic 再退出(Exited 0).
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        sleep 12
+        for t in ascend_bus_invocation_req ascend_bus_invocation_deliver ascend_bus_invocation_resp_in ascend_bus_invocation_resp_out ascend_bus_a2a_req ascend_bus_a2a_deliver ascend_bus_a2a_resp_in ascend_bus_a2a_resp_out; do
+          sh /home/rocketmq/rocketmq-5.3.1/bin/mqadmin updatetopic -n rocketmq-nameserver:9876 -c DefaultCluster -t "$$t" && echo "created $$t"
+        done
+        echo "=== topic list ==="
+        sh /home/rocketmq/rocketmq-5.3.1/bin/mqadmin topicList -n rocketmq-nameserver:9876 | grep ascend_bus || true
+    environment:
+      NAMESRV_ADDR: rocketmq-nameserver:9876
+    depends_on:
+      - rocketmq-broker

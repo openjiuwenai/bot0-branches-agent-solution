@@ -15,7 +15,6 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
@@ -55,7 +54,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * consume side (S4 receiver consumer is deferred, so this is the联调 bridge). Asserts
  * the message lands on the right topic with all routing user-properties
  * (tenantId/messageId/sourceServiceId/targetServiceId/correlationId/eventType/payloadRef)
- * and that {@link BrokerControlDescriptor#decode} round-trips the request control fields.
+ * and that the first-class control fields round-trip across the broker hop.
  *
  * <p><b>Env-guarded.</b> Skipped unless the {@code ROCKETMQ_NAMESERVER} environment
  * variable is set (no broker → skip → suite stays green). Run against a live broker with:
@@ -184,14 +183,14 @@ class RealBrokerProduceSideIntegrationTest {
     }
 
     /**
-     * UC-2 — a client RUN_CREATE request dispatched through the gateway lands on the
-     * FEAT-013 request topic with complete routing headers and a round-trip control
-     * descriptor in the payloadRef.
+     * UC-2 — a client RUN_CREATE request dispatched through the gateway lands on the FEAT-013 request
+     * topic with first-class control user-properties and the A2A body inlined (P-06): the control plane
+     * rides its OWN properties (no descriptor token in payloadRef) and the body is NOT dropped.
      *
      * @throws Exception if the gateway dispatch, broker produce, or capture fails
      */
     @Test
-    void uc2_clientInvocationRequest_landsOnBrokerHdrsAndDesc() throws Exception {
+    void uc2_request_landsWithControlAndInlineBody() throws Exception {
         UUID requestId = UUID.randomUUID();
         IngressEnvelope env = new IngressEnvelope(
                 requestId, TENANT, UUID.randomUUID(),
@@ -209,19 +208,16 @@ class RealBrokerProduceSideIntegrationTest {
         assertThat(received.getProperty("targetServiceId")).isEqualTo(RUNTIME);
         assertThat(received.getProperty("correlationId")).isEqualTo(requestId.toString());
         assertThat(received.getProperty("eventType")).isEqualTo("CLIENT_INVOCATION_REQUESTED");
-        // body is the routing descriptor only (§6.2 ②)
+        // P-06: control plane rides FIRST-CLASS user properties (no descriptor token in payloadRef)
+        assertThat(received.getProperty("traceId")).isEqualTo(TRACE);
+        assertThat(received.getProperty("idempotencyKey")).isEqualTo(env.idempotencyKey().toString());
+        assertThat(received.getProperty("routeHandle")).isEqualTo(ROUTE_INVOCATION);
+        assertThat(received.getProperty("capability")).isEqualTo("a2a"); // default when omitted
+        // P-06 (2b): the A2A body rides inlinePayload — it is NOT dropped crossing the broker
+        assertThat(received.getProperty("inlinePayload")).isEqualTo("payload-body");
+        // payloadRef (the data reference) is absent when the body is inlined; body is routing descriptor only (§6.2②)
+        assertThat(received.getProperty("payloadRef")).isNull();
         assertThat(new String(received.getBody(), StandardCharsets.UTF_8)).isEqualTo("target=" + RUNTIME);
-
-        String payloadRef = received.getProperty("payloadRef");
-        assertThat(payloadRef).isNotBlank();
-        BrokerControlDescriptor.Descriptor decoded = BrokerControlDescriptor.decode(payloadRef);
-        assertThat(decoded.eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
-        assertThat(decoded.traceId()).isEqualTo(TRACE);
-        assertThat(decoded.correlationId()).isEqualTo(requestId.toString());
-        assertThat(decoded.idempotencyKey()).isEqualTo(env.idempotencyKey().toString());
-        assertThat(decoded.routeHandle()).isEqualTo(ROUTE_INVOCATION);
-        assertThat(decoded.capability()).isEqualTo("a2a"); // default when omitted
-        assertThat(decoded.deadlineMillisEpoch()).isEqualTo(Long.MAX_VALUE); // null deadline → Long.MAX_VALUE
     }
 
     /**
@@ -236,15 +232,15 @@ class RealBrokerProduceSideIntegrationTest {
     void uc3_a2aCallRequest_producedViaRelay_landsOnA2aTopic() throws Exception {
         String correlationId = "a2a-" + UUID.randomUUID();
         String idempotencyKey = "idem-" + UUID.randomUUID();
-        String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.A2A_CALL_REQUESTED, TRACE, correlationId,
-                idempotencyKey, ROUTE_A2A, "a2a", Long.MAX_VALUE));
+        // P-06: control plane rides the envelope's first-class control fields; payloadRef is the A2A
+        // data reference (no descriptor token). The 13-arg ctor sets control first-class + payloadRef.
+        String dataRef = "ref://a2a-body/" + correlationId;
         ForwardingEnvelope envelope = new ForwardingEnvelope(
                 new ForwardingMessageId("gw-" + UUID.randomUUID()),
                 AgentBusEventType.A2A_CALL_REQUESTED, TENANT, TRACE, correlationId,
                 idempotencyKey, new ForwardingRouteHandle(ROUTE_A2A, TENANT), "a2a",
                 GATEWAY, RUNTIME, Long.MAX_VALUE,
-                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, descriptor);
+                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, dataRef);
 
         ForwardingReceipt receipt = outbox.enqueue(envelope, GATEWAY, RUNTIME, System.currentTimeMillis());
         assertThat(receipt).isNotNull();
@@ -263,10 +259,10 @@ class RealBrokerProduceSideIntegrationTest {
         assertThat(received.getProperty("tenantId")).isEqualTo(TENANT);
         assertThat(received.getProperty("sourceServiceId")).isEqualTo(GATEWAY);
         assertThat(received.getProperty("targetServiceId")).isEqualTo(RUNTIME);
-        BrokerControlDescriptor.Descriptor decoded =
-                BrokerControlDescriptor.decode(received.getProperty("payloadRef"));
-        assertThat(decoded.eventType()).isEqualTo(AgentBusEventType.A2A_CALL_REQUESTED);
-        assertThat(decoded.routeHandle()).isEqualTo(ROUTE_A2A);
+        // P-06: control + data ride FIRST-CLASS user properties (no descriptor token in payloadRef)
+        assertThat(received.getProperty("traceId")).isEqualTo(TRACE);
+        assertThat(received.getProperty("routeHandle")).isEqualTo(ROUTE_A2A);
+        assertThat(received.getProperty("payloadRef")).isEqualTo(dataRef);
     }
 
     /**

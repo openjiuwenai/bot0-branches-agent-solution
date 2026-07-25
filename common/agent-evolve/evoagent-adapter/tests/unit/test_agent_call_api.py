@@ -56,7 +56,7 @@ class TestAgentCallEndpointRouting:
 
             response = client.post(
                 "/api/v1/agents/edp_agent/conversations/conv1",
-                json={"query": "推荐理财产品"},
+                json={"query": "推荐一款示例产品"},
             )
 
         assert response.status_code == 200
@@ -197,13 +197,13 @@ class TestAgentCallEndpointRouting:
 
             response = client.post(
                 "/api/v1/agents/edp_agent/conversations/conv1",
-                json={"query": "hello", "extra_data": {"UNION_NO": "12345"}},
+                json={"query": "hello", "extra_data": {"customer_id": "12345"}},
             )
 
         assert response.status_code == 200
         # Verify extra_data was passed to AgentClient.call()
         mock_call.assert_called_once_with(
-            conversation_id="conv1", query="hello", extra_data={"UNION_NO": "12345"}
+            conversation_id="conv1", query="hello", extra_data={"customer_id": "12345"}
         )
 
     def test_call_agent_failure_returns_error_response(self, tmp_path):

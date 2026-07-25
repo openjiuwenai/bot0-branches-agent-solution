@@ -5,7 +5,7 @@ the business agent reflects the update in a **new** conversation without restart
 
 Usage:
     python run_e2e_experiment.py
-    python run_e2e_experiment.py --base-url http://host:8900 --skill-name product_recommend_skill
+    python run_e2e_experiment.py --base-url http://host:8900 --skill-name demo_skill
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def build_verification_block(marker: str) -> str:
 ```
 {marker}
 
-为您推荐以下理财产品：
+为您推荐以下示例产品：
 | 序号 | 产品名称 | ...
 ```
 
@@ -182,7 +182,7 @@ def main() -> None:
         sys.exit(1)
 
     print("\n[4/6] 发起业务对话（新会话）...")
-    query = "帮我推荐一款低风险、期限半年左右的理财产品"
+    query = "帮我推荐一款示例产品"
     call_resp = api(
         cfg,
         "POST",

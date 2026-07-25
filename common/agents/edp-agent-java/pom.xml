@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.6</version>
+  </parent>
+
+  <groupId>com.huawei.ascend</groupId>
+  <artifactId>edp-agent-java</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>edp-agent-java</name>
+  <description>Production EDPAgent Java project — engine, scenarios, deploy, tests.</description>
+
+  <properties>
+    <java.version>17</java.version>
+    <maven.compiler.release>17</maven.compiler.release>
+    <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+    <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
+    <!--
+      必须使用为 JDK 17 发布的 agent-core-java（class 文件 major version 61，含
+      harness.deep_agent、core.singleagent.interrupt 及新版 BaseInterruptRail API）。
+      0.1.13 为 JDK17 正式构建。切勿改用旧的裸 0.1.12（部分仓库为缺包的旧构建），
+      会导致 agentcore-ext 编译失败。
+    -->
+    <agent-core-java.version>0.1.13</agent-core-java.version>
+  </properties>
+
+  <modules>
+    <module>engine</module>
+  </modules>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>net.revelc.code.formatter</groupId>
+        <artifactId>formatter-maven-plugin</artifactId>
+        <version>2.23.0</version>
+        <configuration>
+          <configFile>D:\JW\edpa-git\agent-solution\common\agents\.devtools\eclipse-java-formatter.xml</configFile>
+          <includes>
+            <include>**/*.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

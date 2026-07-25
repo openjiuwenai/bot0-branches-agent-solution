@@ -129,8 +129,8 @@ class TestAgentRuntimeTest {
                 AgentBusEventType.INVOCATION_ACCEPTED,
                 AgentBusEventType.INVOCATION_STREAM_READY);
         String taskId = extractTaskId(out.responses().get(0));
-        // STREAM_READY carries a streamRef keyed on the taskId
-        assertThat(out.responses().get(1).payloadRef()).contains("streamRef=stream://" + taskId);
+        // STREAM_READY carries a streamRef keyed on the taskId (P-06: response content rides inlinePayload)
+        assertThat(out.responses().get(1).inlinePayload()).contains("streamRef=stream://" + taskId);
     }
 
     @Test
@@ -187,7 +187,7 @@ class TestAgentRuntimeTest {
         TestAgentRuntime.ProcessingOutcome out = runtime.pollAndProcess(2_000L);
 
         assertThat(out.responseEventTypes()).containsExactly(AgentBusEventType.INVOCATION_STREAM_READY);
-        assertThat(out.responses().get(0).payloadRef()).startsWith("streamRef=stream://");
+        assertThat(out.responses().get(0).inlinePayload()).startsWith("streamRef=stream://");
     }
 
     @Test
@@ -213,8 +213,9 @@ class TestAgentRuntimeTest {
 
     @Test
     void descriptor_round_trip_preserves_all_control_fields() {
-        // buildRequest encoded the control fields into payloadRef; the runtime decoded them and built
-        // responses carrying the SAME correlationId/traceId/idempotencyKey/routeHandle/capability/deadline.
+        // P-06: the control plane rides FIRST-CLASS fields (no descriptor token in payloadRef); the runtime
+        // reads them off the polled inbound and stamps them on responses — SAME correlationId/traceId/
+        // idempotencyKey/routeHandle/capability/deadline round-trip via first-class fields.
         TestAgentRuntime runtime = newRuntime();
         ForwardingEnvelope req = request("req-rt", AgentBusEventType.CLIENT_INVOCATION_REQUESTED, "idem-rt");
         TestAgentRuntime.publishRequest(runtime.broker(), req, 1_000L);
@@ -271,26 +272,29 @@ class TestAgentRuntimeTest {
     }
 
     /**
-     * Extract {@code taskId=<id>} from a response payloadRef, or null if absent.
+     * Extract {@code taskId=<id>} from a response inlinePayload, or null if absent.
      *
-     * @param env the response envelope whose payloadRef to scan
+     * @param env the response envelope whose inlinePayload (A2A response content) to scan
      * @return the taskId value, or {@code null} if no taskId token is present
      */
     private static String extractTaskId(ForwardingEnvelope env) {
-        return token(env.payloadRef(), "taskId").orElse(null);
+        return token(env.inlinePayload(), "taskId").orElse(null);
     }
 
     /**
-     * Extract {@code status=<status>} from a response payloadRef, or null if absent.
+     * Extract {@code status=<status>} from a response inlinePayload, or null if absent.
      *
-     * @param env the response envelope whose payloadRef to scan
+     * @param env the response envelope whose inlinePayload (A2A response content) to scan
      * @return the status value, or {@code null} if no status token is present
      */
     private static String extractStatus(ForwardingEnvelope env) {
-        return token(env.payloadRef(), "status").orElse(null);
+        return token(env.inlinePayload(), "status").orElse(null);
     }
 
     private static Optional<String> token(String descriptor, String key) {
+        if (descriptor == null || descriptor.isBlank()) {
+            return Optional.empty();
+        }
         for (String pair : descriptor.split(";")) {
             int eq = pair.indexOf('=');
             if (eq > 0 && pair.substring(0, eq).equals(key)) {

@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 
 from agent_adapter.api.app import create_app
 from agent_adapter.config import load_config
+from agent_adapter.repository.aggregation import compute_trace_summary
 from agent_adapter.trace_source.db_source import DbTraceSource
 from tests.integration import _pgutil
 
@@ -57,11 +58,15 @@ async def test_standard_list_and_get_records(standard_app, repo, jsonl_spans):
         r = await client.get("/api/v1/traces")
         assert r.status_code == 200
         convs = set(r.json()["conversation_ids"])
-        expected = {t[0]["conversation_id"] for t in _by_trace(jsonl_spans).values()}
+        # 期望 = 各 trace 经 compute_trace_summary 算出的 session_id, 过滤 None
+        # (list_conversations 过滤无 session.id 的 trace; compute 用 _first_attr 取首个非空 session.id)
+        expected = {compute_trace_summary(tid, tspans)["session_id"]
+                    for tid, tspans in _by_trace(jsonl_spans).items()}
+        expected.discard(None)
         assert convs == expected
 
         # 取某会话 records + complete 信号 (根 span 已在 → complete=True)
-        conv = jsonl_spans[0]["conversation_id"]
+        conv = jsonl_spans[0]["session_id"]
         r = await client.get(f"/api/v1/traces/{conv}")
         data = r.json()
         assert data["conversation_id"] == conv
@@ -77,12 +82,12 @@ async def test_standard_cleaned_traces_matches_user_query(standard_app, repo, js
     app.state.trace_source = DbTraceSource(repo)
     await repo.bulk_insert_spans(jsonl_spans)
 
-    conv = jsonl_spans[0]["conversation_id"]
-    root = next(s for s in jsonl_spans if s["conversation_id"] == conv
+    conv = jsonl_spans[0]["session_id"]
+    root = next(s for s in jsonl_spans if s["session_id"] == conv
                 and s.get("kind") == "SERVER" and not s.get("parent_span_id"))
-    user_query = json.loads(
-        (root.get("attributes") or {}).get("openjiuwen.http.request_body")
-    )["user_query"]
+    rb_raw = (root.get("attributes") or {}).get("openjiuwen.http.request_body")
+    request_body = json.loads(rb_raw) if isinstance(rb_raw, str) else rb_raw
+    user_query = request_body["input"]["query"]  # V3 真实: input.query (非 user_query)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -100,7 +105,7 @@ async def test_standard_complete_false_when_no_root(standard_app, repo, jsonl_sp
     app.state.trace_source = DbTraceSource(repo)
     # 仅插入一条非根 INTERNAL span (新会话, 无 SERVER 根)
     no_root = [{**jsonl_spans[0], "kind": "INTERNAL", "parent_span_id": "p0",
-                "conversation_id": "no-root-conv", "trace_id": "no-root-trace",
+                "session_id": "no-root-conv", "trace_id": "no-root-trace",
                 "span_id": "nr-s1"}]
     await repo.bulk_insert_spans(no_root)
 

@@ -67,8 +67,8 @@ async def call_agent(
     默认聚合模式：消费完整 SSE 流后返回结构化 AgentCallResponse（JSON），
     供 evo_agent 的 AdapterClient.invoke 消费（httpx 默认 Accept: */*）。
 
-    流式透传模式：客户端带 ``Accept: text/event-stream`` 时，把 edp_agent 的
-    SSE 行原样转发（StreamingResponse），客户端实时看到中间事件，避免 VA 慢
+    流式透传模式：客户端带 ``Accept: text/event-stream`` 时，把业务 Agent 的
+    SSE 行原样转发（StreamingResponse），客户端实时看到中间事件，避免下游 Agent 慢
     时聚合阻塞导致断连。
     """
     from pydantic import ValidationError
