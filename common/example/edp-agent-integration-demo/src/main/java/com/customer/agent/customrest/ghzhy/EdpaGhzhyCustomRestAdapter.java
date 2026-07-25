@@ -4,6 +4,7 @@
 
 package com.customer.agent.customrest.ghzhy;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
@@ -16,16 +17,15 @@ import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskArtifactUpdateEvent;
 import org.a2aproject.sdk.spec.TaskState;
-import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.TextPart;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -41,6 +41,8 @@ import java.util.UUID;
  * nest custom event data inside {@code artifact.parts[].text} (double-JSON-encoded).
  * Without unwrapping, the frontend cannot extract event names or content,
  * causing all SSE frames to be silently discarded.</p>
+ *
+ * @since 2026-07-24
  */
 public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapter {
 
@@ -63,8 +65,6 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         LOGGER.info("[EDP-CUSTOM-REST] EdpaGhzhyCustomRestAdapter initialized");
     }
 
-    // ===== Request mapping =====
-
     @Override
     public A2ASendCommand toA2ARequest(Context context) {
         String conversationId = resolveConversationId(context);
@@ -73,7 +73,7 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         LOGGER.info("[EDP-CUSTOM-REST-REQ] Received request: conversationId={}, streaming={}, tenant={}",
                 abbreviate(conversationId, 8),
                 resolveStream(context),
-                firstHeader(context.headers(), "x-tenant-id"));
+                firstHeader(context.headers(), "x-tenant-id").orElse(null));
 
         Message message = Message.builder()
                 .role(Message.Role.ROLE_USER)
@@ -87,7 +87,7 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         metadata.put("query", flatten(context.queryParams()));
         metadata.put("path_variables", context.pathVariables());
 
-        String tenantId = firstHeader(context.headers(), "x-tenant-id");
+        String tenantId = firstHeader(context.headers(), "x-tenant-id").orElse(null);
 
         MessageSendParams params = MessageSendParams.builder()
                 .message(message)
@@ -103,8 +103,6 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return new A2ASendCommand(params, conversationId, streaming);
     }
 
-    // ===== Synchronous response =====
-
     @Override
     public Object fromA2ATask(Task task, Context context) {
         String externalId = context.pathVariables().getOrDefault("conversation_id", "");
@@ -117,8 +115,6 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         Map<String, Object> flatData = unwrapTaskToFlat(task, externalId);
         return envelope(true, "", flatData, context);
     }
-
-    // ===== Stream event =====
 
     @Override
     public SseEvent fromA2AStreamEvent(StreamingEventKind event, Context context) {
@@ -133,8 +129,6 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return new SseEvent(sseType, envelope(true, "", flatData, context));
     }
 
-    // ===== Non-stream error =====
-
     @Override
     public Object fromError(CustomRestError error, Context context) {
         LOGGER.error("[EDP-CUSTOM-REST-ERR] Non-stream error: httpStatus={}, code={}, message={}, conversationId={}",
@@ -147,8 +141,6 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         flatData.put("data", Map.of("httpStatus", error.httpStatus(), "code", error.code()));
         return envelope(false, error.message(), flatData, context);
     }
-
-    // ===== Stream error =====
 
     @Override
     public SseEvent fromStreamError(CustomRestError error, Context context) {
@@ -163,9 +155,13 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return new SseEvent("error", envelope(false, error.message(), flatData, context));
     }
 
-    // ===== Unwrapping: A2A SDK objects → flat {event, content, data} =====
-
-    /** Unwrap any StreamingEventKind to flat format for frontend consumption. */
+    /**
+     * Unwrap any StreamingEventKind to flat format for frontend consumption.
+     *
+     * @param event A2A SDK StreamingEventKind 事件对象
+     * @param externalId 外部 conversation ID
+     * @return 扁平化后的 {event, content, data} 格式 Map
+     */
     private Map<String, Object> unwrapToFlat(StreamingEventKind event, String externalId) {
         if (event instanceof TaskArtifactUpdateEvent artifact) {
             return unwrapArtifactToFlat(artifact, externalId);
@@ -191,6 +187,10 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
     /**
      * Unwrap TaskArtifactUpdateEvent: extract custom event payload from
      * artifact.parts[].text (double-JSON-encoded), lift to flat format.
+     *
+     * @param artifactEvent A2A SDK TaskArtifactUpdateEvent 事件对象
+     * @param externalId 外部 conversation ID
+     * @return 扁平化后的 {event, content, data} 格式 Map
      */
     private Map<String, Object> unwrapArtifactToFlat(TaskArtifactUpdateEvent artifactEvent,
             String externalId) {
@@ -200,66 +200,16 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
             return Map.of("event", "artifact_empty", "content", "");
         }
 
-        // Concatenate all TextPart text content
-        StringBuilder textBuilder = new StringBuilder();
-        for (Part<?> part : artifact.parts()) {
-            if (part instanceof TextPart textPart && textPart.text() != null) {
-                textBuilder.append(textPart.text());
-            }
-        }
-        String text = textBuilder.toString();
+        String text = concatArtifactText(artifact);
         if (text.isEmpty()) {
             LOGGER.debug("[EDP-CUSTOM-REST-RSP] Received empty artifact in TaskArtifactUpdateEvent");
             return Map.of("event", "artifact_empty", "content", "");
         }
 
-        // Try to parse as JSON envelope: {type:"custom", payload:{event, content, data, ...}}
-        try {
-            Map<String, Object> parsed = objectMapper.readValue(text,
-                    new TypeReference<Map<String, Object>>() {});
-
-            Object type = parsed.get("type");
-            Object payload = parsed.get("payload");
-
-            // Shape 1: {type:"custom", payload:{event, content, data}} — EdpaEventRail custom events
-            if ("custom".equals(type) && payload instanceof Map) {
-                Map<String, Object> payloadMap = (Map<String, Object>) payload;
-                Map<String, Object> flat = new LinkedHashMap<>();
-                flat.put("event", String.valueOf(payloadMap.getOrDefault("event", "unknown")));
-                flat.put("content", String.valueOf(payloadMap.getOrDefault("content", "")));
-                if (payloadMap.get("data") != null) {
-                    flat.put("data", payloadMap.get("data"));
-                }
-                // Preserve useful payload fields: tool, interrupt_id, etc.
-                copyIfPresent(flat, payloadMap, "tool", "interrupt_id", "timestamp",
-                        "conversation_id", "index");
-                // Replace internal conversation_id with external one
-                if (flat.containsKey("conversation_id")) {
-                    flat.put("conversation_id", externalId);
-                }
-                return flat;
-            }
-
-            // Shape 2: already flat {event, content, data} — pass through
-            if (parsed.containsKey("event")) {
-                Map<String, Object> flat = new LinkedHashMap<>(parsed);
-                if (flat.containsKey("conversation_id")) {
-                    flat.put("conversation_id", externalId);
-                }
-                return flat;
-            }
-
-            // Shape 3: LLM output {type:"llm_output", ...} — lift type as event name
-            if (type instanceof String typeName && !typeName.isEmpty()) {
-                Map<String, Object> flat = new LinkedHashMap<>();
-                flat.put("event", typeName);
-                flat.put("content", text);
-                return flat;
-            }
-        } catch (Exception ex) {
-            LOGGER.warn("[EDP-CUSTOM-REST-ERR] Failed to parse artifact text as JSON, treating as plain text. textLen={}, error={}",
-                    text.length(), ex.getMessage());
-            // JSON parse failed — treat as plain text
+        // 尝试 JSON 解析，失败则当作 plain text
+        Map<String, Object> parsed = parseArtifactJsonEnvelope(text, externalId);
+        if (parsed != null) {
+            return parsed;
         }
 
         // Plain text — wrap as summary event
@@ -269,7 +219,86 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return flat;
     }
 
-    /** Map TaskStatusUpdateEvent state to frontend-recognizable event name. */
+    /**
+     * 从 Artifact 的 parts 中拼接所有 TextPart 文本内容。
+     *
+     * @param artifact A2A SDK Artifact 对象
+     * @return 拼接后的文本内容
+     */
+    private String concatArtifactText(Artifact artifact) {
+        StringBuilder textBuilder = new StringBuilder();
+        for (Part<?> part : artifact.parts()) {
+            if (part instanceof TextPart textPart && textPart.text() != null) {
+                textBuilder.append(textPart.text());
+            }
+        }
+        return textBuilder.toString();
+    }
+
+    /**
+     * 解析 artifact text 为 JSON 信封格式，返回扁平 Map。
+     * 支持3种 JSON 结构：custom payload、flat event、LLM output。
+     * 解析失败时返回 null（由调用方决定回退策略）。
+     *
+     * @param text JSON 文本内容
+     * @param externalId 外部 conversation ID
+     * @return 扁平化 Map，解析失败时返回 null
+     */
+    private Map<String, Object> parseArtifactJsonEnvelope(String text, String externalId) {
+        try {
+            Map<String, Object> parsed = objectMapper.readValue(text,
+                    new TypeReference<Map<String, Object>>() {});
+
+            Object type = parsed.get("type");
+            Object payload = parsed.get("payload");
+
+            // Shape 1: {type:"custom", payload:{event, content, data}}
+            if ("custom".equals(type) && payload instanceof Map) {
+                Map<String, Object> payloadMap = (Map<String, Object>) payload;
+                Map<String, Object> flat = new LinkedHashMap<>();
+                flat.put("event", String.valueOf(payloadMap.getOrDefault("event", "unknown")));
+                flat.put("content", String.valueOf(payloadMap.getOrDefault("content", "")));
+                if (payloadMap.get("data") != null) {
+                    flat.put("data", payloadMap.get("data"));
+                }
+                copyIfPresent(flat, payloadMap, "tool", "interrupt_id", "timestamp",
+                        "conversation_id", "index");
+                if (flat.containsKey("conversation_id")) {
+                    flat.put("conversation_id", externalId);
+                }
+                return flat;
+            }
+
+            // Shape 2: already flat {event, content, data}
+            if (parsed.containsKey("event")) {
+                Map<String, Object> flat = new LinkedHashMap<>(parsed);
+                if (flat.containsKey("conversation_id")) {
+                    flat.put("conversation_id", externalId);
+                }
+                return flat;
+            }
+
+            // Shape 3: LLM output {type:"llm_output", ...}
+            if (type instanceof String typeName && !typeName.isEmpty()) {
+                Map<String, Object> flat = new LinkedHashMap<>();
+                flat.put("event", typeName);
+                flat.put("content", text);
+                return flat;
+            }
+        } catch (JsonProcessingException ex) {
+            LOGGER.warn("[EDP-CUSTOM-REST] Failed to parse artifact text as JSON, "
+                    + "treating as plain text. textLen={}, error={}",
+                    text.length(), ex.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Map TaskStatusUpdateEvent state to frontend-recognizable event name.
+     *
+     * @param statusEvent A2A SDK TaskStatusUpdateEvent 状态更新事件
+     * @return 包含 event/content/data 的扁平化 Map
+     */
     private Map<String, Object> mapStatusToFlat(TaskStatusUpdateEvent statusEvent) {
         String eventName = STATUS_EVENT_MAP.getOrDefault(
                 statusEvent.status().state(), "task_status");
@@ -299,7 +328,13 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return flat;
     }
 
-    /** Unwrap Task (final result) to flat format. */
+    /**
+     * Unwrap Task (final result) to flat format.
+     *
+     * @param task A2A SDK Task 最终结果对象
+     * @param externalId 外部 conversation ID
+     * @return 包含 event/content/data 的扁平化 Map
+     */
     private Map<String, Object> unwrapTaskToFlat(Task task, String externalId) {
         String eventName;
         if (task.status() != null && task.status().state() != null) {
@@ -329,7 +364,12 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return flat;
     }
 
-    /** Unwrap Message (intermediate) to flat format. */
+    /**
+     * Unwrap Message (intermediate) to flat format.
+     *
+     * @param msg A2A SDK Message 中间消息对象
+     * @return 包含 event/content 的扁平化 Map
+     */
     private Map<String, Object> unwrapMessageToFlat(Message msg) {
         StringBuilder sb = new StringBuilder();
         if (msg.parts() != null) {
@@ -346,28 +386,51 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return flat;
     }
 
-    /** Extract text from the last ROLE_AGENT message in Task history. */
+    /**
+     * Extract text from the last ROLE_AGENT message in Task history.
+     *
+     * @param task A2A SDK Task 对象，包含对话历史
+     * @return 最后一条 AGENT 消息的文本内容；无匹配时返回空字符串
+     */
     private static String extractLastAgentText(Task task) {
-        if (task.history() == null || task.history().isEmpty()) return "";
+        if (task.history() == null || task.history().isEmpty()) {
+            return "";
+        }
         // Iterate backwards to find last agent message
         for (int i = task.history().size() - 1; i >= 0; i--) {
             Message msg = task.history().get(i);
             if (msg.role() == Message.Role.ROLE_AGENT && msg.parts() != null) {
-                StringBuilder sb = new StringBuilder();
-                for (Part<?> part : msg.parts()) {
-                    if (part instanceof TextPart textPart && textPart.text() != null) {
-                        sb.append(textPart.text());
-                    }
+                String text = extractTextFromMessage(msg);
+                if (!text.isEmpty()) {
+                    return text;
                 }
-                if (!sb.isEmpty()) return sb.toString();
             }
         }
         return "";
     }
 
-    // ===== SSE event type detection =====
+    /**
+     * 从单条 Message 中提取所有 TextPart 的文本内容。
+     *
+     * @param msg A2A SDK Message 对象
+     * @return 拼接后的文本内容；无 TextPart 时返回空字符串
+     */
+    private static String extractTextFromMessage(Message msg) {
+        StringBuilder sb = new StringBuilder();
+        for (Part<?> part : msg.parts()) {
+            if (part instanceof TextPart textPart && textPart.text() != null) {
+                sb.append(textPart.text());
+            }
+        }
+        return sb.toString();
+    }
 
-    /** Detect SSE event type name based on StreamingEventKind content. */
+    /**
+     * Detect SSE event type name based on StreamingEventKind content.
+     *
+     * @param event A2A SDK StreamingEventKind 事件对象
+     * @return SSE 事件类型名称（"final"、"interrupt" 或 "chunk"）
+     */
     private static String detectEventType(StreamingEventKind event) {
         if (event instanceof TaskStatusUpdateEvent status && status.isFinalOrInterrupted()) {
             return status.status().state().isInterrupted() ? "interrupt" : "final";
@@ -379,9 +442,15 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         return "chunk";
     }
 
-    // ===== Envelope =====
-
-    /** GHZHY 7-field response envelope with flat custom_rsp_data. */
+    /**
+     * GHZHY 7-field response envelope with flat {@code custom_rsp_data}.
+     *
+     * @param success 是否成功
+     * @param error 错误消息（成功时为空字符串）
+     * @param flatData 扁平化的自定义响应数据
+     * @param context 请求上下文
+     * @return 包含 7 个字段的响应 Map
+     */
     private static Map<String, Object> envelope(boolean success, String error,
             Object flatData, Context context) {
         LOGGER.debug("[EDP-CUSTOM-REST-RSP] Building response envelope: success={}, dataKeys={}",
@@ -398,8 +467,6 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         result.put("custom_rsp_data", flatData);
         return result;
     }
-
-    // ===== Request mapping helpers =====
 
     private static String resolveConversationId(Context context) {
         String pathConvId = context.pathVariables().get("conversation_id");
@@ -434,10 +501,12 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
                     context.body().keySet());
             return "";
         }
-        if (source instanceof String text) return text;
+        if (source instanceof String text) {
+            return text;
+        }
         try {
             return objectMapper.writeValueAsString(source);
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             LOGGER.error("[EDP-CUSTOM-REST-ERR] Message serialization failed for source type: {}",
                     source.getClass().getName(), ex);
             throw new IllegalArgumentException("message serialization failed", ex);
@@ -446,17 +515,21 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
 
     private static boolean resolveStream(Context context) {
         Object stream = context.body().get("stream");
-        if (stream == null) return true;
-        if (stream instanceof Boolean b) return b;
-        if (stream instanceof String s && !s.isBlank()) return Boolean.parseBoolean(s);
+        if (stream == null) {
+            return true;
+        }
+        if (stream instanceof Boolean b) {
+            return b;
+        }
+        if (stream instanceof String s && !s.isBlank()) {
+            return Boolean.parseBoolean(s);
+        }
         return true;
     }
 
-    // ===== Utility helpers =====
-
-    private static String firstHeader(Map<String, List<String>> headers, String name) {
+    private static Optional<String> firstHeader(Map<String, List<String>> headers, String name) {
         List<String> values = headers.get(name);
-        return values != null && !values.isEmpty() ? values.get(0) : null;
+        return (values != null && !values.isEmpty()) ? Optional.of(values.get(0)) : Optional.empty();
     }
 
     private static Map<String, Object> flatten(Map<String, List<String>> source) {
@@ -490,10 +563,18 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
     /**
      * Truncate string to maxLen characters, appending "..." if truncated.
      * Used for logging to avoid excessive output.
+     *
+     * @param s 需要截断的字符串
+     * @param maxLen 最大保留字符数
+     * @return 截断后的字符串；若原字符串为 null 则返回 "null"
      */
     private static String abbreviate(String s, int maxLen) {
-        if (s == null) return "null";
-        if (s.length() <= maxLen) return s;
+        if (s == null) {
+            return "null";
+        }
+        if (s.length() <= maxLen) {
+            return s;
+        }
         return s.substring(0, maxLen) + "...";
     }
 }

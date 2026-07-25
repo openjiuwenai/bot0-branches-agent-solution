@@ -488,7 +488,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         // 第四步：加载 Governance 配置（框架级 + 场景级双路径合并）。
         Path frameworkGovernancePath = yamlDir.resolve("governance").toAbsolutePath().normalize();
         if (result.getScenarioHomePath() != null && Files.exists(result.getScenarioHomePath())) {
-            Path scenarioGovernancePath = result.getScenarioHomePath().resolve("governance").toAbsolutePath().normalize();
+            Path scenarioGovernancePath = result.getScenarioHomePath()
+                    .resolve("governance").toAbsolutePath().normalize();
             if (Files.exists(scenarioGovernancePath)) {
                 try {
                     result.setGovernanceConfig(
