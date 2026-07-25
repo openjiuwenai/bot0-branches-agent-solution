@@ -8,13 +8,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusConsumptionDecision;
-import com.openjiuwen.service.bus.consumer.port.BrokerDeliveryPort;
+import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort;
 import com.openjiuwen.service.bus.consumer.runtime.BrokerDeliveryLoop;
 import com.openjiuwen.service.bus.consumer.testkit.InMemoryBrokerDeliveryPort;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
@@ -30,26 +29,9 @@ class BrokerDeliveryLoopTest {
         var event = new AgentBusEventEnvelope("1.0", "A2A_CALL_REQUESTED", "m", "t", "s", "r", null, "c", "x", "i",
                 java.time.Instant.now().plusSeconds(10), "application/json", new byte[]{1}, null, Map.of());
         var seen = new ArrayList<String>();
-        BrokerDeliveryPort port = new BrokerDeliveryPort() {
-            /** {@inheritDoc} */
-            @Override
-            public Optional<Delivery> poll(String c, String t, long n) {
-                return Optional.of(new Delivery(event, new byte[]{1}));
-            }
-
-            /** {@inheritDoc} */
-            @Override
-            public void commit(Delivery d) {
-                seen.add("commit");
-            }
-
-            /** {@inheritDoc} */
-            @Override
-            public void reject(Delivery d, RejectReason r) {
-                seen.add("reject");
-            }
-        };
-        var loop = new BrokerDeliveryLoop(port, d -> BusConsumptionDecision.consumed(), "svc", "t", Clock.systemUTC());
+        var delivery = new AgentBusBrokerDeliveryPort.Delivery(event, new byte[]{1});
+        var loop = new BrokerDeliveryLoop(() -> Optional.of(delivery), ignored -> seen.add("commit"),
+                (ignored, reason) -> seen.add("reject"), ignored -> BusConsumptionDecision.consumed());
         assertThat(loop.tick()).isTrue();
         assertThat(seen).containsExactly("commit");
     }
@@ -59,8 +41,8 @@ class BrokerDeliveryLoopTest {
         var port = new InMemoryBrokerDeliveryPort();
         var event = event("committed-message");
         port.enqueue(event, null);
-        var loop = new BrokerDeliveryLoop(port, delivery -> BusConsumptionDecision.consumed(), "runtime", "t",
-                Clock.systemUTC());
+        var loop = new BrokerDeliveryLoop(() -> port.poll("runtime", "t", System.currentTimeMillis()), port::commit,
+                port::reject, delivery -> BusConsumptionDecision.consumed());
 
         assertThat(loop.tick()).isTrue();
         assertThat(port.isCommitted("committed-message")).isTrue();
@@ -72,12 +54,12 @@ class BrokerDeliveryLoopTest {
         var port = new InMemoryBrokerDeliveryPort();
         var event = event("rejected-message");
         port.enqueue(event, null);
-        var loop = new BrokerDeliveryLoop(port, delivery -> BusConsumptionDecision.retry("temporary"), "runtime", "t",
-                Clock.systemUTC());
+        var loop = new BrokerDeliveryLoop(() -> port.poll("runtime", "t", System.currentTimeMillis()), port::commit,
+                port::reject, delivery -> BusConsumptionDecision.retry("temporary"));
 
         assertThat(loop.tick()).isTrue();
         assertThat(port.rejectionReason("rejected-message"))
-                .contains(BrokerDeliveryPort.RejectReason.PROCESSING_FAILED);
+                .contains(AgentBusBrokerDeliveryPort.RejectReason.PROCESSING_FAILED);
     }
 
     private static AgentBusEventEnvelope event(String messageId) {

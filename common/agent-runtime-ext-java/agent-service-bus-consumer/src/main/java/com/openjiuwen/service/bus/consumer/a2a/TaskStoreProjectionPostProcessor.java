@@ -8,7 +8,6 @@ import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.model.Admission;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
 import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
-import com.openjiuwen.service.bus.consumer.port.BusTaskStateProjector;
 
 import org.a2aproject.sdk.server.tasks.TaskStore;
 import org.a2aproject.sdk.spec.Task;
@@ -34,7 +33,7 @@ import java.util.logging.Logger;
  *
  * @since 2026-07-22
  */
-public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor, BusTaskStateProjector {
+public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor {
     private static final Logger LOG = Logger.getLogger(TaskStoreProjectionPostProcessor.class.getName());
 
     private final Supplier<BusTaskProjectionCoordinator> coordinator;
@@ -81,8 +80,14 @@ public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor
         return projecting;
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Projects the current persisted Task state.
+     *
+     * @param tenantId
+     *            tenant identity
+     * @param taskId
+     *            Task identity
+     */
     public void projectCurrent(String tenantId, String taskId) {
         TaskStore store = taskStore;
         if (store == null) {
@@ -95,8 +100,16 @@ public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor
         }
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Repairs missed Task-state projections.
+     *
+     * @param tenantId
+     *            tenant identity
+     * @param limit
+     *            maximum admission records to inspect
+     *
+     * @return number of admission records inspected
+     */
     public int repair(String tenantId, int limit) {
         int repaired = 0;
         for (Admission admission : admissions.get().list(tenantId, limit)) {

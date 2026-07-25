@@ -8,8 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
-import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -38,9 +38,9 @@ class AgentBusInMemoryIntegrationTest {
         var deliveryPort = new AgentBusBrokerDeliveryPort(runtimeBroker,
                 Feat017BusIntegrationSupport.RUNTIME_CONSUMER, Feat017BusIntegrationSupport.TENANT,
                 Feat017BusIntegrationSupport.RUNTIME);
-        var outbox = new Feat017BusIntegrationSupport.RecordingOutbox();
+        var responseProducer = new Feat017BusIntegrationSupport.RecordingProducer();
         AtomicInteger bridgeCalls = new AtomicInteger();
-        var runtime = Feat017BusIntegrationSupport.runtime(outbox, bridgeCalls);
+        var runtime = Feat017BusIntegrationSupport.runtime(responseProducer, bridgeCalls);
         var loop = new BrokerDeliveryLoop(deliveryPort,
                 delivery -> runtime.consume(delivery.envelope(), delivery.payload()),
                 Feat017BusIntegrationSupport.RUNTIME_CONSUMER, Feat017BusIntegrationSupport.TENANT,
@@ -53,13 +53,13 @@ class AgentBusInMemoryIntegrationTest {
         assertThat(loop.tick()).isFalse();
         assertThat(bridgeCalls).hasValue(1);
 
-        List<ForwardingEnvelope> responses = outbox.envelopes();
-        assertThat(responses).extracting(envelope -> envelope.eventType()).containsExactly(
+        List<BrokerOutboundMessage> responses = responseProducer.messages();
+        assertThat(responses).extracting(message -> message.headers().eventType()).containsExactly(
                 AgentBusEventType.INVOCATION_ACCEPTED, AgentBusEventType.INVOCATION_RESPONSE);
-        assertThat(responses).allSatisfy(envelope -> {
-            assertThat(envelope.sourceServiceId()).isEqualTo(Feat017BusIntegrationSupport.RUNTIME);
-            assertThat(envelope.targetServiceId()).isEqualTo(Feat017BusIntegrationSupport.GATEWAY);
-            assertThat(envelope.correlationId()).isEqualTo("correlation-1");
+        assertThat(responses).allSatisfy(message -> {
+            assertThat(message.headers().sourceServiceId()).isEqualTo(Feat017BusIntegrationSupport.RUNTIME);
+            assertThat(message.headers().targetServiceId()).isEqualTo(Feat017BusIntegrationSupport.GATEWAY);
+            assertThat(message.headers().correlationId()).isEqualTo("correlation-1");
         });
 
         List<BrokerInboundMessage> gatewayMessages = publishResponsesToGateway(responses);
@@ -79,9 +79,9 @@ class AgentBusInMemoryIntegrationTest {
         var deliveryPort = new AgentBusBrokerDeliveryPort(runtimeBroker,
                 Feat017BusIntegrationSupport.RUNTIME_CONSUMER, Feat017BusIntegrationSupport.TENANT,
                 Feat017BusIntegrationSupport.RUNTIME);
-        var outbox = new Feat017BusIntegrationSupport.RecordingOutbox();
+        var responseProducer = new Feat017BusIntegrationSupport.RecordingProducer();
         AtomicInteger bridgeCalls = new AtomicInteger();
-        var runtime = Feat017BusIntegrationSupport.runtime(outbox, bridgeCalls);
+        var runtime = Feat017BusIntegrationSupport.runtime(responseProducer, bridgeCalls);
         var loop = new BrokerDeliveryLoop(deliveryPort,
                 delivery -> runtime.consume(delivery.envelope(), delivery.payload()),
                 Feat017BusIntegrationSupport.RUNTIME_CONSUMER, Feat017BusIntegrationSupport.TENANT,
@@ -95,7 +95,7 @@ class AgentBusInMemoryIntegrationTest {
         assertThat(loop.tick()).isTrue();
 
         assertThat(bridgeCalls).hasValue(1);
-        assertThat(outbox.envelopes()).extracting(ForwardingEnvelope::eventType)
+        assertThat(responseProducer.messages()).extracting(message -> message.headers().eventType())
                 .containsExactly(AgentBusEventType.INVOCATION_ACCEPTED, AgentBusEventType.INVOCATION_RESPONSE,
                         AgentBusEventType.INVOCATION_ACCEPTED);
     }
@@ -112,8 +112,8 @@ class AgentBusInMemoryIntegrationTest {
         var taskStore = new Feat017BusIntegrationSupport.RecordingTaskStore();
         taskStore.save(Feat017BusIntegrationSupport.completedTask(taskId, "query-context"), true);
         taskStore.save(Feat017BusIntegrationSupport.completedTask(clientInvocationId, "decoy-context"), true);
-        var outbox = new Feat017BusIntegrationSupport.RecordingOutbox();
-        var runtime = Feat017BusIntegrationSupport.queryRuntime(outbox, taskStore,
+        var responseProducer = new Feat017BusIntegrationSupport.RecordingProducer();
+        var runtime = Feat017BusIntegrationSupport.queryRuntime(responseProducer, taskStore,
                 Feat017BusIntegrationSupport.queryPayload(taskId, clientInvocationId));
         var loop = new BrokerDeliveryLoop(deliveryPort,
                 delivery -> runtime.consume(delivery.envelope(), delivery.payload()),
@@ -127,11 +127,12 @@ class AgentBusInMemoryIntegrationTest {
         assertThat(loop.tick()).isTrue();
         assertThat(taskStore.requestedIds()).containsExactly(taskId);
 
-        List<ForwardingEnvelope> responses = outbox.envelopes();
+        List<BrokerOutboundMessage> responses = responseProducer.messages();
         assertThat(responses).singleElement().satisfies(response -> {
-            assertThat(response.eventType()).isEqualTo(AgentBusEventType.INVOCATION_RESPONSE);
-            assertThat(response.payloadRef()).isNull();
-            assertThat(response.inlinePayload()).contains("taskId=" + taskId).doesNotContain(clientInvocationId);
+            assertThat(response.headers().eventType()).isEqualTo(AgentBusEventType.INVOCATION_RESPONSE);
+            assertThat(response.headers().payloadRef()).isNull();
+            assertThat(response.headers().inlinePayload()).contains("taskId=" + taskId)
+                    .doesNotContain(clientInvocationId);
         });
         List<BrokerInboundMessage> gatewayMessages = publishResponsesToGateway(responses);
         assertThat(gatewayMessages).singleElement().satisfies(message -> {
@@ -141,16 +142,15 @@ class AgentBusInMemoryIntegrationTest {
         });
     }
 
-    private static List<BrokerInboundMessage> publishResponsesToGateway(List<ForwardingEnvelope> responses) {
+    private static List<BrokerInboundMessage> publishResponsesToGateway(List<BrokerOutboundMessage> responses) {
         InMemoryBroker responseBus = new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_in");
         var gateway = responseBus.consumerFor("gateway-feat017-response");
         DeliveryFilter filter = DeliveryFilter.forRuntime(Feat017BusIntegrationSupport.TENANT,
                 Feat017BusIntegrationSupport.GATEWAY);
         gateway.subscribe("gateway-feat017-response", AgentBusEventType.INVOCATION_ACCEPTED, filter);
         gateway.subscribe("gateway-feat017-response", AgentBusEventType.INVOCATION_RESPONSE, filter);
-        responses.forEach(envelope -> assertThat(responseBus
-                .produce(Feat017BusIntegrationSupport.record(envelope, Feat017BusIntegrationSupport.NOW),
-                        Feat017BusIntegrationSupport.NOW)
+        responses.forEach(message -> assertThat(responseBus
+                .produce(message, Feat017BusIntegrationSupport.NOW)
                 .outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ACCEPTED));
 
         List<BrokerInboundMessage> received = new ArrayList<>();

@@ -8,9 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
-import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingProducer;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
-import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -47,8 +46,8 @@ class RealRocketMqFeat017IntegrationTest {
     private static final long POLL_WAIT_MILLIS = 5_000L;
 
     private static DefaultMQProducer producer;
-    private static RocketMqBrokerForwardingRelay requestRelay;
-    private static RocketMqBrokerForwardingRelay responseRelay;
+    private static RocketMqBrokerForwardingProducer requestProducer;
+    private static RocketMqBrokerForwardingProducer responseProducer;
     private static RocketMqBrokerForwardingConsumer responseConsumer;
     private static AgentBusBrokerDeliveryPort runtimeDelivery;
     private static String runtimeConsumerGroup;
@@ -66,10 +65,10 @@ class RealRocketMqFeat017IntegrationTest {
         producer = new DefaultMQProducer("feat017-it-producer-" + runId);
         producer.setNamesrvAddr(nameserver);
         producer.start();
-        requestRelay = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "deliver",
-                RocketMqBrokerForwardingRelay.defaultSender(producer));
-        responseRelay = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_in",
-                RocketMqBrokerForwardingRelay.defaultSender(producer));
+        requestProducer = new RocketMqBrokerForwardingProducer(new DefaultBrokerTopicResolver(), "deliver",
+                RocketMqBrokerForwardingProducer.defaultSender(producer));
+        responseProducer = new RocketMqBrokerForwardingProducer(new DefaultBrokerTopicResolver(), "resp_in",
+                RocketMqBrokerForwardingProducer.defaultSender(producer));
 
         var requestConsumer = new RocketMqBrokerForwardingConsumer(new DefaultBrokerTopicResolver(), "deliver",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MILLIS);
@@ -122,15 +121,14 @@ class RealRocketMqFeat017IntegrationTest {
         var taskStore = new Feat017BusIntegrationSupport.RecordingTaskStore();
         taskStore.save(Feat017BusIntegrationSupport.completedTask(taskId, "query-context"), true);
         taskStore.save(Feat017BusIntegrationSupport.completedTask(clientInvocationId, "decoy-context"), true);
-        var outbox = new Feat017BusIntegrationSupport.RecordingOutbox();
-        var runtime = Feat017BusIntegrationSupport.queryRuntime(outbox, taskStore,
+        var runtime = Feat017BusIntegrationSupport.queryRuntime(responseProducer, taskStore,
                 Feat017BusIntegrationSupport.queryPayload(taskId, clientInvocationId), runtimeServiceId);
         var loop = new BrokerDeliveryLoop(runtimeDelivery,
                 delivery -> runtime.consume(delivery.envelope(), delivery.payload()), runtimeConsumerGroup,
                 Feat017BusIntegrationSupport.TENANT,
                 Clock.fixed(Instant.ofEpochMilli(Feat017BusIntegrationSupport.NOW), ZoneOffset.UTC));
 
-        BrokerProduceOutcome requestOutcome = requestRelay.produce(Feat017BusIntegrationSupport.requestRecord(
+        BrokerProduceOutcome requestOutcome = requestProducer.produce(Feat017BusIntegrationSupport.requestRecord(
                 AgentBusEventType.CLIENT_INVOCATION_QUERY_REQUESTED, "request-" + UUID.randomUUID(), correlationId,
                 "idem-" + UUID.randomUUID(),
                 new Feat017BusIntegrationSupport.ServiceEndpoints(gatewayServiceId, runtimeServiceId)),
@@ -138,16 +136,6 @@ class RealRocketMqFeat017IntegrationTest {
         assertThat(requestOutcome.outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ACCEPTED);
         awaitDelivery(loop);
         assertThat(taskStore.requestedIds()).containsExactly(taskId);
-
-        List<ForwardingEnvelope> projections = outbox.envelopes();
-        assertThat(projections).singleElement().satisfies(projection -> {
-            assertThat(projection.eventType()).isEqualTo(AgentBusEventType.INVOCATION_RESPONSE);
-            assertThat(projection.payloadRef()).isNull();
-            assertThat(projection.inlinePayload()).contains("taskId=" + taskId).doesNotContain(clientInvocationId);
-        });
-        assertThat(responseRelay.produce(
-                Feat017BusIntegrationSupport.record(projections.get(0), Feat017BusIntegrationSupport.NOW),
-                Feat017BusIntegrationSupport.NOW).outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ACCEPTED);
 
         List<BrokerInboundMessage> busIngress = pollResponses(correlationId, 1);
         assertThat(busIngress).singleElement().satisfies(message -> {
@@ -162,15 +150,14 @@ class RealRocketMqFeat017IntegrationTest {
             AgentBusEventType responseType, String suffix) {
         String correlationId = "feat017-" + suffix + "-" + UUID.randomUUID();
         String idempotencyKey = "idem-" + UUID.randomUUID();
-        var outbox = new Feat017BusIntegrationSupport.RecordingOutbox();
         AtomicInteger bridgeCalls = new AtomicInteger();
-        var runtime = Feat017BusIntegrationSupport.runtime(outbox, bridgeCalls, runtimeServiceId);
+        var runtime = Feat017BusIntegrationSupport.runtime(responseProducer, bridgeCalls, runtimeServiceId);
         var loop = new BrokerDeliveryLoop(runtimeDelivery,
                 delivery -> runtime.consume(delivery.envelope(), delivery.payload()), runtimeConsumerGroup,
                 Feat017BusIntegrationSupport.TENANT,
                 Clock.fixed(Instant.ofEpochMilli(Feat017BusIntegrationSupport.NOW), ZoneOffset.UTC));
 
-        BrokerProduceOutcome requestOutcome = requestRelay.produce(Feat017BusIntegrationSupport.requestRecord(
+        BrokerProduceOutcome requestOutcome = requestProducer.produce(Feat017BusIntegrationSupport.requestRecord(
                 requestType, "request-" + UUID.randomUUID(), correlationId, idempotencyKey,
                 new Feat017BusIntegrationSupport.ServiceEndpoints(gatewayServiceId, runtimeServiceId)),
                 Feat017BusIntegrationSupport.NOW);
@@ -178,14 +165,7 @@ class RealRocketMqFeat017IntegrationTest {
         awaitDelivery(loop);
         assertThat(bridgeCalls).hasValue(1);
 
-        List<ForwardingEnvelope> projections = outbox.envelopes();
-        assertThat(projections).extracting(ForwardingEnvelope::eventType).containsExactly(acceptedType, responseType);
-        projections.forEach(envelope -> assertThat(responseRelay
-                .produce(Feat017BusIntegrationSupport.record(envelope, Feat017BusIntegrationSupport.NOW),
-                        Feat017BusIntegrationSupport.NOW)
-                .outcome()).isEqualTo(BrokerProduceOutcome.Outcome.ACCEPTED));
-
-        List<BrokerInboundMessage> busIngress = pollResponses(correlationId, projections.size());
+        List<BrokerInboundMessage> busIngress = pollResponses(correlationId, 2);
         assertThat(busIngress).extracting(BrokerInboundMessage::eventType).containsExactly(acceptedType, responseType);
         assertThat(busIngress).allSatisfy(message -> {
             assertThat(message.correlationId()).isEqualTo(correlationId);

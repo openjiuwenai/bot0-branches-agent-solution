@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
-import com.openjiuwen.service.bus.consumer.port.BusA2aRequestBridge;
 
 import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.server.ServerCallContext;
@@ -32,10 +31,17 @@ import java.util.Set;
  *
  * @since 2026-07-22
  */
-public final class RequestHandlerBusA2aBridge implements BusA2aRequestBridge {
+public class RequestHandlerBusA2aBridge {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final RequestHandler requestHandler;
+
+    /**
+     * Creates an unbound bridge for SDK-internal test doubles.
+     */
+    protected RequestHandlerBusA2aBridge() {
+        this.requestHandler = null;
+    }
 
     /**
      * Creates a new instance.
@@ -47,8 +53,16 @@ public final class RequestHandlerBusA2aBridge implements BusA2aRequestBridge {
         this.requestHandler = requestHandler;
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Dispatches a bus event through the shared A2A request handler.
+     *
+     * @param envelope
+     *            validated event envelope
+     * @param payload
+     *            decoded request payload
+     *
+     * @return normalized A2A dispatch result
+     */
     public BusDispatchResult handle(AgentBusEventEnvelope envelope, byte[] payload) {
         ServerCallContext context = context(envelope);
         Payload decoded = decode(payload);
@@ -75,15 +89,51 @@ public final class RequestHandlerBusA2aBridge implements BusA2aRequestBridge {
         };
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Returns the existing Task id carried by a continuation request.
+     *
+     * @param envelope
+     *            event envelope
+     * @param payload
+     *            request payload
+     *
+     * @return existing Task id, if present
+     */
     public Optional<String> requestedTaskId(AgentBusEventEnvelope envelope, byte[] payload) {
+        if (requestHandler == null) {
+            return Optional.empty();
+        }
         if (!envelope.eventType().endsWith("INVOCATION_REQUESTED")
                 && !"A2A_CALL_REQUESTED".equals(envelope.eventType())) {
             return Optional.empty();
         }
         MessageSendParams params = convert(decode(payload).params(), MessageSendParams.class);
         return Optional.ofNullable(params.message().taskId()).filter(value -> !value.isBlank());
+    }
+
+    /**
+     * Returns whether the upstream request handler accepts a caller-reserved Task id.
+     *
+     * @return {@code true} when reserved Task ids are supported
+     */
+    public boolean supportsReservedTaskId() {
+        return false;
+    }
+
+    /**
+     * Dispatches with a caller-reserved Task id when the upstream runtime supports it.
+     *
+     * @param envelope
+     *            event envelope
+     * @param payload
+     *            request payload
+     * @param reservedTaskId
+     *            caller-reserved Task id
+     *
+     * @return normalized A2A dispatch result
+     */
+    public BusDispatchResult handle(AgentBusEventEnvelope envelope, byte[] payload, String reservedTaskId) {
+        throw new IllegalStateException("A2A request handler does not support caller-reserved Task ids");
     }
 
     private BusDispatchResult send(AgentBusEventEnvelope envelope, Payload decoded, ServerCallContext context)

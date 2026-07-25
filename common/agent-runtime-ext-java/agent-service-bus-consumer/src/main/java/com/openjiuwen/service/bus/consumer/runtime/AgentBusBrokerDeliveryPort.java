@@ -10,7 +10,6 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
-import com.openjiuwen.service.bus.consumer.port.BrokerDeliveryPort;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -24,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @since 2026-07-22
  */
-public final class AgentBusBrokerDeliveryPort implements BrokerDeliveryPort, AutoCloseable {
+public final class AgentBusBrokerDeliveryPort implements AutoCloseable {
     private static final Set<AgentBusEventType> REQUEST_TYPES = Set.of(AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
             AgentBusEventType.CLIENT_INVOCATION_QUERY_REQUESTED, AgentBusEventType.CLIENT_INVOCATION_CANCEL_REQUESTED,
             AgentBusEventType.CLIENT_STREAM_SUBSCRIBE_REQUESTED, AgentBusEventType.A2A_CALL_REQUESTED,
@@ -57,8 +56,18 @@ public final class AgentBusBrokerDeliveryPort implements BrokerDeliveryPort, Aut
         REQUEST_TYPES.forEach(type -> consumer.subscribe(consumerServiceId, type, filter));
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Polls the next delivery for this runtime subscription.
+     *
+     * @param requestedConsumerServiceId
+     *            requested consumer identity
+     * @param requestedTenantId
+     *            requested tenant identity
+     * @param nowEpochMillis
+     *            current epoch time in milliseconds
+     *
+     * @return next delivery, if available
+     */
     public Optional<Delivery> poll(String requestedConsumerServiceId, String requestedTenantId, long nowEpochMillis) {
         if (!consumerServiceId.equals(requestedConsumerServiceId) || !tenantId.equals(requestedTenantId)) {
             throw new IllegalArgumentException("consumer identity or tenant does not match subscription");
@@ -89,14 +98,24 @@ public final class AgentBusBrokerDeliveryPort implements BrokerDeliveryPort, Aut
         return new Delivery(envelope, inlinePayload);
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Acknowledges a successfully handled delivery.
+     *
+     * @param delivery
+     *            delivery to acknowledge
+     */
     public void commit(Delivery delivery) {
         consumer.commit(remove(delivery));
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Rejects a delivery with a stable reason.
+     *
+     * @param delivery
+     *            delivery to reject
+     * @param reason
+     *            rejection reason
+     */
     public void reject(Delivery delivery, RejectReason reason) {
         ForwardingFailureCode code = switch (reason) {
             case INVALID_ENVELOPE -> ForwardingFailureCode.TENANT_MISMATCH;
@@ -118,5 +137,14 @@ public final class AgentBusBrokerDeliveryPort implements BrokerDeliveryPort, Aut
     @Override
     public void close() {
         consumer.close();
+    }
+
+    /** Carries a normalized runtime event and its broker payload. */
+    public record Delivery(AgentBusEventEnvelope envelope, byte[] payload) {
+    }
+
+    /** Lists runtime-neutral rejection reasons. */
+    public enum RejectReason {
+        INVALID_ENVELOPE, INVALID_PAYLOAD, PROCESSING_FAILED
     }
 }
