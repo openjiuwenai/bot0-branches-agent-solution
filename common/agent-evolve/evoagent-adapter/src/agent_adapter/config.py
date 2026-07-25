@@ -127,14 +127,14 @@ class AgentEntryConfig(BaseModel):
     project_id: str | None = None
     agent_id: str | None = None
     timeout: int = 300
-    # ── EDPAgent 请求透传（客户现场 body/header/URL 自定义）──
+    # ── 业务 Agent 请求透传（可选 body/header/URL 自定义）──
     # request_template: 稳定 body 字段底模（深合并到最终 body，调用方 extra_data
-    #   仍合并进 custom_data.inputs）。用于 role_id/role_name/timeout/custom_data.user_profile
-    #   等客户环境绑定字段，避免 evo_agent 懂业务 body 语义。
+    #   仍合并进 custom_data.inputs）。用于 role_id/role_name/timeout 等部署侧字段，
+    #   避免 evo_agent 懂业务 body 语义。
     request_template: dict[str, Any] | None = None
     # extra_headers: 稳定请求头。值支持 ${ENV_VAR} 语法从环境变量读取（如 token）。
     extra_headers: dict[str, str] | None = None
-    # url_query_params: URL query 参数（如 type=controller&workspace_id=191）。
+    # url_query_params: URL query 参数（如 mode=default&workspace_id=ws_001）。
     url_query_params: dict[str, str] | None = None
     # ── Skill backend (local shared FS vs jiuwenbox sandbox FS) ──
     # skill_backend: "local" (default, host/shared mount) | "jiuwenbox" (upload API)
