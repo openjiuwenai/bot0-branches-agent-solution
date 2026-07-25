@@ -103,6 +103,10 @@ final class VersatileResponseExtractor {
         }
         if (isCompleted && !extractedFields.isEmpty()) {
             if (properties.getResultExtractions() != null && !properties.getResultExtractions().isEmpty()) {
+                String intentId = extractedFields.get("intent_id");
+                if (isAmbiguousIntent(intentId)) {
+                    return List.of(buildAmbiguousChunk(intentId, extractedFields.get("response_content")));
+                }
                 try {
                     Optional<Map<String, Object>> envelope = buildThreeFieldEnvelope();
                     if (envelope.isPresent()) {
@@ -287,6 +291,37 @@ final class VersatileResponseExtractor {
         context.put("resume", false);
         payload.put("context", context);
         return new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload);
+    }
+
+    private boolean isAmbiguousIntent(String intentId) {
+        if (!hasText(intentId)) {
+            return false;
+        }
+        String ambiguousIntentId = properties.getAmbiguousIntentId();
+        return ambiguousIntentId != null && intentId.equals(ambiguousIntentId);
+    }
+
+    private QueryChunk buildAmbiguousChunk(String intentId, String responseContent) {
+        String defaultAgentCard = properties.getDefaultWorkflow().getAgentCard();
+        if (hasText(defaultAgentCard)) {
+            Map<String, Object> envelope = new LinkedHashMap<>();
+            envelope.put("agent_id", defaultAgentCard);
+            envelope.put("response_content", responseContent != null ? responseContent : "");
+            return buildA2aDelegateInterrupt(envelope);
+        }
+        String ambiguousIntentId = properties.getAmbiguousIntentId();
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("code", "VERSATILE_INTENT_AMBIGUOUS");
+        fields.put("intent_id", intentId != null ? intentId : "");
+        fields.put("response_content", responseContent != null ? responseContent : "");
+        fields.put("ambiguous_intent_id", ambiguousIntentId != null ? ambiguousIntentId : "1");
+        String payload;
+        try {
+            payload = OBJECT_MAPPER.writeValueAsString(fields);
+        } catch (JsonProcessingException e) {
+            payload = "{\"code\":\"VERSATILE_INTENT_AMBIGUOUS\"}";
+        }
+        return new QueryChunk(QueryChunk.TYPE_ERROR, payload);
     }
 
     private boolean containsNodeTypeEnd(JsonNode json) {

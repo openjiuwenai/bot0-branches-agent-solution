@@ -51,6 +51,10 @@ openjiuwen:
         input-requirement-get: /data/input_schema
         resume-token-get: /data/resume_token
 
+      intent-reclassify:
+        enabled: true
+        max-reclassify: 1
+
     a2a-gateway:
       enabled: true
       base-url: https://gateway.example.com

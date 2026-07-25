@@ -58,4 +58,37 @@ class VersatilePropertiesTest {
         assertThat(props.getInterrupt().getSignalMatch()).isEqualTo("need_user_input");
         assertThat(props.getInterrupt().getPromptGet()).isEqualTo("/data/question");
     }
+
+    @Test
+    void ambiguousIntentIdDefaultsToOne() {
+        VersatileProperties props = new VersatileProperties();
+        assertThat(props.getAmbiguousIntentId()).isEqualTo("1");
+    }
+
+    @Test
+    void defaultWorkflowAgentCardIsNullByDefault() {
+        VersatileProperties props = new VersatileProperties();
+        assertThat(props.getDefaultWorkflow().getAgentCard()).isNull();
+    }
+
+    @Test
+    void settingDefaultWorkflowAgentCardPersistsValue() {
+        VersatileProperties props = new VersatileProperties();
+        props.getDefaultWorkflow().setAgentCard("agent_card_L2_default");
+        assertThat(props.getDefaultWorkflow().getAgentCard()).isEqualTo("agent_card_L2_default");
+    }
+
+    @Test
+    void bindsAmbiguousIntentAndDefaultWorkflowFromKebabCase() {
+        var source = new MapConfigurationPropertySource(Map.ofEntries(
+                entry("openjiuwen.service.versatile.ambiguous-intent-id", "42"),
+                entry("openjiuwen.service.versatile.default-workflow.agent-card",
+                        "agent_card_L2_default")
+        ));
+        VersatileProperties props = new Binder(source)
+                .bind("openjiuwen.service.versatile", VersatileProperties.class).get();
+
+        assertThat(props.getAmbiguousIntentId()).isEqualTo("42");
+        assertThat(props.getDefaultWorkflow().getAgentCard()).isEqualTo("agent_card_L2_default");
+    }
 }

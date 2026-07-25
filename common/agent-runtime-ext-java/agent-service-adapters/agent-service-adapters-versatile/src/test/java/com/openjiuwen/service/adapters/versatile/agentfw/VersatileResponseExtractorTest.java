@@ -320,6 +320,155 @@ class VersatileResponseExtractorTest {
                 .contains("intent_unmapped");
     }
 
+    @Test
+    void emitsA2aDelegateWithDefaultWorkflowWhenIntentIdIsAmbiguous() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        props.getDefaultWorkflow().setAgentCard("agent_card_L2_default");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"无法确定国内/国际\","
+                + "\"intent_id\":\"1\",\"agent_id\":\"\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_INTERRUPT);
+        QueryChunk delegate = chunks.stream()
+                .filter(c -> QueryChunk.TYPE_INTERRUPT.equals(c.getType()))
+                .findFirst().orElseThrow();
+        Map<?, ?> payload = (Map<?, ?>) delegate.getData();
+        assertThat(payload.get("agentName")).isEqualTo("agent_card_L2_default");
+        assertThat(payload.get("responseContent")).isEqualTo("无法确定国内/国际");
+        assertThat(payload.get("resume")).isEqualTo(false);
+        Map<?, ?> context = (Map<?, ?>) payload.get("context");
+        assertThat(context.get("_interrupt_kind")).isEqualTo("a2a_delegate");
+        assertThat(context.get("agentName")).isEqualTo("agent_card_L2_default");
+    }
+
+    @Test
+    void emitsAmbiguousErrorWhenIntentIdIsAmbiguousAndNoDefaultWorkflow() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"无法确定国内/国际\","
+                + "\"intent_id\":\"1\",\"agent_id\":\"\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_ERROR);
+        String payload = String.valueOf(chunks.get(chunks.size() - 1).getData());
+        assertThat(payload).contains("VERSATILE_INTENT_AMBIGUOUS")
+                .contains("\"intent_id\":\"1\"")
+                .contains("\"response_content\":\"无法确定国内/国际\"")
+                .contains("\"ambiguous_intent_id\":\"1\"");
+    }
+
+    @Test
+    void keepsThreeFieldBranchWhenIntentIdIsNotAmbiguous() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        props.getDefaultWorkflow().setAgentCard("agent_card_L2_default");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"酒店预订\","
+                + "\"intent_id\":\"intent_L1_hotel\",\"agent_id\":\"agent_card_L2_hotel\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        QueryChunk delegate = chunks.stream()
+                .filter(c -> QueryChunk.TYPE_INTERRUPT.equals(c.getType()))
+                .findFirst().orElseThrow();
+        Map<?, ?> payload = (Map<?, ?>) delegate.getData();
+        // intent_id 非 "1"，走原三字段分支，agentName 来自 agent_id，不被 default-workflow 覆盖
+        assertThat(payload.get("agentName")).isEqualTo("agent_card_L2_hotel");
+    }
+
+    @Test
+    void fallsThroughToContractErrorWhenIntentIdIsAbsent() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        props.getDefaultWorkflow().setAgentCard("agent_card_L2_default");
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        // intent_id absent (no ambiguous signal) → falls through to three-field branch
+        // which emits VERSATILE_INTENT_RESULT_CONTRACT (intent_id missing in envelope)
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"酒店预订\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        // Not ambiguous → not self-heal, not VERSATILE_INTENT_AMBIGUOUS
+        String lastPayload = String.valueOf(chunks.get(chunks.size() - 1).getData());
+        assertThat(lastPayload).doesNotContain("VERSATILE_INTENT_AMBIGUOUS");
+    }
+
+    @Test
+    void fallsBackToErrorWhenDefaultWorkflowAgentCardIsBlank() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        props.getDefaultWorkflow().setAgentCard("");  // blank, not null
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\",\"response_content\":\"无法确定\","
+                + "\"intent_id\":\"1\",\"agent_id\":\"\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        // blank agent-card → not self-heal, falls back to TYPE_ERROR
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .contains(QueryChunk.TYPE_ERROR);
+        String payload = String.valueOf(chunks.get(chunks.size() - 1).getData());
+        assertThat(payload).contains("VERSATILE_INTENT_AMBIGUOUS");
+    }
+
+    @Test
+    void treatsNullResponseContentAsEmptyInAmbiguousPayload() {
+        VersatileProperties props = props("AnswerNode");
+        addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
+        addExtraction(props, "agent_id", "/custom_rsp_data/data/agent_id");
+        // No response_content extraction → extractedFields.get("response_content") is null
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(props, resolver(props));
+
+        assertThat(extractor.consumeLine("data: {\"custom_rsp_data\":{\"node_name\":\"AnswerNode\","
+                + "\"data\":{\"node_type\":\"QA\","
+                + "\"intent_id\":\"1\",\"agent_id\":\"\"}}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
+        chunks.addAll(extractor.finish());
+
+        String payload = String.valueOf(chunks.get(chunks.size() - 1).getData());
+        assertThat(payload).contains("VERSATILE_INTENT_AMBIGUOUS")
+                .contains("\"response_content\":\"\"");
+    }
+
     private static void addExtraction(VersatileProperties props, String match, String get) {
         VersatileProperties.ResultExtraction extraction = new VersatileProperties.ResultExtraction();
         extraction.setMatch(match);
