@@ -13,17 +13,124 @@ logger = logging.getLogger("mock_versatile.hooks")
 
 _transfer_counters: dict[str, int] = {}
 _balance_states: dict[str, dict[str, Any]] = {}
+_transfer_detail_cache: dict[str, dict[str, Any]] = {}
+
+WEALTH_WORKFLOW_ID = "b2c3d4e5-f6a7-8901-bcde-f23456789012"
+BALANCE_WORKFLOW_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+TRANSFER_WORKFLOW_ID = "45c08bf2-b591-44e2-9d7c-57dd0bd8f760"
+WEALTH_FIN_CARD_LAST_NO = "6605"
+
+MMI_BASE_PAYLOAD: dict[str, Any] = {
+    "SPTRANSRETCODE": "00009",
+    "SSTANDARDQUESTION": "",
+    "SSTANDARDANSWER": "",
+    "SPDISPLAYINFOL": "",
+    "CURSOR": [],
+    "SNEWVERSIONANSWER": "{}",
+    "TRANSID": "",
+    "SISENDNODE": "1",
+    "INTERRUPTABLE": "false",
+    "STASKID": "",
+    "STASKNAME": "",
+    "SSTANDARDQUESTIONKEY": "",
+    "INSTRUCTIONTYPE": "1",
+    "CONTENTTYPE": "0",
+    "RECOMMENDSCRIPT": "{}",
+    "LLM_otherfield": "LLM_sessionid=123456789&intent=LATEST&LLMAgentVersion=0",
+}
+
+
+def _merge_mmi(overrides: dict[str, Any]) -> dict[str, Any]:
+    return {**MMI_BASE_PAYLOAD, **overrides}
+
+
+def _sse_message_frame(
+    workflow_id: str,
+    node_id: str,
+    node_type: str,
+    node_name: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    frame: dict[str, Any] = {
+        "_event": "message",
+        "index": "0",
+        "node_id": node_id,
+        "node_type": node_type,
+        "node_name": node_name,
+        "workflow_id": workflow_id,
+    }
+    frame.update(extra)
+    return frame
+
+
+def _sse_query_end_frame(workflow_id: str) -> dict[str, Any]:
+    return _sse_message_frame(
+        workflow_id,
+        "node_end",
+        "End",
+        "结束",
+        text="",
+        summary="",
+        is_finished=True,
+    )
+
+
+def _sse_event_end_frame() -> dict[str, Any]:
+    return {"_event": "end"}
+
+
+def _json_text(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def _build_card_number(tail: str) -> str:
+    prefix = "622202"
+    padded_tail = tail[-4:].zfill(4)
+    middle_len = max(0, 19 - len(prefix) - len(padded_tail))
+    return prefix + ("0" * middle_len) + padded_tail
+
+# 与 AgentEnvExplorer scenarios/datasets/products/wealth_products.yaml 保持一致
+WEALTH_PRODUCTS_FULL: list[dict[str, Any]] = [
+    {
+        "prodCode": "DXXJ1339",
+        "prodName": "339现管DXXJ-1339",
+        "prodType": "固定收益类",
+        "profitValue": "3.25%",
+        "riskLevel": "1",
+    },
+    {
+        "prodCode": "BGA0088",
+        "prodName": "招银日盈BGA-0088",
+        "prodType": "浮动收益类",
+        "profitValue": "4.10%",
+        "riskLevel": "2",
+    },
+    {
+        "prodCode": "RJZ2016",
+        "prodName": "聚宝盆RJZ-2016",
+        "prodType": "浮动收益类",
+        "profitValue": "5.20%",
+        "riskLevel": "2",
+    },
+]
+
+
+def _wealth_products_brief() -> list[dict[str, str]]:
+    return [
+        {
+            "productCode": p["prodCode"],
+            "productName": p["prodName"],
+            "productType": p["prodType"],
+            "profitValue": p["profitValue"],
+            "riskLevel": p["riskLevel"],
+        }
+        for p in WEALTH_PRODUCTS_FULL
+    ]
+
 
 MOCK_PRODUCT_FILTER: dict[str, Any] = {
-    "bankCardNumber": "6605",
-    "productList": (
-        "[{'productCode': 'XLT1801', 'productName': '工银理财「添利宝」净值型理财产品(XLT1801)', "
-        "'productType': '固定收益类', 'profitValue': '3.2%', 'riskLevel': 'R1'}, "
-        "{'productCode': 'WM002', 'productName': '稳健增长理财计划(WM002)', 'productType': '混合类', "
-        "'profitValue': '4.5%', 'riskLevel': 'R1'}, "
-        "{'productCode': 'JJ003', 'productName': '进取型权益理财(JJ003)', 'productType': '权益类', "
-        "'profitValue': '6.8%', 'riskLevel': 'R1'}]"
-    ),
+    "bankCardNumber": WEALTH_FIN_CARD_LAST_NO,
+    "productList": _wealth_products_brief(),
 }
 
 
@@ -102,9 +209,11 @@ def reset_transfer_counter(session_key: str | None = None) -> None:
     if session_key:
         _transfer_counters.pop(session_key, None)
         _balance_states.pop(session_key, None)
+        _transfer_detail_cache.pop(session_key, None)
     else:
         _transfer_counters.clear()
         _balance_states.clear()
+        _transfer_detail_cache.clear()
 
 
 def _mock_cny_balance_with_thousands(amount: float) -> str:
@@ -207,6 +316,101 @@ def wealth_product_filter_json(ctx: dict[str, Any]) -> str:
     return json.dumps(MOCK_PRODUCT_FILTER, ensure_ascii=False, separators=(",", ":"))
 
 
+def _wealth_rec_mmi_payload() -> dict[str, Any]:
+    """对齐 AgentEnvExplorer winvest_rec_05_qa.yaml 的 MMI payload。"""
+    return _merge_mmi({
+        "SPTRANSRETCODE": "LLMU0002",
+        "TRANSID": "remit_confirm_sign",
+        "STASKID": "WAPB_remitAI_easy",
+        "STASKNAME": "快速转账",
+        "CURRENTNODE": "理财-筛选结果",
+        "responseData": [
+            {
+                "answer": "为您找到以下符合条件的理财产品",
+                "readme": "",
+                "pageData": {"supportVoice": "true"},
+                "type": "1",
+            },
+            {
+                "answer": "产品筛选结果",
+                "readme": "",
+                "pageData": {
+                    "path": "llm_invest_filterresult",
+                    "showData": {"prodList": WEALTH_PRODUCTS_FULL},
+                    "role": "bot",
+                    "appName": "",
+                    "needCustomStyle": "true",
+                    "url": "finance_mode",
+                    "cardStyle": "fixContent",
+                },
+                "type": "8",
+            },
+        ],
+    })
+
+
+def _wealth_rec_gxz_payload() -> dict[str, Any]:
+    """对齐 AgentEnvExplorer winvest_rec_05_qaz.yaml 的 GXZQAResponseNode payload。"""
+    return {
+        "bankCardNumber": WEALTH_FIN_CARD_LAST_NO,
+        "productList": _wealth_products_brief(),
+    }
+
+
+def _wealth_rec_qa_frame_base(node_name: str, **extra: Any) -> dict[str, Any]:
+    return _sse_message_frame(
+        WEALTH_WORKFLOW_ID,
+        "node_1234567123456",
+        "QA",
+        node_name,
+        **extra,
+    )
+
+
+def wealth_rec_qa_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _wealth_rec_mmi_payload()
+    return _wealth_rec_qa_frame_base(
+        "问答-产品列表展示",
+        text=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+    )
+
+
+def wealth_rec_qa_summary_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _wealth_rec_mmi_payload()
+    return _wealth_rec_qa_frame_base(
+        "问答-产品列表展示",
+        text="",
+        summary=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        is_finished=True,
+    )
+
+
+def wealth_rec_gxz_qa_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _wealth_rec_gxz_payload()
+    return _wealth_rec_qa_frame_base(
+        "GXZQAResponseNode",
+        text=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+    )
+
+
+def wealth_rec_gxz_summary_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _wealth_rec_gxz_payload()
+    return _wealth_rec_qa_frame_base(
+        "GXZQAResponseNode",
+        text="",
+        summary=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        is_finished=True,
+    )
+
+
+def wealth_rec_query_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_query_end_frame(WEALTH_WORKFLOW_ID)
+
+
+def wealth_rec_event_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_event_end_frame()
+
+
 def fund_product_filter_json(ctx: dict[str, Any]) -> str:
     query = str(ctx.get("query", "") or "")
     filtered = _filter_funds_for_query(query)
@@ -253,8 +457,7 @@ def product_buy_response_json(ctx: dict[str, Any]) -> str:
     return json.dumps(buy_data, ensure_ascii=False, separators=(",", ":"))
 
 
-def balance_business_result(ctx: dict[str, Any]) -> dict[str, Any]:
-    """v6 production-style balance payload (emitted as raw SSE frame)."""
+def _resolve_balance_card(ctx: dict[str, Any]) -> tuple[str, float]:
     query = str(ctx.get("query", "") or "")
     conversation_id = str(ctx.get("conversation_id", "") or "default")
     tail_match = re.search(r"尾号为?(\d{4})", query)
@@ -278,6 +481,333 @@ def balance_business_result(ctx: dict[str, Any]) -> dict[str, Any]:
             card_tail = balance_state.get("licai_tail", "6605")
             cny_balance = balance_state["licai_balance"]
 
+    return card_tail, cny_balance
+
+
+def balance_gxz_payload(ctx: dict[str, Any]) -> dict[str, Any]:
+    """对齐 AgentEnvExplorer balance-query-amount bamount_03 的 GXZQAResponseNode payload。"""
+    card_tail, cny_balance = _resolve_balance_card(ctx)
+    return {
+        "bankCardBalanceList": [
+            {
+                "bankCardNumber": _build_card_number(card_tail),
+                "mediumStatus": "0",
+                "currencyBalanceList": [
+                    {
+                        "currencyCode": "001",
+                        "currencyName": "人民币可用余额",
+                        "balance": f"{cny_balance:.2f}",
+                    }
+                ],
+            }
+        ],
+        "queryStatus": "成功",
+        "failCause": "",
+    }
+
+
+def balance_qa_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = balance_gxz_payload(ctx)
+    return _sse_message_frame(
+        BALANCE_WORKFLOW_ID,
+        "node_1234512345123",
+        "QA",
+        "GXZQAResponseNode",
+        text=_json_text(payload),
+    )
+
+
+def balance_qa_summary_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = balance_gxz_payload(ctx)
+    return _sse_message_frame(
+        BALANCE_WORKFLOW_ID,
+        "node_1234512345123",
+        "QA",
+        "GXZQAResponseNode",
+        text="",
+        summary=_json_text(payload),
+        is_finished=True,
+    )
+
+
+def balance_query_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_query_end_frame(BALANCE_WORKFLOW_ID)
+
+
+def balance_event_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_event_end_frame()
+
+
+def _transfer_07_mmi_payload() -> dict[str, Any]:
+    return _merge_mmi({
+        "SSTANDARDANSWER": "转账信息已处理成功",
+        "INSTRUCTIONBODY": "{}",
+        "CURRENTNODE": "转账成功-确认流程成功_发送消息给中控",
+    })
+
+
+def _parse_transfer_details(ctx: dict[str, Any]) -> dict[str, Any]:
+    query = str(ctx.get("query", "") or "")
+    conversation_id = str(ctx.get("conversation_id", "") or "default")
+
+    # 续传时 query 可能为空，从缓存获取首轮的转账描述
+    cached = _get_cached_transfer_detail(conversation_id)
+
+    if query and not cached:
+        # 首轮：从 query 解析（与 transfer_confirm_menu_frame 逻辑一致）
+        amount_match = re.search(r"转账(\d+(?:\.\d+)?)元", query)
+        requested_amount = float(amount_match.group(1)) if amount_match else 1000.0
+
+        payer_m = re.search(r"从尾号(\d+)的卡转账", query)
+        payee_m = re.search(r"元到尾号为(\d+)的卡", query)
+        payer_tail = (payer_m.group(1) if payer_m else "1234")[-4:].zfill(4)
+        payee_tail = (payee_m.group(1) if payee_m else "5678")[-4:].zfill(4)
+    elif cached:
+        # 续传：使用缓存的转账描述
+        requested_amount = cached.get("requested_amount", 1000.0)
+        payer_tail = cached.get("payer_tail", "1234")
+        payee_tail = cached.get("payee_tail", "5678")
+    else:
+        # 兜底
+        requested_amount = 1000.0
+        payer_tail = "1234"
+        payee_tail = "5678"
+
+    actual, success, fail_cause = get_transfer_amount_for_session(conversation_id, requested_amount)
+
+    if success:
+        update_balance_after_transfer(conversation_id, actual)
+        transfer_status = "success"
+        transfer_amount_str = str(int(actual)) if actual == int(actual) else f"{actual:.2f}".rstrip("0").rstrip(".")
+    else:
+        transfer_status = "fail"
+        transfer_amount_str = "0"
+
+    return {
+        "transferStatus": transfer_status,
+        "payerCardNumber": _build_card_number(payer_tail),
+        "payeeCardNumber": _build_card_number(payee_tail),
+        "transferAmount": transfer_amount_str,
+        "failureMsg": fail_cause if not success else "",
+    }
+
+
+def _parse_transfer_description_for_confirm(ctx: dict[str, Any]) -> dict[str, Any]:
+    """从首轮 query 中解析转账描述信息并缓存到 conversation_id 级别，供续传使用。"""
+    query = str(ctx.get("query", "") or "")
+    conversation_id = str(ctx.get("conversation_id", "") or "default")
+
+    amount_match = re.search(r"转账(\d+(?:\.\d+)?)元", query)
+    requested_amount = float(amount_match.group(1)) if amount_match else 1000.0
+
+    payer_m = re.search(r"从尾号(\d+)的卡转账", query)
+    payee_m = re.search(r"元到尾号为(\d+)的卡", query)
+    payer_tail = (payer_m.group(1) if payer_m else "1234")[-4:].zfill(4)
+    payee_tail = (payee_m.group(1) if payee_m else "5678")[-4:].zfill(4)
+
+    detail = {
+        "payer_tail": payer_tail,
+        "payee_tail": payee_tail,
+        "requested_amount": requested_amount,
+    }
+    _transfer_detail_cache[conversation_id] = detail
+    logger.info("transfer_confirm: cached detail for conversation_id=%s detail=%s", conversation_id, detail)
+    return detail
+
+
+def _get_cached_transfer_detail(conversation_id: str) -> dict[str, Any] | None:
+    """获取缓存的转账描述信息（续传时 query 可能为空）。"""
+    return _transfer_detail_cache.get(conversation_id)
+
+
+def transfer_confirm_menu_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    """转账确认提示卡片（首轮），触发 adapter input_required 中断。
+    
+    使用 node_type=Custom（前端可见）+ menu_type=TRANSFER_MENU（触发确认 UI）。
+    不含 End 节点和 GXZQAResponseNode，使 adapter finish() 返回 TYPE_INTERRUPT。
+    """
+    detail = _parse_transfer_description_for_confirm(ctx)
+    payer_tail = detail.get("payer_tail", "1234")
+    payee_tail = detail.get("payee_tail", "5678")
+    amount = detail.get("requested_amount", 1000.0)
+    amount_str = str(int(amount)) if amount == int(amount) else f"{amount:.2f}".rstrip("0").rstrip(".")
+
+    payload = _merge_mmi({
+        "CURRENTNODE": "交易验签-弹出确认卡片",
+        "TRANSID": "remit_confirm_confirm",
+        "INSTRUCTIONTYPE": "1",
+        "INTERRUPTABLE": "true",
+        "responseData": [
+            {
+                "type": "8",
+                "readme": "paySummaryVerbose",
+                "pageData": {
+                    "path": "llm_tranconfrim",
+                    "showData": {
+                        "amount": amount_str,
+                        "cardNum_show": f"尾号{payer_tail}",
+                        "acctTypeDesc": "储蓄卡",
+                        "payeeName_show": f"尾号{payee_tail}",
+                        "remitType": "etrans",
+                    },
+                },
+            },
+            {
+                "type": "1",
+                "answer": f"请确认转账信息：从尾号{payer_tail}的卡转账{amount_str}元到尾号{payee_tail}的卡",
+            },
+        ],
+    })
+
+    confirm_text = f"请确认从尾号{payer_tail}的卡转账{amount_str}元到尾号{payee_tail}的卡"
+
+    return _sse_message_frame(
+        TRANSFER_WORKFLOW_ID,
+        "node_confirm_menu",
+        "Custom",
+        "交易验签-弹出确认卡片",
+        text=confirm_text,
+        menu_type="TRANSFER_MENU",
+        summary=_json_text(payload),
+    )
+
+
+def transfer_gxz_payload(ctx: dict[str, Any]) -> dict[str, Any]:
+    """对齐 AgentEnvExplorer transfer_07_qaz.yaml 的 GXZQAResponseNode payload。"""
+    return _parse_transfer_details(ctx)
+
+
+def transfer_qa_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _transfer_07_mmi_payload()
+    return _sse_message_frame(
+        TRANSFER_WORKFLOW_ID,
+        "node_1234567891234",
+        "QA",
+        "转账成功-确认流程成功_发送消息给中控",
+        text=_json_text(payload),
+    )
+
+
+def transfer_qa_summary_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _transfer_07_mmi_payload()
+    return _sse_message_frame(
+        TRANSFER_WORKFLOW_ID,
+        "node_1234567891234",
+        "QA",
+        "转账成功-确认流程成功_发送消息给中控",
+        text=_json_text(payload),
+    )
+
+
+def transfer_gxz_qa_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = transfer_gxz_payload(ctx)
+    return _sse_message_frame(
+        TRANSFER_WORKFLOW_ID,
+        "node_1234567123456",
+        "QA",
+        "GXZQAResponseNode",
+        text=_json_text(payload),
+    )
+
+
+def transfer_gxz_summary_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = transfer_gxz_payload(ctx)
+    return _sse_message_frame(
+        TRANSFER_WORKFLOW_ID,
+        "node_1234567123456",
+        "QA",
+        "GXZQAResponseNode",
+        text="",
+        summary=_json_text(payload),
+        is_finished=True,
+    )
+
+
+def transfer_query_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_query_end_frame(TRANSFER_WORKFLOW_ID)
+
+
+def transfer_event_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_event_end_frame()
+
+
+def _product_buy_questioner_payload() -> dict[str, Any]:
+    return _merge_mmi({
+        "CURRENTNODE": "理财摸高购买场景",
+        "responseData": [
+            {
+                "type": "2",
+                "answer": "理财购买",
+                "readme": "",
+                "pageData": {
+                    "menu": {
+                        "jumpType": "1",
+                        "menuId": "finance_detail",
+                        "needLogin": "true",
+                        "param": "abcdef",
+                    }
+                },
+            }
+        ],
+    })
+
+
+def _product_buy_gxz_payload(ctx: dict[str, Any]) -> dict[str, Any]:
+    buy_success = os.environ.get("MOCK_PRODUCT_BUY_SUCCESS", "true").lower() == "true"
+    return {
+        "productBuyResponse": {
+            "failCause": "" if buy_success else "余额不足或风控拦截",
+            "buyStatus": "1" if buy_success else "购买理财失败",
+        }
+    }
+
+
+def product_buy_questioner_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _product_buy_questioner_payload()
+    return _sse_message_frame(
+        WEALTH_WORKFLOW_ID,
+        "node_1253512345123",
+        "Questioner",
+        "提问器-理财摸高购买",
+        text=_json_text(payload),
+    )
+
+
+def product_buy_gxz_qa_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _product_buy_gxz_payload(ctx)
+    return _sse_message_frame(
+        WEALTH_WORKFLOW_ID,
+        "node_1233567123456",
+        "QA",
+        "GXZQAResponseNode",
+        text=_json_text(payload),
+    )
+
+
+def product_buy_gxz_summary_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    payload = _product_buy_gxz_payload(ctx)
+    return _sse_message_frame(
+        WEALTH_WORKFLOW_ID,
+        "node_1233567123456",
+        "QA",
+        "GXZQAResponseNode",
+        text="",
+        summary=_json_text(payload),
+        is_finished=True,
+    )
+
+
+def product_buy_query_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_query_end_frame(WEALTH_WORKFLOW_ID)
+
+
+def product_buy_event_end_frame(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _sse_event_end_frame()
+
+
+def balance_business_result(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Legacy balance payload kept for compatibility with older callers."""
+    card_tail, cny_balance = _resolve_balance_card(ctx)
     balance_display = _mock_cny_balance_with_thousands(cny_balance)
 
     return {
@@ -377,43 +907,11 @@ def balance_simple_qa_json(ctx: dict[str, Any]) -> str:
 
 
 def transfer_response_json(ctx: dict[str, Any]) -> str:
-    query = str(ctx.get("query", "") or "")
-    conversation_id = str(ctx.get("conversation_id", "") or "default")
-    amount_match = re.search(r"转账(\d+(?:\.\d+)?)元", query)
-    requested_amount = float(amount_match.group(1)) if amount_match else 1000.0
-
-    actual, success, fail_cause = get_transfer_amount_for_session(conversation_id, requested_amount)
-
-    payer_m = re.search(r"从尾号(\d+)的卡转账", query)
-    payee_m = re.search(r"元到尾号为(\d+)的卡", query)
-    payer_tail = (payer_m.group(1) if payer_m else "1234")[-4:].zfill(4)
-    payee_tail = (payee_m.group(1) if payee_m else "5678")[-4:].zfill(4)
-
-    if success:
-        update_balance_after_transfer(conversation_id, actual)
-        transfer_status = "success"
-        transfer_amount_str = f"{actual:.2f}".rstrip("0").rstrip(".")
-    else:
-        transfer_status = "fail"
-        transfer_amount_str = "0"
-
-    transfer_data = {
-        "transferStatus": transfer_status,
-        "payerCardNumber": f"328393893832{payer_tail}",
-        "payeeCardNumber": f"389288102902{payee_tail}",
-        "transferAmount": transfer_amount_str,
-        "failCause": fail_cause if not success else "",
-    }
-    return json.dumps(transfer_data, ensure_ascii=False, separators=(",", ":"))
+    return _json_text(transfer_gxz_payload(ctx))
 
 
 def transfer_confirmed_simple_json(ctx: dict[str, Any]) -> str:
-    conversation_id = str(ctx.get("conversation_id", "") or "default")
-    if ctx.get("config", {}).get("features", {}).get("stateful_transfer", True):
-        _, success, _ = get_transfer_amount_for_session(conversation_id, 1000.0)
-        if success:
-            update_balance_after_transfer(conversation_id, 1000.0)
-    return json.dumps({"status": "success", "msg": "转账成功"}, ensure_ascii=False)
+    return _json_text(transfer_gxz_payload(ctx))
 
 
 def default_error_qa_json(ctx: dict[str, Any]) -> str:
@@ -434,6 +932,28 @@ def default_answer_qa_json(ctx: dict[str, Any]) -> str:
 
 
 HOOK_REGISTRY: dict[str, Any] = {
+    "wealth_rec_qa_frame": wealth_rec_qa_frame,
+    "wealth_rec_qa_summary_frame": wealth_rec_qa_summary_frame,
+    "wealth_rec_gxz_qa_frame": wealth_rec_gxz_qa_frame,
+    "wealth_rec_gxz_summary_frame": wealth_rec_gxz_summary_frame,
+    "wealth_rec_query_end_frame": wealth_rec_query_end_frame,
+    "wealth_rec_event_end_frame": wealth_rec_event_end_frame,
+    "balance_qa_frame": balance_qa_frame,
+    "balance_qa_summary_frame": balance_qa_summary_frame,
+    "balance_query_end_frame": balance_query_end_frame,
+    "balance_event_end_frame": balance_event_end_frame,
+    "transfer_qa_frame": transfer_qa_frame,
+    "transfer_qa_summary_frame": transfer_qa_summary_frame,
+    "transfer_gxz_qa_frame": transfer_gxz_qa_frame,
+    "transfer_gxz_summary_frame": transfer_gxz_summary_frame,
+    "transfer_query_end_frame": transfer_query_end_frame,
+    "transfer_event_end_frame": transfer_event_end_frame,
+    "transfer_confirm_menu_frame": transfer_confirm_menu_frame,
+    "product_buy_questioner_frame": product_buy_questioner_frame,
+    "product_buy_gxz_qa_frame": product_buy_gxz_qa_frame,
+    "product_buy_gxz_summary_frame": product_buy_gxz_summary_frame,
+    "product_buy_query_end_frame": product_buy_query_end_frame,
+    "product_buy_event_end_frame": product_buy_event_end_frame,
     "wealth_product_filter_json": wealth_product_filter_json,
     "fund_product_filter_json": fund_product_filter_json,
     "product_buy_response_json": product_buy_response_json,

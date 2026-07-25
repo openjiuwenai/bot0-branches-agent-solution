@@ -1,0 +1,95 @@
+{
+  "port": 30002,
+  "host": "127.0.0.1",
+  "tool_name": "get-finance-productslist",
+  "protocol_version": "2024-11-05",
+  "server_name": "mock-mcp",
+  "server_version": "1.0.0",
+  "features": {
+    "stateful_dedup": true,
+    "filter_support": true,
+    "sort_support": true
+  },
+  "products": [
+    {
+      "productCode": "XLT1801",
+      "prodName": "工银理财「添利宝」净值型理财产品(XLT1801)",
+      "prodType": "固定收益类",
+      "profitValue": "3.2%",
+      "riskLevel": "1",
+      "filterRiskLevel": "1",
+      "filterProdType": "1",
+      "pageMark": "20"
+    },
+    {
+      "productCode": "WM002",
+      "prodName": "稳健增长理财计划(WM002)",
+      "prodType": "混合类",
+      "profitValue": "4.5%",
+      "riskLevel": "1",
+      "filterRiskLevel": "1",
+      "filterProdType": "3",
+      "pageMark": "20"
+    },
+    {
+      "productCode": "JJ003",
+      "prodName": "进取型权益理财(JJ003)",
+      "prodType": "权益类",
+      "profitValue": "6.8%",
+      "riskLevel": "1",
+      "filterRiskLevel": "1",
+      "filterProdType": "3",
+      "pageMark": "20"
+    },
+    {
+      "productCode": "ZQ005",
+      "prodName": "稳盈债券型理财(ZQ005)",
+      "prodType": "固定收益类",
+      "profitValue": "3.8%",
+      "riskLevel": "2",
+      "filterRiskLevel": "2",
+      "filterProdType": "1",
+      "pageMark": "20"
+    },
+    {
+      "productCode": "HH008",
+      "prodName": "平衡配置混合理财(HH008)",
+      "prodType": "混合类",
+      "profitValue": "5.2%",
+      "riskLevel": "2",
+      "filterRiskLevel": "2",
+      "filterProdType": "3",
+      "pageMark": "20"
+    },
+    {
+      "productCode": "QQ012",
+      "prodName": "进取成长权益理财(QQ012)",
+      "prodType": "权益类",
+      "profitValue": "7.5%",
+      "riskLevel": "3",
+      "filterRiskLevel": "3",
+      "filterProdType": "3",
+      "pageMark": "20"
+    },
+    {
+      "productCode": "GY015",
+      "prodName": "工银研选稳健理财(GY015)",
+      "prodType": "固定收益类",
+      "profitValue": "4.0%",
+      "riskLevel": "2",
+      "filterRiskLevel": "2",
+      "filterProdType": "1",
+      "pageMark": "20"
+    },
+    {
+      "productCode": "HQ020",
+      "prodName": "活钱管理现金理财(HQ020)",
+      "prodType": "固定收益类",
+      "profitValue": "2.8%",
+      "riskLevel": "1",
+      "filterRiskLevel": "1",
+      "filterProdType": "1",
+      "pageMark": "21"
+    }
+  ]
+}

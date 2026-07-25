@@ -11,6 +11,7 @@ versatile_main.py — 可配置 Mock Versatile 子 agent 上游。
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -89,7 +90,6 @@ def build_context(inputs: dict[str, Any], conversation_id: str) -> dict[str, Any
     return {
         "inputs": inputs,
         "query": str(inputs.get("query", "") or ""),
-        "intent": str(inputs.get("intent", "") or ""),
         "conversation_id": conversation_id,
         "menu_type": str(inputs.get("menu_type", "") or ""),
         "menu_confirm": inputs.get("menu_confirm"),
@@ -196,10 +196,9 @@ async def _handle_workflow(conversation_id: str, request: Request) -> StreamingR
     workflow = MATCHER.resolve(inputs)
 
     logger.info(
-        "route: workflow=%s query=%r intent=%r menu_type=%r menu_confirm=%s",
+        "route: workflow=%s query=%r menu_type=%r menu_confirm=%s",
         workflow.get("id"),
         ctx["query"][:80],
-        ctx["intent"],
         ctx["menu_type"],
         ctx.get("menu_confirm"),
     )
