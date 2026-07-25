@@ -316,3 +316,56 @@ Write-Host ($multiResponse2 | ConvertTo-Json -Depth 100)
 
 如果只提交一个结果、使用未知 `toolCallId`，或不给多 pending 结果定向，Solution 会在恢复 Core 前
 拒绝整次 continuation，不会把一条文本广播给两个 ToolCall。
+
+## 6. 同会话无工具请求隔离
+
+多工具任务完成后，复用同一个 `contextId` 发送一个新请求，但不携带原任务的 `taskId`，也不提供
+`params.metadata.clientTools`。该请求用于确认前两轮动态注入的工具不会泄漏到同一会话的后续任务：
+
+```powershell
+$noToolRequest = [ordered]@{
+  jsonrpc = "2.0"
+  id = "no-tool-round-1"
+  method = "SendMessage"
+  params = [ordered]@{
+    message = [ordered]@{
+      role = "ROLE_USER"
+      messageId = [Guid]::NewGuid().ToString("N")
+      contextId = $multiTask.contextId
+      parts = @([ordered]@{
+        text = "NO_CLIENT_TOOL_DEMO：如果当前请求实际提供了 getLocalWeather 工具就调用它；否则只回复 NO_CLIENT_TOOL_AVAILABLE。"
+      })
+    }
+  }
+}
+
+$noToolResponse = Invoke-ClientToolA2A $noToolRequest
+$noToolTask = $noToolResponse.result.task
+$noToolInterrupt = $noToolTask.status.message.metadata._interrupt
+$noToolFinalText = @(
+  foreach ($artifact in @($noToolTask.artifacts)) {
+    foreach ($part in @($artifact.parts)) {
+      if ($part.text) {
+        $part.text
+      }
+    }
+  }
+) -join "`n"
+
+if ($noToolTask.status.state -ne "TASK_STATE_COMPLETED") {
+  throw "Expected COMPLETED, actual=$($noToolTask.status.state)"
+}
+if ($null -ne $noToolInterrupt) {
+  throw "Expected no client-tool interrupt, actual=$($noToolInterrupt | ConvertTo-Json -Compress -Depth 100)"
+}
+if ($noToolFinalText -notlike "*NO_CLIENT_TOOL_AVAILABLE*") {
+  throw "Expected NO_CLIENT_TOOL_AVAILABLE, actual=$noToolFinalText"
+}
+
+Write-Host "No-tool final response:"
+Write-Host ($noToolResponse | ConvertTo-Json -Depth 100)
+```
+
+该轮预期为 `TASK_STATE_COMPLETED`，且响应中没有 `_interrupt`。同时检查服务端日志中的本轮
+`Before request chat model`：`tools` 应为 `[]` 或 `null`，不得再出现 `getLocalWeather`、
+`createCalendarEvent`。日志中的模型入参是确认旧工具未泄漏的最终依据。
