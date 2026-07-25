@@ -10,6 +10,7 @@ import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.harness.workspace.Workspace;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
