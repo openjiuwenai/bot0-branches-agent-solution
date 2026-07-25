@@ -157,7 +157,12 @@ src/main/java/com/openjiuwen/example/versatile/intent/
 │   ├── LocalMappingCardRegistrar.java    # Local HTTP 模式路由注册
 │   ├── LocalMappingProperties.java
 │   ├── LocalHttpRemoteAgentCaller.java   # Local HTTP caller（@ConditionalOnProperty enabled=false）
-│   └── ForwardedServeRequests.java       # 把 response_content 作为 assistant message 追加到转发请求
+│   ├── ForwardedServeRequests.java       # 把 response_content 作为 assistant message 追加到转发请求
+│   └── RouteCacheAutoConfiguration.java  # 路由缓存自动装配
+│       ├── RouteCacheProperties.java     # 缓存配置（enabled/ttl）
+│       └── InProcessRouteCache.java     # 进程内缓存实现
+├── handler/
+│   └── CachedVersatileAgentHandler.java # 装饰器：缓存 L1 解析的下一跳 agent_id
 └── mock/
     ├── MockVersatileController.java      # mock Versatile SSE 端点
     └── MockA2AGatewayController.java     # mock A2A Gateway（转发代理，仅 mock-a2a-gateway profile）
@@ -168,3 +173,38 @@ src/main/java/com/openjiuwen/example/versatile/intent/
 - Java 17+（运行时需 17+，构建用 Maven）
 - `com.openjiuwen:agent-service-app` 0.1.0
 - `com.openjiuwen:agent-service-adapters-versatile` 0.1.0
+
+## Multi-Turn Route Cache
+
+When enabled on the L1 profile, the route cache stores the next-hop `agent_id`
+resolved by the L1 Versatile workflow for each `conversationId`. Subsequent
+turns in the same conversation skip L1 and emit a synthetic `a2a_delegate`
+interrupt directly to the cached L2 agent.
+
+### Configuration
+
+```yaml
+openjiuwen:
+  service:
+    versatile:
+      route-cache:
+        enabled: true      # default false; enabled on layer1 profile
+        ttl: 30m           # default 30 minutes
+```
+
+### Invalidation
+
+The cache is invalidated when:
+- TTL expires (lazy eviction on read).
+- `clearSession(conversationId)` is called (transitively via
+  `A2AEnabledServeOrchestrator.resetConversation`).
+- `ReclassifyServeOrchestrator` detects a reclassify signal.
+
+### Caveats
+
+- Cache is process-local (no Redis). Loss of cache causes L1 to re-run on
+  the next turn — acceptable for this lossy-tolerant optimization.
+- Only L1 routing is cached. L2 still runs every turn.
+- On cache hit, the synthetic `a2a_delegate` payload uses empty
+  `responseContent` (the original L1 output is already in the conversation
+  history forwarded by RemoteAgentCaller).
