@@ -12,7 +12,7 @@ openjiuwen:
     query:
       legacy-path-enabled: true
       webflux:
-        enabled: false
+        enabled: true
     a2a:
       # NOTE: a2a.agent-name is NOT bound by A2AProperties (no such field); the card
       # name comes from spring.application.name above. Kept for forward compatibility.
