@@ -76,6 +76,12 @@ class A2aDelegatePayloadTest {
     void buildSyntheticPayloadHasAllRequiredFields() {
         Map<String, Object> payload = A2aDelegatePayload.buildSyntheticPayload(
                 "agent_card_layer2_hotel", "", "我要订酒店", true);
+        // type + toolCallId are required by A2AEnabledServeOrchestrator.isCoordinatorInterrupt
+        assertEquals("__interaction__", payload.get("type"));
+        assertInstanceOf(String.class, payload.get("toolCallId"));
+        String toolCallId = (String) payload.get("toolCallId");
+        assertTrue(toolCallId.startsWith("versatile-delegate-"),
+                "toolCallId must follow the versatile-delegate-<uuid> shape");
         assertEquals("agent_card_layer2_hotel", payload.get("agentName"));
         assertEquals("", payload.get("responseContent"));
         assertEquals(false, payload.get("resume"));
@@ -88,6 +94,14 @@ class A2aDelegatePayloadTest {
         assertEquals("a2a_delegate", ctx.get("_interrupt_kind"));
         assertEquals("agent_card_layer2_hotel", ctx.get("agentName"));
         assertEquals(false, ctx.get("resume"));
+    }
+
+    @Test
+    void buildSyntheticPayloadGeneratesFreshToolCallIdPerCall() {
+        Map<String, Object> a = A2aDelegatePayload.buildSyntheticPayload("agentX", "", "q", false);
+        Map<String, Object> b = A2aDelegatePayload.buildSyntheticPayload("agentX", "", "q", false);
+        assertNotEquals(a.get("toolCallId"), b.get("toolCallId"),
+                "toolCallId must be a fresh UUID per call so the orchestrator can correlate batches");
     }
 
     @Test
