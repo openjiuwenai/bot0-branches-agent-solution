@@ -36,19 +36,27 @@ def captured_logs():
 # ── sampling 覆盖 ────────────────────────────────────────────────────────────
 
 def test_apply_sampling_overrides_writes_hardcoded_values():
-    """硬编码 0.3 / 0.95 必须落到 model_config_obj。"""
-    from EDPAgent.agent import _apply_sampling_overrides
+    """模块常量值必须落到 model_config_obj。"""
+    from EDPAgent.agent import (
+        _apply_sampling_overrides,
+        _LLM_TEMPERATURE_OVERRIDE,
+        _LLM_TOP_P_OVERRIDE,
+    )
 
     cfg = SimpleNamespace(model_config_obj=SimpleNamespace(temperature=0.95, top_p=0.1))
     _apply_sampling_overrides(cfg)
 
-    assert cfg.model_config_obj.temperature == 0.3
-    assert cfg.model_config_obj.top_p == 0.95
+    assert cfg.model_config_obj.temperature == _LLM_TEMPERATURE_OVERRIDE
+    assert cfg.model_config_obj.top_p == _LLM_TOP_P_OVERRIDE
 
 
 def test_apply_sampling_overrides_emits_config_log_keyword(captured_logs):
     """启动覆盖后必须打 [EDP-LLM-CONFIG] 关键字日志，含 sampling 值。"""
-    from EDPAgent.agent import _apply_sampling_overrides
+    from EDPAgent.agent import (
+        _apply_sampling_overrides,
+        _LLM_TEMPERATURE_OVERRIDE,
+        _LLM_TOP_P_OVERRIDE,
+    )
 
     cfg = SimpleNamespace(model_config_obj=SimpleNamespace(temperature=0.95, top_p=0.1))
     _apply_sampling_overrides(cfg)
@@ -56,7 +64,7 @@ def test_apply_sampling_overrides_emits_config_log_keyword(captured_logs):
     matched = [line for line in captured_logs if "[EDP-LLM-CONFIG]" in line]
     assert matched, f"未找到 [EDP-LLM-CONFIG] 关键字日志，captured={captured_logs}"
     blob = " ".join(matched)
-    assert "0.3" in blob and "0.95" in blob, f"日志缺少 sampling 值：{matched}"
+    assert str(_LLM_TEMPERATURE_OVERRIDE) in blob and str(_LLM_TOP_P_OVERRIDE) in blob, f"日志缺少 sampling 值：{matched}"
 
 
 def test_apply_sampling_overrides_no_op_when_config_missing(captured_logs):
