@@ -158,12 +158,12 @@ public final class AmbiguousPayloadParser {
         // The marker typically appears as a string value inside the JSON
         // object (e.g. {"code":"VERSATILE_INTENT_AMBIGUOUS",...}), so we must
         // find the open-brace that *encloses* it, not the first one after it.
-        Optional<int[]> bounds = findEnclosingObject(message, markerIdx);
+        Optional<Bounds> bounds = findEnclosingObject(message, markerIdx);
         if (bounds.isEmpty()) {
             return Optional.empty();
         }
-        int[] range = bounds.get();
-        String json = message.substring(range[0], range[1] + 1);
+        Bounds range = bounds.get();
+        String json = message.substring(range.openIdx(), range.closeIdx() + 1);
         try {
             JsonNode node = MAPPER.readTree(json);
             if (node == null || !node.isObject()) {
@@ -195,9 +195,10 @@ public final class AmbiguousPayloadParser {
      *
      * @param text       the message text
      * @param markerIdx  the index of the ambiguous marker
-     * @return a two-element array {@code [start, end]} or empty if not found
+     * @return a {@link Bounds} holding the inclusive {@code [openIdx, closeIdx]}
+     *         indices, or empty if no enclosing object is found
      */
-    private static Optional<int[]> findEnclosingObject(String text, int markerIdx) {
+    private static Optional<Bounds> findEnclosingObject(String text, int markerIdx) {
         int depth = 0;
         boolean inString = false;
         boolean escape = false;
@@ -231,14 +232,15 @@ public final class AmbiguousPayloadParser {
                     continue;
                 }
                 if (markerIdx >= openIdx && markerIdx <= i) {
-                    return Optional.of(new int[] {openIdx, i});
+                    return Optional.of(new Bounds(openIdx, i));
                 }
                 openIdx = -1;
-            } else {
-                // not a brace — no action needed (terminal else for G.CTL.02)
             }
         }
         return Optional.empty();
+    }
+
+    private record Bounds(int openIdx, int closeIdx) {
     }
 
     private static String textOrEmpty(JsonNode node) {
