@@ -300,7 +300,7 @@ class TestTraceAssemblerFeed:
         assembler = TraceAssembler()
         results = assembler.feed(_make_record(
             "TAG_PLANNING_DECISION",
-            message={"id": "plan-001", "thought": "user wants理财"},
+            message={"id": "plan-001", "thought": "user wants product info"},
         ))
         assert len(results) == 1
         assert results[0]["id"] == "plan-001"
