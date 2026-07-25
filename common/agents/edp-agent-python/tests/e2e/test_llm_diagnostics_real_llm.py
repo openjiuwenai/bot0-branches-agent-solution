@@ -40,16 +40,20 @@ def captured_logs():
 
 def test_e2e_config_keyword_emitted_on_override(captured_logs):
     """_apply_sampling_overrides 后 [EDP-LLM-CONFIG] 必出。"""
-    from EDPAgent.agent import _apply_sampling_overrides
+    from EDPAgent.agent import (
+        _apply_sampling_overrides,
+        _LLM_TEMPERATURE_OVERRIDE,
+        _LLM_TOP_P_OVERRIDE,
+    )
 
     cfg = SimpleNamespace(model_config_obj=SimpleNamespace(temperature=0.95, top_p=0.1))
     _apply_sampling_overrides(cfg)
 
-    assert cfg.model_config_obj.temperature == 0.3
-    assert cfg.model_config_obj.top_p == 0.95
+    assert cfg.model_config_obj.temperature == _LLM_TEMPERATURE_OVERRIDE
+    assert cfg.model_config_obj.top_p == _LLM_TOP_P_OVERRIDE
     blob = "\n".join(captured_logs)
     assert "[EDP-LLM-CONFIG]" in blob
-    assert "0.3" in blob and "0.95" in blob
+    assert str(_LLM_TEMPERATURE_OVERRIDE) in blob and str(_LLM_TOP_P_OVERRIDE) in blob
 
 
 def test_e2e_raw_keyword_on_real_llm_response(aliyun_env, captured_logs):
