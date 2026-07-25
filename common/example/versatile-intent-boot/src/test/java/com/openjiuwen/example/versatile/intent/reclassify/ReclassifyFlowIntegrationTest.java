@@ -4,6 +4,7 @@
 package com.openjiuwen.example.versatile.intent.reclassify;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -11,7 +12,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentException;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
@@ -30,11 +30,20 @@ import java.util.Map;
  * Integration-style test: full L1 decorator loop around a mocked L1
  * orchestrator, covering reclassify success, reclassify limit, and
  * augmented-context propagation.
+ *
+ * <p>Signal path (new design): the wrapped orchestrator surfaces L2 ambiguous
+ * as a {@code QueryResponse} whose {@code content} is the envelope JSON
+ * (sync) or a {@code TYPE_CHUNK} envelope (stream). The decorator inspects
+ * the response/chunk and re-invokes with augmented context.
  */
 class ReclassifyFlowIntegrationTest {
-    private static final String PAYLOAD = "{\"code\":\"VERSATILE_INTENT_AMBIGUOUS\","
-            + "\"intent_id\":\"1\",\"response_content\":\"无法确定国内/国际\","
-            + "\"ambiguous_intent_id\":\"1\"}";
+    private static final String AMBIGUOUS_ENVELOPE_JSON = "{\"type\":\"answer\","
+            + "\"intent_id\":\"1\","
+            + "\"payload\":{\"content\":\"无法确定国内/国际\"}}";
+
+    private static final Map<String, Object> AMBIGUOUS_ENVELOPE_MAP = new LinkedHashMap<>(
+            Map.of("type", "answer", "intent_id", "1",
+                    "response_content", "无法确定国内/国际", "ambiguous", true));
 
     private ServeOrchestrator wrapped;
     private ReclassifyProperties properties;
@@ -45,6 +54,7 @@ class ReclassifyFlowIntegrationTest {
         properties = new ReclassifyProperties();
         properties.setEnabled(true);
         properties.setMaxReclassify(1);
+        properties.setAmbiguousIntentId("1");
     }
 
     private ServeRequest sampleRequest() {
@@ -61,12 +71,17 @@ class ReclassifyFlowIntegrationTest {
         return request;
     }
 
+    private QueryResponse ambiguousResponse() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("role", "assistant");
+        result.put("content", AMBIGUOUS_ENVELOPE_JSON);
+        return new QueryResponse(result, "conv-1");
+    }
+
     @Test
     void queryReclassifySuccessPathUsesAugmentedContext() {
         ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties);
-        when(wrapped.query(any())).thenThrow(
-                new IllegalStateException("Remote batch execution failed",
-                        new RemoteAgentException(PAYLOAD, null)))
+        when(wrapped.query(any())).thenReturn(ambiguousResponse())
                 .thenReturn(new QueryResponse(Map.of("content", "酒店预订成功"), "conv-1"));
 
         QueryResponse response = decorator.query(sampleRequest());
@@ -78,14 +93,11 @@ class ReclassifyFlowIntegrationTest {
     @Test
     void queryReclassifyLimitWhenSecondAttemptAlsoAmbiguous() {
         ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties);
-        when(wrapped.query(any())).thenThrow(
-                new IllegalStateException("Remote batch execution failed",
-                        new RemoteAgentException(PAYLOAD, null)));
+        when(wrapped.query(any())).thenReturn(ambiguousResponse());
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> decorator.query(sampleRequest()))
+        assertThatThrownBy(() -> decorator.query(sampleRequest()))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("VERSATILE_INTENT_RECLASSIFY_LIMIT")
-                .hasCauseInstanceOf(IllegalStateException.class);
+                .hasMessageContaining("VERSATILE_INTENT_RECLASSIFY_LIMIT");
         verify(wrapped, times(2)).query(any());
     }
 
@@ -96,7 +108,8 @@ class ReclassifyFlowIntegrationTest {
 
         doAnswer(inv -> {
             QueryStreamObserver obs = inv.getArgument(1);
-            obs.onError(new RemoteAgentException(PAYLOAD, null));
+            obs.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, AMBIGUOUS_ENVELOPE_MAP));
+            obs.onComplete();
             return null;
         }).doAnswer(inv -> {
             QueryStreamObserver obs = inv.getArgument(1);

@@ -17,20 +17,22 @@ import java.util.Optional;
 
 /**
  * Decorator around {@link ServeOrchestrator} that retries L1 intent
- * recognition with augmented context when L2 returns a
- * {@code VERSATILE_INTENT_AMBIGUOUS} error.
+ * recognition with augmented context when L2 returns an answer envelope
+ * whose {@code intent_id} matches the configured ambiguous id.
+ *
+ * <p>Signal path: L2 adapter produces a {@code TYPE_CHUNK} answer envelope
+ * carrying {@code intent_id}. The envelope traverses HTTP / gateway / batch
+ * coordinator as a normal 200 response and surfaces as the
+ * {@code QueryResponse.result.content} (a JSON string) at this decorator.
+ * The decorator parses the content via
+ * {@link AmbiguousPayloadParser#fromQueryResponse} and, on match, rebuilds
+ * the request with the L2 {@code response_content} appended as an assistant
+ * message, then re-invokes the wrapped orchestrator.
  *
  * <p>Streaming path: each attempt is issued with a fresh
- * {@link ReclassifyObserver}; if the observer reports an ambiguous payload
- * (and the local counter has not exceeded {@code max-reclassify}), a new
- * augmented {@link ServeRequest} is built and the wrapped orchestrator is
- * invoked again. Non-ambiguous errors are forwarded to the downstream
- * observer verbatim.
- *
- * <p>Non-streaming path: the runtime propagates L2 failures as
- * {@link RuntimeException}s (directly or wrapped); the decorator catches
- * {@code RuntimeException}, walks the cause chain via
- * {@link AmbiguousPayloadParser} to find the ambiguous payload, and retries.
+ * {@link ReclassifyObserver}; the observer inspects {@code TYPE_CHUNK}
+ * envelopes via {@link AmbiguousPayloadParser#fromChunkData} and, on match,
+ * swallows the chunk so the runtime does not surface it to the client.
  *
  * <p>The counter is a method-local variable — there is no cross-request
  * state. {@code max-reclassify=0} disables retry and produces
@@ -58,22 +60,18 @@ public class ReclassifyServeOrchestrator implements ServeOrchestrator {
         int reclassifyCount = 0;
         ServeRequest current = request;
         while (true) {
-            QueryResponse response;
-            try {
-                response = wrapped.query(current);
-            } catch (RuntimeException ex) {
-                Optional<AmbiguousPayload> ambiguous = AmbiguousPayloadParser.fromThrowable(ex);
-                if (ambiguous.isEmpty()) {
-                    throw ex;
-                }
-                reclassifyCount++;
-                if (reclassifyCount > properties.getMaxReclassify()) {
-                    throw new IllegalStateException(LIMIT_CODE + ": max=" + properties.getMaxReclassify(), ex);
-                }
-                current = buildAugmentedRequest(request, ambiguous.get());
-                continue;
+            QueryResponse response = wrapped.query(current);
+            Optional<AmbiguousPayload> ambiguous = AmbiguousPayloadParser.fromQueryResponse(
+                    response, properties.getAmbiguousIntentId());
+            if (ambiguous.isEmpty()) {
+                return response;
             }
-            return response;
+            reclassifyCount++;
+            if (reclassifyCount > properties.getMaxReclassify()) {
+                throw new IllegalStateException(
+                        LIMIT_CODE + ": max=" + properties.getMaxReclassify());
+            }
+            current = buildAugmentedRequest(request, ambiguous.get());
         }
     }
 
@@ -86,7 +84,7 @@ public class ReclassifyServeOrchestrator implements ServeOrchestrator {
         int reclassifyCount = 0;
         ServeRequest current = request;
         while (true) {
-            ReclassifyObserver probe = new ReclassifyObserver(observer);
+            ReclassifyObserver probe = new ReclassifyObserver(observer, properties.getAmbiguousIntentId());
             wrapped.streamQuery(current, probe);
             if (!probe.ambiguousTriggered()) {
                 return;

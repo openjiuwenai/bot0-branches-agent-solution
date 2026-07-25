@@ -13,6 +13,16 @@ class ReclassifyPropertiesTest {
         ReclassifyProperties props = new ReclassifyProperties();
         assertThat(props.isEnabled()).isFalse();
         assertThat(props.getMaxReclassify()).isEqualTo(1);
+        assertThat(props.getAmbiguousIntentId()).isEqualTo("1");
+    }
+
+    @Test
+    void blankAmbiguousIntentIdCoercesToDefault() {
+        ReclassifyProperties props = new ReclassifyProperties();
+        props.setAmbiguousIntentId("  ");
+        assertThat(props.getAmbiguousIntentId()).isEqualTo("1");
+        props.setAmbiguousIntentId("2");
+        assertThat(props.getAmbiguousIntentId()).isEqualTo("2");
     }
 
     @Test

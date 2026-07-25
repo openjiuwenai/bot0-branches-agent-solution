@@ -438,19 +438,21 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
         if (raw.isEmpty()) {
             return;
         }
-        String answer = RemoteAgentAnswerExtractor.extractAnswer(raw).orElse(raw);
+        Optional<Map<String, Object>> envelope = RemoteAgentAnswerExtractor.extractAnswerEnvelope(raw);
+        boolean preserveEnvelope = envelope.isPresent() && envelope.get().containsKey("intent_id");
+        String answer = preserveEnvelope
+                ? raw
+                : RemoteAgentAnswerExtractor.extractAnswer(raw).orElse(raw);
         if (observer != null) {
-            Map<String, Object> envelope = new LinkedHashMap<>();
-            envelope.put("type", "answer");
-            envelope.put("output", answer);
-            observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, envelope));
+            Map<String, Object> chunkEnvelope = new LinkedHashMap<>();
+            chunkEnvelope.put("type", "answer");
+            chunkEnvelope.put("output", RemoteAgentAnswerExtractor.extractAnswer(raw).orElse(raw));
+            observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, chunkEnvelope));
         }
-        RemoteAgentAnswerExtractor.extractAnswer(raw).ifPresent(ans -> {
-            if (!result.isDone()) {
-                result.complete(new RemoteCallOutcome(aue.taskId(), TaskState.TASK_STATE_COMPLETED,
-                        "COMPLETED", ans, null));
-            }
-        });
+        if (!result.isDone()) {
+            result.complete(new RemoteCallOutcome(aue.taskId(), TaskState.TASK_STATE_COMPLETED,
+                    "COMPLETED", answer, null));
+        }
     }
 
     private void handleStatusUpdate(TaskStatusUpdateEvent sue, CompletableFuture<RemoteCallOutcome> result,
@@ -505,7 +507,10 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                 text = extractText(task.artifacts().get(0).parts());
                 emitArtifactsAsChunks(task.artifacts(), observer);
             }
-            String answer = RemoteAgentAnswerExtractor.extractAnswer(text).orElse(text);
+            Optional<Map<String, Object>> envelope = RemoteAgentAnswerExtractor.extractAnswerEnvelope(text);
+            String answer = envelope.isPresent() && envelope.get().containsKey("intent_id")
+                    ? text
+                    : RemoteAgentAnswerExtractor.extractAnswer(text).orElse(text);
             result.complete(new RemoteCallOutcome(task.id(), state, resultCategory(state), answer, null));
         } else {
             log.debug("A2AGateway caller: non-terminal task event state={}", state);

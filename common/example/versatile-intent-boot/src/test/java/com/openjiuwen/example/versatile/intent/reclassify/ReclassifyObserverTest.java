@@ -8,6 +8,8 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,11 +27,11 @@ class ReclassifyObserverTest {
     @BeforeEach
     void setUp() {
         downstream = mock(QueryStreamObserver.class);
-        observer = new ReclassifyObserver(downstream);
+        observer = new ReclassifyObserver(downstream, "1");
     }
 
     @Test
-    void forwardsOnNextAndOnComplete() {
+    void forwardsNonAmbiguousOnNextAndOnComplete() {
         QueryChunk chunk = new QueryChunk();
         observer.onNext(chunk);
         observer.onComplete();
@@ -39,18 +41,17 @@ class ReclassifyObserverTest {
     }
 
     @Test
-    void interceptsAmbiguousOnError() {
-        // Build a throwable whose message contains the ambiguous marker inside
-        // a JSON object — same shape the L2 adapter emits via TYPE_ERROR.
-        String payload = "{\"code\":\"VERSATILE_INTENT_AMBIGUOUS\","
-                + "\"intent_id\":\"1\","
-                + "\"response_content\":\"not sure\","
-                + "\"ambiguous_intent_id\":\"1\"}";
-        Throwable error = new RuntimeException(payload);
+    void interceptsAmbiguousOnNextFromMapEnvelope() {
+        // L2 adapter emits TYPE_CHUNK with a Map envelope carrying intent_id.
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("intent_id", "1");
+        envelope.put("response_content", "not sure");
+        envelope.put("ambiguous", true);
+        QueryChunk chunk = new QueryChunk(QueryChunk.TYPE_CHUNK, envelope);
 
-        observer.onError(error);
+        observer.onNext(chunk);
 
-        // Downstream must NOT receive the error.
         verifyNoInteractions(downstream);
         assertThat(observer.ambiguousTriggered()).isTrue();
         Optional<AmbiguousPayload> parsed = observer.ambiguousPayload();
@@ -58,6 +59,22 @@ class ReclassifyObserverTest {
         assertThat(parsed.get().intentId()).isEqualTo("1");
         assertThat(parsed.get().responseContent()).isEqualTo("not sure");
         assertThat(parsed.get().ambiguousIntentId()).isEqualTo("1");
+    }
+
+    @Test
+    void interceptsAmbiguousOnNextFromStringEnvelope() {
+        // Gateway caller may surface the envelope as a JSON string.
+        String payload = "{\"type\":\"answer\",\"intent_id\":\"1\","
+                + "\"payload\":{\"content\":\"unsure\"}}";
+        QueryChunk chunk = new QueryChunk(QueryChunk.TYPE_CHUNK, payload);
+
+        observer.onNext(chunk);
+
+        verifyNoInteractions(downstream);
+        assertThat(observer.ambiguousTriggered()).isTrue();
+        assertThat(observer.ambiguousPayload()).get()
+                .extracting(AmbiguousPayload::responseContent)
+                .isEqualTo("unsure");
     }
 
     @Test
@@ -80,28 +97,23 @@ class ReclassifyObserverTest {
     }
 
     @Test
-    void interceptsAmbiguousPayloadInWrappedCauseChain() {
-        // L2 ambiguous errors arrive wrapped by remote-agent runtime exceptions;
-        // the parser walks the cause chain, and so must the observer.
-        String payload = "{\"code\":\"VERSATILE_INTENT_AMBIGUOUS\","
-                + "\"intent_id\":\"1\","
-                + "\"response_content\":\"unsure\","
-                + "\"ambiguous_intent_id\":\"1\"}";
-        Throwable cause = new RuntimeException(payload);
-        Throwable wrapped = new RuntimeException("remote agent failed", cause);
+    void nonMatchingIntentIdDoesNotTrigger() {
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("intent_id", "intent_L2_hotel_domestic");
+        envelope.put("response_content", "国内酒店");
+        QueryChunk chunk = new QueryChunk(QueryChunk.TYPE_CHUNK, envelope);
 
-        observer.onError(wrapped);
+        observer.onNext(chunk);
 
-        verifyNoInteractions(downstream);
-        assertThat(observer.ambiguousTriggered()).isTrue();
-        assertThat(observer.ambiguousPayload()).isPresent();
-        assertThat(observer.ambiguousPayload().get().responseContent()).isEqualTo("unsure");
+        verify(downstream).onNext(chunk);
+        assertThat(observer.ambiguousTriggered()).isFalse();
     }
 
     @Test
     void rejectsNullDownstreamAtConstruction() {
         assertThatNullPointerException()
-                .isThrownBy(() -> new ReclassifyObserver(null))
+                .isThrownBy(() -> new ReclassifyObserver(null, "1"))
                 .withMessageContaining("downstream");
     }
 }
