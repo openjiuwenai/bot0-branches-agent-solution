@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
+import com.openjiuwen.service.adapters.agentcore.ext.external.ClientToolRail;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
@@ -89,13 +90,17 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
         installBeforeRun();
-        super.streamQuery(request, observer);
+        try (var binding = ClientToolRail.bind(getAgent(), request)) {
+            super.streamQuery(request, observer);
+        }
     }
 
     @Override
     public QueryResponse query(ServeRequest request) {
         installBeforeRun();
-        return super.query(request);
+        try (var binding = ClientToolRail.bind(getAgent(), request)) {
+            return super.query(request);
+        }
     }
 
     private void installBeforeRun() {
