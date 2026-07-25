@@ -220,12 +220,15 @@ public final class AmbiguousPayloadParser {
             if (inString) {
                 continue;
             }
+            if (c != '{' && c != '}') {
+                continue;
+            }
             if (c == '{') {
                 if (depth == 0) {
                     openIdx = i;
                 }
                 depth++;
-            } else if (c == '}') {
+            } else {
                 depth--;
                 if (depth != 0 || openIdx < 0) {
                     // still inside a nested object, or no open brace tracked
