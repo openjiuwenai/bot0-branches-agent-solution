@@ -157,10 +157,10 @@ When asked to verify skill content, use read_file on this file and quote the HOT
 def ask_quote_marker(remote_path: str) -> str:
     # Intentionally NO marker value in the prompt (anti-cheat).
     return (
-        "这是联调探针，不要做理财推荐。"
+        "这是联调探针，请忽略业务意图。"
         f"请立刻用 read_file 工具读取文件 `{remote_path}`，"
         "在最终回答里原样输出文件中以 `HOTUPDATE_MARKER=` 开头的那一行（整行复制，不要改写）。"
-        "不要调用 call_mcp/call_versatile/ask_user。"
+        "不要调用 call_mcp/call_demo_tool/ask_user。"
     )
 
 

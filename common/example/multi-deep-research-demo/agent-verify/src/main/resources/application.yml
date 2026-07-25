@@ -1,0 +1,60 @@
+server:
+  port: ${VERIFY_AGENT_PORT:18093}
+
+openjiuwen:
+  service:
+    handler: agentcore
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "VerifyAgent"
+      agent-description: "ReAct-based judge sub-agent — validates a draft research report against 对比矩阵/引用来源/置信度 anchors, backed by react-rails CriteriaReplanBridgeRail + RootCauseRail"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "verify_report"
+          name: "Verify draft research report"
+          description: "Read a draft research report; emit VERDICT: PASS/FAIL plus a coverage bullet list for 对比矩阵/引用来源/置信度; if FAIL append 缺失项 list. No tools; single-shot."
+          tags: ["verify", "judge", "deep-research"]
+          examples: ["请判定以下报告是否覆盖对比矩阵、引用来源、置信度三项..."]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+  demo:
+    verify-agent:
+      provider: ${LLM_PROVIDER:OpenAI}
+      api-key: ${LLM_API_KEY:}
+      api-base: ${LLM_API_BASE:https://api.deepseek.com}
+      model-name: ${LLM_MODEL:deepseek-chat}
+      ssl-verify: ${LLM_SSL_VERIFY:true}
+      temperature: ${LLM_TEMPERATURE:0.0}
+      top-p: ${LLM_TOP_P:0.8}
+      max-iterations: ${VERIFY_AGENT_MAX_ITERATIONS:2}
+      # react-rails knobs (consumed by VerifyAgentFactory, not by any auto-config)
+      # NOTE: set to 1 to hit the Exit-2 (pushSteering) branch for Bug #3 proof.
+      # With max-replan=1, first verify-fail should push a steering hint AND
+      # trigger a second ReAct iteration where the hint gets injected into
+      # LLM context. RailStateObserver will log EXIT_TAKEN=Exit-2-pushSteering
+      # on iteration 1; if Bug #3 exists, iteration 2 never fires (no-tool
+      # ReActAgent skips SteeringQueue drain).
+      max-replan: ${VERIFY_AGENT_MAX_REPLAN:1}
+      # Happy-path phrases — LLM only emits `<anchor>已覆盖` when it affirms
+      # coverage; `<anchor>缺失` when not. RuleBasedCriteriaVerifier's substring
+      # match is a coarse but sound correctness proxy under this convention.
+      # See VerifyAgentProperties.criteria JavaDoc for the anti-patterns we
+      # rejected (topic anchor "对比矩阵" → false-PASS; directive
+      # "必须包含对比矩阵" → false-FAIL).
+      criteria:
+        - 对比矩阵已覆盖
+        - 引用来源已覆盖
+        - 置信度已覆盖
+
+logging:
+  level:
+    com.openjiuwen.example.deepresearch.verify: DEBUG
+    com.openjiuwen.agents.reactrails: DEBUG
+    com.openjiuwen.service.adapters.agentcore: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG

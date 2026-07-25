@@ -1,0 +1,68 @@
+## ================================================================
+## actrule.yaml - 执行约束配置
+## ================================================================
+## 配置 Agent 的执行规则、任务模板、工具限制
+## 场景级增量覆盖框架级配置，未配置字段自动继承框架默认值
+## ================================================================
+
+actrule:
+  ## --- 任务模板（DAG 待办列表） ---
+  ## 定义标准客服流程的任务步骤，depends_on 定义依赖关系
+  todolist_entries:
+    - catalog_id: "understand_intent"
+      content: "理解用户意图，确认服务需求"
+      depends_on: []
+      skill: ""
+      description: "分析用户输入，判断属于咨询/办理/查询/投诉哪类"
+
+    - catalog_id: "provide_solution"
+      content: "提供解决方案或回答咨询"
+      depends_on:
+        - "understand_intent"
+      skill: "faq_skill"
+      description: "根据用户需求提供对应的服务方案"
+
+    - catalog_id: "confirm_satisfaction"
+      content: "确认用户需求已满足"
+      depends_on:
+        - "provide_solution"
+      skill: ""
+      description: "询问用户是否还有其他问题，确保服务闭环"
+
+  ## --- 动态路径规则（可选） ---
+  todolist_dynamic_paths:
+    - path_id: "skip_to_complaint"
+      description: "用户明确表示投诉，跳转至投诉处理"
+      trigger: "用户明确表示投诉"
+      skip_steps:
+        - "provide_solution"
+      redirect: "understand_intent → confirm_satisfaction"
+
+  ## --- 执行限制 ---
+  max_subtasks: 30          # 单层最大子任务数
+  max_steps: 50             # 最大执行步数
+  enable_task_loop: true    # 启用任务循环
+
+  ## --- Skill 加载模式 ---
+  # all: 列出所有 Skill，Agent 直接判断匹配
+  # auto_list: 动态搜索 Skill，Agent 先调用 list_tool 查询
+  # none: 不加载 Skill
+  skill_mode: all
+
+  ## --- 工具限制 ---
+  allowed_tools:
+    - "call_mcp"
+    - "call_versatile"
+    - "ask_user"
+    - "cancel_task"
+    - "skill_tool"
+    - "todo_create"
+    - "todo_modify"
+    - "todo_list"
+    - "todo_get"
+
+  ## --- 工具调用上限（key=工具名，value=次数） ---
+  tool_limits:
+    call_versatile: 20
+    call_mcp: 50
+    ask_user: 10

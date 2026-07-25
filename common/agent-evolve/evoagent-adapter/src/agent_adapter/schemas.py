@@ -41,7 +41,7 @@ class AgentCallResponse(BaseModel):
     answer: str = Field(default="", description="Assembled final answer from summary/final_answer_chunk events")
     interrupted: bool = Field(
         default=False,
-        description="True when Agent yielded a VA delegate interrupt (needs continuation)",
+        description="True when Agent yielded a delegate interrupt (needs continuation)",
     )
     interrupt_intent: str | None = Field(default=None, description="Intent of the interrupt")
     interrupt_description: str | None = Field(default=None, description="Task description of the interrupt")

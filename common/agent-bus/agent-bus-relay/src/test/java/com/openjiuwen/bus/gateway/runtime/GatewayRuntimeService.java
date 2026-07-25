@@ -4,7 +4,6 @@
 
 package com.openjiuwen.bus.gateway.runtime;
 
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
@@ -176,9 +175,15 @@ public final class GatewayRuntimeService implements IngressGateway {
         String correlationId = env.requestId().toString();
         String idempotencyKey = env.idempotencyKey().toString();
 
-        String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                eventType, env.traceId(), correlationId, idempotencyKey,
-                routeHandle.value(), capability, deadline, sourceServiceId));
+        // P-06: the control plane rides the envelope's FIRST-CLASS control fields; the A2A body rides
+        // inlinePayload (small JSON-RPC text — 2b). payloadRef is the data reference for large/multimodal
+        // bodies, resolved via a CALLER-OWNED store (2a, NOT provided by the SDK). This reference gateway
+        // inlines small String bodies; a production gateway stores large bodies and puts the ref here.
+        Object body = env.payload();
+        String inlinePayload = (body instanceof String s) ? s : null;
+        ForwardingEnvelope.PayloadPolicy policy = (inlinePayload != null)
+                ? ForwardingEnvelope.PayloadPolicy.DATA_BEARING
+                : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY; // non-inlineable body → prod gateway store (2a)
         ForwardingEnvelope envelope = new ForwardingEnvelope(
                 new ForwardingMessageId("gw-" + UUID.randomUUID()),
                 eventType,
@@ -191,8 +196,10 @@ public final class GatewayRuntimeService implements IngressGateway {
                 sourceServiceId,
                 targetServiceId,
                 deadline,
-                ForwardingEnvelope.PayloadPolicy.DATA_BEARING,
-                descriptor);
+                policy,
+                null,           // payloadRef: A2A data reference (large bodies, caller store) — none when inlined
+                inlinePayload,
+                sourceServiceId); // P-06: originalCaller = this gateway (response routing across the relay hop)
 
         // enqueue → claim → produce → markAcked (simplified synchronous dispatch; S4 adds the worker loop)
         ForwardingReceipt receipt = outbox.enqueue(envelope, sourceServiceId, targetServiceId, now);
@@ -302,14 +309,16 @@ public final class GatewayRuntimeService implements IngressGateway {
     private MatchResult handleMatchedResponse(BrokerInboundMessage msg, UUID requestId,
                                                InvocationResponseStatus status, String taskId) {
         return switch (status) {
-            case ACCEPTED_WITH_TASK -> new MatchResult(null,
-                    BrokerControlDescriptor.token(msg.payloadRef(), "taskId").orElse(null));
+            case ACCEPTED_WITH_TASK -> new MatchResult(null, responseToken(msg, "taskId"));
             case COMPLETED_RESPONSE -> new MatchResult(toIngressResponse(requestId, status,
-                    taskId != null ? taskId
-                            : BrokerControlDescriptor.token(msg.payloadRef(), "taskId").orElse(null),
-                    null, null), null);
+                    taskId != null ? taskId : responseToken(msg, "taskId"), null, null), null);
+            // FEAT-017: INPUT_REQUIRED is non-terminal but actionable — the Task is accepted yet needs
+            // input. Return promptly (ACCEPTED with taskId) so the caller can resume, instead of draining
+            // the accept window. Coexists with the FEAT-005 shadow-task resume on the caller side.
+            case INPUT_REQUIRED -> new MatchResult(toIngressResponse(requestId, status,
+                    taskId != null ? taskId : responseToken(msg, "taskId"), null, null), null);
             case STREAM_READY -> new MatchResult(toIngressResponse(requestId, status, null,
-                    BrokerControlDescriptor.token(msg.payloadRef(), "streamRef").orElse(null), null), null);
+                    responseToken(msg, "streamRef"), null), null);
             case REJECTED, FAILED -> new MatchResult(toIngressResponse(requestId, status, null, null,
                     reasonFrom(msg, status)), null);
             case UNKNOWN -> new MatchResult(null, taskId);
@@ -321,9 +330,11 @@ public final class GatewayRuntimeService implements IngressGateway {
 
     /**
      * Classify a polled response by its NATIVE {@link BrokerInboundMessage#eventType()}
-     * (FEAT-013/014 family). The {@code INVOCATION_TERMINAL} / {@code A2A_CALL_TERMINAL}
-     * sub-state (completed / cancelled / failed) is decoded from the {@code status=}
-     * token in the payloadRef; all other classifications are pure eventType mappings.
+     * (FEAT-013/014/017 family). The {@code INVOCATION_TERMINAL} / {@code A2A_CALL_TERMINAL}
+     * sub-state (completed / cancelled / failed) is decoded from the {@code status=} token in the
+     * {@code inlinePayload} (the A2A response envelope as DATA — P-06/FEAT-014:68); all other
+     * classifications are pure eventType mappings. {@code *_INPUT_REQUIRED} (FEAT-017) maps to
+     * {@link InvocationResponseStatus#INPUT_REQUIRED}. Pure (no instance state), hence static.
      *
      * <p>Terminal sub-state mapping:
      * <ul>
@@ -338,7 +349,7 @@ public final class GatewayRuntimeService implements IngressGateway {
      * @param m the polled response (non-null; correlationId already matched by the caller)
      * @return the observed invocation status
      */
-    public InvocationResponseStatus classify(BrokerInboundMessage m) {
+    public static InvocationResponseStatus classify(BrokerInboundMessage m) {
         Objects.requireNonNull(m, "m is required");
         AgentBusEventType eventType = m.eventType();
         if (eventType == null) {
@@ -346,12 +357,14 @@ public final class GatewayRuntimeService implements IngressGateway {
         }
         return switch (eventType) {
             case INVOCATION_RESPONSE, A2A_CALL_RESPONSE -> InvocationResponseStatus.COMPLETED_RESPONSE;
+            case INVOCATION_INPUT_REQUIRED, A2A_CALL_INPUT_REQUIRED ->
+                    InvocationResponseStatus.INPUT_REQUIRED;
             case INVOCATION_ACCEPTED, A2A_CALL_ACCEPTED -> InvocationResponseStatus.ACCEPTED_WITH_TASK;
             case INVOCATION_STREAM_READY, A2A_STREAM_READY -> InvocationResponseStatus.STREAM_READY;
             case INVOCATION_REJECTED, A2A_CALL_REJECTED -> InvocationResponseStatus.REJECTED;
             case INVOCATION_FAILED, A2A_CALL_FAILED -> InvocationResponseStatus.FAILED;
             case INVOCATION_TERMINAL, A2A_CALL_TERMINAL -> {
-                String status = BrokerControlDescriptor.token(m.payloadRef(), "status").orElse(null);
+                String status = responseToken(m, "status");
                 yield "completed".equals(status) || "cancelled".equals(status)
                         ? InvocationResponseStatus.COMPLETED_RESPONSE
                         : InvocationResponseStatus.FAILED;
@@ -378,6 +391,7 @@ public final class GatewayRuntimeService implements IngressGateway {
         return switch (status) {
             case COMPLETED_RESPONSE -> IngressResponse.accepted(requestId, taskId); // cursor = taskId or null
             case ACCEPTED_WITH_TASK -> IngressResponse.accepted(requestId, taskId);
+            case INPUT_REQUIRED -> IngressResponse.accepted(requestId, taskId); // FEAT-017: resume via taskId
             case STREAM_READY -> IngressResponse.accepted(requestId, streamRef);
             case REJECTED, FAILED -> IngressResponse.rejected(requestId, rejectionReason(status, reason));
             case UNKNOWN -> IngressResponse.deferred(requestId);
@@ -491,11 +505,11 @@ public final class GatewayRuntimeService implements IngressGateway {
     }
 
     private static String reasonFrom(BrokerInboundMessage m, InvocationResponseStatus status) {
-        String reason = BrokerControlDescriptor.token(m.payloadRef(), "reason").orElse(null);
+        String reason = responseToken(m, "reason");
         if (reason != null && !reason.isBlank()) {
             return reason;
         }
-        String tokenStatus = BrokerControlDescriptor.token(m.payloadRef(), "status").orElse(null);
+        String tokenStatus = responseToken(m, "status");
         if (tokenStatus != null && !tokenStatus.isBlank()) {
             return tokenStatus;
         }
@@ -507,6 +521,26 @@ public final class GatewayRuntimeService implements IngressGateway {
             return reason;
         }
         return status.name();
+    }
+
+    static String responseToken(BrokerInboundMessage m, String key) {
+        // P-06 / FEAT-014:68: response content (taskId / status / streamRef / reason) rides inlinePayload
+        // (the A2A response envelope as DATA), NOT a control-descriptor payloadRef. The gateway — the
+        // A2A-aware caller — interprets the inline response content here; the bus carries it opaquely.
+        // Pre-P-06 this peeked a token from payloadRef (the retired descriptor codec), conflating the
+        // data reference with response content.
+        String result = null;
+        String body = m.inlinePayload();
+        if (body != null && !body.isBlank()) {
+            for (String pair : body.split(";")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0 && pair.substring(0, eq).equals(key)) {
+                    result = pair.substring(eq + 1);
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     private static String requireNonBlank(String value, String name) {

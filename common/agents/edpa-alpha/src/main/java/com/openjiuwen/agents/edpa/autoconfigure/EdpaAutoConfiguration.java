@@ -143,17 +143,20 @@ public class EdpaAutoConfiguration {
                 } else {
                     agent.registerRail(new ExploreRail(explorer, budget));
                 }
-                ReplanRail sharedCounter = new ReplanRail(properties.getMaxReplan());
+                ReplanRail sharedReplanRail = new ReplanRail(properties.getMaxReplan());
                 if (!properties.getCriteria().isEmpty()) {
                     agent.registerRail(new CriteriaReplanBridgeRail(
-                            criteriaVerifier, properties.getCriteria(), sharedCounter));
+                            criteriaVerifier, properties.getCriteria(), sharedReplanRail));
                     if (properties.isProactiveConvergenceEnabled()) {
                         agent.registerRail(buildProactiveConvergenceRail(
                                 criteriaVerifier, properties));
                     }
                 }
                 if (properties.getMaxReplan() >= 0) {
-                    agent.registerRail(new ReplanRail(properties.getMaxReplan()));
+                    // Register the SAME instance that was passed to CriteriaReplanBridgeRail above —
+                    // LLM-driven __replan__ calls and verify-failure retries must share one budget
+                    // (4-lens MAJOR #1 fix: was `new ReplanRail(...)` = disjoint counters → 2× budget).
+                    agent.registerRail(sharedReplanRail);
                     ReplanTool.registerOnto(agent);
                 }
                 // Action phase — device-failure degrade (reused).

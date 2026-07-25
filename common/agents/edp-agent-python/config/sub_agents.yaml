@@ -1,0 +1,11 @@
+# 子 Agent 路由配置（主 Agent 专用，MultiagentInterruptRail 读取）
+# 部署时根据实际环境修改 URL
+
+sub_agents:
+  - entity_type: "ABC"
+    url: "http://localhost:28090/a2a"
+    name: "abc_agent"
+  # 未来可扩展其他类型的子Agent
+  # - entity_type: "RISK"
+  #   url: "http://risk-agent:8080"
+  #   name: "risk_agent"

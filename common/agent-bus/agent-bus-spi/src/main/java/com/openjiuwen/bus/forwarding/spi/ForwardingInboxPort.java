@@ -20,9 +20,22 @@ package com.openjiuwen.bus.forwarding.spi;
 public interface ForwardingInboxPort {
     /**
      * Receive an envelope on the consumer side, dedup, and return the resulting
-     * inbox status. First arrival → {@link ForwardingStatus.Inbox#RECEIVED};
-     * duplicate {@code (tenantId, messageId, consumerServiceId)} →
-     * {@link ForwardingStatus.Inbox#DUPLICATE_SUPPRESSED}.
+     * inbox status.
+     *
+     * <p>First arrival → {@link ForwardingStatus.Inbox#RECEIVED} (a {@code RECEIVED}
+     * row is inserted).
+     *
+     * <p>Re-arrival of an <b>in-flight</b> record (row still {@code RECEIVED} — i.e. a
+     * broker redelivery that lands after {@code receive} but before
+     * {@link #markConsumed}) → {@link ForwardingStatus.Inbox#RECEIVED} (legal
+     * {@code ARRIVE_REDELIVER} self-loop; the row is untouched and the receiver
+     * re-processes, so a crash between {@code receive} and {@code produce} does not
+     * lose the message; outbox deterministic-messageId idempotency prevents a double
+     * produce).
+     *
+     * <p>Re-arrival of a <b>terminal</b> record ({@code CONSUMED} / {@code REJECTED} /
+     * {@code DUPLICATE_SUPPRESSED}) → {@link ForwardingStatus.Inbox#DUPLICATE_SUPPRESSED}
+     * (the row is untouched; the receiver suppresses, no re-execution).
      *
      * @param envelope the forwarding envelope to receive
      * @param consumerServiceId the consumer service identity scoping the dedup key
