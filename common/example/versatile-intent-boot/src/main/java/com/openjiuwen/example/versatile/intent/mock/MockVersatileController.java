@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 /**
  * Mock Versatile SSE endpoint for local 联调 (L2 §5.5.3 方案 B).
  *
@@ -47,6 +49,15 @@ public class MockVersatileController {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
+     * Counts invocations of {@link #mockVersatile} for use by E2E tests that
+     * verify the route cache skips L1 on the second turn of a conversation.
+     * Incremented at the entry of {@link #mockVersatile} (before scenario
+     * selection) so every HTTP hit is recorded regardless of which canned
+     * scenario the mock serves.
+     */
+    private final AtomicInteger l1InvocationCount = new AtomicInteger();
+
+    /**
      * Handles a mock Versatile SSE request, selecting a canned response by query keyword.
      *
      * @param agentId        the path variable agent identifier
@@ -59,6 +70,7 @@ public class MockVersatileController {
             @PathVariable String agentId,
             @PathVariable String conversationId,
             @RequestBody(required = false) String body) {
+        l1InvocationCount.incrementAndGet();
         String query = extractQuery(body);
         boolean hasAssistant = hasAssistantMessage(body);
         String sse = cannedSse(agentId, query, conversationId, hasAssistant);
@@ -67,6 +79,25 @@ public class MockVersatileController {
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(sse);
+    }
+
+    /**
+     * Returns the number of times {@link #mockVersatile} has been invoked since
+     * the last {@link #resetCounters()} call. Used by E2E route-cache tests to
+     * assert that L1 is skipped on cache hits.
+     *
+     * @return the current invocation count
+     */
+    public int getL1InvocationCount() {
+        return l1InvocationCount.get();
+    }
+
+    /**
+     * Resets the invocation counter to zero. Test setup calls this before each
+     * scenario to make assertions deterministic.
+     */
+    public void resetCounters() {
+        l1InvocationCount.set(0);
     }
 
     private static String extractQuery(String body) {
