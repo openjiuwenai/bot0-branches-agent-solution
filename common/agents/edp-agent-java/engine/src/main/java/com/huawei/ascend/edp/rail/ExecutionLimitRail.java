@@ -64,26 +64,23 @@ public class ExecutionLimitRail extends AgentRail {
     private static final int CLEANUP_INTERVAL = 100;
     private static final long STALE_THRESHOLD_MS = 3600000L;
 
+    /**
+     * Redis key 前缀与 TTL（常量，工具调用计数持久化到 edpa:toolcount:{sessionId}）。
+     */
+    private static final String REDIS_KEY_PREFIX = "edpa";
+    private static final long TOOL_COUNT_TTL_SECONDS = 3600L;
+
     private final Set<String> alreadyWarned = ConcurrentHashMap.newKeySet();
 
     /**
      * 行为治理配置，提供 tool_limits 工具调用次数上限。
      */
-
     private final ActRuleConfig actrule;
-
-    /**
-     * Redis key 前缀与 TTL（常量，工具调用计数持久化到 edpa:toolcount:{sessionId}）。
-     */
-
-    private static final String REDIS_KEY_PREFIX = "edpa";
-    private static final long TOOL_COUNT_TTL_SECONDS = 3600L;
 
     /**
      * 本地计数器：sessionId -> (toolName -> count)。
      * beforeInvoke 从 Redis 恢复，beforeToolCall 本地递增，afterInvoke 持久化到 Redis。
      */
-
     private final Map<String, Map<String, Integer>> toolCallCounts = new ConcurrentHashMap<>();
 
     /**

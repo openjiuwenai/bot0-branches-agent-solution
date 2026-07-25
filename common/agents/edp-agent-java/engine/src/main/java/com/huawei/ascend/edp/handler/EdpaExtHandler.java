@@ -60,10 +60,10 @@ import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
+import redis.clients.jedis.exceptions.JedisConnectionException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -1211,6 +1211,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         } else if ("sentinel".equals(mode)) {
             LOGGER.warn("[EDPA-DIAG] Sentinel mode not supported by agent-core RedisKVStoreProvider, "
                     + "falling back to single mode");
+        } else {
+            LOGGER.debug("[EDPA-DIAG] Redis mode={} -> single mode config", mode);
         }
 
         // 创建带连接池的 UnifiedJedis，通过 redis_client 键传入 agent-core。
