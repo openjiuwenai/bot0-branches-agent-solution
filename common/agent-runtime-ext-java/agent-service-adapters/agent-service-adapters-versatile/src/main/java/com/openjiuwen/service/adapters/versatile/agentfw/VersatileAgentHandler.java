@@ -77,13 +77,22 @@ public class VersatileAgentHandler implements AgentHandler {
     }
 
     private Map<String, Object> resolveQueryResult(ServeRequest request, List<QueryChunk> chunks) {
-        boolean isInterrupted = false;
-        Map<String, Object> interruptPayload = null;
-        List<String> interruptMessages = new ArrayList<>();
-        Map<String, Object> a2aDelegatePayload = null;
-        Object legacyAnswerContent = null;
-        String ambiguousIntentId = null;
+        ChunkAccumulator acc = new ChunkAccumulator();
         for (QueryChunk chunk : chunks) {
+            acc.process(chunk, request);
+        }
+        return acc.buildResult(request);
+    }
+
+    private final class ChunkAccumulator {
+        private boolean isInterrupted;
+        private Map<String, Object> interruptPayload;
+        private final List<String> interruptMessages = new ArrayList<>();
+        private Map<String, Object> a2aDelegatePayload;
+        private Object legacyAnswerContent;
+        private String ambiguousIntentId;
+
+        void process(QueryChunk chunk, ServeRequest request) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
                         request.getConversationId(), chunk.getData());
@@ -92,12 +101,12 @@ public class VersatileAgentHandler implements AgentHandler {
             if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType())) {
                 if (chunk.getData() instanceof Map<?, ?> m && isA2aDelegate(m)) {
                     a2aDelegatePayload = copyToStringMap(m);
-                    continue;
+                    return;
                 }
                 isInterrupted = true;
                 interruptPayload = chunk.getData() instanceof Map<?, ?> m
                         ? copyToStringMap(m) : null;
-                continue;
+                return;
             }
             Optional<Map<String, Object>> envelope = answerEnvelope(chunk.getData());
             if (envelope.isPresent()) {
@@ -109,32 +118,35 @@ public class VersatileAgentHandler implements AgentHandler {
                 if (envelope.get().get("intent_id") instanceof String intentId && !intentId.isBlank()) {
                     ambiguousIntentId = intentId;
                 }
-                continue;
+                return;
             }
             interruptMessages.add(String.valueOf(chunk.getData()));
         }
-        if (a2aDelegatePayload != null) {
-            return a2aDelegateResult(request, a2aDelegatePayload);
-        }
-        if (legacyAnswerContent != null) {
-            Map<String, Object> result = assistantResult(legacyAnswerContent);
-            if (ambiguousIntentId != null) {
-                result.put("intent_id", ambiguousIntentId);
+
+        Map<String, Object> buildResult(ServeRequest request) {
+            if (a2aDelegatePayload != null) {
+                return a2aDelegateResult(request, a2aDelegatePayload);
             }
-            return result;
-        }
-        if (isInterrupted) {
-            Map<String, Object> result = assistantResult(
-                    interruptPayload != null && interruptPayload.get("message") != null
-                            ? String.valueOf(interruptPayload.get("message"))
-                            : interruptMessage(interruptMessages));
-            if (interruptPayload != null) {
-                result.put("_interrupt", interruptPayload);
+            if (legacyAnswerContent != null) {
+                Map<String, Object> result = assistantResult(legacyAnswerContent);
+                if (ambiguousIntentId != null) {
+                    result.put("intent_id", ambiguousIntentId);
+                }
+                return result;
             }
-            log.info("Versatile query returned interrupt conversation_id={}", request.getConversationId());
-            return result;
+            if (isInterrupted) {
+                Map<String, Object> result = assistantResult(
+                        interruptPayload != null && interruptPayload.get("message") != null
+                                ? String.valueOf(interruptPayload.get("message"))
+                                : interruptMessage(interruptMessages));
+                if (interruptPayload != null) {
+                    result.put("_interrupt", interruptPayload);
+                }
+                log.info("Versatile query returned interrupt conversation_id={}", request.getConversationId());
+                return result;
+            }
+            return assistantResult(interruptMessage(interruptMessages));
         }
-        return assistantResult(interruptMessage(interruptMessages));
     }
 
     private static boolean isA2aDelegate(Map<?, ?> data) {

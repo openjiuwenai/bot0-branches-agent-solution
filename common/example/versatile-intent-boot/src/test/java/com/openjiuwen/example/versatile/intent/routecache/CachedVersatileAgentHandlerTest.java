@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import com.openjiuwen.service.spec.dto.QueryChunk;
@@ -5,10 +9,12 @@ import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,8 +22,18 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Verifies cache hit/miss behavior of {@link CachedVersatileAgentHandler} for
+ * both the request/response and streaming paths.
+ *
+ * @since 2026-07-25
+ */
 class CachedVersatileAgentHandlerTest {
     private final AtomicLong now = new AtomicLong(1_000L);
     private final RouteCacheProperties props = new RouteCacheProperties();
@@ -93,12 +109,25 @@ class CachedVersatileAgentHandlerTest {
         handler.query(req("c1", "订酒店")); // populate cache via query path
         delegate.queryCalls.set(0);
 
-        AtomicReference<List<QueryChunk>> emitted = new AtomicReference<>(new java.util.ArrayList<>());
+        AtomicReference<List<QueryChunk>> emitted = new AtomicReference<>(new ArrayList<>());
         QueryStreamObserver observer = new QueryStreamObserver() {
-            @Override public void onNext(QueryChunk chunk) { emitted.get().add(chunk); }
-            @Override public void onError(Throwable t) {}
-            @Override public void onComplete() {}
-            @Override public boolean isCancelled() { return false; }
+            @Override
+            public void onNext(QueryChunk chunk) {
+                emitted.get().add(chunk);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
         };
         handler.streamQuery(req("c1", "上海今晚五星"), observer);
         assertEquals(0, delegate.streamQueryCalls.get(), "delegate streamQuery must NOT be called on cache hit");
@@ -116,7 +145,7 @@ class CachedVersatileAgentHandlerTest {
         delegate.streamChunks = List.of(
                 new QueryChunk(QueryChunk.TYPE_INTERRUPT, A2aDelegatePayload.buildSyntheticPayload(
                         "agent_card_layer2_flight", "flight output", "订机票", true)));
-        AtomicReference<List<QueryChunk>> emitted = new AtomicReference<>(new java.util.ArrayList<>());
+        AtomicReference<List<QueryChunk>> emitted = new AtomicReference<>(new ArrayList<>());
         QueryStreamObserver observer = recObserver(emitted);
         handler.streamQuery(req("c2", "订机票"), observer);
         assertEquals(1, delegate.streamQueryCalls.get());
@@ -131,16 +160,29 @@ class CachedVersatileAgentHandlerTest {
     void streamQueryNonA2aDelegateChunksDoNotPopulateCache() {
         delegate.streamChunks = List.of(
                 new QueryChunk(QueryChunk.TYPE_CHUNK, Map.of("type", "answer", "output", "plain")));
-        handler.streamQuery(req("c3", "q"), recObserver(new AtomicReference<>(new java.util.ArrayList<>())));
+        handler.streamQuery(req("c3", "q"), recObserver(new AtomicReference<>(new ArrayList<>())));
         assertTrue(cache.get("c3").isEmpty());
     }
 
     private static QueryStreamObserver recObserver(AtomicReference<List<QueryChunk>> sink) {
         return new QueryStreamObserver() {
-            @Override public void onNext(QueryChunk chunk) { sink.get().add(chunk); }
-            @Override public void onError(Throwable t) {}
-            @Override public void onComplete() {}
-            @Override public boolean isCancelled() { return false; }
+            @Override
+            public void onNext(QueryChunk chunk) {
+                sink.get().add(chunk);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
         };
     }
 
@@ -152,7 +194,7 @@ class CachedVersatileAgentHandlerTest {
         Map<String, Object> userMsg = new LinkedHashMap<>();
         userMsg.put("role", "user");
         userMsg.put("content", userQuery);
-        r.setMessages(new java.util.ArrayList<>(List.of(userMsg)));
+        r.setMessages(new ArrayList<>(List.of(userMsg)));
         return r;
     }
 

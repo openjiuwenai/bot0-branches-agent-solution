@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import java.util.LinkedHashMap;
@@ -31,9 +35,9 @@ import java.util.Optional;
 final class A2aDelegatePayload {
     private static final String A2A_DELEGATE_KIND = "a2a_delegate";
 
-    record Parsed(String agentName, String responseContent) {}
-
     private A2aDelegatePayload() {}
+
+    record Parsed(String agentName, String responseContent) {}
 
     static Optional<Parsed> fromResultMap(Map<String, Object> result) {
         Object interruptObj = result.get("_interrupt");

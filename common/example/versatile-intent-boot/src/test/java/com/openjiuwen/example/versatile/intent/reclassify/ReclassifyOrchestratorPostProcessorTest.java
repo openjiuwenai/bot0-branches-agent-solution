@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.reclassify;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,6 +13,12 @@ import com.openjiuwen.example.versatile.intent.routecache.RouteCache;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+/**
+ * Verifies {@link ReclassifyOrchestratorPostProcessor} bean-replacement
+ * semantics and constructor null-checks.
+ *
+ * @since 2026-07-24
+ */
 class ReclassifyOrchestratorPostProcessorTest {
     @SuppressWarnings("unchecked")
     private ObjectProvider<RouteCache> emptyProvider() {

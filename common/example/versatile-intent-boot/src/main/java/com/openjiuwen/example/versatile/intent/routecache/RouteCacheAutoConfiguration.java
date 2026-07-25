@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import com.openjiuwen.example.versatile.intent.VersatileIntentAutoConfiguration;
@@ -34,7 +35,6 @@ import org.springframework.context.annotation.Bean;
         havingValue = "true")
 @EnableConfigurationProperties(RouteCacheProperties.class)
 public class RouteCacheAutoConfiguration {
-
     /**
      * Process-local {@link RouteCache} backed by a {@code ConcurrentHashMap}.
      *

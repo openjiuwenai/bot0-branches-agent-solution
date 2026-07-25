@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.reclassify;
 
 import com.openjiuwen.example.versatile.intent.routecache.RouteCache;

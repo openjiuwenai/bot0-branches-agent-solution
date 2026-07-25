@@ -1,12 +1,19 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.reclassify;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Verifies defaults, setters, and coercion rules of
+ * {@link ReclassifyProperties}.
+ *
+ * @since 2026-07-24
+ */
 class ReclassifyPropertiesTest {
     @Test
     void defaultsToDisabledAndMaxOne() {

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.reclassify;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,6 +15,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Verifies {@link AmbiguousPayloadParser} extraction from query responses,
+ * chunk data, and throwable cause chains.
+ *
+ * @since 2026-07-24
+ */
 class AmbiguousPayloadParserTest {
     private static final String AMBIGUOUS_ID = "1";
 

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.reclassify;
 
 import com.openjiuwen.example.versatile.intent.routecache.RouteCache;
@@ -68,7 +69,7 @@ public class ReclassifyServeOrchestrator implements ServeOrchestrator {
                                        Optional<RouteCache> routeCache) {
         this.wrapped = Objects.requireNonNull(wrapped, "wrapped");
         this.properties = Objects.requireNonNull(properties, "properties");
-        this.routeCache = routeCache == null ? Optional.empty() : routeCache;
+        this.routeCache = Objects.requireNonNullElse(routeCache, Optional.empty());
     }
 
     /**

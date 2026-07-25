@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import com.openjiuwen.service.spec.dto.QueryChunk;
@@ -86,10 +90,14 @@ public final class CachedVersatileAgentHandler implements AgentHandler {
     }
 
     @Override
-    public void start() { delegate.start(); }
+    public void start() {
+        delegate.start();
+    }
 
     @Override
-    public void stop() { delegate.stop(); }
+    public void stop() {
+        delegate.stop();
+    }
 
     private QueryResponse syntheticResponse(ServeRequest request, CachedRoute route) {
         Map<String, Object> result = new LinkedHashMap<>();

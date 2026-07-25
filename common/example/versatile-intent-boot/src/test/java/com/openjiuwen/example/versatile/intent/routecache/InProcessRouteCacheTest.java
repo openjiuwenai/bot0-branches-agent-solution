@@ -1,11 +1,25 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import org.junit.jupiter.api.Test;
+
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
-import static org.junit.jupiter.api.Assertions.*;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Verifies put/get/invalidate behavior and TTL expiry of
+ * {@link InProcessRouteCache}.
+ *
+ * @since 2026-07-25
+ */
 class InProcessRouteCacheTest {
     private final AtomicLong now = new AtomicLong(1_000L);
     private final InProcessRouteCache cache = new InProcessRouteCache(Duration.ofMillis(500L), now::get);

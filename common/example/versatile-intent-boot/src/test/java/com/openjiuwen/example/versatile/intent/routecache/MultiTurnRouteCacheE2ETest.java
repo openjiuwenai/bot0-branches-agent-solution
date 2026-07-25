@@ -1,6 +1,7 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import com.openjiuwen.example.versatile.intent.mock.MockVersatileController;
@@ -55,7 +56,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         // by VersatileRequestExtractor (only {conversation_id} is), so we
         // hardcode the literal "proj" segment that MockVersatileController binds.
         "server.port=18081",
-        "openjiuwen.service.versatile.url-template=http://localhost:18081/v1/proj/agents/agent_L1/conversations/{conversation_id}"
+        "openjiuwen.service.versatile.url-template="
+                + "http://localhost:18081/v1/proj/agents/agent_L1/conversations/{conversation_id}"
 })
 class MultiTurnRouteCacheE2ETest {
 
