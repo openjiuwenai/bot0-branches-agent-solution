@@ -63,6 +63,8 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import redis.clients.jedis.exceptions.JedisConnectionException;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -1168,11 +1170,11 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         String skillMode = actrule != null && actrule.getSkillMode() != null ? actrule.getSkillMode() : "all";
 
         // 使用 agent-core 的 KV 存储（Redis）替代自定义 RedisTodoStore。
-        // kvStoreConfig 为 null 时回落到默认 file 存储。
+        // kvStoreConfig 为空时回落到默认 file 存储。
         Map<String, Object> kvStoreConfig = buildKvStoreConfig();
-        String todoStorageType = kvStoreConfig != null ? "kv" : "file";
+        String todoStorageType = !kvStoreConfig.isEmpty() ? "kv" : "file";
         LOGGER.info("[EDPA-DIAG] DeepAgent todoStorageType={}, kvStore={}",
-                todoStorageType, kvStoreConfig != null ? "redis" : "none");
+                todoStorageType, !kvStoreConfig.isEmpty() ? "redis" : "none");
 
         return DeepAgentConfig.builder().systemPrompt(systemPrompt != null ? systemPrompt : "")
                 .maxIterations(actrule != null && actrule.getMaxSteps() != null && actrule.getMaxSteps() > 0
@@ -1188,14 +1190,14 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * 从 RedisConfig 静态持有者获取 TodoRedisProperties，构建 agent-core 的 kvStoreConfig。
      *
      * <p>结构: {type: "redis", conf: {host, port, password, cluster}}。
-     * Redis 未配置时返回 null，DeepAgent 回落到默认的 file 存储。</p>
+     * Redis 未配置时返回空 Map，DeepAgent 回落到默认的 file 存储。</p>
      *
-     * @return kvStoreConfig Map，或 null
+     * @return kvStoreConfig Map，或空 Map
      */
     private static Map<String, Object> buildKvStoreConfig() {
         TodoRedisProperties redisProps = RedisConfig.getRedisProperties();
         if (redisProps == null) {
-            return null;
+            return Collections.emptyMap();
         }
         Map<String, Object> conf = new LinkedHashMap<>();
         conf.put("host", redisProps.getHost());
@@ -1216,9 +1218,9 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         // 如果存在则直接使用，不会创建裸 Jedis 连接（避免 SocketException 断连问题）。
         // 连接池配置参考 RedisJedisClientFactory：
         //   testOnBorrow=true（借用前 PING 验证）、testWhileIdle=true（空闲清理）
-        Object pooledClient = createPooledRedisClient(redisProps);
-        if (pooledClient != null) {
-            conf.put("redis_client", pooledClient);
+        Optional<Object> pooledClient = createPooledRedisClient(redisProps);
+        if (pooledClient.isPresent()) {
+            conf.put("redis_client", pooledClient.get());
             LOGGER.info("[EDPA-DIAG] Injected pooled Redis client (UnifiedJedis + PooledConnectionProvider), "
                     + "testOnBorrow=true, testWhileIdle=true, maxTotal=16, maxIdle=8, minIdle=1");
         }
@@ -1239,9 +1241,9 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * </ul>
      *
      * @param redisProps Redis 连接配置
-     * @return UnifiedJedis 实例，创建失败返回 null（回退到 agent-core 默认的裸 Jedis）
+     * @return UnifiedJedis 实例的 Optional，创建失败返回 Optional.empty()（回退到 agent-core 默认的裸 Jedis）
      */
-    private static Object createPooledRedisClient(TodoRedisProperties redisProps) {
+    private static Optional<Object> createPooledRedisClient(TodoRedisProperties redisProps) {
         try {
             String host = redisProps.getHost() != null ? redisProps.getHost().trim() : "localhost";
             int port = redisProps.getPort() > 0 ? redisProps.getPort() : 6379;
@@ -1276,11 +1278,11 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             redis.clients.jedis.HostAndPort hostAndPort = new redis.clients.jedis.HostAndPort(host, port);
             redis.clients.jedis.providers.PooledConnectionProvider provider =
                     new redis.clients.jedis.providers.PooledConnectionProvider(hostAndPort, clientConfig, poolConfig);
-            return new redis.clients.jedis.UnifiedJedis(provider);
-        } catch (Exception e) {
+            return Optional.of(new redis.clients.jedis.UnifiedJedis(provider));
+        } catch (JedisConnectionException e) {
             LOGGER.warn("[EDPA-DIAG] Failed to create pooled Redis client, falling back to default: {}",
                     e.getMessage());
-            return null;
+            return Optional.empty();
         }
     }
 

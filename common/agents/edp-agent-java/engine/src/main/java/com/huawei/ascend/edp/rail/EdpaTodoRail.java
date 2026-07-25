@@ -476,11 +476,11 @@ public class EdpaTodoRail extends DeepAgentRail {
         String rawSid = ctx.getSession().getSessionId();
 
         // ★ agent-core TodoStorage：load 后检查非空（TodoStorage 无 exists 方法）
-        TodoStorage storage = getTodoStorage();
-        if (storage != null) {
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isPresent()) {
             String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
             try {
-                List<TodoItem> todos = storage.load(sid);
+                List<TodoItem> todos = storageOpt.get().load(sid);
                 return todos != null && !todos.isEmpty();
             } catch (IOException | RuntimeException e) {
                 LOGGER.debug("hasPlannedTodos storage load failed: {}", e.getMessage());
@@ -494,19 +494,19 @@ public class EdpaTodoRail extends DeepAgentRail {
 
     /**
      * lazy 创建 TodoStorage，通过 deepAgent.getKvStore() 获取共享 KV 存储。
-     * kvStore 为 null 时回落到 FileTodoStorage。
+     * kvStore 为空时回落到 FileTodoStorage。
      *
-     * @return TodoStorage 实例，或 null（workspace 不可用时）
+     * @return TodoStorage 实例的 Optional，workspace 不可用时返回 Optional.empty()
      */
-    private TodoStorage getTodoStorage() {
+    private Optional<TodoStorage> getTodoStorage() {
         if (todoStorage != null) {
-            return todoStorage;
+            return Optional.of(todoStorage);
         }
         try {
             BaseKVStore kvStore = deepAgent.getKvStore();
             if (kvStore != null) {
                 todoStorage = new KvTodoStorage(kvStore);
-                return todoStorage;
+                return Optional.of(todoStorage);
             }
         } catch (IllegalStateException | NullPointerException e) {
             LOGGER.debug("getTodoStorage: kvStore unavailable: {}", e.getMessage());
@@ -514,11 +514,11 @@ public class EdpaTodoRail extends DeepAgentRail {
         try {
             java.nio.file.Path todoDir = deepAgent.getWorkspace().root().resolve(".todo");
             todoStorage = new FileTodoStorage(todoDir);
-            return todoStorage;
+            return Optional.of(todoStorage);
         } catch (IllegalStateException | NullPointerException e) {
             LOGGER.warn("getTodoStorage: workspace unavailable: {}", e.getMessage());
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -571,13 +571,14 @@ public class EdpaTodoRail extends DeepAgentRail {
         }
 
         String sessionId = resolveSessionId(inputs);
-        TodoStorage storage = getTodoStorage();
-        if (storage == null) {
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isEmpty()) {
             if (isModify) {
                 injectFinalAnswerDirective(ctx);
             }
             return;
         }
+        TodoStorage storage = storageOpt.get();
         try {
             List<TodoItem> todos = storage.load(sessionId);
             if (todos == null || todos.isEmpty()) {
@@ -618,13 +619,13 @@ public class EdpaTodoRail extends DeepAgentRail {
         if (rawSid == null || rawSid.isBlank()) {
             return;
         }
-        TodoStorage storage = getTodoStorage();
-        if (storage == null) {
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isEmpty()) {
             return;
         }
         String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
         try {
-            List<TodoItem> todos = storage.load(sid);
+            List<TodoItem> todos = storageOpt.get().load(sid);
             injectFinalAnswerDirective(ctx, sid, todos);
         } catch (IOException | IllegalStateException e) {
             LOGGER.warn("[EDPA-DIAG] UC10_CHECK_FAILED session={} error={}", sid, e.getMessage());
@@ -1014,8 +1015,8 @@ public class EdpaTodoRail extends DeepAgentRail {
      * @param ctx the ctx value
      */
     private void injectActiveTodoStatus(AgentCallbackContext ctx) {
-        TodoStorage storage = getTodoStorage();
-        if (storage == null) {
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isEmpty()) {
             return;
         }
         String rawSid = ctx.getSession() != null ? ctx.getSession().getSessionId() : null;
@@ -1024,7 +1025,7 @@ public class EdpaTodoRail extends DeepAgentRail {
         }
         String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
         try {
-            List<TodoItem> todos = storage.load(sid);
+            List<TodoItem> todos = storageOpt.get().load(sid);
             if (todos == null || todos.isEmpty()) {
                 return;
             }

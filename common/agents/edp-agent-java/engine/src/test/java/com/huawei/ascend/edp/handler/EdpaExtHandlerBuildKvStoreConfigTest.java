@@ -16,7 +16,10 @@
 
 package com.huawei.ascend.edp.handler;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.config.TodoRedisProperties;
@@ -34,7 +37,7 @@ import java.util.Map;
  *
  * <p>验证 agent-core KV 存储配置的正确构建：
  * <ul>
- *   <li>RedisProperties 为 null 时返回 null（回落 file 存储）</li>
+ *   <li>RedisProperties 为 null 时返回空 Map（回落 file 存储）</li>
  *   <li>single 模式：conf 包含 host/port，不含 cluster</li>
  *   <li>cluster 模式：conf 包含 cluster="true"</li>
  *   <li>有密码时包含 password，无密码时不包含</li>
@@ -73,9 +76,11 @@ class EdpaExtHandlerBuildKvStoreConfigTest {
     }
 
     @Test
-    void nullProps_returnsNull() throws Exception {
+    void nullProps_returnsEmptyMap() throws Exception {
         injectStatic("singletonProps", null);
-        assertNull(invokeBuildKvStoreConfig());
+        Map<String, Object> result = invokeBuildKvStoreConfig();
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 
     @Test

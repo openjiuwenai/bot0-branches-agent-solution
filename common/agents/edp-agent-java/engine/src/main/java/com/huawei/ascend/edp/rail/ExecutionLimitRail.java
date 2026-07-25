@@ -25,7 +25,8 @@ import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Duration;
@@ -143,7 +144,7 @@ public class ExecutionLimitRail extends AgentRail {
                 LOGGER.info("[ExecutionLimitRail] session {} recovered from Redis: key={}, counts={}",
                         sid, key, local);
             }
-        } catch (Exception e) {
+        } catch (RedisConnectionFailureException | RedisSystemException e) {
             LOGGER.error("[ExecutionLimitRail] session {} Redis GET failed, starting from 0", sid, e);
             toolCallCounts.put(sid, new ConcurrentHashMap<>());
         }
@@ -210,7 +211,7 @@ public class ExecutionLimitRail extends AgentRail {
             redisTemplate.expire(key, Duration.ofSeconds(TOOL_COUNT_TTL_SECONDS));
             LOGGER.debug("[ExecutionLimitRail] session {} persisted {} tool counts, TTL={}s",
                     sid, counts.size(), TOOL_COUNT_TTL_SECONDS);
-        } catch (Exception e) {
+        } catch (RedisConnectionFailureException | RedisSystemException e) {
             LOGGER.error("[ExecutionLimitRail] session {} failed to persist tool counts to Redis", sid, e);
             return;
         }
