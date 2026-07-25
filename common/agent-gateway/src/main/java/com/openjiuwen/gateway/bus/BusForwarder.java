@@ -101,6 +101,7 @@ public class BusForwarder {
                     window.onProjection(folded, null, System.currentTimeMillis());
                 } else {
                     // non-terminal non-accept (e.g. STREAM_READY): keep polling
+                    continue;
                 }
             }
         }
