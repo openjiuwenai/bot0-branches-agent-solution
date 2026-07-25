@@ -6,13 +6,11 @@ package com.openjiuwen.service.bus.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusConsumptionDecision;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.port.BusA2aRequestBridge;
-import com.openjiuwen.service.bus.consumer.port.BusPayloadResolver;
-import com.openjiuwen.service.bus.consumer.port.TaskIdAwareBusA2aRequestBridge;
 import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
 
@@ -25,6 +23,8 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * Tests RuntimeBusEventConsumer behavior.
@@ -35,10 +35,10 @@ class RuntimeBusEventConsumerTest {
     @Test
     void consumesOnceAndDeduplicatesCreation() {
         AtomicInteger calls = new AtomicInteger();
-        BusA2aRequestBridge bridge = (e, payload) -> {
+        RequestHandlerBusA2aBridge bridge = bridge((e, payload) -> {
             calls.incrementAndGet();
             return new BusDispatchResult("task-1", null, null, false);
-        };
+        });
         RuntimeBusEventConsumer consumer = consumer(bridge, e -> e.inlinePayload());
         AgentBusEventEnvelope event = event("CLIENT_INVOCATION_REQUESTED", "idem-1");
         assertThat(consumer.consume(event, null).type()).isEqualTo(BusConsumptionDecision.Type.ACK_CONSUMED);
@@ -48,9 +48,9 @@ class RuntimeBusEventConsumerTest {
 
     @Test
     void retriesTransientBridgeFailure() {
-        RuntimeBusEventConsumer consumer = consumer((e, p) -> {
+        RuntimeBusEventConsumer consumer = consumer(bridge((e, p) -> {
             throw new IllegalStateException("down");
-        }, e -> e.inlinePayload());
+        }), e -> e.inlinePayload());
         assertThat(consumer.consume(event("A2A_CALL_REQUESTED", "idem-2"), null).type())
                 .isEqualTo(BusConsumptionDecision.Type.RETRY);
     }
@@ -58,10 +58,18 @@ class RuntimeBusEventConsumerTest {
     @Test
     void passesReservedTaskIdToTaskAwareBridge() {
         AtomicInteger calls = new AtomicInteger();
-        TaskIdAwareBusA2aRequestBridge bridge = (event, payload, reservedTaskId) -> {
-            calls.incrementAndGet();
-            assertThat(reservedTaskId).startsWith("bus-");
-            return new BusDispatchResult(reservedTaskId, null, null, false);
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge() {
+            @Override
+            public boolean supportsReservedTaskId() {
+                return true;
+            }
+
+            @Override
+            public BusDispatchResult handle(AgentBusEventEnvelope event, byte[] payload, String reservedTaskId) {
+                calls.incrementAndGet();
+                assertThat(reservedTaskId).startsWith("bus-");
+                return new BusDispatchResult(reservedTaskId, null, null, false);
+            }
         };
         RuntimeBusEventConsumer consumer = consumer(bridge, e -> e.inlinePayload());
         assertThat(consumer.consume(event("CLIENT_INVOCATION_REQUESTED", "idem-aware"), null).type())
@@ -72,15 +80,13 @@ class RuntimeBusEventConsumerTest {
     @Test
     void continuationUsesExistingTaskIdWithoutTaskIdAwareExtension() {
         AtomicInteger calls = new AtomicInteger();
-        BusA2aRequestBridge bridge = new BusA2aRequestBridge() {
-            /** {@inheritDoc} */
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge() {
             @Override
             public BusDispatchResult handle(AgentBusEventEnvelope event, byte[] payload) {
                 calls.incrementAndGet();
                 return new BusDispatchResult("existing-task", null, null, false);
             }
 
-            /** {@inheritDoc} */
             @Override
             public Optional<String> requestedTaskId(AgentBusEventEnvelope event, byte[] payload) {
                 return Optional.of("existing-task");
@@ -98,7 +104,8 @@ class RuntimeBusEventConsumerTest {
         Instant now = Instant.parse("2026-07-20T00:00:00Z");
         RuntimeBusEventConsumer consumer = new RuntimeBusEventConsumer(
                 new BusEnvelopeValidator(Clock.fixed(now, ZoneOffset.UTC), "runtime-a"), e -> e.inlinePayload(),
-                new InMemoryBusTaskAdmissionStore(), (e, p) -> new BusDispatchResult(null, null, null, false),
+                new InMemoryBusTaskAdmissionStore(),
+                bridge((e, p) -> new BusDispatchResult(null, null, null, false)),
                 new BusTaskProjectionCoordinator(
                         new com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore(),
                         published::add));
@@ -111,12 +118,23 @@ class RuntimeBusEventConsumerTest {
         });
     }
 
-    private RuntimeBusEventConsumer consumer(BusA2aRequestBridge bridge, BusPayloadResolver resolver) {
+    private RuntimeBusEventConsumer consumer(RequestHandlerBusA2aBridge bridge,
+            Function<AgentBusEventEnvelope, byte[]> resolver) {
         Instant now = Instant.parse("2026-07-20T00:00:00Z");
         return new RuntimeBusEventConsumer(new BusEnvelopeValidator(Clock.fixed(now, ZoneOffset.UTC), "runtime-a"),
                 resolver, new InMemoryBusTaskAdmissionStore(), bridge, new BusTaskProjectionCoordinator(
                         new com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore(), p -> {
                         }));
+    }
+
+    private static RequestHandlerBusA2aBridge bridge(
+            BiFunction<AgentBusEventEnvelope, byte[], BusDispatchResult> dispatch) {
+        return new RequestHandlerBusA2aBridge() {
+            @Override
+            public BusDispatchResult handle(AgentBusEventEnvelope event, byte[] payload) {
+                return dispatch.apply(event, payload);
+            }
+        };
     }
 
     private AgentBusEventEnvelope event(String type, String key) {

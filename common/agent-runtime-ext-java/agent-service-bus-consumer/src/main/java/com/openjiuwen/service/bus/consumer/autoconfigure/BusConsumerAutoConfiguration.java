@@ -4,27 +4,19 @@
 
 package com.openjiuwen.service.bus.consumer.autoconfigure;
 
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
-import com.openjiuwen.service.bus.consumer.observability.BusConsumerTelemetry;
-import com.openjiuwen.service.bus.consumer.port.BrokerDeliveryPort;
-import com.openjiuwen.service.bus.consumer.port.BusA2aRequestBridge;
-import com.openjiuwen.service.bus.consumer.port.BusPayloadResolver;
 import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
 import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
-import com.openjiuwen.service.bus.consumer.port.BusTaskStateProjector;
-import com.openjiuwen.service.bus.consumer.port.RuntimeBusResponsePublisher;
-import com.openjiuwen.service.bus.consumer.port.RuntimeBusTargetIdentity;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairScheduler;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairer;
 import com.openjiuwen.service.bus.consumer.relay.BusResponseRelay;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort;
-import com.openjiuwen.service.bus.consumer.runtime.AgentBusOutboxResponsePublisher;
+import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
 import com.openjiuwen.service.bus.consumer.runtime.BrokerConsumerLifecycle;
 import com.openjiuwen.service.bus.consumer.runtime.BrokerDeliveryLoop;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
@@ -36,12 +28,8 @@ import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.observation.ObservationRegistry;
-
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.TaskStore;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -52,6 +40,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 
 import java.time.Clock;
 
@@ -61,28 +50,15 @@ import java.time.Clock;
  * @since 2026-07-22
  */
 @AutoConfiguration
-@AutoConfigureBefore(A2AAutoConfiguration.class)
+@AutoConfigureBefore(name = "com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration")
 @EnableConfigurationProperties(BusConsumerProperties.class)
 @ConditionalOnProperty(prefix = "openjiuwen.service.bus.consumer", name = "enabled", havingValue = "true")
 public class BusConsumerAutoConfiguration {
     private static final long STREAM_REF_TTL_SECONDS = 300L;
 
     @Bean
-    @ConditionalOnMissingBean
-    Clock busConsumerClock() {
-        return Clock.systemUTC();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    BusEnvelopeValidator busEnvelopeValidator(RuntimeBusTargetIdentity identity, Clock clock, BusConsumerProperties p) {
-        return new BusEnvelopeValidator(clock, identity.serviceId());
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    RuntimeBusTargetIdentity runtimeBusTargetIdentity(BusConsumerProperties p) {
-        return () -> p.getTargetServiceId();
+    BusEnvelopeValidator busEnvelopeValidator(Environment environment) {
+        return new BusEnvelopeValidator(Clock.systemUTC(), serviceId(environment));
     }
 
     @Bean
@@ -104,7 +80,6 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(name = "busDurabilityGuard")
     Object busDurabilityGuard(BusConsumerProperties p, BusTaskAdmissionStore admission,
             BusResponseProjectionStore projection) {
         DurabilityGuard.verify(true, p.isAllowEphemeralState(), admission, projection);
@@ -112,20 +87,6 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean
-    BusPayloadResolver busPayloadResolver() {
-        return e -> e.inlinePayload();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    BusConsumerTelemetry busConsumerTelemetry(ObjectProvider<MeterRegistry> meters,
-            ObjectProvider<ObservationRegistry> observations) {
-        return new BusConsumerTelemetry(meters.getIfAvailable(), observations.getIfAvailable());
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     BusConcurrencyGuard busConcurrencyGuard(BusConsumerProperties p) {
         BusConsumerProperties.Tuning tuning = p.getTuning();
         return new BusConcurrencyGuard(tuning.getPayloadMaxInFlight(), tuning.getBridgeMaxInFlight(),
@@ -133,59 +94,55 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    @ConditionalOnMissingBean(BrokerDeliveryPort.class)
     @ConditionalOnBean(name = "runtimeRequestConsumer")
-    BrokerDeliveryPort agentBusBrokerDeliveryPort(
+    AgentBusBrokerDeliveryPort agentBusBrokerDeliveryPort(
             @Qualifier("runtimeRequestConsumer") BrokerForwardingConsumerPort consumer, BusConsumerProperties p,
-            RuntimeBusTargetIdentity identity) {
-        return new AgentBusBrokerDeliveryPort(consumer, consumerServiceId(identity),
+            Environment environment) {
+        return new AgentBusBrokerDeliveryPort(consumer, consumerServiceId(environment),
                 require(p.getConsumerTenantId(), "consumer-tenant-id"),
-                require(identity.serviceId(), "target-service-id"));
+                serviceId(environment));
     }
 
     @Bean
-    @ConditionalOnMissingBean(RuntimeBusResponsePublisher.class)
-    @ConditionalOnBean(ForwardingOutboxPort.class)
-    RuntimeBusResponsePublisher agentBusOutboxResponsePublisher(ForwardingOutboxPort outbox,
-            RuntimeBusTargetIdentity identity) {
-        return new AgentBusOutboxResponsePublisher(outbox, require(identity.serviceId(), "target-service-id"));
+    @ConditionalOnBean(name = "runtimeResponseProducer")
+    AgentBusResponsePublisher agentBusResponsePublisher(
+            @Qualifier("runtimeResponseProducer") BrokerForwardingProducerPort producer, Environment environment) {
+        return new AgentBusResponsePublisher(producer, serviceId(environment));
     }
 
     @Bean
-    @ConditionalOnMissingBean
-    BusA2aRequestBridge busA2aRequestBridge(RequestHandler requestHandler) {
+    RequestHandlerBusA2aBridge busA2aRequestBridge(RequestHandler requestHandler) {
         return new RequestHandlerBusA2aBridge(requestHandler);
     }
 
     @Bean(destroyMethod = "close")
-    @ConditionalOnBean({BusResponseProjectionStore.class, RuntimeBusResponsePublisher.class})
-    BusResponseRelay busResponseRelay(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher,
-            BusConsumerProperties p, BusConsumerTelemetry telemetry, BusConcurrencyGuard concurrency) {
+    @ConditionalOnBean({BusResponseProjectionStore.class, AgentBusResponsePublisher.class})
+    BusResponseRelay busResponseRelay(BusResponseProjectionStore store, AgentBusResponsePublisher publisher,
+            BusConsumerProperties p, BusConcurrencyGuard concurrency) {
         BusConsumerProperties.Tuning tuning = p.getTuning();
-        return new BusResponseRelay(store, publisher, BusExecutors.singleThreadScheduler("bus-response-relay"),
-                tuning.getResponseRelayMaxAttempts(), tuning.getResponseRelayBackoff(), telemetry, concurrency);
+        return new BusResponseRelay(store, publisher::publish, BusExecutors.singleThreadScheduler("bus-response-relay"),
+                tuning.getResponseRelayMaxAttempts(), tuning.getResponseRelayBackoff(), concurrency);
     }
 
     @Bean
-    @ConditionalOnBean({BusResponseProjectionStore.class, RuntimeBusResponsePublisher.class, BusResponseRelay.class})
+    @ConditionalOnBean({BusResponseProjectionStore.class, AgentBusResponsePublisher.class,
+            BusResponseRelay.class})
     BusTaskProjectionCoordinator busTaskProjectionCoordinator(BusResponseProjectionStore store,
-            RuntimeBusResponsePublisher publisher, BusResponseRelay relay, BusConsumerTelemetry telemetry,
-            BusConcurrencyGuard concurrency) {
-        return new BusTaskProjectionCoordinator(store, publisher, relay, telemetry, concurrency);
+            AgentBusResponsePublisher publisher, BusResponseRelay relay, BusConcurrencyGuard concurrency) {
+        return new BusTaskProjectionCoordinator(store, publisher::publish, relay, concurrency);
     }
 
     @Bean
     @ConditionalOnBean({BusResponseProjectionStore.class, BusResponseRelay.class})
     BusProjectionRepairer busProjectionRepairer(BusResponseProjectionStore store, BusResponseRelay relay,
-            BusConsumerProperties p, BusConsumerTelemetry telemetry) {
-        return new BusProjectionRepairer(store, relay, require(p.getConsumerTenantId(), "consumer-tenant-id"),
-                telemetry);
+            BusConsumerProperties p) {
+        return new BusProjectionRepairer(store, relay, require(p.getConsumerTenantId(), "consumer-tenant-id"));
     }
 
     @Bean
     @ConditionalOnBean(BusProjectionRepairer.class)
     BusProjectionRepairScheduler busProjectionRepairScheduler(BusProjectionRepairer repairer, BusConsumerProperties p,
-            org.springframework.beans.factory.ObjectProvider<BusTaskStateProjector> taskProjector) {
+            org.springframework.beans.factory.ObjectProvider<TaskStoreProjectionPostProcessor> taskProjector) {
         return new BusProjectionRepairScheduler(repairer, p.getTuning().getRepairInterval().toMillis(),
                 taskProjector.getIfAvailable(), require(p.getConsumerTenantId(), "consumer-tenant-id"));
     }
@@ -204,23 +161,23 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean({BusA2aRequestBridge.class, RuntimeBusResponsePublisher.class})
+    @ConditionalOnBean({RequestHandlerBusA2aBridge.class, AgentBusResponsePublisher.class})
     RuntimeBusEventConsumer runtimeBusEventConsumer(ConfigurableListableBeanFactory beans) {
         return new RuntimeBusEventConsumer(beans.getBean(BusEnvelopeValidator.class),
-                beans.getBean(BusPayloadResolver.class), beans.getBean(BusTaskAdmissionStore.class),
-                beans.getBean(BusA2aRequestBridge.class), beans.getBean(BusTaskProjectionCoordinator.class),
+                event -> event.inlinePayload(), beans.getBean(BusTaskAdmissionStore.class),
+                beans.getBean(RequestHandlerBusA2aBridge.class), beans.getBean(BusTaskProjectionCoordinator.class),
                 beans.getBeanProvider(StreamReadyProjector.class).getIfAvailable(),
-                beans.getBeanProvider(BusTaskStateProjector.class).getIfAvailable(),
-                beans.getBean(BusConsumerTelemetry.class), beans.getBean(BusConcurrencyGuard.class));
+                beans.getBeanProvider(TaskStoreProjectionPostProcessor.class).getIfAvailable(),
+                beans.getBean(BusConcurrencyGuard.class));
     }
 
     @Bean
-    @ConditionalOnBean({BrokerDeliveryPort.class, RuntimeBusEventConsumer.class})
-    BrokerDeliveryLoop brokerDeliveryLoop(BrokerDeliveryPort broker, RuntimeBusEventConsumer consumer,
-            BusConsumerProperties p, RuntimeBusTargetIdentity identity, Clock clock) {
+    @ConditionalOnBean({AgentBusBrokerDeliveryPort.class, RuntimeBusEventConsumer.class})
+    BrokerDeliveryLoop brokerDeliveryLoop(AgentBusBrokerDeliveryPort broker, RuntimeBusEventConsumer consumer,
+            BusConsumerProperties p, Environment environment) {
         return new BrokerDeliveryLoop(broker, d -> consumer.consume(d.envelope(), d.payload()),
-                consumerServiceId(identity),
-                require(p.getConsumerTenantId(), "consumer-tenant-id"), clock);
+                consumerServiceId(environment),
+                require(p.getConsumerTenantId(), "consumer-tenant-id"), Clock.systemUTC());
     }
 
     @Bean
@@ -230,15 +187,15 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    SmartInitializingSingleton busConsumerRequiredBeans(BusConsumerProperties p, RuntimeBusTargetIdentity identity,
+    SmartInitializingSingleton busConsumerRequiredBeans(BusConsumerProperties p, Environment environment,
             ConfigurableListableBeanFactory beans) {
         return () -> {
-            require(identity.serviceId(), "target-service-id");
+            serviceId(environment);
             require(p.getConsumerTenantId(), "consumer-tenant-id");
             if (beans.getBeanProvider(RuntimeBusEventConsumer.class).getIfAvailable() == null) {
                 throw new IllegalStateException("RuntimeBusEventConsumer bean is required");
             }
-            if (beans.getBeanProvider(BrokerDeliveryPort.class).getIfAvailable() == null) {
+            if (beans.getBeanProvider(AgentBusBrokerDeliveryPort.class).getIfAvailable() == null) {
                 throw new IllegalStateException("runtimeRequestConsumer/delivery adapter is required");
             }
             TaskStore configuredTaskStore = beans.getBeanProvider(TaskStore.class).getIfAvailable();
@@ -246,14 +203,18 @@ public class BusConsumerAutoConfiguration {
                 throw new IllegalStateException("A2A TaskStore bean is required");
             }
             DurabilityGuard.verifyTaskStore(p.isAllowEphemeralState(), configuredTaskStore);
-            if (beans.getBeanProvider(RuntimeBusResponsePublisher.class).getIfAvailable() == null) {
-                throw new IllegalStateException("RuntimeBusResponsePublisher bean is required");
+            if (beans.getBeanProvider(AgentBusResponsePublisher.class).getIfAvailable() == null) {
+                throw new IllegalStateException("runtimeResponseProducer/response publisher is required");
             }
         };
     }
 
-    static String consumerServiceId(RuntimeBusTargetIdentity identity) {
-        return "runtime-" + require(identity.serviceId(), "target-service-id");
+    static String consumerServiceId(Environment environment) {
+        return "runtime-" + serviceId(environment);
+    }
+
+    private static String serviceId(Environment environment) {
+        return require(environment.getProperty("spring.application.name"), "spring.application.name");
     }
 
     private static String require(String value, String name) {

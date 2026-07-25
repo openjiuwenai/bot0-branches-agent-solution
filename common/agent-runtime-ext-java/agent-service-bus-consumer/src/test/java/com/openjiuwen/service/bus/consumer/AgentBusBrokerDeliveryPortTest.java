@@ -11,7 +11,6 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
-import com.openjiuwen.service.bus.consumer.port.BrokerDeliveryPort;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort;
 
 import org.junit.jupiter.api.Test;
@@ -35,7 +34,8 @@ class AgentBusBrokerDeliveryPortTest {
         AgentBusBrokerDeliveryPort adapter = new AgentBusBrokerDeliveryPort(consumer, "runtime-runtime-a", "tenant-a",
                 "runtime-a");
 
-        BrokerDeliveryPort.Delivery delivery = adapter.poll("runtime-runtime-a", "tenant-a", 1L).orElseThrow();
+        AgentBusBrokerDeliveryPort.Delivery delivery = adapter.poll("runtime-runtime-a", "tenant-a", 1L)
+                .orElseThrow();
         assertThat(consumer.subscriptions).hasSize(8);
         assertThat(delivery.envelope().eventType()).isEqualTo("CLIENT_INVOCATION_REQUESTED");
         assertThat(delivery.envelope().traceId()).isEqualTo("trace-1");

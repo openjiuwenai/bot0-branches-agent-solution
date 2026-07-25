@@ -5,9 +5,7 @@
 package com.openjiuwen.service.bus.consumer.relay;
 
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.observability.BusConsumerTelemetry;
 import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
-import com.openjiuwen.service.bus.consumer.port.RuntimeBusResponsePublisher;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
 
 import org.slf4j.Logger;
@@ -17,6 +15,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Relays persisted response projections with bounded retry.
@@ -27,11 +26,10 @@ public final class BusResponseRelay implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(BusResponseRelay.class);
 
     private final BusResponseProjectionStore store;
-    private final RuntimeBusResponsePublisher publisher;
+    private final Consumer<BusResponseProjection> publisher;
     private final ScheduledExecutorService scheduler;
     private final int maxAttempts;
     private final Duration initialBackoff;
-    private final BusConsumerTelemetry telemetry;
     private final BusConcurrencyGuard concurrency;
 
     /**
@@ -48,10 +46,9 @@ public final class BusResponseRelay implements AutoCloseable {
      * @param initialBackoff
      *            the initialBackoff value
      */
-    public BusResponseRelay(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher,
+    public BusResponseRelay(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
             ScheduledExecutorService scheduler, int maxAttempts, Duration initialBackoff) {
-        this(store, publisher, scheduler, maxAttempts, initialBackoff, new BusConsumerTelemetry(null, null),
-                new BusConcurrencyGuard(16, 16, 16, 64));
+        this(store, publisher, scheduler, maxAttempts, initialBackoff, new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
     /**
@@ -67,37 +64,12 @@ public final class BusResponseRelay implements AutoCloseable {
      *            the maxAttempts value
      * @param initialBackoff
      *            the initialBackoff value
-     * @param telemetry
-     *            the telemetry value
-     */
-    public BusResponseRelay(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher,
-            ScheduledExecutorService scheduler, int maxAttempts, Duration initialBackoff,
-            BusConsumerTelemetry telemetry) {
-        this(store, publisher, scheduler, maxAttempts, initialBackoff, telemetry,
-                new BusConcurrencyGuard(16, 16, 16, 64));
-    }
-
-    /**
-     * Creates a new instance.
-     *
-     * @param store
-     *            the store value
-     * @param publisher
-     *            the publisher value
-     * @param scheduler
-     *            the scheduler value
-     * @param maxAttempts
-     *            the maxAttempts value
-     * @param initialBackoff
-     *            the initialBackoff value
-     * @param telemetry
-     *            the telemetry value
      * @param concurrency
      *            the concurrency value
      */
-    public BusResponseRelay(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher,
+    public BusResponseRelay(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
             ScheduledExecutorService scheduler, int maxAttempts, Duration initialBackoff,
-            BusConsumerTelemetry telemetry, BusConcurrencyGuard concurrency) {
+            BusConcurrencyGuard concurrency) {
         if (maxAttempts < 1 || initialBackoff.isNegative() || initialBackoff.isZero()) {
             throw new IllegalArgumentException();
         }
@@ -106,7 +78,6 @@ public final class BusResponseRelay implements AutoCloseable {
         this.scheduler = Objects.requireNonNull(scheduler);
         this.maxAttempts = maxAttempts;
         this.initialBackoff = initialBackoff;
-        this.telemetry = Objects.requireNonNull(telemetry);
         this.concurrency = Objects.requireNonNull(concurrency);
     }
 
@@ -119,11 +90,10 @@ public final class BusResponseRelay implements AutoCloseable {
      * @return the operation result
      */
     public boolean submit(BusResponseProjection projection) {
-        boolean appended = telemetry.observe("projection.append", family(projection), () -> store.append(projection));
+        boolean appended = store.append(projection);
         if (!appended) {
             return false;
         }
-        telemetry.projectionAppended();
         attempt(projection, 1);
         return true;
     }
@@ -143,18 +113,12 @@ public final class BusResponseRelay implements AutoCloseable {
             return;
         }
         try {
-            telemetry.observe("projection.publish", family(projection),
-                    () -> concurrency.call(BusConcurrencyGuard.Lane.PROJECTION, () -> {
-                        publisher.publish(projection);
-                        return null;
-                    }));
+            concurrency.call(BusConcurrencyGuard.Lane.PROJECTION, () -> {
+                publisher.accept(projection);
+                return null;
+            });
             store.markPublished(projection.tenantId(), projection.eventId());
-            telemetry.projectionPublished();
-            telemetry.projection(projection.eventType(), "published");
-            telemetry.projectionLag(projection.eventType(),
-                    Duration.between(projection.occurredAt(), java.time.Instant.now()).toNanos());
         } catch (IllegalArgumentException | IllegalStateException failure) {
-            telemetry.projection(projection.eventType(), "failed");
             LOG.warn("Projection publish attempt {} failed for event {}", attempt, projection.eventId(), failure);
             if (attempt < maxAttempts) {
                 scheduler.schedule(() -> attempt(projection, attempt + 1),
@@ -162,11 +126,6 @@ public final class BusResponseRelay implements AutoCloseable {
             }
         }
     }
-
-    private static String family(BusResponseProjection projection) {
-        return projection.eventType().startsWith("A2A") ? "a2a" : "invocation";
-    }
-
     /** {@inheritDoc} */
     @Override
     public void close() {

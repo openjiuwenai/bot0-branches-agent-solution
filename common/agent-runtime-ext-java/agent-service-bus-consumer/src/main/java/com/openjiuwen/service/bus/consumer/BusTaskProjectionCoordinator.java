@@ -5,14 +5,14 @@
 package com.openjiuwen.service.bus.consumer;
 
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.observability.BusConsumerTelemetry;
 import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
-import com.openjiuwen.service.bus.consumer.port.RuntimeBusResponsePublisher;
 import com.openjiuwen.service.bus.consumer.relay.BusResponseRelay;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.function.Consumer;
 
 /**
  * Publishes stable, idempotent Task facts; it never carries token chunks or SSE frames.
@@ -23,9 +23,8 @@ public final class BusTaskProjectionCoordinator {
     private static final Logger LOG = LoggerFactory.getLogger(BusTaskProjectionCoordinator.class);
 
     private final BusResponseProjectionStore store;
-    private final RuntimeBusResponsePublisher publisher;
+    private final Consumer<BusResponseProjection> publisher;
     private final BusResponseRelay relay;
-    private final BusConsumerTelemetry telemetry;
     private final BusConcurrencyGuard concurrency;
 
     /**
@@ -36,8 +35,8 @@ public final class BusTaskProjectionCoordinator {
      * @param publisher
      *            the publisher value
      */
-    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher) {
-        this(store, publisher, null, new BusConsumerTelemetry(null, null), new BusConcurrencyGuard(16, 16, 16, 64));
+    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher) {
+        this(store, publisher, null, new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
     /**
@@ -50,9 +49,9 @@ public final class BusTaskProjectionCoordinator {
      * @param relay
      *            the relay value
      */
-    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher,
+    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
             BusResponseRelay relay) {
-        this(store, publisher, relay, new BusConsumerTelemetry(null, null), new BusConcurrencyGuard(16, 16, 16, 64));
+        this(store, publisher, relay, new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
     /**
@@ -64,34 +63,14 @@ public final class BusTaskProjectionCoordinator {
      *            the publisher value
      * @param relay
      *            the relay value
-     * @param telemetry
-     *            the telemetry value
-     */
-    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher,
-            BusResponseRelay relay, BusConsumerTelemetry telemetry) {
-        this(store, publisher, relay, telemetry, new BusConcurrencyGuard(16, 16, 16, 64));
-    }
-
-    /**
-     * Creates a new instance.
-     *
-     * @param store
-     *            the store value
-     * @param publisher
-     *            the publisher value
-     * @param relay
-     *            the relay value
-     * @param telemetry
-     *            the telemetry value
      * @param concurrency
      *            the concurrency value
      */
-    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, RuntimeBusResponsePublisher publisher,
-            BusResponseRelay relay, BusConsumerTelemetry telemetry, BusConcurrencyGuard concurrency) {
+    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
+            BusResponseRelay relay, BusConcurrencyGuard concurrency) {
         this.store = store;
         this.publisher = publisher;
         this.relay = relay;
-        this.telemetry = telemetry;
         this.concurrency = concurrency;
     }
 
@@ -114,24 +93,15 @@ public final class BusTaskProjectionCoordinator {
             }
             return submitted;
         }
-        boolean appended = telemetry.observe("projection.append", family(projection.eventType()),
-                () -> store.append(projection));
+        boolean appended = store.append(projection);
         if (!appended) {
             return false;
         }
-        telemetry.projectionAppended();
-        telemetry.observe("projection.publish", family(projection.eventType()), () -> {
-            concurrency.call(BusConcurrencyGuard.Lane.PROJECTION, () -> {
-                publisher.publish(projection);
-                return null;
-            });
+        concurrency.call(BusConcurrencyGuard.Lane.PROJECTION, () -> {
+            publisher.accept(projection);
             return null;
         });
         store.markPublished(projection.tenantId(), projection.eventId());
-        telemetry.projectionPublished();
-        telemetry.projection(projection.eventType(), "published");
-        telemetry.projectionLag(projection.eventType(),
-                java.time.Duration.between(projection.occurredAt(), java.time.Instant.now()).toNanos());
         audit(projection);
         return true;
     }
@@ -145,9 +115,5 @@ public final class BusTaskProjectionCoordinator {
         LOG.info("bus projection audit tenantHash={} messageId={} correlationId={} taskId={} eventType={} kind={}",
                 Integer.toHexString(projection.tenantId().hashCode()), projection.causationMessageId(),
                 projection.correlationId(), projection.taskId(), projection.eventType(), kind);
-    }
-
-    private static String family(String type) {
-        return type != null && type.startsWith("A2A") ? "a2a" : "invocation";
     }
 }

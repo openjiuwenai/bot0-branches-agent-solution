@@ -5,22 +5,27 @@
 package com.openjiuwen.service.bus.consumer.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.ProjectingTaskStore;
-import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
-import com.openjiuwen.service.bus.consumer.port.BrokerDeliveryPort;
-import com.openjiuwen.service.bus.consumer.port.BusA2aRequestBridge;
-import com.openjiuwen.service.bus.consumer.port.RuntimeBusResponsePublisher;
-import com.openjiuwen.service.bus.consumer.port.RuntimeBusTargetIdentity;
+import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
+import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort;
+import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
 
+import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.InMemoryTaskStore;
 import org.a2aproject.sdk.server.tasks.TaskStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.mock.env.MockEnvironment;
 
+import java.lang.reflect.Proxy;
 import java.time.Duration;
 
 /**
@@ -33,43 +38,39 @@ class BusConsumerAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
             .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
                     "openjiuwen.service.bus.consumer.allow-ephemeral-state=true",
-                    "openjiuwen.service.bus.consumer.target-service-id=runtime-a",
-                    "openjiuwen.service.bus.consumer.consumer-tenant-id=tenant-a")
-            .withBean(BusA2aRequestBridge.class,
-                    () -> (event, payload) -> new BusDispatchResult("task", null, null, false))
-            .withBean(RuntimeBusResponsePublisher.class, () -> projection -> {
-            }).withBean(BrokerDeliveryPort.class, () -> new BrokerDeliveryPort() {
-                /** {@inheritDoc} */
-                @Override
-                public java.util.Optional<Delivery> poll(String consumer, String tenant, long now) {
-                    return java.util.Optional.empty();
-                }
-
-                /** {@inheritDoc} */
-                @Override
-                public void commit(Delivery delivery) {
-                }
-
-                /** {@inheritDoc} */
-                @Override
-                public void reject(Delivery delivery, RejectReason reason) {
-                }
+                    "openjiuwen.service.bus.consumer.consumer-tenant-id=tenant-a",
+                    "spring.application.name=runtime-a")
+            .withBean(RequestHandler.class, BusConsumerAutoConfigurationTest::requestHandler)
+            .withBean("runtimeResponseProducer", BrokerForwardingProducerPort.class,
+                    () -> new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_in"))
+            .withBean(AgentBusBrokerDeliveryPort.class, () -> {
+                var broker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "deliver");
+                return new AgentBusBrokerDeliveryPort(broker.consumerFor("runtime-runtime-a"), "runtime-runtime-a",
+                        "tenant-a", "runtime-a");
             }).withBean(TaskStore.class, InMemoryTaskStore::new);
 
     @Test
     void createsConsumerWhenEnabledByDefault() {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(RuntimeBusEventConsumer.class);
+            assertThat(context).hasSingleBean(AgentBusResponsePublisher.class);
             assertThat(context).hasSingleBean(BusConsumerProperties.class);
             assertThat(context.getBean(TaskStore.class)).isInstanceOf(ProjectingTaskStore.class);
         });
     }
 
     @Test
-    void derivesConsumerServiceIdFromRuntimeTargetIdentity() {
-        RuntimeBusTargetIdentity identity = () -> "runtime-a";
+    void derivesConsumerServiceIdFromApplicationName() {
+        MockEnvironment environment = new MockEnvironment().withProperty("spring.application.name", "runtime-a");
 
-        assertThat(BusConsumerAutoConfiguration.consumerServiceId(identity)).isEqualTo("runtime-runtime-a");
+        assertThat(BusConsumerAutoConfiguration.consumerServiceId(environment)).isEqualTo("runtime-runtime-a");
+    }
+
+    @Test
+    void rejectsMissingApplicationName() {
+        assertThatThrownBy(() -> BusConsumerAutoConfiguration.consumerServiceId(new MockEnvironment()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("spring.application.name");
     }
 
     @Test
@@ -85,8 +86,8 @@ class BusConsumerAutoConfigurationTest {
     }
 
     @Test
-    void customBridgeReplacesDefault() {
-        contextRunner.run(context -> assertThat(context).hasSingleBean(BusA2aRequestBridge.class));
+    void usesConfiguredBridge() {
+        contextRunner.run(context -> assertThat(context).hasSingleBean(RequestHandlerBusA2aBridge.class));
     }
 
     @Test
@@ -107,11 +108,19 @@ class BusConsumerAutoConfigurationTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
                 .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
                         "openjiuwen.service.bus.consumer.allow-ephemeral-state=true",
-                        "openjiuwen.service.bus.consumer.target-service-id=runtime-a",
-                        "openjiuwen.service.bus.consumer.consumer-tenant-id=tenant-a")
+                        "openjiuwen.service.bus.consumer.consumer-tenant-id=tenant-a",
+                        "spring.application.name=runtime-a")
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("RequestHandler");
+                });
+    }
+
+    private static RequestHandler requestHandler() {
+        return (RequestHandler) Proxy.newProxyInstance(RequestHandler.class.getClassLoader(),
+                new Class<?>[]{RequestHandler.class},
+                (proxy, method, arguments) -> {
+                    throw new UnsupportedOperationException(method.getName());
                 });
     }
 }

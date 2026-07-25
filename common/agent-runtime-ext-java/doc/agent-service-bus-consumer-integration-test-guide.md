@@ -1,348 +1,302 @@
-# agent-service-bus-consumer（FEAT-017）联调测试指南
+# FEAT-017 agent-service-bus-consumer 联调测试指南
 
-本文说明如何在 Linux/macOS 上验证 `agent-service-bus-consumer` 与 agent-bus 的联调，包括不依赖外部服务的内存联调，以及使用本机 RocketMQ 进程的 broker 往返测试。本文不依赖 Docker。
+> 更新日期：2026-07-25
+> 适用代码：agent-bus PR 124 角色化装配及 FEAT-017 runtime consumer
 
-除非特别说明，所有命令均在 `agent-solution` 仓库根目录执行。
+## 1. 联调目标
 
-## 1. 测试边界
-
-FEAT-017 负责以下中间链路：
-
-```text
-agent-bus *_deliver
-        |
-        v
-AgentBusBrokerDeliveryPort
-        |
-        v
-RuntimeBusEventConsumer -> A2A bridge -> Task/响应投影
-        |
-        v
-AgentBusOutboxResponsePublisher
-        |
-        v
-agent-bus *_resp_in
-```
-
-FEAT-013/014 负责外围两跳：`*_req -> *_deliver` 和 `*_resp_in -> *_resp_out`，以及 Postgres outbox/inbox、relay 重试和 DLQ。FEAT-017 的测试不复制这些实现，而是使用 agent-bus 提供的 SPI、testkit 和 RocketMQ adapter 验证双方边界契约。
-
-对应测试文件：
-
-- `AgentBusInMemoryIntegrationTest`：使用 `agent-bus-testkit` 的 `InMemoryBroker` 模拟 gateway、bus 和 runtime。
-- `RealRocketMqFeat017IntegrationTest`：使用真实 `RocketMqBrokerForwardingRelay` 和 `RocketMqBrokerForwardingConsumer` 验证 RocketMQ 往返。
-- `Feat017BusIntegrationSupport`：构造标准 agent-bus envelope、运行时 A2A bridge fixture 和响应 outbox fixture。
-
-## 2. 内存联调
-
-### 2.1 覆盖场景
-
-内存联调不需要 RocketMQ，覆盖：
-
-1. gateway/bus 将 `CLIENT_INVOCATION_REQUESTED` 投递到 `*_deliver`。
-2. FEAT-017 按 tenant 和 target service 订阅并消费。
-3. 请求进入与标准 A2A 入口等价的 bridge fixture。
-4. runtime 输出 `INVOCATION_ACCEPTED` 和 `INVOCATION_RESPONSE`。
-5. 响应通过 agent-bus outbox envelope 回到 `*_resp_in`。
-6. 同一 `tenantId + idempotencyKey` 重投时，A2A bridge 只执行一次。
-7. `CLIENT_INVOCATION_QUERY_REQUESTED` 通过标准 `GetTask` 语义查询 runtime 自有 TaskStore。
-8. 查询以 payload 中的服务端 `taskId` 为准，不能用 gateway 的 `clientInvocationId` 替代。
-
-### 2.2 执行命令
-
-先安装 agent-bus 模块，使 runtime 扩展工程能解析 SPI、SDK 和 testkit：
-
-```bash
-mvn -f common/agent-bus/pom.xml \
-  -pl agent-bus-spi,agent-bus-testkit,agent-bus-sdk -am \
-  -DskipTests install
-```
-
-运行内存联调：
-
-```bash
-mvn -f common/agent-runtime-ext-java/pom.xml \
-  -pl agent-service-bus-consumer -am test \
-  -Dtest=AgentBusInMemoryIntegrationTest \
-  -Dsurefire.failIfNoSpecifiedTests=false
-```
-
-预期结果：3 个测试通过，外部 RocketMQ 未启动也不影响执行。
-
-## 3. 真实 RocketMQ 联调
-
-### 3.1 测试拓扑
+本指南验证以下链路：
 
 ```text
-bus/gateway fixture
-  -> ascend_bus_{invocation|a2a}_deliver
-  -> RocketMQ
-  -> FEAT-017 runtime consumer
-  -> A2A bridge fixture
-  -> ACCEPTED + RESPONSE outbox envelope
-  -> RocketMQ
-  -> ascend_bus_{invocation|a2a}_resp_in
-  -> bus response verifier
+gateway/caller
+  -> *_req
+  -> agent-bus relay
+  -> *_deliver
+  -> agent-runtime（FEAT-017）
+  -> *_resp_in
+  -> agent-bus relay
+  -> *_resp_out
+  -> gateway/caller
 ```
 
-该测试覆盖 invocation 和 A2A 两个事件族。consumer group 每次运行带随机后缀，避免共享 broker 上旧消费位点干扰。
+三个进程职责如下：
 
-Task 查询场景会在 runtime TaskStore 中同时保存目标 Task 和一个以 `clientInvocationId` 命名的诱饵 Task。Gateway 查询 payload 使用：
+| 进程 | agent-bus 角色 | 职责 |
+|---|---|---|
+| gateway/caller | `caller` | 向 `req` 发布请求，从 `resp_out` 接收响应 |
+| agent-bus relay | `relay` | 完成 `req -> deliver` 和 `resp_in -> resp_out` 两跳转发 |
+| agent-runtime | `runtime` | 从 `deliver` 接收请求，进入 A2A `RequestHandler`，向 `resp_in` 发布投影 |
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "GetTask",
-  "params": {
-    "id": "runtime-task-id",
-    "historyLength": 10,
-    "tenant": "tenant-a"
-  },
-  "clientInvocationId": "client-invocation-decoy"
-}
+FEAT-017 和 Demo 不创建 RocketMQ 客户端、不填写 Topic、不管理 Consumer Group。上述物理细节由
+agent-bus SDK 的角色化自动装配完成。
+
+## 2. 当前装配关系
+
+Demo 只提供：
+
+- Spring Boot 应用入口；
+- 一个业务 `AgentHandler`；
+- 部署配置。
+
+引入 `agent-service-bus-consumer` 和 `agent-bus-sdk` 后，配置：
+
+```yaml
+agent-bus:
+  role:
+    runtime:
+      enabled: true
 ```
 
-runtime 必须只以 `params.id` 查询 TaskStore，并发布携带 `runtime-task-id` 的 `INVOCATION_RESPONSE`。如果实现错误地使用 `clientInvocationId`，测试会查到诱饵 Task 并因 taskId 不一致而失败。
+agent-bus SDK 自动提供：
 
-### 3.2 准备本机环境
+| Bean | 类型 | SDK 内部绑定 |
+|---|---|---|
+| `runtimeRequestConsumer` | `BrokerForwardingConsumerPort` | 消费 `deliver` |
+| `runtimeResponseProducer` | `BrokerForwardingProducerPort` | 生产 `resp_in` |
 
-要求：
+FEAT-017 自动提供：
 
-- 64 位 Linux 或 macOS。
-- 已安装 JDK，并且 `java -version` 可以正常执行。建议与本工程统一使用 JDK 17。
-- 已安装 `curl` 和 `unzip`。
+| 组件 | 作用 |
+|---|---|
+| `AgentBusBrokerDeliveryPort` | 使用 `runtimeRequestConsumer` 接收并确认消息 |
+| `RuntimeBusEventConsumer` | 校验、幂等 admission、调用 A2A bridge |
+| `AgentBusResponsePublisher` | 使用 `runtimeResponseProducer` 直接发布响应投影 |
+| `BusResponseProjectionStore` / `BusResponseRelay` | 保存未发布投影，并对瞬时发布失败做有界重试 |
 
-macOS 通过 Homebrew 安装 JDK 17 后，如果 `/usr/bin/java` 仍然找不到 Java，需要在当前终端显式设置：
+当前 runtime 角色采用 direct produce，不要求 Demo 创建 agent-bus outbox、dispatcher 或数据库。
+生产级持久 admission/projection/TaskStore 仍属于后续可靠性接入。
+
+## 3. 自动化测试
+
+### 3.1 agent-bus SDK
 
 ```bash
-export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
-export PATH="${JAVA_HOME}/bin:${PATH}"
-java -version
-mvn -version
+cd agent-solution/common/agent-bus
+mvn -pl agent-bus-sdk,agent-bus-testkit -am test
 ```
 
-Linux 应按发行版的 JDK 安装路径设置 `JAVA_HOME`，并同样确认 `java -version` 和 `mvn -version` 都使用 JDK 17。
+重点用例：
 
-本测试使用 RocketMQ Broker 5.3.1；agent-bus 当前使用 RocketMQ Client 5.1.4。该组合已通过本文真实 Broker 联调验证。下载并解压 Broker 官方二进制包：
+- `AgentBusRuntimeRoleAutoConfigurationTest`：验证 runtime 角色开关创建
+  `runtimeRequestConsumer` 和 `runtimeResponseProducer`；
+- `RocketMqBrokerForwardingProducerTest`：验证 direct produce 的 broker 映射；
+- `BrokerForwardingPortsContractTest`：验证 producer/consumer SPI。
+
+### 3.2 FEAT-017 内存联调
 
 ```bash
-export ROCKETMQ_VERSION="5.3.1"
-export ROCKETMQ_RUNTIME_DIR="/tmp/feat017-rocketmq"
-export ROCKETMQ_ARCHIVE="${ROCKETMQ_RUNTIME_DIR}/rocketmq-${ROCKETMQ_VERSION}.zip"
-export ROCKETMQ_INSTALL_DIR="${ROCKETMQ_RUNTIME_DIR}/rocketmq-all-${ROCKETMQ_VERSION}-bin-release"
-
-mkdir -p "${ROCKETMQ_RUNTIME_DIR}"
-curl -fL \
-  "https://archive.apache.org/dist/rocketmq/${ROCKETMQ_VERSION}/rocketmq-all-${ROCKETMQ_VERSION}-bin-release.zip" \
-  -o "${ROCKETMQ_ARCHIVE}"
-unzip -q "${ROCKETMQ_ARCHIVE}" -d "${ROCKETMQ_RUNTIME_DIR}"
+cd agent-solution/common/agent-runtime-ext-java
+mvn -Pagent-service-bus-consumer \
+  -pl agent-service-bus-consumer -am test -DskipITs
 ```
 
-如果已经安装了相同版本，只需把 `ROCKETMQ_INSTALL_DIR` 指向其解压目录。可执行以下命令确认目录正确：
+`agent-service-bus-consumer` 不在 `agent-runtime-ext-java` 的默认 reactor 中，避免
+agent-bus 制品尚未发布时影响其他 runtime 扩展模块。只有显式启用同名 Maven profile
+时才把 FEAT-017 加入构建。
 
-```bash
-test -x "${ROCKETMQ_INSTALL_DIR}/bin/mqnamesrv"
-test -x "${ROCKETMQ_INSTALL_DIR}/bin/mqbroker"
-test -x "${ROCKETMQ_INSTALL_DIR}/bin/mqadmin"
-java -version
-```
+`AgentBusInMemoryIntegrationTest` 使用 agent-bus testkit，只存在于测试作用域，覆盖：
 
-### 3.3 启动 NameServer 和 Broker
+- 创建请求进入 runtime；
+- `ACCEPTED`、`RESPONSE` 投影直接进入 response producer；
+- 相同幂等键不重复调用 A2A bridge；
+-查询 Task 时使用 `taskId`，不使用 `clientInvocationId` 替代。
 
-先启动 NameServer：
+### 3.3 真实 RocketMQ adapter 测试
 
-```bash
-mkdir -p "${ROCKETMQ_RUNTIME_DIR}/logs" "${ROCKETMQ_RUNTIME_DIR}/store"
-export JAVA_OPT_EXT="-server -Xms512m -Xmx512m -Xmn128m"
-
-nohup sh "${ROCKETMQ_INSTALL_DIR}/bin/mqnamesrv" \
-  > "${ROCKETMQ_RUNTIME_DIR}/logs/nameserver.log" 2>&1 &
-echo $! > "${ROCKETMQ_RUNTIME_DIR}/nameserver.pid"
-```
-
-等待 NameServer 就绪，并确认日志出现 `The Name Server boot success`：
-
-```bash
-for attempt in {1..30}; do
-  grep -q "The Name Server boot success" \
-    "${ROCKETMQ_RUNTIME_DIR}/logs/nameserver.log" && break
-  sleep 1
-done
-
-grep "The Name Server boot success" \
-  "${ROCKETMQ_RUNTIME_DIR}/logs/nameserver.log" || exit 1
-```
-
-再启动 Broker。仓库内的 `broker.conf` 使用 `127.0.0.1:9876`，适用于测试进程和 RocketMQ 都在同一台机器的场景：
-
-```bash
-export FEAT017_BROKER_CONFIG="${PWD}/common/agent-runtime-ext-java/agent-service-bus-consumer/src/test/resources/e2e/rocketmq/broker.conf"
-
-nohup sh "${ROCKETMQ_INSTALL_DIR}/bin/mqbroker" \
-  -n 127.0.0.1:9876 \
-  -c "${FEAT017_BROKER_CONFIG}" \
-  > "${ROCKETMQ_RUNTIME_DIR}/logs/broker.log" 2>&1 &
-echo $! > "${ROCKETMQ_RUNTIME_DIR}/broker.pid"
-```
-
-等待 Broker 启动并注册到 NameServer：
-
-```bash
-for attempt in {1..60}; do
-  grep -q "The broker\[broker-a.*boot success" \
-    "${ROCKETMQ_RUNTIME_DIR}/logs/broker.log" && break
-  sleep 1
-done
-
-grep "The broker\[broker-a.*boot success" \
-  "${ROCKETMQ_RUNTIME_DIR}/logs/broker.log" || exit 1
-sh "${ROCKETMQ_INSTALL_DIR}/bin/mqadmin" clusterList -n 127.0.0.1:9876
-```
-
-`clusterList` 必须包含 `DefaultCluster`、`broker-a` 和 `127.0.0.1:10911`，再继续创建 Topic。
-
-`broker.conf` 已启用 `enablePropertyFilter=true`。这是 tenantId 和 targetServiceId SQL92 broker-side filter 生效的必要条件。
-
-### 3.4 创建测试 Topic
-
-```bash
-for topic in \
-  ascend_bus_invocation_req ascend_bus_invocation_deliver \
-  ascend_bus_invocation_resp_in ascend_bus_invocation_resp_out \
-  ascend_bus_a2a_req ascend_bus_a2a_deliver \
-  ascend_bus_a2a_resp_in ascend_bus_a2a_resp_out; do
-  sh "${ROCKETMQ_INSTALL_DIR}/bin/mqadmin" updatetopic \
-    -n 127.0.0.1:9876 \
-    -c DefaultCluster \
-    -t "${topic}" || exit 1
-done
-
-sh "${ROCKETMQ_INSTALL_DIR}/bin/mqadmin" topicList \
-  -n 127.0.0.1:9876 | grep '^ascend_bus_'
-```
-
-预期能看到 8 个 `ascend_bus_*` topic。
-
-### 3.5 执行真实 broker 测试
-
-Linux/macOS：
+先确认 RocketMQ NameServer 和 Broker 已启动，并设置：
 
 ```bash
 export ROCKETMQ_NAMESERVER=127.0.0.1:9876
-
-mvn -f common/agent-runtime-ext-java/pom.xml \
-  -pl agent-service-bus-consumer -am test \
-  -Dtest=RealRocketMqFeat017IntegrationTest \
-  -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
-预期结果：
+然后执行：
 
-- `invocationRequestTraversesDeliverRuntimeAndResponseIngress` 通过。
-- `a2aRequestTraversesDeliverRuntimeAndResponseIngress` 通过。
-- `clientInvocationQueryUsesRuntimeTaskIdInsteadOfClientInvocationId` 通过。
-- 请求分别经过 `ascend_bus_invocation_deliver` 和 `ascend_bus_a2a_deliver`。
-- 响应分别进入 `ascend_bus_invocation_resp_in` 和 `ascend_bus_a2a_resp_in`。
-- 每个请求都产生 ACCEPTED 和 RESPONSE，且 tenant、target service、correlationId 和 taskId 保持一致。
-- Task 查询只产生 `INVOCATION_RESPONSE`；TaskStore 的查询参数和响应 taskId 都必须等于 payload 中的服务端 taskId，且响应不得把 `clientInvocationId` 当成 taskId。
+```bash
+cd agent-solution/common/agent-runtime-ext-java
+mvn -Pagent-service-bus-consumer \
+  -pl agent-service-bus-consumer -am \
+  -DROCKETMQ_NAMESERVER="$ROCKETMQ_NAMESERVER" \
+  -Djunit.jupiter.conditions.deactivate= \
+  test
+```
 
-如果未设置 `ROCKETMQ_NAMESERVER`，该测试会自动跳过，不影响普通单元测试。
+`RealRocketMqFeat017IntegrationTest` 会直接使用真实 agent-bus RocketMQ producer/consumer adapter，
+验证 `deliver -> runtime -> resp_in`。未设置 `ROCKETMQ_NAMESERVER` 时该测试按条件跳过。
 
-## 4. 与 FEAT-013/014 完整 relay 联调
+## 4. 构建 Demo
 
-真实 RocketMQ 测试直接从 `*_deliver` 开始，并在 `*_resp_in` 结束，准确覆盖 FEAT-017 的职责边界。需要验证完整链路时，组合执行：
+先安装当前 agent-bus 和 FEAT-017：
 
-1. FEAT-013/014 的 `RealBrokerTwoHopRelayIntegrationTest`，确认 gateway、Postgres outbox/inbox 和 event-bus relay 的两跳治理。
-2. 本文的 `RealRocketMqFeat017IntegrationTest`，确认真实 runtime 消费与响应回写。
-3. 使用同一组 8 个 RocketMQ topic、tenant 和 serviceId 做多进程验收。
+```bash
+cd agent-solution/common/agent-bus
+mvn -pl agent-bus-sdk -am install -DskipTests
 
-完整责任链如下：
+cd ../agent-runtime-ext-java
+mvn -Pagent-service-bus-consumer \
+  -pl agent-service-bus-consumer -am install -DskipTests
+```
+
+再构建 Demo：
+
+```bash
+cd ../example/agent-bus-consumer-demo
+mvn clean package
+```
+
+Demo 源码中不应出现以下内容：
+
+- `org.apache.rocketmq.*`；
+- `DefaultBrokerTopicResolver`；
+- `deliver`、`resp_in` Topic suffix；
+- Producer/Consumer Bean；
+- `RuntimeResponseOutboxDispatcher`；
+- `agent-bus-testkit` 生产依赖。
+
+## 5. 启动 Runtime Demo
+
+### 5.1 配置
+
+默认配置位于：
 
 ```text
-gateway -> *_req -> event-bus relay -> *_deliver
-       -> FEAT-017 runtime -> *_resp_in
-       -> event-bus response relay -> *_resp_out -> gateway
+common/example/agent-bus-consumer-demo/src/main/resources/application.yml
 ```
 
-Postgres、Flyway、relay fat-jar 和数据库检查命令沿用 `feat-013-014-test-guide.md`。本文启动的本机 RocketMQ 只服务于 FEAT-017 broker 边界测试，不启动 Postgres 和 relay 进程。
-
-## 5. 常见问题
-
-### 5.1 测试一直收不到消息
-
-确认：
-
-- `ROCKETMQ_NAMESERVER` 指向宿主机可访问的 NameServer。
-- `nameserver.log` 和 `broker.log` 均出现 `boot success`，且没有端口占用或 JVM 内存错误。
-- Broker 对测试进程发布的地址可达；本地配置使用 `brokerIP1=127.0.0.1`。
-- `mqadmin topicList` 能列出 8 个 `ascend_bus_*` topic。
-- Broker 配置包含 `enablePropertyFilter=true`。
-
-检查本机进程和端口：
+部署时通常只需要覆盖：
 
 ```bash
-ps -p "$(cat /tmp/feat017-rocketmq/nameserver.pid)"
-ps -p "$(cat /tmp/feat017-rocketmq/broker.pid)"
-sh "${ROCKETMQ_INSTALL_DIR}/bin/mqadmin" clusterList -n 127.0.0.1:9876
+export AGENT_BUS_NAMESERVER=127.0.0.1:9876
+export AGENT_BUS_TENANT=tenant-a
+export AGENT_BUS_NAMESPACE=ascend-prod
+export RUNTIME_SERVICE_ID=agent-bus-consumer-demo
 ```
 
-### 5.2 报 SQL92 filter 不支持
+其中 `RUNTIME_SERVICE_ID` 同时用于当前临时的 `spring.application.name`。gateway 发布请求时，
+`targetServiceId` 必须使用同一个值。FEAT-015/016 registry serviceId 接入后将替换这一临时来源。
 
-说明 Broker 没有加载本目录的 `broker.conf`，或者启动的是另一套 Broker。先停止本机 Broker，再按 3.3 节指定 `-c "${FEAT017_BROKER_CONFIG}"` 重新启动：
+### 5.2 启动
 
 ```bash
-sh "${ROCKETMQ_INSTALL_DIR}/bin/mqshutdown" broker
+cd agent-solution/common/example/agent-bus-consumer-demo
+mvn spring-boot:run
 ```
 
-### 5.3 Broker 启动时提示内存不足
+启动时应看到：
 
-确认启动前设置了较小的测试堆：
+- agent-bus runtime role 自动配置生效；
+- FEAT-017 自动配置生效；
+- `runtimeRequestConsumer` 开始订阅；
+- 不需要 Demo 自己创建 Topic resolver、consumer 或 producer。
 
-```bash
-export JAVA_OPT_EXT="-server -Xms512m -Xmx512m -Xmn128m"
+## 6. Topic 准备
+
+RocketMQ 环境需要存在以下 Topic：
+
+```text
+ascend_bus_invocation_req
+ascend_bus_invocation_deliver
+ascend_bus_invocation_resp_in
+ascend_bus_invocation_resp_out
+ascend_bus_a2a_req
+ascend_bus_a2a_deliver
+ascend_bus_a2a_resp_in
+ascend_bus_a2a_resp_out
 ```
 
-如果机器资源仍不足，可以进一步降低 `-Xms` 和 `-Xmx`，但二者应保持一致。
+可由部署平台提前创建，也可在允许自动创建 Topic 的本地 Broker 上由首次发送触发。生产环境建议显式创建，
+并按 agent-bus 部署规范设置权限和保留策略。runtime 和 Demo 不负责创建 Topic。
 
-### 5.4 Maven 找不到 agent-bus-testkit
+## 7. 三进程完整联调
 
-先执行：
+### 7.1 启动顺序
 
-```bash
-mvn -f common/agent-bus/pom.xml \
-  -pl agent-bus-spi,agent-bus-testkit,agent-bus-sdk -am \
-  -DskipTests install
+1. 启动 RocketMQ NameServer 和 Broker。
+2. 启动 PostgreSQL，供 agent-bus relay 的 durable inbox/outbox 使用。
+3. 启动 agent-bus relay：
+
+   ```bash
+   cd agent-solution/common/agent-bus
+   mvn -pl agent-bus-relay -am package -DskipTests
+   java -jar agent-bus-relay/target/agent-bus-relay-0.1.0.jar \
+     --spring.profiles.active=eventbus
+   ```
+
+4. 启动 `agent-bus-consumer-demo`。
+5. 启动 gateway/caller，启用：
+
+   ```yaml
+   agent-bus:
+     role:
+       caller:
+         enabled: true
+   ```
+
+agent-bus relay 所需 PostgreSQL 连接通过 `SPRING_DATASOURCE_URL`、
+`SPRING_DATASOURCE_USERNAME` 和 `SPRING_DATASOURCE_PASSWORD` 提供。
+
+### 7.2 查询 Task 场景
+
+前置条件：runtime 的 `TaskStore` 中已存在 `taskId=runtime-task-1`。
+
+gateway 发布：
+
+```text
+eventType = CLIENT_INVOCATION_QUERY_REQUESTED
+targetServiceId = agent-bus-consumer-demo
+payload.method = GetTask
+payload.params.id = runtime-task-1
+clientInvocationId = client-side-id
 ```
 
-再执行 runtime 扩展工程的测试。
+期望：
 
-## 6. 清理环境
+1. relay 将请求从 `invocation_req` 转发到 `invocation_deliver`；
+2. runtime 角色 consumer 收到请求；
+3. FEAT-017 调用 A2A `RequestHandler.onGetTask`；
+4. `TaskStore.get` 使用 `runtime-task-1`；
+5. runtime 角色 producer 向 `invocation_resp_in` 发布 `INVOCATION_RESPONSE`；
+6. relay 转发到 `invocation_resp_out`；
+7. 响应中的 Task 是 `runtime-task-1`，`clientInvocationId` 不得替代 `taskId`。
 
-```bash
-sh "${ROCKETMQ_INSTALL_DIR}/bin/mqshutdown" broker
-sh "${ROCKETMQ_INSTALL_DIR}/bin/mqshutdown" namesrv
+## 8. 故障定位
+
+### Runtime 启动提示缺少 `runtimeRequestConsumer`
+
+检查：
+
+```yaml
+agent-bus.role.runtime.enabled: true
 ```
 
-确认不再需要日志、消息数据和下载包后，可删除本次测试专用目录：
+并确认当前使用的是包含 PR 124 的 `agent-bus-sdk`。
 
-```bash
-rm -rf /tmp/feat017-rocketmq
+### Runtime 启动提示缺少 `runtimeResponseProducer`
+
+原因同上。FEAT-017 当前要求 runtime 角色的请求 consumer 和响应 producer 同时存在，避免启动成
+“只能消费、不能响应”的半功能状态。
+
+### 启动时尝试配置 DataSource
+
+Demo 默认 `memory` profile 排除了 DataSource/Flyway 自动配置，并设置：
+
+```yaml
+agent-bus.reliability.enabled: false
 ```
 
-如果 RocketMQ 运行在另一台机器上，需要把 `broker.conf` 的 `brokerIP1` 改成测试机可访问的地址，同时把 `ROCKETMQ_NAMESERVER` 改成远端 NameServer 地址，并确保网络允许访问 9876、10909 和 10911 端口。
+runtime direct role 本身不需要数据库。relay 进程仍需要数据库。
 
-## 7. 实际验证记录
+### Runtime 收不到消息
 
-2026-07-23 已在以下 macOS 环境完整执行第 2、3、6 节：
+依次确认：
 
-| 项目 | 实际值/结果 |
-| --- | --- |
-| 操作系统 | macOS 26.5.2，Apple Silicon arm64 |
-| JDK | Homebrew OpenJDK 17.0.19 |
-| RocketMQ Broker | 5.3.1 |
-| agent-bus RocketMQ Client | 5.1.4 |
-| Topic | 8 个 `ascend_bus_*` Topic 全部创建成功 |
-| `AgentBusInMemoryIntegrationTest` | 3 个通过，0 失败，0 错误，0 跳过 |
-| `RealRocketMqFeat017IntegrationTest` | 3 个通过，0 失败，0 错误，0 跳过 |
-| `agent-service-bus-consumer` 全量测试 | 39 个通过，0 失败，0 错误，0 跳过 |
+1. gateway 的 `targetServiceId` 与 runtime 的 `spring.application.name` 一致；
+2. tenant 一致；
+3. relay 已订阅 `req` 并向 `deliver` 转发；
+4. Topic 已创建；
+5. NameServer 地址和 namespace 一致。
 
-本记录只证明上述 macOS 环境已验证；Linux 命令保持 POSIX shell 兼容，但仍应在目标 Linux 发行版上复验。
+### 响应发布失败
+
+`AgentBusResponsePublisher` 会把 `UNAVAILABLE`/`ROUTE_NOT_FOUND` 转为发布异常；
+`BusResponseRelay` 对未发布投影做有界重试。检查 RocketMQ、namespace、Topic 和 relay 的
+`resp_in` 订阅。

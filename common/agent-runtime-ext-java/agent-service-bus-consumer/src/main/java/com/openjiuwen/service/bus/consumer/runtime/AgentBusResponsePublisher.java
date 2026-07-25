@@ -5,12 +5,11 @@
 package com.openjiuwen.service.bus.consumer.runtime;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
-import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
-import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
-import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.port.RuntimeBusResponsePublisher;
 
 import java.util.Locale;
 import java.util.Map;
@@ -18,29 +17,33 @@ import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
- * Persists FEAT-017 response projections through the canonical agent-bus outbox SDK.
+ * Publishes FEAT-017 response projections through the agent-bus runtime-role producer.
  *
  * @since 2026-07-22
  */
-public final class AgentBusOutboxResponsePublisher implements RuntimeBusResponsePublisher {
-    private final ForwardingOutboxPort outbox;
+public final class AgentBusResponsePublisher {
+    private final BrokerForwardingProducerPort producer;
     private final String localServiceId;
 
     /**
      * Creates a new instance.
      *
-     * @param outbox
-     *            the outbox value
+     * @param producer
+     *            runtime-role response producer
      * @param localServiceId
      *            the localServiceId value
      */
-    public AgentBusOutboxResponsePublisher(ForwardingOutboxPort outbox, String localServiceId) {
-        this.outbox = Objects.requireNonNull(outbox);
+    public AgentBusResponsePublisher(BrokerForwardingProducerPort producer, String localServiceId) {
+        this.producer = Objects.requireNonNull(producer);
         this.localServiceId = require(localServiceId, "localServiceId");
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Publishes a persisted response projection directly to the agent-bus response ingress.
+     *
+     * @param projection
+     *            persisted response projection
+     */
     public void publish(BusResponseProjection projection) {
         AgentBusEventType eventType;
         try {
@@ -56,14 +59,17 @@ public final class AgentBusOutboxResponsePublisher implements RuntimeBusResponse
                 ? "response:" + targetServiceId
                 : projection.routeHandle();
         long now = projection.occurredAt().toEpochMilli();
-        ForwardingEnvelope envelope = new ForwardingEnvelope(new ForwardingMessageId(projection.eventId()), eventType,
-                tenantId, fallback(projection.traceId(), projection.correlationId()),
-                require(projection.correlationId(), "correlationId"),
-                fallback(projection.idempotencyKey(), projection.eventId()),
-                new ForwardingRouteHandle(routeValue, tenantId), "agent-runtime-response", localServiceId,
-                targetServiceId, now + 300_000L, ForwardingEnvelope.PayloadPolicy.DATA_BEARING, null,
-                encodeProjection(projection), null);
-        outbox.enqueue(envelope, localServiceId, targetServiceId, now);
+        BrokerMessageHeaders headers = new BrokerMessageHeaders(tenantId, projection.eventId(), localServiceId,
+                targetServiceId, null, require(projection.correlationId(), "correlationId"), eventType,
+                fallback(projection.traceId(), projection.correlationId()),
+                fallback(projection.idempotencyKey(), projection.eventId()), routeValue, "agent-runtime-response",
+                now + 300_000L, encodeProjection(projection), null);
+        BrokerProduceOutcome outcome = producer.produce(
+                new BrokerOutboundMessage("target=" + targetServiceId, headers), now);
+        if (outcome.outcome() != BrokerProduceOutcome.Outcome.ACCEPTED) {
+            throw new IllegalStateException("agent-bus response produce failed: " + outcome.outcome()
+                    + ", failureCode=" + outcome.failureCode());
+        }
     }
 
     private static String encodeProjection(BusResponseProjection projection) {

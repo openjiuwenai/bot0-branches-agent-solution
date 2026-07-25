@@ -4,7 +4,7 @@
 
 package com.openjiuwen.service.bus.consumer.relay;
 
-import com.openjiuwen.service.bus.consumer.port.BusTaskStateProjector;
+import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
 import com.openjiuwen.service.bus.consumer.runtime.BusExecutors;
 
 import org.slf4j.Logger;
@@ -24,7 +24,7 @@ public final class BusProjectionRepairScheduler implements SmartLifecycle {
 
     private final BusProjectionRepairer repairer;
     private final long intervalMillis;
-    private final BusTaskStateProjector taskProjector;
+    private final TaskStoreProjectionPostProcessor taskProjector;
     private final String tenantId;
     private final ScheduledExecutorService executor = BusExecutors.singleThreadScheduler("agent-bus-projection-repair");
     private volatile boolean running;
@@ -54,7 +54,7 @@ public final class BusProjectionRepairScheduler implements SmartLifecycle {
      *            the tenantId value
      */
     public BusProjectionRepairScheduler(BusProjectionRepairer repairer, long intervalMillis,
-            BusTaskStateProjector taskProjector, String tenantId) {
+            TaskStoreProjectionPostProcessor taskProjector, String tenantId) {
         if (intervalMillis <= 0) {
             throw new IllegalArgumentException("repair interval must be positive");
         }

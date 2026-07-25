@@ -4,17 +4,14 @@
 
 package com.openjiuwen.service.bus.consumer;
 
+import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
+import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
 import com.openjiuwen.service.bus.consumer.model.Admission;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusConsumptionDecision;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.observability.BusConsumerTelemetry;
-import com.openjiuwen.service.bus.consumer.port.BusA2aRequestBridge;
-import com.openjiuwen.service.bus.consumer.port.BusPayloadResolver;
 import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
-import com.openjiuwen.service.bus.consumer.port.BusTaskStateProjector;
-import com.openjiuwen.service.bus.consumer.port.TaskIdAwareBusA2aRequestBridge;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
 import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
@@ -33,6 +30,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Consumes validated bus events and dispatches them through the standard A2A control plane.
@@ -43,13 +41,12 @@ public final class RuntimeBusEventConsumer {
     private static final Logger LOG = LoggerFactory.getLogger(RuntimeBusEventConsumer.class);
 
     private final BusEnvelopeValidator validator;
-    private final BusPayloadResolver payloadResolver;
+    private final Function<AgentBusEventEnvelope, byte[]> payloadResolver;
     private final BusTaskAdmissionStore admissionStore;
-    private final BusA2aRequestBridge bridge;
+    private final RequestHandlerBusA2aBridge bridge;
     private final BusTaskProjectionCoordinator projections;
     private final StreamReadyProjector streamReadyProjector;
-    private final BusTaskStateProjector taskStateProjector;
-    private final BusConsumerTelemetry telemetry;
+    private final TaskStoreProjectionPostProcessor taskStateProjector;
     private final BusConcurrencyGuard concurrency;
 
     /**
@@ -66,10 +63,10 @@ public final class RuntimeBusEventConsumer {
      * @param projections
      *            the projections value
      */
-    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, BusPayloadResolver resolver,
-            BusTaskAdmissionStore admissionStore, BusA2aRequestBridge bridge,
+    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
+            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
             BusTaskProjectionCoordinator projections) {
-        this(validator, resolver, admissionStore, bridge, projections, null, null, new BusConsumerTelemetry(null, null),
+        this(validator, resolver, admissionStore, bridge, projections, null, null,
                 new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
@@ -89,11 +86,11 @@ public final class RuntimeBusEventConsumer {
      * @param streamReadyProjector
      *            the streamReadyProjector value
      */
-    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, BusPayloadResolver resolver,
-            BusTaskAdmissionStore admissionStore, BusA2aRequestBridge bridge, BusTaskProjectionCoordinator projections,
-            StreamReadyProjector streamReadyProjector) {
+    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
+            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
+            BusTaskProjectionCoordinator projections, StreamReadyProjector streamReadyProjector) {
         this(validator, resolver, admissionStore, bridge, projections, streamReadyProjector, null,
-                new BusConsumerTelemetry(null, null), new BusConcurrencyGuard(16, 16, 16, 64));
+                new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
     /**
@@ -114,11 +111,12 @@ public final class RuntimeBusEventConsumer {
      * @param taskStateProjector
      *            the taskStateProjector value
      */
-    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, BusPayloadResolver resolver,
-            BusTaskAdmissionStore admissionStore, BusA2aRequestBridge bridge, BusTaskProjectionCoordinator projections,
-            StreamReadyProjector streamReadyProjector, BusTaskStateProjector taskStateProjector) {
+    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
+            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
+            BusTaskProjectionCoordinator projections, StreamReadyProjector streamReadyProjector,
+            TaskStoreProjectionPostProcessor taskStateProjector) {
         this(validator, resolver, admissionStore, bridge, projections, streamReadyProjector, taskStateProjector,
-                new BusConsumerTelemetry(null, null), new BusConcurrencyGuard(16, 16, 16, 64));
+                new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
     /**
@@ -138,43 +136,13 @@ public final class RuntimeBusEventConsumer {
      *            the streamReadyProjector value
      * @param taskStateProjector
      *            the taskStateProjector value
-     * @param telemetry
-     *            the telemetry value
-     */
-    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, BusPayloadResolver resolver,
-            BusTaskAdmissionStore admissionStore, BusA2aRequestBridge bridge, BusTaskProjectionCoordinator projections,
-            StreamReadyProjector streamReadyProjector, BusTaskStateProjector taskStateProjector,
-            BusConsumerTelemetry telemetry) {
-        this(validator, resolver, admissionStore, bridge, projections, streamReadyProjector, taskStateProjector,
-                telemetry, new BusConcurrencyGuard(16, 16, 16, 64));
-    }
-
-    /**
-     * Creates a new instance.
-     *
-     * @param validator
-     *            the validator value
-     * @param resolver
-     *            the resolver value
-     * @param admissionStore
-     *            the admissionStore value
-     * @param bridge
-     *            the bridge value
-     * @param projections
-     *            the projections value
-     * @param streamReadyProjector
-     *            the streamReadyProjector value
-     * @param taskStateProjector
-     *            the taskStateProjector value
-     * @param telemetry
-     *            the telemetry value
      * @param concurrency
      *            the concurrency value
      */
-    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, BusPayloadResolver resolver,
-            BusTaskAdmissionStore admissionStore, BusA2aRequestBridge bridge, BusTaskProjectionCoordinator projections,
-            StreamReadyProjector streamReadyProjector, BusTaskStateProjector taskStateProjector,
-            BusConsumerTelemetry telemetry, BusConcurrencyGuard concurrency) {
+    public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
+            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
+            BusTaskProjectionCoordinator projections, StreamReadyProjector streamReadyProjector,
+            TaskStoreProjectionPostProcessor taskStateProjector, BusConcurrencyGuard concurrency) {
         this.validator = validator;
         this.payloadResolver = resolver;
         this.admissionStore = admissionStore;
@@ -182,7 +150,6 @@ public final class RuntimeBusEventConsumer {
         this.projections = projections;
         this.streamReadyProjector = streamReadyProjector;
         this.taskStateProjector = taskStateProjector;
-        this.telemetry = telemetry;
         this.concurrency = concurrency;
     }
 
@@ -197,14 +164,7 @@ public final class RuntimeBusEventConsumer {
      * @return the operation result
      */
     public BusConsumptionDecision consume(AgentBusEventEnvelope envelope, byte[] brokerPayload) {
-        long started = System.nanoTime();
-        String family = envelope == null || envelope.eventType() == null
-                ? "unknown"
-                : sourceFamily(envelope.eventType());
-        BusConsumptionDecision decision = telemetry.observe("bus.consume", family,
-                () -> consumeInternal(envelope, brokerPayload));
-        telemetry.delivery(family, decision.type().name(), System.nanoTime() - started);
-        return decision;
+        return consumeInternal(envelope, brokerPayload);
     }
 
     private BusConsumptionDecision consumeInternal(AgentBusEventEnvelope envelope, byte[] brokerPayload) {
@@ -213,26 +173,15 @@ public final class RuntimeBusEventConsumer {
             return invalidEnvelope(envelope, invalid.get());
         }
         try {
-            byte[] payload;
-            long payloadStarted = System.nanoTime();
-            String payloadMode = envelope.inlinePayload() == null ? "reference" : "inline";
-            try {
-                payload = envelope.inlinePayload() != null
-                        ? envelope.inlinePayload()
-                        : telemetry.observe("payload.resolve", sourceFamily(envelope.eventType()), () -> concurrency
-                                .call(BusConcurrencyGuard.Lane.PAYLOAD, () -> payloadResolver.resolve(envelope)));
-                telemetry.payload(payloadMode, "success", System.nanoTime() - payloadStarted);
-            } catch (IllegalArgumentException | IllegalStateException failure) {
-                telemetry.payload(payloadMode, "failure", System.nanoTime() - payloadStarted);
-                throw failure;
-            }
+            byte[] payload = envelope.inlinePayload() != null
+                    ? envelope.inlinePayload()
+                    : concurrency.call(BusConcurrencyGuard.Lane.PAYLOAD, () -> payloadResolver.apply(envelope));
             if (payload == null || payload.length == 0) {
                 return failed(envelope, null, "PAYLOAD_EMPTY", false);
             }
             return isCreation(envelope.eventType())
-                    ? telemetry.observe("task.admit", sourceFamily(envelope.eventType()),
-                            () -> concurrency.admission(envelope.tenantId(), envelope.idempotencyKey(),
-                                    () -> consumeCreation(envelope, payload, brokerPayload)))
+                    ? concurrency.admission(envelope.tenantId(), envelope.idempotencyKey(),
+                            () -> consumeCreation(envelope, payload, brokerPayload))
                     : consumeControl(envelope, payload);
         } catch (BusConcurrencyGuard.BusyException busy) {
             return BusConsumptionDecision.retry(busy.getMessage());
@@ -257,7 +206,6 @@ public final class RuntimeBusEventConsumer {
         Admission existing = admissionStore.find(envelope.tenantId(), envelope.idempotencyKey()).orElse(null);
         if (existing != null) {
             if (!existing.requestDigest().equals(digest)) {
-                telemetry.admission("conflict");
                 return rejected(envelope, "IDEMPOTENCY_KEY_CONFLICT");
             }
             if (existing.state() == Admission.State.ADMITTED) {
@@ -268,8 +216,8 @@ public final class RuntimeBusEventConsumer {
             BusDispatchResult recovered;
             if (requestedTaskId != null && requestedTaskId.equals(existing.taskId())) {
                 recovered = dispatch(envelope, payload);
-            } else if (bridge instanceof TaskIdAwareBusA2aRequestBridge aware) {
-                recovered = dispatch(aware, envelope, payload, existing.taskId());
+            } else if (bridge.supportsReservedTaskId()) {
+                recovered = dispatch(envelope, payload, existing.taskId());
             } else {
                 return BusConsumptionDecision.retry("RESERVED_TASK_REQUIRES_ID_AWARE_BRIDGE");
             }
@@ -283,11 +231,10 @@ public final class RuntimeBusEventConsumer {
                 Admission.State.RESERVED);
         Admission reserved = admissionStore.reserve(reservation);
         if (!reserved.requestDigest().equals(digest)) {
-            telemetry.admission("conflict");
             return rejected(envelope, "IDEMPOTENCY_KEY_CONFLICT");
         }
-        BusDispatchResult result = requestedTaskId == null && bridge instanceof TaskIdAwareBusA2aRequestBridge aware
-                ? dispatch(aware, envelope, payload, reserved.taskId())
+        BusDispatchResult result = requestedTaskId == null && bridge.supportsReservedTaskId()
+                ? dispatch(envelope, payload, reserved.taskId())
                 : dispatch(envelope, payload);
         return admitAndProject(envelope, result, reserved.taskId(), "CREATED");
     }
@@ -296,14 +243,13 @@ public final class RuntimeBusEventConsumer {
             String reservedTaskId, String idempotencyResult) {
         String taskId = result.taskId();
         if (taskId == null || taskId.isBlank()) {
-            if (bridge instanceof TaskIdAwareBusA2aRequestBridge) {
+            if (bridge.supportsReservedTaskId()) {
                 taskId = reservedTaskId;
             } else {
                 return BusConsumptionDecision.retry("A2A_TASK_ID_UNAVAILABLE");
             }
         }
         admissionStore.markAdmitted(envelope.tenantId(), envelope.idempotencyKey(), taskId);
-        telemetry.admission(idempotencyResult);
         projectAccepted(envelope, taskId, idempotencyResult);
         if (result.response() != null) {
             projectResponse(envelope, taskId, result);
@@ -462,14 +408,11 @@ public final class RuntimeBusEventConsumer {
     }
 
     private BusDispatchResult dispatch(AgentBusEventEnvelope envelope, byte[] payload) {
-        return telemetry.observe("a2a.bridge", sourceFamily(envelope.eventType()),
-                () -> concurrency.call(BusConcurrencyGuard.Lane.BRIDGE, () -> bridge.handle(envelope, payload)));
+        return concurrency.call(BusConcurrencyGuard.Lane.BRIDGE, () -> bridge.handle(envelope, payload));
     }
 
-    private BusDispatchResult dispatch(TaskIdAwareBusA2aRequestBridge aware, AgentBusEventEnvelope envelope,
-            byte[] payload, String taskId) {
-        return telemetry.observe("a2a.bridge", sourceFamily(envelope.eventType()),
-                () -> concurrency.call(BusConcurrencyGuard.Lane.BRIDGE, () -> aware.handle(envelope, payload, taskId)));
+    private BusDispatchResult dispatch(AgentBusEventEnvelope envelope, byte[] payload, String taskId) {
+        return concurrency.call(BusConcurrencyGuard.Lane.BRIDGE, () -> bridge.handle(envelope, payload, taskId));
     }
 
     private record ProjectionFact(String kind, String type, long revision, Map<String, Object> data) {

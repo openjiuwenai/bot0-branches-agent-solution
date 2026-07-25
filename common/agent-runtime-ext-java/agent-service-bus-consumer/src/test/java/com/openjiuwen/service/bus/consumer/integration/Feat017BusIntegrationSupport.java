@@ -6,18 +6,19 @@ package com.openjiuwen.service.bus.consumer.integration;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
-import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
-import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
+import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
-import com.openjiuwen.service.bus.consumer.port.TaskIdAwareBusA2aRequestBridge;
+import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
 import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
 import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
@@ -92,42 +93,50 @@ final class Feat017BusIntegrationSupport {
                 envelope.deadlineMillisEpoch(), envelope.inlinePayload(), envelope.originalCaller());
     }
 
-    static RuntimeBusEventConsumer runtime(RecordingOutbox outbox, AtomicInteger bridgeCalls) {
-        return runtime(outbox, bridgeCalls, RUNTIME);
+    static RuntimeBusEventConsumer runtime(BrokerForwardingProducerPort producer, AtomicInteger bridgeCalls) {
+        return runtime(producer, bridgeCalls, RUNTIME);
     }
 
-    static RuntimeBusEventConsumer runtime(RecordingOutbox outbox, AtomicInteger bridgeCalls,
+    static RuntimeBusEventConsumer runtime(BrokerForwardingProducerPort producer, AtomicInteger bridgeCalls,
             String runtimeServiceId) {
-        TaskIdAwareBusA2aRequestBridge bridge = (envelope, payload, reservedTaskId) -> {
-            bridgeCalls.incrementAndGet();
-            Task task = Task.builder().id(reservedTaskId).contextId("ctx-feat017")
-                    .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED, null,
-                            OffsetDateTime.ofInstant(Instant.ofEpochMilli(NOW), ZoneOffset.UTC)))
-                    .build();
-            return BusDispatchResult.task(task);
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge() {
+            @Override
+            public boolean supportsReservedTaskId() {
+                return true;
+            }
+
+            @Override
+            public BusDispatchResult handle(AgentBusEventEnvelope envelope, byte[] payload, String reservedTaskId) {
+                bridgeCalls.incrementAndGet();
+                Task task = Task.builder().id(reservedTaskId).contextId("ctx-feat017")
+                        .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED, null,
+                                OffsetDateTime.ofInstant(Instant.ofEpochMilli(NOW), ZoneOffset.UTC)))
+                        .build();
+                return BusDispatchResult.task(task);
+            }
         };
-        var publisher = new com.openjiuwen.service.bus.consumer.runtime.AgentBusOutboxResponsePublisher(outbox,
-                runtimeServiceId);
-        var coordinator = new BusTaskProjectionCoordinator(new InMemoryBusResponseProjectionStore(), publisher);
+        var publisher = new AgentBusResponsePublisher(producer, runtimeServiceId);
+        var coordinator = new BusTaskProjectionCoordinator(new InMemoryBusResponseProjectionStore(),
+                publisher::publish);
         return new RuntimeBusEventConsumer(
                 new BusEnvelopeValidator(Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC), runtimeServiceId),
                 envelope -> REQUEST_PAYLOAD, new InMemoryBusTaskAdmissionStore(), bridge, coordinator);
     }
 
-    static RuntimeBusEventConsumer queryRuntime(RecordingOutbox outbox, RecordingTaskStore taskStore,
+    static RuntimeBusEventConsumer queryRuntime(BrokerForwardingProducerPort producer, RecordingTaskStore taskStore,
             byte[] queryPayload) {
-        return queryRuntime(outbox, taskStore, queryPayload, RUNTIME);
+        return queryRuntime(producer, taskStore, queryPayload, RUNTIME);
     }
 
-    static RuntimeBusEventConsumer queryRuntime(RecordingOutbox outbox, RecordingTaskStore taskStore,
+    static RuntimeBusEventConsumer queryRuntime(BrokerForwardingProducerPort producer, RecordingTaskStore taskStore,
             byte[] queryPayload, String runtimeServiceId) {
         Executor directExecutor = Runnable::run;
         var requestHandler = DefaultRequestHandler.create(null, taskStore, null, null, null, directExecutor,
                 directExecutor);
         var bridge = new RequestHandlerBusA2aBridge(requestHandler);
-        var publisher = new com.openjiuwen.service.bus.consumer.runtime.AgentBusOutboxResponsePublisher(outbox,
-                runtimeServiceId);
-        var coordinator = new BusTaskProjectionCoordinator(new InMemoryBusResponseProjectionStore(), publisher);
+        var publisher = new AgentBusResponsePublisher(producer, runtimeServiceId);
+        var coordinator = new BusTaskProjectionCoordinator(new InMemoryBusResponseProjectionStore(),
+                publisher::publish);
         return new RuntimeBusEventConsumer(
                 new BusEnvelopeValidator(Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC), runtimeServiceId),
                 envelope -> queryPayload, new InMemoryBusTaskAdmissionStore(), bridge, coordinator);
@@ -193,53 +202,27 @@ final class Feat017BusIntegrationSupport {
     }
 
     /**
-     * Minimal outbox fixture that records the durable-enqueue boundary owned by FEAT-017.
+     * Minimal producer fixture that records FEAT-017 direct response publication.
      */
-    static final class RecordingOutbox implements ForwardingOutboxPort {
-        private final Map<String, ForwardingEnvelope> envelopes = new LinkedHashMap<>();
+    static final class RecordingProducer implements BrokerForwardingProducerPort {
+        private final Map<String, BrokerOutboundMessage> messages = new LinkedHashMap<>();
 
-        List<ForwardingEnvelope> envelopes() {
-            return new ArrayList<>(envelopes.values());
+        List<BrokerOutboundMessage> messages() {
+            return new ArrayList<>(messages.values());
         }
 
         /** {@inheritDoc} */
         @Override
-        public ForwardingReceipt enqueue(ForwardingEnvelope envelope, String sourceServiceId, String targetServiceId,
-                long nowMillisEpoch) {
-            envelopes.putIfAbsent(envelope.tenantId() + "|" + envelope.messageId().value(), envelope);
-            return ForwardingReceipt.accepted(envelope.messageId(), envelope.tenantId(), nowMillisEpoch);
+        public BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
+            throw new UnsupportedOperationException("FEAT-017 uses direct response produce");
         }
 
         /** {@inheritDoc} */
         @Override
-        public ForwardingStatus.Outbox markAcked(ForwardingMessageId id, String tenantId, String leaseOwner) {
-            throw new UnsupportedOperationException("dispatch state is owned by agent-bus");
-        }
-
-        /** {@inheritDoc} */
-        @Override
-        public ForwardingStatus.Outbox scheduleRetry(ForwardingMessageId id, String tenantId, String leaseOwner,
-                ForwardingFailureCode code, long nextAttemptAtMillisEpoch) {
-            throw new UnsupportedOperationException("dispatch state is owned by agent-bus");
-        }
-
-        /** {@inheritDoc} */
-        @Override
-        public ForwardingStatus.Outbox moveToDlq(ForwardingMessageId id, String tenantId, String leaseOwner,
-                ForwardingFailureCode code) {
-            throw new UnsupportedOperationException("dispatch state is owned by agent-bus");
-        }
-
-        /** {@inheritDoc} */
-        @Override
-        public ForwardingStatus.Outbox markExpired(ForwardingMessageId id, String tenantId, String leaseOwner) {
-            throw new UnsupportedOperationException("dispatch state is owned by agent-bus");
-        }
-
-        /** {@inheritDoc} */
-        @Override
-        public ForwardingStatus.Outbox statusOf(ForwardingMessageId id, String tenantId) {
-            return ForwardingStatus.Outbox.PENDING;
+        public BrokerProduceOutcome produce(BrokerOutboundMessage message, long nowMillisEpoch) {
+            String key = message.headers().tenantId() + "|" + message.headers().messageId();
+            messages.putIfAbsent(key, message);
+            return BrokerProduceOutcome.accepted();
         }
     }
 }

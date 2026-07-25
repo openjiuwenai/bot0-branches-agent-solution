@@ -5,7 +5,8 @@
 package com.openjiuwen.service.bus.consumer.testkit;
 
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
-import com.openjiuwen.service.bus.consumer.port.BrokerDeliveryPort;
+import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort.Delivery;
+import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort.RejectReason;
 
 import java.util.Map;
 import java.util.Objects;
@@ -14,11 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * In-memory fixture for the runtime delivery port.
+ * In-memory broker fixture used only by the bus-consumer tests.
  *
  * @since 2026-07-22
  */
-public final class InMemoryBrokerDeliveryPort implements BrokerDeliveryPort {
+public final class InMemoryBrokerDeliveryPort {
     private final ConcurrentLinkedQueue<Delivery> available = new ConcurrentLinkedQueue<>();
     private final Map<String, Delivery> inFlight = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<Delivery> committed = new ConcurrentLinkedQueue<>();
@@ -36,8 +37,18 @@ public final class InMemoryBrokerDeliveryPort implements BrokerDeliveryPort {
         available.add(new Delivery(Objects.requireNonNull(envelope), payload));
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Polls the next delivery in the requested tenant scope.
+     *
+     * @param consumerServiceId
+     *            consumer identity
+     * @param tenantId
+     *            tenant identity
+     * @param nowEpochMillis
+     *            current epoch time
+     *
+     * @return next delivery, if available
+     */
     public Optional<Delivery> poll(String consumerServiceId, String tenantId, long nowEpochMillis) {
         Delivery delivery = available.poll();
         if (delivery == null) {
@@ -51,14 +62,24 @@ public final class InMemoryBrokerDeliveryPort implements BrokerDeliveryPort {
         return Optional.of(delivery);
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Commits an in-flight delivery.
+     *
+     * @param delivery
+     *            delivery to commit
+     */
     public void commit(Delivery delivery) {
         committed.add(remove(delivery));
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Rejects an in-flight delivery.
+     *
+     * @param delivery
+     *            delivery to reject
+     * @param reason
+     *            rejection reason
+     */
     public void reject(Delivery delivery, RejectReason reason) {
         Delivery removed = remove(delivery);
         rejected.put(removed.envelope().messageId(), Objects.requireNonNull(reason));
