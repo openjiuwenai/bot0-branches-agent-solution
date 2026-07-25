@@ -4,13 +4,13 @@
 
 package com.openjiuwen.example.versatile.intent.routecache;
 
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
 
 /**
  * Verifies default state and setter behavior of {@link RouteCacheProperties}.

@@ -4,6 +4,8 @@
 
 package com.openjiuwen.example.versatile.intent.routecache;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.openjiuwen.example.versatile.intent.mock.MockVersatileController;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.AgentHandler;
@@ -18,8 +20,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * End-to-end integration test for the multi-turn route cache.
@@ -60,7 +60,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
                 + "http://localhost:18081/v1/proj/agents/agent_L1/conversations/{conversation_id}"
 })
 class MultiTurnRouteCacheE2ETest {
-
     @Autowired
     private AgentHandler handler;
 
