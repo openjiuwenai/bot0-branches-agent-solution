@@ -99,6 +99,7 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
           <mainClass>com.huawei.ascend.edp.EdpApplication</mainClass>
+          <classifier>exec</classifier>
           <includeSystemScope>true</includeSystemScope>
         </configuration>
       </plugin>

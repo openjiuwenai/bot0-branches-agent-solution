@@ -7,11 +7,46 @@
 
 共享网络 `agent-net` 是 EDP 与 adapter 的运行契约。两个团队的启动脚本都可以创建或复用它，但任何一方的停止脚本都不删除它。
 
-## 0. 从零开始：x86 Linux 一键部署（推荐）
+## 0. 从零开始：64 位 Linux（amd64/arm64）一键部署（推荐）
 
-本手册所有 `.sh` 脚本均为 Linux 原生 bash，可在 x86 Linux 上仅凭本代码仓完成“构建 jar → 构建镜像 → 建网络 → 起容器 → 验证”，**无需任何 Windows / PowerShell 步骤**。
+本手册所有 `.sh` 脚本均为 Linux 原生 bash，可在 64 位 amd64 或 arm64 Linux 上仅凭本代码仓完成“构建 jar → 构建镜像 → 建网络 → 起容器 → 验证”，**无需任何 Windows / PowerShell 步骤**。构建服务器和部署服务器为同一台时，`docker build` 会自动按当前服务器架构构建对应镜像，不需要 `buildx` 或手工指定 `--platform`。
 
 前置：Linux 上已装 `git`、`docker`、`JDK 17`、`Maven 3.8+`（构建镜像必须 Docker；构建 jar 必须 JDK17+Maven）。
+
+ARM64 服务器在部署前先确认操作系统、Docker 和基础镜像均为 64 位 ARM：
+
+```bash
+uname -m
+getconf LONG_BIT
+docker info --format '{{.Architecture}}'
+
+docker pull eclipse-temurin:21-jre-jammy
+docker pull python:3.11-slim
+docker pull redis:7-alpine
+docker image inspect \
+  --format '{{.RepoTags}} -> {{.Os}}/{{.Architecture}}' \
+  eclipse-temurin:21-jre-jammy \
+  python:3.11-slim \
+  redis:7-alpine
+```
+
+预期 `uname -m` 为 `aarch64` 或 `arm64`，`getconf LONG_BIT` 为 `64`，三个基础镜像均为 `linux/arm64`。本手册不覆盖 32 位 ARM（如 `armv7l`）。如果镜像来自企业私有仓库或镜像代理，还必须确认该仓库实际同步了 arm64 版本；使用 external Redis 时无需拉取本地 Redis 镜像。
+
+部署前先一次性确认上述工具均已就位且版本符合要求（git 任意现代版本、Docker 引擎可用且守护进程已运行、JDK 必须为 17、Maven 不低于 3.8）：
+
+```bash
+git --version
+
+docker --version
+docker info --format '{{.ServerVersion}}'
+
+java -version 2>&1
+
+mvn -version
+```
+
+预期 `git --version` 显示 `git version 2.x`；`docker --version` 显示 `Docker version 20.10` 或更高，且 `docker info` 能正常输出（说明守护进程已启动，否则后续 `docker build`/`docker run` 都会失败）；`java -version` 显示主版本为 `17`（切勿使用 11 或 21，本项目依赖的 `agent-core-java:0.1.13` 是 JDK 17 构建，class 文件 major version 61）；`mvn -version` 显示 `Apache Maven 3.8.x` 或更高，且其下 `Java version` 行同样指向 17。任一项不满足，先安装或切换到对应版本再继续。
+
 
 ```bash
 # 1) 拉取代码仓
@@ -230,7 +265,47 @@ bash common/agents/edp-agent-java/deploy/verify.sh
 
 external 模式只从临时探测容器检查 TCP 连通性，并把 Redis 配置传给 EDP。脚本绝不创建、启动、停止、删除外部 Redis，也不创建本地 Redis volume。EDP 应用自身会在启动时执行 PING/INFO；失败时容器无法变为 healthy。
 
-## 5a. 沙箱（Sandbox）环境配置
+## 5a. Redis 高可用与数据可靠性建议
+
+Redis 在本服务中承担两类持久化职责：Agent 的 Todo 任务列表（会话级任务规划与执行进度）与会话 Checkpointer（Agent 执行中断恢复点）。前者丢失会导致任务需要重新规划，后者丢失会导致中断的会话无法续接。因此 Redis 不仅是运行时依赖，更是**承载业务会话状态的数据存储单元**——对它的要求不只是"尽量可用"，还包括"故障后已产生的会话数据可恢复"。生产部署应从以下三个维度统筹考虑，具体方案选型与实施步骤由各团队的 Redis 运维方负责。
+
+### 维度一：服务高可用——避免单点故障
+
+单实例 Redis（无论 local 还是 external 的 single 模式）存在单点故障风险：所在节点宕机、网络分区、进程崩溃都会导致服务不可用。EDP 应用在启动期对 Redis 执行 fail-fast 健康检查（`PING` + `INFO server`），Redis 不可达时容器无法启动；运行期 `RedisTodoStore` 对读操作有静默降级，但 Checkpointer 路径的容错能力取决于 core-sdk 实现，不应假设 Redis 故障时业务可无损继续。因此应从源头保证 Redis 服务自身的连续性。
+
+业界成熟的 Redis 高可用形态主要有三种，按复杂度递增：
+
+- **主从复制（Master-Replica）**：一个主节点写、一个或多个从节点异步复制。提供读冗余和数据副本，但主节点故障需人工介入切换，不满足自动恢复要求，适合对可用性要求不高的场景。
+- **哨兵（Sentinel）**：在主从基础上部署独立的 Sentinel 进程集群，负责监控主从存活、自动进行故障判定与主从切换，并通知客户端新主地址。主节点故障时可在秒级到数十秒内完成自动切换，是中小规模部署的主流选择。本项目的 Redis 配置类已支持 `sentinel` 模式（见 `TodoRedisProperties`），Lettuce 客户端会感知 Sentinel 下发的主节点切换。
+- **Redis Cluster**：数据分片存储在多个分片上，每个分片自带主从，集群通过 Gossip 协议自动完成故障检测与切换。兼顾高可用与水平扩展，适合数据量大或吞吐高的场景，但运维复杂度最高。
+
+此外，**云厂商托管 Redis**（如华为云 DCS、AWS ElastiCache 等）通常内置主备自动切换、监控告警与备份恢复，可显著降低自运维成本，推荐优先评估。
+
+> 不论采用哪种形态，都应通过实际故障注入（例如主动停止主节点）验证切换耗时与客户端重连行为，确认 EDP 应用在切换空窗期内不会出现不可恢复的状态。
+
+### 维度二：数据持久化与恢复——故障后找回已产生的数据
+
+高可用机制保证的是"服务连续"，但**不等于数据零丢失**。Redis 主从复制是异步的，主节点故障瞬间未同步到从节点的写入会丢失；Sentinel/Cluster 的故障切换同样存在复制延迟导致的数据窗口。对于本服务中 Checkpointer 和 Todo 这类会话状态数据，还需从持久化和备份两个层面保证可恢复：
+
+- **持久化机制**：Redis 提供 RDB（周期性快照）和 AOF（追加写入日志）两种持久化方式。AOF 以 `appendonly` 方式记录每条写命令，配合 `appendfsync` 策略（`everysec` 为可用性与性能的常用折中）可将故障后的数据丢失窗口控制在 1 秒量级；RDB 适合作为周期性全量备份。生产环境建议同时开启 AOF 与 RDB，AOF 优先用于故障恢复，RDB 用于异地备份与长期归档。本目录 `start-local-redis.sh` 已为 local 模式启用 AOF，external 模式需由 Redis 运维方确认持久化策略。
+- **定期备份**：应将 RDB/AOF 文件定期转储到独立存储（对象存储、异地卷），并验证备份的可恢复性——"有备份"与"能恢复"是两件事，未经验证的备份等于没有备份。备份恢复演练应纳入日常运维流程。
+- **RDB 与 AOF 的取舍**：对数据一致性要求极高的场景优先 AOF，对恢复速度要求高、可容忍少量数据丢失的场景可侧重 RDB。本服务的会话数据有 TTL（Todo 默认 3600 秒、Checkpointer 默认 60 分钟）且读时续期，短期丢失影响可控，但仍建议以 AOF 为主，避免切换瞬间丢失整段会话进度。
+- **数据迁移与扩缩容**：更换 Redis 实例或扩容时，应通过主从同步完成数据迁移后再切换，避免直接更换连接地址导致存量会话数据丢失。
+
+### 维度三：运行期探活与运维编排——让故障可被发现、可被自愈
+
+Redis 自身高可用解决了"主节点故障自动切换"，但应用侧与编排平台侧还需配合，才能实现端到端的故障自愈：
+
+- **应用健康探活**：EDP 启动期已对 Redis 执行 `PING`/`INFO` 健康检查。在容器编排平台（Docker Compose、Kubernetes 等）中，应将此检查暴露为容器的存活探针（Liveness Probe）或就绪探针（Readiness Probe）语义：Redis 不可达时，新实例不应接管流量，已运行实例应被重新调度。需注意，由于 EDP 是 fail-fast 语义，Redis 故障期间实例会反复启动失败，编排平台应配置合理的重启退避策略（如 Kubernetes 的 `CrashLoopBackOff` 退避），避免在高频重启中放大对 Redis 的压力。
+- **就绪与存活的区分**：推荐将"Redis 连通性"纳入就绪探针而非存活探针——Redis 短暂抖动时，实例进程仍健康，仅暂时不接流量，待 Redis 恢复后立即就绪；若纳入存活探针，则会在 Redis 抖动期反复重启实例，反而延长恢复时间。
+- **编排平台与 Redis 高可用的关系**：编排平台（如 Kubernetes）负责应用 Pod 的调度与重启，但**不能替代 Redis 自身的高可用**。在 Kubernetes 中运行 Redis 时，应使用 Redis Operator 或 StatefulSet 部署 Sentinel/Cluster，而非依赖平台重启单实例 Redis Pod——重启一个数据进程不等于完成主从故障转移。编排平台的作用是让"应用实例"与"Redis 实例"都具备被自动调度与恢复的能力，真正的数据层高可用仍需由 Sentinel/Cluster 或托管服务提供。
+- **监控告警**：应对 Redis 的关键指标（主从复制延迟、内存使用、连接数、慢查询、持久化耗时、故障切换事件）建立监控与告警，故障切换发生时应能及时通知运维人员核对数据一致性。Sentinel/Cluster 的切换日志、AOF 重写日志也应纳入采集。
+
+### 与本项目配置的对应关系
+
+上述三个维度中，维度一对应 `EDPA_REDIS_MODE`（`single`/`sentinel`/`cluster`）及相关节点配置，维度二对应 Redis 实例自身的持久化与备份策略（不由 EDP 配置，由 Redis 运维方负责），维度三对应编排平台的探针与监控配置。本目录脚本当前覆盖的是 local/external single 模式的部署与连通性验证，sentinel/cluster 模式及生产级持久化、备份、监控方案需由 Redis 运维方在完成集成验证后另行实施。
+
+## 5b. 沙箱（Sandbox）环境配置
 
 EDPA 支持沙箱隔离执行模式，脚本和工具调用在独立容器中运行，与宿主机环境隔离。**默认关闭**，需要手动配置开启。
 
@@ -385,7 +460,7 @@ bash common/agents/edp-agent-java/deploy/verify.sh
   - 确认 `common/agent-runtime-ext-java/pom.xml` 与 `common/agents/edp-agent-java/pom.xml` 中 `agent-core-java` 版本均为 `0.1.13`（为 JDK 17 发布的构建）；
   - 确认该构件可从你们的 Maven 仓库/镜像解析（`mvn -q dependency:get -Dartifact=com.openjiuwen:agent-core-java:0.1.13`）；
   - 若本机 `~/.m2` 里曾缓存过坏的 `0.1.12`，可删除 `~/.m2/repository/com/openjiuwen/agent-core-java` 后重试，让 Maven 重新下载正确构件。
-  - 说明：裸版本号 `0.1.12` 在部分仓库里对应缺包、且 `BaseInterruptRail` 为旧 4 参数签名的历史构建，这正是同事在 x86 Linux 上编译失败的根因。
+  - 说明：裸版本号 `0.1.12` 在部分仓库里对应缺包、且 `BaseInterruptRail` 为旧 4 参数签名的历史构建，这正是此前在 Linux 上编译失败的根因。
 - **Linux 上执行 `.sh` 报 `bad interpreter: ...^M` 或 `no such file or directory`**：脚本被存成了 CRLF（多因在 Windows 上编辑/提交）。仓库已加入 `.gitattributes` 强制 `*.sh` 为 LF；若仍遇到，重新 clone，或执行 `sed -i 's/\r$//' common/agents/edp-agent-java/deploy/*.sh`。
 - API Key 为空：编辑 `deploy/.env`，填写 `EDP_AGENT_MODEL_API_KEY`。
 - Redis 启动失败：local 查看 `docker logs edp-redis`；external 检查 DNS、端口、密码、版本和 ACL。

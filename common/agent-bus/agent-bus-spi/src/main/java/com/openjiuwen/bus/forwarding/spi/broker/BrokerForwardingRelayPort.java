@@ -5,6 +5,7 @@
 package com.openjiuwen.bus.forwarding.spi.broker;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.BrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 
 /**
@@ -54,4 +55,39 @@ public interface BrokerForwardingRelayPort {
      *         a terminal delivery result
      */
     BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch);
+
+    /**
+     * Produce a pre-built broker-agnostic message directly onto the broker — the
+     * non-outbox (direct-tap) produce entry. Used by a FEAT-017 target runtime's
+     * response producer that taps {@code AgentEmitter} callbacks and emits
+     * {@code INVOCATION_*}/{@code A2A_CALL_*} response events to {@code resp_in}
+     * WITHOUT a durable outbox record (FEAT-017 §5.1.4: ack at the receive boundary;
+     * a response-publish failure is recovered via TaskStore / status projection / GetTask).
+     *
+     * <p>The implementation derives the broker topic from
+     * {@code message.headers().eventType()} via the injected {@link BrokerTopicResolver}
+     * (+ hop suffix), wraps the message into a broker-native message (routing-descriptor
+     * body + first-class control-plane headers + conditional {@code payloadRef} + bounded
+     * {@code inlinePayload}), and publishes. A {@code null} {@code eventType} → non-retryable
+     * {@link BrokerProduceOutcome.Outcome#ROUTE_NOT_FOUND}.
+     *
+     * <p><b>Optional capability.</b> A relay port that only ever re-publishes claimed outbox
+     * records (the event-bus relay, or an outbox-only test fake) does NOT need direct-tap;
+     * the default throws {@link UnsupportedOperationException} so such ports compile
+     * unchanged. The RocketMQ adapter + the in-memory broker override it; a direct-tap
+     * producer injects an overriding port (e.g. a {@code RocketMqBrokerForwardingRelay}
+     * bound to the {@code resp_in} suffix). Precedent: {@link java.util.Iterator#remove()}.
+     *
+     * @param message the pre-built broker-agnostic outbound message (non-null; the adapter
+     *                reads only its routing descriptor + headers and derives the topic via
+     *                {@link BrokerTopicResolver}, never unwrapping the opaque routeHandle)
+     * @param nowMillisEpoch the produce instant (adapter-internal sequencing / observability)
+     * @return the produce outcome (ACCEPTED / UNAVAILABLE / ROUTE_NOT_FOUND)
+     * @since 0.1.0
+     */
+    default BrokerProduceOutcome produce(BrokerOutboundMessage message, long nowMillisEpoch) {
+        throw new UnsupportedOperationException(
+                "direct (non-outbox) produce is not supported by this BrokerForwardingRelayPort; "
+                        + "override produce(BrokerOutboundMessage, long) to enable FEAT-017 direct-tap");
+    }
 }

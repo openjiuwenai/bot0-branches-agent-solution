@@ -15,7 +15,7 @@ def make_start_record(
     trace_id: str = "trace-abc",
     agent_id: str = "agent-001",
     start_time: str = "2026-06-09 14:30:15.123",
-    model: str = "glm-5",
+    model: str = "model-sample",
 ) -> ParsedTagRecord:
     message = {
         "id": call_id,
@@ -82,7 +82,7 @@ class TestNormalPairing:
         assert record.complete is True
         assert record.call_id == "uuid-001"
         assert record.conversation_id == "conv-999"
-        assert record.model == "glm-5"
+        assert record.model == "model-sample"
 
     def test_duration_ms_calculated_correctly(self):
         engine = PairingEngine(pair_timeout_seconds=300)

@@ -4,9 +4,9 @@
 #   bash deploy/build-jar.sh
 # 或手工执行：
 #   mvn -f common/agent-runtime-ext-java/pom.xml clean install -DskipTests
-#   mvn -f common/agent/edp-agent-java/pom.xml       clean package -DskipTests
+#   mvn -f common/agents/edp-agent-java/pom.xml       clean package -DskipTests
 #
-# 构建命令（在 common/agent/edp-agent-java 目录，即以本项目为构建上下文）：
+# 构建命令（在 common/agents/edp-agent-java 目录，即以本项目为构建上下文）：
 #   bash deploy/build-image.sh
 # 等价于：
 #   docker build -t edp-agent-java:latest -f deploy/Dockerfile .

@@ -4,10 +4,10 @@ kafka 上的 otlp_traces topic 承载的是 OTLP JSON 信封:
     resourceSpans[].scopeSpans[].spans[]
 span.attributes / resource.attributes 是 anyvalue 数组, 时间是 unix nano, kind 是 int 枚举。
 
-本模块摊平成 adapter 内部统一形状（由 synthetic span fixtures 验证）:
+本模块摊平成 adapter 内部统一形状 (对齐 tests/data/otel_spans.jsonl):
     trace_id/span_id/parent_span_id/trace_state/name/kind(字符串)/start_time(ISO)/end_time(ISO)/
-    duration_ns/service_name/scope_name/scope_version/status_code(字符串)/status_message/
-    attributes(dict)/resource_attributes(dict)/events(list)/links(list)/conversation_id
+    service_name/scope_name/scope_version/status_code(字符串)/status_message/
+    attributes(dict)/resource_attributes(dict)/events(list)/links(list)/session_id
 
 纯函数, 无 I/O, 便于单测 (用 jsonl 反构 OTLP 往返验证)。
 参考: 原 trace-pg-sink compose/collector/sink/consumer.py 的 spans_from/scalar/attrs_to_dict。
@@ -116,7 +116,6 @@ def parse_span(
     status = span.get("status") or {}
     start_nano = _to_int(span.get("startTimeUnixNano"))
     end_nano = _to_int(span.get("endTimeUnixNano"))
-    duration = (end_nano - start_nano) if (start_nano is not None and end_nano is not None) else None
     kind_int = _to_int(span.get("kind"))
     status_int = _to_int(status.get("code"))
     return {
@@ -128,7 +127,6 @@ def parse_span(
         "kind": _KIND_BY_INT.get(kind_int, "UNSPECIFIED"),
         "start_time": _nano_to_iso(start_nano),
         "end_time": _nano_to_iso(end_nano),
-        "duration_ns": duration,
         "service_name": service_name,
         "scope_name": scope_name,
         "scope_version": scope_version,
@@ -139,7 +137,7 @@ def parse_span(
         "events": _events_to_list(span.get("events")),
         "links": _links_to_list(span.get("links")),
         # 提升字段: 供轨迹 API 查询/根 span 判定
-        "conversation_id": attrs.get("session.id"),
+        "session_id": attrs.get("session.id"),
     }
 
 

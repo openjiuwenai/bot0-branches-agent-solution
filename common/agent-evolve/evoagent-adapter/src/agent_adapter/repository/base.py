@@ -41,18 +41,18 @@ class TraceRepository(Protocol):
         """按 trace_id 取全部 spans (按 start_time 升序, 供重建 span 树)。"""
         ...
 
-    async def get_spans_by_conversation(self, conversation_id: str) -> list[dict[str, Any]]:
-        """按 conversation_id 取全部 spans (跨 trace, 按 start_time 升序)。"""
+    async def get_spans_by_session(self, session_id: str) -> list[dict[str, Any]]:
+        """按 session_id 取全部 spans (跨 trace, 按 start_time 升序)。"""
         ...
 
     async def get_trace_tree(self, trace_id: str) -> dict[str, Any]:
         """重建 span 树 (parent/children 嵌套)。"""
         ...
 
-    async def get_root_span(self, conversation_id: str) -> dict[str, Any] | None:
+    async def get_root_span(self, session_id: str) -> dict[str, Any] | None:
         """取会话根 span (kind=SERVER 且 parent_span_id 为空); 用于 complete 判定与汇总。"""
         ...
 
-    async def list_conversations(self, agent_name: str | None = None) -> list[dict[str, Any]]:
+    async def list_sessions(self, agent_name: str | None = None) -> list[dict[str, Any]]:
         """列出 traces 汇总 (可按 service_name=agent_name 过滤)。"""
         ...

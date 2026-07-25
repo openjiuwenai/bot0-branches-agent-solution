@@ -1,6 +1,6 @@
-"""otlp_parser 单测: 用 synthetic spans 反构 OTLP 信封, 解析回扁平 dict, 断言字段一致。
+"""otlp_parser 单测: 用 otel_spans.jsonl 反构 OTLP 信封, 解析回扁平 dict, 断言字段一致。
 
-验证 adapter 消费 kafka (OTLP 信封) 后得到的 span 形状与通用测试数据一致 ——
+验证 adapter 消费 kafka (OTLP 信封) 后得到的 span 形状与参考 jsonl (真实 EDPAgent 数据) 一致 ——
 即设计文档点 7 "数据一致性" 在解析层的保证。
 """
 
@@ -11,11 +11,22 @@ from datetime import datetime, timezone
 
 from agent_adapter.kafka_consumer.otlp_parser import parse_otlp_envelope
 
-from tests._testdata import otel_spans
+from tests._testdata import otel_spans_jsonl
 
 
-def _load_spans() -> list[dict]:
-    return otel_spans()
+def _load_jsonl_spans() -> list[dict]:
+    raw = otel_spans_jsonl().read_text(encoding="utf-8")
+    dec = json.JSONDecoder()
+    i, n, spans = 0, len(raw), []
+    while i < n:
+        while i < n and raw[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        obj, end = dec.raw_decode(raw, i)
+        spans.append(obj)
+        i = end
+    return spans
 
 
 # ---- 反向映射: 扁平 span dict → OTLP 信封 (仅测试用) ----
@@ -82,27 +93,27 @@ def _flat_to_otlp(span: dict) -> dict:
 # ---- 字段比对 (jsonl 原始 vs 解析回) ----
 
 def _assert_span_roundtrips(orig: dict, parsed: dict) -> None:
-    # jsonl 的 16 字段
+    # jsonl 的标量字段 (无 duration_ns; session_id 提升字段)
     for k in ("trace_id", "span_id", "parent_span_id", "name", "kind",
-              "start_time", "end_time", "duration_ns", "status_code", "status_message",
+              "start_time", "end_time", "status_code", "status_message",
               "scope_name", "scope_version"):
         assert parsed[k] == orig.get(k), f"{k}: {parsed[k]!r} != {orig.get(k)!r}"
     # attributes / resource_attributes (dict 等值)
     assert parsed["attributes"] == orig.get("attributes"), "attributes mismatch"
     assert parsed["resource_attributes"] == orig.get("resource_attributes"), "resource_attributes mismatch"
-    # events/links (jsonl 均空)
+    # events/links
     assert parsed["events"] == (orig.get("events") or [])
     assert parsed["links"] == (orig.get("links") or [])
     # 提升字段
     assert parsed["service_name"] == (orig.get("resource_attributes") or {}).get("service.name")
-    assert parsed["conversation_id"] == (orig.get("attributes") or {}).get("session.id")
-    # trace_state (jsonl 无此字段, OTLP 默认空)
+    assert parsed["session_id"] == (orig.get("attributes") or {}).get("session.id")
+    # trace_state
     assert parsed["trace_state"] == orig.get("trace_state", "")
 
 
-def test_roundtrip_all_synthetic_spans():
-    spans = _load_spans()
-    assert len(spans) > 0, "synthetic fixture 未生成 span"
+def test_roundtrip_all_jsonl_spans():
+    spans = _load_jsonl_spans()
+    assert len(spans) > 0, "jsonl 未加载到 span"
     for orig in spans:
         envelope = _flat_to_otlp(orig)
         parsed_list = parse_otlp_envelope(json.dumps(envelope))
@@ -111,14 +122,14 @@ def test_roundtrip_all_synthetic_spans():
 
 
 def test_bytes_input():
-    spans = _load_spans()
+    spans = _load_jsonl_spans()
     env = json.dumps(_flat_to_otlp(spans[0])).encode("utf-8")
     parsed = parse_otlp_envelope(env)
     assert parsed[0]["trace_id"] == spans[0]["trace_id"]
 
 
 def test_multi_spans_in_one_envelope():
-    spans = _load_spans()[:3]
+    spans = _load_jsonl_spans()[:3]
     # 合并 3 个 span 到一个 resourceSpans (同 resource)
     res_attrs = _dict_to_attrs(spans[0].get("resource_attributes") or {})
     otlp_spans = []

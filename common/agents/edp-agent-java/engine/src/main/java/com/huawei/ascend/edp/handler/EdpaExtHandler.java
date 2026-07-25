@@ -488,20 +488,35 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             LOGGER.info("Scenario home resolved: {}", result.getScenarioHomePath());
         }
 
-        // 第四步：加载 Governance 配置。
-        Path governancePath = yamlDir.resolve("governance").toAbsolutePath().normalize();
-        if (result.getScenarioHomePath() != null) {
-            governancePath = result.getScenarioHomePath().resolve("governance").toAbsolutePath().normalize();
-        }
-        if (Files.exists(governancePath)) {
+        // 第四步：加载 Governance 配置（框架级 + 场景级双路径合并）。
+        Path frameworkGovernancePath = yamlDir.resolve("governance").toAbsolutePath().normalize();
+        if (result.getScenarioHomePath() != null && Files.exists(result.getScenarioHomePath())) {
+            Path scenarioGovernancePath = result.getScenarioHomePath()
+                    .resolve("governance").toAbsolutePath().normalize();
+            if (Files.exists(scenarioGovernancePath)) {
+                try {
+                    result.setGovernanceConfig(
+                        GovernanceConfigLoader.loadWithPriority(scenarioGovernancePath, frameworkGovernancePath));
+                    LOGGER.info("Governance loaded with priority: scenario={}, framework={}",
+                        scenarioGovernancePath, frameworkGovernancePath);
+                } catch (IllegalStateException e) {
+                    LOGGER.warn("Failed to load governance config: {}", e.getMessage());
+                }
+            } else {
+                try {
+                    result.setGovernanceConfig(GovernanceConfigLoader.load(frameworkGovernancePath));
+                    LOGGER.info("Governance loaded from framework only: {}", frameworkGovernancePath);
+                } catch (IllegalStateException e) {
+                    LOGGER.warn("Failed to load governance config: {}", e.getMessage());
+                }
+            }
+        } else {
             try {
-                result.setGovernanceConfig(GovernanceConfigLoader.load(governancePath));
-                LOGGER.info("Governance loaded from {}", governancePath);
+                result.setGovernanceConfig(GovernanceConfigLoader.load(frameworkGovernancePath));
+                LOGGER.info("Governance loaded from framework only (no scenarioHome)");
             } catch (IllegalStateException e) {
                 LOGGER.warn("Failed to load governance config: {}", e.getMessage());
             }
-        } else {
-            LOGGER.info("Governance loaded from framework only (no scenarioHome)");
         }
 
         // 第五步：配置校验 fail-fast。
@@ -573,8 +588,17 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         Path frameworkScriptsPath = yamlDir.resolve("governance").resolve("scriptconfig.yaml").toAbsolutePath()
                 .normalize();
         if (Files.exists(frameworkScriptsPath)) {
+            // 文件系统优先（开发态）
             sysScriptsConfig.load(frameworkScriptsPath.toString());
             LOGGER.info("Framework scripts loaded from {}", frameworkScriptsPath);
+        } else {
+            // 文件系统不存在 → classpath 回退（集成态，引擎 JAR 内有 governance）
+            boolean loadedFromClasspath = sysScriptsConfig.loadFromClasspath();
+            if (loadedFromClasspath) {
+                LOGGER.info("Framework scripts loaded from classpath (engine JAR)");
+            } else {
+                LOGGER.warn("Framework scripts not found in filesystem or classpath, using defaults");
+            }
         }
         if (result.getScenarioHomePath() != null) {
             Path scenarioScriptsPath = result.getScenarioHomePath().resolve("governance").resolve("scriptconfig.yaml")
