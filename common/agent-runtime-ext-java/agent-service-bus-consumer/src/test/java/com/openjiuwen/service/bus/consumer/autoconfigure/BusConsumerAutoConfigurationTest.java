@@ -13,8 +13,12 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.ProjectingTaskStore;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
+import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
+import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
 
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
@@ -56,7 +60,25 @@ class BusConsumerAutoConfigurationTest {
             assertThat(context).hasSingleBean(AgentBusResponsePublisher.class);
             assertThat(context).hasSingleBean(BusConsumerProperties.class);
             assertThat(context.getBean(TaskStore.class)).isInstanceOf(ProjectingTaskStore.class);
+            assertThat(context).hasSingleBean(BusTaskAdmissionStore.class);
+            assertThat(context).hasSingleBean(BusResponseProjectionStore.class);
+            assertThat(context.getBean(BusTaskAdmissionStore.class))
+                    .isInstanceOf(InMemoryBusTaskAdmissionStore.class);
+            assertThat(context.getBean(BusResponseProjectionStore.class))
+                    .isInstanceOf(InMemoryBusResponseProjectionStore.class);
         });
+    }
+
+    @Test
+    void rejectsApplicationAdmissionStoreOverride() {
+        contextRunner.withBean("applicationAdmissionStore", BusTaskAdmissionStore.class,
+                InMemoryBusTaskAdmissionStore::new).run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void rejectsApplicationProjectionStoreOverride() {
+        contextRunner.withBean("applicationProjectionStore", BusResponseProjectionStore.class,
+                InMemoryBusResponseProjectionStore::new).run(context -> assertThat(context).hasFailed());
     }
 
     @Test
