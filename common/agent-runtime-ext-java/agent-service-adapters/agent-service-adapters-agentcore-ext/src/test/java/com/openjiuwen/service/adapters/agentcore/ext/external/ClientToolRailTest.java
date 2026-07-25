@@ -4,6 +4,10 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.tool.schema.ToolInfo;
 import com.openjiuwen.core.session.Session;
@@ -22,6 +26,7 @@ import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -30,13 +35,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+/**
+ * Tests request-scoped client tool registration, interruption, and resumption.
+ *
+ * @since 2026-07-25
+ */
 class ClientToolRailTest {
     @Test
-    void injectsVisibleToolsOnlyIntoExactRequestSessionAndUnregistersOnClose() {
+    void injectsVisibleToolsForExactSessionAndUnregistersOnClose() {
         ReActAgent agent = agent();
         ModelCallInputs matchingInputs = ModelCallInputs.builder().tools(new ArrayList<>()).build();
         ModelCallInputs otherInputs = ModelCallInputs.builder().tools(new ArrayList<>()).build();
@@ -55,7 +61,7 @@ class ClientToolRailTest {
     }
 
     @Test
-    void deepAgentBindingTargetsInternalAgentAndRequiresCompleteNumericSuffix() {
+    void deepAgentBindingRequiresCompleteNumericSessionSuffix() {
         DeepAgent deepAgent = new DeepAgent(agentCard(), DeepAgentConfig.builder().enableTaskLoop(true).build(), null);
         ModelCallInputs derived = ModelCallInputs.builder().tools(new ArrayList<>()).build();
         ModelCallInputs raw = ModelCallInputs.builder().tools(new ArrayList<>()).build();
@@ -83,13 +89,14 @@ class ClientToolRailTest {
             assertThatThrownBy(() -> execute(agent, AgentCallbackEvent.BEFORE_TOOL_CALL,
                     toolContext(toolCall, "readCurrentPage", "ctx", null)))
                     .isInstanceOfSatisfying(ToolInterruptException.class, exception -> {
-                        assertThat(exception.getRequest()).isInstanceOf(ToolCallInterruptRequest.class);
-                        ToolCallInterruptRequest request = (ToolCallInterruptRequest) exception.getRequest();
-                        assertThat(request.getToolCallId()).isEqualTo("call-1");
-                        assertThat(request.getToolName()).isEqualTo("readCurrentPage");
-                        assertThat(request.getContext())
-                                .containsEntry("_interrupt_kind", "client_tool")
-                                .containsEntry("arguments", Map.of("selector", "#main"));
+                        assertThat(exception.getRequest()).isInstanceOfSatisfying(
+                                ToolCallInterruptRequest.class, request -> {
+                                    assertThat(request.getToolCallId()).isEqualTo("call-1");
+                                    assertThat(request.getToolName()).isEqualTo("readCurrentPage");
+                                    assertThat(request.getContext())
+                                            .containsEntry("_interrupt_kind", "client_tool")
+                                            .containsEntry("arguments", Map.of("selector", "#main"));
+                                });
                     });
         }
     }
@@ -106,11 +113,12 @@ class ClientToolRailTest {
             execute(agent, AgentCallbackEvent.BEFORE_TOOL_CALL, context);
         }
 
-        ToolCallInputs inputs = (ToolCallInputs) context.getInputs();
         assertThat(context.getExtra()).containsEntry("_skip_tool", true);
-        assertThat(inputs.getToolResult()).isEqualTo("page body from client");
-        assertThat(inputs.getToolMsg().getToolCallId()).isEqualTo("call-1");
-        assertThat(inputs.getToolMsg().getContent()).isEqualTo("page body from client");
+        assertThat(context.getInputs()).isInstanceOfSatisfying(ToolCallInputs.class, inputs -> {
+            assertThat(inputs.getToolResult()).isEqualTo("page body from client");
+            assertThat(inputs.getToolMsg().getToolCallId()).isEqualTo("call-1");
+            assertThat(inputs.getToolMsg().getContent()).isEqualTo("page body from client");
+        });
     }
 
     @Test
@@ -124,7 +132,8 @@ class ClientToolRailTest {
         }
 
         assertThat(context.getExtra()).doesNotContainKey("_skip_tool");
-        assertThat(((ToolCallInputs) context.getInputs()).getToolResult()).isNull();
+        assertThat(context.getInputs()).isInstanceOfSatisfying(
+                ToolCallInputs.class, inputs -> assertThat(inputs.getToolResult()).isNull());
     }
 
     @Test

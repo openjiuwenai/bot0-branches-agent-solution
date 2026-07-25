@@ -4,20 +4,26 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.singleagent.ReActAgent;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackEvent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+/**
+ * Tests request-scoped client tool result binding.
+ *
+ * @since 2026-07-25
+ */
 class ClientToolBindingTest {
     @Test
     void convertsCompleteMultipleTargetedResultsForCoreHandler() {
