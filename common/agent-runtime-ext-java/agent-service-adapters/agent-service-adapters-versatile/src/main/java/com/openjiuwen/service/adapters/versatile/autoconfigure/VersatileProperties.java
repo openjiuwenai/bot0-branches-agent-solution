@@ -34,6 +34,8 @@ public class VersatileProperties {
     private List<ResultExtraction> resultExtractions = new ArrayList<>();
     private Interrupt interrupt = new Interrupt();
     private boolean logMaskSensitive = true;
+    private String ambiguousIntentId = "1";
+    private DefaultWorkflow defaultWorkflow = new DefaultWorkflow();
 
     public String getUrlTemplate() {
         return urlTemplate;
@@ -148,6 +150,22 @@ public class VersatileProperties {
 
     public void setLogMaskSensitive(boolean logMaskSensitive) {
         this.logMaskSensitive = logMaskSensitive;
+    }
+
+    public String getAmbiguousIntentId() {
+        return ambiguousIntentId;
+    }
+
+    public void setAmbiguousIntentId(String ambiguousIntentId) {
+        this.ambiguousIntentId = ambiguousIntentId;
+    }
+
+    public DefaultWorkflow getDefaultWorkflow() {
+        return defaultWorkflow;
+    }
+
+    public void setDefaultWorkflow(DefaultWorkflow defaultWorkflow) {
+        this.defaultWorkflow = defaultWorkflow != null ? defaultWorkflow : new DefaultWorkflow();
     }
 
     /**
@@ -346,6 +364,26 @@ public class VersatileProperties {
 
         public void setUrlTemplate(String urlTemplate) {
             this.urlTemplate = urlTemplate;
+        }
+    }
+
+    /**
+     * Configuration for the L2 self-heal default workflow. When {@code agent-card}
+     * is set, the extractor emits an {@code a2a_delegate} interrupt pointing at
+     * this workflow on ambiguous intent; when unset, the extractor falls back to
+     * L1 by emitting a {@code VERSATILE_INTENT_AMBIGUOUS} error.
+     *
+     * @since 2026-07-24
+     */
+    public static class DefaultWorkflow {
+        private String agentCard;
+
+        public String getAgentCard() {
+            return agentCard;
+        }
+
+        public void setAgentCard(String agentCard) {
+            this.agentCard = agentCard;
         }
     }
 }

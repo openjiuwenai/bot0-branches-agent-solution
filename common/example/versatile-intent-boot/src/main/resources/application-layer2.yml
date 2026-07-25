@@ -46,6 +46,10 @@ openjiuwen:
         input-requirement-get: /data/input_schema
         resume-token-get: /data/resume_token
 
+      ambiguous-intent-id: "1"
+      default-workflow:
+        agent-card: agent_card_L2_default
+
     a2a-gateway:
       enabled: true
       base-url: https://gateway.example.com

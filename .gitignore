@@ -30,8 +30,8 @@ target/
 *.key
 *.pem
 
-# test/ 本地脚本与数据（评测/跑批脚本、人工标注、run 产物、测试 trace/skill）不提交
-test/
+# /test/ 仓库根目录下的本地脚本与数据（评测/跑批脚本、人工标注、run 产物、测试 trace/skill）不提交
+/test/
 
 # evoagent 运行产物（GU/golden_data/intermediate 等 workspace 产物）
 common/agent-evolve/evoagent/workspace/
@@ -54,4 +54,4 @@ common/agents/edpa-alpha/
 TestRun/
 TestRun.rar
 /.pipeline/
-docs/superpowers/plans/
+docs/superpowers/
