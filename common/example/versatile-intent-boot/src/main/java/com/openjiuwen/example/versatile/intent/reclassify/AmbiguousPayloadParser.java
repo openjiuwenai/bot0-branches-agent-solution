@@ -5,21 +5,26 @@ package com.openjiuwen.example.versatile.intent.reclassify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.service.spec.dto.QueryResponse;
 
+import java.util.Map;
 import java.util.Optional;
 
 /**
- * Extracts an {@link AmbiguousPayload} from a {@link Throwable}'s message by
- * walking its cause chain. Each cause's message is scanned for the
- * {@code VERSATILE_INTENT_AMBIGUOUS} marker; when found, the surrounding JSON
- * object is parsed.
+ * Extracts an {@link AmbiguousPayload} from either:
+ * <ul>
+ *   <li>a {@link QueryResponse} whose {@code content} carries a JSON envelope
+ *       with {@code intent_id} matching the configured ambiguous id (the
+ *       primary signal path — L2 adapter returns a normal answer chunk whose
+ *       envelope traverses HTTP / gateway / batch coordinator unchanged), or</li>
+ *   <li>a {@link Throwable}'s message walking its cause chain (legacy path
+ *       retained for callers that still surface ambiguous as an exception).</li>
+ * </ul>
  *
- * <p>The parser tolerates prefix/suffix text around the JSON object (the
- * runtime wraps remote-agent failure messages with contextual prefixes). It
- * scans the message for the JSON object that encloses the marker — tracking
- * string literals and escape sequences so braces inside string values do not
- * confuse the scan — and requires that object to be valid JSON containing
- * the four payload fields.
+ * <p>The {@code fromThrowable} path scans each cause's message for the
+ * {@code VERSATILE_INTENT_AMBIGUOUS} marker. The parser tolerates prefix/suffix
+ * text around the JSON object and tracks string literals and escape sequences
+ * so braces inside string values do not confuse the scan.
  *
  * @since 2026-07-24
  */
@@ -28,6 +33,50 @@ public final class AmbiguousPayloadParser {
     private static final String MARKER = "VERSATILE_INTENT_AMBIGUOUS";
 
     private AmbiguousPayloadParser() {
+    }
+
+    /**
+     * Inspects a {@link QueryResponse} for an ambiguous answer envelope.
+     *
+     * <p>The response's {@code result.content} must be a JSON string with an
+     * {@code intent_id} field matching {@code ambiguousIntentId}. The
+     * {@code response_content} is extracted from either the top-level
+     * {@code response_content} field or the nested {@code payload.content}
+     * field (the mock gateway wraps business text under {@code payload.content}).
+     *
+     * @param response          the query response to inspect, may be {@code null}
+     * @param ambiguousIntentId the configured ambiguous intent id (e.g. "1")
+     * @return the parsed payload, or empty if the response is not ambiguous
+     */
+    public static Optional<AmbiguousPayload> fromQueryResponse(QueryResponse response, String ambiguousIntentId) {
+        if (response == null || response.getResult() == null) {
+            return Optional.empty();
+        }
+        Object content = (response.getResult() instanceof Map<?, ?> m) ? m.get("content") : null;
+        if (!(content instanceof String s) || s.isBlank()) {
+            return Optional.empty();
+        }
+        return fromContentString(s, ambiguousIntentId);
+    }
+
+    /**
+     * Inspects a chunk's data for an ambiguous answer envelope.
+     *
+     * <p>Used by the streaming-path observer. Accepts either a {@link Map}
+     * envelope directly or a JSON string envelope.
+     *
+     * @param data              the chunk data
+     * @param ambiguousIntentId the configured ambiguous intent id
+     * @return the parsed payload, or empty if the data is not an ambiguous envelope
+     */
+    public static Optional<AmbiguousPayload> fromChunkData(Object data, String ambiguousIntentId) {
+        if (data instanceof Map<?, ?> map) {
+            return fromEnvelopeMap(map, ambiguousIntentId);
+        }
+        if (data instanceof String s && !s.isBlank()) {
+            return fromContentString(s, ambiguousIntentId);
+        }
+        return Optional.empty();
     }
 
     /**
@@ -54,6 +103,49 @@ public final class AmbiguousPayloadParser {
             current = current.getCause();
         }
         return Optional.empty();
+    }
+
+    private static Optional<AmbiguousPayload> fromContentString(String s, String ambiguousIntentId) {
+        try {
+            JsonNode root = MAPPER.readTree(s);
+            if (root == null || !root.isObject()) {
+                return Optional.empty();
+            }
+            return fromEnvelopeNode(root, ambiguousIntentId);
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<AmbiguousPayload> fromEnvelopeMap(Map<?, ?> map, String ambiguousIntentId) {
+        Object intentIdRaw = map.get("intent_id");
+        if (!(intentIdRaw instanceof String intentId) || intentId.isBlank()) {
+            return Optional.empty();
+        }
+        if (!intentId.equals(ambiguousIntentId)) {
+            return Optional.empty();
+        }
+        String responseContent = map.get("response_content") instanceof String rc ? rc : "";
+        if (responseContent.isBlank() && map.get("payload") instanceof Map<?, ?> payload) {
+            responseContent = payload.get("content") instanceof String pc ? pc : "";
+        }
+        return Optional.of(new AmbiguousPayload(intentId, responseContent, ambiguousIntentId));
+    }
+
+    private static Optional<AmbiguousPayload> fromEnvelopeNode(JsonNode node, String ambiguousIntentId) {
+        JsonNode intentIdNode = node.path("intent_id");
+        if (!intentIdNode.isTextual()) {
+            return Optional.empty();
+        }
+        String intentId = intentIdNode.asText();
+        if (!intentId.equals(ambiguousIntentId)) {
+            return Optional.empty();
+        }
+        String responseContent = textOrEmpty(node.get("response_content"));
+        if (responseContent.isEmpty()) {
+            responseContent = textOrEmpty(node.path("payload").path("content"));
+        }
+        return Optional.of(new AmbiguousPayload(intentId, responseContent, ambiguousIntentId));
     }
 
     private static Optional<AmbiguousPayload> parseMessage(String message) {

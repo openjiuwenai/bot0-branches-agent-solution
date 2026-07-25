@@ -352,7 +352,7 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void emitsAmbiguousErrorWhenIntentIdIsAmbiguousAndNoDefaultWorkflow() {
+    void emitsAmbiguousChunkWhenIntentIdIsAmbiguousAndNoDefaultWorkflow() {
         VersatileProperties props = props("AnswerNode");
         addExtraction(props, "response_content", "/custom_rsp_data/data/response_content");
         addExtraction(props, "intent_id", "/custom_rsp_data/data/intent_id");
@@ -367,13 +367,15 @@ class VersatileResponseExtractorTest {
                 extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
         chunks.addAll(extractor.finish());
 
-        assertThat(chunks).extracting(QueryChunk::getType)
-                .contains(QueryChunk.TYPE_ERROR);
-        String payload = String.valueOf(chunks.get(chunks.size() - 1).getData());
-        assertThat(payload).contains("VERSATILE_INTENT_AMBIGUOUS")
-                .contains("\"intent_id\":\"1\"")
-                .contains("\"response_content\":\"无法确定国内/国际\"")
-                .contains("\"ambiguous_intent_id\":\"1\"");
+        QueryChunk ambiguous = chunks.stream()
+                .filter(c -> QueryChunk.TYPE_CHUNK.equals(c.getType()))
+                .filter(c -> c.getData() instanceof Map<?, ?>)
+                .findFirst().orElseThrow();
+        Map<?, ?> envelope = (Map<?, ?>) ambiguous.getData();
+        assertThat(envelope.get("type")).isEqualTo("answer");
+        assertThat(envelope.get("intent_id")).isEqualTo("1");
+        assertThat(envelope.get("response_content")).isEqualTo("无法确定国内/国际");
+        assertThat(envelope.get("ambiguous")).isEqualTo(true);
     }
 
     @Test
@@ -441,11 +443,13 @@ class VersatileResponseExtractorTest {
                 extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
         chunks.addAll(extractor.finish());
 
-        // blank agent-card → not self-heal, falls back to TYPE_ERROR
-        assertThat(chunks).extracting(QueryChunk::getType)
-                .contains(QueryChunk.TYPE_ERROR);
-        String payload = String.valueOf(chunks.get(chunks.size() - 1).getData());
-        assertThat(payload).contains("VERSATILE_INTENT_AMBIGUOUS");
+        // blank agent-card → not self-heal, falls back to TYPE_CHUNK ambiguous envelope
+        QueryChunk ambiguous = chunks.stream()
+                .filter(c -> QueryChunk.TYPE_CHUNK.equals(c.getType()))
+                .filter(c -> c.getData() instanceof Map<?, ?>)
+                .findFirst().orElseThrow();
+        Map<?, ?> envelope = (Map<?, ?>) ambiguous.getData();
+        assertThat(envelope.get("intent_id")).isEqualTo("1");
     }
 
     @Test
@@ -464,9 +468,12 @@ class VersatileResponseExtractorTest {
                 extractor.consumeLine("data: {\"data\":{\"node_type\":\"End\"}}"));
         chunks.addAll(extractor.finish());
 
-        String payload = String.valueOf(chunks.get(chunks.size() - 1).getData());
-        assertThat(payload).contains("VERSATILE_INTENT_AMBIGUOUS")
-                .contains("\"response_content\":\"\"");
+        QueryChunk ambiguous = chunks.stream()
+                .filter(c -> QueryChunk.TYPE_CHUNK.equals(c.getType()))
+                .filter(c -> c.getData() instanceof Map<?, ?>)
+                .findFirst().orElseThrow();
+        Map<?, ?> envelope = (Map<?, ?>) ambiguous.getData();
+        assertThat(envelope.get("response_content")).isEqualTo("");
     }
 
     private static void addExtraction(VersatileProperties props, String match, String get) {

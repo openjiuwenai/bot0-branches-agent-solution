@@ -67,7 +67,7 @@ import java.util.Map;
  * <p>The routing table mirrors {@code card-resolver.local-mapping} in
  * {@code application-mock-versatile.yml}, mapping each {@code agentCard} to
  * the runtime process that hosts it. Ports match the e2e script defaults
- * (L1=8081, L2=8082, downstream=8083).
+ * (L1=8081, L2=8082, downstream=8083, default-wf=8085).
  *
  * @since 0.1.0
  */
@@ -84,6 +84,7 @@ public class MockA2AGatewayController {
             "agent_card_L2_flight_a", "http://localhost:8082",
             "agent_card_L2_flight_b", "http://localhost:8082",
             "agent_card_L2_fallback", "http://localhost:8082",
+            "agent_card_L2_default", "http://localhost:8085",
             "agent_card_biz_hotel_domestic", "http://localhost:8083",
             "agent_card_biz_hotel_international", "http://localhost:8083",
             "agent_card_biz_flight_domestic", "http://localhost:8083",

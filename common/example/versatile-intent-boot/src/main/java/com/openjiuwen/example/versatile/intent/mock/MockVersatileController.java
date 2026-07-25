@@ -23,11 +23,15 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>Activated by the {@code mock-versatile} profile. Matches the Versatile
  * URL pattern {@code /v1/proj/agents/{agentId}/conversations/{conversationId}}
- * and returns canned SSE responses that drive the three L2 §6.2 scenarios:
+ * and returns canned SSE responses that drive the L2 §6.2 scenarios:
  * <ul>
- *   <li>Scenario 1 (query contains "订酒店"): L1→L2→downstream full chain.</li>
+ *   <li>Scenario 1 (query contains "订酒店", default): L1→L2→downstream full chain.</li>
  *   <li>Scenario 2 (query contains "重分类"): downstream→L1 reclassification.</li>
  *   <li>Scenario 3 (query contains "中断"): L1 explicit user interrupt.</li>
+ *   <li>Scenario 4 (query contains "意图不明"): L2 returns {@code intent_id="1"}
+ *       (ambiguous). L2 Adapter self-heals via {@code a2a_delegate} to
+ *       {@code agent_card_L2_default}, which routes to the default-wf process
+ *       ({@code agent_L2_default}) returning a fallback business answer.</li>
  * </ul>
  *
  * <p>The mock inspects {@code inputs.query} from the request body to select
@@ -56,9 +60,10 @@ public class MockVersatileController {
             @PathVariable String conversationId,
             @RequestBody(required = false) String body) {
         String query = extractQuery(body);
-        String sse = cannedSse(agentId, query, conversationId);
-        log.info("Mock Versatile agentId={} conversationId={} query={} -> {} bytes SSE",
-                agentId, conversationId, query, sse.length());
+        boolean hasAssistant = hasAssistantMessage(body);
+        String sse = cannedSse(agentId, query, conversationId, hasAssistant);
+        log.info("Mock Versatile agentId={} conversationId={} query={} hasAssistant={} -> {} bytes SSE",
+                agentId, conversationId, query, hasAssistant, sse.length());
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(sse);
@@ -77,12 +82,52 @@ public class MockVersatileController {
         }
     }
 
-    private static String cannedSse(String agentId, String query, String conversationId) {
+    /**
+     * Returns true if the request body's {@code inputs.messages} array contains
+     * at least one entry with {@code role="assistant"}. Used by the ambiguous
+     * scenario to distinguish the first L1/L2 call (only user messages) from
+     * the L1 reclassify retry (user + assistant messages appended by the
+     * {@code ReclassifyServeOrchestrator} decorator).
+     *
+     * @param body the raw request body (may be {@code null})
+     * @return true if an assistant message is present
+     */
+    private static boolean hasAssistantMessage(String body) {
+        if (body == null || body.isBlank()) {
+            return false;
+        }
+        try {
+            JsonNode messages = MAPPER.readTree(body).path("inputs").path("messages");
+            // VersatileRequestExtractor serializes messages as a JSON string
+            // (OBJECT_MAPPER.writeValueAsString(list)), so the node may be
+            // textual rather than an array. Parse it again when that happens.
+            if (messages.isTextual()) {
+                messages = MAPPER.readTree(messages.asText());
+            }
+            if (!messages.isArray()) {
+                return false;
+            }
+            for (JsonNode msg : messages) {
+                JsonNode role = msg.path("role");
+                if (role.isTextual() && "assistant".equals(role.asText())) {
+                    return true;
+                }
+            }
+        } catch (JsonProcessingException ignored) {
+            // fall through
+        }
+        return false;
+    }
+
+    private static String cannedSse(String agentId, String query, String conversationId, boolean hasAssistant) {
         if (query.contains("中断")) {
             return interruptSse();
         }
         if (query.contains("重分类")) {
             return reclassifySse(agentId);
+        }
+        if (query.contains("意图不明")) {
+            return ambiguousSse(agentId, hasAssistant);
         }
         return defaultChainSse(agentId);
     }
@@ -136,5 +181,67 @@ public class MockVersatileController {
                         + "{\"question\":\"请提供入住日期\",\"input_schema\":\"date\","
                         + "\"resume_token\":\"tok-123\"}}",
                 "{\"data\":{\"node_type\":\"End\"}}");
+    }
+
+    /**
+     * Scenario 4 canned SSE: L2 returns {@code intent_id="1"} (ambiguous).
+     * L2 Adapter detects this and either self-heals via {@code a2a_delegate}
+     * to {@code agent_card_L2_default} (when default-workflow is configured)
+     * or produces a {@code TYPE_CHUNK} answer envelope carrying
+     * {@code intent_id} (when default-workflow is absent, triggering L1
+     * reclassify via the {@code ReclassifyServeOrchestrator} decorator).
+     *
+     * <p>On the L1 reclassify retry, the {@code ReclassifyServeOrchestrator}
+     * decorator appends an assistant message (L2's previous response_content)
+     * to the ServeRequest. The mock detects this via {@code hasAssistant}:
+     * <ul>
+     *   <li>{@code agent_L1} + {@code hasAssistant=true}: returns a three-field
+     *       answer pointing directly to {@code agent_card_biz_hotel_domestic},
+     *       skipping L2 and routing to downstream so the reclassify loop
+     *       terminates with a business result.</li>
+     *   <li>{@code agent_L2} + {@code hasAssistant=true}: returns a three-field
+     *       answer (used by unit tests that re-invoke L2 directly).</li>
+     * </ul>
+     *
+     * @param agentId       the agent identifier from the URL path
+     * @param hasAssistant  true if the request messages contain an assistant entry
+     * @return canned SSE response for the ambiguous scenario
+     */
+    private static String ambiguousSse(String agentId, boolean hasAssistant) {
+        return switch (agentId) {
+            case "agent_L1" -> hasAssistant
+                    ? sse(
+                            "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":"
+                                    + "{\"node_type\":\"QA\",\"response_content\":\"L1重识别完成\","
+                                    + "\"intent_id\":\"intent_L2_hotel_domestic\","
+                                    + "\"agent_id\":\"agent_card_biz_hotel_domestic\"}}}",
+                            "{\"data\":{\"node_type\":\"End\"}}")
+                    : sse(
+                            "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":"
+                                    + "{\"node_type\":\"QA\",\"response_content\":\"L1酒店意图\","
+                                    + "\"intent_id\":\"intent_L1_hotel\",\"agent_id\":\"agent_card_L2_hotel\"}}}",
+                            "{\"data\":{\"node_type\":\"End\"}}");
+            case "agent_L2" -> hasAssistant
+                    ? sse(
+                            "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":"
+                                    + "{\"node_type\":\"QA\",\"response_content\":\"国内酒店已识别\","
+                                    + "\"intent_id\":\"intent_L2_hotel_domestic\","
+                                    + "\"agent_id\":\"agent_card_biz_hotel_domestic\"}}}",
+                            "{\"data\":{\"node_type\":\"End\"}}")
+                    : sse(
+                            "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":"
+                                    + "{\"node_type\":\"QA\",\"response_content\":\"无法确定国内/国际酒店\","
+                                    + "\"intent_id\":\"1\"}}}",
+                            "{\"data\":{\"node_type\":\"End\"}}");
+            case "agent_L2_default" -> sse(
+                    "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":"
+                            + "{\"node_type\":\"QA\",\"text\":\"默认工作流兜底：转人工客服\"}}}",
+                    "{\"data\":{\"node_type\":\"End\"}}");
+            case "agent_biz" -> sse(
+                    "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":"
+                            + "{\"node_type\":\"QA\",\"text\":\"酒店预订成功：上海今晚五星\"}}}",
+                    "{\"data\":{\"node_type\":\"End\"}}");
+            default -> sse("{\"data\":{\"node_type\":\"End\"}}");
+        };
     }
 }

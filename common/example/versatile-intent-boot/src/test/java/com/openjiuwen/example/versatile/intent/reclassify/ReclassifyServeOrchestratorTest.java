@@ -13,7 +13,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentException;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
@@ -30,9 +29,18 @@ import java.util.List;
 import java.util.Map;
 
 class ReclassifyServeOrchestratorTest {
-    private static final String PAYLOAD = "{\"code\":\"VERSATILE_INTENT_AMBIGUOUS\","
-            + "\"intent_id\":\"1\",\"response_content\":\"无法确定\","
-            + "\"ambiguous_intent_id\":\"1\"}";
+    /**
+     * Envelope JSON string surfaced as {@code QueryResponse.result.content}
+     * by the L1 A2A caller when the L2 adapter emits a {@code TYPE_CHUNK}
+     * answer envelope carrying {@code intent_id}.
+     */
+    private static final String AMBIGUOUS_ENVELOPE_JSON = "{\"type\":\"answer\","
+            + "\"intent_id\":\"1\","
+            + "\"payload\":{\"content\":\"无法确定\"}}";
+
+    private static final Map<String, Object> AMBIGUOUS_ENVELOPE_MAP = new LinkedHashMap<>(
+            Map.of("type", "answer", "intent_id", "1",
+                    "response_content", "无法确定", "ambiguous", true));
 
     private ServeOrchestrator wrapped;
     private ReclassifyProperties properties;
@@ -43,6 +51,7 @@ class ReclassifyServeOrchestratorTest {
         properties = new ReclassifyProperties();
         properties.setEnabled(true);
         properties.setMaxReclassify(1);
+        properties.setAmbiguousIntentId("1");
     }
 
     private ServeRequest sampleRequest() {
@@ -57,6 +66,13 @@ class ReclassifyServeOrchestratorTest {
         messages.add(userMsg);
         request.setMessages(messages);
         return request;
+    }
+
+    private QueryResponse ambiguousResponse() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("role", "assistant");
+        result.put("content", AMBIGUOUS_ENVELOPE_JSON);
+        return new QueryResponse(result, "conv-1");
     }
 
     @Test
@@ -75,7 +91,8 @@ class ReclassifyServeOrchestratorTest {
 
         doAnswer(inv -> {
             QueryStreamObserver obs = inv.getArgument(1);
-            obs.onError(new RemoteAgentException(PAYLOAD, null));
+            obs.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, AMBIGUOUS_ENVELOPE_MAP));
+            obs.onComplete();
             return null;
         }).doAnswer(inv -> {
             QueryStreamObserver obs = inv.getArgument(1);
@@ -101,7 +118,8 @@ class ReclassifyServeOrchestratorTest {
 
         doAnswer(inv -> {
             QueryStreamObserver obs = inv.getArgument(1);
-            obs.onError(new RemoteAgentException(PAYLOAD, null));
+            obs.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, AMBIGUOUS_ENVELOPE_MAP));
+            obs.onComplete();
             return null;
         }).when(wrapped).streamQuery(any(), any());
 
@@ -139,7 +157,8 @@ class ReclassifyServeOrchestratorTest {
 
         doAnswer(inv -> {
             QueryStreamObserver obs = inv.getArgument(1);
-            obs.onError(new RemoteAgentException(PAYLOAD, null));
+            obs.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, AMBIGUOUS_ENVELOPE_MAP));
+            obs.onComplete();
             return null;
         }).when(wrapped).streamQuery(any(), any());
 
@@ -156,9 +175,7 @@ class ReclassifyServeOrchestratorTest {
         ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties);
         QueryResponse successResponse = new QueryResponse(Map.of("content", "final"), "conv-1");
 
-        when(wrapped.query(any())).thenThrow(
-                new IllegalStateException("Remote batch execution failed",
-                        new RemoteAgentException(PAYLOAD, null)))
+        when(wrapped.query(any())).thenReturn(ambiguousResponse())
                 .thenReturn(successResponse);
 
         QueryResponse response = decorator.query(sampleRequest());
@@ -169,9 +186,7 @@ class ReclassifyServeOrchestratorTest {
     @Test
     void queryReclassifyLimitRethrows() {
         ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties);
-        when(wrapped.query(any())).thenThrow(
-                new IllegalStateException("Remote batch execution failed",
-                        new RemoteAgentException(PAYLOAD, null)));
+        when(wrapped.query(any())).thenReturn(ambiguousResponse());
 
         assertThatThrownBy(() -> decorator.query(sampleRequest()))
                 .isInstanceOf(IllegalStateException.class)
@@ -180,13 +195,12 @@ class ReclassifyServeOrchestratorTest {
     }
 
     @Test
-    void queryForwardsNonAmbiguousException() {
+    void queryForwardsNonAmbiguousResponse() {
         ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties);
-        IllegalStateException realError = new IllegalStateException("unrelated");
-        when(wrapped.query(any())).thenThrow(realError);
+        QueryResponse normalResponse = new QueryResponse(Map.of("content", "normal"), "conv-1");
+        when(wrapped.query(any())).thenReturn(normalResponse);
 
-        assertThatThrownBy(() -> decorator.query(sampleRequest()))
-                .isSameAs(realError);
+        assertThat(decorator.query(sampleRequest())).isSameAs(normalResponse);
         verify(wrapped, times(1)).query(any());
     }
 
@@ -204,9 +218,7 @@ class ReclassifyServeOrchestratorTest {
     @Test
     void augmentedRequestAppendsAssistantMessageAndPreservesLastUserQuery() {
         ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties);
-        when(wrapped.query(any())).thenThrow(
-                new IllegalStateException("Remote batch execution failed",
-                        new RemoteAgentException(PAYLOAD, null)))
+        when(wrapped.query(any())).thenReturn(ambiguousResponse())
                 .thenReturn(new QueryResponse(Map.of("content", "ok"), "conv-1"));
 
         ServeRequest original = sampleRequest();
@@ -228,9 +240,7 @@ class ReclassifyServeOrchestratorTest {
     void queryMaxReclassifyZeroProducesLimitImmediately() {
         properties.setMaxReclassify(0);
         ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties);
-        when(wrapped.query(any())).thenThrow(
-                new IllegalStateException("Remote batch execution failed",
-                        new RemoteAgentException(PAYLOAD, null)));
+        when(wrapped.query(any())).thenReturn(ambiguousResponse());
 
         assertThatThrownBy(() -> decorator.query(sampleRequest()))
                 .isInstanceOf(IllegalStateException.class)

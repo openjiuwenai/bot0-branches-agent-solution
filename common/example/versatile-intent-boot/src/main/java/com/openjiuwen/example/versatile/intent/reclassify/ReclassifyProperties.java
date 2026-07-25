@@ -10,8 +10,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>When {@code enabled=true}, the {@link ReclassifyServeOrchestrator} wraps
  * the runtime's {@code A2AEnabledServeOrchestrator} and retries the L1 intent
- * workflow with augmented context when L2 returns a
- * {@code VERSATILE_INTENT_AMBIGUOUS} error.
+ * workflow with augmented context when L2 returns an answer envelope whose
+ * {@code intent_id} matches {@link #getAmbiguousIntentId()}.
  *
  * @since 2026-07-24
  */
@@ -19,6 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ReclassifyProperties {
     private boolean enabled = false;
     private int maxReclassify = 1;
+    private String ambiguousIntentId = "1";
 
     public boolean isEnabled() {
         return enabled;
@@ -34,5 +35,14 @@ public class ReclassifyProperties {
 
     public void setMaxReclassify(int maxReclassify) {
         this.maxReclassify = Math.max(0, maxReclassify);
+    }
+
+    public String getAmbiguousIntentId() {
+        return ambiguousIntentId;
+    }
+
+    public void setAmbiguousIntentId(String ambiguousIntentId) {
+        this.ambiguousIntentId = ambiguousIntentId == null || ambiguousIntentId.isBlank()
+                ? "1" : ambiguousIntentId;
     }
 }

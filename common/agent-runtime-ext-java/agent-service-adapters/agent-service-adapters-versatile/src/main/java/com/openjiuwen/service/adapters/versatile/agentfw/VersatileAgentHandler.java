@@ -82,6 +82,7 @@ public class VersatileAgentHandler implements AgentHandler {
         List<String> interruptMessages = new ArrayList<>();
         Map<String, Object> a2aDelegatePayload = null;
         Object legacyAnswerContent = null;
+        String ambiguousIntentId = null;
         for (QueryChunk chunk : chunks) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
@@ -105,6 +106,9 @@ public class VersatileAgentHandler implements AgentHandler {
                     content = envelope.get().get("output");
                 }
                 legacyAnswerContent = content;
+                if (envelope.get().get("intent_id") instanceof String intentId && !intentId.isBlank()) {
+                    ambiguousIntentId = intentId;
+                }
                 continue;
             }
             interruptMessages.add(String.valueOf(chunk.getData()));
@@ -113,7 +117,11 @@ public class VersatileAgentHandler implements AgentHandler {
             return a2aDelegateResult(request, a2aDelegatePayload);
         }
         if (legacyAnswerContent != null) {
-            return assistantResult(legacyAnswerContent);
+            Map<String, Object> result = assistantResult(legacyAnswerContent);
+            if (ambiguousIntentId != null) {
+                result.put("intent_id", ambiguousIntentId);
+            }
+            return result;
         }
         if (isInterrupted) {
             Map<String, Object> result = assistantResult(

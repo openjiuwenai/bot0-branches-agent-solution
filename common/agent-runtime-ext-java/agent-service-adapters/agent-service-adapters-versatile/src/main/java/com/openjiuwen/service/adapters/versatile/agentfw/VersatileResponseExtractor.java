@@ -309,19 +309,12 @@ final class VersatileResponseExtractor {
             envelope.put("response_content", responseContent != null ? responseContent : "");
             return buildA2aDelegateInterrupt(envelope);
         }
-        String ambiguousIntentId = properties.getAmbiguousIntentId();
-        Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("code", "VERSATILE_INTENT_AMBIGUOUS");
-        fields.put("intent_id", intentId != null ? intentId : "");
-        fields.put("response_content", responseContent != null ? responseContent : "");
-        fields.put("ambiguous_intent_id", ambiguousIntentId != null ? ambiguousIntentId : "1");
-        String payload;
-        try {
-            payload = OBJECT_MAPPER.writeValueAsString(fields);
-        } catch (JsonProcessingException e) {
-            payload = "{\"code\":\"VERSATILE_INTENT_AMBIGUOUS\"}";
-        }
-        return new QueryChunk(QueryChunk.TYPE_ERROR, payload);
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("intent_id", intentId != null ? intentId : "");
+        envelope.put("response_content", responseContent != null ? responseContent : "");
+        envelope.put("ambiguous", true);
+        return new QueryChunk(QueryChunk.TYPE_CHUNK, envelope);
     }
 
     private boolean containsNodeTypeEnd(JsonNode json) {
