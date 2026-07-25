@@ -149,20 +149,14 @@ mvn -DskipTests package   # 仅打包（联调脚本会用这个 jar）
 src/main/java/com/openjiuwen/example/versatile/intent/
 ├── VersatileIntentApplication.java       # Spring Boot 入口
 ├── VersatileIntentAutoConfiguration.java # 自动装配
-├── a2a/
-│   ├── A2AGatewayAutoConfiguration.java  # A2A Gateway caller 装配（@ConditionalOnProperty enabled=true）
-│   ├── A2AGatewayRemoteAgentCaller.java  # Gateway 模式 caller（走 SDK Client → /a2a/{agentId}）
-│   ├── A2AGatewayCardResolver.java       # 解析 agentCard → gatewayBaseUrl + "/a2a/" + agentId
-│   ├── A2AGatewayProperties.java         # gateway 配置（token/base-url/version-node/...）
-│   ├── LocalMappingCardRegistrar.java    # Local HTTP 模式路由注册
-│   ├── LocalMappingProperties.java
-│   ├── LocalHttpRemoteAgentCaller.java   # Local HTTP caller（@ConditionalOnProperty enabled=false）
-│   ├── ForwardedServeRequests.java       # 把 response_content 作为 assistant message 追加到转发请求
-│   └── RouteCacheAutoConfiguration.java  # 路由缓存自动装配
-│       ├── RouteCacheProperties.java     # 缓存配置（enabled/ttl）
-│       └── InProcessRouteCache.java     # 进程内缓存实现
-├── handler/
-│   └── CachedVersatileAgentHandler.java # 装饰器：缓存 L1 解析的下一跳 agent_id
+├── routecache/                          # 多跳路由缓存特性
+│   ├── RouteCache.java                  # 缓存 SPI 接口：get、put、invalidate
+│   ├── CachedRoute.java                 # 缓存值对象：agentName、responseContent、expiresAt
+│   ├── InProcessRouteCache.java         # 进程内实现：ConcurrentHashMap + TTL 惰性过期
+│   ├── RouteCacheProperties.java        # @ConfigurationProperties("openjiuwen.service.versatile.route-cache")：enabled、ttl
+│   ├── CachedVersatileAgentHandler.java # AgentHandler 装饰器：拦截 query/streamQuery/clearSession
+│   ├── A2aDelegatePayload.java          # 工具类：提取/合成 a2a_delegate payload
+│   └── RouteCacheAutoConfiguration.java # Spring Boot 自动装配：注册 RouteCache Bean 与 CachedVersatileAgentHandler Bean
 └── mock/
     ├── MockVersatileController.java      # mock Versatile SSE 端点
     └── MockA2AGatewayController.java     # mock A2A Gateway（转发代理，仅 mock-a2a-gateway profile）
