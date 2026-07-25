@@ -207,10 +207,10 @@ def run_all(cfg: SandboxModeConfig) -> list[Result]:
         f"/api/v1/agents/{agent}/conversations/{conv}",
         {
             "query": (
-                "这是联调探针，不要做理财推荐。"
+                "这是联调探针，请忽略业务意图。"
                 f"请立刻用 read_file 读取 `{cfg.remote_skill_md}`，"
                 "在最终回答里原样输出文件中以 `HOTUPDATE_MARKER=` 开头的那一行"
-                "（若没有该行则输出文件前 3 行）。不要调用 call_mcp/call_versatile/ask_user。"
+                "（若没有该行则输出文件前 3 行）。不要调用 call_mcp/call_demo_tool/ask_user。"
             )
         },
         timeout=300,

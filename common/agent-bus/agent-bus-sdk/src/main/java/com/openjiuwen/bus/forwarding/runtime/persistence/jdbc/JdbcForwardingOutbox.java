@@ -140,10 +140,12 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
             String sql = "INSERT INTO " + TABLE + " ("
                     + "tenant_id, message_id, source_service_id, target_service_id, route_handle, "
                     + "payload_ref, status, attempt_count, next_attempt_at, created_at, updated_at, "
-                    + "last_failure_code, lease_owner, lease_until, correlation_id, event_type) "
+                    + "last_failure_code, lease_owner, lease_until, correlation_id, event_type, "
+                    + "trace_id, idempotency_key, capability, deadline_millis_epoch, inline_payload, original_caller) "
                     + "VALUES (:tenantId, :messageId, :sourceServiceId, :targetServiceId, :routeHandle, "
                     + ":payloadRef, :status, 0, NULL, :now, :now, NULL, NULL, NULL, "
-                    + ":correlationId, :eventType) "
+                    + ":correlationId, :eventType, "
+                    + ":traceId, :idempotencyKey, :capability, :deadlineMillisEpoch, :inlinePayload, :originalCaller) "
                     + "ON CONFLICT (tenant_id, message_id) DO NOTHING";
             MapSqlParameterSource params = new MapSqlParameterSource()
                     .addValue("tenantId", envelope.tenantId())
@@ -155,7 +157,14 @@ public final class JdbcForwardingOutbox implements ForwardingOutboxPort, Forward
                     .addValue("status", status.name())
                     .addValue("now", nowMillisEpoch)
                     .addValue("correlationId", envelope.correlationId())
-                    .addValue("eventType", envelope.eventType() == null ? null : envelope.eventType().name());
+                    .addValue("eventType", envelope.eventType() == null ? null : envelope.eventType().name())
+                    // P-06 V4: first-class control plane + inlinePayload + originalCaller
+                    .addValue("traceId", envelope.traceId())
+                    .addValue("idempotencyKey", envelope.idempotencyKey())
+                    .addValue("capability", envelope.capability())
+                    .addValue("deadlineMillisEpoch", envelope.deadlineMillisEpoch())
+                    .addValue("inlinePayload", envelope.inlinePayload())
+                    .addValue("originalCaller", envelope.originalCaller());
             jdbc.update(sql, params);
             // idempotent re-enqueue (ON CONFLICT DO NOTHING) still returns accepted.
             return ForwardingReceipt.accepted(envelope.messageId(), envelope.tenantId(), nowMillisEpoch);

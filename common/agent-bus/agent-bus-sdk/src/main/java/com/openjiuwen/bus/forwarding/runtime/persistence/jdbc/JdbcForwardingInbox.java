@@ -33,11 +33,15 @@ import javax.sql.DataSource;
  *
  * <h2>SQL contract</h2>
  * <ul>
- *   <li><b>dedup</b> — {@code receive} runs {@code INSERT ... ON CONFLICT
- *       (tenant_id, message_id, consumer_service_id) DO NOTHING}; one affected row
- *       is a first arrival ({@code RECEIVED}), zero is a duplicate
- *       ({@code DUPLICATE_SUPPRESSED}, stored entry untouched, matching the
- *       in-memory contract).</li>
+ *   <li><b>dedup + crash-safe re-arrival split</b> — {@code receive} runs
+ *       {@code INSERT ... ON CONFLICT (tenant_id, message_id, consumer_service_id)
+ *       DO NOTHING}; one affected row is a first arrival ({@code RECEIVED}). A
+ *       zero-affected conflict re-reads the stored status and splits: an in-flight
+ *       {@code RECEIVED} row (crash between receive and markConsumed) returns
+ *       {@code RECEIVED} (legal {@code ARRIVE_REDELIVER} self-loop, row untouched —
+ *       re-process, at-least-once); a terminal row returns
+ *       {@code DUPLICATE_SUPPRESSED} (suppress, no re-execution, row untouched),
+ *       matching the in-memory contract.</li>
  *   <li><b>terminal guarded mutation</b> — {@code markConsumed} runs
  *       {@code UPDATE ... WHERE status='RECEIVED'} so only a RECEIVED row may move
  *       CONSUMED; zero rows is diagnosed (missing vs already terminal) and classified
@@ -125,12 +129,56 @@ public final class JdbcForwardingInbox implements ForwardingInboxPort {
                     .addValue("consumerServiceId", consumerServiceId)
                     .addValue("now", nowMillisEpoch);
             int affected = jdbc.update(sql, params);
-            if (affected == 0) {
-                // duplicate arrival — dedup outcome, stored entry untouched.
-                return stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_DUPLICATE);
+            if (affected == 1) {
+                return stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_NEW);
             }
-            return stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_NEW);
+            // Re-arrival (ON CONFLICT DO NOTHING left the stored row untouched): split an in-flight
+            // RECEIVED row (crash between receive and markConsumed) — re-process, at-least-once;
+            // outbox deterministic-messageId idempotency prevents a double produce — from a terminal
+            // row (CONSUMED / REJECTED / DUPLICATE_SUPPRESSED) — suppress, no re-execution. The row
+            // is never mutated here; only the return value is computed.
+            ForwardingStatus.Inbox existing = selectStatus(envelope.tenantId(),
+                    envelope.messageId().value(), consumerServiceId);
+            if (existing == ForwardingStatus.Inbox.RECEIVED) {
+                stateMachine.transitInbox(ForwardingStatus.Inbox.RECEIVED,
+                        ForwardingStateMachine.InboxEvent.ARRIVE_REDELIVER);
+                return ForwardingStatus.Inbox.RECEIVED;
+            }
+            return stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_DUPLICATE);
         });
+    }
+
+    /**
+     * Read the current status of an inbox entry within the caller's tenant-scoped
+     * transaction (no nested {@code withTenant}). Used by {@link #receive} after an
+     * {@code ON CONFLICT DO NOTHING} conflict to split an in-flight {@code RECEIVED}
+     * re-arrival (re-process) from a terminal re-arrival (suppress). The row is
+     * guaranteed to exist (the conflict means a prior row is present), so this never
+     * raises the missing-entry diagnostic of {@link #statusOf}.
+     *
+     * @param tenantId         the tenant scope of the inbox record
+     * @param messageId        the raw message id ({@code envelope.messageId().value()})
+     * @param consumerServiceId the consumer owning the inbox record
+     * @return the current inbox status
+     */
+    private ForwardingStatus.Inbox selectStatus(String tenantId, String messageId,
+                                                String consumerServiceId) {
+        String sql = "SELECT status FROM " + TABLE
+                + " WHERE tenant_id = :tenantId AND message_id = :messageId"
+                + " AND consumer_service_id = :consumerServiceId";
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("tenantId", tenantId)
+                .addValue("messageId", messageId)
+                .addValue("consumerServiceId", consumerServiceId);
+        List<ForwardingStatus.Inbox> rows = jdbc.query(sql, params,
+                (rs, rowNum) -> ForwardingStatus.Inbox.valueOf(rs.getString("status")));
+        if (rows.isEmpty()) {
+            // The conflict guarantees a prior row; an empty read here is a correctness bug.
+            throw new IllegalStateException(
+                    "inbox conflict but no row for tenantId=" + tenantId + " messageId=" + messageId
+                            + " consumerServiceId=" + consumerServiceId);
+        }
+        return rows.get(0);
     }
 
     @Override

@@ -100,7 +100,7 @@ def run_all(cfg: HotUpdateConfig) -> list[Result]:
         cfg,
         "POST",
         f"/api/v1/agents/{agent}/conversations/{conv}",
-        {"query": "推荐一款低风险理财产品"},
+        {"query": "推荐一款示例产品"},
         timeout=300,
     )
     ok = code == 200 and call.get("success") is True
@@ -151,7 +151,7 @@ def run_all(cfg: HotUpdateConfig) -> list[Result]:
         cfg,
         "POST",
         f"/api/v1/agents/{agent}/conversations/{conv_reuse}",
-        {"query": "推荐理财产品"},
+        {"query": "推荐一款示例产品"},
         timeout=300,
     )
     code, t1 = api(cfg, "GET", f"/api/v1/agents/{agent}/traces/{conv_reuse}", timeout=60)

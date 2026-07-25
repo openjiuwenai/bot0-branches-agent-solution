@@ -4,7 +4,6 @@
 
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
@@ -47,32 +46,36 @@ import java.util.Set;
  * profile configs, slice B), not a worker-logic concern. Which eventTypes the relay
  * re-publishes is likewise configured, not hard-coded: a forward relay is constructed
  * with {@link #FORWARD_REQUEST_TYPES} (hop1 req → hop2 deliver); a response relay with
- * {@link #RESPONSE_TYPES} (resp_in → resp_out, symmetric governance — the response
- * carries a {@link BrokerControlDescriptor} so the same decode / correlation-match /
- * dedup / audit applies). The worker just re-publishes the forwarded record through
- * whatever relay port + type set it is constructed with.
+ * {@link #RESPONSE_TYPES} (resp_in → resp_out, symmetric governance). The worker just
+ * re-publishes the forwarded record through whatever relay port + type set it is
+ * constructed with.
  *
- * <p><b>Governance acts applied between the hops:</b>
+ * <p><b>P-06 governance acts applied between the hops</b> (control rides FIRST-CLASS broker
+ * fields; {@code payloadRef} is the A2A data reference, never a control-descriptor token):
  * <ul>
  *   <li><b>skip non-relayable</b> — self-produced echoes / control / out-of-direction
- *       messages (soft eventType absent or not in this relay's configured type set)
- *       are committed without processing, mirroring {@code TestAgentRuntime.pollAndProcess}.
- *       A forward relay is constructed with {@link #FORWARD_REQUEST_TYPES}; a response
- *       relay with {@link #RESPONSE_TYPES}.</li>
- *   <li><b>descriptor decode</b> — {@link BrokerControlDescriptor#decode} recovers the
- *       request's control fields (eventType/traceId/correlationId/idempotencyKey/
- *       routeHandle/capability/deadline) from the {@code payloadRef} (the only field
- *       besides the native correlation/event headers that survives the broker poll).
- *       A malformed descriptor → commit + inbox REJECTED (non-retryable; a broker
- *       redelivery cannot fix a poison message, so it is not redelivered).</li>
- *   <li><b>correlation match</b> — the native header {@code correlationId} must equal
- *       the descriptor's {@code correlationId} (the gateway stamped both consistently).
- *       A mismatch → commit + inbox REJECTED (data-integrity failure, non-retryable).</li>
- *   <li><b>inbox dedup</b> — {@link ForwardingInboxPort#receive} returns
- *       {@link ForwardingStatus.Inbox#DUPLICATE_SUPPRESSED} on a replayed
- *       {@code (tenantId, messageId, consumerServiceId)}; the relay commits without
- *       re-publishing, so an at-least-once redelivery of hop1 never double-produces
- *       hop2.</li>
+ *       messages (eventType absent or not in this relay's configured type set) are committed
+ *       without processing. A forward relay uses {@link #FORWARD_REQUEST_TYPES}; a response
+ *       relay uses {@link #RESPONSE_TYPES}.</li>
+ *   <li><b>control-plane presence</b> — a relayable message must carry its control plane
+ *       (traceId / idempotencyKey / routeHandle / capability) as first-class fields. Absence →
+ *       commit + inbox REJECTED (non-retryable poison; a broker redelivery cannot fix a missing
+ *       control field). Replaces the pre-P-06 descriptor decode + correlation-match: there is now a
+ *       single first-class correlationId, so no header/descriptor mismatch is possible.</li>
+ *   <li><b>inbox dedup</b> — {@link ForwardingInboxPort#receive} splits a redelivery:
+ *       an in-flight {@code RECEIVED} row (crash between receive and markConsumed) returns
+ *       {@link ForwardingStatus.Inbox#RECEIVED} (legal {@code ARRIVE_REDELIVER} self-loop —
+ *       the relay re-publishes; outbox deterministic-messageId idempotency prevents a double
+ *       hop2, so at-least-once never loses); a terminal row returns
+ *       {@link ForwardingStatus.Inbox#DUPLICATE_SUPPRESSED} — the relay commits without
+ *       re-publishing, so a redelivery after a completed forward never re-executes.</li>
+ *   <li><b>crash recovery</b> — when nothing is claimable ({@code claimDue} returned empty),
+ *       a prior crashed attempt may have already produced + acked hop2
+ *       ({@code outbox.statusOf} == {@code ACKED}); the relay then
+ *       {@link ForwardingInboxPort#markConsumed markConsumed}s + commits idempotently instead
+ *       of reject→redeliver, which would loop against the terminal, never-re-claimable ACKED
+ *       row. A {@code DISPATCHING} (active self-lease) row still rejects, so the lease/claim
+ *       machinery re-drives produce after expiry.</li>
  *   <li><b>audit</b> — {@link ForwardingInboxPort#markConsumed} (success) /
  *       {@link ForwardingInboxPort#markRejected} (governance failure) record the
  *       terminal inbox state for observability.</li>
@@ -94,8 +97,9 @@ import java.util.Set;
 public final class EventBusRelayWorker {
     /**
      * The FEAT-013/014 forward-request eventTypes a <b>forward relay</b> relays
-     * (hop1 {@code ascend_bus_*_req} → hop2 {@code ascend_bus_*_deliver}). The
-     * request carries a {@link BrokerControlDescriptor} in its {@code payloadRef}.
+     * (hop1 {@code ascend_bus_*_req} → hop2 {@code ascend_bus_*_deliver}). The request carries
+     * its control plane as first-class broker fields (P-06); {@code payloadRef} is the A2A data
+     * reference, not a control-descriptor token.
      */
     public static final Set<AgentBusEventType> FORWARD_REQUEST_TYPES = Set.of(
             AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
@@ -108,25 +112,26 @@ public final class EventBusRelayWorker {
             AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED);
 
     /**
-     * The FEAT-013/014 response/terminal eventTypes a <b>response relay</b>
-     * relays ({@code ascend_bus_*_resp_in} → {@code ascend_bus_*_resp_out}). The
-     * response carries a {@link BrokerControlDescriptor} in its {@code payloadRef}
-     * (symmetric to the request) so the relay recovers the control fields
-     * (traceId / idempotencyKey / routeHandle / capability / deadline) lost crossing
-     * the resp_in hop, plus {@code taskId} / {@code status} / {@code streamRef}
-     * tokens the gateway reads via {@link BrokerControlDescriptor#token}.
+     * The FEAT-013/014/017 response/terminal eventTypes a <b>response relay</b>
+     * relays ({@code ascend_bus_*_resp_in} → {@code ascend_bus_*_resp_out}). Includes the
+     * FEAT-017 {@code *_INPUT_REQUIRED} wait-for-input projections. The response carries its
+     * control plane as first-class broker fields (P-06) + the response content (taskId /
+     * status / streamRef) in {@code inlinePayload} (A2A response envelope as DATA), which the
+     * gateway reads via responseToken.
      */
     public static final Set<AgentBusEventType> RESPONSE_TYPES = Set.of(
             AgentBusEventType.INVOCATION_ACCEPTED,
             AgentBusEventType.INVOCATION_REJECTED,
             AgentBusEventType.INVOCATION_FAILED,
             AgentBusEventType.INVOCATION_RESPONSE,
+            AgentBusEventType.INVOCATION_INPUT_REQUIRED,
             AgentBusEventType.INVOCATION_STREAM_READY,
             AgentBusEventType.INVOCATION_TERMINAL,
             AgentBusEventType.A2A_CALL_ACCEPTED,
             AgentBusEventType.A2A_CALL_REJECTED,
             AgentBusEventType.A2A_CALL_FAILED,
             AgentBusEventType.A2A_CALL_RESPONSE,
+            AgentBusEventType.A2A_CALL_INPUT_REQUIRED,
             AgentBusEventType.A2A_STREAM_READY,
             AgentBusEventType.A2A_CALL_TERMINAL);
 
@@ -233,37 +238,32 @@ public final class EventBusRelayWorker {
      */
     private MessageOutcome relayOneMessage(BrokerInboundMessage msg, String tenantId,
                                            long nowMillisEpoch, String role) {
-        // governance 1: skip non-relayable echoes / control / out-of-direction (soft eventType
-        // absent or not in this relay's configured type set) — commit + advance.
-        AgentBusEventType eventType = BrokerControlDescriptor.softEventType(msg.payloadRef()).orElse(null);
+        // governance 1: skip non-relayable echoes / control / out-of-direction (eventType absent or
+        // not in this relay's configured type set) — commit + advance. P-06: eventType is now a
+        // first-class inbound field (mirrored from headers at poll), so this no longer peeks a payloadRef
+        // descriptor token.
+        AgentBusEventType eventType = msg.eventType();
         if (eventType == null || !relayableTypes.contains(eventType)) {
-            log.info("[{}] SKIP non-relayable softEventType={} (not in {} relayable set) messageId={}",
+            log.info("[{}] SKIP non-relayable eventType={} (not in {} relayable set) messageId={}",
                     role, eventType, role, msg.messageId());
             consumer.commit(msg);
             return MessageOutcome.SKIPPED;
         }
 
-        // governance 2: descriptor decode (recovers control fields lost crossing the hop).
-        BrokerControlDescriptor.Descriptor desc;
-        try {
-            desc = BrokerControlDescriptor.decode(msg.payloadRef());
-        } catch (IllegalArgumentException | NullPointerException ex) {
-            log.warn("[{}] REJECT poison (descriptor decode failed) messageId={} error={}",
-                    role, msg.messageId(), ex.toString());
+        // governance 2: control-plane presence (P-06). A relayable request carries its control plane as
+        // first-class inbound fields (traceId / idempotencyKey / routeHandle / capability); absence means
+        // the upstream produced a malformed/incomplete message — poison (reject without redelivery; a broker
+        // redelivery cannot fix a missing control field). Replaces the pre-P-06 descriptor decode.
+        if (isBlank(msg.traceId()) || isBlank(msg.idempotencyKey())
+                || isBlank(msg.routeHandle()) || isBlank(msg.capability())) {
+            log.warn("[{}] REJECT poison (control plane incomplete: trace/idem/route/cap absent) messageId={}",
+                    role, msg.messageId());
             rejectPoison(msg, ForwardingFailureCode.PAYLOAD_REF_INVALID);
             return MessageOutcome.GOVERNANCE_REJECTED;
         }
 
-        // governance 3: correlation match (native header corrId == descriptor corrId).
-        if (!Objects.equals(msg.correlationId(), desc.correlationId())) {
-            log.warn("[{}] REJECT poison (correlation mismatch header={} desc={}) messageId={}",
-                    role, msg.correlationId(), desc.correlationId(), msg.messageId());
-            rejectPoison(msg, ForwardingFailureCode.PAYLOAD_REF_INVALID);
-            return MessageOutcome.GOVERNANCE_REJECTED;
-        }
-
-        // governance 4: inbox dedup (a replayed hop1 must not double-produce hop2).
-        ForwardingEnvelope env = buildHop2Envelope(msg, desc);
+        // governance 3: inbox dedup (a replayed hop1 must not double-produce hop2).
+        ForwardingEnvelope env = buildHop2Envelope(msg);
         ForwardingStatus.Inbox inboxStatus = inbox.receive(env, consumerServiceId, nowMillisEpoch);
         if (inboxStatus == ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED) {
             log.info("[{}] DEDUP suppressed (replayed hop1, not re-published) messageId={}",
@@ -307,8 +307,26 @@ public final class EventBusRelayWorker {
                     env.sourceServiceId(), env.targetServiceId(), env.routeHandle().value());
             return MessageOutcome.RELAYED;
         }
-        // produce UNAVAILABLE / ROUTE_NOT_FOUND (or nothing claimed): reject → redeliver; the agent-bus
-        // retry policy owns when, and rejecting leaves the hop1 message visible for operator intervention.
+        // Nothing claimable now (outcome == null): a prior crashed attempt may have already produced +
+        // acked hop2 (outbox now ACKED) but died before markConsumed/commit. If so, complete idempotently
+        // — markConsumed (the inbox row is RECEIVED, since receive returned RECEIVED to enter republish)
+        // + commit — instead of reject→redeliver, which would loop forever against an ACKED (terminal,
+        // never re-claimable) outbox row. A DISPATCHING row (active self-lease from a prior in-flight
+        // produce) or PENDING / RETRY_SCHEDULED falls through to reject: the lease/claim machinery
+        // re-drives produce after lease expiry.
+        if (outcome == null) {
+            ForwardingStatus.Outbox hop2 = outbox.statusOf(env.messageId(), tenantId);
+            if (hop2 == ForwardingStatus.Outbox.ACKED) {
+                inbox.markConsumed(env.messageId(), tenantId, consumerServiceId);
+                consumer.commit(msg);
+                log.info("[{}] RECOVER hop2 already-ACKED (prior crashed attempt) messageId={}",
+                        role, msg.messageId());
+                return MessageOutcome.RELAYED;
+            }
+        }
+        // produce UNAVAILABLE / ROUTE_NOT_FOUND (or nothing claimable + not ACKED): reject → redeliver;
+        // the agent-bus retry policy owns when, and rejecting leaves the hop1 message visible for
+        // operator intervention.
         ForwardingFailureCode code = (outcome != null && outcome.failureCode() != null)
                 ? outcome.failureCode()
                 : ForwardingFailureCode.RECEIVER_UNAVAILABLE;
@@ -334,7 +352,7 @@ public final class EventBusRelayWorker {
     }
 
     /**
-     * Build the hop2 forward envelope from the inbound message + decoded descriptor.
+     * Build the hop2 forward envelope from the inbound hop1 message (P-06).
      *
      * <p>The hop2 {@code messageId} is a fresh relay-scoped id (prefix {@code eb-} +
      * hop1 broker id) so the outbox dedup {@code (tenantId, messageId)} does NOT
@@ -342,34 +360,38 @@ public final class EventBusRelayWorker {
      * table and reusing the hop1 id would make {@code ON CONFLICT DO NOTHING} silently
      * skip the hop2 insert, leaving nothing for {@code claimDue} to claim. Defence
      * against double-relay of a replayed hop1 is owned by the inbox dedup (which keys
-     * on the hop1 id carried in {@code env.messageId()}'s tail). {@code correlationId} /
-     * {@code routeHandle} / {@code capability} / {@code deadline} pass through from
-     * the descriptor; {@code sourceServiceId} = this relay; {@code targetServiceId} =
-     * the original runtime target; {@code payloadRef} = the same descriptor (so the
-     * runtime can decode it on hop2).
+     * on the hop1 id carried in {@code env.messageId()}'s tail).
      *
-     * @param msg  the inbound hop1 message (carries tenantId, targetServiceId, payloadRef)
-     * @param desc the decoded request control descriptor (eventType / traceId / correlationId /
-     *             idempotencyKey / routeHandle / capability / deadline)
-     * @return the hop2 forward envelope (fresh {@code eb-} messageId, control fields from desc)
+     * <p><b>P-06 control/data separation.</b> The control plane (eventType / traceId /
+     * correlationId / idempotencyKey / routeHandle / capability / deadline) is read from the
+     * inbound's FIRST-CLASS fields — no descriptor decode. The A2A data reference
+     * ({@code payloadRef}) and the bounded inline body ({@code inlinePayload}) pass through as
+     * DATA; the policy follows data presence (a control-only hop1 forwards as CONTROL_ONLY).
+     * {@code sourceServiceId} = this relay; {@code targetServiceId} = the original runtime target.
+     *
+     * @param msg the inbound hop1 message (carries first-class control + data fields)
+     * @return the hop2 forward envelope (fresh {@code eb-} messageId, control from msg)
      */
-    private ForwardingEnvelope buildHop2Envelope(BrokerInboundMessage msg,
-                                                 BrokerControlDescriptor.Descriptor desc) {
+    private ForwardingEnvelope buildHop2Envelope(BrokerInboundMessage msg) {
         String hop2MessageId = "eb-" + msg.messageId();
+        boolean hasData = msg.payloadRef() != null || msg.inlinePayload() != null;
         return new ForwardingEnvelope(
                 new ForwardingMessageId(hop2MessageId),
-                desc.eventType(),
+                msg.eventType(),
                 msg.tenantId(),
-                desc.traceId(),
-                desc.correlationId(),
-                desc.idempotencyKey(),
-                new ForwardingRouteHandle(desc.routeHandle(), msg.tenantId()),
-                desc.capability(),
+                msg.traceId(),
+                msg.correlationId(),
+                msg.idempotencyKey(),
+                new ForwardingRouteHandle(msg.routeHandle(), msg.tenantId()),
+                msg.capability(),
                 sourceServiceId,
                 msg.targetServiceId(),
-                desc.deadlineMillisEpoch(),
-                ForwardingEnvelope.PayloadPolicy.DATA_BEARING,
-                msg.payloadRef());
+                msg.deadlineMillisEpoch(),
+                hasData ? ForwardingEnvelope.PayloadPolicy.DATA_BEARING
+                        : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY,
+                msg.payloadRef(),
+                msg.inlinePayload(),
+                msg.originalCaller());  // P-06: preserve original caller across the hop (response routing)
     }
 
     /**
@@ -406,5 +428,10 @@ public final class EventBusRelayWorker {
             throw new IllegalArgumentException(name + " must not be blank");
         }
         return value;
+    }
+
+    private static boolean isBlank(String value) {
+        // P-06 control-plane presence guard: null or blank control field → malformed/incomplete message.
+        return value == null || value.isBlank();
     }
 }

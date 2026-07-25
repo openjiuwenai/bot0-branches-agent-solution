@@ -33,9 +33,9 @@ class TestCleanTraces:
         records = [
             self._make_generation_record(
                 messages=[
-                    {"role": "user", "content": "推荐理财产品"},
-                    {"role": "assistant", "content": "好的，我来为您推荐", "tool_calls": [{"function": {"name": "call_versatile"}}]},
-                    {"role": "tool", "name": "call_versatile", "content": '{"result": "..."}'},
+                    {"role": "user", "content": "推荐一款示例产品"},
+                    {"role": "assistant", "content": "好的，我来为您推荐", "tool_calls": [{"function": {"name": "call_demo_tool"}}]},
+                    {"role": "tool", "name": "call_demo_tool", "content": '{"result": "..."}'},
                     {"role": "assistant", "content": "根据结果推荐如下"},
                 ],
                 output={"role": "assistant", "content": "最终回答"},
@@ -46,10 +46,10 @@ class TestCleanTraces:
 
         assert result["session_id"] == "conv1"
         assert result["agent_name"] == "edp_agent"
-        assert result["task_input"] == "推荐理财产品"
+        assert result["task_input"] == "推荐一款示例产品"
         assert result["trajectory"]["total_messages"] == 5  # 4 input + 1 output
-        assert "call_versatile" in result["trajectory"]["tool_calls_used"]
-        assert result["trajectory"]["summary"] == "5 messages, 1 unique tools: call_versatile"
+        assert "call_demo_tool" in result["trajectory"]["tool_calls_used"]
+        assert result["trajectory"]["summary"] == "5 messages, 1 unique tools: call_demo_tool"
         # 5 filtered messages (4 from input + 1 output), all user/assistant/tool
         assert len(result["messages"]) == 5
 
@@ -122,13 +122,13 @@ class TestCleanTraces:
                     {"role": "user", "content": "do stuff"},
                     {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "ask_user"}}]},
                     {"role": "tool", "name": "ask_user", "content": "user input"},
-                    {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "call_versatile"}}]},
-                    {"role": "tool", "name": "call_versatile", "content": "result"},
+                    {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "call_demo_tool"}}]},
+                    {"role": "tool", "name": "call_demo_tool", "content": "result"},
                 ],
             ),
         ]
         result = clean_traces(records, session_id="conv1", agent_name="edp")
-        assert result["trajectory"]["tool_calls_used"] == ["ask_user", "call_versatile"]
+        assert result["trajectory"]["tool_calls_used"] == ["ask_user", "call_demo_tool"]
 
     def test_no_output_still_works(self):
         """GENERATION without output field still returns input messages."""
@@ -162,9 +162,9 @@ class TestCleanedTracesEndpoint:
                 "type": "GENERATION",
                 "id": "gen-001",
                 "input": {"messages": [
-                    {"role": "user", "content": "推荐理财产品"},
-                    {"role": "assistant", "content": "好的", "tool_calls": [{"function": {"name": "call_versatile"}}]},
-                    {"role": "tool", "name": "call_versatile", "content": '{"result": "..."}'},
+                    {"role": "user", "content": "推荐一款示例产品"},
+                    {"role": "assistant", "content": "好的", "tool_calls": [{"function": {"name": "call_demo_tool"}}]},
+                    {"role": "tool", "name": "call_demo_tool", "content": '{"result": "..."}'},
                 ]},
                 "output": {"role": "assistant", "content": "推荐如下"},
             },
@@ -192,8 +192,8 @@ class TestCleanedTracesEndpoint:
         data = response.json()
         assert data["session_id"] == "conv1"
         assert data["agent_name"] == "edp_agent"
-        assert data["task_input"] == "推荐理财产品"
-        assert "call_versatile" in data["trajectory"]["tool_calls_used"]
+        assert data["task_input"] == "推荐一款示例产品"
+        assert "call_demo_tool" in data["trajectory"]["tool_calls_used"]
 
     def test_cleaned_traces_nonexistent_agent_404(self, tmp_path):
         log_dir = tmp_path / "logs"
