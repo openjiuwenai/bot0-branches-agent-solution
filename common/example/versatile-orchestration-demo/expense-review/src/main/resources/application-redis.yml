@@ -1,0 +1,19 @@
+# Redis middleware profile — overlays application.yml when --spring.profiles.active=redis.
+# A single block switches BOTH the agent/workflow checkpointer and the A2A task store to redis
+# (see agent-runtime-java RedisMiddlewareAutoConfiguration + A2AAutoConfiguration.a2aTaskStore).
+# Mirrors multi-deep-research-demo/agent-deep-research-runtime/application-redis-checkpointer.yml.
+openjiuwen:
+  service:
+    middleware:
+      checkpointer:
+        type: redis
+        redis-ref: default
+        ttl-seconds: ${CHECKPOINTER_TTL_SECONDS:86400}
+      redis:
+        default:
+          type: ${REDIS_TYPE:standalone}
+          host: ${REDIS_HOST:127.0.0.1}
+          port: ${REDIS_PORT:6379}
+          database: ${REDIS_DB:0}
+          timeout-ms: ${REDIS_TIMEOUT_MS:3000}
+          encrypted-password: ${REDIS_PASSWORD:}

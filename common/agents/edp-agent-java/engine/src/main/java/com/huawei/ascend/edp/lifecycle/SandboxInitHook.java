@@ -16,6 +16,7 @@
 
 package com.huawei.ascend.edp.lifecycle;
 
+import com.huawei.ascend.edp.config.EdpConfigValidator;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.SandboxConfig;
 import com.huawei.ascend.edp.service.SkillPackService;
@@ -87,6 +88,8 @@ public class SandboxInitHook implements AgentInitHook {
      */
     public void onInit(AgentLifecycleContext context) throws Exception {
         SandboxConfig config = springBootConfig.getSandbox();
+        // fail-fast 校验：sandbox enabled 但 service-url 为空时立即报错
+        EdpConfigValidator.validateSandboxConfig(config);
         if (config == null || !config.isEnabled()) {
             LOGGER.info("[EDP-SANDBOX] Sandbox disabled, skipping init");
             return;
