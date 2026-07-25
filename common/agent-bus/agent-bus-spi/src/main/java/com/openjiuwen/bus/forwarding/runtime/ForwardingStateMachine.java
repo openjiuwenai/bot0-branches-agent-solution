@@ -21,6 +21,15 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
  * {@link InboxEvent#ARRIVE_NEW} / {@link InboxEvent#ARRIVE_DUPLICATE}) accept a
  * {@code null} current.
  *
+ * <p>Inbox {@link InboxEvent#ARRIVE_REDELIVER} is the at-least-once redelivery of an
+ * in-flight (non-terminal {@code RECEIVED}) record — a broker redelivery that arrives
+ * after {@code receive} but before {@code consume}. It is a legal self-loop
+ * {@code RECEIVED -> RECEIVED} (the row is untouched; the receiver re-processes), so a
+ * crash between {@code receive} and {@code produce} / {@code markConsumed} does not
+ * lose the message. A terminal row's re-arrival is not a state transition — the row
+ * stays terminal and {@code receive} returns {@code DUPLICATE_SUPPRESSED} without
+ * invoking the engine.
+ *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4}
  * (outbox / inbox migration tables — the single source of truth); mirror the
  * L2 tables exactly when editing.
@@ -35,7 +44,7 @@ public final class ForwardingStateMachine {
 
     /** Events that drive an inbox record through its lifecycle. */
     public enum InboxEvent {
-        ARRIVE_NEW, ARRIVE_DUPLICATE, CONSUME, REJECT
+        ARRIVE_NEW, ARRIVE_DUPLICATE, CONSUME, REJECT, ARRIVE_REDELIVER
     }
 
     /**
@@ -97,6 +106,7 @@ public final class ForwardingStateMachine {
             case RECEIVED -> switch (event) {
                 case CONSUME -> ForwardingStatus.Inbox.CONSUMED;
                 case REJECT -> ForwardingStatus.Inbox.REJECTED;
+                case ARRIVE_REDELIVER -> ForwardingStatus.Inbox.RECEIVED;
                 default -> throw illegal("inbox", current, event);
             };
             case DUPLICATE_SUPPRESSED, CONSUMED, REJECTED -> throw new IllegalStateTransitionException(

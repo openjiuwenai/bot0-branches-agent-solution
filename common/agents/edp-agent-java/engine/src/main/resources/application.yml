@@ -1,0 +1,127 @@
+server:
+  port: ${SERVER_PORT:8190}
+
+spring:
+  application:
+    name: edp-agent-engine
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "EDPAgent"
+      agent-description: "EDPAgent — EDP deep agent with scenario-driven banking workflow processing"
+      provider-organization: "Huawei"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "edp_banking_workflow"
+          name: "EDP Banking Workflow"
+          description: "Process EDP banking workflow requests including account balance lookup, transfer preparation, and scenario-driven business steps"
+          tags: ["edp", "banking", "workflow"]
+          examples: ["查询账户余额", "办理转账业务"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+    external:
+      sandbox:
+        enabled: ${EDPA_SANDBOX_GOVERNED_ENABLED:false}   # 治理装饰层开关，true 触发 AgentCoreSandboxClientFactory Bean 创建
+        timeout-ms: 60000                              # 装饰层全局超时（毫秒），与 edpa.agent.sandbox.exec-timeout-seconds 取较短者生效
+        retry:
+          max: 2                                       # 失败重试次数（0=不重试）
+          backoff-ms: 1000                             # 重试退避间隔（毫秒）
+        circuit-breaker:
+          enabled: true                                # 启用熔断器
+          failure-threshold: 5                         # 连续失败达到此阈值后熔断器打开
+          reset-timeout-ms: 30000                      # 熔断打开后经过此时间进入半开状态（毫秒）
+        audit:
+          enabled: true                                # 启用审计日志（EXTERNAL_CALL_AUDIT 标记）
+        servers:
+          - server-id: default                         # 服务器标识，factory.create() 无参版本默认查找 "default"
+            service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}  # 沙箱服务地址，必须与 edpa.agent.sandbox.service-url 一致
+            sandbox-type: jiuwenbox                    # 沙箱类型
+            launcher-type: pre_deploy                  # 启动器类型
+            on-stop: delete                            # 停止时行为
+            root-path: .                               # 沙箱根路径
+            idle-ttl-seconds: 300                      # 空闲存活秒数
+            extra-params:                              # 需求2 DecoratingSandboxClient 的 filesystem_policy 注入
+              policy:
+                filesystem_policy:
+                  read_write:
+                    - ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+                  directories:
+                    - path: ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+                      permissions: "0755"
+              policy_mode: append
+    middleware:
+      checkpointer:
+        type: redis
+        redis-ref: default
+      redis:
+        default:
+          host: ${EDPA_REDIS_HOST:localhost}
+          port: ${EDPA_REDIS_PORT:6379}
+          database: ${EDPA_REDIS_DB:0}
+          timeout-ms: ${EDPA_REDIS_CONNECT_TIMEOUT:3000}
+          encrypted-password: ${EDPA_REDIS_PASSWORD:}
+
+edpa:
+  agent:
+    scenario-home: ${EDP_AGENT_SCENARIO_HOME:../scenarios/wealth-demo}
+    redis:
+      mode: ${EDPA_REDIS_MODE:single}
+      host: ${EDPA_REDIS_HOST:localhost}
+      port: ${EDPA_REDIS_PORT:6379}
+      password: ${EDPA_REDIS_PASSWORD:}
+      database: ${EDPA_REDIS_DB:0}
+      connect-timeout-ms: ${EDPA_REDIS_CONNECT_TIMEOUT:5000}
+      socket-timeout-ms: ${EDPA_REDIS_SOCKET_TIMEOUT:10000}
+      checkpointer-ttl-minutes: ${EDPA_REDIS_CHECKPOINTER_TTL:60}
+      todo:
+        key-prefix: ${EDPA_REDIS_KEY_PREFIX:edpa}
+        ttl-seconds: ${EDPA_REDIS_TODO_TTL:3600}
+        refresh-on-read: ${EDPA_REDIS_REFRESH_ON_READ:true}
+    model:
+      provider: ${EDP_AGENT_MODEL_PROVIDER:OpenAI}
+      name: ${EDP_AGENT_MODEL_NAME:deepseek-v4-pro}
+      base-url: ${EDP_AGENT_MODEL_BASE_URL:https://api.deepseek.com/v1}
+      api-key: ${EDP_AGENT_MODEL_API_KEY:sk-xxxxx}
+    versatile:
+      url: ${EDP_AGENT_VERSATILE_URL:http://localhost:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}}
+      adapter-a2a-url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191/a2a}
+      timeout: ${EDP_AGENT_VERSATILE_TIMEOUT:30s}
+      url-variables:
+        workflow_id: mock_workflow
+      query-params:
+        type: controller
+        workspace_id: "10"
+      headers:
+        content-type: application/json
+        stream: "true"
+    mcpsse:
+      master-url: ${EDP_MCP_MASTER_URL:http://106.15.62.172:8000/sse}
+      standby-url: ${EDP_MCP_STANDBY_URL:http://106.15.62.172:8000/sse}
+      access-token: ${EDP_MCP_ACCESS_TOKEN:test_token}
+      app-name: ${EDP_MCP_APP_NAME:test_app}
+    sandbox:
+      enabled: ${EDPA_SANDBOX_ENABLED:false}
+      service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}
+      sandbox-id-prefix: ${EDPA_SANDBOX_ID_PREFIX:edp}
+      exec-timeout-seconds: ${EDPA_SANDBOX_EXEC_TIMEOUT:60}
+      skill-deploy-path: ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+      auto-create-on-startup: ${EDPA_SANDBOX_AUTO_CREATE:true}
+      on-stop: ${EDPA_SANDBOX_ON_STOP:delete}
+      fallback-on-failure: ${EDPA_SANDBOX_FALLBACK_ON_FAILURE:true}
+      excluded-commands: ${EDPA_SANDBOX_EXCLUDED_COMMANDS:whoami,hostname}
+      container-scope: ${EDPA_SANDBOX_CONTAINER_SCOPE:SESSION}
+      create-timeout-seconds: ${EDPA_SANDBOX_CREATE_TIMEOUT:30}
+
+logging:
+  level:
+    com.huawei.ascend.edp: DEBUG
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG

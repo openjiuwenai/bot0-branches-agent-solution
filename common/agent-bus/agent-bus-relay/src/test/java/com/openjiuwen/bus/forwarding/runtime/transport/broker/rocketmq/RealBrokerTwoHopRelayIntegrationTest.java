@@ -10,11 +10,13 @@ import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingInbo
 import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutbox;
 import com.openjiuwen.bus.forwarding.runtime.relay.EventBusRelayWorker;
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.gateway.runtime.FakeAgentDiscoveryService;
 import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
@@ -72,10 +74,9 @@ import javax.sql.DataSource;
  * The forward relay is constructed with {@link EventBusRelayWorker#FORWARD_REQUEST_TYPES}
  * (it relays request eventTypes req→deliver); the response relay with
  * {@link EventBusRelayWorker#RESPONSE_TYPES} (resp_in→resp_out). Both reuse the SAME
- * governance (descriptor decode + correlation-match + inbox dedup + re-publish + audit):
- * responses carry a {@link BrokerControlDescriptor} payloadRef symmetric to requests
- * (the control fields lost crossing the hop are recovered from the descriptor; the
- * gateway still reads {@code taskId}/{@code status} via {@link BrokerControlDescriptor#token}).
+ * governance (P-06: control-plane presence + inbox dedup + re-publish + audit): control rides
+ * FIRST-CLASS fields across the hop (no descriptor token in payloadRef); the gateway reads
+ * {@code taskId}/{@code status} from the response {@code inlinePayload} (A2A response content).
  *
  * <p><b>Pinned governance semantics (the L2 feat-013 §1.2 / §4.1 between-hops governance):</b>
  * <ul>
@@ -137,7 +138,6 @@ class RealBrokerTwoHopRelayIntegrationTest {
     private static final String ROUTE_INVOCATION = "invocation"; // BrokerTopicResolver → ascend_bus_invocation_*
     private static final String TOPIC_REQ = "ascend_bus_invocation_req";
     private static final String TOPIC_DELIVER = "ascend_bus_invocation_deliver";
-    private static final String TOPIC_RESP_IN = "ascend_bus_invocation_resp_in";
     private static final String TOPIC_RESP_OUT = "ascend_bus_invocation_resp_out";
 
     private static final long ACCEPT_TIMEOUT_MS = 20_000L;
@@ -455,11 +455,11 @@ class RealBrokerTwoHopRelayIntegrationTest {
     /**
      * Produce a hop1 request onto {@code ascend_bus_invocation_req} with a controlled
      * messageId (mirrors {@code RocketMqBrokerForwardingRelay#buildMessage} user-properties
-     * so the forward relay's poll adapter + {@link BrokerControlDescriptor#decode} work).
+     * so the forward relay's poll adapter reads the first-class control fields).
      *
      * @param producer  the MQ producer to send the hop1 on
      * @param messageId the controlled message identifier
-     * @param corrId     the correlation identifier (used for both native header + descriptor)
+     * @param corrId     the correlation identifier stamped on the message header
      * @param tenant     the tenant scope stamped on the message
      * @param target     the target service identifier stamped on the message
      */
@@ -479,14 +479,10 @@ class RealBrokerTwoHopRelayIntegrationTest {
      */
     private static void sendHop1Poison(DefaultMQProducer producer, String messageId, CorrIds corrIds,
                                        String tenant, String target) {
-        sendHop1(producer, messageId, corrIds, tenant, target);
-    }
-
-    private static void sendHop1(DefaultMQProducer producer, String messageId, CorrIds corrIds,
-                                 String tenant, String target) {
-        String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED, TRACE, corrIds.descriptorCorrId(),
-                "idem-" + messageId, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE));
+        // P-06: the corrId-mismatch poison is OBSOLETE (single first-class correlationId, no descriptor).
+        // The new poison is a CONTROL-PLANE-INCOMPLETE message (eventType set, control absent) — the
+        // forward relay's governance rejects it without redelivery. (corrId-mismatch assertions in the
+        // poison tests need updating when this IT is next run against a live broker.)
         Message msg = new Message(TOPIC_REQ, /* tags */ null, messageId,
                 ("target=" + target).getBytes(StandardCharsets.UTF_8));
         msg.putUserProperty("tenantId", tenant);
@@ -495,7 +491,32 @@ class RealBrokerTwoHopRelayIntegrationTest {
         msg.putUserProperty("targetServiceId", target);
         msg.putUserProperty("correlationId", corrIds.nativeCorrId());
         msg.putUserProperty("eventType", AgentBusEventType.CLIENT_INVOCATION_REQUESTED.name());
-        msg.putUserProperty("payloadRef", descriptor);
+        // intentionally NO control user properties (traceId/idempotencyKey/routeHandle/capability) → poison
+        try {
+            SendResult result = producer.send(msg);
+            assertThat(result.getSendStatus()).isEqualTo(SendStatus.SEND_OK);
+        } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
+            throw new IllegalStateException("failed to send hop1 poison " + messageId, e);
+        }
+    }
+
+    private static void sendHop1(DefaultMQProducer producer, String messageId, CorrIds corrIds,
+                                 String tenant, String target) {
+        // P-06: the request control plane rides FIRST-CLASS user properties (no descriptor token in
+        // payloadRef). This hop1 is control-only (no body) — the runtime responds by eventType.
+        Message msg = new Message(TOPIC_REQ, /* tags */ null, messageId,
+                ("target=" + target).getBytes(StandardCharsets.UTF_8));
+        msg.putUserProperty("tenantId", tenant);
+        msg.putUserProperty("messageId", messageId);
+        msg.putUserProperty("sourceServiceId", GATEWAY);
+        msg.putUserProperty("targetServiceId", target);
+        msg.putUserProperty("correlationId", corrIds.nativeCorrId());
+        msg.putUserProperty("eventType", AgentBusEventType.CLIENT_INVOCATION_REQUESTED.name());
+        msg.putUserProperty("traceId", TRACE);
+        msg.putUserProperty("idempotencyKey", "idem-" + messageId);
+        msg.putUserProperty("routeHandle", ROUTE_INVOCATION);
+        msg.putUserProperty("capability", "a2a");
+        msg.putUserProperty("originalCaller", GATEWAY); // P-06: original caller (gateway) — response routes back to it
         try {
             SendResult result = producer.send(msg);
             assertThat(result.getSendStatus()).isEqualTo(SendStatus.SEND_OK);
@@ -539,13 +560,19 @@ class RealBrokerTwoHopRelayIntegrationTest {
      * (broker-side bySql = this runtime's tenant + targetServiceId), decodes the request
      * descriptor, and produces the BLOCKING response sequence (ACCEPTED + RESPONSE +
      * TERMINAL) onto {@code ascend_bus_invocation_resp_in} via a {@link DefaultMQProducer},
-     * each response carrying a {@link BrokerControlDescriptor} payloadRef (symmetric to the
-     * request) so the response relay recovers the control fields + the gateway reads
-     * {@code taskId}/{@code status} via {@link BrokerControlDescriptor#token}.
+     * each response carrying its control as FIRST-CLASS user-properties + the response content
+     * (taskId/status) in {@code inlinePayload} (P-06), so the response relay reads control
+     * first-class and the gateway reads {@code taskId}/{@code status} via responseToken.
      */
     static final class TempRuntime {
+        private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("it-TempRuntime");
+
         private final RocketMqBrokerForwardingConsumer consumer;
         private final DefaultMQProducer producer;
+
+        // SPI relay port (suffix "resp_in") — wraps the raw producer so produceResponse reuses the SDK
+        // wire-format encoder instead of hand-rolling Message + putUserProperty.
+        private final RocketMqBrokerForwardingRelay respProducer;
         private final AtomicLong taskSeq = new AtomicLong();
         private final AtomicLong respSeq = new AtomicLong();
         private final String runId;
@@ -558,6 +585,10 @@ class RealBrokerTwoHopRelayIntegrationTest {
                     RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
             this.producer = new DefaultMQProducer("it-runtime-producer-2hop" + runId);
             this.producer.setNamesrvAddr(nameserver);
+            // suffix "resp_in": produce responses to ascend_bus_invocation_resp_in (the response relay
+            // governs them and re-publishes to resp_out for the gateway).
+            this.respProducer = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_in",
+                    RocketMqBrokerForwardingRelay.defaultSender(this.producer));
             this.runId = runId;
         }
 
@@ -567,6 +598,11 @@ class RealBrokerTwoHopRelayIntegrationTest {
                     DeliveryFilter.forRuntime(TENANT, RUNTIME));
             consumer.subscribe(RUNTIME + runId, AgentBusEventType.A2A_CALL_REQUESTED,
                     DeliveryFilter.forRuntime(TENANT, RUNTIME));
+            // P-06: clear leftover deliver messages from prior runs. The broker persists messages across
+            // runs; a new consumer-group may start at FIRST_OFFSET and re-consume a stale hop2 (whose
+            // shape may differ from this run's contract), which can stall the daemon before this run's
+            // hop2 arrives. Drain BEFORE the pollLoop starts so only this run's hop2 is processed.
+            consumer.drainAll(POLL_WAIT_MS);
             running = true;
             // Single-thread executor mirroring StdioMcpClient §315 (G.CON.08/12): the daemon
             // thread carries an uncaught-exception handler; shutdown uses the executor's
@@ -581,11 +617,14 @@ class RealBrokerTwoHopRelayIntegrationTest {
                 try {
                     Optional<BrokerInboundMessage> msg = consumer.poll(System.currentTimeMillis());
                     if (msg.isPresent()) {
+                        LOG.info("[TempRuntime] RECV messageId={} eventType={} target={}",
+                                msg.get().messageId(), msg.get().eventType(), msg.get().targetServiceId());
                         processRequest(msg.get());
                         consumer.commit(msg.get()); // model B ack-after-consume
                     }
                 } catch (IllegalStateException e) {
                     // transient broker hiccup — keep polling (the runtime is long-lived)
+                    LOG.warn("[TempRuntime] pollLoop caught (continuing): {}", e.toString());
                 }
             }
         }
@@ -604,21 +643,16 @@ class RealBrokerTwoHopRelayIntegrationTest {
         }
 
         private synchronized void processRequest(BrokerInboundMessage req) {
-            if (req.payloadRef() == null || req.payloadRef().isBlank()) {
-                return; // not a request descriptor — skip
+            // P-06: request control plane is FIRST-CLASS on the inbound. Skip non-request echoes by
+            // eventType (own responses carry a response eventType or null), not by decoding payloadRef.
+            LOG.info("[TempRuntime] processRequest messageId={} eventType={}", req.messageId(), req.eventType());
+            if (req.eventType() != AgentBusEventType.CLIENT_INVOCATION_REQUESTED) {
+                LOG.info("[TempRuntime] SKIP (not CLIENT_INVOCATION_REQUESTED) eventType={}", req.eventType());
+                return; // own response echo / out-of-scope — skip
             }
-            BrokerControlDescriptor.Descriptor desc;
-            try {
-                desc = BrokerControlDescriptor.decode(req.payloadRef());
-            } catch (IllegalArgumentException e) {
-                return; // not a valid request descriptor — skip
-            }
-            if (desc.eventType() != AgentBusEventType.CLIENT_INVOCATION_REQUESTED) {
-                return; // invocation family only
-            }
-            String corrId = desc.correlationId();
-            String trace = desc.traceId();
-            String idem = desc.idempotencyKey();
+            String corrId = req.correlationId();
+            String trace = req.traceId();
+            String idem = req.idempotencyKey();
             String taskId = "task-" + taskSeq.incrementAndGet();
             // L2 §6.2.1 BLOCKING: ACCEPTED + RESPONSE(snapshot) + TERMINAL(completed).
             produceResponse(AgentBusEventType.INVOCATION_ACCEPTED,
@@ -630,34 +664,38 @@ class RealBrokerTwoHopRelayIntegrationTest {
         }
 
         /**
-         * Build + send a response to {@code resp_in} with a descriptor payloadRef
-         * (symmetric to the request).
+         * Build a response {@link BrokerOutboundMessage} and produce it to {@code resp_in} via the SPI
+         * relay port ({@link #respProducer}) — reuses {@code RocketMqBrokerForwardingRelay.buildMessage}
+         * so the response's first-class control headers + {@code inlinePayload} wire format matches what
+         * the response relay decodes (resp_in → resp_out).
          *
-         * @param eventType the response event type to stamp on the descriptor + header
-         * @param task      the task cursor (id + status snapshot) carried in the descriptor
-         * @param corrId    the correlation identifier recovered from the request descriptor
-         * @param trace     the trace identifier recovered from the request descriptor
-         * @param idem      the idempotency key recovered from the request descriptor
+         * @param eventType the response event type stamped on the header
+         * @param task      the task cursor (id + status snapshot) carried in the inlinePayload
+         * @param corrId    the correlation identifier (first-class, from the request)
+         * @param trace     the trace identifier (first-class, from the request)
+         * @param idem      the idempotency key (first-class, from the request)
          */
         private void produceResponse(AgentBusEventType eventType, TaskCursor task,
                                      String corrId, String trace, String idem) {
-            String descriptor = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                    eventType, trace, corrId, idem, ROUTE_INVOCATION, "a2a", Long.MAX_VALUE))
-                    + ";taskId=" + task.taskId() + ";status=" + task.status();
+            // P-06: response control rides FIRST-CLASS headers (built by the relay encoder from the
+            // BrokerOutboundMessage); response content (taskId/status) rides inlinePayload (A2A response
+            // envelope as DATA). The response relay reads control first-class; the gateway reads
+            // taskId/status via responseToken.
             String messageId = "resp-" + respSeq.incrementAndGet();
-            Message msg = new Message(TOPIC_RESP_IN, /* tags */ null, messageId,
-                    ("target=" + GATEWAY).getBytes(StandardCharsets.UTF_8));
-            msg.putUserProperty("tenantId", TENANT);
-            msg.putUserProperty("messageId", messageId);
-            msg.putUserProperty("sourceServiceId", RUNTIME);
-            msg.putUserProperty("targetServiceId", GATEWAY);
-            msg.putUserProperty("correlationId", corrId);
-            msg.putUserProperty("eventType", eventType.name());
-            msg.putUserProperty("payloadRef", descriptor);
-            try {
-                producer.send(msg);
-            } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
-                throw new IllegalStateException("temp runtime failed to produce response " + eventType, e);
+            String inline = "taskId=" + task.taskId() + ";status=" + task.status();
+            BrokerOutboundMessage message = new BrokerOutboundMessage(
+                    "target=" + GATEWAY,
+                    new BrokerMessageHeaders(
+                            TENANT, messageId, RUNTIME, GATEWAY,
+                            null, corrId, eventType,
+                            trace, idem, ROUTE_INVOCATION, "a2a",
+                            Long.MAX_VALUE, inline, null));
+            BrokerProduceOutcome outcome = respProducer.produce(message, System.currentTimeMillis());
+            LOG.info("[TempRuntime] SEND eventType={} messageId={} target={} inline={} outcome={}",
+                    eventType, messageId, GATEWAY, inline, outcome.outcome());
+            if (outcome.outcome() != BrokerProduceOutcome.Outcome.ACCEPTED) {
+                throw new IllegalStateException(
+                        "temp runtime failed to produce response " + eventType + ": " + outcome.outcome());
             }
         }
 
@@ -677,7 +715,9 @@ class RealBrokerTwoHopRelayIntegrationTest {
                 t.setName(name);
                 t.setDaemon(true);
                 t.setUncaughtExceptionHandler((thr, ex) -> {
-                    // no-op: pollLoop already swallows transient broker hiccups
+                    // P-06 diag: a non-IllegalStateException here would silently kill the pollLoop
+                    // (no resp_in produced → gateway DEFERRED). Log it so silent deaths are visible.
+                    LOG.error("[TempRuntime] pollLoop thread died (uncaught exception): {}", ex.toString(), ex);
                 });
                 return t;
             }

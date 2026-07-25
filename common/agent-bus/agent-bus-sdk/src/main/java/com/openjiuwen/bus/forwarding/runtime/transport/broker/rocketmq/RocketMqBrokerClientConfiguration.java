@@ -18,9 +18,9 @@ import org.springframework.context.annotation.Configuration;
  * RocketMQ broker client bean assembly — <b>role-agnostic, no {@code @Profile}</b>
  * (arch-driven gateway-assembly-purify follow-on: de-gateway-ification, 2026-07-16).
  *
- * <p>Owns the generic <b>client-side</b> RocketMQ beans — the ones any process form
+ * <p>Owns the generic role-agnostic RocketMQ beans — the ones any process form
  * needs when it acts as a <b>caller</b> (produces hop1 requests + consumes hop
- * responses):
+ * responses) OR as a <b>target/callee</b> (produces direct-tap responses):
  * <ul>
  *   <li>{@code defaultProducer} ({@link DefaultMQProducer}, group=
  *       {@code props.producerGroup()}) — the base producer group; consumed by
@@ -35,6 +35,14 @@ import org.springframework.context.annotation.Configuration;
  *       {@code DefaultBrokerTopicResolver} + suffix {@code "resp_out"} → {@code ascend_bus_*_resp_out})
  *       — response consume. Used by the gateway AND by any agent-runtime awaiting a
  *       response to its own outbound call.</li>
+ *   <li>{@code runtimeResponseProducer} ({@link RocketMqBrokerForwardingRelay} with
+ *       {@code DefaultBrokerTopicResolver} + suffix {@code "resp_in"} → {@code ascend_bus_*_resp_in})
+ *       — direct-tap response PRODUCE. Used by an agent-runtime acting as the TARGET/callee
+ *       (FEAT-017): its response producer taps {@code AgentEmitter} and emits {@code INVOCATION_*}/
+ *       {@code A2A_CALL_*} responses. Declared as the {@link BrokerForwardingRelayPort} SPI type so
+ *       the external runtime injects it by qualifier without seeing the concrete RocketMQ adapter
+ *       (the event-bus relay's {@code responseRelayConsumer} is the symmetric CONSUME side on the
+ *       same {@code resp_in} topic, in a different process).</li>
  * </ul>
  *
  * <p><b>Why these beans are NOT gateway-specific.</b> The prior name
@@ -124,5 +132,29 @@ public class RocketMqBrokerClientConfiguration {
         return new RocketMqBrokerForwardingConsumer(new DefaultBrokerTopicResolver(), "resp_out",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(broker.nameserverEndpoints()),
                 props.pollWaitMillis());
+    }
+
+    /**
+     * Target-runtime response producer — produces to {@code ascend_bus_*_resp_in} via
+     * {@code DefaultBrokerTopicResolver} + suffix {@code "resp_in"}. Used by an agent-runtime
+     * acting as the <b>target/callee</b> (FEAT-017 direct-tap): its response producer taps
+     * {@code AgentEmitter} callbacks and emits {@code INVOCATION_*}/{@code A2A_CALL_*} response
+     * events. Declared as the broker-agnostic {@link BrokerForwardingRelayPort} SPI type so the
+     * external runtime injects it by qualifier and never sees the concrete RocketMQ adapter — the
+     * broker selection (RocketMQ) stays internal to the SDK (replaceable by Kafka/NATS).
+     *
+     * <p>The external runtime injects {@code @Qualifier("runtimeResponseProducer")
+     * BrokerForwardingRelayPort} and calls {@code produce(BrokerOutboundMessage, long)} (the
+     * direct-tap overload) per response; the {@code "resp_in"} suffix routes the message to the
+     * response relay's hop-in topic. No durable outbox record is involved (FEAT-017 §5.1.4:
+     * a response-publish failure is recovered via TaskStore / status projection / GetTask).
+     *
+     * @param defaultProducer the shared RocketMQ producer (provides the send transport)
+     * @return a response relay bound to the {@code resp_in} topic, exposed as the SPI type
+     */
+    @Bean(name = "runtimeResponseProducer")
+    BrokerForwardingRelayPort runtimeResponseProducer(DefaultMQProducer defaultProducer) {
+        return new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_in",
+                RocketMqBrokerForwardingRelay.defaultSender(defaultProducer));
     }
 }

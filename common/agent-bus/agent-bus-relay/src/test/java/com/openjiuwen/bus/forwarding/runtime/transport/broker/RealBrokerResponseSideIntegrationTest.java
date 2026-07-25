@@ -11,9 +11,9 @@ import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqB
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
 import com.openjiuwen.bus.gateway.runtime.FakeAgentDiscoveryService;
@@ -21,12 +21,9 @@ import com.openjiuwen.bus.gateway.runtime.GatewayRuntimeService;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 import com.openjiuwen.bus.spi.ingress.IngressResponse;
 
-import org.apache.rocketmq.client.exception.MQBrokerException;
-import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
-import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -123,6 +120,27 @@ class RealBrokerResponseSideIntegrationTest {
     private static TempRuntime tempRuntime; // T: LitePull poll-loop consuming requests
 
     private GatewayRuntimeService gateway;
+
+    /**
+     * P-06: extract a {@code key=value} token from a response inlinePayload (A2A response content).
+     *
+     * @param body the response inlinePayload (nullable; null/blank → null)
+     * @param key the token key to match
+     * @return the token value, or {@code null} if absent
+     */
+    private static String inlineToken(String body, String key) {
+        String result = null;
+        if (body != null && !body.isBlank()) {
+            for (String pair : body.split(";")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0 && pair.substring(0, eq).equals(key)) {
+                    result = pair.substring(eq + 1);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
 
     @BeforeAll
     static void startBrokerClients() throws Exception {
@@ -288,6 +306,12 @@ class RealBrokerResponseSideIntegrationTest {
                 InvocationResponseStatus.COMPLETED_RESPONSE);
         assertClassify(AgentBusEventType.INVOCATION_TERMINAL, "taskId=t5;status=failed",
                 InvocationResponseStatus.FAILED);
+        // FEAT-017: *_INPUT_REQUIRED wait-for-input projection survives the broker round-trip and
+        // maps to INPUT_REQUIRED (not UNKNOWN) so the gateway surfaces it promptly.
+        assertClassify(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "taskId=t6;input=needed",
+                InvocationResponseStatus.INPUT_REQUIRED);
+        assertClassify(AgentBusEventType.A2A_CALL_INPUT_REQUIRED, "taskId=t7;input=needed",
+                InvocationResponseStatus.INPUT_REQUIRED);
     }
 
     /**
@@ -295,13 +319,13 @@ class RealBrokerResponseSideIntegrationTest {
      *
      * @param eventType the response event type to produce + classify
      * @param payloadRef the response payloadRef (carrying status / taskId / streamRef tokens)
-     * @param expected   the classification {@code gateway.classify} should yield
+     * @param expected   the classification {@code GatewayRuntimeService.classify} should yield
      */
     private void assertClassify(AgentBusEventType eventType, String payloadRef,
                                 InvocationResponseStatus expected) {
         String corrId = UUID.randomUUID().toString();
         tempRuntime.produceResponse(eventType, payloadRef, corrId);
-        assertThat(gateway.classify(pollNext(corrId))).isEqualTo(expected);
+        assertThat(GatewayRuntimeService.classify(pollNext(corrId))).isEqualTo(expected);
     }
 
     /**
@@ -333,7 +357,9 @@ class RealBrokerResponseSideIntegrationTest {
         String matched = requestId.toString();
         // self-source (matching corrId, source=GATEWAY) → skip-own
         tempRuntime.produceResponse(AgentBusEventType.INVOCATION_RESPONSE,
-                "taskId=self-1;status=snapshot", matched, new TempRuntime.ResponseRouting(TENANT, GATEWAY, GATEWAY));
+                "taskId=self-1;status=snapshot", matched,
+                new TempRuntime.ResponseRouting(TENANT, GATEWAY, GATEWAY, TRACE,
+                        "idem-self", ROUTE_INVOCATION, "a2a"));
         // non-matching corrId → corrId-filter skip
         tempRuntime.produceResponse(AgentBusEventType.INVOCATION_RESPONSE,
                 "taskId=other-1;status=snapshot", UUID.randomUUID().toString());
@@ -355,7 +381,9 @@ class RealBrokerResponseSideIntegrationTest {
         String matched = requestId.toString();
         // cross-tenant (tenant-b) RESPONSE with MATCHING corrId → filtered by acceptWindow's tenant guard
         tempRuntime.produceResponse(AgentBusEventType.INVOCATION_RESPONSE,
-                "taskId=B-1;status=snapshot", matched, new TempRuntime.ResponseRouting("tenant-b", RUNTIME, GATEWAY));
+                "taskId=B-1;status=snapshot", matched,
+                new TempRuntime.ResponseRouting("tenant-b", RUNTIME, GATEWAY, TRACE,
+                        "idem-b", ROUTE_INVOCATION, "a2a"));
 
         IngressResponse resp = gateway.acceptWindow(requestId, TENANT);
         assertThat(resp.status()).isEqualTo(IngressResponse.IngressStatus.DEFERRED);
@@ -390,7 +418,8 @@ class RealBrokerResponseSideIntegrationTest {
                 break;
             }
             if (corrId.equals(m.correlationId())) {
-                String tid = BrokerControlDescriptor.token(m.payloadRef(), "taskId").orElse(null);
+                // P-06: response content (taskId) rides inlinePayload (the A2A response envelope as DATA)
+                String tid = inlineToken(m.inlinePayload(), "taskId");
                 if (tid != null) {
                     taskIds.add(tid);
                 }
@@ -499,6 +528,10 @@ class RealBrokerResponseSideIntegrationTest {
     static final class TempRuntime {
         private final RocketMqBrokerForwardingConsumer consumer; // T: LitePull adapter (request consumption)
         private final DefaultMQProducer producer; // produce responses
+
+        // SPI relay port (suffix "resp_out") — wraps the raw producer so produceResponse reuses the SDK
+        // wire-format encoder instead of hand-rolling Message + putUserProperty.
+        private final RocketMqBrokerForwardingRelay respProducer;
         private final AtomicLong taskSeq = new AtomicLong();
         private final AtomicLong respSeq = new AtomicLong();
         private final Map<String, TaskEntry> taskByKey = new ConcurrentHashMap<>();
@@ -513,13 +546,30 @@ class RealBrokerResponseSideIntegrationTest {
                     RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
             this.producer = new DefaultMQProducer("it-temp-runtime-producer");
             producer.setNamesrvAddr(nameserver);
+            // suffix "resp_out": this double produces DIRECTLY to resp_out (bypassing the relay response
+            // hop) to exercise the gateway response side in isolation (UC-6/D9 inject eventType directly).
+            this.respProducer = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_out",
+                    RocketMqBrokerForwardingRelay.defaultSender(this.producer));
         }
 
         /** Configurable response behaviour for a consumed REQUESTED event (mirrors TestAgentRuntime). */
         enum ResponseMode {BLOCKING, SILENT, STREAMING}
 
-        /** Pairs the response routing triple so produceResponse stays ≤5 params (G.MET.01). */
-        record ResponseRouting(String tenantId, String source, String target) {}
+        /**
+         * Pairs the response routing + first-class control so produceResponse stays ≤5 params (G.MET.01).
+         * P-06: the response carries control first-class (the response relay's governance requires it).
+         */
+        record ResponseRouting(String tenantId, String source, String target,
+                String traceId, String idempotencyKey, String routeHandle, String capability) {
+            /**
+             * Direct-injection defaults (UC-6/D9): source=RUNTIME, target=GATEWAY, standard control.
+             *
+             * @return a response routing with standard control fields
+             */
+            static ResponseRouting defaults() {
+                return new ResponseRouting(TENANT, RUNTIME, GATEWAY, TRACE, "idem-stub", ROUTE_INVOCATION, "a2a");
+            }
+        }
 
         void start() throws Exception {
             producer.start();
@@ -599,25 +649,33 @@ class RealBrokerResponseSideIntegrationTest {
             }
         }
 
+        /**
+         * P-06: build a response routing triple (source=RUNTIME, target=the request's source) carrying
+         * the request's first-class control, so produceResponse call sites stay short (G.FMT.10).
+         *
+         * @param tenant the tenant scope
+         * @param target the response target (original caller serviceId)
+         * @param req the inbound request carrying first-class control
+         * @return a ResponseRouting with source=RUNTIME + the request's control fields
+         */
+        private ResponseRouting routing(String tenant, String target, BrokerInboundMessage req) {
+            return new ResponseRouting(tenant, RUNTIME, target, req.traceId(), req.idempotencyKey(),
+                    req.routeHandle(), req.capability());
+        }
+
         private synchronized void processRequest(BrokerInboundMessage req) {
-            String payloadRef = req.payloadRef();
-            if (payloadRef == null || payloadRef.isBlank()) {
-                return;
-            }
-            BrokerControlDescriptor.Descriptor desc;
-            try {
-                desc = BrokerControlDescriptor.decode(payloadRef);
-            } catch (IllegalArgumentException e) {
-                return; // not a request descriptor (own response echo) — skip
-            }
-            if (desc.eventType() != AgentBusEventType.CLIENT_INVOCATION_REQUESTED) {
-                return; // UC-4..UC-10 scope: invocation family only
+            // P-06: request control plane is FIRST-CLASS on the inbound (eventType / correlationId /
+            // idempotencyKey / ...). Skip non-request echoes by eventType (own responses carry a response
+            // eventType or null), not by decoding a payloadRef descriptor.
+            AgentBusEventType reqEventType = req.eventType();
+            if (reqEventType != AgentBusEventType.CLIENT_INVOCATION_REQUESTED) {
+                return; // own response echo / out-of-scope — skip
             }
             String reqTenant = req.tenantId();
             String reqSource = req.sourceServiceId(); // = GATEWAY (response target)
-            String corrId = desc.correlationId();
+            String corrId = req.correlationId();
             // §4.4 server-side creation idempotency: (tenantId|idempotencyKey) → single task.
-            String dedupKey = reqTenant + "|" + desc.idempotencyKey();
+            String dedupKey = reqTenant + "|" + req.idempotencyKey();
             TaskEntry entry = taskByKey.computeIfAbsent(dedupKey,
                     k -> new TaskEntry("task-" + taskSeq.incrementAndGet()));
             ResponseMode mode = this.responseMode;
@@ -628,53 +686,56 @@ class RealBrokerResponseSideIntegrationTest {
             if (entry.emitted) {
                 // §4.4 repeat REQUESTED → re-emit only ACCEPTED (same taskId, no second logical call)
                 produceResponse(AgentBusEventType.INVOCATION_ACCEPTED, "taskId=" + taskId, corrId,
-                        new ResponseRouting(reqTenant, RUNTIME, reqSource));
+                        routing(reqTenant, reqSource, req));
                 return;
             }
             entry.emitted = true;
             // L2 §6.2.1 BLOCKING: ACCEPTED + RESPONSE + TERMINAL(completed).
             produceResponse(AgentBusEventType.INVOCATION_ACCEPTED, "taskId=" + taskId, corrId,
-                    new ResponseRouting(reqTenant, RUNTIME, reqSource));
+                    routing(reqTenant, reqSource, req));
             if (mode == ResponseMode.STREAMING) {
                 // L2 §6.2.4 STREAMING: ACCEPTED + STREAM_READY (cursor=streamRef).
                 produceResponse(AgentBusEventType.INVOCATION_STREAM_READY,
                         "taskId=" + taskId + ";streamRef=stream://" + taskId, corrId,
-                        new ResponseRouting(reqTenant, RUNTIME, reqSource));
+                        routing(reqTenant, reqSource, req));
                 return;
             }
             produceResponse(AgentBusEventType.INVOCATION_RESPONSE, "taskId=" + taskId + ";status=snapshot",
-                    corrId, new ResponseRouting(reqTenant, RUNTIME, reqSource));
+                    corrId, routing(reqTenant, reqSource, req));
             produceResponse(AgentBusEventType.INVOCATION_TERMINAL, "taskId=" + taskId + ";status=completed",
-                    corrId, new ResponseRouting(reqTenant, RUNTIME, reqSource));
+                    corrId, routing(reqTenant, reqSource, req));
         }
 
         /**
-         * Build + send a single response message to {@code resp_out} mirroring
-         * {@link RocketMqBrokerForwardingRelay#buildMessage} user-properties. Package-private so
-         * UC-6 (per-eventType classify) + D9 can inject a chosen eventType directly; {@code source=RUNTIME},
-         * {@code target=GATEWAY} (the response swap).
+         * Build a response {@link BrokerOutboundMessage} and produce it to {@code resp_out} via the SPI
+         * relay port ({@link #respProducer}) — reuses {@link RocketMqBrokerForwardingRelay#buildMessage}
+         * so the response's first-class control headers + {@code inlinePayload} wire format matches what
+         * the gateway reads. Package-private so UC-6 (per-eventType classify) + D9 can inject a chosen
+         * eventType directly; {@code source=RUNTIME}, {@code target=GATEWAY} (the response swap).
          *
-         * @param eventType      the response event type to produce
-         * @param respPayloadRef the response payloadRef (carrying status / taskId / streamRef tokens)
-         * @param correlationId  the correlation id stamped on the message (matches the request)
-         * @param routing        the tenant/source/target routing triple stamped on the message
+         * @param eventType     the response event type to produce
+         * @param respInline    the response inlinePayload (A2A response content: taskId / status / streamRef)
+         * @param correlationId the correlation id stamped on the message (matches the request)
+         * @param routing       the tenant/source/target routing triple stamped on the message
          */
-        void produceResponse(AgentBusEventType eventType, String respPayloadRef, String correlationId,
+        void produceResponse(AgentBusEventType eventType, String respInline, String correlationId,
                              ResponseRouting routing) {
             String messageId = "resp-" + respSeq.incrementAndGet();
-            Message msg = new Message(TOPIC_INVOCATION_RESP_OUT, /* tags */ null, messageId,
-                    ("target=" + routing.target()).getBytes(StandardCharsets.UTF_8));
-            msg.putUserProperty("tenantId", routing.tenantId());
-            msg.putUserProperty("messageId", messageId);
-            msg.putUserProperty("sourceServiceId", routing.source());
-            msg.putUserProperty("targetServiceId", routing.target());
-            msg.putUserProperty("correlationId", correlationId);
-            msg.putUserProperty("eventType", eventType.name());
-            msg.putUserProperty("payloadRef", respPayloadRef);
-            try {
-                producer.send(msg);
-            } catch (RemotingException | MQBrokerException | MQClientException | InterruptedException e) {
-                throw new IllegalStateException("temp runtime failed to produce response " + eventType, e);
+            // P-06: control plane + response content ride FIRST-CLASS headers (built by the relay encoder
+            // from the BrokerOutboundMessage); the response relay's governance + the gateway classify read
+            // them directly. This double produces directly to resp_out (suffix "resp_out").
+            BrokerOutboundMessage message = new BrokerOutboundMessage(
+                    "target=" + routing.target(),
+                    new BrokerMessageHeaders(
+                            routing.tenantId(), messageId, routing.source(), routing.target(),
+                            null, correlationId, eventType,
+                            routing.traceId(), routing.idempotencyKey(),
+                            routing.routeHandle(), routing.capability(),
+                            Long.MAX_VALUE, respInline, null));
+            BrokerProduceOutcome outcome = respProducer.produce(message, System.currentTimeMillis());
+            if (outcome.outcome() != BrokerProduceOutcome.Outcome.ACCEPTED) {
+                throw new IllegalStateException(
+                        "temp runtime failed to produce response " + eventType + ": " + outcome.outcome());
             }
         }
 
@@ -682,13 +743,12 @@ class RealBrokerResponseSideIntegrationTest {
          * UC-6 / UC-8 / UC-9 / D9 direct-injection overload: response-swap defaults
          * (source=RUNTIME, target=GATEWAY, tenant=TENANT).
          *
-         * @param eventType      the response event type to produce
-         * @param respPayloadRef the response payloadRef (carrying status / taskId / streamRef tokens)
-         * @param correlationId  the correlation id stamped on the message (matches the request)
+         * @param eventType     the response event type to produce
+         * @param respInline    the response inlinePayload (A2A response content: taskId / status / streamRef)
+         * @param correlationId the correlation id stamped on the message (matches the request)
          */
-        void produceResponse(AgentBusEventType eventType, String respPayloadRef, String correlationId) {
-            produceResponse(eventType, respPayloadRef, correlationId,
-                    new ResponseRouting(TENANT, RUNTIME, GATEWAY));
+        void produceResponse(AgentBusEventType eventType, String respInline, String correlationId) {
+            produceResponse(eventType, respInline, correlationId, ResponseRouting.defaults());
         }
     }
 }

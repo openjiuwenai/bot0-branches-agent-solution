@@ -4,7 +4,7 @@ Encapsulates HTTP interaction with EDPAgent's SSE streaming endpoint:
   POST /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
 
 Consumes the SSE event stream, assembles the final answer, detects
-VA delegate interrupts, collects simplified event summaries, and
+delegate interrupts, collects simplified event summaries, and
 returns a structured AgentCallResponse.
 """
 
@@ -42,8 +42,7 @@ class AgentClient:
         agent_id: URL path segment for agent
         timeout: Request timeout in seconds
         request_template: 稳定 body 字段底模，深合并到最终请求体；调用方 extra_data
-            仍合并进 custom_data.inputs。用于透传 role_id/role_name/custom_data.user_profile
-            等客户环境绑定字段。
+            仍合并进 custom_data.inputs。用于透传 role_id/role_name 等部署侧稳定字段。
         extra_headers: 稳定请求头。值支持 ${ENV_VAR} 语法从环境变量读取。
         url_query_params: URL query 参数（拼到 conversation URL 后）。
     """
@@ -110,7 +109,7 @@ class AgentClient:
             body["input"] = input_obj
         input_obj.setdefault("query", query)
 
-        # custom_data.inputs：合并 extra_data（调用方动态字段，如 ZRTtype/run_id）
+        # custom_data.inputs：合并 extra_data（调用方动态字段，如 demo_flag/run_id）
         custom_data = body.setdefault("custom_data", {})
         if not isinstance(custom_data, dict):
             custom_data = {}
@@ -196,7 +195,7 @@ class AgentClient:
 
         与 call() 的聚合模式互补：不消费/聚合事件，把 edp_agent 的 SSE 行原样
         转发给客户端（每行末补 ``\\n`` 以满足 SSE 帧换行要求）。用于客户端
-        期望实时流式事件（``Accept: text/event-stream``）的场景——避免 VA 慢
+        期望实时流式事件（``Accept: text/event-stream``）的场景——避免下游 Agent 慢
         时聚合模式阻塞导致客户端收不到任何字节而断连。
 
         异常不抛出，而是以 SSE error 事件形式 yield，避免 StreamingResponse
