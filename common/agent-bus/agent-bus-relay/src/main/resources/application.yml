@@ -45,3 +45,10 @@ agent-bus:
   tenant: ${AGENT_BUS_TENANT:tenant-a}
   gateway-service-id: ${AGENT_BUS_GATEWAY_SERVICE_ID:gateway-01}
   event-bus-service-id: ${AGENT_BUS_EVENT_BUS_SERVICE_ID:eventbus-01}
+  # 角色装配开关(role-based-assembly)。relay 角色门控新的 AgentBusRelayRoleAutoConfiguration
+  # (relay producer + 4 relay ports + 2 workers + 2 ticks + subscribe-at-startup)。
+  # 须与 eventbus profile 同时启用:profile 激活 EventBusRelaySchedulingConfig(relay 专用
+  # 调度器,仍 @Profile("eventbus"))即 `--spring.profiles.active=eventbus`;此属性激活本角色自动配置。
+  role:
+    relay:
+      enabled: true
