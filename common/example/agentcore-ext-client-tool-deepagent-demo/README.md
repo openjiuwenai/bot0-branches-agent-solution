@@ -39,29 +39,26 @@ A2A SendMessage + params.metadata.clientTools
 在 PowerShell 中执行。三个仓库共用同一个隔离 Maven 本地仓库，确保示例使用的是本地最新代码：
 
 ```powershell
-$localRepo = "D:\Code\openJiuwen\agent-solution\.m2\repository"
-
-mvn "-Dmaven.repo.local=$localRepo" `
-  -f "D:\Code\openJiuwen\agent-core-java\pom.xml" `
+mvn `
+  -f "..\agent-core-java\pom.xml" `
   clean install
 
-mvn "-Dmaven.repo.local=$localRepo" `
-  -f "D:\Code\openJiuwen\agent-runtime-java\pom.xml" `
+mvn `
+  -f "..\agent-runtime-java\pom.xml" `
   clean install
 
-mvn "-Dmaven.repo.local=$localRepo" `
-  -f "D:\Code\openJiuwen\agent-solution\common\agent-runtime-ext-java\pom.xml" `
+mvn `
+  -f "common\agent-runtime-ext-java\pom.xml" `
   clean install
 
-mvn "-Dmaven.repo.local=$localRepo" `
-  -f "D:\Code\openJiuwen\agent-solution\common\example\agentcore-ext-client-tool-deepagent-demo\pom.xml" `
+mvn `
+  -f "common\example\agentcore-ext-client-tool-deepagent-demo\pom.xml" `
   clean package
 ```
 
 ## 2. 启动 Runtime + DeepAgent
 
 ```powershell
-Set-Location "D:\Code\openJiuwen\agent-solution"
 chcp.com 65001 > $null
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 [Console]::InputEncoding = $utf8
@@ -75,8 +72,7 @@ $env:DEEPSEEK_API_KEY = "<your-deepseek-api-key>"
 $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 $env:DEEPSEEK_MODEL = "deepseek-chat"
 
-$localRepo = "D:\Code\openJiuwen\agent-solution\.m2\repository"
-mvn "-Dmaven.repo.local=$localRepo" `
+mvn `
   -f "common\example\agentcore-ext-client-tool-deepagent-demo\pom.xml" `
   spring-boot:run
 ```
