@@ -4,19 +4,18 @@
 
 package com.customer.agent.customrest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import com.customer.agent.customrest.abcde.EdpaAbcdeCustomRestAdapter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 
 import org.junit.jupiter.api.Test;
-
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 /**
  * Verifies conditional adapter AutoConfiguration and bean registration.
@@ -36,7 +35,9 @@ class EdpCustomRestAdapterAutoConfigurationTest {
     @Test
     void registersAdapterWhenQueryPathConfigured() {
         contextRunner.withUserConfiguration(Dependencies.class)
-                .withPropertyValues("openjiuwen.service.custom-rest.query-path=/v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}")
+                .withPropertyValues(
+                        "openjiuwen.service.custom-rest.query-path="
+                                + "/v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(CustomRestProtocolAdapter.class);

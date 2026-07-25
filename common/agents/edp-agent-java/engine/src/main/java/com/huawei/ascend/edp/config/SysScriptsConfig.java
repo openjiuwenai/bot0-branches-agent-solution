@@ -135,53 +135,57 @@ public class SysScriptsConfig {
         }
 
         Path filePath = Path.of(configPath).toAbsolutePath().normalize();
-        boolean loadedFromFile = false;
 
         // 1. 尝试从文件系统加载
         if (Files.exists(filePath)) {
             try {
                 loadFromFile(filePath);
                 this.loaded = true;
-                loadedFromFile = true;
                 LOGGER.info("SysScriptsConfig loaded from file: {}", filePath);
             } catch (IOException | RuntimeException e) {
                 throw new IllegalStateException("加载场景话术配置失败: " + filePath, e);
             }
+            return;
         }
 
         // 2. 文件系统路径不存在 → 尝试从 classpath 加载
-        if (!loadedFromFile) {
-            // 从完整路径中提取相对路径
-            String relativePath = extractClasspathResource(configPath);
-
-            // 尝试多个可能的 classpath 资源路径
-            String[] resourcePaths = {"BOOT-INF/classes/" + relativePath, relativePath, "classes/" + relativePath};
-
-            ClassLoader cl = Thread.currentThread().getContextClassLoader();
-            if (cl == null) {
-                cl = getClass().getClassLoader();
-            }
-
-            for (String resourcePath : resourcePaths) {
-                try (InputStream is = cl.getResourceAsStream(resourcePath)) {
-                    if (is != null) {
-                        boolean success = parseAndMergeFromInputStream(is, resourcePath);
-                        if (success) {
-                            this.loaded = true;
-                            loadedFromFile = true;
-                            break;
-                        }
-                    }
-                } catch (IOException e) {
-                    LOGGER.debug("Failed to load from classpath {}: {}", resourcePath, e.getMessage());
-                }
-            }
-        }
-
-        if (!loadedFromFile) {
+        boolean loadedFromClasspath = loadFromClasspathFallback(configPath);
+        if (!loadedFromClasspath) {
             throw new IllegalStateException("话术配置不存在: " + configPath
                     + "（文件系统路径不存在，classpath 中也未找到）");
         }
+    }
+
+    /**
+     * 从 classpath 尝试加载配置（load 方法的回退逻辑）。
+     *
+     * @param configPath 配置文件路径
+     * @return true 表示成功从 classpath 加载
+     */
+    private boolean loadFromClasspathFallback(String configPath) {
+        String relativePath = extractClasspathResource(configPath);
+        String[] resourcePaths = {"BOOT-INF/classes/" + relativePath, relativePath, "classes/" + relativePath};
+
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = getClass().getClassLoader();
+        }
+
+        for (String resourcePath : resourcePaths) {
+            try (InputStream is = cl.getResourceAsStream(resourcePath)) {
+                if (is != null) {
+                    boolean success = parseAndMergeFromInputStream(is, resourcePath);
+                    if (success) {
+                        this.loaded = true;
+                        LOGGER.info("SysScriptsConfig loaded from classpath: {}", resourcePath);
+                        return true;
+                    }
+                }
+            } catch (IOException e) {
+                LOGGER.debug("Failed to load from classpath {}: {}", resourcePath, e.getMessage());
+            }
+        }
+        return false;
     }
 
     /**

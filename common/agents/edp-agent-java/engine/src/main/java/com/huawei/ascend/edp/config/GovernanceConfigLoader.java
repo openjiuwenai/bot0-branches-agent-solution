@@ -33,6 +33,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Governance配置加载器。
@@ -167,13 +168,13 @@ public class GovernanceConfigLoader {
         // classpath 搜索路径需覆盖多种打包形态
         String[] basePathPrefixes = {"", "BOOT-INF/classes/", "classes/"};
 
-        config.setPlanrule(
-                loadYamlFromClasspath(cl, basePathPrefixes, "governance/planrule.yaml", "planrule", PlanRuleConfig.class));
-        config.setActrule(
-                loadYamlFromClasspath(cl, basePathPrefixes, "governance/actrule.yaml", "actrule", ActRuleConfig.class));
-        config.setScriptconfig(
-                loadYamlFromClasspath(cl, basePathPrefixes, "governance/scriptconfig.yaml", "scriptconfig",
-                        ScriptConfig.class));
+        config.setPlanrule(loadYamlFromClasspath(cl, basePathPrefixes,
+                "governance/planrule.yaml", "planrule", PlanRuleConfig.class).orElse(null));
+        config.setActrule(loadYamlFromClasspath(cl, basePathPrefixes,
+                "governance/actrule.yaml", "actrule", ActRuleConfig.class).orElse(null));
+        config.setScriptconfig(loadYamlFromClasspath(cl, basePathPrefixes,
+                "governance/scriptconfig.yaml", "scriptconfig",
+                ScriptConfig.class).orElse(null));
 
         return config;
     }
@@ -186,10 +187,10 @@ public class GovernanceConfigLoader {
      * @param resourcePath 相对资源路径（如 "governance/actrule.yaml"）
      * @param rootNodeName yaml根节点名（如 "actrule"）
      * @param targetType 目标反序列化类型
-     * @return 解析后的配置对象；classpath中无可用资源时返回null
+     * @return 解析后的配置对象；classpath中无可用资源时返回Optional.empty()
      */
 
-    private static <T> T loadYamlFromClasspath(ClassLoader cl, String[] prefixes,
+    private static <T> Optional<T> loadYamlFromClasspath(ClassLoader cl, String[] prefixes,
             String resourcePath, String rootNodeName, Class<T> targetType) {
         for (String prefix : prefixes) {
             try (InputStream is = cl.getResourceAsStream(prefix + resourcePath)) {
@@ -199,7 +200,7 @@ public class GovernanceConfigLoader {
                     if (node != null) {
                         T result = YAML_MAPPER.treeToValue(node, targetType);
                         LOGGER.info("Loaded {} from classpath: {}", rootNodeName, prefix + resourcePath);
-                        return result;
+                        return Optional.of(result);
                     }
                 }
             } catch (IOException e) {
@@ -208,7 +209,7 @@ public class GovernanceConfigLoader {
             }
         }
         LOGGER.info("{} not found in classpath, using defaults", rootNodeName);
-        return null;
+        return Optional.empty();
     }
 
     /**

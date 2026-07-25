@@ -29,6 +29,8 @@ import org.springframework.context.annotation.Bean;
  *
  * <p>Registered via {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports},
  * so the host process does not need to modify scanBasePackages.</p>
+ *
+ * @since 2026-07-24
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "openjiuwen.service.custom-rest", name = "query-path")
