@@ -153,7 +153,7 @@ public class EdpaEventRail extends DeepAgentRail {
     private static final String FK_PREFIX = "scriptconfig.think_chunk_scripts.think_chunk_fixed_scripts.";
 
     /**
-     * Todo 数据 Redis TTL（秒），与会话结束后数据清理周期一致。
+     * 任务列表数据 Redis TTL（秒），与会话结束后数据清理周期一致。
      */
     private static final int TODO_REDIS_TTL_SECONDS = 3600;
 
@@ -1253,6 +1253,8 @@ public class EdpaEventRail extends DeepAgentRail {
                         sessionId, key, TODO_REDIS_TTL_SECONDS);
             } else if (success != null && !success) {
                 LOGGER.debug("[EDPA-DIAG] setTodoRedisTtl sid={} key={} not found", sessionId, key);
+            } else {
+                LOGGER.warn("[EDPA-DIAG] setTodoRedisTtl sid={} key={} expire returned null", sessionId, key);
             }
         } catch (RedisConnectionFailureException | RedisSystemException e) {
             LOGGER.warn("[EDPA-DIAG] setTodoRedisTtl failed sid={}: {}", sessionId, e.getMessage());

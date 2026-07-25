@@ -1029,49 +1029,68 @@ public class EdpaTodoRail extends DeepAgentRail {
             if (todos == null || todos.isEmpty()) {
                 return;
             }
-
-            // 签名去重：状态没变就不重复注入
-            String signature = todos.stream()
-                    .map(t -> t.getId() + ":" + (t.getStatus() != null ? t.getStatus().name() : "null"))
-                    .reduce("", (a, b) -> a + "," + b);
-            String sigKey = "_edp_todo_sig";
-            Object prevSig = ctx.getExtra().get(sigKey);
-            if (signature.equals(prevSig)) {
+            if (isSignatureUnchanged(ctx, todos)) {
                 return;
             }
-            ctx.getExtra().put(sigKey, signature);
-
-            // 构建todo状态摘要
-            StringBuilder sb = new StringBuilder("【当前任务状态】\n");
-            for (TodoItem t : todos) {
-                String status = t.getStatus() != null ? t.getStatus().name() : "UNKNOWN";
-                String mark;
-                if (isCompletedLike(t)) {
-                    mark = "✓";
-                } else if ("IN_PROGRESS".equals(status)) {
-                    mark = "▶";
-                } else {
-                    mark = "○";
-                }
-                sb.append(mark).append(" ").append(t.getContent() != null ? t.getContent() : t.getId());
-                if (isCompletedLike(t)) {
-                    sb.append(" (已完成，不可修改)");
-                }
-                sb.append("\n");
-            }
-
-            long active = todos.stream().filter(t -> !isCompletedLike(t))
-                    .count();
-            if (active > 0) {
-                sb.append("请使用 todo_modify 推进任务，不要重新 todo_create。");
-            }
-
-            ctx.pushSteering(sb.toString());
+            String summary = buildTodoStatusSummary(todos);
+            ctx.pushSteering(summary);
+            long active = todos.stream().filter(t -> !isCompletedLike(t)).count();
             LOGGER.info("[EDPA-TODO-INJECT] injected active todo status, sid={}, todos={}, active={}", sid,
                     todos.size(), active);
         } catch (IOException | IllegalStateException e) {
             LOGGER.warn("[EDPA-TODO-INJECT] failed, sid={}, error={}", sid, e.getMessage());
         }
+    }
+
+    /**
+     * 签名去重：todoId:status 拼接，状态没变化时不重复注入。
+     *
+     * @param ctx   回调上下文
+     * @param todos 当前 todo 列表
+     * @return true 表示签名未变化（跳过注入）
+     */
+    private boolean isSignatureUnchanged(AgentCallbackContext ctx, List<TodoItem> todos) {
+        String signature = todos.stream()
+                .map(t -> t.getId() + ":" + (t.getStatus() != null ? t.getStatus().name() : "null"))
+                .reduce("", (a, b) -> a + "," + b);
+        String sigKey = "_edp_todo_sig";
+        Object prevSig = ctx.getExtra().get(sigKey);
+        if (signature.equals(prevSig)) {
+            return true;
+        }
+        ctx.getExtra().put(sigKey, signature);
+        return false;
+    }
+
+    /**
+     * 构建 todo 状态摘要文本。
+     *
+     * @param todos 当前 todo 列表
+     * @return 摘要文本
+     */
+    private String buildTodoStatusSummary(List<TodoItem> todos) {
+        StringBuilder sb = new StringBuilder("【当前任务状态】\n");
+        for (TodoItem t : todos) {
+            String status = t.getStatus() != null ? t.getStatus().name() : "UNKNOWN";
+            String mark;
+            if (isCompletedLike(t)) {
+                mark = "✓";
+            } else if ("IN_PROGRESS".equals(status)) {
+                mark = "▶";
+            } else {
+                mark = "○";
+            }
+            sb.append(mark).append(" ").append(t.getContent() != null ? t.getContent() : t.getId());
+            if (isCompletedLike(t)) {
+                sb.append(" (已完成，不可修改)");
+            }
+            sb.append("\n");
+        }
+        long active = todos.stream().filter(t -> !isCompletedLike(t)).count();
+        if (active > 0) {
+            sb.append("请使用 todo_modify 推进任务，不要重新 todo_create。");
+        }
+        return sb.toString();
     }
 }
 

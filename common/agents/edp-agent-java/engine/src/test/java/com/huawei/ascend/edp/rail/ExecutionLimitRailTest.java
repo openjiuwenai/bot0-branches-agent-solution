@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
-
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -52,6 +51,9 @@ import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -60,7 +62,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>覆盖场景：Redis 恢复、本地递增、超限拦截、持久化、异常降级、定期清理。</p>
  */
 class ExecutionLimitRailTest {
-
     private StringRedisTemplate redisTemplate;
     private HashOperations<String, Object, Object> hashOps;
     private TodoRedisProperties props;
@@ -396,7 +397,10 @@ class ExecutionLimitRailTest {
         // callCounter 设为 99，下一次触发清理
         Field callCounterField = ExecutionLimitRail.class.getDeclaredField("callCounter");
         callCounterField.setAccessible(true);
-        AtomicInteger callCounter = (AtomicInteger) callCounterField.get(rail);
+        Object callCounterRaw = callCounterField.get(rail);
+        assertTrue(callCounterRaw instanceof AtomicInteger,
+                "callCounter should be AtomicInteger");
+        AtomicInteger callCounter = (AtomicInteger) callCounterRaw;
         callCounter.set(99);
 
         rail.beforeToolCall(realCtx("session-1", "call_versatile")); // 100th call -> cleanup
@@ -434,15 +438,15 @@ class ExecutionLimitRailTest {
         rail.beforeInvoke(realCtxNoTool("session-1"));
 
         int threadCount = 10;
-        Thread[] threads = new Thread[threadCount];
-        for (int i = 0; i < threadCount; i++) {
-            threads[i] = new Thread(() -> rail.beforeToolCall(realCtx("session-1", "call_versatile")));
-        }
-        for (Thread t : threads) {
-            t.start();
-        }
-        for (Thread t : threads) {
-            t.join();
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(threadCount, threadCount, 60L,
+                TimeUnit.SECONDS, new LinkedBlockingQueue<>(threadCount));
+        try {
+            for (int i = 0; i < threadCount; i++) {
+                executor.execute(() -> rail.beforeToolCall(realCtx("session-1", "call_versatile")));
+            }
+        } finally {
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
         }
 
         rail.afterInvoke(realCtxNoTool("session-1"));
