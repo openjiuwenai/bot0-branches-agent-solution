@@ -1,0 +1,15 @@
+# Gateway profile — caller-role activation.
+#
+# The gateway IS a caller: it produces hop1 requests (@Qualifier("requestProducer"))
+# and consumes hop responses (@Qualifier("responseConsumer")). Those two beans now
+# live in AgentBusCallerRoleAutoConfiguration, gated behind
+# agent-bus.role.caller.enabled=true (role-based-assembly). Activating the gateway
+# profile must therefore turn the caller role on so GatewayRuntimeConfiguration's
+# @Qualifier injections resolve.
+#
+# This profile is test/E2E-scoped (GatewayRuntimeConfiguration + TempClientMain live
+# in agent-bus-relay test sources); the production gateway module lands in a later batch.
+agent-bus:
+  role:
+    caller:
+      enabled: true

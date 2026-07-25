@@ -9,7 +9,7 @@ import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * In-memory test double for the broker relay ({@link BrokerForwardingRelayPort}) +
+ * In-memory test double for the broker relay ({@link BrokerForwardingProducerPort}) +
  * the factory for per-consumer {@link BrokerForwardingConsumerPort} doubles —
  * NON-PRODUCTION.
  *
@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @since 0.1.0
  */
 // non-production — test fixture only; real broker adapter is decision §7 / Stage 28
-public final class InMemoryBroker implements BrokerForwardingRelayPort {
+public final class InMemoryBroker implements BrokerForwardingProducerPort {
     private final BrokerTopicResolver resolver;
     private final String suffix;
 

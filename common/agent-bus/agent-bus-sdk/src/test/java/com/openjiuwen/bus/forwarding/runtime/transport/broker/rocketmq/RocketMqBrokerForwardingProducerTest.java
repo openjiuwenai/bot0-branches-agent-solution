@@ -26,20 +26,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Unit tests for {@link RocketMqBrokerForwardingRelay} (FEAT-013/014, S3).
+ * Unit tests for {@link RocketMqBrokerForwardingProducer} (FEAT-013/014, S3).
  *
  * <p>Pins the pure record&rarr;{@link Message} mapping (decision §6.2 ② routing-descriptor
  * body; routing-metadata user properties incl. {@code correlationId} per FEAT-013 §4.2 so
  * the gateway can match responses) and the {@code produce} outcome mapping
  * (routeNotFound / accepted / unavailable) via a fake
- * {@link RocketMqBrokerForwardingRelay.MessageSender} — no live broker (the real
+ * {@link RocketMqBrokerForwardingProducer.MessageSender} — no live broker (the real
  * {@code DefaultMQProducer} round-trip is the S7 {@code @EnabledIfEnvironmentProperty}
  * integration test, env-guarded).
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md} §4.1 / §5.2 / §8.1.
  */
-class RocketMqBrokerForwardingRelayTest {
+class RocketMqBrokerForwardingProducerTest {
     private static final String TENANT = "tenant-a";
     private static final String ROUTE = "route-for-tenant-a";
     private static final String SOURCE = "source-svc";
@@ -50,7 +50,7 @@ class RocketMqBrokerForwardingRelayTest {
     void buildMessage_maps_record_to_descriptor_body_and_metadata() {
         ForwardingOutboxRecord record = record("msg-1", "payload-ref-1", "corr-1");
 
-        Message msg = RocketMqBrokerForwardingRelay.buildMessage(record, "topic-from-resolver");
+        Message msg = RocketMqBrokerForwardingProducer.buildMessage(record, "topic-from-resolver");
 
         assertThat(msg.getTopic()).isEqualTo("topic-from-resolver");
         // §6.2 ②: body is a routing descriptor only — NEVER the payload body.
@@ -72,7 +72,7 @@ class RocketMqBrokerForwardingRelayTest {
     void buildMessage_omits_corr_id_payload_ref_when_control_only() {
         ForwardingOutboxRecord record = record("msg-ctrl", null, null);
 
-        Message msg = RocketMqBrokerForwardingRelay.buildMessage(record, "topic-x");
+        Message msg = RocketMqBrokerForwardingProducer.buildMessage(record, "topic-x");
 
         assertThat(msg.getUserProperty("correlationId")).isNull();
         assertThat(msg.getUserProperty("payloadRef")).isNull();
@@ -85,14 +85,14 @@ class RocketMqBrokerForwardingRelayTest {
     void buildMessage_body_does_not_leak_payload_ref() {
         // §6.2 ②: the payload reference rides as a header, never in the body.
         ForwardingOutboxRecord record = record("msg-1", "ref-secret-payload", "corr-1");
-        Message msg = RocketMqBrokerForwardingRelay.buildMessage(record, "topic-x");
+        Message msg = RocketMqBrokerForwardingProducer.buildMessage(record, "topic-x");
         assertThat(new String(msg.getBody(), StandardCharsets.UTF_8)).doesNotContain("ref-secret-payload");
     }
 
     @Test
     void produce_returns_accepted_when_sender_succeeds() {
         List<Message> sent = new ArrayList<>();
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-from-resolver"), SUFFIX, sent::add);
 
         BrokerProduceOutcome outcome = relay.produce(record("msg-1", "ref-1", "corr-1"), 1_000L);
@@ -109,7 +109,7 @@ class RocketMqBrokerForwardingRelayTest {
     void produce_returns_route_not_found_when_record_has_no_event_type() {
         // Option B: the topic is derived from the record's eventType; a record with no eventType
         // (a JDBC-loaded back-compat row without the V3 column) cannot yield a topic → ROUTE_NOT_FOUND.
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-x"), SUFFIX, msg -> {});
 
         BrokerProduceOutcome outcome = relay.produce(recordNoEventType("msg-1", null, null), 1_000L);
@@ -121,7 +121,7 @@ class RocketMqBrokerForwardingRelayTest {
 
     @Test
     void produce_returns_unavailable_when_sender_throws() {
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-x"), SUFFIX, msg -> {
                     throw new IllegalStateException("broker down");
                 });
@@ -135,7 +135,7 @@ class RocketMqBrokerForwardingRelayTest {
 
     @Test
     void produce_returns_unavailable_on_InterruptedException() {
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-x"), SUFFIX, msg -> {
                     throw new InterruptedException();
                 });
@@ -149,7 +149,7 @@ class RocketMqBrokerForwardingRelayTest {
 
     @Test
     void produce_rejects_null_record() {
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-x"), SUFFIX, msg -> {});
         // a typed null selects the outbox-record overload over the direct-tap produce(BrokerOutboundMessage)
         ForwardingOutboxRecord nullRecord = null;
@@ -164,7 +164,7 @@ class RocketMqBrokerForwardingRelayTest {
         // and produces it directly. The message carries the full control plane + inlinePayload as
         // FIRST-CLASS headers so the relay's poison guard (trace/idem/route/cap present) accepts it.
         List<Message> sent = new ArrayList<>();
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-from-resolver"), SUFFIX, sent::add);
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
                 TENANT, "msg-resp", "runtime-svc", "gateway-1",
@@ -190,7 +190,7 @@ class RocketMqBrokerForwardingRelayTest {
 
     @Test
     void produce_outbound_message_null_event_type_route_not_found() {
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-x"), SUFFIX, msg -> { });
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
                 TENANT, "msg-no-et", SOURCE, TARGET, null, "corr", null,
@@ -205,7 +205,7 @@ class RocketMqBrokerForwardingRelayTest {
 
     @Test
     void produce_outbound_message_rejects_null_message() {
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
                 resolver("topic-x"), SUFFIX, msg -> { });
         BrokerOutboundMessage nullMessage = null;
         assertThatThrownBy(() -> relay.produce(nullMessage, 1_000L))

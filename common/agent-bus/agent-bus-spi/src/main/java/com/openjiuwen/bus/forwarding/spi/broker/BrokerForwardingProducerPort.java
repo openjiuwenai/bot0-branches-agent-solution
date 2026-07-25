@@ -9,7 +9,7 @@ import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMess
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 
 /**
- * Relay-side broker SPI: produce a claimed outbox record onto a broker (Stage 26,
+ * Producer-side broker SPI: produce a claimed outbox record onto a broker (Stage 26,
  * T4 hybrid).
  *
  * <p>The relay worker claims a {@link ForwardingOutboxRecord} from the outbox and
@@ -27,7 +27,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
  * a broker produce is fire-and-forget, and {@code ACCEPTED} means the broker
  * accepted the message — NOT that the receiver processed it. The terminal ack
  * (outbox ACKED) arrives via the model-B reverse-ack channel (Stage 27). Stage 26
- * ships this independent SPI; Stage 27 decides how the relay adapter composes
+ * ships this independent SPI; Stage 27 decides how the producer adapter composes
  * with the worker / {@code ForwardingDeliveryPort}.
  *
  * <p>Broker native retry is OFF — the agent-bus retry policy (Stage 14) leads, so
@@ -40,8 +40,8 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
  *
  * @since 0.1.0
  */
-// scope: forwarding transport.broker — relay SPI; produce is fire-and-forget, not a terminal delivery
-public interface BrokerForwardingRelayPort {
+// scope: forwarding transport.broker — produce SPI; produce is fire-and-forget, not a terminal delivery
+public interface BrokerForwardingProducerPort {
     /**
      * Produce a claimed outbox record onto the broker.
      *
@@ -71,11 +71,11 @@ public interface BrokerForwardingRelayPort {
      * {@code inlinePayload}), and publishes. A {@code null} {@code eventType} → non-retryable
      * {@link BrokerProduceOutcome.Outcome#ROUTE_NOT_FOUND}.
      *
-     * <p><b>Optional capability.</b> A relay port that only ever re-publishes claimed outbox
+     * <p><b>Optional capability.</b> A producer port that only ever re-publishes claimed outbox
      * records (the event-bus relay, or an outbox-only test fake) does NOT need direct-tap;
      * the default throws {@link UnsupportedOperationException} so such ports compile
      * unchanged. The RocketMQ adapter + the in-memory broker override it; a direct-tap
-     * producer injects an overriding port (e.g. a {@code RocketMqBrokerForwardingRelay}
+     * producer injects an overriding port (e.g. a {@code RocketMqBrokerForwardingProducer}
      * bound to the {@code resp_in} suffix). Precedent: {@link java.util.Iterator#remove()}.
      *
      * @param message the pre-built broker-agnostic outbound message (non-null; the adapter
@@ -87,7 +87,7 @@ public interface BrokerForwardingRelayPort {
      */
     default BrokerProduceOutcome produce(BrokerOutboundMessage message, long nowMillisEpoch) {
         throw new UnsupportedOperationException(
-                "direct (non-outbox) produce is not supported by this BrokerForwardingRelayPort; "
+                "direct (non-outbox) produce is not supported by this BrokerForwardingProducerPort; "
                         + "override produce(BrokerOutboundMessage, long) to enable FEAT-017 direct-tap");
     }
 }

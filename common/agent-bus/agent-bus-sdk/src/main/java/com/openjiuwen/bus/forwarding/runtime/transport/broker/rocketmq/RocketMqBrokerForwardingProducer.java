@@ -10,7 +10,7 @@ import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMess
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * RocketMQ concrete adapter for {@link BrokerForwardingRelayPort} (FEAT-013/014, S3).
+ * RocketMQ concrete adapter for {@link BrokerForwardingProducerPort} (FEAT-013/014, S3).
  *
  * <p>Maps a claimed {@link ForwardingOutboxRecord} onto a RocketMQ {@link Message} and
  * produces it via a {@link DefaultMQProducer}-backed sender. The broker topic is
@@ -52,13 +52,13 @@ import java.util.Objects;
  *
  * @since 0.1.0
  */
-// scope: forwarding transport.broker — concrete RocketMQ relay adapter (SPI-licensed, ArchUnit-confined)
-public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRelayPort {
+// scope: forwarding transport.broker — concrete RocketMQ producer adapter (SPI-licensed, ArchUnit-confined)
+public final class RocketMqBrokerForwardingProducer implements BrokerForwardingProducerPort {
     private final BrokerTopicResolver resolver;
     private final String suffix;
     private final MessageSender sender;
 
-    public RocketMqBrokerForwardingRelay(BrokerTopicResolver resolver, String suffix, MessageSender sender) {
+    public RocketMqBrokerForwardingProducer(BrokerTopicResolver resolver, String suffix, MessageSender sender) {
         this.resolver = Objects.requireNonNull(resolver, "resolver is required");
         this.suffix = requireSuffix(suffix);
         this.sender = Objects.requireNonNull(sender, "sender is required");
@@ -71,7 +71,7 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
     @FunctionalInterface
     public interface MessageSender {
         /**
-         * Send the message; throw on any failure (the relay maps it to UNAVAILABLE).
+         * Send the message; throw on any failure (the producer maps it to UNAVAILABLE).
          *
          * @param message the built RocketMQ message to send
          * @throws Exception if the send fails (MQClientException / broker error / interrupt)
@@ -227,7 +227,7 @@ public final class RocketMqBrokerForwardingRelay implements BrokerForwardingRela
     /**
      * Production sender backed by a started {@link DefaultMQProducer}. A non-{@code SEND_OK}
      * send status (replication timeout / slave unavailable) surfaces as an exception so the
-     * relay maps it to {@code UNAVAILABLE} (retryable) — the agent-bus retry policy re-drives
+     * producer maps it to {@code UNAVAILABLE} (retryable) — the agent-bus retry policy re-drives
      * and the outbox dedups on {@code (tenantId, messageId)}, preserving at-least-once.
      *
      * @param producer the started {@link DefaultMQProducer} (required)
