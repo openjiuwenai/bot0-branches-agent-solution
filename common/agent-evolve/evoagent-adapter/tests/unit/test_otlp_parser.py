@@ -1,6 +1,6 @@
-"""otlp_parser 单测: 用 otel_spans_v2.jsonl 反构 OTLP 信封, 解析回扁平 dict, 断言字段一致。
+"""otlp_parser 单测: 用 otel_spans.jsonl 反构 OTLP 信封, 解析回扁平 dict, 断言字段一致。
 
-验证 adapter 消费 kafka (OTLP 信封) 后得到的 span 形状与参考 jsonl (模拟 EDPAgent 数据) 一致 ——
+验证 adapter 消费 kafka (OTLP 信封) 后得到的 span 形状与参考 jsonl (真实 EDPAgent 数据) 一致 ——
 即设计文档点 7 "数据一致性" 在解析层的保证。
 """
 
@@ -93,21 +93,21 @@ def _flat_to_otlp(span: dict) -> dict:
 # ---- 字段比对 (jsonl 原始 vs 解析回) ----
 
 def _assert_span_roundtrips(orig: dict, parsed: dict) -> None:
-    # jsonl 的 16 字段
+    # jsonl 的标量字段 (无 duration_ns; session_id 提升字段)
     for k in ("trace_id", "span_id", "parent_span_id", "name", "kind",
-              "start_time", "end_time", "duration_ns", "status_code", "status_message",
+              "start_time", "end_time", "status_code", "status_message",
               "scope_name", "scope_version"):
         assert parsed[k] == orig.get(k), f"{k}: {parsed[k]!r} != {orig.get(k)!r}"
     # attributes / resource_attributes (dict 等值)
     assert parsed["attributes"] == orig.get("attributes"), "attributes mismatch"
     assert parsed["resource_attributes"] == orig.get("resource_attributes"), "resource_attributes mismatch"
-    # events/links (jsonl 均空)
+    # events/links
     assert parsed["events"] == (orig.get("events") or [])
     assert parsed["links"] == (orig.get("links") or [])
     # 提升字段
     assert parsed["service_name"] == (orig.get("resource_attributes") or {}).get("service.name")
-    assert parsed["conversation_id"] == (orig.get("attributes") or {}).get("session.id")
-    # trace_state (jsonl 无此字段, OTLP 默认空)
+    assert parsed["session_id"] == (orig.get("attributes") or {}).get("session.id")
+    # trace_state
     assert parsed["trace_state"] == orig.get("trace_state", "")
 
 

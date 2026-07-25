@@ -228,7 +228,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8900
     {
       "call_id": "uuid-001",
       "conversation_id": "conv-001",
-      "model": "glm-5",
+      "model": "model-sample",
       "type": "GENERATION",
       "start_time": "2026-06-10 14:30:15.123",
       "end_time": "2026-06-10 14:30:17.456",
@@ -343,7 +343,7 @@ adapter/
   "trace_id": "trace-abc",
   "agent_id": "agent-001",
   "conversation_id": "conv-999",
-  "model": "glm-5",
+  "model": "model-sample",
   "type": "GENERATION",
   "start_time": "2026-06-10 14:30:15.123",
   "end_time": "2026-06-10 14:30:17.456",

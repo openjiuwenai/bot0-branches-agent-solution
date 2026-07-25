@@ -5,6 +5,7 @@
 package com.openjiuwen.bus.forwarding.runtime.relay;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
@@ -13,7 +14,6 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerControlDescriptor;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
@@ -26,11 +26,10 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Unit tests for {@link EventBusRelayWorker} — the consume→govern→re-produce relay.
@@ -41,8 +40,9 @@ import java.util.Set;
  * two-hop topic routing (req vs deliver) is not exercised here — that lands with the
  * real 8-topic broker in the two-hop IT (slice E).
  *
- * <p>Covers the four between-hops governance acts: skip-non-request, descriptor
- * decode, correlation match, inbox dedup, plus the transient produce-failure path.
+ * <p>Covers the between-hops governance acts (P-06): skip-non-request (eventType
+ * discriminator), control-plane presence (reject poison with absent control), inbox
+ * dedup, plus the transient produce-failure path.
  */
 class EventBusRelayWorkerTest {
     static final class FakeConsumer implements BrokerForwardingConsumerPort {
@@ -83,21 +83,40 @@ class EventBusRelayWorkerTest {
     }
 
     static final class FakeInbox implements ForwardingInboxPort {
-        final Set<String> seen = new HashSet<>();      // tenant|messageId|consumer
+        /** tenant|messageId|consumer -> current inbox status (mirrors InMemoryForwardingInbox). */
+        final Map<String, ForwardingStatus.Inbox> seen = new HashMap<>();
         final List<ForwardingMessageId> consumed = new ArrayList<>();
         final List<ForwardingMessageId> rejected = new ArrayList<>();
+
+        /**
+         * Test seam: when set, the next {@link #markConsumed} throws to simulate a crash after
+         * hop2 is produced + acked but before markConsumed/commit (W4) — leaving outbox ACKED,
+         * inbox RECEIVED, hop1 uncommitted.
+         */
+        boolean throwNextMarkConsumed;
 
         @Override
         public ForwardingStatus.Inbox receive(ForwardingEnvelope env, String consumerServiceId,
                 long nowMillisEpoch) {
-            String key = env.tenantId() + "|" + env.messageId().value() + "|" + consumerServiceId;
-            return seen.add(key) ? ForwardingStatus.Inbox.RECEIVED
+            String key = key(env.tenantId(), env.messageId().value(), consumerServiceId);
+            ForwardingStatus.Inbox prior = seen.putIfAbsent(key, ForwardingStatus.Inbox.RECEIVED);
+            if (prior == null) {
+                return ForwardingStatus.Inbox.RECEIVED;                       // first arrival
+            }
+            // Re-arrival: in-flight RECEIVED -> re-process; terminal -> suppress (row untouched).
+            return prior == ForwardingStatus.Inbox.RECEIVED
+                    ? ForwardingStatus.Inbox.RECEIVED
                     : ForwardingStatus.Inbox.DUPLICATE_SUPPRESSED;
         }
 
         @Override
         public ForwardingStatus.Inbox markConsumed(ForwardingMessageId id, String tenantId,
                 String consumerServiceId) {
+            if (throwNextMarkConsumed) {
+                throwNextMarkConsumed = false;
+                throw new IllegalStateException("simulated crash before commit (W4)");
+            }
+            seen.put(key(tenantId, id.value(), consumerServiceId), ForwardingStatus.Inbox.CONSUMED);
             consumed.add(id);
             return ForwardingStatus.Inbox.CONSUMED;
         }
@@ -105,6 +124,11 @@ class EventBusRelayWorkerTest {
         @Override
         public ForwardingStatus.Inbox markRejected(ForwardingMessageId id, String tenantId,
                 String consumerServiceId, ForwardingFailureCode code) {
+            String key = key(tenantId, id.value(), consumerServiceId);
+            ForwardingStatus.Inbox prior = seen.get(key);
+            if (prior == null || prior == ForwardingStatus.Inbox.RECEIVED) {
+                seen.put(key, ForwardingStatus.Inbox.REJECTED);
+            }
             rejected.add(id);
             return ForwardingStatus.Inbox.REJECTED;
         }
@@ -112,7 +136,12 @@ class EventBusRelayWorkerTest {
         @Override
         public ForwardingStatus.Inbox statusOf(ForwardingMessageId id, String tenantId,
                 String consumerServiceId) {
-            return ForwardingStatus.Inbox.RECEIVED;
+            return seen.getOrDefault(key(tenantId, id.value(), consumerServiceId),
+                    ForwardingStatus.Inbox.RECEIVED);
+        }
+
+        private static String key(String tenantId, String messageId, String consumerServiceId) {
+            return tenantId + "|" + messageId + "|" + consumerServiceId;
         }
     }
 
@@ -129,11 +158,11 @@ class EventBusRelayWorkerTest {
 
     private static BrokerInboundMessage hop1Request(String tenant, String messageId, String corrId,
                                                    String route, String target) {
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-                "trace-" + messageId, corrId, "idem-" + messageId, route, "a2a", Long.MAX_VALUE));
+        // P-06: the control plane rides FIRST-CLASS fields (no descriptor token in payloadRef).
+        // payloadRef is the A2A data reference; control fields are populated for a valid relayable request.
         return new BrokerInboundMessage(tenant, messageId, "gateway-1", target, "event-bus",
-                desc, corrId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
+                "ref://payload/" + messageId, corrId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                "trace-" + messageId, "idem-" + messageId, route, "a2a", Long.MAX_VALUE, null, null);
     }
 
     private static EventBusRelayWorker newWorker(FakeConsumer c, FakeInbox inbox, InMemoryForwardingOutbox outbox,
@@ -158,23 +187,22 @@ class EventBusRelayWorkerTest {
     }
 
     /**
-     * A resp_in response message: descriptor payloadRef (symmetric to the request) + taskId/status tokens.
+     * A resp_in response message: first-class control plane + response content (taskId/status) in
+     * inlinePayload (P-06: A2A response envelope as DATA; the gateway reads it via responseToken).
      *
      * @param tenant the tenant scope
      * @param messageId the inbound message id
-     * @param corrId the correlation id stamped in both descriptor and native header
+     * @param corrId the correlation id (first-class, mirrors the request)
      * @param eventType the response event type
-     * @param responseTokens the extra taskId/status tokens appended to the descriptor
-     * @return a resp_in inbound message carrying the symmetric descriptor + tokens
+     * @param responseTokens the taskId/status content carried in inlinePayload
+     * @return a resp_in inbound message carrying first-class control + response content
      */
     private static BrokerInboundMessage respInMessage(String tenant, String messageId, String corrId,
                                                        AgentBusEventType eventType, String responseTokens) {
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                eventType, "trace-" + messageId, corrId,
-                "idem-" + messageId, "invocation", "a2a", Long.MAX_VALUE))
-                + ";" + responseTokens;
         return new BrokerInboundMessage(tenant, messageId, "runtime-1", "gateway-1", "event-bus-resp",
-                desc, corrId, eventType);
+                null, corrId, eventType,
+                "trace-" + messageId, "idem-" + messageId, "invocation", "a2a", Long.MAX_VALUE,
+                responseTokens, null);
     }
 
     @Test
@@ -220,19 +248,19 @@ class EventBusRelayWorkerTest {
     }
 
     @Test
-    void rejectsCorrelationMismatchPoison() {
+    void rejectsControlPlaneIncompletePoison() {
         FakeConsumer c = new FakeConsumer();
         FakeInbox inbox = new FakeInbox();
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
         FakeRelay relay = new FakeRelay();
         EventBusRelayWorker w = newWorker(c, inbox, outbox, relay);
 
-        // descriptor corrId "desc-corr" disagrees with the native header corrId "header-corr".
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-                "tr", "desc-corr", "idem", "route-1", "a2a", Long.MAX_VALUE));
+        // P-06: a relayable request whose control plane is absent (traceId/idempotencyKey/routeHandle/
+        // capability null — back-compat 8-arg form) is poison — governance rejects without redelivery (a
+        // broker redelivery cannot fix a missing control field). Replaces the pre-P-06 corrId-mismatch
+        // poison: there is now a single first-class correlationId, so no header/descriptor mismatch exists.
         c.queue.add(new BrokerInboundMessage("t1", "m1", "gateway-1", "runtime-1", "event-bus",
-                desc, "header-corr", AgentBusEventType.CLIENT_INVOCATION_REQUESTED));
+                "ref://x", "c1", AgentBusEventType.CLIENT_INVOCATION_REQUESTED));
 
         EventBusRelayWorker.RelayTickResult r = w.runOnce("t1", 100L, 5);
 
@@ -285,6 +313,42 @@ class EventBusRelayWorkerTest {
     }
 
     @Test
+    void recoversAckedHop2AfterCrashBeforeCommitWithoutLoop() {
+        // P-00: a prior crashed attempt produced + acked hop2 but died before markConsumed/commit
+        // (outbox ACKED, inbox RECEIVED, hop1 uncommitted). The broker redelivers hop1; the relay
+        // must recover idempotently — re-receive the in-flight RECEIVED row (returns RECEIVED, not
+        // DUPLICATE_SUPPRESSED), find nothing claimable (ACKED is terminal), short-circuit on
+        // outbox.statusOf==ACKED, markConsumed + commit — no second produce, no reject→redeliver
+        // loop. Pre-fix this looped forever against the terminal ACKED row (or over-suppressed,
+        // leaving inbox RECEIVED).
+        FakeConsumer c = new FakeConsumer();
+        FakeInbox inbox = new FakeInbox();
+        InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
+        FakeRelay relay = new FakeRelay();
+        EventBusRelayWorker w = newWorker(c, inbox, outbox, relay);
+
+        c.queue.add(hop1Request("t1", "m1", "c1", "route-1", "runtime-1"));
+        inbox.throwNextMarkConsumed = true;
+        assertThrows(IllegalStateException.class, () -> w.runOnce("t1", 100L, 5));
+        assertEquals(1, relay.produced.size());      // hop2 produced + acked before the crash
+        assertEquals(0, c.committed.size());         // hop1 NOT committed (crash before commit)
+        assertEquals(ForwardingStatus.Inbox.RECEIVED, inbox.statusOf(
+                new ForwardingMessageId("eb-m1"), "t1", "event-bus"));   // inbox stuck RECEIVED
+
+        // redeliver the SAME hop1 (at-least-once): recover idempotently.
+        c.queue.add(hop1Request("t1", "m1", "c1", "route-1", "runtime-1"));
+        EventBusRelayWorker.RelayTickResult r2 = w.runOnce("t1", 200L, 5);
+
+        assertEquals(1, r2.relayed());
+        assertEquals(0, r2.dedupSuppressed());
+        assertEquals(1, relay.produced.size());       // still ONE hop2 — no re-produce
+        assertEquals(1, c.committed.size());          // hop1 committed (recovered)
+        assertEquals(0, c.rejected.size());           // no reject→redeliver loop
+        assertEquals(ForwardingStatus.Inbox.CONSUMED, inbox.statusOf(
+                new ForwardingMessageId("eb-m1"), "t1", "event-bus"));
+    }
+
+    @Test
     void responseRelayRelaysRespInToRespOutAndCommits() {
         FakeConsumer c = new FakeConsumer();
         FakeInbox inbox = new FakeInbox();
@@ -300,6 +364,29 @@ class EventBusRelayWorkerTest {
         assertEquals(1, r.relayed());
         assertEquals(0, r.dedupSuppressed());
         assertEquals(0, r.governanceRejected());
+        assertEquals(1, relay.produced.size());     // resp_out re-published
+        assertEquals(1, c.committed.size());        // resp_in committed (model B ack)
+        assertEquals(0, c.rejected.size());
+        assertEquals(1, inbox.consumed.size());     // audit: inbox CONSUMED
+    }
+
+    @Test
+    void responseRelayRelaysInputRequiredRespInToRespOutAndCommits() {
+        // FEAT-017: *_INPUT_REQUIRED is a response projection the response relay must forward
+        // (resp_in → resp_out) like the other RESPONSE_TYPES — not SKIP as an out-of-set echo.
+        FakeConsumer c = new FakeConsumer();
+        FakeInbox inbox = new FakeInbox();
+        InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
+        FakeRelay relay = new FakeRelay();
+        EventBusRelayWorker w = newResponseWorker(c, inbox, outbox, relay);
+
+        c.queue.add(respInMessage("t1", "m1", "c1", AgentBusEventType.INVOCATION_INPUT_REQUIRED,
+                "taskId=task-1;input=needed"));
+
+        EventBusRelayWorker.RelayTickResult r = w.runOnce("t1", 100L, 5);
+
+        assertEquals(1, r.relayed());
+        assertEquals(0, r.skipped());
         assertEquals(1, relay.produced.size());     // resp_out re-published
         assertEquals(1, c.committed.size());        // resp_in committed (model B ack)
         assertEquals(0, c.rejected.size());
@@ -349,19 +436,17 @@ class EventBusRelayWorkerTest {
     }
 
     @Test
-    void responseRelayRejectsCorrelationMismatchPoison() {
+    void responseRelayRejectsControlPlaneIncompletePoison() {
         FakeConsumer c = new FakeConsumer();
         FakeInbox inbox = new FakeInbox();
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
         FakeRelay relay = new FakeRelay();
         EventBusRelayWorker w = newResponseWorker(c, inbox, outbox, relay);
 
-        // descriptor corrId "desc-corr" disagrees with the native header corrId "header-corr".
-        String desc = BrokerControlDescriptor.encode(new BrokerControlDescriptor.Descriptor(
-                AgentBusEventType.INVOCATION_RESPONSE,
-                "tr", "desc-corr", "idem", "invocation", "a2a", Long.MAX_VALUE)) + ";taskId=t1;status=snapshot";
+        // P-06: a relayable response whose control plane is absent is poison — governance rejects.
+        // (Replaces the pre-P-06 corrId-mismatch poison; single first-class correlationId → no mismatch.)
         c.queue.add(new BrokerInboundMessage("t1", "m1", "runtime-1", "gateway-1", "event-bus-resp",
-                desc, "header-corr", AgentBusEventType.INVOCATION_RESPONSE));
+                "taskId=t1;status=snapshot", "c1", AgentBusEventType.INVOCATION_RESPONSE));
 
         EventBusRelayWorker.RelayTickResult r = w.runOnce("t1", 100L, 5);
 

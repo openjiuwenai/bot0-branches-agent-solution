@@ -180,7 +180,7 @@ def test_deleted_sandbox_raises_unavailable_not_skill_not_found(tmp_path: Path) 
     )
     store._cached_sandbox_ids["edp_agent"] = "dead-sbx"
     with pytest.raises(SandboxUnavailableError):
-        store.read_skill("edp_agent", "product_recommend_skill")
+        store.read_skill("edp_agent", "demo_skill")
 
 
 def test_no_ready_sandbox_on_resolve_raises_unavailable(tmp_path: Path) -> None:
