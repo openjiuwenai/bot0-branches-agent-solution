@@ -14,7 +14,7 @@ openjiuwen:
     query:
       legacy-path-enabled: true
       webflux:
-        enabled: false
+        enabled: true
     a2a:
       agent-name: plan-agent
       agent-description: "One-sentence bank-transfer planning agent (ReAct). Decomposes a request and calls versatile-adapter per task."
@@ -24,6 +24,8 @@ openjiuwen:
       remote-agents:
         - name: versatile-adapter
           url: ${VERSATILE_ADAPTER_CARD_URL:http://127.0.0.1:18094}
+    custom-rest:
+      query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
 
 plan-agent:
   model-provider: ${LLM_PROVIDER:openai}
