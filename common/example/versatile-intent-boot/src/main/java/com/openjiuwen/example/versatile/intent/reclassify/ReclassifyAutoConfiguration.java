@@ -3,6 +3,9 @@
  */
 package com.openjiuwen.example.versatile.intent.reclassify;
 
+import com.openjiuwen.example.versatile.intent.routecache.RouteCache;
+
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -28,10 +31,13 @@ public class ReclassifyAutoConfiguration {
      * Registers the orchestrator post-processor bean.
      *
      * @param properties the reclassify properties
+     * @param routeCacheProvider optional provider for the L1 {@link RouteCache};
+     *                           absent when route-cache support is disabled
      * @return the post-processor
      */
     @Bean
-    public static ReclassifyOrchestratorPostProcessor reclassifyOrchestratorPostProcessor(ReclassifyProperties properties) {
-        return new ReclassifyOrchestratorPostProcessor(properties);
+    public static ReclassifyOrchestratorPostProcessor reclassifyOrchestratorPostProcessor(
+            ReclassifyProperties properties, ObjectProvider<RouteCache> routeCacheProvider) {
+        return new ReclassifyOrchestratorPostProcessor(properties, routeCacheProvider);
     }
 }

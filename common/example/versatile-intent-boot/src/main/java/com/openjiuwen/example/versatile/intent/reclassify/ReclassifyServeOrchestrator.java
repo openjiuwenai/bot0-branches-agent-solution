@@ -3,6 +3,7 @@
  */
 package com.openjiuwen.example.versatile.intent.reclassify;
 
+import com.openjiuwen.example.versatile.intent.routecache.RouteCache;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
@@ -39,6 +40,13 @@ import java.util.Optional;
  * {@code VERSATILE_INTENT_RECLASSIFY_LIMIT} immediately on the first
  * ambiguous signal.
  *
+ * <p>When an ambiguous payload is detected and a retry is about to be
+ * issued, the L1 {@link RouteCache} for the active conversation is
+ * invalidated. Without this, the retry would skip L1 via the cache and
+ * reuse the very route that produced the ambiguous response. The cache
+ * is injected as an {@link Optional} so the decorator keeps working when
+ * route-cache support is disabled at runtime.
+ *
  * @since 2026-07-24
  */
 public class ReclassifyServeOrchestrator implements ServeOrchestrator {
@@ -46,10 +54,32 @@ public class ReclassifyServeOrchestrator implements ServeOrchestrator {
 
     private final ServeOrchestrator wrapped;
     private final ReclassifyProperties properties;
+    private final Optional<RouteCache> routeCache;
 
-    public ReclassifyServeOrchestrator(ServeOrchestrator wrapped, ReclassifyProperties properties) {
+    /**
+     * Primary constructor — accepts an optional {@link RouteCache} that is
+     * invalidated before each reclassify retry.
+     *
+     * @param wrapped the underlying orchestrator to delegate to
+     * @param properties reclassify configuration
+     * @param routeCache optional L1 route cache; cleared on retry
+     */
+    public ReclassifyServeOrchestrator(ServeOrchestrator wrapped, ReclassifyProperties properties,
+                                       Optional<RouteCache> routeCache) {
         this.wrapped = Objects.requireNonNull(wrapped, "wrapped");
         this.properties = Objects.requireNonNull(properties, "properties");
+        this.routeCache = routeCache == null ? Optional.empty() : routeCache;
+    }
+
+    /**
+     * Backwards-compatible constructor for callers that do not wire a
+     * route cache. Equivalent to passing {@link Optional#empty()}.
+     *
+     * @param wrapped the underlying orchestrator to delegate to
+     * @param properties reclassify configuration
+     */
+    public ReclassifyServeOrchestrator(ServeOrchestrator wrapped, ReclassifyProperties properties) {
+        this(wrapped, properties, Optional.empty());
     }
 
     @Override
@@ -71,6 +101,7 @@ public class ReclassifyServeOrchestrator implements ServeOrchestrator {
                 throw new IllegalStateException(
                         LIMIT_CODE + ": max=" + properties.getMaxReclassify());
             }
+            invalidateRouteCache(request.getConversationId());
             current = buildAugmentedRequest(request, ambiguous.get());
         }
     }
@@ -95,8 +126,24 @@ public class ReclassifyServeOrchestrator implements ServeOrchestrator {
                         LIMIT_CODE + ": max=" + properties.getMaxReclassify()));
                 return;
             }
+            invalidateRouteCache(request.getConversationId());
             current = buildAugmentedRequest(request, probe.ambiguousPayload().orElseThrow());
         }
+    }
+
+    /**
+     * Clears any cached L1 route for the given conversation before a
+     * reclassify retry, so the next {@code wrapped.query/streamQuery}
+     * invocation re-runs L1 instead of reusing the rejected route.
+     * No-op when no {@link RouteCache} is wired or the id is blank.
+     *
+     * @param conversationId the active conversation id
+     */
+    private void invalidateRouteCache(String conversationId) {
+        if (conversationId == null || conversationId.isBlank()) {
+            return;
+        }
+        routeCache.ifPresent(c -> c.invalidate(conversationId));
     }
 
     @Override
