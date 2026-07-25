@@ -60,3 +60,13 @@ common/agents/edpa-alpha/
 TestRun/
 TestRun.rar
 /.pipeline/
+
+# Local test reports and tools — not for production
+common/agents/edp-agent-java/scenarios/wealth-demo/test/git_changes_report.md
+common/agents/edp-agent-java/scenarios/wealth-demo/test/test_report_*.md
+common/agents/edp-agent-java/scenarios/wealth-demo/test/test_output_*.json
+redis_hgetall.py
+redis_hgetall2.py
+redis_query.ps1
+redis_query.py
+tool-counter-redis-plan.md
