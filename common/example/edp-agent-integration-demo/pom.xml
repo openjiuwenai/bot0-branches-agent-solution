@@ -66,6 +66,20 @@
             <version>0.1.0</version>
         </dependency>
 
+        <!-- Custom REST SPI — 提供 CustomRestProtocolAdapter 接口，用于 ABCDE 网关协议适配 -->
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-app-custom-rest</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+
+        <!-- Versatile 适配器 — 提供 call_versatile 工具，用于调用外部 Versatile 工作流（理财产品推荐等） -->
+        <dependency>
+            <groupId>com.huawei.ascend</groupId>
+            <artifactId>adapter-versatile-agent-java</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
