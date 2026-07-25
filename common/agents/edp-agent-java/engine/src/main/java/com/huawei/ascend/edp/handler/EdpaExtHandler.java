@@ -1210,10 +1210,78 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             LOGGER.warn("[EDPA-DIAG] Sentinel mode not supported by agent-core RedisKVStoreProvider, "
                     + "falling back to single mode");
         }
+
+        // 创建带连接池的 UnifiedJedis，通过 redis_client 键传入 agent-core。
+        // agent-core 的 RedisKVStoreProvider.resolveRedisClient() 检查 conf.get("redis_client")，
+        // 如果存在则直接使用，不会创建裸 Jedis 连接（避免 SocketException 断连问题）。
+        // 连接池配置参考 RedisJedisClientFactory：
+        //   testOnBorrow=true（借用前 PING 验证）、testWhileIdle=true（空闲清理）
+        Object pooledClient = createPooledRedisClient(redisProps);
+        if (pooledClient != null) {
+            conf.put("redis_client", pooledClient);
+            LOGGER.info("[EDPA-DIAG] Injected pooled Redis client (UnifiedJedis + PooledConnectionProvider), "
+                    + "testOnBorrow=true, testWhileIdle=true, maxTotal=16, maxIdle=8, minIdle=1");
+        }
+
         Map<String, Object> kvStoreConfig = new LinkedHashMap<>();
         kvStoreConfig.put("type", "redis");
         kvStoreConfig.put("conf", conf);
         return kvStoreConfig;
+    }
+
+    /**
+     * 创建带连接池的 Redis 客户端（UnifiedJedis + PooledConnectionProvider）。
+     *
+     * <p>参考 RedisJedisClientFactory 的连接池配置：
+     * <ul>
+     *   <li>testOnBorrow=true — 借用连接前发送 PING 验证有效性，断连后自动创建新连接</li>
+     *   <li>testWhileIdle=true — evictor 定期清理空闲失效连接</li>
+     * </ul>
+     *
+     * @param redisProps Redis 连接配置
+     * @return UnifiedJedis 实例，创建失败返回 null（回退到 agent-core 默认的裸 Jedis）
+     */
+    private static Object createPooledRedisClient(TodoRedisProperties redisProps) {
+        try {
+            String host = redisProps.getHost() != null ? redisProps.getHost().trim() : "localhost";
+            int port = redisProps.getPort() > 0 ? redisProps.getPort() : 6379;
+            String password = redisProps.getPassword();
+            boolean hasPassword = password != null && !password.isBlank();
+
+            // 连接池配置（参考 RedisJedisClientFactory.poolConfig()）
+            org.apache.commons.pool2.impl.GenericObjectPoolConfig<redis.clients.jedis.Connection> poolConfig =
+                    new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
+            poolConfig.setMaxTotal(16);
+            poolConfig.setMaxIdle(8);
+            poolConfig.setMinIdle(1);
+            poolConfig.setTestOnBorrow(true);
+            poolConfig.setTestWhileIdle(true);
+
+            // Jedis 客户端配置（密码、数据库、超时）
+            redis.clients.jedis.DefaultJedisClientConfig.Builder builder =
+                    redis.clients.jedis.DefaultJedisClientConfig.builder();
+            int timeoutMs = redisProps.getSocketTimeoutMs() > 0 ? redisProps.getSocketTimeoutMs() : 3000;
+            builder.connectionTimeoutMillis(timeoutMs);
+            builder.socketTimeoutMillis(timeoutMs);
+            if (hasPassword) {
+                builder.password(password);
+            }
+            int database = redisProps.getDatabase();
+            if (database > 0) {
+                builder.database(database);
+            }
+            redis.clients.jedis.JedisClientConfig clientConfig = builder.build();
+
+            // 创建 PooledConnectionProvider + UnifiedJedis
+            redis.clients.jedis.HostAndPort hostAndPort = new redis.clients.jedis.HostAndPort(host, port);
+            redis.clients.jedis.providers.PooledConnectionProvider provider =
+                    new redis.clients.jedis.providers.PooledConnectionProvider(hostAndPort, clientConfig, poolConfig);
+            return new redis.clients.jedis.UnifiedJedis(provider);
+        } catch (Exception e) {
+            LOGGER.warn("[EDPA-DIAG] Failed to create pooled Redis client, falling back to default: {}",
+                    e.getMessage());
+            return null;
+        }
     }
 
     private static void registerSkills(DeepAgent deepAgent, Path skillsDir, String agentName) {
