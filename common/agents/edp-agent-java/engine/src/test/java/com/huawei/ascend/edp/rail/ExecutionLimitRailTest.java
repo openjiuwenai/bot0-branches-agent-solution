@@ -16,8 +16,20 @@
 
 package com.huawei.ascend.edp.rail;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.huawei.ascend.edp.config.ActRuleConfig;
 import com.huawei.ascend.edp.config.RedisConfig;
@@ -32,6 +44,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -71,13 +84,26 @@ class ExecutionLimitRailTest {
         injectStatic("singletonProps", null);
     }
 
+    /**
+     * 通过反射设置 RedisConfig 的静态字段值。
+     *
+     * @param fieldName 字段名称
+     * @param value     要设置的值
+     * @throws Exception 反射操作异常
+     */
     private void injectStatic(String fieldName, Object value) throws Exception {
         Field f = RedisConfig.class.getDeclaredField(fieldName);
         f.setAccessible(true);
         f.set(null, value);
     }
 
-    /** 构造 mock ctx（可 verify requestForceFinish） */
+    /**
+     * 构造 mock AgentCallbackContext（可 verify requestForceFinish）。
+     *
+     * @param sid       会话 ID
+     * @param toolName 工具名称
+     * @return mock 的 AgentCallbackContext
+     */
     private AgentCallbackContext mockCtx(String sid, String toolName) {
         Session session = mock(Session.class);
         when(session.getSessionId()).thenReturn(sid);
@@ -85,7 +111,13 @@ class ExecutionLimitRailTest {
         return mock(AgentCallbackContext.class);
     }
 
-    /** 构造真实 ctx（不可 verify，但可执行） */
+    /**
+     * 构造真实 AgentCallbackContext（不可 verify，但可执行）。
+     *
+     * @param sid       会话 ID
+     * @param toolName 工具名称
+     * @return 真实的 AgentCallbackContext
+     */
     private AgentCallbackContext realCtx(String sid, String toolName) {
         Session session = mock(Session.class);
         when(session.getSessionId()).thenReturn(sid);
@@ -93,14 +125,25 @@ class ExecutionLimitRailTest {
         return AgentCallbackContext.builder().session(session).inputs(inputs).build();
     }
 
-    /** 构造真实 ctx 无工具（用于 beforeInvoke/afterInvoke） */
+    /**
+     * 构造无工具的真实 AgentCallbackContext（用于 beforeInvoke/afterInvoke）。
+     *
+     * @param sid 会话 ID
+     * @return 无工具的 AgentCallbackContext
+     */
     private AgentCallbackContext realCtxNoTool(String sid) {
         Session session = mock(Session.class);
         when(session.getSessionId()).thenReturn(sid);
         return AgentCallbackContext.builder().session(session).build();
     }
 
-    /** 构造 mock ctx 并 stub getInputs/getSession */
+    /**
+     * 构造 mock AgentCallbackContext 并 stub getInputs/getSession 方法。
+     *
+     * @param sid       会话 ID
+     * @param toolName 工具名称
+     * @return stub 了 getInputs/getSession 的 mock AgentCallbackContext
+     */
     private AgentCallbackContext mockCtxWithStubs(String sid, String toolName) {
         Session session = mock(Session.class);
         when(session.getSessionId()).thenReturn(sid);
@@ -111,7 +154,12 @@ class ExecutionLimitRailTest {
         return ctx;
     }
 
-    /** 构造 mock ctx 无工具 */
+    /**
+     * 构造无工具的 mock AgentCallbackContext。
+     *
+     * @param sid 会话 ID
+     * @return 无工具的 mock AgentCallbackContext
+     */
     private AgentCallbackContext mockCtxNoTool(String sid) {
         Session session = mock(Session.class);
         when(session.getSessionId()).thenReturn(sid);
@@ -120,6 +168,12 @@ class ExecutionLimitRailTest {
         return ctx;
     }
 
+    /**
+     * 构建带工具调用次数限制的 ActRuleConfig。
+     *
+     * @param limits 工具名称到调用次数上限的映射
+     * @return 配置好的 ActRuleConfig
+     */
     private ActRuleConfig buildActRule(Map<String, Integer> limits) {
         ActRuleConfig actrule = new ActRuleConfig();
         actrule.setToolLimits(limits);
@@ -263,7 +317,7 @@ class ExecutionLimitRailTest {
     // TC-08: Redis GET 异常 - 不阻断业务
     @Test
     void redisGetException_doesNotBlock() {
-        when(hashOps.entries(anyString())).thenThrow(new RuntimeException("Redis down"));
+        when(hashOps.entries(anyString())).thenThrow(new RedisConnectionFailureException("Redis down"));
         ActRuleConfig actrule = buildActRule(Map.of("call_versatile", 50));
         ExecutionLimitRail rail = new ExecutionLimitRail(actrule);
 
@@ -277,7 +331,7 @@ class ExecutionLimitRailTest {
     @Test
     void redisSetException_doesNotThrow() {
         when(hashOps.entries(anyString())).thenReturn(new HashMap<>());
-        doThrow(new RuntimeException("Redis down")).when(hashOps).putAll(anyString(), anyMap());
+        doThrow(new RedisConnectionFailureException("Redis down")).when(hashOps).putAll(anyString(), anyMap());
         ActRuleConfig actrule = buildActRule(Map.of("call_versatile", 50));
         ExecutionLimitRail rail = new ExecutionLimitRail(actrule);
 
