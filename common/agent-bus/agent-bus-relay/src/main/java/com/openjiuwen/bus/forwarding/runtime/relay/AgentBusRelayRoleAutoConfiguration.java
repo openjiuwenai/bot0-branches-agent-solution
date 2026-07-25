@@ -58,7 +58,8 @@ import java.util.Map;
  *
  * <p><b>Shared infra moved out.</b> The {@code brokerClientProperties} /
  * {@code relayOutbox} / {@code relayInbox} beans previously declared in the old config are now
- * provided by the broker base ({@link com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusBrokerClientBaseAutoConfiguration},
+ * provided by the broker base ({@link 
+ * com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusBrokerClientBaseAutoConfiguration},
  * which owns {@code brokerClientProperties} + {@link AgentBusBrokerProperties}) and the
  * JDBC reliability autoconfig ({@link com.openjiuwen.bus.forwarding.common.AgentBusReliabilityAutoConfiguration},
  * which owns {@code forwardingOutbox} / {@code forwardingInbox}), shared with the gateway process
