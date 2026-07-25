@@ -10,6 +10,7 @@ EDPAgent 唯一公开入口（对齐需求文档 §4.5 的 17 种事件序列）
 from __future__ import annotations
 
 import json
+import os
 import shlex
 from cmath import cos
 from pathlib import Path
@@ -39,7 +40,7 @@ from .agent_rule import (
     load_scenario_config,
     collect_skill_scripts,
 )
-from .config import get_settings
+from .config import get_settings, _env_float, _env_int
 
 from .rail.memory_rail import build_memory_prompt_suffix, regist_memory_rail
 
@@ -155,12 +156,13 @@ def _extract_user_id(context: Optional[dict], conv_id: str) -> str:
 # ── LLM sampling 默认覆盖（修复 glm-5 偶发空响应）────────────────────────
 # openjiuwen 0.1.11 ModelRequestConfig 默认 temperature=0.95 / top_p=0.1，对
 # reasoning 模型（glm-5/DeepSeek-R1/Qwen3-Thinking）会偶发只产 reasoning_content
-# 不产 content（finish_reason 异常、content 为空）。这里硬编码到对 reasoning
-# 模型友好的值；不走 env 配置以保证容器内任何部署都拿到一致行为。
+# 不产 content（finish_reason 异常、content 为空）。这里覆盖到对 reasoning
+# 模型友好的默认值；同时支持通过环境变量在不发版的情况下调整，便于运维应对
+# LLM 网关偶发超时/502 等瞬时故障（max_retries 默认 3 次自动重试）。
 # 排查时：grep "[EDP-LLM-CONFIG]" 验证启动覆盖；grep "[EDP-LLM-EMPTY]" 抓空响应。
-_LLM_TEMPERATURE_OVERRIDE = 0.3
-_LLM_TOP_P_OVERRIDE = 0.95
-_LLM_MAX_RETRIES = 0
+_LLM_TEMPERATURE_OVERRIDE = _env_float("LLM_TEMPERATURE", 0.3)
+_LLM_TOP_P_OVERRIDE = _env_float("LLM_TOP_P", 0.95)
+_LLM_MAX_RETRIES = _env_int("LLM_MAX_RETRIES", 3)
 
 def _apply_sampling_overrides(config: Any) -> None:
     """把硬编码的 sampling 值落到 ReActAgentConfig.model_config_obj 上。
@@ -556,7 +558,6 @@ async def initialize_dpa() -> None:
         logger.warning("[DPA] AgentRule.md 未找到，使用默认配置")
 
     # ── Phase1 解耦：加载场景配置（改造点 A）────────────────────────
-    import os
     scenario_name = (
         os.environ.get("ACTIVE_SCENARIO")
         or _agent_rule.scenario_discovery.active_scenario
