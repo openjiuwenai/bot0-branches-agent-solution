@@ -20,6 +20,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Unit tests for {@link SkillHubManager} covering the test matrix T2/T3/T4/T8/T11/T15/T16.
@@ -731,7 +737,7 @@ class SkillHubManagerTest {
             return true;
         };
         provider.verifyBehavior = path -> true;
-        java.util.concurrent.atomic.AtomicInteger installCount = new java.util.concurrent.atomic.AtomicInteger();
+        AtomicInteger installCount = new AtomicInteger();
         SkillHubInstaller spyInstaller = new SkillHubInstaller() {
             @Override
             public void install(Object agent, List<Path> skillPaths) {
@@ -758,13 +764,14 @@ class SkillHubManagerTest {
      * @param agent the shared agent instance
      * @param n number of concurrent workers
      * @param installCount the shared install invocation counter
+     * @throws InterruptedException if the latch await is interrupted
      */
-    private static void runConcurrentRegister(SkillHubManager manager, Object agent, int n,
-            java.util.concurrent.atomic.AtomicInteger installCount) throws InterruptedException {
-        java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(n);
-        java.util.concurrent.CountDownLatch doneLatch = new java.util.concurrent.CountDownLatch(n);
-        java.util.concurrent.atomic.AtomicReference<IllegalStateException> firstError = new java.util.concurrent.atomic.AtomicReference<>();
-        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(n);
+    private static void runConcurrentRegister(SkillHubManager manager, Object agent, int n, AtomicInteger installCount)
+            throws InterruptedException {
+        CountDownLatch startLatch = new CountDownLatch(n);
+        CountDownLatch doneLatch = new CountDownLatch(n);
+        AtomicReference<IllegalStateException> firstError = new AtomicReference<>();
+        ExecutorService pool = Executors.newFixedThreadPool(n);
         try {
             for (int i = 0; i < n; i++) {
                 pool.submit(() -> {
@@ -781,10 +788,9 @@ class SkillHubManagerTest {
                     }
                 });
             }
-            assertThat(doneLatch.await(10, java.util.concurrent.TimeUnit.SECONDS))
-                    .as("all workers should finish within 10s").isTrue();
+            assertThat(doneLatch.await(10, TimeUnit.SECONDS)).as("all workers should finish within 10s").isTrue();
             if (firstError.get() != null) {
-                throw new RuntimeException("worker threw", firstError.get());
+                throw new AssertionError("worker threw", firstError.get());
             }
             assertThat(installCount.get()).as(
                     "installer.install must be called exactly once for the same agent " + "under concurrent register")
