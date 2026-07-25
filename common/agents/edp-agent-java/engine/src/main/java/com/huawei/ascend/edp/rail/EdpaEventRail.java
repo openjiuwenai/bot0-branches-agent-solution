@@ -21,6 +21,7 @@ import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ScriptResolver;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.ToolConstants;
+import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.enhancer.TodoSessionResolver;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -46,6 +47,7 @@ import com.openjiuwen.spi.store.BaseKVStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -60,6 +62,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import java.time.Duration;
 import java.util.stream.Stream;
 
 /**
@@ -146,6 +149,11 @@ public class EdpaEventRail extends DeepAgentRail {
      * 固定帧配置 key 前缀
      */
     private static final String FK_PREFIX = "scriptconfig.think_chunk_scripts.think_chunk_fixed_scripts.";
+
+    /**
+     * Todo 数据 Redis TTL（秒），与会话结束后数据清理周期一致。
+     */
+    private static final int TODO_REDIS_TTL_SECONDS = 3600;
 
     /**
      * 上一轮发射的 todolist 指纹，用于检测任务列表是否变化并决定是否重推。
@@ -1226,6 +1234,27 @@ public class EdpaEventRail extends DeepAgentRail {
             lastTodolistFingerprint.put(sid, fp);
         }
         updatePrevTodoStatus(sid, todos);
+
+        setTodoRedisTtl(sid);
+    }
+
+    private void setTodoRedisTtl(String sessionId) {
+        StringRedisTemplate template = RedisConfig.getStringRedisTemplate();
+        if (template == null) {
+            return;
+        }
+        String key = sessionId + ":todo";
+        try {
+            Boolean success = template.expire(key, Duration.ofSeconds(TODO_REDIS_TTL_SECONDS));
+            if (success != null && success) {
+                LOGGER.info("[EDPA-DIAG] setTodoRedisTtl sid={} key={} ttl={}s",
+                        sessionId, key, TODO_REDIS_TTL_SECONDS);
+            } else if (success != null && !success) {
+                LOGGER.debug("[EDPA-DIAG] setTodoRedisTtl sid={} key={} not found", sessionId, key);
+            }
+        } catch (Exception e) {
+            LOGGER.warn("[EDPA-DIAG] setTodoRedisTtl failed sid={}: {}", sessionId, e.getMessage());
+        }
     }
 
     private void emitEmptyTodolistPair(AgentCallbackContext ctx) {
