@@ -50,6 +50,9 @@ openjiuwen:
       default-workflow:
         agent-card: agent_card_L2_default
 
+      route-cache:
+        enabled: false
+
     a2a-gateway:
       enabled: true
       base-url: https://gateway.example.com

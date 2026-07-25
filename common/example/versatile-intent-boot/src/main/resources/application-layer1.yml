@@ -55,6 +55,10 @@ openjiuwen:
         enabled: true
         max-reclassify: 1
 
+      route-cache:
+        enabled: true
+        ttl: 30m
+
     a2a-gateway:
       enabled: true
       base-url: https://gateway.example.com
