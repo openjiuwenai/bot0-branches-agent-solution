@@ -112,7 +112,8 @@
   "status": "queued",
   "progress": null,
   "result": null,
-  "error": null
+  "error": null,
+  "error_code": null
 }
 ```
 
@@ -123,6 +124,7 @@
 | `progress` | `object` | 当前进度（提交时为 `null`） |
 | `result` | `object` | 优化结果（完成后填充） |
 | `error` | `string` | 错误信息（失败时填充） |
+| `error_code` | `string \| null` | 依赖或优化错误码；对外统一为字符串 |
 
 ### Response `422 Unprocessable Entity`
 
@@ -298,7 +300,8 @@
     "edits_applied": 12
   },
   "result": null,
-  "error": "Adapter sidecar connection timeout after 300s"
+  "error": "OpenJiuwen model service config error",
+  "error_code": "181002"
 }
 ```
 
