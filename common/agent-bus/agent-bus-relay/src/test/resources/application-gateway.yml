@@ -1,15 +1,19 @@
-# Gateway profile — caller-role activation.
-#
-# The gateway IS a caller: it produces hop1 requests (@Qualifier("requestProducer"))
-# and consumes hop responses (@Qualifier("responseConsumer")). Those two beans now
-# live in AgentBusCallerRoleAutoConfiguration, gated behind
-# agent-bus.role.caller.enabled=true (role-based-assembly). Activating the gateway
-# profile must therefore turn the caller role on so GatewayRuntimeConfiguration's
-# @Qualifier injections resolve.
-#
-# This profile is test/E2E-scoped (GatewayRuntimeConfiguration + TempClientMain live
-# in agent-bus-relay test sources); the production gateway module lands in a later batch.
+# gateway profile 专属——仅 TempClientMain(gateway test double)加载。
+# caller 角色激活。gateway 的 reference impl(GatewayRuntimeService)用 outbox 做 durable dispatch,
+# 需要 DataSource。Flyway 关闭(relay 先启动建表,client 不做 schema 迁移——设计原则)。
+# 公共 broker 配置(nameserver/namespace/service-id 等)从 agent-bus-sdk 的 application.yml 加载。
+
 agent-bus:
   role:
     caller:
       enabled: true
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agentbus}
+    username: ${SPRING_DATASOURCE_USERNAME:agentbus}
+    password: ${SPRING_DATASOURCE_PASSWORD:agentbus}
+    driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: false
