@@ -1852,6 +1852,8 @@ public class VersatileInterruptRail extends AgentRail {
             ProcessBuilder pb = new ProcessBuilder("python", scriptName);
             pb.directory(skillsDir.toFile());
             pb.environment().put("SKILL_INPUT", skillInputJson);
+            pb.environment().put("PYTHONIOENCODING", "utf-8");
+            pb.environment().put("PYTHONUTF8", "1");
             pb.redirectErrorStream(true);
             Process process = pb.start();
             boolean finished = process.waitFor(ScriptConstants.SANDBOX_TIMEOUT_SECONDS, TimeUnit.SECONDS);

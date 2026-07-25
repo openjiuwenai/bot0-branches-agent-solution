@@ -380,6 +380,7 @@ public class McpInterruptRail extends AgentRail {
         }
         builder.environment().put("SKILL_INPUT", argumentsJson);
         builder.environment().put("PYTHONIOENCODING", "utf-8");
+        builder.environment().put("PYTHONUTF8", "1");
 
         // ---- MCP SSE 配置注入 + 灰度路由 ----
         String wapGrayFlag = extractWapGrayFlag(scriptParams).orElse(null);
@@ -890,6 +891,7 @@ public class McpInterruptRail extends AgentRail {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("SKILL_INPUT", argumentsJson);
         env.put("PYTHONIOENCODING", "utf-8");
+        env.put("PYTHONUTF8", "1");
 
         // MCP SSE 配置注入
         String wapGrayFlag = extractWapGrayFlag(scriptParams).orElse(null);
