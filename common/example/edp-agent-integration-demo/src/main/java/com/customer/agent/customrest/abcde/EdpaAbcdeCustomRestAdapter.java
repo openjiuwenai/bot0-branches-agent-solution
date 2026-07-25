@@ -22,6 +22,7 @@ import org.a2aproject.sdk.spec.TextPart;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,6 @@ import java.util.UUID;
  * @since 2026-07-24
  */
 public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapter {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpaAbcdeCustomRestAdapter.class);
 
     private static final Map<TaskState, String> STATUS_EVENT_MAP = Map.of(
@@ -208,7 +208,7 @@ public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapt
 
         // 尝试 JSON 解析，失败则当作 plain text
         Map<String, Object> parsed = parseArtifactJsonEnvelope(text, externalId);
-        if (parsed != null) {
+        if (!parsed.isEmpty()) {
             return parsed;
         }
 
@@ -290,7 +290,7 @@ public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapt
                     + "treating as plain text. textLen={}, error={}",
                     text.length(), ex.getMessage());
         }
-        return null;
+        return Collections.emptyMap();
     }
 
     /**

@@ -35,7 +35,6 @@ import org.springframework.context.annotation.Bean;
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "openjiuwen.service.custom-rest", name = "query-path")
 public class EdpCustomRestAdapterAutoConfiguration {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpCustomRestAdapterAutoConfiguration.class);
 
     @Bean
