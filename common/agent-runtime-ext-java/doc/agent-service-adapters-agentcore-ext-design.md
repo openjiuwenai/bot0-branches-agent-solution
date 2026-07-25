@@ -134,7 +134,7 @@ AgentHandler agentHandler(DeepAgent agent) {
 ```text
 openjiuwen.service.a2a.remote-agents
   -> A2AAgentCardDiscovery
-  -> A2ARemoteAgentCardRegistry.register(name, card, timeoutSeconds)
+  -> A2ARemoteAgentCardRegistry.register(name, card, timeoutSeconds, streaming)
   -> RemoteA2aToolInstaller.install(agent)
   -> registry.getAll()
 ```
@@ -149,6 +149,7 @@ openjiuwen:
       remote-agents:
         - name: versatile-agent
           url: http://127.0.0.1:18091
+          streaming: true
 ```
 
 `A2AAgentCardDiscovery` 在应用 ready 后读取 `remote-agents`，用 `remote.url` 拼出：
@@ -160,10 +161,10 @@ openjiuwen:
 发现成功后注册：
 
 ```java
-registry.register(remote.getName(), card, remote.getTimeoutSeconds());
+registry.register(remote.getName(), card, remote.getTimeoutSeconds(), remote.isStreaming());
 ```
 
-因此 registry entry 的 `name()` 来自 Agent A 配置的 `remote-agents[].name`，card 来自 Agent B 暴露的 A2A card。`agentcore-ext` 消费的是 registry entry，不直接消费 `remote-agents[].url`。
+因此 registry entry 的 `name()`、timeout 和 streaming 偏好来自 Agent A 的 `remote-agents[]` 配置，card 来自 Agent B 暴露的 A2A card。`agentcore-ext` 消费 registry entry 以安装工具，不直接消费 `remote-agents[].url` 或调用模式；真正的调用方式由 runtime client 按 `agentName` 回查 entry。
 
 ## 7. 远端 Card 和工具描述
 
@@ -360,12 +361,11 @@ InterruptRequest context：
 ```json
 {
   "agentName": "<remoteAgentId>",
-  "_interrupt_kind": "a2a_delegate",
-  "_stream_mode": "sse"
+  "_interrupt_kind": "a2a_delegate"
 }
 ```
 
-`agentName` 是后续 runtime 远端路由键，来自 `entry.name()`；`_stream_mode` 当前固定为 `sse`。
+`agentName` 是后续 runtime 远端路由键，来自 `entry.name()`；远端执行方式由 runtime 按每个 remote agent 的 registry 配置独立管理，Rail 不携带执行模式字段。
 
 ### 9.2 resume
 
@@ -389,8 +389,7 @@ reject(resumeInput)
   "toolCallId": "call-xxx",
   "context": {
     "agentName": "versatile-agent",
-    "_interrupt_kind": "a2a_delegate",
-    "_stream_mode": "sse"
+    "_interrupt_kind": "a2a_delegate"
   }
 }
 ```
@@ -398,21 +397,18 @@ reject(resumeInput)
 `A2AEnabledServeOrchestrator` 当前消费规则：
 
 ```text
-1. 流式模式捕获 QueryChunk.TYPE_INTERRUPT；非流式模式读取 QueryResponse.result._interrupt。
-2. 从 context._interrupt_kind 读取 kind；等于 a2a_delegate 时进入远端委托。
-3. 从 context.agentName 读取远端 agent name。
-4. 从 message 读取远端 user message。
-5. 流式路径中，_stream_mode == sse 时调用 callStreaming，否则调用 callSync。
-6. 非流式 query 路径当前直接调用 callSync。
-7. 远端返回最终结果后构造 resume ServeRequest，并把结果作为本地 interrupted tool 的输入。
-8. 远端 INPUT_REQUIRED 时保存 shadow task，并向客户端返回 interrupt。
+1. `JiuwenCoreAgentHandler` 在流式和非流式模式下收齐同轮 interrupt，保留每个成员的真实 `toolCallId`。
+2. orchestrator 校验每个远端成员的 `context._interrupt_kind == a2a_delegate`、`context.agentName` 和 `toolCallId`；缺少关联 ID 时拒绝，不生成伪 ID。
+3. `RemoteInvocationBatchCoordinator` 把单成员也按大小为 1 的批次处理，通过统一结构化调用并发执行远端成员；每个成员按 `agentName` 使用 registry 中独立配置的调用模式。
+4. coordinator 在所有成员完成或进入 `INPUT_REQUIRED` 后保存 `_remote_batch`；存在待输入成员时向客户端返回带 `toolCallId` 的公开 interrupt。
+5. 全部成员结果就绪后，runtime 构造按 `toolCallId` 映射的 `InteractiveInput`，一次恢复 AgentCore。
 ```
 
 远端通信阶段由 `A2ARemoteAgentClient` 处理：
 
 ```text
 registry.get(agentName)
-  -> RemoteAgentEntry(card, timeoutSeconds)
+  -> RemoteAgentEntry(card, timeoutSeconds, streaming)
   -> Client.builder(card)
        .clientConfig(streaming flag)
        .withTransport(JSONRPCTransport.class, new JSONRPCTransportConfig())
@@ -422,16 +418,18 @@ registry.get(agentName)
 
 因此真正通信地址来自远端 card 的 `supportedInterfaces[0].url()` / SDK transport 解析结果，而不是 `agentcore-ext` 生成的 interrupt。
 
-shadow task 保存的数据包括：
+shadow task 只使用 `Task.metadata["_remote_batch"]` 保存批次状态，例如：
 
 ```text
-_agent_name
-_remote_url
-_remote_task_id
-_stream_mode
+batchId / parentTaskId / state
+members[].toolCallId
+members[].agentName
+members[].state
+members[].remoteTaskId
+members[].result / inputPrompt
 ```
 
-其中 `_remote_url` 来自 `registry.resolveUrl(agentName)`，用于记录和恢复上下文；resume 调用远端时仍以 `_agent_name` 回查 registry。
+单成员和多成员使用相同结构。续轮时 runtime 通过父 `taskId + TextPart.metadata.toolCallId` 定位成员，并以该成员的 `agentName/remoteTaskId` 恢复远端调用。Rail 不保存批次、远端 Task ID 或恢复结果。
 
 ## 11. 配置和使用方式
 
@@ -447,11 +445,12 @@ openjiuwen:
       remote-agents:
         - name: versatile-agent
           url: http://127.0.0.1:18091
+          streaming: true
 ```
 
 `handler=agentcore-ext` 是宿主应用约定；当前 auto-config 不根据这个值创建 handler。
 
-`remote-agents[].name` 是发现后的 registry key，也是 `toolName`、`remoteAgentId` 和 interrupt context 中的 `agentName`。`remote-agents[].url` 只用于发现 card，不直接进入工具注入结果。
+`remote-agents[].name` 是发现后的 registry key，也是 `toolName`、`remoteAgentId` 和 interrupt context 中的 `agentName`。`remote-agents[].url` 只用于发现 card，不直接进入工具注入结果。`remote-agents[].streaming` 由 runtime client 消费，默认 `false`；设为 `true` 表示优先流式，若 card 声明不支持则由 A2A SDK 降级为非流式。该值不进入 Rail interrupt 或 `_remote_batch`。
 
 ### 11.2 Agent B：card skill 描述
 

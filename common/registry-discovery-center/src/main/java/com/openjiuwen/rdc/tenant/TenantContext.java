@@ -20,20 +20,19 @@ package com.openjiuwen.rdc.tenant;
  * <p>Pure Java — no Spring / JDBC / Jackson / Consul imports (ADR-0160
  * decision 1).
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
  */
 public interface TenantContext {
     /**
      * Returns the tenant id bound to the current call scope.
      *
-     * @return the tenant id bound to the current call scope, or {@code null}
-     *         when no caller has bound the context. HTTP-entry call sites
-     *         pass {@code tenantId} explicitly and leave the context unbound;
-     *         background scheduling paths bind via
-     *         {@code ThreadLocalTenantContext.bindForScope} for the duration
-     *         of a unit of work. Discovery callers cross-check the bound
-     *         tenant against the explicit parameter only when bound (ADR-0160
-     *         decision 6).
+     * <p>HTTP-entry call sites pass {@code tenantId} explicitly and leave the
+     * context unbound; background scheduling paths bind via
+     * {@code ThreadLocalTenantContext.bindForScope} for the duration of a unit
+     * of work. Discovery callers cross-check the bound tenant against the
+     * explicit parameter only when bound (ADR-0160 decision 6).
+     *
+     * @return bound tenant id, or {@code null} when unbound
      */
     String current();
 }

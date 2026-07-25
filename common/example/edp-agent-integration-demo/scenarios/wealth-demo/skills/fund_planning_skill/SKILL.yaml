@@ -1,0 +1,12 @@
+name: fund_planning_skill
+description: "查询理财账户余额，如果资金不足进行资金筹划，并购买理财产品。"
+scripts:
+  fund_planning_success: "已为您完成理财产品购买"
+  fund_planning_buy_failed: "购买失败，请重新尝试"
+  fund_planning_transfer_limit: "您已超过转账次数限制，购买失败"
+  fund_planning_wealth_insufficient: "理财账户资金不足，查询活期账户余额"
+  fund_planning_both_insufficient: "您的活期账户余额不足，结束理财产品购买"
+  fund_planning_balance_insufficient: "您的活期账户余额不足，结束理财产品购买"
+  fund_planning_card_mismatch: "您只有一张卡，不满足当前理财购买流程，已退出购买"
+  fund_planning_purchase_aborted: "购买异常，已退出购买流程"
+  fund_planning_session_timeout: "对话超时，已退出购买流程"

@@ -13,7 +13,7 @@
 
     <artifactId>edpa-alpha</artifactId>
     <name>edpa-alpha — Explore Decision Plan Action Agent (fuses PEV kernel + ReAct Rails)</name>
-    <description>EDPA-alpha adds an explicit Explore phase on top of PEV's sealed dispatch kernel and react-rails' steerable rails. Uses ReActAgent as the steerable host (consumeForceFinish + injectPendingSteering), reuses PevKernel.toReplanAction for Decision dispatch, and adds Explorer SPI + ExploreRail for active information gathering before planning.</description>
+    <description>EDPA-alpha adds an explicit Explore phase on top of PEV's sealed dispatch kernel and react-rails' steerable rails. Uses ReActAgent as the steerable host (consumeForceFinish + injectPendingSteering), embeds a byte-identical port of PevKernel.toReplanAction as EdpaKernel.toReplanAction (peer, not dependency), and adds Explorer SPI + ExploreRail for active information gathering before planning. Observability inherits react-rails RailTelemetry (no separate OTel layer).</description>
 
     <properties>
         <formatter.plugin.version>2.24.1</formatter.plugin.version>
@@ -28,19 +28,12 @@
             <version>0.1.13</version>
         </dependency>
         <dependency>
+            <!-- Requires react-rails 0.1.0 built with MR !66 changes (ReplanTool.isReachable).
+                 Fresh clone: `mvn install -pl common/agent-core-ext-java/react-rails` first.
+                 After !66 release (version bump), this resolves automatically. -->
             <groupId>com.openjiuwen</groupId>
             <artifactId>react-rails</artifactId>
             <version>0.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-api</artifactId>
-            <version>1.55.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-sdk-trace</artifactId>
-            <version>1.55.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

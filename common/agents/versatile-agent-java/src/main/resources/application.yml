@@ -1,0 +1,51 @@
+server:
+  port: ${VERSATILE_AGENT_PORT:8191}
+
+openjiuwen:
+  service:
+    agent-id: versatile-agent
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-description: "Remote runtime that processes banking and external business workflows through Versatile HTTP/SSE."
+      skills:
+        - id: "banking_workflow"
+          name: "Banking Workflow"
+          description: "Process banking workflow requests such as account balance lookup, transfer preparation, and follow-up business steps through the configured Versatile HTTP/SSE workflow."
+    versatile:
+
+      url-template: ${VERSATILE_URL:http://127.0.0.1:30001/v1/0/agent-manager/workflows/wealth-invest/conversations/{conversation_id}}
+      timeout: ${VERSATILE_TIMEOUT:600s}
+      forward-header-whitelist:
+        - stream
+        - x-invoke-mode
+        - x-language
+      headers-template:
+        Content-Type: application/json
+        accept: "*/*"
+        stream: "true"
+        x-invoke-mode: DEBUG
+        x-language: zh-cn
+      result-node-name: ${VERSATILE_RESULT_NODE:GXZQAResponseNode}
+      passthrough-headers:
+        - x-invoke-mode
+        - x-language
+      input-metadata-keys:
+        - intent
+        - wap_userName
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  file:
+    name: logs/run/run.log
+  level:
+    com.huawei.ascend.versatile: DEBUG
+    com.openjiuwen.service.adapters.versatile: DEBUG
+    com.openjiuwen.service.app: DEBUG

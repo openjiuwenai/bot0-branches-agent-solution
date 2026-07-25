@@ -21,12 +21,14 @@ from evo_agent.cancellation import CancellationToken
 from evo_agent.dataset.case import merge_extra_data
 from evo_agent.errors import ValidationCoverageError
 from evo_agent.evaluator.batch_result import EvaluationBatchResult, EvaluationOutcome
+from evo_agent.evaluator.metrics.extract import extract_config_from_evaluator
 from evo_agent.evaluator.trajectory.normalize import normalize_trace_to_trajectory
 from evo_agent.optimizer.skill_document.types import (
     GateEpochArtifactInput,
     GateEvaluationRecord,
     ValidationCoverageFailureInput,
 )
+from evo_agent.rollout_invoke import invoke_with_empty_extract_retry
 from evo_agent.types import TrajectoryUnavailableError
 
 # Type aliases for _select_best_candidate_on_val override
@@ -71,6 +73,8 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         rollout_extra_data: dict[str, Any] | None = None,
         trace_max_retries: int = 3,
         trace_retry_backoff: float = 1.0,
+        empty_extract_max_attempts: int = 3,
+        empty_extract_retry_backoff: float = 1.0,
         tie_reval_eps: float = 0.0,
         validation_max_case_attempts: int = 2,
         validation_min_success_ratio: float = 1.0,
@@ -85,6 +89,8 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         self._rollout_extra_data = rollout_extra_data or {}
         self._trace_max_retries = trace_max_retries
         self._trace_retry_backoff = trace_retry_backoff
+        self._empty_extract_max_attempts = max(int(empty_extract_max_attempts), 1)
+        self._empty_extract_retry_backoff = float(empty_extract_retry_backoff)
         # 平局重 eval 阈值：|cand - base| <= eps 触发 1 次候选重 eval（均值降噪）。
         # 默认 0.0 = 仅精确平局触发；负值可禁用。
         self._tie_reval_eps = tie_reval_eps
@@ -93,8 +99,9 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         self._validation_require_same_case_set = validation_require_same_case_set
         self._cancellation_token = cancellation_token or CancellationToken()
 
-        # Gate score capture: records {base_score, candidate_score} per epoch
-        # where 2 candidates were evaluated. Index i → Trainer epoch i+1.
+        # Per-epoch validation score capture. Comparison epochs record the real
+        # base/candidate pair; no-op epochs mirror the unchanged score so report
+        # cardinality remains aligned with managed-doc snapshots.
         self._gate_epoch_scores: list[dict[str, float]] = []
         self._cached_base_val_score: float | None = None
         self._cached_base_val_evaluated: list[EvaluatedCase] | None = None
@@ -104,10 +111,11 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
 
     @property
     def gate_epoch_scores(self) -> list[dict[str, float]]:
-        """Per-epoch gate scores: [{base_score, candidate_score}, ...].
+        """Per-epoch validation scores: [{base_score, candidate_score}, ...].
 
         Index i corresponds to Trainer epoch i+1 (artifact dir ``epoch_{i+1}``).
-        Only populated when exactly 2 candidates were evaluated (base + candidate).
+        No-op epochs use the unchanged score for both numeric reporting fields;
+        their artifact keeps ``candidate_score=null`` and ``decision=unchanged``.
         """
         return list(self._gate_epoch_scores)
 
@@ -144,7 +152,17 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         """
         if not candidates:
             self._cancellation_token.raise_if_requested()
-            return self.evaluate(agent, val_cases)
+            score, evaluated = self.evaluate(agent, val_cases)
+            batch = _matching_or_synthetic_batch(self._last_validation_batch, evaluated)
+            self._last_validation_batch = batch
+            self._capture_managed_doc_candidate(operators)
+            self._publish_noop_epoch_artifact(
+                score=score,
+                selected_batch=batch,
+                reason="no_candidates",
+            )
+            self.record_validation_baseline(score, evaluated)
+            return score, evaluated
 
         base_state = self._snapshot_operators_state(operators)
         val_case_count = len(val_cases.get_cases()) if val_cases is not None else 0
@@ -167,12 +185,7 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
             # optimizer produced only one candidate. Capture happens before
             # validation can restore a winner, preserving rejected rounds.
             if candidate_index == len(candidates) - 1:
-                for operator_id, operator in operators.items():
-                    if not operator_id.startswith("managed_doc:"):
-                        continue
-                    content = operator.get_state().get("skill_content")
-                    if isinstance(content, str):
-                        self._managed_doc_candidates.setdefault(operator_id, []).append(content)
+                self._capture_managed_doc_candidate(operators)
 
             cached_base_score = self._cached_base_val_score
             cached_base_evaluated = self._cached_base_val_evaluated
@@ -334,6 +347,14 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
                     selected_batch=selected_batch,
                 )
             )
+        elif len(scores) == 1:
+            selected_batch = batches_by_candidate[0]
+            self._last_validation_batch = selected_batch
+            self._publish_noop_epoch_artifact(
+                score=scores[0],
+                selected_batch=selected_batch,
+                reason="no_selected_edits" if not candidates[0] else "single_candidate",
+            )
 
         if best_state is not None:
             self._restore_operators_state(operators, best_state)
@@ -373,6 +394,39 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         notify = getattr(self._callbacks, "on_gate_artifact_ready", None)
         if callable(notify):
             notify(artifact_input)
+
+    def _publish_noop_epoch_artifact(
+        self,
+        *,
+        score: float,
+        selected_batch: EvaluationBatchResult,
+        reason: str,
+    ) -> None:
+        """Publish an explicit unchanged epoch without fabricating a candidate gate."""
+        self._gate_epoch_scores.append({"base_score": score, "candidate_score": score})
+        self._notify_gate_artifact_ready(
+            GateEpochArtifactInput(
+                gate=GateEvaluationRecord(
+                    base_score=score,
+                    candidate_score=None,
+                    decision="unchanged",
+                    kind="no_op",
+                    reason=reason,
+                ),
+                base_batch=selected_batch,
+                candidate_batches=(),
+                selected_batch=selected_batch,
+            )
+        )
+
+    def _capture_managed_doc_candidate(self, operators: dict[str, _Operator]) -> None:
+        """Capture the evaluated managed document, including unchanged no-op epochs."""
+        for operator_id, operator in operators.items():
+            if not operator_id.startswith("managed_doc:"):
+                continue
+            content = operator.get_state().get("skill_content")
+            if isinstance(content, str):
+                self._managed_doc_candidates.setdefault(operator_id, []).append(content)
 
     def _require_comparable_validation(
         self,
@@ -432,29 +486,44 @@ class EvoTrainer(Trainer):  # type: ignore[misc]
         """
         sem = asyncio.Semaphore(min(self._num_parallel, len(cases)))
 
+        extract_cfg = extract_config_from_evaluator(self._evaluator)
+
         async def _rollout_one(case: Any) -> tuple[dict[str, Any], Any]:
             async with sem:
                 self._cancellation_token.raise_if_requested()
-                conversation_id = self._conversation_id_factory.new(
-                    phase="val", case_id=case.case_id
+                case_extra = case.inputs.get("extra_data", {})
+                extra = merge_extra_data(self._rollout_extra_data, case_extra)
+
+                async def _invoke_once(conversation_id: str) -> dict[str, Any]:
+                    try:
+                        result = await agent.invoke(
+                            {
+                                **case.inputs,
+                                "conversation_id": conversation_id,
+                                "extra_data": extra,
+                            },
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Validation invoke failed for case=%s conversation_id=%s: %s",
+                            case.case_id,
+                            conversation_id,
+                            exc,
+                        )
+                        return {"answer": "", "error": str(exc)}
+                    return result if isinstance(result, dict) else {"answer": str(result)}
+
+                answer, conversation_id = await invoke_with_empty_extract_retry(
+                    invoke_once=_invoke_once,
+                    new_conversation_id=lambda: self._conversation_id_factory.new(
+                        phase="val", case_id=case.case_id
+                    ),
+                    extract_cfg=extract_cfg,
+                    max_attempts=self._empty_extract_max_attempts,
+                    backoff_secs=self._empty_extract_retry_backoff,
+                    case_id=case.case_id,
+                    phase="val",
                 )
-
-                try:
-                    case_extra = case.inputs.get("extra_data", {})
-                    extra = merge_extra_data(self._rollout_extra_data, case_extra)
-                    result = await agent.invoke(
-                        {**case.inputs, "conversation_id": conversation_id, "extra_data": extra},
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Validation invoke failed for case=%s conversation_id=%s: %s",
-                        case.case_id,
-                        conversation_id,
-                        exc,
-                    )
-                    result = {"answer": "", "error": str(exc)}
-
-                answer = result if isinstance(result, dict) else {"answer": str(result)}
 
                 # Do not interrupt an already-started Agent call. Once it has
                 # reached a terminal response, stop before scheduling trace work.

@@ -1,0 +1,135 @@
+# wealth-demo 场景 planrule 配置（增量覆盖）
+#
+# 说明：本文件仅配置场景级差异字段，未配置的字段自动继承框架默认值。
+#       全量可配字段及说明见 engine/src/main/resources/governance/_reference/planrule.yaml
+
+planrule:
+  # 场景名称（仅场景级配置，框架默认无值）
+  scenario_name: "理财购买"
+
+  # 场景描述（仅场景级配置，框架默认无值）
+  scenario_description: "理财产品推荐、筛选、购买全流程"
+
+  # 业务范围（替代式覆盖框架默认值）
+  scope:
+    allowed: "理财产品推荐、筛选、购买、银行账户余额查询、银行账户间转账、资金筹划（理财卡与储蓄卡之间的资金调配）"
+    denied: "基金相关业务、股票相关业务、保险相关业务、贷款相关业务、信用卡相关业务、购买i豆"
+
+  # 补充提示词（理财场景专属规则，追加到框架 base_protocol）
+  supplementary_prompt:
+    # base_protocol 继承框架配置，不可覆盖
+    # additional_prompt 仅包含理财场景特有的差异规则
+
+    additional_prompt: |
+      ## 理财场景强制规则（不可违反）
+
+      ### 强制规则（不可违反）
+      - 当用户提出业务范围内的请求（如推荐理财、购买理财、查询余额等）时，你**必须**立即调用 `todo_create` 工具创建任务列表，**禁止直接用文本回答**。
+      - 只有纯打招呼（如\"你好\"）或业务范围外的请求，才可以直接文本回答。
+      - 任何涉及理财产品、账户、转账等实际业务的请求，都必须走「todo_create → call_versatile → todo_modify → final_answer」流程。
+      - 违反此规则直接回答业务请求将被视为错误。
+
+      ### ★ Skill 路由强制规则（最高优先级，不可违反）
+      - 当用户输入同时包含**购买意图**（如"购买"、"买"、"选"）+ **产品提及**（序号如"1号/第一支"、名称如"XX产品"、代码）+ **金额**（如"17元"、"5000元"）时，你**必须**调用 `skill_tool` 加载并执行 `product_select_skill`，**禁止**路由到 `product_recommend_skill` 或直接调用 `call_versatile`。
+      - "路由到 skill"的定义：**必须调用 `skill_tool` 工具读取该 skill 的 SKILL.md，然后严格按 SKILL.md 流程执行**（包括 SKILL.md 中的 ask_user 调用规约）。禁止只在思考中描述"走某 skill"而不生成 skill_tool 调用。
+      - 即使当前会话**没有产品推荐列表**，也必须调用 `skill_tool` 加载 `product_select_skill`；该 skill 内部会按规则处理"无产品列表"分支（输出"抱歉没有理解您的意思"）。
+      - **禁止**以"当前无产品推荐列表，需先推荐"为由绕过 `product_select_skill`。
+      - 示例（模式匹配，非精确字符串）：
+        - 含"买/购买/选" + 产品序号或名称 + 金额 → product_select_skill
+        - 含"第X支/第X个/X号" + 金额 → product_select_skill
+        - 含产品名称 + "XX元" → product_select_skill
+      - 此规则优先级高于 skill_routing 中的其他规则。
+
+      ### 工具调用规约调整
+      - 每次只执行一个 tool_call，不要并发。（与框架通用规则不同，理财场景禁止并发）
+      - **禁止用文本代替工具调用**：当你判断需要调用某工具（skill_tool / ask_user / call_versatile 等）时，**必须生成 tool_call**，禁止只在思考/文本中描述"需要调用 XX"而不生成实际 tool_call。
+
+      ### ★★ todo_create 规划规则（强制执行，不可违反）
+      理财场景**必须一次性创建完整的4步任务列表**，禁止只创建1个或2个任务。
+      可用 catalog_id 及其含义：
+        - product_recommend：推荐理财产品（起点任务，无依赖）
+        - interact_finance_rec：交互式理财筛选（依赖 product_recommend）
+        - product_select：确定购买产品和金额（依赖 interact_finance_rec）
+        - fund_planning：查询理财账户余额并购买（依赖 product_select）
+
+      #### 强制规则
+      1. 当用户意图为"买理财"、"推荐理财"、"理财"等理财业务请求时，**必须**一次性创建全部4个任务：
+         todo_create({ tasks: [
+           {catalog_id:\"product_recommend\"},
+           {catalog_id:\"interact_finance_rec\"},
+           {catalog_id:\"product_select\"},
+           {catalog_id:\"fund_planning\"}
+         ]})
+      2. **严禁**只创建 product_recommend 一个任务
+      3. **严禁**只创建 product_recommend + product_select 两个任务
+      4. 任务数量不足4个时，用户将无法看到完整的理财购买流程规划，导致体验割裂
+      5. 后续步骤可通过 todo_modify 跳过（如用户快速选择则跳过 interact_finance_rec），但初始规划必须完整
+
+      ### ★★ product_select_skill 选品校验强化规则（最高优先级，不可违反）
+      在执行 product_select_skill 时，必须严格按以下步骤提取和校验，**禁止跳过任何一步**：
+
+      #### 1. 完整提取所有产品提及（不可遗漏）
+      用户输入中**所有可能指向产品的表达**都必须分别提取，不能只取其中一种：
+      - 序号：\"1号\"、\"第一支\"、\"第2个\"
+      - 产品名称关键词：\"邮鸿宝\"、\"EXP\"、\"稳健盈利\"
+      - 产品代码：\"DXXJ1339\"、\"BGA0088\"
+      - 金额数字：\"17元\"、\"5000\"
+      **严禁只取序号而把产品名称当作\"无关修饰词\"忽略。** 示例：\"购买1号 EXP产品\" 必须同时提取 [序号=1号, 名称=EXP]。
+
+      #### 2. 全量存在性校验（任一不存在 → invalid）
+      对提取到的**每个**产品提及，必须分别在上文推荐列表中查找：
+      - 序号是否 ≤ 列表长度
+      - 产品名称关键词是否能在列表任一 productName 中匹配到子串
+      - 产品代码是否能在列表任一 productCode 中匹配
+      只要有一个提及在列表中**找不到对应产品**，立即走 `invalid` 分支：
+      - `response_template_status=\"invalid\"`
+      - `response_template_vars={}`
+      - 输出 \"抱歉没有理解您的意思，请重新输入\"
+
+      #### 3. 一致性校验（多个提及指向不同产品 → invalid）
+      当用户同时给出多个产品提及时（如\"序号 + 名称\"），必须验证它们指向**同一个**产品：
+      - \"购买1号 EXP产品\"：1号指向列表第1个产品，EXP必须在第1个产品的 productName/productCode 中能匹配
+      - 若不一致 → 立即走 `invalid` 分支
+      - **严禁**忽略其中任一提及后继续匹配
+
+      #### 4. 校验优先级（高于 missing_amount / missing_product / confirm）
+      合法性校验（存在性、一致性、多值检测）**必须优先于**缺失性判断：
+      - 错误的输入（如\"购买1号 EXP产品\"）**不应**询问金额，而应直接 invalid
+      - 即使金额也缺失，只要产品提及本身不合法，优先 invalid
+
+      #### 5. 典型反例（必须走 invalid，禁止走其他分支）
+      推荐列表：[1: 339号国投DXXJ-1339, 2: 稳健盈利BGA-0088, 3: 锐进增值RJZ-2016]
+      - \"购买1号 EXP产品\" → EXP 不在列表 → **invalid**（而非 missing_amount）
+      - \"购买1号 BGA0088\" → 序号与代码不一致 → **invalid**
+      - \"购买第五支\" → 序号>列表长度 → **invalid**
+      - \"购买ABC产品\" → 名称不存在 → **invalid**
+      - \"购买1号 5元\" → 1号=DXXJ1339，一致且金额有效 → **confirm**
+
+      ### 超范围处理规则
+      当用户请求不在 scope.allowed 允许的业务范围内时（如订机票、买保险等）：
+      1. 不要自行回答或解释原因
+      2. 必须调用 ask_user 工具，传入以下参数：
+         - response_template_keys=[\"out_of_scope\"]
+         - response_template_status=\"out_of_scope\"
+      3. 运行时将自动输出超范围提示话术并结束当前对话
+
+  # Skill路由规则（继承式覆盖框架默认值，框架默认无值）
+  skill_routing:
+    # ★ 高优先级强制路由：用户表达"购买+产品+金额"模式时，必须走 product_select_skill
+    # 解决新会话无产品列表时 LLM 误走 product_recommend_skill 的问题。
+    # product_select_skill 内部会按 SKILL.md 第一步规则处理"无产品列表"→Case D invalid
+    - trigger: "用户输入包含购买意图 + 产品提及（序号/名称/代码） + 金额，如\"购买1号17元\"\"买第二支5000元\"\"购买XX产品XX元\""
+      skill: "product_select_skill"
+      priority: 10
+    - trigger: "用户首次请求推荐理财产品"
+      skill: "product_recommend_skill"
+      priority: 1
+    - trigger: "用户从推荐结果中选择产品"
+      skill: "product_select_skill"
+      priority: 2
+    - trigger: "用户确认购买或需要资金筹划"
+      skill: "fund_planning_skill"
+      priority: 2
+    - trigger: "用户请求换一批、追加筛选条件"
+      skill: "interact_finance_rec_skill"
+      priority: 1

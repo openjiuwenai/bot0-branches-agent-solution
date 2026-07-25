@@ -4,6 +4,8 @@
 
 package com.openjiuwen.rdc.tenant;
 
+import com.openjiuwen.rdc.tenant.TenantContext;
+
 import java.util.Objects;
 
 /**
@@ -25,7 +27,7 @@ import java.util.Objects;
  * <p>Phase-2 swap path: a reactor-context-backed implementation may replace
  * this class without touching the {@link TenantContext} port or any caller.
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
  */
 public final class ThreadLocalTenantContext implements TenantContext {
     private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
@@ -52,10 +54,10 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * the supplier's result. Use this for background scheduling paths that
      * need to return a value.
      *
-     * @param tenantId tenant to bind; must not be {@code null} or blank
-     * @param work     supplier to execute with the tenant bound
-     * @param <T>      result type produced by the supplier
-     * @return the supplier's result
+     * @param tenantId tenantId
+     * @param work work
+     * @return result
+     * @since 0.1.0
      */
     public static <T> T bindForScope(String tenantId, java.util.function.Supplier<T> work) {
         String prior = CURRENT.get();
@@ -72,7 +74,8 @@ public final class ThreadLocalTenantContext implements TenantContext {
      * package-private so external callers cannot bypass the
      * {@code bindForScope} lifecycle.
      *
-     * @param tenantId tenant to bind; must not be {@code null} or blank
+     * @param tenantId tenantId
+     * @since 0.1.0
      */
     static void set(String tenantId) {
         if (tenantId == null || tenantId.isBlank()) {
@@ -84,11 +87,12 @@ public final class ThreadLocalTenantContext implements TenantContext {
     /**
      * Clear the current thread's tenant. Called by {@link #bindForScope}'s
      * finally block; package-private for the same reason as {@link #set}.
+     *
+     * @since 0.1.0
      */
     static void clear() {
         CURRENT.remove();
     }
-
     private static void restore(String prior) {
         if (prior == null) {
             CURRENT.remove();
@@ -97,6 +101,12 @@ public final class ThreadLocalTenantContext implements TenantContext {
         }
     }
 
+    /**
+     * current.
+     *
+     * @return result
+     * @since 0.1.0
+     */
     @Override
     public String current() {
         return CURRENT.get();

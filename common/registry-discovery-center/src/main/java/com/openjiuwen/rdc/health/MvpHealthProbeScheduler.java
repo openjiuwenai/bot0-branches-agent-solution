@@ -5,9 +5,9 @@
 package com.openjiuwen.rdc.health;
 
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
-import com.openjiuwen.rdc.config.RegistryOpContext;
-import com.openjiuwen.rdc.repository.AgentRegistryRepository;
+import com.openjiuwen.rdc.config.RegistryOpAudit;
 import com.openjiuwen.rdc.repository.AgentRegistryRepository.ProbeTarget;
+import com.openjiuwen.rdc.repository.AgentRegistryRepository;
 import com.openjiuwen.rdc.tenant.ThreadLocalTenantContext;
 
 import org.slf4j.MDC;
@@ -18,6 +18,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.util.List;
 import java.util.UUID;
@@ -33,7 +34,7 @@ import java.util.UUID;
  * stale threshold (default 5 s). For each target, HTTP
  * {@code GET {endpoint_url}/health} via {@link RestClient}:
  * <ul>
- *   <li>2xx → {@code updateStatus(..., "ONLINE", shouldRefreshHeartbeat=true)} —
+ *   <li>2xx → {@code updateStatus(..., "ONLINE", refreshHeartbeat=true)} —
  *       heartbeat refreshed, status reaffirmed. A DEGRADED row that probes
  *       successfully is restored to ONLINE (PR #389 review issue #4).</li>
  *   <li>5xx / connect exception / read timeout →
@@ -77,7 +78,7 @@ import java.util.UUID;
  * <p>Authority: ADR-0160 + HD3-004 + Rule R-C.c (Stage 24 RLS wiring) +
  * PR #389 review issue #2 (timeout / trailing-slash / thread isolation).
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
  */
 @Component
 public class MvpHealthProbeScheduler {
@@ -89,6 +90,14 @@ public class MvpHealthProbeScheduler {
     private final long staleBeforeMs;
     private final int scanLimit;
 
+    /**
+     * Production constructor with configured probe timeouts and scan limit.
+     *
+     * @param repository repository
+     * @param observability observability
+     * @param staleBeforeMs staleBeforeMs
+     * @param scanLimit scanLimit
+     */
     @Autowired
     public MvpHealthProbeScheduler(AgentRegistryRepository repository,
                                    RegistryObservabilityConfig observability,
@@ -104,12 +113,11 @@ public class MvpHealthProbeScheduler {
      * parameterless constructor above; the defaults there (2s / 2s) match
      * the values asserted by {@code Pr389ProbeSchedulerHardeningFeedbackLoopTest}.
      *
-     * @param repository     the agent registry port used to scan + update probe status
-     * @param observability  the observability facade recording probe metrics (latency / outcome)
-     * @param staleBeforeMs  the staleness threshold in ms; entries whose last heartbeat is
-     *                       older than {@code now - staleBeforeMs} are eligible for probing
-     * @param scanLimit      the maximum number of probe targets to scan per sweep
-     * @param requestFactory the HTTP request factory (lets tests inject explicit timeouts)
+     * @param repository repository
+     * @param observability observability
+     * @param staleBeforeMs staleBeforeMs
+     * @param scanLimit scanLimit
+     * @param requestFactory requestFactory
      */
     MvpHealthProbeScheduler(AgentRegistryRepository repository,
                             RegistryObservabilityConfig observability,
@@ -131,9 +139,9 @@ public class MvpHealthProbeScheduler {
     }
 
     /**
-     * Scheduled sweep — find ONLINE / DEGRADED entries whose heartbeat is
-     * stale and probe each one. Runs every 5 seconds by default
-     * (configurable via {@code agent-bus.registry.mvp.probe-interval-ms}).
+     * probeOnlineAgents.
+     *
+     * @since 0.1.0
      */
     @Scheduled(fixedDelayString = "${agent-bus.registry.mvp.probe-interval-ms:5000}")
     public void probeOnlineAgents() {
@@ -155,9 +163,9 @@ public class MvpHealthProbeScheduler {
      * clients silently canonicalise {@code //x} → {@code /x}, masking the
      * bug at the wire level).
      *
-     * @param endpointUrl the registered agent endpoint URL (must not be blank)
-     * @return the endpoint URL with a trailing {@code /} stripped and {@code /health} appended
-     * @throws IllegalArgumentException if {@code endpointUrl} is null or blank
+     * @param endpointUrl endpointUrl
+     * @return result
+     * @since 0.1.0
      */
     static String composeProbeUrl(String endpointUrl) {
         if (endpointUrl == null || endpointUrl.isBlank()) {
@@ -168,35 +176,34 @@ public class MvpHealthProbeScheduler {
     }
 
     private void probeOne(ProbeTarget target) {
-        ThreadLocalTenantContext.bindForScope(target.tenantId(), () -> {
+            ThreadLocalTenantContext.bindForScope(target.tenantId(), () -> {
             String traceId = UUID.randomUUID().toString();
             MDC.put("traceId", traceId);
             long start = System.nanoTime();
             String outcome = "probe_failed";
             String health = "DEGRADED";
             try {
-                httpClient.get()
-                        .uri(composeProbeUrl(target.endpointUrl()))
-                        .retrieve()
-                        .toBodilessEntity();
-                repository.updateStatus(new AgentRegistryRepository.StatusUpdate(target.tenantId(), target.agentId(),
-                        target.serviceId(), target.instanceId(), "ONLINE", true));
-                outcome = "success";
-                health = "ONLINE";
-            } catch (org.springframework.web.client.RestClientException ex) {
-                // A probe failure (5xx / connect / read-timeout) must downgrade
-                // the entry to DEGRADED but not abort the sweep; outcome / health
-                // already defaulted to probe_failed / DEGRADED.
-                repository.updateStatus(new AgentRegistryRepository.StatusUpdate(target.tenantId(), target.agentId(),
-                        target.serviceId(), target.instanceId(), "DEGRADED", false));
+            httpClient.get()
+            .uri(composeProbeUrl(target.endpointUrl()))
+            .retrieve()
+            .toBodilessEntity();
+            repository.updateStatus(new AgentRegistryRepository.StatusUpdate(
+            target.tenantId(), target.agentId(), target.serviceId(),
+            target.instanceId(), "ONLINE", true));
+            outcome = "success";
+            health = "ONLINE";
+            } catch (RestClientException ex) {
+            repository.updateStatus(new AgentRegistryRepository.StatusUpdate(
+            target.tenantId(), target.agentId(), target.serviceId(),
+            target.instanceId(), "DEGRADED", false));
+            observability.observeUnhealthy(target.tenantId(), target.agentId(), "DEGRADED");
             } finally {
-                long latencyMs = (System.nanoTime() - start) / 1_000_000;
-                RegistryOpContext ctx = RegistryOpContext.of(traceId, target.tenantId(), target.agentId())
-                        .health(health)
-                        .build();
-                observability.observeProbe(ctx, outcome, latencyMs);
-                MDC.remove("traceId");
+            long latencyMs = (System.nanoTime() - start) / 1_000_000;
+            observability.observeProbe(new RegistryOpAudit(
+            traceId, target.tenantId(), target.agentId(),
+            null, null, health, null, outcome, latencyMs));
+            MDC.remove("traceId");
             }
-        });
-    }
+            });
+        }
 }

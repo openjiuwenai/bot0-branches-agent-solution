@@ -25,7 +25,11 @@ class AgentCallRequest(BaseModel):
     query: str = Field(description="User natural language query")
     extra_data: dict | None = Field(
         default=None,
-        description="Extra key-value pairs forwarded to EDPAgent custom_data.inputs",
+        description=(
+            "Extra key-value pairs forwarded to EDPAgent custom_data.inputs. "
+            "Sampling knobs such as temperature should be placed here "
+            '(e.g. {"temperature": 0.7}) when the downstream Agent consumes them.'
+        ),
     )
 
 
@@ -37,7 +41,7 @@ class AgentCallResponse(BaseModel):
     answer: str = Field(default="", description="Assembled final answer from summary/final_answer_chunk events")
     interrupted: bool = Field(
         default=False,
-        description="True when Agent yielded a VA delegate interrupt (needs continuation)",
+        description="True when Agent yielded a delegate interrupt (needs continuation)",
     )
     interrupt_intent: str | None = Field(default=None, description="Intent of the interrupt")
     interrupt_description: str | None = Field(default=None, description="Task description of the interrupt")
@@ -96,6 +100,7 @@ class SkillContentResponse(BaseModel):
 class SkillUpdateResponse(BaseModel):
     success: bool
     skill_name: str
+    revision: str
     message: str | None = None
 
 

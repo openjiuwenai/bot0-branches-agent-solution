@@ -6,8 +6,8 @@ package com.openjiuwen.rdc.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -87,6 +87,7 @@ final class RouteHandleCodec {
      *
      * @param fields the 6 route-handle fields (tenantId, agentId, serviceId,
      *               instanceId, routeKey, contractVersion); must not be {@code null}
+     *
      * @return opaque route handle with {@code v2:} prefix; never {@code null}
      */
     static String encode(HandleFields fields) {
@@ -156,10 +157,10 @@ final class RouteHandleCodec {
     }
 
     private static JsonNode parseJson(String base64Payload) {
-        byte[] json;
-        try {
+            byte[] json;
+            try {
             json = Base64.getDecoder().decode(base64Payload);
-        } catch (IllegalArgumentException ex) {
+            } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("route handle is not valid base64", ex);
         }
         try {
@@ -179,9 +180,9 @@ final class RouteHandleCodec {
     }
 
     private static void requireNonBlank(String value, String name) {
-        if (value == null) {
-            throw new IllegalArgumentException(name + " must not be null");
-        }
+            if (value == null) {
+                throw new IllegalArgumentException(name + " must not be null");
+            }
         if (value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");
         }
@@ -192,9 +193,18 @@ final class RouteHandleCodec {
      * decoded view returned by {@link #decode}. The {@code serviceId} field is
      * the logical service identifier; the {@code instanceId} field lets the
      * forwarding layer resolve a specific instance among N replicas.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param serviceId serviceId
+     * @param instanceId instanceId
+     * @param routeKey routeKey
+     * @param contractVersion contractVersion
+     * @return result
+     * @since 0.1.0
      */
     record HandleFields(
             String tenantId, String agentId, String serviceId,
             String instanceId, String routeKey, String contractVersion) {
+        }
     }
-}

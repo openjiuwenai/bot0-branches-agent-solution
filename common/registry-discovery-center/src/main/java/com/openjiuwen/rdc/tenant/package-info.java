@@ -41,4 +41,5 @@
  * Servlet / JDBC imports (enforced by {@code AgentRdcRegistryJdbcPurityTest}
  * Spring Web / Micrometer / Servlet confinement rules).
  */
+
 package com.openjiuwen.rdc.tenant;

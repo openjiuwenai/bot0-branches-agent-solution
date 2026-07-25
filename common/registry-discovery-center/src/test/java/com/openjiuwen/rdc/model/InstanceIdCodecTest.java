@@ -33,12 +33,10 @@ class InstanceIdCodecTest {
     void derive_assumes_http_when_no_scheme() {
         assertThat(InstanceIdCodec.derive("host:8080")).isEqualTo("host-8080");
     }
-
     @Test
     void derive_lowercases_host() {
         assertThat(InstanceIdCodec.derive("http://HOST:8080")).isEqualTo("host-8080");
     }
-
     @Test
     void derive_rejects_blank_url() {
         assertThatThrownBy(() -> InstanceIdCodec.derive(""))

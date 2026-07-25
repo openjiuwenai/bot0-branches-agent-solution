@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from openjiuwen.core.foundation.llm.schema.message import UserMessage
 
-from evo_agent.llm.icbc_model_client import ICBCStreamIntegrityError
+from evo_agent.llm.custom_sse_model_client import SSEStreamIntegrityError
 from evo_agent.llm.invocation import (
     LLMInvocation,
     LLMInvocationContext,
@@ -296,13 +296,13 @@ def test_invocation_limiter_survives_repeated_asyncio_run_loops() -> None:
             assert asyncio.run(run_accumulation_round()) == ["ok", "ok"]
 
 
-async def test_icbc_stream_integrity_failure_keeps_transport_category() -> None:
-    """ICBC 坏流重试耗尽后不能降级为普通 llm_invoke_error。"""
+async def test_custom_sse_stream_integrity_failure_keeps_transport_category() -> None:
+    """CustomSSE 坏流重试耗尽后不能降级为普通 llm_invoke_error。"""
     provider = MagicMock()
     provider.invoke = AsyncMock(
         side_effect=[
-            ICBCStreamIntegrityError(chunk_index=1, raw_payload="bad-1"),
-            ICBCStreamIntegrityError(chunk_index=2, raw_payload="bad-2"),
+            SSEStreamIntegrityError(chunk_index=1, raw_payload="bad-1"),
+            SSEStreamIntegrityError(chunk_index=2, raw_payload="bad-2"),
         ]
     )
     invocation = LLMInvocation(

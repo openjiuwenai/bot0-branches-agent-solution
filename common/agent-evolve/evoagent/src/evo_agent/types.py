@@ -80,7 +80,9 @@ class OptimizeRequest:
     dataset_manifest_path: Path | None = None  # dataset.yaml 路径（CLI 模式）
 
     # ── 评估器 ──
-    evaluator_prompt: str = ""  # 从 evaluator_template.prompt 映射
+    evaluator_prompt: str = ""  # 从 evaluator_template.prompt 映射（llm）
+    # API 评估模式配置（默认 metric）。CLI 走 dataset.yaml 时可不填。
+    evaluator_config: dict[str, Any] = field(default_factory=lambda: {"type": "metric"})
 
     # ── 连接 ──
     adapter_url: str = ""  # 从 EvolveConfig 或 CLI 注入

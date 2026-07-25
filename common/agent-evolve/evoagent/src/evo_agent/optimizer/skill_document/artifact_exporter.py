@@ -40,7 +40,7 @@ class ArtifactExporter:
 
     Directory structure:
         output_dir/epoch_N/step_M/{trajectories.jsonl, eval_results.json, ...}
-        output_dir/epoch_N/{skill_before.md, gate_result.json, ...}
+        output_dir/epoch_N/{skill_before.md, gate_result.json, experience_library.json, ...}
     """
 
     def __init__(
@@ -290,6 +290,37 @@ class ArtifactExporter:
             filename = f"skill_{tag}.md"
         (epoch_dir / filename).write_text(skill_content, encoding="utf-8")
 
+    def export_experience_library(
+        self,
+        epoch: int,
+        library: dict[str, Any],
+        *,
+        operator_id: str = "",
+    ) -> None:
+        """Write TF-GRPO experience library snapshot after an optimization epoch.
+
+        ``library`` should match ``ExperienceLibrary.to_dict()`` shape:
+        ``{domain, max_experiences, experiences}``.
+        """
+        epoch_dir = self._epoch_dir(epoch)
+        if not epoch_dir:
+            return
+        data = {
+            "schema_version": 1,
+            "epoch": epoch,
+            "operator_id": operator_id or None,
+            "domain": library.get("domain", "markdown"),
+            "max_experiences": library.get("max_experiences"),
+            "experiences": list(library.get("experiences") or []),
+            "exported_at": datetime.now(UTC).isoformat(),
+        }
+        filename = (
+            f"experience_library_{operator_id}.json"
+            if operator_id
+            else "experience_library.json"
+        )
+        self._write_json(epoch_dir / filename, data)
+
     def export_gate_result(
         self,
         epoch: int,
@@ -317,6 +348,7 @@ class ArtifactExporter:
         data = {
             "schema_version": 2,
             "status": "valid",
+            "kind": gate.kind if gate else "inferred",
             "epoch": epoch,
             "base_score": base_score,
             "candidate_score": candidate_score,
@@ -326,6 +358,7 @@ class ArtifactExporter:
                 else None
             ),
             "decision": decision or "unknown",
+            "reason": gate.reason if gate else None,
             "score_threshold": self._score_threshold,
             "selected_failure_rate": (
                 sum(score < self._score_threshold for score in selected_scores)
@@ -413,7 +446,9 @@ class ArtifactExporter:
         result_data = {
             "schema_version": 1,
             "epoch": artifact_epoch,
+            "kind": gate.kind,
             "decision": gate.decision,
+            "reason": gate.reason,
             "score_threshold": self._score_threshold,
             "attempted_count": batch.attempted_count,
             "evaluated_count": batch.evaluated_count,
@@ -447,7 +482,9 @@ class ArtifactExporter:
                 "schema_version": 1,
                 "complete": True,
                 "generated_at": datetime.now(UTC).isoformat(),
+                "kind": gate.kind,
                 "decision": gate.decision,
+                "reason": gate.reason,
                 "coverage": batch.coverage,
                 "result_count": len(results),
                 "failure_count": len(failures),

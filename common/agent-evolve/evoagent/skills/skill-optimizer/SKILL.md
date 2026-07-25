@@ -1,39 +1,37 @@
 ---
 name: skill-optimizer
-description: 给定一个服务器侧种子数据集路径 + 目标 agent 名 + 待优化 skill 名，经 adapter 读取 baseline、调用优化器服务完成"提交优化→轮询→报告前后对比→经 adapter 回写 skill→调 agent 验证"全流程。当用户说"用这批轨迹/这个数据集优化 X agent 的 Y skill""改进 zdt_agent/edp_agent 的 skill""跑一轮 skill 优化"时使用。
+description: 给定 agent 名 + skill 名 + 服务器侧种子数据集路径，提交优化器 /optimize、轮询、报告前后对比、经 adapter 回写优化后 skill、调 agent 验证。当用户说"优化 X agent 的 Y skill""跑一轮 skill 优化""提交优化任务/查进度/回写 skill"时使用。种子数据集通常由 skill-evaluator 产出或用户自带。
 ---
 
-# skill-optimize（agent 自执行）
+# skill-optimizer（agent 自执行）
 
-本 skill 串起**两个已部署服务**完成"数据集 + agent → 优化后 skill 并回写验证"闭环：
+本 skill 是 **skill 自进化的"优化"半边**，与 `skill-evaluator` 互为独立模块，合并即完整自进化流程。
 
-- **优化器服务（EvoAgent API）**：跑优化（提交 / 轮询 / 结果）
-- **Agent Adapter**：读写 agent 的 skill、调用真实 agent、拉取/清洗轨迹
+它只做优化侧的事：读 baseline → 提交 `/optimize` → 轮询 → 报告前后对比 → 回写 skill → 调 agent 验证。**不跑 `/evaluate` 系列独立评估**——评估在 `/optimize` 循环内部由优化器自动完成（train/val 分片 + 每 epoch 评分）；基线打分/攒种子数据集归 `skill-evaluator`。
 
 **本 skill 由你（agent）直接用 HTTP 工具执行，不调用任何外部脚本。**
 
 ## 架构（先理解，再执行）
 
-优化器内部**已集成 adapter**，二者分工如下（用户已确认）：
+串接两个已部署服务：
 
-- **第一轮 rollout** 用 `dataset_path` 指向的**种子 golden_data**（用户提供，位于优化器服务器上）。它是优化的起点。
-- **之后各轮**：优化器**自行**经 adapter 获取并清洗轨迹（调 agent 产生新 rollout、读 traces、取 cleaned-traces）。这一步**优化器内部完成，本 skill 不参与**，也无需在 skill 侧喂数据。
+- **优化器服务（EvoAgent API）**：`/optimize` 提交/轮询/cancel/stream、`/scenarios`、`/health`。请求体内嵌 `optimizer_template` + `evaluator_template`——评估在优化循环内部由优化器自动完成，**本 skill 不另调 `/evaluate`**。
+- **Agent Adapter**：读 baseline（前后对比）、`update_skill` 回写、调真实 agent 验证。
 
-因此本 skill 的职责是补全优化器**两侧**的缺口：
+优化器内部**已集成 adapter**：
+- **第一轮 rollout** 用 `dataset_path` 指向的**种子 golden_data**（用户提供，位于优化器服务器上）。
+- **之后各轮**：优化器**自行**经 adapter 获取并清洗轨迹。这一步**优化器内部完成，本 skill 不参与**，也无需在 skill 侧喂数据。
 
-1. 优化前：经 adapter **读 baseline skill**（看优化前的 SKILL.md）
-2. 优化：提交 `/optimize` → 轮询 → 报告
-3. 优化后：经 adapter **回写优化后的 skill** 到 agent 的 skills 目录，并**调 agent 验证**
+因此本 skill 的职责是补全优化器**两侧**的缺口：优化前读 baseline；优化后回写 + 验证。
 
 ## 配置（唯一地址来源，全文只此一处）
 
 ```
-OPT = http://60.204.199.88:8888    # 优化器
-ADP = http://124.71.234.88:8888    # adapter
+OPT = http://60.204.199.48:8000    # 优化器
+ADP = http://124.71.234.237:8900   # adapter
 ```
 
-下文统一用 `${OPT}` / `${ADP}` 指代，所有 endpoint 写成 `${OPT}/<path>` 或 `${ADP}/<path>`。
-若日后迁移服务，**只需改这两行**，正文不要再出现具体 IP/端口。
+下文统一用 `${OPT}` / `${ADP}` 指代。若日后迁移服务，**只需改这两行**，正文不要再出现具体 IP/端口。
 
 `/optimize` 要求传 `dataset_path`（优化器服务器上的文件路径，白名单：
 `/tmp/evo_agent`、`/data/evo_agent`、`/home/evolution/evoagent-studio`，文件须已存在），
@@ -54,17 +52,17 @@ ADP = http://124.71.234.88:8888    # adapter
 |---|---|---|
 | `agent_name` | 是 | 目标 agent 名（如 zdt_agent、edp_agent） |
 | `skills` | 是 | 待优化 skill 名列表（可多个） |
-| `dataset_path` | 是 | **优化器服务器上的绝对路径**（jsonl）。必须是 golden_data 格式：每行含 `id/inputs/expected_behavior/case_type`。文件需已存在于优化器服务器上。用作第一轮 rollout 种子 |
+| `dataset_path` | 是 | **优化器服务器上的绝对路径**（jsonl）。必须是 golden_data 格式：每行含 `id/inputs/expected_behavior/case_type`。文件需已存在于优化器服务器上。用作第一轮 rollout 种子。可由 `skill-evaluator` 攒出后上传 |
 
 > 提醒用户：`dataset_path` 是优化器服务器上的路径，不是本地路径。若用户手里只有本地文件，
 > 让其先把文件传到优化器服务器（如 scp/rsync）后给出服务器侧绝对路径再调用本 skill。
-> 若用户连数据集都没有，可走"其他命令/构造种子数据集"从 adapter 历史轨迹现攒一个（仍需落地到优化器服务器）。
+> 若用户连数据集都没有，可先跑 `skill-evaluator` 从 adapter 历史轨迹现攒一个（仍需落地到优化器服务器）。
 
 ---
 
 ## 步骤 0：经 adapter 读取 baseline skill（对用户可见）
 
-优化前先确认目标 skill 存在并捕获优化前内容，供步骤 5 对比。
+优化前先确认目标 skill 存在并捕获优化前内容，供步骤 4/5 对比。
 
 **0.1 列出 agent 的 skills，确认目标 skill 名存在**
 ```
@@ -103,7 +101,7 @@ POST ${OPT}/optimize
 Content-Type: application/json
 ```
 
-请求体（`<...>` 换实际值，`default_epochs` 固定 `1`）：
+请求体（`<...>` 换实际值，`num_epochs` 固定 `1`）：
 
 ```json
 {
@@ -239,70 +237,11 @@ Content-Type: application/json
 说明"已用探针调用 agent，回复：<answer 摘要>"。`conversation_id` 自取一个不重复的串即可。
 
 > 探针调用会触发真实 agent 产生新轨迹（adapter 会归档），不影响优化结果。
+> 若需对回写后的 skill 做更正式的复评，转 `skill-evaluator` 跑 baseline 对比评估。
 
 ---
 
 ## 其他命令
-
-### adapter：列出某 agent 的 skills
-```
-POST ${ADP}/api/v1/skills   {"action":"skill_list","agent_name":"<agent_name>"}
-```
-
-### adapter：读某 skill 全文
-```
-POST ${ADP}/api/v1/skills   {"action":"skill_content","agent_name":"<agent_name>","skill_name":"<skill>"}
-```
-
-### adapter：写回/覆盖某 skill
-```
-POST ${ADP}/api/v1/skills   {"action":"update_skill","agent_name":"<agent_name>","skill_name":"<skill>","skill_content":"<新全文>"}
-```
-> 写回前如需保险，可先 `skill_content` 读出原文备份到对话里再覆盖。
-
-### adapter：调用真实 agent
-```
-POST ${ADP}/api/v1/agents/<agent_name>/conversations/<conversation_id>
-Content-Type: application/json
-{"query":"<用户问题>"}
-```
-响应含 `answer` 与流式 `events`（think_chunk/final_answer_chunk 等）。
-
-### adapter：列出某 agent 的历史轨迹
-```
-GET ${ADP}/api/v1/agents/<agent_name>/traces
-```
-返回 `{"conversation_ids":[...],"total":N}`。注意 conv id 形如 `<hash>:<train|val>:<i>:<j>`，
-后缀的 `train`/`val` 可直接作 golden_data 的 `case_type`。
-
-### adapter：取某条轨迹的清洗结果
-```
-GET ${ADP}/api/v1/agents/<agent_name>/cleaned-traces/<conversation_id>
-```
-返回 `{"session_id","agent_name","task_input","trajectory","messages"}`：
-- `task_input`：首条用户输入 → 作 golden_data 的 `inputs.query`
-- `trajectory`：工具调用摘要
-- `messages`：清洗后的完整对话消息 → 喂给评估器
-
-### 构造种子数据集（当用户没有 dataset_path 时）
-
-若用户没有现成 golden_data，可从 adapter 历史轨迹现攒一个，再上传到优化器服务器：
-
-1. `GET ${ADP}/api/v1/agents/<agent_name>/traces` 拿 conv id 列表
-2. 逐条 `GET ${ADP}/api/v1/agents/<agent_name>/cleaned-traces/<conv_id>` 取 `task_input`、`messages`
-3. 组 golden_data 每行：
-   ```json
-   {"id":"<conv_id>","inputs":{"query":"<task_input>"},"expected_behavior":"<期望行为>","case_type":"<train|val,取 conv id 后缀>"}
-   ```
-4. `expected_behavior`（期望行为）的来源：
-   - 优先：用户直接给标签；
-   - 或用优化器 `POST ${OPT}/evaluate/generate-goal`（body `{"messages":[...],"llm_config":{...}}`，
-     从轨迹自动生成目标）——**注意该接口要求 `llm_config`（model_name+api_key+api_base），
-     需用户提供，skill 不内置**。
-5. 拼成 jsonl 后，**仍需把文件落到优化器服务器白名单目录**（scp/rsync）才能用于 `/optimize`。
-   skill 不代传文件。
-
-> 这条路径产出的是"种子数据集"，仅用于第一轮 rollout；后续轮的轨迹获取与清洗由优化器经 adapter 自行完成。
 
 ### 优化器：查看某任务详情 / 进度
 ```
@@ -315,6 +254,38 @@ GET ${OPT}/optimize/<job_id>
 GET ${OPT}/scenarios
 ```
 遍历返回数组，每项 `name / optimizer_class / hyperparams`。
+
+### 优化器：中止任务
+```
+POST ${OPT}/optimize/<job_id>/cancel
+```
+终态任务返回 409。
+
+### 优化器：SSE 实时进度
+```
+GET ${OPT}/optimize/<job_id>/stream
+```
+支持 `Last-Event-ID` 重放历史事件。
+
+### adapter：写回/覆盖某 skill
+```
+POST ${ADP}/api/v1/skills   {"action":"update_skill","agent_name":"<agent_name>","skill_name":"<skill>","skill_content":"<新全文>"}
+```
+> 写回前如需保险，可先 `skill_content` 读出原文备份到对话里再覆盖。
+
+### adapter：列出/读取 skill
+```
+POST ${ADP}/api/v1/skills   {"action":"skill_list","agent_name":"<agent_name>"}
+POST ${ADP}/api/v1/skills   {"action":"skill_content","agent_name":"<agent_name>","skill_name":"<skill>"}
+```
+
+### adapter：调用真实 agent（验证探针）
+```
+POST ${ADP}/api/v1/agents/<agent_name>/conversations/<conversation_id>
+Content-Type: application/json
+{"query":"<用户问题>"}
+```
+响应含 `answer` 与流式 `events`（think_chunk/final_answer_chunk 等）。
 
 ### 优化器 / adapter：健康检查
 ```
@@ -331,9 +302,9 @@ GET ${ADP}/api/v1/status   → 各 agent 的 trace 归档/offset 状态
 ## 边界
 
 - 只调这两个服务（地址见文首"配置"，全文唯一地址来源）
+- **不跑 `/evaluate` 系列**——基线打分/攒种子数据集归 `skill-evaluator`；优化循环内的 train/val 评估由 `/optimize` 自带，本 skill 不另调独立评估端点
 - `dataset_path` 必须是优化器服务器上的路径；本 skill 不上传、不转换本地文件
-- 不传 LLM 配置给 `/optimize`（不要求；优化器自带模型配置）。仅"构造种子数据集"用 `generate-goal` 时才需用户提供 `llm_config`
+- 不传 LLM 配置给 `/optimize`（不要求；优化器自带模型配置）
 - 只动 skill 内容（经 adapter `update_skill`），不动 agent 配置和模型
 - `epochs` 固定为 1，内置在请求模板里，不向用户询问、不在对话输出
-- 优化流程内含评估（train/val 分片 + 每 epoch 评分），不必单独跑 eval
 - 回写走 adapter；若优化器已自行回写，5B 的对比探测会识别出来，不重复写坏

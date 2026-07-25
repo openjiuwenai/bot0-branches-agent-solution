@@ -4,31 +4,28 @@
 
 /**
  * agent-bus registry-discovery-center — MVC Controller layer, HTTP entry
- * point (FEAT-016 §3.1).
+ * point (FEAT-016 + Feat-015).
  *
- * <p>{@link com.openjiuwen.rdc.controller.MvpRegistryController} exposes
- * {@code POST /api/registry/register}, three discovery query dimensions
- * ({@code GET /api/registry/instances/{tenantId}/{agentId}},
- * {@code GET /api/registry/instances/by-service/{tenantId}/{serviceId}},
- * {@code GET /api/registry/instances/by-capability/{tenantId}/{capability}}),
- * {@code POST /api/registry/route-handle/resolve} (FEAT-016 forwarding-layer
- * handle resolution), and three {@code DELETE /api/registry/deregister/...}
- * variants (1-field {@code {tenantId}/{agentId}} / 2-field
- * {@code {tenantId}/{agentId}/{serviceId}} / 4-field
- * {@code {tenantId}/{agentId}/{serviceId}/{instanceId}}). All endpoints read
- * {@code tenantId} from the path / body and pass it down explicitly — no
- * {@code TenantFilter} populates a {@code TenantContext} at Servlet entry
- * (ESC-2 design pivot, ADR-0160 decision 6: three-layer tenant isolation —
- * explicit parameter + application-layer {@code WHERE tenant_id = :tenantId}
- * + PostgreSQL RLS).
+ * <p>HTTP entry points only:
+ * <ul>
+ *   <li>{@link com.openjiuwen.rdc.controller.MvpRegistryController} — Feat-015
+ *       {@code POST /api/registry/discover}, push register (410 when
+ *       deployment-discovery enabled), deregister</li>
+ *   <li>{@link com.openjiuwen.rdc.controller.InstanceRouteController} — FEAT-016
+ *       instance list + {@code POST /route-handle/resolve}</li>
+ *   <li>{@link com.openjiuwen.rdc.controller.RegistryApiExceptionHandler} —
+ *       shared {@code @RestControllerAdvice}</li>
+ * </ul>
  *
- * <p>Spring Web annotations are visible at compile time via
- * {@code spring-boot-starter-web}; Jackson is licensed here for A2A AgentCard
- * JSON serialization at the HTTP boundary (REQ-2026-001). JDBC is forbidden
- * in this package — the controller calls
+ * <p>Validators, Jackson wiring, and domain exceptions live in
+ * {@code service} / {@code config} / {@code model} respectively.
+ *
+ * <p>All endpoints take {@code tenantId} explicitly — no {@code TenantFilter}
+ * (ADR-0160 decision 6). JDBC is forbidden; controllers call
  * {@link com.openjiuwen.rdc.repository.AgentRegistryRepository} /
  * {@link com.openjiuwen.rdc.service.AgentDiscoveryService} only.
  *
- * <p>Authority: ADR-0160 decisions 4 / 6 / 7 + FEAT-016 §6.1.
+ * <p>Authority: ADR-0160 decisions 4 / 6 / 7 + Feat-015 / FEAT-016.
  */
+
 package com.openjiuwen.rdc.controller;

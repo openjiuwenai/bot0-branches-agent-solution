@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openjiuwen.agent_evolving.trainer.progress import Callbacks
 
+from evo_agent.callbacks import SkillDocumentCallbacks
 from evo_agent.conversation import ConversationIdFactory
 from evo_agent.errors import ValidationCoverageError
 from evo_agent.evaluator.batch_result import (
@@ -32,6 +33,8 @@ def _make_trainer(
     evaluator: Any = None,
     trace_max_retries: int = 1,
     trace_retry_backoff: float = 0.0,
+    empty_extract_max_attempts: int = 3,
+    empty_extract_retry_backoff: float = 0.0,
     num_parallel: int = 2,
     validation_min_success_ratio: float = 1.0,
     validation_require_same_case_set: bool = True,
@@ -45,6 +48,8 @@ def _make_trainer(
         num_parallel=num_parallel,
         trace_max_retries=trace_max_retries,
         trace_retry_backoff=trace_retry_backoff,
+        empty_extract_max_attempts=empty_extract_max_attempts,
+        empty_extract_retry_backoff=empty_extract_retry_backoff,
         validation_min_success_ratio=validation_min_success_ratio,
         validation_require_same_case_set=validation_require_same_case_set,
     )
@@ -66,6 +71,54 @@ def test_evaluate_none_cases_returns_zero() -> None:
     score, evaluated = trainer.evaluate(MagicMock(), None)
     assert score == 0.0
     assert evaluated == []
+
+
+def test_evaluate_retries_when_extract_field_empty() -> None:
+    """配置了 extract 时，字段为空会换 conversation_id 重试 invoke。"""
+    from evo_agent.evaluator.factory import create_evaluator
+
+    calls: list[str] = []
+
+    async def mock_invoke(payload: dict[str, Any], **kwargs: Any) -> dict[str, str]:
+        calls.append(payload["conversation_id"])
+        if len(calls) == 1:
+            return {"answer": "incomplete"}
+        return {"answer": '<answer>{"responsibility": "无责"}</answer>'}
+
+    agent = AsyncMock()
+    agent.invoke = AsyncMock(side_effect=mock_invoke)
+
+    messages = [{"role": "user", "content": "hi"}]
+    adapter = AsyncMock()
+    adapter.get_traces = AsyncMock(return_value={"messages": messages, "summary": "s"})
+
+    evaluator = create_evaluator(
+        {
+            "type": "metric",
+            "metric": "exact_match",
+            "extract": {
+                "strategy": "answer_tag_json_field",
+                "fields": ["responsibility"],
+                "prefer_values": ["无责", "有责"],
+            },
+        }
+    )
+
+    trainer = _make_trainer(
+        adapter_client=adapter,
+        evaluator=evaluator,
+        empty_extract_max_attempts=3,
+    )
+    mock_cases = MagicMock()
+    mock_cases.get_cases.return_value = [_make_case("c1")]
+    with patch.object(evaluator, "batch_evaluate", MagicMock(return_value=[])):
+        trainer.evaluate(agent, mock_cases)
+
+    assert len(calls) == 2
+    assert calls[0] != calls[1]
+    # traces should be fetched for the successful conversation
+    adapter.get_traces.assert_awaited()
+    assert adapter.get_traces.await_args.kwargs["case_id"] == calls[-1]
 
 
 def test_evaluate_uses_unique_conversation_ids() -> None:
@@ -534,43 +587,74 @@ def test_managed_doc_candidate_content_is_captured_even_when_gate_rejects() -> N
     assert trainer.managed_doc_epoch_contents("managed_doc:agent_rule") == ("rejected candidate",)
 
 
-def test_select_best_candidate_single_candidate_no_record() -> None:
-    """1 candidate → no entry in _gate_epoch_scores (no comparison to make)."""
+def test_select_best_candidate_single_noop_completes_epoch_artifact() -> None:
+    """0-edit 的 unchanged candidate 必须发布 no-op artifact 并正常结束 epoch。"""
     trainer = _make_trainer()
+    optimizer = MagicMock()
+    optimizer._artifact_epoch = 0
+    optimizer.run_epoch_end = AsyncMock()
+    callback = SkillDocumentCallbacks(optimizer)
+    trainer._callbacks = callback
 
     single_eval = _make_evaluated_case("c1", 0.5)
     trainer.evaluate = MagicMock(return_value=(0.5, [single_eval]))  # type: ignore[method-assign]
 
-    operators = {"skill_a": _make_mock_operator()}
-    candidates = [{("skill_a", "skill_content"): "only"}]
-
-    trainer._select_best_candidate_on_val(
-        agent=MagicMock(),
-        operators=operators,
-        candidates=candidates,
-        val_cases=MagicMock(),
-    )
-
-    assert len(trainer._gate_epoch_scores) == 0
-
-
-def test_select_best_candidate_empty_returns_evaluate() -> None:
-    """0 candidates → delegates to self.evaluate(), no recording."""
-    trainer = _make_trainer()
-
-    eval_result = _make_evaluated_case("c1", 0.6)
-    trainer.evaluate = MagicMock(return_value=(0.6, [eval_result]))  # type: ignore[method-assign]
+    val_cases = MagicMock()
+    val_cases.get_cases.return_value = [single_eval.case]
 
     score, evaluated = trainer._select_best_candidate_on_val(
         agent=MagicMock(),
-        operators={"skill_a": _make_mock_operator()},
+        operators={"managed_doc:agent_rule": _make_mock_operator()},
+        candidates=[{}],
+        val_cases=val_cases,
+    )
+
+    callback.on_train_epoch_end(
+        MagicMock(),
+        MagicMock(current_epoch=1),
+        evaluated,
+    )
+
+    assert score == 0.5
+    artifact_input = optimizer.run_epoch_end.await_args.kwargs["artifact_input"]
+    assert artifact_input.gate.kind == "no_op"
+    assert artifact_input.gate.reason == "no_selected_edits"
+    assert artifact_input.gate.decision == "unchanged"
+    assert artifact_input.gate.base_score == 0.5
+    assert artifact_input.gate.candidate_score is None
+    assert trainer.gate_epoch_scores == [
+        {
+            "base_score": 0.5,
+            "candidate_score": 0.5,
+        }
+    ]
+    assert trainer.managed_doc_epoch_contents("managed_doc:agent_rule") == ("original",)
+
+
+def test_select_best_candidate_empty_emits_noop_artifact() -> None:
+    """0 candidates 也必须发布显式 no-op，不能在 epoch-end 留下空队列。"""
+    trainer = _make_trainer()
+    callbacks = MagicMock()
+    trainer._callbacks = callbacks
+
+    evaluated = _make_evaluated_case("c1", 0.6)
+    trainer.evaluate = MagicMock(return_value=(0.6, [evaluated]))  # type: ignore[method-assign]
+    val_cases = MagicMock()
+    val_cases.get_cases.return_value = [evaluated.case]
+
+    score, selected = trainer._select_best_candidate_on_val(
+        agent=MagicMock(),
+        operators={"managed_doc:agent_rule": _make_mock_operator()},
         candidates=[],
-        val_cases=MagicMock(),
+        val_cases=val_cases,
     )
 
     assert score == 0.6
-    assert evaluated == [eval_result]
-    assert len(trainer._gate_epoch_scores) == 0
+    assert selected == [evaluated]
+    artifact_input = callbacks.on_gate_artifact_ready.call_args.args[0]
+    assert artifact_input.gate.kind == "no_op"
+    assert artifact_input.gate.reason == "no_candidates"
+    assert trainer.gate_epoch_scores[-1] == {"base_score": 0.6, "candidate_score": 0.6}
 
 
 def test_multiple_epochs_accumulate_scores() -> None:

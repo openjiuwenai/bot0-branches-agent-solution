@@ -22,36 +22,36 @@ import java.util.concurrent.TimeUnit;
  * service stay thin:
  * <ul>
  *   <li><b>Audit</b> — structured SLF4J log lines on the {@code registry.audit}
- *       logger. Operations register/deregister/probe/resolve emit 10 fields
- *       via shared audit helper: {@code traceId}, {@code tenantId},
+ *       logger, 9 fields per line (REQ-2026-004 removed {@code capability}
+ *       from the audit schema): {@code traceId}, {@code tenantId},
  *       {@code agentId}, {@code contractVersion}, {@code capabilityVersion},
- *       {@code health}, {@code routeHandleId}, {@code outcome}, {@code latencyMs}.
- *       Discover emits 12 fields: {@code registryOp, traceId, tenantId, queryDimension,
- *       queryValue, contractVersion, capabilityVersion, health, routeHandleId, outcome,
- *       latencyMs, resultCount}. The {@code registryOp} tag prefixes each line.
- *       Unavailable fields are emitted as {@code "-"}</li>
+ *       {@code health}, {@code routeHandleId}, {@code outcome},
+ *       {@code latencyMs}. The {@code registryOp} tag (register / deregister
+ *       / probe / discover / resolve) prefixes each line. Unavailable fields
+ *       are emitted as {@code "-"} so log parsers can rely on a stable
+ *       9-field shape.</li>
  *   <li><b>Metrics</b> — Micrometer {@link Counter} ({@code agent_bus_registry_op_total},
  *       tags {@code op} + {@code outcome}) and {@link Timer}
  *       ({@code agent_bus_registry_op_duration_ms}, tag {@code op}) per
  *       registry operation. {@link MeterRegistry} is constructor-injected.</li>
  * </ul>
  *
- * <p>FEAT-016 changes (baseline-breaking):
+ * <p>REQ-2026-004 changes (baseline-breaking):
  * <ul>
- *   <li>{@code observeDiscover} now takes {@code queryDimension} +
- *       {@code queryValue} instead of {@code agentId}. The discovery service
- *       has three query dimensions (agentId / serviceId / capability); the
- *       audit log now records which dimension was queried and the value
- *       searched. Operations dashboards parsing the audit log must update
- *       their field semantics (the agentId field now carries the
- *       queryDimension for discover ops).</li>
+ *   <li>Removed {@code capability} parameter from {@link #observeRegister}
+ *       and {@link #observeDiscover} — audit log format goes from 10 fields
+ *       to 9 fields. Operations dashboards parsing the audit log must update
+ *       their field count.</li>
+ *   <li>{@code observeDiscover} now takes {@code agentId} instead of
+ *       {@code capability} — single-value point lookup reports the agentId
+ *       it searched for, not a capability scope.</li>
  * </ul>
  *
  * <p>Each {@code observeXxx} method emits BOTH the audit line and the
  * metric update for one operation, so callers make a single call per op
  * (no risk of audit-without-metric or vice versa).
  *
- * @since 2026-07-10
+ * @since 0.1.0
  */
 @Configuration
 public class RegistryObservabilityConfig {
@@ -61,111 +61,194 @@ public class RegistryObservabilityConfig {
 
     private final MeterRegistry meterRegistry;
 
-    /**
-     * Constructs the facade with the injected meter registry.
-     *
-     * @param meterRegistry the Micrometer registry used to record op counters/timers
-     */
     public RegistryObservabilityConfig(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
     }
+    // ---- audit + metrics per operation ----
 
     /**
-     * Records a register operation's audit line + metrics.
+     * observeRegister.
      *
-     * @param context the audit context (traceId/tenantId/agentId/contractVersion/
-     *                capabilityVersion/health/routeHandleId)
-     * @param outcome the operation outcome tag (success/error/...)
-     * @param latencyMs the operation latency in milliseconds
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param contractVersion contractVersion
+     * @param capabilityVersion capabilityVersion
+     * @param health health
+     * @param routeHandleId routeHandleId
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     * @param audit audit
      */
-    public void observeRegister(RegistryOpContext context, String outcome, long latencyMs) {
-        audit("register", context, outcome, latencyMs);
-        recordMetrics("register", outcome, latencyMs);
+    public void observeRegister(RegistryOpAudit audit) {
+        audit("register", audit);
+        recordMetrics("register", audit.outcome(), audit.latencyMs());
     }
 
     /**
-     * Records a deregister operation's audit line + metrics.
+     * observeDeregister.
      *
-     * @param context the audit context (traceId/tenantId/agentId)
-     * @param outcome the operation outcome tag
-     * @param latencyMs the operation latency in milliseconds
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
      */
-    public void observeDeregister(RegistryOpContext context, String outcome, long latencyMs) {
-        audit("deregister", context, outcome, latencyMs);
+    public void observeDeregister(String traceId, String tenantId, String agentId,
+                                  String outcome, long latencyMs) {
+        audit("deregister", new RegistryOpAudit(
+                traceId, tenantId, agentId, null, null, null, null, outcome, latencyMs));
         recordMetrics("deregister", outcome, latencyMs);
     }
 
     /**
-     * Records a probe operation's audit line + metrics.
+     * observeProbe.
      *
-     * @param context the audit context (traceId/tenantId/agentId/health)
-     * @param outcome the operation outcome tag
-     * @param latencyMs the operation latency in milliseconds
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param health health
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     * @param audit audit
      */
-    public void observeProbe(RegistryOpContext context, String outcome, long latencyMs) {
-        audit("probe", context, outcome, latencyMs);
-        recordMetrics("probe", outcome, latencyMs);
+    public void observeProbe(RegistryOpAudit audit) {
+        audit("probe", audit);
+        recordMetrics("probe", audit.outcome(), audit.latencyMs());
     }
 
     /**
-     * FEAT-016: takes {@code queryDimension} (agentId / serviceId /
-     * capability) + {@code queryValue} instead of {@code agentId}. The audit
-     * line records the dimension and value searched so dashboards can
-     * distinguish the three query paths.
+     * observeDiscover.
      *
-     * @param context the audit context (traceId/tenantId/queryDimension/queryValue)
-     * @param outcome the operation outcome tag
-     * @param resultCount the number of rows returned by the discovery query
-     * @param latencyMs the operation latency in milliseconds
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param outcome outcome
+     * @param resultCount resultCount
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     * @param audit audit
      */
-    public void observeDiscover(RegistryOpContext context, String outcome,
-                                int resultCount, long latencyMs) {
-        String queryDimension = context.getQueryDimension();
-        String queryValue = context.getQueryValue();
-        AUDIT.info("registryOp=discover traceId={} tenantId={} queryDimension={} queryValue={} "
+    public void observeDiscover(RegistryOpAudit audit, int resultCount) {
+        AUDIT.info("registryOp=discover traceId={} tenantId={} agentId={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={} resultCount={}",
-                context.getTraceId(), context.getTenantId(),
-                queryDimension == null ? PLACEHOLDER : queryDimension,
-                queryValue == null ? PLACEHOLDER : queryValue,
-                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, outcome, latencyMs,
+                audit.traceId(), audit.tenantId(),
+                audit.agentId() == null ? PLACEHOLDER : audit.agentId(),
+                PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER, audit.outcome(), audit.latencyMs(),
                 resultCount < 0 ? PLACEHOLDER : String.valueOf(resultCount));
-        recordMetrics("discover", outcome, latencyMs);
+        recordMetrics("discover", audit.outcome(), audit.latencyMs());
     }
 
     /**
-     * Records a resolve operation's audit line + metrics.
+     * observeResolve.
      *
-     * @param context the audit context (traceId/tenantId/routeHandleId)
-     * @param outcome the operation outcome tag
-     * @param latencyMs the operation latency in milliseconds
+     * @param traceId traceId
+     * @param tenantId tenantId
+     * @param routeHandleId routeHandleId
+     * @param outcome outcome
+     * @param latencyMs latencyMs
+     * @since 0.1.0
+     * @param audit audit
      */
-    public void observeResolve(RegistryOpContext context, String outcome, long latencyMs) {
-        audit("resolve", context, outcome, latencyMs);
-        recordMetrics("resolve", outcome, latencyMs);
+    public void observeResolve(RegistryOpAudit audit) {
+        audit("resolve", audit);
+        recordMetrics("resolve", audit.outcome(), audit.latencyMs());
     }
 
     /**
-     * Emits the shared 10-field audit log line for an operation.
+     * Governance events per 0711 §5.1.8 SHOULD (independent of query failures).
      *
-     * @param op the operation name (register/deregister/probe/resolve)
-     * @param context the audit context carrying the per-op fields
-     * @param outcome the operation outcome tag
-     * @param latencyMs the operation latency in milliseconds
+     * @param sourceId sourceId
+     * @param tenantId tenantId
+     * @param instanceId instanceId
+     * @param failureCode failureCode
+     * @since 0.1.0
      */
-    private void audit(String op, RegistryOpContext context, String outcome, long latencyMs) {
-        String contractVersion = context.getContractVersion();
-        String capabilityVersion = context.getCapabilityVersion();
-        String health = context.getHealth();
-        String routeHandleId = context.getRouteHandleId();
+    public void observeCardRefreshFailed(String sourceId, String tenantId, String instanceId,
+                                         String failureCode) {
+        recordGovernance("card_refresh_failed", sourceId, tenantId, instanceId, failureCode);
+    }
+
+    /**
+     * observeSourceStale.
+     *
+     * @param sourceId sourceId
+     * @since 0.1.0
+     */
+    public void observeSourceStale(String sourceId) {
+        recordGovernance("source_stale", sourceId, PLACEHOLDER, PLACEHOLDER, PLACEHOLDER);
+    }
+
+    /**
+     * observeReconciliationConflict.
+     *
+     * @param sourceId sourceId
+     * @param revision revision
+     * @since 0.1.0
+     */
+    public void observeReconciliationConflict(String sourceId, long revision) {
+        recordGovernance("reconciliation_conflict", sourceId, PLACEHOLDER, PLACEHOLDER,
+                String.valueOf(revision));
+    }
+
+    /**
+     * observeInstanceDraining.
+     *
+     * @param sourceId sourceId
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @since 0.1.0
+     */
+    public void observeInstanceDraining(String sourceId, String tenantId, String agentId) {
+        recordGovernance("draining", sourceId, tenantId, agentId, PLACEHOLDER);
+    }
+
+    /**
+     * observeLeaseExpired.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @since 0.1.0
+     */
+    public void observeLeaseExpired(String tenantId, String agentId) {
+        recordGovernance("lease_expired", PLACEHOLDER, tenantId, agentId, PLACEHOLDER);
+    }
+
+    /**
+     * observeUnhealthy.
+     *
+     * @param tenantId tenantId
+     * @param agentId agentId
+     * @param health health
+     * @since 0.1.0
+     */
+    public void observeUnhealthy(String tenantId, String agentId, String health) {
+        recordGovernance("unhealthy", PLACEHOLDER, tenantId, agentId, health);
+    }
+    // ---- internals ----
+
+    private void audit(String op, RegistryOpAudit audit) {
         AUDIT.info("registryOp={} traceId={} tenantId={} agentId={} "
                         + "contractVersion={} capabilityVersion={} health={} routeHandleId={} outcome={} "
                         + "latencyMs={}",
-                op, context.getTraceId(), context.getTenantId(), context.getAgentId(),
-                contractVersion == null ? PLACEHOLDER : contractVersion,
-                capabilityVersion == null ? PLACEHOLDER : capabilityVersion,
-                health == null ? PLACEHOLDER : health,
-                routeHandleId == null ? PLACEHOLDER : routeHandleId, outcome, latencyMs);
+                op,
+                audit.traceId(),
+                audit.tenantId(),
+                nullToPlaceholder(audit.agentId()),
+                nullToPlaceholder(audit.contractVersion()),
+                nullToPlaceholder(audit.capabilityVersion()),
+                nullToPlaceholder(audit.health()),
+                nullToPlaceholder(audit.routeHandleId()),
+                audit.outcome(),
+                audit.latencyMs());
+    }
+
+    private static String nullToPlaceholder(String value) {
+        return value == null ? PLACEHOLDER : value;
     }
 
     private void recordMetrics(String op, String outcome, long latencyMs) {
@@ -178,5 +261,15 @@ public class RegistryObservabilityConfig {
                 .tag("op", op)
                 .register(meterRegistry)
                 .record(latencyMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void recordGovernance(String event, String sourceId, String tenantId,
+                                  String agentOrInstance, String detail) {
+        AUDIT.info("registryOp=governance event={} sourceId={} tenantId={} target={} detail={}",
+                event, sourceId, tenantId, agentOrInstance, detail);
+        Counter.builder("agent_bus_registry_governance_total")
+                .tag("event", event)
+                .register(meterRegistry)
+                .increment();
     }
 }

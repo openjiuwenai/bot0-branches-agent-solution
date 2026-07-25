@@ -28,7 +28,7 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
  * Spring Boot application) + PR #389 review issue #2 (probe scheduler thread
  * isolation).
  *
- * @since 2026-07-10
+ * @since 0.1.0 (2026)
  */
 @Configuration
 @EnableScheduling
@@ -42,7 +42,8 @@ public class RegistrySchedulingConfig implements SchedulingConfigurer {
      * {@code MvpHealthProbeScheduler}'s RestClient read timeout (default 2s)
      * — they cannot pin a thread indefinitely.
      *
-     * @return the dedicated probe scheduler (never {@code null})
+     * @return result
+     * @since 0.1.0
      */
     @Bean(destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler registryProbeTaskScheduler() {
@@ -53,6 +54,12 @@ public class RegistrySchedulingConfig implements SchedulingConfigurer {
         return scheduler;
     }
 
+    /**
+     * configureTasks.
+     *
+     * @param registrar registrar
+     * @since 0.1.0
+     */
     @Override
     public void configureTasks(ScheduledTaskRegistrar registrar) {
         // Bind the registry probe's @Scheduled methods to the dedicated
