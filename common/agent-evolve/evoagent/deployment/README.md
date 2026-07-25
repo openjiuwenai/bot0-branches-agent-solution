@@ -3,7 +3,7 @@
 EvoAgent 是基于 agent-core 的自进化元 Agent，以 FastAPI 服务形式对外提供 skill 文档自动优化能力。
 本目录包含完整的 Docker 化部署脚本，支持**联网构建**与**离线包**两种交付方式。
 
-> 更详细的操作流程见 [operations-guide.md](./operations-guide.md)。
+> 更详细的操作流程见 [evoagent部署指南.md](../docs/02-部署指南/evoagent部署指南.md)。
 
 ---
 
@@ -210,7 +210,7 @@ EVO_ARTIFACT_DIR=./workspace/artifacts
 EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db  # 必须位于持久卷
 ```
 
-完整字段见 [config/.env.example](./config/.env.example)，详细解释见 [operations-guide.md §4.4](./operations-guide.md)。
+完整字段见 [config/.env.example](./config/.env.example)，详细解释见 [evoagent部署指南.md §4.4](../docs/02-部署指南/evoagent部署指南.md)。
 
 ---
 
@@ -388,7 +388,7 @@ curl http://localhost:8000/openapi.json            # 验证
 
 | 文档 | 路径 |
 |------|------|
-| 详细操作指南 | [operations-guide.md](./operations-guide.md) |
+| 详细操作指南 | [evoagent部署指南.md](../docs/02-部署指南/evoagent部署指南.md) |
 | 项目 README | [../README.md](../README.md) |
 | API 参考 | [../docs/api/optimization-api-reference.md](../docs/api/optimization-api-reference.md) |
 | 配置源码 | [../src/evo_agent/config.py](../src/evo_agent/config.py) |
