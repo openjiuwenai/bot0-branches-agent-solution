@@ -70,6 +70,12 @@ final class A2aDelegatePayload {
     static Map<String, Object> buildSyntheticPayload(String agentName, String responseContent,
                                                      String userQuery, boolean stream) {
         Map<String, Object> payload = new LinkedHashMap<>();
+        // type + toolCallId are required by A2AEnabledServeOrchestrator.isCoordinatorInterrupt
+        // (single-agent path). Without them the orchestrator throws
+        // CORE_INTERRUPT_CORRELATION_MISSING. Mirrors the real builder in
+        // VersatileResponseExtractor.buildA2aDelegateInterrupt.
+        payload.put("type", "__interaction__");
+        payload.put("toolCallId", "versatile-delegate-" + java.util.UUID.randomUUID());
         payload.put("agentName", agentName);
         payload.put("responseContent", responseContent);
         payload.put("resume", false);

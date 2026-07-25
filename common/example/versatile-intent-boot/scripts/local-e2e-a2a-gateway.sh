@@ -2,12 +2,14 @@
 #
 # Local end-to-end runbook for the A2A Gateway caller mode (full chain).
 # Verifies L2 §6.2.1 场景一 (两层识别 + 下游业务), L2 §6.2.4 意图不明自消,
-# and L2 §6.2.2 意图不明回退 L1 重识别 under a2a-gateway.enabled=true.
+# L2 §6.2.2 意图不明回退 L1 重识别, and the multi-turn route cache
+# (route cached on turn 1, reused on turn 2) under a2a-gateway.enabled=true.
 #
 # §6.2.2 and §6.2.4 are mutually exclusive on L2 config (default-workflow
 # present vs absent), so the script runs two rounds with an L2 restart
 # in between:
 #   - Round 1: L2 with default-workflow → §6.2.1 + §6.2.4 self-heal
+#     + multi-turn route cache (conv_id=c4-multi-turn, two client turns)
 #   - Round 2: L2 without default-workflow → §6.2.2 reclassify
 #
 # §6.2.2 signal path (L2 ambiguous → L1 reclassify):
@@ -84,6 +86,27 @@
 #   9. default-wf Versatile → terminal {text:"默认工作流兜底：转人工客服"}
 #   10. default-wf → gateway → L2 → gateway → L1 → client
 #   Final response contains "默认工作流兜底"
+#
+# Chain (multi-turn route cache, conv_id=c4-multi-turn):
+#   Turn 1 (cache miss):
+#     1. Client → L1 /v1/query "订酒店" (conv_id=c4-multi-turn)
+#     2. L1 Versatile invoked (counter=1) → three-field {agent_id:
+#        "agent_card_L2_hotel"}
+#     3. CachedVersatileAgentHandler captures {agentName:
+#        "agent_card_L2_hotel"} into RouteCache keyed by conv_id
+#     4. L1 → gateway → L2 → gateway → downstream → "酒店预订成功"
+#   Turn 2 (cache hit, same conv_id):
+#     1. Client → L1 /v1/query "再订一晚" (conv_id=c4-multi-turn)
+#     2. CachedVersatileAgentHandler cache hit → synthesizes a2a_delegate
+#        {agentName:"agent_card_L2_hotel"} WITHOUT invoking L1 Versatile
+#        (counter stays at 1)
+#     3. L1 → gateway → L2 → gateway → downstream → "酒店预订成功"
+#   Assertions:
+#     - Both turns' responses contain "酒店预订成功"
+#     - L1 versatile log count for c4-multi-turn == 1 (cache hit on turn 2)
+#     - L2 versatile log count for c4-multi-turn == 2 (one per turn)
+#     - Gateway inbound agent_card_L2_hotel delta == 2 (one per turn)
+#     - Gateway inbound agent_card_biz_hotel_domestic delta == 2 (one per turn)
 #
 # Header propagation is verified via gateway log assertions (the gateway logs
 # all inbound token/userId/versionNode/X-B3-*/X-Biz-Tag headers at INFO).
@@ -236,11 +259,11 @@ assert_log_contains() {
 }
 
 main() {
-    echo "==> A2A Gateway 全链路联调 (L2 §6.2.1 + §6.2.4 自消 + §6.2.2 重识别)"
+    echo "==> A2A Gateway 全链路联调 (L2 §6.2.1 + §6.2.4 自消 + 多轮路由缓存 + §6.2.2 重识别)"
     build_if_needed
 
     echo
-    echo "======================================== Round 1: §6.2.1 + §6.2.4 自消 ========================================"
+    echo "======================================== Round 1: §6.2.1 + §6.2.4 自消 + 多轮路由缓存 ========================================"
 
     echo
     echo "==================== 启动 gateway + L1 + L2 + downstream + default-wf ===================="
@@ -327,6 +350,61 @@ main() {
     echo
     echo "==================== 验证 L2 日志：ambiguous 自消 a2a_delegate ===================="
     assert_log_contains "l2-ambiguous-delegate" "$LOG_DIR/layer2.log" "A2AGateway call agent=agent_card_L2_default"
+
+    echo
+    echo "==================== Scenario: 多轮对话路由缓存复用 (conv_id=c4-multi-turn, two turns) ===================="
+    echo "    Turn 1: POST http://localhost:${L1_PORT}/v1/query  conv_id=c4-multi-turn  messages=[{user, 订酒店}]"
+    echo "    Turn 2: POST http://localhost:${L1_PORT}/v1/query  conv_id=c4-multi-turn  messages=[{user, 再订一晚}]"
+    echo "    Expected: both turns return 酒店预订成功; L1 versatile invoked ONCE (cache hit on turn 2)"
+
+    # Capture gateway inbound counts BEFORE the multi-turn scenario. The
+    # gateway log accumulates across c1/c2 scenarios, so we assert deltas
+    # rather than absolute counts.
+    local gw_l2_hotel_before gw_biz_before
+    gw_l2_hotel_before=$(grep -c "inbound agentId=agent_card_L2_hotel" "$LOG_DIR/gateway.log" 2>/dev/null || echo 0)
+    gw_biz_before=$(grep -c "inbound agentId=agent_card_biz_hotel_domestic" "$LOG_DIR/gateway.log" 2>/dev/null || echo 0)
+
+    local resp_t1 resp_t2
+    resp_t1=$(send_query_with_trace "$L1_PORT" "c4-multi-turn" "订酒店")
+    echo "    turn1 response: $(echo "$resp_t1" | head -c 800)"
+    assert_contains "multi-turn-turn1-business-output" "$resp_t1" "酒店预订成功"
+
+    resp_t2=$(send_query_with_trace "$L1_PORT" "c4-multi-turn" "再订一晚")
+    echo "    turn2 response: $(echo "$resp_t2" | head -c 800)"
+    assert_contains "multi-turn-turn2-business-output" "$resp_t2" "酒店预订成功"
+
+    echo
+    echo "==================== 验证路由缓存命中：L1 versatile 仅调用一次 ===================="
+    # conv_id c4-multi-turn is unique to this scenario, so a direct grep is clean.
+    local l1_versatile_count l2_versatile_count
+    l1_versatile_count=$(grep -c "Mock Versatile agentId=agent_L1 conversationId=c4-multi-turn" "$LOG_DIR/layer1.log" 2>/dev/null || echo 0)
+    l2_versatile_count=$(grep -c "Mock Versatile agentId=agent_L2 conversationId=c4-multi-turn" "$LOG_DIR/layer2.log" 2>/dev/null || echo 0)
+    if [ "$l1_versatile_count" -eq 1 ]; then
+        echo "    PASS: L1 versatile invoked exactly once for c4-multi-turn (route cache hit on turn 2)"
+    else
+        echo "    FAIL: expected L1 versatile count=1 (cache hit on turn 2), got $l1_versatile_count" >&2
+        return 1
+    fi
+    if [ "$l2_versatile_count" -eq 2 ]; then
+        echo "    PASS: L2 versatile invoked twice for c4-multi-turn (chain still flows through L2 on both turns)"
+    else
+        echo "    FAIL: expected L2 versatile count=2 (one per turn), got $l2_versatile_count" >&2
+        return 1
+    fi
+
+    echo
+    echo "==================== 验证 gateway 日志：两轮各触发一次 L1→L2 hop + L2→downstream hop ===================="
+    local gw_l2_hotel_after gw_biz_after gw_l2_hotel_delta gw_biz_delta
+    gw_l2_hotel_after=$(grep -c "inbound agentId=agent_card_L2_hotel" "$LOG_DIR/gateway.log" 2>/dev/null || echo 0)
+    gw_biz_after=$(grep -c "inbound agentId=agent_card_biz_hotel_domestic" "$LOG_DIR/gateway.log" 2>/dev/null || echo 0)
+    gw_l2_hotel_delta=$((gw_l2_hotel_after - gw_l2_hotel_before))
+    gw_biz_delta=$((gw_biz_after - gw_biz_before))
+    if [ "$gw_l2_hotel_delta" -eq 2 ] && [ "$gw_biz_delta" -eq 2 ]; then
+        echo "    PASS: gateway received 2 L1→L2 hops and 2 L2→downstream hops for c4-multi-turn (one pair per turn)"
+    else
+        echo "    FAIL: expected gateway deltas L2_hotel=2 biz=2, got L2_hotel=$gw_l2_hotel_delta biz=$gw_biz_delta" >&2
+        return 1
+    fi
 
     echo
     echo "======================================== Round 2: §6.2.2 L2 意图不明回退 L1 重识别 ========================================"
