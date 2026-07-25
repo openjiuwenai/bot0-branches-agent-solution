@@ -212,6 +212,7 @@ public class ExecutionLimitRail extends AgentRail {
                     sid, counts.size(), TOOL_COUNT_TTL_SECONDS);
         } catch (Exception e) {
             LOGGER.error("[ExecutionLimitRail] session {} failed to persist tool counts to Redis", sid, e);
+            return;
         }
     }
 
