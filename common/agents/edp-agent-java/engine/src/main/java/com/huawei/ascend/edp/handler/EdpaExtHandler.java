@@ -522,6 +522,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         // 第五步：配置校验 fail-fast。
         EdpConfigValidator.validateModelConfig(config.getModel());
         EdpConfigValidator.validateVersatileUrl(config.getVersatile());
+        EdpConfigValidator.validateSandboxConfig(config.getSandbox());
         if (result.getScenarioHomePath() != null) {
             EdpConfigValidator.validateScenarioConfig(result.getScenarioHomePath());
         }
