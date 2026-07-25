@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import java.util.Optional;
@@ -13,12 +17,26 @@ import java.util.Optional;
  * @since 2026-07-25
  */
 public interface RouteCache {
-    /** Looks up a cached route. Returns empty if absent or expired. */
+    /**
+     * Looks up a cached route.
+     *
+     * @param conversationId the conversation id
+     * @return the cached route, or empty if absent or expired
+     */
     Optional<CachedRoute> get(String conversationId);
 
-    /** Stores a route for the given conversation id. */
+    /**
+     * Stores a route for the given conversation id.
+     *
+     * @param conversationId the conversation id
+     * @param route the route to cache
+     */
     void put(String conversationId, CachedRoute route);
 
-    /** Removes any cached entry for the given conversation id. */
+    /**
+     * Removes any cached entry for the given conversation id.
+     *
+     * @param conversationId the conversation id
+     */
     void invalidate(String conversationId);
 }

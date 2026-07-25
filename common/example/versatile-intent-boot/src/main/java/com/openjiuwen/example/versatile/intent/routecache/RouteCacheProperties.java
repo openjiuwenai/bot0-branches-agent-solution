@@ -1,6 +1,11 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import java.time.Duration;
 
 /**
@@ -19,9 +24,19 @@ public class RouteCacheProperties {
     private boolean enabled = false;
     private Duration ttl = Duration.ofMinutes(30);
 
-    public boolean isEnabled() { return enabled; }
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isEnabled() {
+        return enabled;
+    }
 
-    public Duration getTtl() { return ttl; }
-    public void setTtl(Duration ttl) { this.ttl = ttl; }
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public Duration getTtl() {
+        return ttl;
+    }
+
+    public void setTtl(Duration ttl) {
+        this.ttl = ttl;
+    }
 }

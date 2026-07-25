@@ -1,16 +1,8 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.reclassify;
-
-import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
@@ -19,8 +11,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-class ReclassifyObserverTest {
+import com.openjiuwen.service.spec.dto.QueryChunk;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Verifies that {@link ReclassifyObserver} intercepts ambiguous answer
+ * envelopes while forwarding all other signals to the downstream observer.
+ *
+ * @since 2026-07-24
+ */
+class ReclassifyObserverTest {
     private QueryStreamObserver downstream;
     private ReclassifyObserver observer;
 

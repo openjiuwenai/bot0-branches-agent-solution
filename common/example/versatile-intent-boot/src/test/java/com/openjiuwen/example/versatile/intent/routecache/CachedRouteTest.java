@@ -1,8 +1,20 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Verifies accessor and expiry semantics of {@link CachedRoute}.
+ *
+ * @since 2026-07-25
+ */
 class CachedRouteTest {
     @Test
     void exposesAgentNameAndResponseContent() {

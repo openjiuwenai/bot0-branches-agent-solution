@@ -1,11 +1,26 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import static org.junit.jupiter.api.Assertions.*;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Verifies parsing of {@code a2a_delegate} payloads and synthetic payload
+ * construction in {@link A2aDelegatePayload}.
+ *
+ * @since 2026-07-25
+ */
 class A2aDelegatePayloadTest {
     @Test
     void fromResultMapExtractsAgentNameAndResponseContent() {
@@ -78,8 +93,11 @@ class A2aDelegatePayloadTest {
                 "agent_card_layer2_hotel", "", "我要订酒店", true);
         // type + toolCallId are required by A2AEnabledServeOrchestrator.isCoordinatorInterrupt
         assertEquals("__interaction__", payload.get("type"));
-        assertInstanceOf(String.class, payload.get("toolCallId"));
-        String toolCallId = (String) payload.get("toolCallId");
+        Object toolCallIdObj = payload.get("toolCallId");
+        assertInstanceOf(String.class, toolCallIdObj);
+        assertTrue(toolCallIdObj instanceof String,
+                "toolCallId must be a String before downcasting");
+        String toolCallId = (String) toolCallIdObj;
         assertTrue(toolCallId.startsWith("versatile-delegate-"),
                 "toolCallId must follow the versatile-delegate-<uuid> shape");
         assertEquals("agent_card_layer2_hotel", payload.get("agentName"));

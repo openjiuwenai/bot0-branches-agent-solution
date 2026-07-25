@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.routecache;
 
 /**
@@ -14,6 +18,12 @@ package com.openjiuwen.example.versatile.intent.routecache;
  * @since 2026-07-25
  */
 public record CachedRoute(String agentName, String responseContent, long expiresAt) {
+    /**
+     * Returns whether this entry has expired as of the supplied monotonic time.
+     *
+     * @param nowMillis the current monotonic time in millis
+     * @return {@code true} if {@code nowMillis} is past {@code expiresAt}
+     */
     public boolean isExpired(long nowMillis) {
         return nowMillis > expiresAt;
     }

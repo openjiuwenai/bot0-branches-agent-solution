@@ -1,8 +1,10 @@
 /*
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
+
 package com.openjiuwen.example.versatile.intent.reclassify;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.spec.dto.QueryResponse;
@@ -112,7 +114,7 @@ public final class AmbiguousPayloadParser {
                 return Optional.empty();
             }
             return fromEnvelopeNode(root, ambiguousIntentId);
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             return Optional.empty();
         }
     }
@@ -156,11 +158,12 @@ public final class AmbiguousPayloadParser {
         // The marker typically appears as a string value inside the JSON
         // object (e.g. {"code":"VERSATILE_INTENT_AMBIGUOUS",...}), so we must
         // find the open-brace that *encloses* it, not the first one after it.
-        int[] bounds = findEnclosingObject(message, markerIdx);
-        if (bounds == null) {
+        Optional<int[]> bounds = findEnclosingObject(message, markerIdx);
+        if (bounds.isEmpty()) {
             return Optional.empty();
         }
-        String json = message.substring(bounds[0], bounds[1] + 1);
+        int[] range = bounds.get();
+        String json = message.substring(range[0], range[1] + 1);
         try {
             JsonNode node = MAPPER.readTree(json);
             if (node == null || !node.isObject()) {
@@ -174,7 +177,7 @@ public final class AmbiguousPayloadParser {
             String responseContent = textOrEmpty(node.get("response_content"));
             String ambiguousIntentId = textOrEmpty(node.get("ambiguous_intent_id"));
             return Optional.of(new AmbiguousPayload(intentId, responseContent, ambiguousIntentId));
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             return Optional.empty();
         }
     }
@@ -183,7 +186,7 @@ public final class AmbiguousPayloadParser {
      * Scans the message forward, tracking string literals and escape
      * sequences, to locate the JSON object that encloses the marker at
      * {@code markerIdx}. Returns the inclusive {@code [openBrace, closeBrace]}
-     * indices, or {@code null} if no enclosing object is found.
+     * indices, or empty if no enclosing object is found.
      *
      * <p>The scan walks every top-level (depth-0) {@code {} ... {@code }}
      * pair; the first pair whose span contains the marker is returned. This
@@ -192,9 +195,9 @@ public final class AmbiguousPayloadParser {
      *
      * @param text       the message text
      * @param markerIdx  the index of the ambiguous marker
-     * @return a two-element array {@code [start, end]} or {@code null}
+     * @return a two-element array {@code [start, end]} or empty if not found
      */
-    private static int[] findEnclosingObject(String text, int markerIdx) {
+    private static Optional<int[]> findEnclosingObject(String text, int markerIdx) {
         int depth = 0;
         boolean inString = false;
         boolean escape = false;
@@ -223,15 +226,19 @@ public final class AmbiguousPayloadParser {
                 depth++;
             } else if (c == '}') {
                 depth--;
-                if (depth == 0 && openIdx >= 0) {
-                    if (markerIdx >= openIdx && markerIdx <= i) {
-                        return new int[] {openIdx, i};
-                    }
-                    openIdx = -1;
+                if (depth != 0 || openIdx < 0) {
+                    // still inside a nested object, or no open brace tracked
+                    continue;
                 }
+                if (markerIdx >= openIdx && markerIdx <= i) {
+                    return Optional.of(new int[] {openIdx, i});
+                }
+                openIdx = -1;
+            } else {
+                // not a brace — no action needed (terminal else for G.CTL.02)
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static String textOrEmpty(JsonNode node) {
