@@ -72,12 +72,11 @@ public class ExecutionLimitRail extends AgentRail {
     private final ActRuleConfig actrule;
 
     /**
-     * Redis 模板，会话级读写计数器。
+     * Redis key 前缀与 TTL（常量，工具调用计数持久化到 edpa:toolcount:{sessionId}）。
      */
 
-    private final StringRedisTemplate redisTemplate;
-    private final String redisKeyPrefix;
-    private final long toolCountTtlSeconds;
+    private static final String REDIS_KEY_PREFIX = "edpa";
+    private static final long TOOL_COUNT_TTL_SECONDS = 3600L;
 
     /**
      * 本地计数器：sessionId -> (toolName -> count)。
@@ -106,17 +105,6 @@ public class ExecutionLimitRail extends AgentRail {
 
     public ExecutionLimitRail(ActRuleConfig actrule) {
         this.actrule = actrule;
-        this.redisTemplate = RedisConfig.getStringRedisTemplate();
-        if (redisTemplate != null) {
-            var props = RedisConfig.getRedisProperties();
-            this.redisKeyPrefix = props != null && props.getTodo() != null
-                    ? props.getTodo().getKeyPrefix() : "edpa";
-            this.toolCountTtlSeconds = props != null && props.getTodo() != null
-                    ? props.getTodo().getTtlSeconds() : 3600L;
-        } else {
-            this.redisKeyPrefix = "edpa";
-            this.toolCountTtlSeconds = 3600L;
-        }
         setPriority(70);
     }
 
@@ -134,6 +122,7 @@ public class ExecutionLimitRail extends AgentRail {
         toolCallCounts.remove(sid);
         sessionLastActive.remove(sid);
 
+        StringRedisTemplate redisTemplate = RedisConfig.getStringRedisTemplate();
         if (redisTemplate == null) {
             toolCallCounts.put(sid, new ConcurrentHashMap<>());
             sessionLastActive.put(sid, System.currentTimeMillis());
@@ -208,6 +197,7 @@ public class ExecutionLimitRail extends AgentRail {
             return;
         }
 
+        StringRedisTemplate redisTemplate = RedisConfig.getStringRedisTemplate();
         if (redisTemplate == null) {
             return;
         }
@@ -217,9 +207,9 @@ public class ExecutionLimitRail extends AgentRail {
             Map<String, String> hashEntries = new HashMap<>();
             counts.forEach((tool, count) -> hashEntries.put(tool, String.valueOf(count)));
             redisTemplate.opsForHash().putAll(key, hashEntries);
-            redisTemplate.expire(key, Duration.ofSeconds(toolCountTtlSeconds));
+            redisTemplate.expire(key, Duration.ofSeconds(TOOL_COUNT_TTL_SECONDS));
             LOGGER.debug("[ExecutionLimitRail] session {} persisted {} tool counts, TTL={}s",
-                    sid, counts.size(), toolCountTtlSeconds);
+                    sid, counts.size(), TOOL_COUNT_TTL_SECONDS);
         } catch (Exception e) {
             LOGGER.error("[ExecutionLimitRail] session {} failed to persist tool counts to Redis", sid, e);
         }
@@ -252,7 +242,7 @@ public class ExecutionLimitRail extends AgentRail {
     }
 
     private String redisKey(String sid) {
-        return redisKeyPrefix + ":toolcount:" + sid;
+        return REDIS_KEY_PREFIX + ":toolcount:" + sid;
     }
 
     /**

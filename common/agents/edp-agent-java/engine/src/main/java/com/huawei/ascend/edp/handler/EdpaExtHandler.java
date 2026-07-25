@@ -25,14 +25,15 @@ import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.EdpaTodolist;
 import com.huawei.ascend.edp.config.GovernanceConfig;
 import com.huawei.ascend.edp.config.GovernanceConfigLoader;
+import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
+import com.huawei.ascend.edp.config.TodoRedisProperties;
 import com.huawei.ascend.edp.enhancer.EdpaAgentEnhancer;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail.VersatilePassthroughBuffer;
 import com.huawei.ascend.edp.stream.PlanrulePromptBuilder;
 import com.huawei.ascend.edp.stream.QueryChunkFormatAdapter;
 import com.huawei.ascend.edp.stream.SkillScriptsCollector;
-import com.huawei.ascend.edp.todo.RedisTodoStore;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -410,14 +411,16 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * model/versatile 从 Spring Boot 绑定获取。
      * 不再需要 EnvOverrides（Spring Boot ${ENV_VAR:default} 自动处理）。</p>
      *
+     * <p>Todo 存储由 agent-core 的 TodoStorage SPI 提供，通过 DeepAgentConfig 的
+     * todoStorageType/kvStoreConfig 配置，不再需要外部传入 RedisTodoStore。</p>
+     *
      * @param config EDPAgent 合并后配置（含 scenarioHome/model/versatile/mcpsse）
-     * @param redisTodoStore Redis Todo 存储（可为null：未启用Redis时回落文件/缓存）
      * @param agentName Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）
      * @param decoratedSandboxClient the decoratedSandboxClient value
      * @return InitResult 包含真实 agent 实例和初始化产物
      */
 
-    public static InitResult performInit(EdpaSpringBootConfig config, RedisTodoStore redisTodoStore, String agentName,
+    public static InitResult performInit(EdpaSpringBootConfig config, String agentName,
             SandboxClient decoratedSandboxClient) {
         LOGGER.info("EdpaExtHandler performInit start (Phase 2)");
         InitResult result = new InitResult();
@@ -1139,6 +1142,13 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         String skillMode = actrule != null && actrule.getSkillMode() != null ? actrule.getSkillMode() : "all";
 
+        // 使用 agent-core 的 KV 存储（Redis）替代自定义 RedisTodoStore。
+        // kvStoreConfig 为 null 时回落到默认 file 存储。
+        Map<String, Object> kvStoreConfig = buildKvStoreConfig();
+        String todoStorageType = kvStoreConfig != null ? "kv" : "file";
+        LOGGER.info("[EDPA-DIAG] DeepAgent todoStorageType={}, kvStore={}",
+                todoStorageType, kvStoreConfig != null ? "redis" : "none");
+
         return DeepAgentConfig.builder().systemPrompt(systemPrompt != null ? systemPrompt : "")
                 .maxIterations(actrule != null && actrule.getMaxSteps() != null && actrule.getMaxSteps() > 0
                         ? actrule.getMaxSteps()
@@ -1146,7 +1156,39 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
                 .enableTaskLoop(
                         actrule != null && actrule.getEnableTaskLoop() != null ? actrule.getEnableTaskLoop() : false)
                 .enableTaskPlanning(true).skillDirectories(skillDirs).skillMode(skillMode).model(modelMap)
-                .backend(backendMap).build();
+                .backend(backendMap).todoStorageType(todoStorageType).kvStoreConfig(kvStoreConfig).build();
+    }
+
+    /**
+     * 从 RedisConfig 静态持有者获取 TodoRedisProperties，构建 agent-core 的 kvStoreConfig。
+     *
+     * <p>结构: {type: "redis", conf: {host, port, password, cluster}}。
+     * Redis 未配置时返回 null，DeepAgent 回落到默认的 file 存储。</p>
+     *
+     * @return kvStoreConfig Map，或 null
+     */
+    private static Map<String, Object> buildKvStoreConfig() {
+        TodoRedisProperties redisProps = RedisConfig.getRedisProperties();
+        if (redisProps == null) {
+            return null;
+        }
+        Map<String, Object> conf = new LinkedHashMap<>();
+        conf.put("host", redisProps.getHost());
+        conf.put("port", redisProps.getPort());
+        if (redisProps.getPassword() != null && !redisProps.getPassword().isBlank()) {
+            conf.put("password", redisProps.getPassword());
+        }
+        String mode = redisProps.getMode() == null ? "single" : redisProps.getMode().toLowerCase();
+        if ("cluster".equals(mode)) {
+            conf.put("cluster", "true");
+        } else if ("sentinel".equals(mode)) {
+            LOGGER.warn("[EDPA-DIAG] Sentinel mode not supported by agent-core RedisKVStoreProvider, "
+                    + "falling back to single mode");
+        }
+        Map<String, Object> kvStoreConfig = new LinkedHashMap<>();
+        kvStoreConfig.put("type", "redis");
+        kvStoreConfig.put("conf", conf);
+        return kvStoreConfig;
     }
 
     private static void registerSkills(DeepAgent deepAgent, Path skillsDir, String agentName) {
