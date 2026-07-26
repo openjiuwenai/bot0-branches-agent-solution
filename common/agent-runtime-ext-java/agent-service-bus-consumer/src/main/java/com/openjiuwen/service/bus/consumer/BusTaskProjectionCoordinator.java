@@ -5,9 +5,9 @@
 package com.openjiuwen.service.bus.consumer;
 
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
 import com.openjiuwen.service.bus.consumer.relay.BusResponseRelay;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 public final class BusTaskProjectionCoordinator {
     private static final Logger LOG = LoggerFactory.getLogger(BusTaskProjectionCoordinator.class);
 
-    private final BusResponseProjectionStore store;
+    private final InMemoryBusResponseProjectionStore store;
     private final Consumer<BusResponseProjection> publisher;
     private final BusResponseRelay relay;
     private final BusConcurrencyGuard concurrency;
@@ -35,7 +35,8 @@ public final class BusTaskProjectionCoordinator {
      * @param publisher
      *            the publisher value
      */
-    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher) {
+    public BusTaskProjectionCoordinator(InMemoryBusResponseProjectionStore store,
+            Consumer<BusResponseProjection> publisher) {
         this(store, publisher, null, new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
@@ -49,8 +50,8 @@ public final class BusTaskProjectionCoordinator {
      * @param relay
      *            the relay value
      */
-    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
-            BusResponseRelay relay) {
+    public BusTaskProjectionCoordinator(InMemoryBusResponseProjectionStore store,
+            Consumer<BusResponseProjection> publisher, BusResponseRelay relay) {
         this(store, publisher, relay, new BusConcurrencyGuard(16, 16, 16, 64));
     }
 
@@ -66,8 +67,8 @@ public final class BusTaskProjectionCoordinator {
      * @param concurrency
      *            the concurrency value
      */
-    public BusTaskProjectionCoordinator(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
-            BusResponseRelay relay, BusConcurrencyGuard concurrency) {
+    public BusTaskProjectionCoordinator(InMemoryBusResponseProjectionStore store,
+            Consumer<BusResponseProjection> publisher, BusResponseRelay relay, BusConcurrencyGuard concurrency) {
         this.store = store;
         this.publisher = publisher;
         this.relay = relay;

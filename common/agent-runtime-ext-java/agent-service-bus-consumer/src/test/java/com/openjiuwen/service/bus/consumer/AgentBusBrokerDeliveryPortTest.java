@@ -36,7 +36,7 @@ class AgentBusBrokerDeliveryPortTest {
 
         AgentBusBrokerDeliveryPort.Delivery delivery = adapter.poll("runtime-runtime-a", "tenant-a", 1L)
                 .orElseThrow();
-        assertThat(consumer.subscriptions).hasSize(8);
+        assertThat(consumer.subscriptions).hasSize(6);
         assertThat(delivery.envelope().eventType()).isEqualTo("CLIENT_INVOCATION_REQUESTED");
         assertThat(delivery.envelope().traceId()).isEqualTo("trace-1");
         assertThat(delivery.envelope().routeHandle()).isEqualTo("route-1");

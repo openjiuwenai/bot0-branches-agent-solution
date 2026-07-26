@@ -5,8 +5,8 @@
 package com.openjiuwen.service.bus.consumer.relay;
 
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 public final class BusResponseRelay implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(BusResponseRelay.class);
 
-    private final BusResponseProjectionStore store;
+    private final InMemoryBusResponseProjectionStore store;
     private final Consumer<BusResponseProjection> publisher;
     private final ScheduledExecutorService scheduler;
     private final int maxAttempts;
@@ -46,7 +46,7 @@ public final class BusResponseRelay implements AutoCloseable {
      * @param initialBackoff
      *            the initialBackoff value
      */
-    public BusResponseRelay(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
+    public BusResponseRelay(InMemoryBusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
             ScheduledExecutorService scheduler, int maxAttempts, Duration initialBackoff) {
         this(store, publisher, scheduler, maxAttempts, initialBackoff, new BusConcurrencyGuard(16, 16, 16, 64));
     }
@@ -67,7 +67,7 @@ public final class BusResponseRelay implements AutoCloseable {
      * @param concurrency
      *            the concurrency value
      */
-    public BusResponseRelay(BusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
+    public BusResponseRelay(InMemoryBusResponseProjectionStore store, Consumer<BusResponseProjection> publisher,
             ScheduledExecutorService scheduler, int maxAttempts, Duration initialBackoff,
             BusConcurrencyGuard concurrency) {
         if (maxAttempts < 1 || initialBackoff.isNegative() || initialBackoff.isZero()) {

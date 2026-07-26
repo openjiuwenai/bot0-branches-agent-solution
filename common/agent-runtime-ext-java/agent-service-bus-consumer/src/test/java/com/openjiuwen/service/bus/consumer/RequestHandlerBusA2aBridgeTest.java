@@ -10,17 +10,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 
+import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.spec.InvalidRequestError;
+import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskState;
 import org.a2aproject.sdk.spec.TaskStatus;
+import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
+import org.a2aproject.sdk.spec.UnsupportedOperationError;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.Map;
-import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.Flow;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -32,7 +36,8 @@ class RequestHandlerBusA2aBridgeTest {
     @Test
     void mapsFeat001MethodNamesToRequestHandler() {
         AtomicReference<String> called = new AtomicReference<>();
-        RequestHandler handler = requestHandler(called);
+        AtomicReference<Boolean> streamFlag = new AtomicReference<>();
+        RequestHandler handler = requestHandler(called, streamFlag);
         RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(handler);
 
         var send = bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
@@ -40,6 +45,7 @@ class RequestHandlerBusA2aBridgeTest {
                 "parts":[{"text":"hi"}],"messageId":"m1"}}}
                 """));
         assertThat(called).hasValue("onMessageSend");
+        assertThat(streamFlag).hasValue(false);
         assertThat(send.task().id()).isEqualTo("task-1");
 
         var stream = bridge.handle(event("A2A_CALL_REQUESTED"), bytes("""
@@ -47,6 +53,9 @@ class RequestHandlerBusA2aBridgeTest {
                 "parts":[{"text":"hi"}],"messageId":"m1","taskId":"task-1"}}}
                 """));
         assertThat(called).hasValue("onMessageSendStream");
+        assertThat(streamFlag).hasValue(true);
+        assertThat(stream.taskId()).isEqualTo("task-1");
+        assertThat(stream.response()).isNull();
         assertThat(stream.streamReady()).isTrue();
 
         bridge.handle(event("CLIENT_INVOCATION_QUERY_REQUESTED"), bytes("""
@@ -56,7 +65,21 @@ class RequestHandlerBusA2aBridgeTest {
     }
 
     @Test
-    void mapsCancelAndSubscribeToRequestHandler() {
+    void obtainsRuntimeTaskIdFromFirstEventOfNewStream() {
+        RequestHandler handler = requestHandler(new AtomicReference<>(), new AtomicReference<>());
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(handler);
+
+        var stream = bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
+                {"method":"SendStreamingMessage","params":{"message":{"role":"ROLE_USER",
+                "parts":[{"text":"hi"}],"messageId":"m1"}}}
+                """));
+
+        assertThat(stream.taskId()).isEqualTo("task-1");
+        assertThat(stream.streamReady()).isTrue();
+    }
+
+    @Test
+    void extractsContinuationTaskIdAndMapsSubscribeToRequestHandler() {
         AtomicReference<String> called = new AtomicReference<>();
         RequestHandler handler = requestHandler(called);
         RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(handler);
@@ -66,14 +89,29 @@ class RequestHandlerBusA2aBridgeTest {
                 "parts":[{"text":"hi"}],"messageId":"m1","taskId":"task-1"}}}
                 """)).orElseThrow()).isEqualTo("task-1");
 
-        bridge.handle(event("A2A_CALL_CANCEL_REQUESTED"), bytes("""
-                {"method":"CancelTask","params":{"id":"task-1"}}
-                """));
-        assertThat(called).hasValue("onCancelTask");
         bridge.handle(event("A2A_STREAM_SUBSCRIBE_REQUESTED"), bytes("""
                 {"method":"SubscribeToTask","params":{"id":"task-1"}}
                 """));
-        assertThat(called).hasValue("onSubscribeToTask");
+        assertThat(called).hasValue("onGetTask");
+    }
+
+    @Test
+    void rejectsSubscriptionToTerminalTaskWithoutOpeningPublisher() {
+        AtomicReference<String> called = new AtomicReference<>();
+        RequestHandler handler = requestHandlerProxy((proxy, method, args) -> {
+            called.set(method.getName());
+            if ("onGetTask".equals(method.getName())) {
+                return Task.builder().id("task-1").contextId("ctx")
+                        .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).build();
+            }
+            throw new AssertionError("Unexpected RequestHandler call: " + method.getName());
+        });
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(handler);
+
+        assertThatThrownBy(() -> bridge.handle(event("CLIENT_STREAM_SUBSCRIBE_REQUESTED"), bytes("""
+                {"method":"SubscribeToTask","params":{"id":"task-1"}}
+                """))).isInstanceOf(UnsupportedOperationError.class);
+        assertThat(called).hasValue("onGetTask");
     }
 
     @Test
@@ -104,16 +142,50 @@ class RequestHandlerBusA2aBridgeTest {
     }
 
     private static RequestHandler requestHandler(AtomicReference<String> called) {
+        return requestHandler(called, new AtomicReference<>());
+    }
+
+    private static RequestHandler requestHandler(AtomicReference<String> called, AtomicReference<Boolean> streamFlag) {
         return requestHandlerProxy((proxy, method, args) -> {
             called.set(method.getName());
-            if ("onMessageSend".equals(method.getName()) || "onGetTask".equals(method.getName())
-                    || "onCancelTask".equals(method.getName())) {
+            if ("onMessageSend".equals(method.getName()) || "onGetTask".equals(method.getName())) {
+                if ("onMessageSend".equals(method.getName())) {
+                    streamFlag.set(streamFlag(args));
+                }
                 return task("task-1");
             }
-            if ("onMessageSendStream".equals(method.getName()) || "onSubscribeToTask".equals(method.getName())) {
-                return new SubmissionPublisher<>();
+            if ("onMessageSendStream".equals(method.getName())) {
+                streamFlag.set(streamFlag(args));
+                return firstEventPublisher(TaskStatusUpdateEvent.builder().taskId("task-1").contextId("ctx")
+                        .status(new TaskStatus(TaskState.TASK_STATE_WORKING)).build());
+            }
+            if ("onSubscribeToTask".equals(method.getName())) {
+                return firstEventPublisher(task("task-1"));
             }
             return null;
+        });
+    }
+
+    private static Boolean streamFlag(Object[] args) {
+        return (Boolean) ((ServerCallContext) args[1]).getState().get("_a2a_stream");
+    }
+
+    private static Flow.Publisher<StreamingEventKind> firstEventPublisher(StreamingEventKind event) {
+        return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
+            private boolean emitted;
+
+            @Override
+            public void request(long count) {
+                if (!emitted && count > 0) {
+                    emitted = true;
+                    subscriber.onNext(event);
+                }
+            }
+
+            @Override
+            public void cancel() {
+                // The bridge only needs the first event to obtain the Task id.
+            }
         });
     }
 

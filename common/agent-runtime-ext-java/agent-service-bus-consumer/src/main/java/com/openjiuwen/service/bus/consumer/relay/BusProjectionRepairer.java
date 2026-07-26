@@ -4,7 +4,7 @@
 
 package com.openjiuwen.service.bus.consumer.relay;
 
-import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
 
 import java.util.Objects;
 
@@ -14,7 +14,7 @@ import java.util.Objects;
  * @since 2026-07-22
  */
 public final class BusProjectionRepairer {
-    private final BusResponseProjectionStore store;
+    private final InMemoryBusResponseProjectionStore store;
     private final BusResponseRelay relay;
     private final String tenantId;
 
@@ -28,7 +28,7 @@ public final class BusProjectionRepairer {
      * @param tenantId
      *            the tenantId value
      */
-    public BusProjectionRepairer(BusResponseProjectionStore store, BusResponseRelay relay, String tenantId) {
+    public BusProjectionRepairer(InMemoryBusResponseProjectionStore store, BusResponseRelay relay, String tenantId) {
         this.store = Objects.requireNonNull(store);
         this.relay = Objects.requireNonNull(relay);
         this.tenantId = Objects.requireNonNull(tenantId);

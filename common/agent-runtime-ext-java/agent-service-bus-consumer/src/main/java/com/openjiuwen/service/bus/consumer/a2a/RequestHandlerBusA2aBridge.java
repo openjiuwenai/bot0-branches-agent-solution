@@ -14,17 +14,24 @@ import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.auth.UnauthenticatedUser;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.spec.A2AError;
-import org.a2aproject.sdk.spec.CancelTaskParams;
 import org.a2aproject.sdk.spec.InvalidRequestError;
 import org.a2aproject.sdk.spec.MessageSendParams;
+import org.a2aproject.sdk.spec.StreamingEventKind;
+import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskIdParams;
 import org.a2aproject.sdk.spec.TaskQueryParams;
+import org.a2aproject.sdk.spec.UnsupportedOperationError;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Bridges bus control events to the same public A2A RequestHandler used by HTTP.
@@ -33,6 +40,7 @@ import java.util.Set;
  */
 public class RequestHandlerBusA2aBridge {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final long FIRST_STREAM_EVENT_TIMEOUT_SECONDS = 30L;
 
     private final RequestHandler requestHandler;
 
@@ -73,16 +81,10 @@ public class RequestHandlerBusA2aBridge {
                 TaskQueryParams params = scoped(convert(decoded.params(), TaskQueryParams.class), envelope.tenantId());
                 yield BusDispatchResult.task(requestHandler.onGetTask(params, context));
             }
-            case "CLIENT_INVOCATION_CANCEL_REQUESTED", "A2A_CALL_CANCEL_REQUESTED" -> {
-                requireMethod(decoded, "CancelTask");
-                CancelTaskParams params = scoped(convert(decoded.params(), CancelTaskParams.class),
-                        envelope.tenantId());
-                yield BusDispatchResult.task(requestHandler.onCancelTask(params, context));
-            }
             case "CLIENT_STREAM_SUBSCRIBE_REQUESTED", "A2A_STREAM_SUBSCRIBE_REQUESTED" -> {
                 requireMethod(decoded, "SubscribeToTask");
                 TaskIdParams params = scoped(convert(decoded.params(), TaskIdParams.class), envelope.tenantId());
-                requestHandler.onSubscribeToTask(params, context);
+                ensureSubscribable(params, context);
                 yield BusDispatchResult.stream(params.id());
             }
             default -> throw new InvalidRequestError("Unsupported A2A bus event: " + envelope.eventType());
@@ -144,12 +146,63 @@ public class RequestHandlerBusA2aBridge {
         }
         boolean streaming = isMethod(decoded, "SendStreamingMessage") || decoded.method() == null
                 && Boolean.parseBoolean(envelope.metadata() == null ? null : envelope.metadata().get("streaming"));
+        context.getState().put("_a2a_stream", streaming);
         if (streaming) {
-            requestHandler.onMessageSendStream(params, context);
-            return BusDispatchResult.stream(params.message().taskId());
+            Flow.Publisher<StreamingEventKind> publisher = requestHandler.onMessageSendStream(params, context);
+            return BusDispatchResult.streaming(firstEvent(publisher));
         }
         requireMethod(decoded, "SendMessage");
         return BusDispatchResult.response(requestHandler.onMessageSend(params, context));
+    }
+
+    private void ensureSubscribable(TaskIdParams params, ServerCallContext context) throws A2AError {
+        Task task = requestHandler.onGetTask(new TaskQueryParams(params.id(), null, params.tenant()), context);
+        if (task.status().state().isFinal()) {
+            throw new UnsupportedOperationError(null,
+                    "Cannot subscribe to task " + task.id() + " in terminal state " + task.status().state(), null);
+        }
+    }
+
+    private static StreamingEventKind firstEvent(Flow.Publisher<StreamingEventKind> publisher) {
+        if (publisher == null) {
+            throw new IllegalStateException("A2A stream publisher is unavailable");
+        }
+        CompletableFuture<StreamingEventKind> first = new CompletableFuture<>();
+        publisher.subscribe(new Flow.Subscriber<>() {
+            private Flow.Subscription subscription;
+
+            @Override
+            public void onSubscribe(Flow.Subscription value) {
+                subscription = value;
+                value.request(1);
+            }
+
+            @Override
+            public void onNext(StreamingEventKind item) {
+                first.complete(item);
+                subscription.cancel();
+            }
+
+            @Override
+            public void onError(Throwable failure) {
+                first.completeExceptionally(failure);
+            }
+
+            @Override
+            public void onComplete() {
+                first.completeExceptionally(new IllegalStateException("A2A stream completed without an event"));
+            }
+        });
+        try {
+            return first.get(FIRST_STREAM_EVENT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException failure) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the first A2A stream event", failure);
+        } catch (ExecutionException failure) {
+            throw new IllegalStateException("A2A stream failed before its first event", failure.getCause());
+        } catch (TimeoutException failure) {
+            throw new IllegalStateException("Timed out waiting for the first A2A stream event", failure);
+        }
     }
 
     private static ServerCallContext context(AgentBusEventEnvelope envelope) {
@@ -212,11 +265,6 @@ public class RequestHandlerBusA2aBridge {
     private static TaskQueryParams scoped(TaskQueryParams params, String tenantId) {
         requireTenant(params.tenant(), tenantId);
         return new TaskQueryParams(params.id(), params.historyLength(), tenantId);
-    }
-
-    private static CancelTaskParams scoped(CancelTaskParams params, String tenantId) {
-        requireTenant(params.tenant(), tenantId);
-        return new CancelTaskParams(params.id(), tenantId, params.metadata());
     }
 
     private static TaskIdParams scoped(TaskIdParams params, String tenantId) {

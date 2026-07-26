@@ -5,7 +5,6 @@
 package com.openjiuwen.service.bus.consumer.store;
 
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
 
 import java.util.List;
 import java.util.Map;
@@ -16,13 +15,19 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @since 2026-07-22
  */
-public final class InMemoryBusResponseProjectionStore implements BusResponseProjectionStore {
+public final class InMemoryBusResponseProjectionStore {
     private final Map<String, BusResponseProjection> projections = new ConcurrentHashMap<>();
     private final Map<String, Boolean> published = new ConcurrentHashMap<>();
     private final Map<String, Sequence> sequences = new ConcurrentHashMap<>();
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Atomically appends a new projection.
+     *
+     * @param projection
+     *            projection to append
+     *
+     * @return false when the projection already exists
+     */
     public synchronized boolean append(BusResponseProjection projection) {
         requireTenant(projection.tenantId());
         String key = key(projection.tenantId(), projection.eventId());
@@ -35,8 +40,14 @@ public final class InMemoryBusResponseProjectionStore implements BusResponseProj
         return true;
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Marks a projection as published.
+     *
+     * @param tenantId
+     *            tenant identity
+     * @param eventId
+     *            event identity
+     */
     public void markPublished(String tenantId, String eventId) {
         String key = key(requireTenant(tenantId), eventId);
         if (!projections.containsKey(key)) {
@@ -45,14 +56,30 @@ public final class InMemoryBusResponseProjectionStore implements BusResponseProj
         published.put(key, true);
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Checks whether a projection has been published.
+     *
+     * @param tenantId
+     *            tenant identity
+     * @param eventId
+     *            event identity
+     *
+     * @return true when the projection has been published
+     */
     public boolean isPublished(String tenantId, String eventId) {
         return Boolean.TRUE.equals(published.get(key(requireTenant(tenantId), eventId)));
     }
 
-    /** {@inheritDoc} */
-    @Override
+    /**
+     * Lists unpublished projections in a tenant scope.
+     *
+     * @param tenantId
+     *            tenant identity
+     * @param limit
+     *            maximum result count
+     *
+     * @return unpublished projections in the tenant scope
+     */
     public List<BusResponseProjection> pending(String tenantId, int limit) {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit must be positive");

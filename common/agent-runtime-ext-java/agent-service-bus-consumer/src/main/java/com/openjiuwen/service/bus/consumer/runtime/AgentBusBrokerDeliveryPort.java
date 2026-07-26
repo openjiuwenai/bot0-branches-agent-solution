@@ -25,9 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class AgentBusBrokerDeliveryPort implements AutoCloseable {
     private static final Set<AgentBusEventType> REQUEST_TYPES = Set.of(AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
-            AgentBusEventType.CLIENT_INVOCATION_QUERY_REQUESTED, AgentBusEventType.CLIENT_INVOCATION_CANCEL_REQUESTED,
-            AgentBusEventType.CLIENT_STREAM_SUBSCRIBE_REQUESTED, AgentBusEventType.A2A_CALL_REQUESTED,
-            AgentBusEventType.A2A_CALL_QUERY_REQUESTED, AgentBusEventType.A2A_CALL_CANCEL_REQUESTED,
+            AgentBusEventType.CLIENT_INVOCATION_QUERY_REQUESTED, AgentBusEventType.CLIENT_STREAM_SUBSCRIBE_REQUESTED,
+            AgentBusEventType.A2A_CALL_REQUESTED, AgentBusEventType.A2A_CALL_QUERY_REQUESTED,
             AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED);
 
     private final BrokerForwardingConsumerPort consumer;

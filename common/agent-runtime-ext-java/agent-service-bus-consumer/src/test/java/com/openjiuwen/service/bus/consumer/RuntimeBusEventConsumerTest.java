@@ -103,7 +103,8 @@ class RuntimeBusEventConsumerTest {
         var published = new ArrayList<BusResponseProjection>();
         Instant now = Instant.parse("2026-07-20T00:00:00Z");
         RuntimeBusEventConsumer consumer = new RuntimeBusEventConsumer(
-                new BusEnvelopeValidator(Clock.fixed(now, ZoneOffset.UTC), "runtime-a"), e -> e.inlinePayload(),
+                new BusEnvelopeValidator(Clock.fixed(now, ZoneOffset.UTC), "tenant-a", "runtime-a"),
+                e -> e.inlinePayload(),
                 new InMemoryBusTaskAdmissionStore(),
                 bridge((e, p) -> new BusDispatchResult(null, null, null, false)),
                 new BusTaskProjectionCoordinator(
@@ -121,8 +122,9 @@ class RuntimeBusEventConsumerTest {
     private RuntimeBusEventConsumer consumer(RequestHandlerBusA2aBridge bridge,
             Function<AgentBusEventEnvelope, byte[]> resolver) {
         Instant now = Instant.parse("2026-07-20T00:00:00Z");
-        return new RuntimeBusEventConsumer(new BusEnvelopeValidator(Clock.fixed(now, ZoneOffset.UTC), "runtime-a"),
-                resolver, new InMemoryBusTaskAdmissionStore(), bridge, new BusTaskProjectionCoordinator(
+        return new RuntimeBusEventConsumer(
+                new BusEnvelopeValidator(Clock.fixed(now, ZoneOffset.UTC), "tenant-a", "runtime-a"), resolver,
+                new InMemoryBusTaskAdmissionStore(), bridge, new BusTaskProjectionCoordinator(
                         new com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore(), p -> {
                         }));
     }

@@ -119,7 +119,8 @@ final class Feat017BusIntegrationSupport {
         var coordinator = new BusTaskProjectionCoordinator(new InMemoryBusResponseProjectionStore(),
                 publisher::publish);
         return new RuntimeBusEventConsumer(
-                new BusEnvelopeValidator(Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC), runtimeServiceId),
+                new BusEnvelopeValidator(Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC), TENANT,
+                        runtimeServiceId),
                 envelope -> REQUEST_PAYLOAD, new InMemoryBusTaskAdmissionStore(), bridge, coordinator);
     }
 
@@ -138,7 +139,8 @@ final class Feat017BusIntegrationSupport {
         var coordinator = new BusTaskProjectionCoordinator(new InMemoryBusResponseProjectionStore(),
                 publisher::publish);
         return new RuntimeBusEventConsumer(
-                new BusEnvelopeValidator(Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC), runtimeServiceId),
+                new BusEnvelopeValidator(Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC), TENANT,
+                        runtimeServiceId),
                 envelope -> queryPayload, new InMemoryBusTaskAdmissionStore(), bridge, coordinator);
     }
 

@@ -7,27 +7,34 @@ package com.openjiuwen.service.bus.consumer.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.ProjectingTaskStore;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
-import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
-import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
+import com.openjiuwen.service.bus.consumer.model.Admission;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
 import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
 import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
+import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
+import com.openjiuwen.service.bus.consumer.stream.StreamReferenceSubscriptionAspect;
 
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.InMemoryTaskStore;
 import org.a2aproject.sdk.server.tasks.TaskStore;
+import org.a2aproject.sdk.spec.TaskIdParams;
+import org.a2aproject.sdk.spec.TaskNotFoundError;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Proxy;
 import java.time.Duration;
@@ -41,8 +48,7 @@ class BusConsumerAutoConfigurationTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
             .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
-                    "openjiuwen.service.bus.consumer.allow-ephemeral-state=true",
-                    "openjiuwen.service.bus.consumer.consumer-tenant-id=tenant-a",
+                    "agent-bus.tenant=tenant-a",
                     "spring.application.name=runtime-a")
             .withBean(RequestHandler.class, BusConsumerAutoConfigurationTest::requestHandler)
             .withBean("runtimeResponseProducer", BrokerForwardingProducerPort.class,
@@ -60,25 +66,12 @@ class BusConsumerAutoConfigurationTest {
             assertThat(context).hasSingleBean(AgentBusResponsePublisher.class);
             assertThat(context).hasSingleBean(BusConsumerProperties.class);
             assertThat(context.getBean(TaskStore.class)).isInstanceOf(ProjectingTaskStore.class);
-            assertThat(context).hasSingleBean(BusTaskAdmissionStore.class);
-            assertThat(context).hasSingleBean(BusResponseProjectionStore.class);
-            assertThat(context.getBean(BusTaskAdmissionStore.class))
-                    .isInstanceOf(InMemoryBusTaskAdmissionStore.class);
-            assertThat(context.getBean(BusResponseProjectionStore.class))
-                    .isInstanceOf(InMemoryBusResponseProjectionStore.class);
+            assertThat(context).hasSingleBean(InMemoryBusTaskAdmissionStore.class);
+            assertThat(context).hasSingleBean(InMemoryBusResponseProjectionStore.class);
+            assertThat(context).hasSingleBean(StreamReferenceService.class);
+            assertThat(context).hasSingleBean(StreamReferenceSubscriptionAspect.class);
+            assertThat(context.getBean(AgentBusBrokerProperties.class).tenant()).isEqualTo("tenant-a");
         });
-    }
-
-    @Test
-    void rejectsApplicationAdmissionStoreOverride() {
-        contextRunner.withBean("applicationAdmissionStore", BusTaskAdmissionStore.class,
-                InMemoryBusTaskAdmissionStore::new).run(context -> assertThat(context).hasFailed());
-    }
-
-    @Test
-    void rejectsApplicationProjectionStoreOverride() {
-        contextRunner.withBean("applicationProjectionStore", BusResponseProjectionStore.class,
-                InMemoryBusResponseProjectionStore::new).run(context -> assertThat(context).hasFailed());
     }
 
     @Test
@@ -113,9 +106,57 @@ class BusConsumerAutoConfigurationTest {
     }
 
     @Test
-    void createsStreamReferenceServiceWhenSecretConfigured() {
-        contextRunner.withPropertyValues("openjiuwen.service.bus.consumer.stream-ref-secret=test-secret")
-                .run(context -> assertThat(context).hasSingleBean(StreamReferenceService.class));
+    void createsStreamSupportWithoutUserSecret() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(StreamReferenceService.class);
+            assertThat(context).hasSingleBean(StreamReadyProjector.class);
+            StreamReferenceService references = context.getBean(StreamReferenceService.class);
+            String streamRef = references.issue("tenant-a", "task-1", 100);
+            assertThat(references.validate(streamRef, "tenant-a", "task-1", 200)
+                    .expiresAtEpochSeconds()).isEqualTo(3700);
+        });
+    }
+
+    @Test
+    void interceptsTaskSubscriptionBeforeRequestHandler() {
+        contextRunner.run(context -> {
+            StreamReferenceService references = context.getBean(StreamReferenceService.class);
+            InMemoryBusTaskAdmissionStore admissions = context.getBean(InMemoryBusTaskAdmissionStore.class);
+            admissions.reserve(new Admission("tenant-a", "idem-1", "digest", "reserved-task", "CLIENT", "corr",
+                    "trace", "gateway", "runtime-a", null, Admission.State.RESERVED));
+            admissions.markAdmitted("tenant-a", "idem-1", "task-1");
+            String streamReference = references.issue("tenant-a", "task-1",
+                    System.currentTimeMillis() / 1000);
+            MockHttpServletRequest request = new MockHttpServletRequest();
+            request.addHeader("X-OpenJiuwen-Stream-Ref", streamReference);
+            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+            try {
+                assertThatThrownBy(() -> context.getBean(RequestHandler.class)
+                        .onSubscribeToTask(new TaskIdParams("task-2", "tenant-a"), null))
+                        .isInstanceOf(TaskNotFoundError.class);
+                assertThat(context.getBean(RequestHandler.class)
+                        .onSubscribeToTask(new TaskIdParams("task-1", "tenant-a"), null)).isNull();
+                assertThat(context.getBean(RequestHandler.class)
+                        .onSubscribeToTask(new TaskIdParams("task-1"), null)).isNull();
+                RequestContextHolder.setRequestAttributes(
+                        new ServletRequestAttributes(new MockHttpServletRequest()));
+                assertThatThrownBy(() -> context.getBean(RequestHandler.class)
+                        .onSubscribeToTask(new TaskIdParams("task-1", "tenant-a"), null))
+                        .isInstanceOf(TaskNotFoundError.class);
+                assertThatThrownBy(() -> context.getBean(RequestHandler.class)
+                        .onSubscribeToTask(new TaskIdParams("task-1", "tenant-other"), null))
+                        .isInstanceOf(TaskNotFoundError.class);
+                assertThat(context.getBean(RequestHandler.class)
+                        .onSubscribeToTask(new TaskIdParams("standard-task", "tenant-a"), null)).isNull();
+            } finally {
+                RequestContextHolder.resetRequestAttributes();
+            }
+            assertThatThrownBy(() -> context.getBean(RequestHandler.class)
+                    .onSubscribeToTask(new TaskIdParams("task-1", "tenant-a"), null))
+                    .isInstanceOf(TaskNotFoundError.class);
+            assertThat(context.getBean(RequestHandler.class)
+                    .onSubscribeToTask(new TaskIdParams("standard-task", "tenant-a"), null)).isNull();
+        });
     }
 
     @Test
@@ -129,8 +170,7 @@ class BusConsumerAutoConfigurationTest {
     void enabledFailsFastWhenRequiredRuntimeBeansAreMissing() {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
                 .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
-                        "openjiuwen.service.bus.consumer.allow-ephemeral-state=true",
-                        "openjiuwen.service.bus.consumer.consumer-tenant-id=tenant-a",
+                        "agent-bus.tenant=tenant-a",
                         "spring.application.name=runtime-a")
                 .run(context -> {
                     assertThat(context).hasFailed();
@@ -142,6 +182,9 @@ class BusConsumerAutoConfigurationTest {
         return (RequestHandler) Proxy.newProxyInstance(RequestHandler.class.getClassLoader(),
                 new Class<?>[]{RequestHandler.class},
                 (proxy, method, arguments) -> {
+                    if ("onSubscribeToTask".equals(method.getName())) {
+                        return null;
+                    }
                     throw new UnsupportedOperationException(method.getName());
                 });
     }
