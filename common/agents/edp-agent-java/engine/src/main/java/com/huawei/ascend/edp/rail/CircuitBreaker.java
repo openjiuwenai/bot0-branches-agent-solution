@@ -116,17 +116,20 @@ public class CircuitBreaker {
      */
     public void recordFailure() {
         int failures = consecutiveFailures.incrementAndGet();
-        if (failures >= failureThreshold) {
-            if (state.compareAndSet(State.CLOSED, State.OPEN)) {
-                openedAt = Instant.now();
-                LOGGER.warn("[CircuitBreaker:{}] CLOSED -> OPEN (consecutive failures={})", name, failures);
-            } else if (state.compareAndSet(State.HALF_OPEN, State.OPEN)) {
-                openedAt = Instant.now();
-                LOGGER.warn("[CircuitBreaker:{}] HALF_OPEN -> OPEN (trial request failed)", name);
-            } else {
-                LOGGER.debug("[CircuitBreaker:{}] already OPEN, failures={}", name, failures);
-            }
+        if (failures < failureThreshold) {
+            return;
         }
+        transitionToOpen(State.CLOSED, "consecutive failures=" + failures);
+        transitionToOpen(State.HALF_OPEN, "trial request failed");
+    }
+
+    private void transitionToOpen(State expected, String reason) {
+        if (!state.compareAndSet(expected, State.OPEN)) {
+            LOGGER.debug("[CircuitBreaker:{}] already OPEN, expected={}", name, expected);
+            return;
+        }
+        openedAt = Instant.now();
+        LOGGER.warn("[CircuitBreaker:{}] {} -> OPEN ({})", name, expected, reason);
     }
 
     /**
