@@ -235,9 +235,17 @@ public class PEVAgent extends BaseAgent {
             ReplanAction.LocalReplan localReplan) {
         List<PevComponents.PlanNode> redo = new ArrayList<>();
         Set<String> failed = localReplan.failedNodes() == null ? Set.of() : localReplan.failedNodes();
+        String feedback = localReplan.feedback();
         for (PevComponents.PlanNode n : plan.nodes()) {
             if (failed.contains(n.id())) {
-                redo.add(n);
+                // Inject corrective feedback into the redo node's description (mirrors the
+                // GlobalReplan pattern at line 226: userInput + " [correction: feedback]").
+                // This ensures executor receives different input on retry, breaking the
+                // "same-prompt same-output" loop. Fix for issue #35.
+                String correctedDesc = (feedback == null || feedback.isBlank())
+                        ? n.description()
+                        : n.description() + " [correction: " + feedback + "]";
+                redo.add(new PevComponents.PlanNode(n.id(), correctedDesc));
                 state.completed.remove(n.id());
             }
         }
