@@ -32,7 +32,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -69,8 +68,6 @@ public class ExecutionLimitRail extends AgentRail {
      */
     private static final String REDIS_KEY_PREFIX = "edpa";
     private static final long TOOL_COUNT_TTL_SECONDS = 3600L;
-
-    private final Set<String> alreadyWarned = ConcurrentHashMap.newKeySet();
 
     /**
      * 行为治理配置，提供 tool_limits 工具调用次数上限。
@@ -260,12 +257,10 @@ public class ExecutionLimitRail extends AgentRail {
             }
         }
 
-        if (alreadyWarned.add(toolName)) {
-            LOGGER.info(
-                    "[ExecutionLimitRail] tool '{}' not configured in tool_limits, "
-                            + "using default limit=100 (first occurrence)",
-                    toolName);
-        }
+        LOGGER.debug(
+                "[ExecutionLimitRail] tool '{}' not configured in tool_limits, "
+                        + "using default limit=100",
+                toolName);
         return 100;
     }
 }

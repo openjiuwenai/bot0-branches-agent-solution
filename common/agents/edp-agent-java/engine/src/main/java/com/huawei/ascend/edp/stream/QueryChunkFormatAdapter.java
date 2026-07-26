@@ -18,6 +18,7 @@ package com.huawei.ascend.edp.stream;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huawei.ascend.edp.rail.ParseErrorTracker;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
@@ -317,7 +318,8 @@ public class QueryChunkFormatAdapter implements QueryStreamObserver {
                     new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, Object>>() {
                     });
         } catch (JsonProcessingException e) {
-            return Collections.emptyMap();
+            ParseErrorTracker.recordFailure("QueryChunkFormatAdapter.parseJsonToMap", e.getMessage());
+            return ParseErrorTracker.degradedMap(e.getMessage());
         }
     }
 
