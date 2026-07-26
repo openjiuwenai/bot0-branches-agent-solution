@@ -83,13 +83,11 @@ public class ExecutionLimitRail extends AgentRail {
     /**
      * 会话最后活跃时间：sessionId -> timestamp，用于定期清理僵尸 entry。
      */
-
     private final Map<String, Long> sessionLastActive = new ConcurrentHashMap<>();
 
     /**
      * 调用计数器，每 CLEANUP_INTERVAL 次触发一次清理。
      */
-
     private final AtomicInteger callCounter = new AtomicInteger(0);
 
     /**
@@ -97,7 +95,6 @@ public class ExecutionLimitRail extends AgentRail {
      *
      * @param actrule 行为治理配置
      */
-
     public ExecutionLimitRail(ActRuleConfig actrule) {
         this.actrule = actrule;
         setPriority(70);
