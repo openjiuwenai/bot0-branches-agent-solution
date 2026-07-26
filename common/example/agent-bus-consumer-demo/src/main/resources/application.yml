@@ -17,9 +17,6 @@ openjiuwen:
     bus:
       consumer:
         enabled: true
-        allow-ephemeral-state: true
-        consumer-tenant-id: ${AGENT_BUS_TENANT:tenant-a}
-        stream-ref-secret: ${STREAM_REF_SECRET:feat017-local-integration-secret}
 
 agent-bus:
   role:

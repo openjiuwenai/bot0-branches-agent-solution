@@ -7,7 +7,7 @@ package com.openjiuwen.service.bus.consumer.a2a;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.model.Admission;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
 
 import org.a2aproject.sdk.server.tasks.TaskStore;
 import org.a2aproject.sdk.spec.Task;
@@ -37,7 +37,7 @@ public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor
     private static final Logger LOG = Logger.getLogger(TaskStoreProjectionPostProcessor.class.getName());
 
     private final Supplier<BusTaskProjectionCoordinator> coordinator;
-    private final Supplier<BusTaskAdmissionStore> admissions;
+    private final Supplier<InMemoryBusTaskAdmissionStore> admissions;
     private final ConcurrentHashMap<String, AtomicLong> fallbackRevisions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> taskTenants = new ConcurrentHashMap<>();
     private volatile TaskStore taskStore;
@@ -51,7 +51,7 @@ public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor
      *            the admissions value
      */
     public TaskStoreProjectionPostProcessor(BusTaskProjectionCoordinator coordinator,
-            BusTaskAdmissionStore admissions) {
+            InMemoryBusTaskAdmissionStore admissions) {
         this(() -> coordinator, () -> admissions);
     }
 
@@ -64,7 +64,7 @@ public final class TaskStoreProjectionPostProcessor implements BeanPostProcessor
      *            the admissions value
      */
     public TaskStoreProjectionPostProcessor(Supplier<BusTaskProjectionCoordinator> coordinator,
-            Supplier<BusTaskAdmissionStore> admissions) {
+            Supplier<InMemoryBusTaskAdmissionStore> admissions) {
         this.coordinator = coordinator;
         this.admissions = admissions;
     }

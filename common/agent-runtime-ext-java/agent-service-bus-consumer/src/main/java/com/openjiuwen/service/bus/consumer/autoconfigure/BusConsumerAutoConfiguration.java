@@ -4,14 +4,13 @@
 
 package com.openjiuwen.service.bus.consumer.autoconfigure;
 
+import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
-import com.openjiuwen.service.bus.consumer.port.BusResponseProjectionStore;
-import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairScheduler;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairer;
 import com.openjiuwen.service.bus.consumer.relay.BusResponseRelay;
@@ -21,11 +20,11 @@ import com.openjiuwen.service.bus.consumer.runtime.BrokerConsumerLifecycle;
 import com.openjiuwen.service.bus.consumer.runtime.BrokerDeliveryLoop;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
 import com.openjiuwen.service.bus.consumer.runtime.BusExecutors;
-import com.openjiuwen.service.bus.consumer.runtime.DurabilityGuard;
 import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
 import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
+import com.openjiuwen.service.bus.consumer.stream.StreamReferenceSubscriptionAspect;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
 
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
@@ -39,6 +38,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.core.env.Environment;
 
 import java.time.Clock;
@@ -50,37 +50,36 @@ import java.time.Clock;
  */
 @AutoConfiguration
 @AutoConfigureBefore(name = "com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration")
-@EnableConfigurationProperties(BusConsumerProperties.class)
+@EnableConfigurationProperties({BusConsumerProperties.class, AgentBusBrokerProperties.class})
+@EnableAspectJAutoProxy
 @ConditionalOnProperty(prefix = "openjiuwen.service.bus.consumer", name = "enabled", havingValue = "true")
 public class BusConsumerAutoConfiguration {
-    private static final long STREAM_REF_TTL_SECONDS = 300L;
+    private static final long STREAM_REF_TTL_SECONDS = 60L * 60L;
 
     @Bean
-    BusEnvelopeValidator busEnvelopeValidator(Environment environment) {
-        return new BusEnvelopeValidator(Clock.systemUTC(), serviceId(environment));
+    BusEnvelopeValidator busEnvelopeValidator(Environment environment, AgentBusBrokerProperties bus) {
+        return new BusEnvelopeValidator(Clock.systemUTC(), tenantId(bus), serviceId(environment));
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "openjiuwen.service.bus.consumer", name = "stream-ref-secret")
-    StreamReferenceService streamReferenceService(BusConsumerProperties p) {
-        return new StreamReferenceService(p.getStreamRefSecret(), STREAM_REF_TTL_SECONDS);
+    StreamReferenceService streamReferenceService() {
+        return new StreamReferenceService(STREAM_REF_TTL_SECONDS);
     }
 
     @Bean
-    BusTaskAdmissionStore busTaskAdmissionStore() {
+    StreamReferenceSubscriptionAspect streamReferenceSubscriptionAspect(StreamReferenceService references,
+            InMemoryBusTaskAdmissionStore admissions, AgentBusBrokerProperties bus) {
+        return new StreamReferenceSubscriptionAspect(references, admissions, tenantId(bus), Clock.systemUTC());
+    }
+
+    @Bean
+    InMemoryBusTaskAdmissionStore busTaskAdmissionStore() {
         return new InMemoryBusTaskAdmissionStore();
     }
 
     @Bean
-    BusResponseProjectionStore busResponseProjectionStore() {
+    InMemoryBusResponseProjectionStore busResponseProjectionStore() {
         return new InMemoryBusResponseProjectionStore();
-    }
-
-    @Bean
-    Object busDurabilityGuard(BusConsumerProperties p, BusTaskAdmissionStore admission,
-            BusResponseProjectionStore projection) {
-        DurabilityGuard.verify(true, p.isAllowEphemeralState(), admission, projection);
-        return new Object();
     }
 
     @Bean
@@ -93,11 +92,10 @@ public class BusConsumerAutoConfiguration {
     @Bean(destroyMethod = "close")
     @ConditionalOnBean(name = "runtimeRequestConsumer")
     AgentBusBrokerDeliveryPort agentBusBrokerDeliveryPort(
-            @Qualifier("runtimeRequestConsumer") BrokerForwardingConsumerPort consumer, BusConsumerProperties p,
-            Environment environment) {
+            @Qualifier("runtimeRequestConsumer") BrokerForwardingConsumerPort consumer,
+            AgentBusBrokerProperties bus, Environment environment) {
         return new AgentBusBrokerDeliveryPort(consumer, consumerServiceId(environment),
-                require(p.getConsumerTenantId(), "consumer-tenant-id"),
-                serviceId(environment));
+                tenantId(bus), serviceId(environment));
     }
 
     @Bean
@@ -113,8 +111,8 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    @ConditionalOnBean({BusResponseProjectionStore.class, AgentBusResponsePublisher.class})
-    BusResponseRelay busResponseRelay(BusResponseProjectionStore store, AgentBusResponsePublisher publisher,
+    @ConditionalOnBean({InMemoryBusResponseProjectionStore.class, AgentBusResponsePublisher.class})
+    BusResponseRelay busResponseRelay(InMemoryBusResponseProjectionStore store, AgentBusResponsePublisher publisher,
             BusConsumerProperties p, BusConcurrencyGuard concurrency) {
         BusConsumerProperties.Tuning tuning = p.getTuning();
         return new BusResponseRelay(store, publisher::publish, BusExecutors.singleThreadScheduler("bus-response-relay"),
@@ -122,26 +120,27 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean({BusResponseProjectionStore.class, AgentBusResponsePublisher.class,
+    @ConditionalOnBean({InMemoryBusResponseProjectionStore.class, AgentBusResponsePublisher.class,
             BusResponseRelay.class})
-    BusTaskProjectionCoordinator busTaskProjectionCoordinator(BusResponseProjectionStore store,
+    BusTaskProjectionCoordinator busTaskProjectionCoordinator(InMemoryBusResponseProjectionStore store,
             AgentBusResponsePublisher publisher, BusResponseRelay relay, BusConcurrencyGuard concurrency) {
         return new BusTaskProjectionCoordinator(store, publisher::publish, relay, concurrency);
     }
 
     @Bean
-    @ConditionalOnBean({BusResponseProjectionStore.class, BusResponseRelay.class})
-    BusProjectionRepairer busProjectionRepairer(BusResponseProjectionStore store, BusResponseRelay relay,
-            BusConsumerProperties p) {
-        return new BusProjectionRepairer(store, relay, require(p.getConsumerTenantId(), "consumer-tenant-id"));
+    @ConditionalOnBean({InMemoryBusResponseProjectionStore.class, BusResponseRelay.class})
+    BusProjectionRepairer busProjectionRepairer(InMemoryBusResponseProjectionStore store, BusResponseRelay relay,
+            AgentBusBrokerProperties bus) {
+        return new BusProjectionRepairer(store, relay, tenantId(bus));
     }
 
     @Bean
     @ConditionalOnBean(BusProjectionRepairer.class)
     BusProjectionRepairScheduler busProjectionRepairScheduler(BusProjectionRepairer repairer, BusConsumerProperties p,
-            org.springframework.beans.factory.ObjectProvider<TaskStoreProjectionPostProcessor> taskProjector) {
+            org.springframework.beans.factory.ObjectProvider<TaskStoreProjectionPostProcessor> taskProjector,
+            AgentBusBrokerProperties bus) {
         return new BusProjectionRepairScheduler(repairer, p.getTuning().getRepairInterval().toMillis(),
-                taskProjector.getIfAvailable(), require(p.getConsumerTenantId(), "consumer-tenant-id"));
+                taskProjector.getIfAvailable(), tenantId(bus));
     }
 
     @Bean
@@ -154,14 +153,14 @@ public class BusConsumerAutoConfiguration {
     @ConditionalOnBean(BusTaskProjectionCoordinator.class)
     static TaskStoreProjectionPostProcessor taskStoreProjectionPostProcessor(ConfigurableListableBeanFactory beans) {
         return new TaskStoreProjectionPostProcessor(() -> beans.getBean(BusTaskProjectionCoordinator.class),
-                () -> beans.getBean(BusTaskAdmissionStore.class));
+                () -> beans.getBean(InMemoryBusTaskAdmissionStore.class));
     }
 
     @Bean
     @ConditionalOnBean({RequestHandlerBusA2aBridge.class, AgentBusResponsePublisher.class})
     RuntimeBusEventConsumer runtimeBusEventConsumer(ConfigurableListableBeanFactory beans) {
         return new RuntimeBusEventConsumer(beans.getBean(BusEnvelopeValidator.class),
-                event -> event.inlinePayload(), beans.getBean(BusTaskAdmissionStore.class),
+                event -> event.inlinePayload(), beans.getBean(InMemoryBusTaskAdmissionStore.class),
                 beans.getBean(RequestHandlerBusA2aBridge.class), beans.getBean(BusTaskProjectionCoordinator.class),
                 beans.getBeanProvider(StreamReadyProjector.class).getIfAvailable(),
                 beans.getBeanProvider(TaskStoreProjectionPostProcessor.class).getIfAvailable(),
@@ -171,10 +170,9 @@ public class BusConsumerAutoConfiguration {
     @Bean
     @ConditionalOnBean({AgentBusBrokerDeliveryPort.class, RuntimeBusEventConsumer.class})
     BrokerDeliveryLoop brokerDeliveryLoop(AgentBusBrokerDeliveryPort broker, RuntimeBusEventConsumer consumer,
-            BusConsumerProperties p, Environment environment) {
+            AgentBusBrokerProperties bus, Environment environment) {
         return new BrokerDeliveryLoop(broker, d -> consumer.consume(d.envelope(), d.payload()),
-                consumerServiceId(environment),
-                require(p.getConsumerTenantId(), "consumer-tenant-id"), Clock.systemUTC());
+                consumerServiceId(environment), tenantId(bus), Clock.systemUTC());
     }
 
     @Bean
@@ -184,11 +182,11 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    SmartInitializingSingleton busConsumerRequiredBeans(BusConsumerProperties p, Environment environment,
+    SmartInitializingSingleton busConsumerRequiredBeans(AgentBusBrokerProperties bus, Environment environment,
             ConfigurableListableBeanFactory beans) {
         return () -> {
             serviceId(environment);
-            require(p.getConsumerTenantId(), "consumer-tenant-id");
+            tenantId(bus);
             if (beans.getBeanProvider(RuntimeBusEventConsumer.class).getIfAvailable() == null) {
                 throw new IllegalStateException("RuntimeBusEventConsumer bean is required");
             }
@@ -199,7 +197,6 @@ public class BusConsumerAutoConfiguration {
             if (configuredTaskStore == null) {
                 throw new IllegalStateException("A2A TaskStore bean is required");
             }
-            DurabilityGuard.verifyTaskStore(p.isAllowEphemeralState(), configuredTaskStore);
             if (beans.getBeanProvider(AgentBusResponsePublisher.class).getIfAvailable() == null) {
                 throw new IllegalStateException("runtimeResponseProducer/response publisher is required");
             }
@@ -208,6 +205,10 @@ public class BusConsumerAutoConfiguration {
 
     static String consumerServiceId(Environment environment) {
         return "runtime-" + serviceId(environment);
+    }
+
+    private static String tenantId(AgentBusBrokerProperties bus) {
+        return require(bus.tenant(), "agent-bus.tenant");
     }
 
     private static String serviceId(Environment environment) {

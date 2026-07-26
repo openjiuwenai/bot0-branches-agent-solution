@@ -25,7 +25,7 @@ import java.util.Map;
 class BusEnvelopeValidatorTest {
     private final Instant now = Instant.parse("2026-07-20T00:00:00Z");
     private final BusEnvelopeValidator validator = new BusEnvelopeValidator(Clock.fixed(now, ZoneOffset.UTC),
-            "runtime-a");
+            "tenant-a", "runtime-a");
 
     @Test
     void acceptsValidInlineRequest() {
@@ -45,6 +45,14 @@ class BusEnvelopeValidatorTest {
     }
 
     @Test
+    void rejectsEnvelopeOutsideConfiguredAgentBusTenant() {
+        assertThat(validator.validate(
+                event("CLIENT_INVOCATION_REQUESTED", "runtime-a", now.plusSeconds(10), new byte[]{1}, null,
+                        "tenant-b")))
+                .contains("TENANT_SCOPE_VIOLATION");
+    }
+
+    @Test
     void rejectsAmbiguousPayload() {
         assertThat(validator.validate(
                 event("CLIENT_INVOCATION_REQUESTED", "runtime-a", now.plusSeconds(1), new byte[]{1}, "ref://payload")))
@@ -60,7 +68,12 @@ class BusEnvelopeValidatorTest {
     }
 
     private AgentBusEventEnvelope event(String type, String target, Instant deadline, byte[] inline, String ref) {
-        return new AgentBusEventEnvelope("1.0", type, "m-1", "tenant-a", "source", target, null, "corr-1", "trace-1",
+        return event(type, target, deadline, inline, ref, "tenant-a");
+    }
+
+    private AgentBusEventEnvelope event(String type, String target, Instant deadline, byte[] inline, String ref,
+            String tenantId) {
+        return new AgentBusEventEnvelope("1.0", type, "m-1", tenantId, "source", target, null, "corr-1", "trace-1",
                 "idem-1", deadline, "application/json", inline, ref, Map.of());
     }
 }

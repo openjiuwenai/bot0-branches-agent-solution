@@ -18,18 +18,18 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Tests creation of signed STREAM_READY control-plane projections.
+ * Tests creation of opaque STREAM_READY control-plane projections.
  *
  * @since 2026-07-22
  */
 class StreamReadyProjectorTest {
     @Test
-    void projectsSignedStreamReferenceWithoutStreamFrames() {
+    void projectsOpaqueStreamReferenceWithoutStreamFrames() {
         var seen = new AtomicReference<BusResponseProjection>();
         var coordinator = new BusTaskProjectionCoordinator(new InMemoryBusResponseProjectionStore(), seen::set);
         BusResponseProjection projection = new BusResponseProjection("event-1", "A2A_STREAM_READY", "tenant-a", "corr",
                 "task-1", Instant.ofEpochSecond(100), Map.of());
-        new StreamReadyProjector(coordinator, new StreamReferenceService("secret", 60)).project(projection);
+        new StreamReadyProjector(coordinator, new StreamReferenceService(60)).project(projection);
         assertThat(seen.get().data()).containsKey("streamRef");
         assertThat(seen.get().data()).doesNotContainKey("token");
     }

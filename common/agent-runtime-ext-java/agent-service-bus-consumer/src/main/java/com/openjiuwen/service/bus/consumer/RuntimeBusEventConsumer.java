@@ -11,8 +11,8 @@ import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusConsumptionDecision;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
 import com.openjiuwen.service.bus.consumer.model.BusResponseProjection;
-import com.openjiuwen.service.bus.consumer.port.BusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.runtime.BusConcurrencyGuard;
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
 
@@ -42,7 +42,7 @@ public final class RuntimeBusEventConsumer {
 
     private final BusEnvelopeValidator validator;
     private final Function<AgentBusEventEnvelope, byte[]> payloadResolver;
-    private final BusTaskAdmissionStore admissionStore;
+    private final InMemoryBusTaskAdmissionStore admissionStore;
     private final RequestHandlerBusA2aBridge bridge;
     private final BusTaskProjectionCoordinator projections;
     private final StreamReadyProjector streamReadyProjector;
@@ -64,7 +64,7 @@ public final class RuntimeBusEventConsumer {
      *            the projections value
      */
     public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
-            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
+            InMemoryBusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
             BusTaskProjectionCoordinator projections) {
         this(validator, resolver, admissionStore, bridge, projections, null, null,
                 new BusConcurrencyGuard(16, 16, 16, 64));
@@ -87,7 +87,7 @@ public final class RuntimeBusEventConsumer {
      *            the streamReadyProjector value
      */
     public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
-            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
+            InMemoryBusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
             BusTaskProjectionCoordinator projections, StreamReadyProjector streamReadyProjector) {
         this(validator, resolver, admissionStore, bridge, projections, streamReadyProjector, null,
                 new BusConcurrencyGuard(16, 16, 16, 64));
@@ -112,7 +112,7 @@ public final class RuntimeBusEventConsumer {
      *            the taskStateProjector value
      */
     public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
-            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
+            InMemoryBusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
             BusTaskProjectionCoordinator projections, StreamReadyProjector streamReadyProjector,
             TaskStoreProjectionPostProcessor taskStateProjector) {
         this(validator, resolver, admissionStore, bridge, projections, streamReadyProjector, taskStateProjector,
@@ -140,7 +140,7 @@ public final class RuntimeBusEventConsumer {
      *            the concurrency value
      */
     public RuntimeBusEventConsumer(BusEnvelopeValidator validator, Function<AgentBusEventEnvelope, byte[]> resolver,
-            BusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
+            InMemoryBusTaskAdmissionStore admissionStore, RequestHandlerBusA2aBridge bridge,
             BusTaskProjectionCoordinator projections, StreamReadyProjector streamReadyProjector,
             TaskStoreProjectionPostProcessor taskStateProjector, BusConcurrencyGuard concurrency) {
         this.validator = validator;
@@ -276,6 +276,9 @@ public final class RuntimeBusEventConsumer {
     }
 
     private BusConsumptionDecision invalidEnvelope(AgentBusEventEnvelope envelope, String reason) {
+        if ("TENANT_SCOPE_VIOLATION".equals(reason)) {
+            return BusConsumptionDecision.rejected(reason);
+        }
         if (!trustedForResponse(envelope)) {
             return BusConsumptionDecision.rejected(reason);
         }

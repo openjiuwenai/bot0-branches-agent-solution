@@ -16,9 +16,6 @@ import java.time.Duration;
 @ConfigurationProperties("openjiuwen.service.bus.consumer")
 public class BusConsumerProperties {
     private boolean enabled;
-    private String streamRefSecret;
-    private String consumerTenantId;
-    private boolean allowEphemeralState;
     private Tuning tuning = new Tuning();
 
     public boolean isEnabled() {
@@ -27,30 +24,6 @@ public class BusConsumerProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
-    }
-
-    public String getStreamRefSecret() {
-        return streamRefSecret;
-    }
-
-    public void setStreamRefSecret(String streamRefSecret) {
-        this.streamRefSecret = streamRefSecret;
-    }
-
-    public String getConsumerTenantId() {
-        return consumerTenantId;
-    }
-
-    public void setConsumerTenantId(String value) {
-        this.consumerTenantId = value;
-    }
-
-    public boolean isAllowEphemeralState() {
-        return allowEphemeralState;
-    }
-
-    public void setAllowEphemeralState(boolean value) {
-        this.allowEphemeralState = value;
     }
 
     public Tuning getTuning() {
