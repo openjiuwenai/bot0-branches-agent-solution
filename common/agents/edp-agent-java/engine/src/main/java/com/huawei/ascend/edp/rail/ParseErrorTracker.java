@@ -16,12 +16,12 @@
 
 package com.huawei.ascend.edp.rail;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * LLM 输出 JSON 解析失败追踪器。
@@ -37,7 +37,6 @@ import org.slf4j.LoggerFactory;
  */
 
 public final class ParseErrorTracker {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(ParseErrorTracker.class);
 
     /** 降级 Map 中的标记键名 */

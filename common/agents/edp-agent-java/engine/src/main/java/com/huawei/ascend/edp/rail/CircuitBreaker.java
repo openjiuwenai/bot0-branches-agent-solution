@@ -16,13 +16,13 @@
 
 package com.huawei.ascend.edp.rail;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * 轻量级熔断器，无外部依赖。
@@ -38,12 +38,7 @@ import org.slf4j.LoggerFactory;
  */
 
 public class CircuitBreaker {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(CircuitBreaker.class);
-
-    public enum State {
-        CLOSED, OPEN, HALF_OPEN
-    }
 
     private final String name;
     private final int failureThreshold;
@@ -64,6 +59,18 @@ public class CircuitBreaker {
         this.name = name;
         this.failureThreshold = failureThreshold;
         this.resetTimeout = Duration.ofMillis(resetTimeoutMs);
+    }
+
+    /**
+     * 熔断器状态枚举。
+     * <ul>
+     *     <li>CLOSED：正常放行</li>
+     *     <li>OPEN：快速失败，拒绝所有请求</li>
+     *     <li>HALF_OPEN：半开，仅放行一个试探请求</li>
+     * </ul>
+     */
+    public enum State {
+        CLOSED, OPEN, HALF_OPEN
     }
 
     /**
@@ -116,6 +123,8 @@ public class CircuitBreaker {
             } else if (state.compareAndSet(State.HALF_OPEN, State.OPEN)) {
                 openedAt = Instant.now();
                 LOGGER.warn("[CircuitBreaker:{}] HALF_OPEN -> OPEN (trial request failed)", name);
+            } else {
+                LOGGER.debug("[CircuitBreaker:{}] already OPEN, failures={}", name, failures);
             }
         }
     }
