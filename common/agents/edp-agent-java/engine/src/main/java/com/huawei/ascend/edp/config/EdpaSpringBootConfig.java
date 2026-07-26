@@ -420,6 +420,73 @@ public class EdpaSpringBootConfig {
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers != null ? headers : new LinkedHashMap<>();
         }
+
+        /**
+         * 熔断器配置。
+         */
+        private CircuitBreakerConfig circuitBreaker = new CircuitBreakerConfig();
+
+        /**
+         * Gets the circuit breaker config.
+         *
+         * @return the result
+         */
+        public CircuitBreakerConfig getCircuitBreaker() {
+            return circuitBreaker;
+        }
+
+        /**
+         * Sets the circuit breaker config.
+         *
+         * @param circuitBreaker the circuitBreaker value
+         */
+        public void setCircuitBreaker(CircuitBreakerConfig circuitBreaker) {
+            this.circuitBreaker = circuitBreaker != null ? circuitBreaker : new CircuitBreakerConfig();
+        }
+
+        /**
+         * 熔断器参数配置。
+         */
+        public static class CircuitBreakerConfig {
+            /**
+             * 是否启用熔断器。
+             */
+            private boolean enabled = true;
+
+            /**
+             * 连续失败达到此阈值后熔断器打开。
+             */
+            private int failureThreshold = 5;
+
+            /**
+             * 熔断打开后经过此时间进入半开状态（毫秒）。
+             */
+            private long resetTimeoutMs = 30000;
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public int getFailureThreshold() {
+                return failureThreshold;
+            }
+
+            public void setFailureThreshold(int failureThreshold) {
+                this.failureThreshold = failureThreshold;
+            }
+
+            public long getResetTimeoutMs() {
+                return resetTimeoutMs;
+            }
+
+            public void setResetTimeoutMs(long resetTimeoutMs) {
+                this.resetTimeoutMs = resetTimeoutMs;
+            }
+        }
     }
 
     /**

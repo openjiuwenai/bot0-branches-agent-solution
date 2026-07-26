@@ -29,6 +29,7 @@ import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.TodoRedisProperties;
 import com.huawei.ascend.edp.enhancer.EdpaAgentEnhancer;
+import com.huawei.ascend.edp.rail.ParseErrorTracker;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail.VersatilePassthroughBuffer;
 import com.huawei.ascend.edp.stream.PlanrulePromptBuilder;
@@ -784,7 +785,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     private Optional<String> extractPassthroughDisplayText(String nodeJson) {
         Map<String, Object> eventMap = parseJsonObject(nodeJson);
-        if (eventMap == null || eventMap.isEmpty()) {
+        if (eventMap == null || eventMap.isEmpty() || ParseErrorTracker.hasParseError(eventMap)) {
             return Optional.empty();
         }
 
@@ -867,8 +868,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             return Collections.emptyMap();
         }
         Map<String, Object> body = parseJsonObject(text);
-        if (body.isEmpty()) {
-            LOGGER.warn("Versatile continuation input JSON parse returned empty");
+        if (body.isEmpty() || ParseErrorTracker.hasParseError(body)) {
+            LOGGER.warn("Versatile continuation input JSON parse failed or empty");
             return Collections.emptyMap();
         }
         Object inputs = body.get("inputs");
@@ -883,9 +884,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             return OBJECT_MAPPER.readValue(text, new TypeReference<LinkedHashMap<String, Object>>() {
             });
         } catch (JsonProcessingException e) {
-            // 降级说明：JSON 解析失败，返回空 Map 兜底
-            LOGGER.warn("[EDPA-DIAG] parseJsonObject failed, returning empty map: err={}", e.getMessage());
-            return Map.of();
+            ParseErrorTracker.recordFailure("EdpaExtHandler.parseJsonObject", e.getMessage());
+            return ParseErrorTracker.degradedMap(e.getMessage());
         }
     }
 
