@@ -314,6 +314,11 @@ public class EdpaSpringBootConfig {
         private Map<String, String> headers = new LinkedHashMap<>();
 
         /**
+         * 熔断器配置。
+         */
+        private CircuitBreakerConfig circuitBreaker = new CircuitBreakerConfig();
+
+        /**
          * Gets the url.
          *
          * @return the result
@@ -422,11 +427,6 @@ public class EdpaSpringBootConfig {
         }
 
         /**
-         * 熔断器配置。
-         */
-        private CircuitBreakerConfig circuitBreaker = new CircuitBreakerConfig();
-
-        /**
          * Gets the circuit breaker config.
          *
          * @return the result
@@ -461,7 +461,7 @@ public class EdpaSpringBootConfig {
             /**
              * 熔断打开后经过此时间进入半开状态（毫秒）。
              */
-            private long resetTimeoutMs = 30000;
+            private long resetTimeoutMs = 30000L;
 
             public boolean isEnabled() {
                 return enabled;
