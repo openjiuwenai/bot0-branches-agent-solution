@@ -115,6 +115,16 @@ public class VersatileInterruptRail extends AgentRail {
     static final String HISTORY_INFO_KEY = "history_info";
 
     /**
+     * SSE 响应体最大允许大小（字节），超过则截断并告警，防止 OOM。
+     */
+    private static final int MAX_RESPONSE_BODY_BYTES = 10 * 1024 * 1024; // 10MB
+
+    /**
+     * 截断后的响应体日志摘要长度。
+     */
+    private static final int TRUNCATED_LOG_LENGTH = 500;
+
+    /**
      * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
      */
     private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
@@ -169,6 +179,11 @@ public class VersatileInterruptRail extends AgentRail {
      * 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。
      */
     private final SandboxClient decoratedClient;
+
+    /**
+     * Versatile 调用熔断器，连续失败达阈值后快速失败，避免线程池耗尽。
+     */
+    private final CircuitBreaker circuitBreaker;
 
     /**
      * 构造 VA 委托 Rail。
@@ -248,6 +263,18 @@ public class VersatileInterruptRail extends AgentRail {
                 ? parseTimeout(versatileConfig.getTimeout())
                 : Duration.ofSeconds(30);
         this.httpClient = HttpClient.newBuilder().connectTimeout(timeout).version(HttpClient.Version.HTTP_1_1).build();
+
+        // 初始化熔断器
+        if (versatileConfig != null && versatileConfig.getCircuitBreaker() != null
+                && versatileConfig.getCircuitBreaker().isEnabled()) {
+            var cbConfig = versatileConfig.getCircuitBreaker();
+            this.circuitBreaker = new CircuitBreaker("versatile",
+                    cbConfig.getFailureThreshold(), cbConfig.getResetTimeoutMs());
+            LOGGER.info("[VersatileInterruptRail] circuit breaker enabled: failureThreshold={}, resetTimeoutMs={}",
+                    cbConfig.getFailureThreshold(), cbConfig.getResetTimeoutMs());
+        } else {
+            this.circuitBreaker = null;
+        }
 
         // VA 与 MCP、ask_user 同属工具调用增强类 Rail，使用同一优先级。
         setPriority(85);
@@ -536,14 +563,32 @@ public class VersatileInterruptRail extends AgentRail {
         if (!hasAdapterA2a && !hasDirectUrl) {
             return failedResult("versatile config is missing");
         }
+        // 熔断器检查：OPEN 状态下快速失败，避免线程阻塞
+        if (circuitBreaker != null && !circuitBreaker.allowRequest()) {
+            LOGGER.warn("[VersatileInterruptRail] circuit breaker OPEN, returning degraded response, convId={}",
+                    conversationId);
+            return failedResult("工作流暂不可用，请稍后重试");
+        }
         try {
             Map<String, Object> result = hasAdapterA2a
                     ? callVersatileAdapterA2a(versatileInputs, conversationId)
                     : callVersatileDirect(versatileInputs, conversationId);
+            // 记录熔断器状态：HTTP 4xx/5xx 返回 failedResult(status=failed)
+            if (circuitBreaker != null) {
+                String status = String.valueOf(result.getOrDefault("status", ""));
+                if ("failed".equals(status)) {
+                    circuitBreaker.recordFailure();
+                } else {
+                    circuitBreaker.recordSuccess();
+                }
+            }
             storePassthroughNodes(conversationId, result);
             return result;
         } catch (IOException | InterruptedException e) {
             LOGGER.warn("VersatileInterruptRail: direct call failed: {}", e.getMessage());
+            if (circuitBreaker != null) {
+                circuitBreaker.recordFailure();
+            }
             return failedResult(e.getMessage());
         }
     }
@@ -567,12 +612,13 @@ public class VersatileInterruptRail extends AgentRail {
         LOGGER.info("VersatileInterruptRail: POST {}", url);
         HttpResponse<String> response = httpClient.send(builder.build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        String safeBody = checkAndTruncateBody(response.body());
         LOGGER.info("[VersatileInterruptRail] response status={} body={}", response.statusCode(),
-                desensitizeSensitiveFields(abbreviate(response.body())));
+                desensitizeSensitiveFields(abbreviate(safeBody)));
         if (response.statusCode() >= 400) {
-            return failedResult("HTTP " + response.statusCode() + ": " + response.body());
+            return failedResult("HTTP " + response.statusCode() + ": " + safeBody);
         }
-        String content = normalizeContent(response.body());
+        String content = normalizeContent(safeBody);
         LOGGER.info("VersatileInterruptRail: normalized content {}", content);
         return Map.of("source", "versatile", "status", "completed", "content", content);
     }
@@ -650,12 +696,13 @@ public class VersatileInterruptRail extends AgentRail {
                 .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8)).build();
         HttpResponse<String> response = httpClient.send(request,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        String safeBody = checkAndTruncateBody(response.body());
         LOGGER.info("[VersatileInterruptRail] adapter A2A status={} body={}", response.statusCode(),
-                desensitizeSensitiveFields(abbreviate(response.body())));
+                desensitizeSensitiveFields(abbreviate(safeBody)));
         if (response.statusCode() >= 400) {
-            return failedResult("adapter A2A HTTP " + response.statusCode() + ": " + response.body());
+            return failedResult("adapter A2A HTTP " + response.statusCode() + ": " + safeBody);
         }
-        return normalizeA2aAdapterResponse(response.body());
+        return normalizeA2aAdapterResponse(safeBody);
     }
 
     /**
@@ -1272,6 +1319,33 @@ public class VersatileInterruptRail extends AgentRail {
 
     private Map<String, Object> failedResult(String error) {
         return Map.of("source", "versatile", "status", "failed", "error", error != null ? error : "unknown");
+    }
+
+    /**
+     * 检查并截断过大的 SSE 响应体，防止 OOM。
+     *
+     * <p>SSE 流可能包含大量事件帧（artifactUpdate 持续推送），响应体可能达到数十 MB。
+     * 超过 {@link #MAX_RESPONSE_BODY_BYTES} 时截断并输出 WARN 日志。</p>
+     *
+     * @param body the raw response body
+     * @return 原始 body 或截断后的 body
+     */
+    private String checkAndTruncateBody(String body) {
+        if (body == null) {
+            return "";
+        }
+        int byteLen = body.getBytes(StandardCharsets.UTF_8).length;
+        if (byteLen <= MAX_RESPONSE_BODY_BYTES) {
+            return body;
+        }
+        // 按 UTF-8 字节截断，避免截断到多字节字符中间
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        byte[] truncated = new byte[MAX_RESPONSE_BODY_BYTES];
+        System.arraycopy(bytes, 0, truncated, 0, MAX_RESPONSE_BODY_BYTES);
+        String result = new String(truncated, StandardCharsets.UTF_8);
+        LOGGER.warn("[VersatileInterruptRail] response body too large ({} bytes), truncated to {} bytes",
+                byteLen, MAX_RESPONSE_BODY_BYTES);
+        return result;
     }
 
     private String toJson(Object value) {

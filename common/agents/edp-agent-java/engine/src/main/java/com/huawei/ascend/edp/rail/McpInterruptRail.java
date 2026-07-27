@@ -652,7 +652,8 @@ public class McpInterruptRail extends AgentRail {
                     return toStringKeyMap(OBJECT_MAPPER.convertValue(node, Map.class));
                 }
             } catch (JsonProcessingException e) {
-                LOGGER.warn("McpInterruptRail: failed to parse call_mcp result JSON: {}", abbreviate(text));
+                ParseErrorTracker.recordFailure("McpInterruptRail.normalizeObject", e.getMessage());
+                return ParseErrorTracker.degradedMap(e.getMessage());
             }
         }
         return Map.of();
