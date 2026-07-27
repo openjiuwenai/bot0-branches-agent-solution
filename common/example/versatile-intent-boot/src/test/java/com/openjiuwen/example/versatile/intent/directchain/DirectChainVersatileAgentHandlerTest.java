@@ -166,13 +166,17 @@ class DirectChainVersatileAgentHandlerTest {
             Throwable[] error, boolean[] done) {
         List<QueryChunk> chunks = new CopyOnWriteArrayList<>();
         handler.streamQuery(req, new QueryStreamObserver() {
-            /** 接收流式 chunk，累积到列表。 */
+            /**
+             * 接收流式 chunk，累积到列表。
+             */
             @Override
             public void onNext(QueryChunk c) {
                 chunks.add(c);
             }
 
-            /** 记录流式错误（当 error 槽非空时）。 */
+            /**
+             * 记录流式错误（当 error 槽非空时）。
+             */
             @Override
             public void onError(Throwable e) {
                 if (error != null) {
@@ -180,7 +184,9 @@ class DirectChainVersatileAgentHandlerTest {
                 }
             }
 
-            /** 标记流式完成（当 done 槽非空时）。 */
+            /**
+             * 标记流式完成（当 done 槽非空时）。
+             */
             @Override
             public void onComplete() {
                 if (done != null) {

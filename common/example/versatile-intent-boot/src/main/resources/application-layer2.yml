@@ -64,4 +64,3 @@ openjiuwen:
     direct-chain:
       enabled: false
       a2a-forward-agent-cards: []
-      raw-passthrough: false

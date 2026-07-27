@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Bean;
 
 /**
  * 直链示例自动装配。在 {@code openjiuwen.example.direct-chain.enabled=true} 时，
- * 根据是否走原始透传注册对应的 {@link AgentHandler}，覆盖默认的 versatile handler。
+ * 注册 {@link DirectChainVersatileAgentHandler} 覆盖默认的 versatile handler。
  *
  * @since 0.1.0
  */
@@ -35,24 +35,8 @@ public class DirectChainAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(AgentHandler.class)
-    @ConditionalOnProperty(prefix = "openjiuwen.example.direct-chain", name = "raw-passthrough",
-            havingValue = "false", matchIfMissing = true)
     public AgentHandler directChainVersatileAgentHandler(VersatileProperties versatileProps,
             DirectChainProperties props, A2AGatewayCardResolver gatewayResolver) {
         return new DirectChainVersatileAgentHandler(versatileProps, props, gatewayResolver);
-    }
-
-    /**
-     * 注册业务终端原始透传 handler：把业务返回的 SSE 原样透传给 client，不做意图识别。
-     *
-     * @param versatileProps versatile 全局配置（提供 url-template）
-     * @return 原始透传 handler
-     */
-    @Bean
-    @ConditionalOnMissingBean(AgentHandler.class)
-    @ConditionalOnProperty(prefix = "openjiuwen.example.direct-chain", name = "raw-passthrough",
-            havingValue = "true")
-    public AgentHandler rawVersatilePassthroughHandler(VersatileProperties versatileProps) {
-        return new RawVersatilePassthroughHandler(versatileProps);
     }
 }

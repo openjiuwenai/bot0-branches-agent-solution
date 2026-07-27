@@ -95,6 +95,18 @@ public class MockA2AGatewayController {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String QUERY_PATH = "/v1/query";
 
+    /**
+     * 末端业务卡 → versatile mock agentId 映射（mock 内硬编码，非生产路由）。
+     * 直链隧道收到这些卡时，gateway 直接转发到 versatile mock 的
+     * {@code /v1/proj/agents/{agentId}/conversations/{cid}} 端点（而非中间跳所用的
+     * {@code /v1/query}），并把 serve 协议 body 翻译成 versatile {@code {inputs:...}} body，
+     * 从而让业务的原始 versatile SSE 事件不经业务终端 handler 直接到达 client。
+     */
+    private static final Map<String, String> VERSATILE_TERMINAL_AGENTS = Map.of(
+            "agent_card_biz_hotel_domestic", "agent_biz",
+            "agent_card_biz_hotel_international", "agent_biz",
+            "agent_card_biz_flight_domestic", "agent_biz");
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(10))
@@ -161,10 +173,20 @@ public class MockA2AGatewayController {
     /**
      * Direct-chain tunnel endpoint. Activated by the {@code X-Direct-Chain=true}
      * header (matched by Spring's {@code headers} attribute, taking precedence
-     * over the no-header {@link #handle} mapping). Forwards the inbound body
-     * verbatim to {@code routing[agentId] + "/v1/query"} and streams the
-     * target's raw {@code data:} lines back to the response output stream as
+     * over the no-header {@link #handle} mapping). Streams the target's raw
+     * {@code data:} lines back to the response output stream as
      * {@code text/event-stream} without parsing or rewrapping.
+     *
+     * <p>Two forwarding modes (mock-only, hardcoded by {@link #VERSATILE_TERMINAL_AGENTS}):
+     * <ul>
+     *   <li><b>末端业务卡</b>（如 {@code agent_card_biz_hotel_domestic}）：gateway 直接转发到
+     *       versatile mock 的 {@code /v1/proj/agents/{versatileAgentId}/conversations/{cid}}
+     *       端点，并把 serve 协议 body（{@code {conversation_id,stream,messages}}）翻译成
+     *       versatile {@code {inputs:{query,messages}}} body。业务原始 versatile SSE 事件
+     *       不经任何业务终端 handler 直接透传给 client。</li>
+     *   <li><b>中间跳卡</b>（如 {@code agent_card_L2_hotel}）：哑隧道，原样转发到
+     *       {@code routing[agentId] + "/v1/query"}，body 不改。</li>
+     * </ul>
      *
      * @param agentId  the path variable agent identifier (mapped via {@link #routing})
      * @param body     the raw inbound request body (may be {@code null})
@@ -184,15 +206,25 @@ public class MockA2AGatewayController {
                     "no routing for agentId=" + agentId);
             return;
         }
-        String targetUrl = targetBase + QUERY_PATH;
+        String forwardBody = body != null && !body.isBlank() ? body : "{}";
+        String targetUrl;
+        String versatileAgent = VERSATILE_TERMINAL_AGENTS.get(agentId);
+        if (versatileAgent != null) {
+            // 末端业务卡：直连 versatile mock，翻译 body + 拼 versatile 路径
+            String[] rewritten = rewriteToVersatile(targetBase, versatileAgent, forwardBody);
+            targetUrl = rewritten[0];
+            forwardBody = rewritten[1];
+        } else {
+            // 中间跳：哑隧道，原样转发到 /v1/query
+            targetUrl = targetBase + QUERY_PATH;
+        }
         log.info("Mock A2A Gateway TUNNEL agentId={} -> {}", agentId, targetUrl);
         try {
             HttpRequest forwardReq = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))
                     .timeout(Duration.ofMinutes(5))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body != null && !body.isBlank() ? body : "{}",
-                            StandardCharsets.UTF_8))
+                    .POST(HttpRequest.BodyPublishers.ofString(forwardBody, StandardCharsets.UTF_8))
                     .build();
             HttpResponse<java.io.InputStream> resp = httpClient.send(forwardReq,
                     HttpResponse.BodyHandlers.ofInputStream());
@@ -218,6 +250,62 @@ public class MockA2AGatewayController {
         } catch (InterruptedException e) {
             throw new IOException("tunnel interrupted", e);
         }
+    }
+
+    /**
+     * 把直链隧道收到的 serve 协议 body（{@code {conversation_id,stream,messages:[{role,content}]}}）
+     * 翻译成 versatile 协议 body（{@code {inputs:{query,messages}}}），并拼出 versatile mock
+     * URL {@code <targetBase>/v1/proj/agents/<versatileAgent>/conversations/<cid>}。
+     *
+     * <p>{@code query} 取 messages 中最后一条 {@code role=user} 的 content（支持纯文本与
+     * {@code {query:"..."}} 结构两种形态）；{@code cid} 取 {@code conversation_id}，缺省回退
+     * {@code "default"}。解析失败时尽力降级，不抛异常。
+     *
+     * @param targetBase     目标 runtime base URL（来自 routing）
+     * @param versatileAgent versatile mock agentId（来自 {@link #VERSATILE_TERMINAL_AGENTS}）
+     * @param serveBody      直链隧道收到的 serve 协议 body
+     * @return {@code [targetUrl, versatileBody]}，长度恒为 2
+     */
+    private static String[] rewriteToVersatile(String targetBase, String versatileAgent, String serveBody) {
+        String conversationId = "";
+        String query = "";
+        JsonNode messages = null;
+        try {
+            JsonNode root = MAPPER.readTree(serveBody);
+            JsonNode cid = root.path("conversation_id");
+            if (cid.isTextual()) {
+                conversationId = cid.asText();
+            }
+            JsonNode msgs = root.path("messages");
+            if (msgs.isArray() && msgs.size() > 0) {
+                messages = msgs;
+                for (JsonNode m : msgs) {
+                    if (!"user".equals(m.path("role").asText())) {
+                        continue;
+                    }
+                    JsonNode content = m.path("content");
+                    if (content.isTextual()) {
+                        query = content.asText();
+                    } else if (content.isObject()) {
+                        JsonNode q = content.path("query");
+                        if (q.isTextual()) {
+                            query = q.asText();
+                        }
+                    }
+                }
+            }
+        } catch (JsonProcessingException e) {
+            log.warn("Mock A2A Gateway tunnel: failed to parse serve body for versatile rewrite: {}",
+                    e.getMessage());
+        }
+        ObjectNode inputs = MAPPER.createObjectNode();
+        inputs.put("query", query);
+        inputs.set("messages", messages != null ? messages : MAPPER.createArrayNode());
+        ObjectNode versatileBody = MAPPER.createObjectNode();
+        versatileBody.set("inputs", inputs);
+        String cid = conversationId.isBlank() ? "default" : conversationId;
+        String targetUrl = targetBase + "/v1/proj/agents/" + versatileAgent + "/conversations/" + cid;
+        return new String[] {targetUrl, versatileBody.toString()};
     }
 
     private void logInbound(String agentId, String query, String contextId, HttpServletRequest request) {
