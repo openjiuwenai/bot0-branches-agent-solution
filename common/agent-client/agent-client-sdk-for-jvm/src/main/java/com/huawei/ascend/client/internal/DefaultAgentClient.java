@@ -1,6 +1,5 @@
 package com.huawei.ascend.client.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.ascend.client.api.AgentClient;
 import com.huawei.ascend.client.api.ContinueInputRequest;
 import com.huawei.ascend.client.api.Handle;
@@ -20,6 +19,8 @@ import com.huawei.ascend.client.tool.spi.ToolView;
 import com.huawei.ascend.client.transport.spi.CredentialProvider;
 import com.huawei.ascend.client.transport.spi.ToolWireSpec;
 import com.huawei.ascend.client.transport.spi.TransportProvider;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -174,7 +175,9 @@ public final class DefaultAgentClient implements AgentClient {
         if (perRequestToken != null && !perRequestToken.isEmpty()) {
             return perRequestToken;
         }
-        return (credentials != null) ? credentials.tokenFor(conversationId) : null;
+        return Optional.ofNullable(credentials)
+                .map(c -> c.tokenFor(conversationId))
+                .orElse(null);
     }
 
     private ToolExposurePolicy effectivePolicy(String conversationId, ToolExposurePolicy invocationPolicy) {
@@ -309,7 +312,7 @@ public final class DefaultAgentClient implements AgentClient {
                 if (subscription != null) {
                     subscription.cancel();
                 }
-            } catch (RuntimeException ignore) {
+            } catch (IllegalStateException | NullPointerException ignore) {
                 // AutoCloseable 契约：close 不抛异常。
             }
             if (!downstream.isClosed()) {

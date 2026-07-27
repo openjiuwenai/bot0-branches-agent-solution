@@ -140,13 +140,15 @@ final class ChatBroadcaster {
                 .replace("\r", "");
     }
 
-    /** 一个 SSE 客户端连接。 */
-    static final class SseClient {
+    /** 一个 SSE 客户端连接。OutputStream 在构造时获取一次，整个 SSE 会话期间复用，由 close() 关闭。 */
+    static final class SseClient implements AutoCloseable {
         final HttpExchange exchange;
+        final OutputStream out;
         final AtomicBoolean closed = new AtomicBoolean(false);
 
-        SseClient(HttpExchange exchange) {
+        SseClient(HttpExchange exchange) throws IOException {
             this.exchange = exchange;
+            this.out = exchange.getResponseBody();
         }
 
         synchronized void send(String event, String data) throws IOException {
@@ -154,9 +156,19 @@ final class ChatBroadcaster {
                 throw new IOException("closed");
             }
             String payload = "event: " + event + "\ndata: " + data + "\n\n";
-            OutputStream os = exchange.getResponseBody();
-            os.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            os.flush();
+            out.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            out.flush();
+        }
+
+        @Override
+        public void close() {
+            if (closed.compareAndSet(false, true)) {
+                try {
+                    out.close();
+                } catch (IOException ignore) {
+                    // best-effort：连接已断开时关闭忽略。
+                }
+            }
         }
     }
 }

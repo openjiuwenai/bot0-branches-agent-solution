@@ -1,13 +1,14 @@
 package com.huawei.ascend.client.transport.a2a;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.huawei.ascend.client.api.InvocationEvent;
 import com.huawei.ascend.client.api.InvocationSnapshot;
 import com.huawei.ascend.client.api.InvocationMode;
 import com.huawei.ascend.client.api.TaskState;
 import com.huawei.ascend.client.transport.spi.TransportProvider;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,9 +25,11 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Flow;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -56,11 +59,15 @@ public final class A2aHttpTransportProvider implements TransportProvider {
     public A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper) {
         String normalized = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.endpoint = URI.create(normalized.endsWith("/a2a") ? normalized : normalized + "/a2a");
-        this.io = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "a2a-transport-io");
-            t.setDaemon(true);
-            return t;
-        });
+        this.io = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
+                new SynchronousQueue<>(), r -> {
+                    Thread t = new Thread(r, "a2a-transport-io");
+                    t.setDaemon(true);
+                    t.setUncaughtExceptionHandler((thread, ex) -> {
+                        // best-effort：IO 线程未捕获异常不打断传输层主流程。
+                    });
+                    return t;
+                });
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .executor(io)
@@ -157,11 +164,11 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                     }
                     try {
                         JsonNode result = extractResult(codec.readTree(resp.body()));
-                        emit(ch, codec.parseFrame(result));
+                        codec.parseFrame(result).ifPresent(f -> emit(ch, f));
                         if (ack != null) {
                             ack.complete(workingSnapshot(ch));
                         }
-                    } catch (RuntimeException e) {
+                    } catch (A2aTransportException | IllegalArgumentException e) {
                         failChannel(ch, ack, e);
                     }
                 });
@@ -179,7 +186,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             if (node.hasNonNull("message")) {
                 message = node.get("message").asText(body);
             }
-        } catch (RuntimeException ignore) {
+        } catch (A2aTransportException ignore) {
             // 非 JSON 响应体：保留原始文本。
         }
         return new A2aTransportException("gateway rejected request [" + status + "/" + code + "]: " + message);
@@ -223,7 +230,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             flushFrame(ch, data);
         } catch (IOException e) {
             handleSseReadFailure(ch, e);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | NullPointerException e) {
             handleSseReadFailure(ch, e);
         }
     }
@@ -252,7 +259,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         String json = data.toString();
         data.setLength(0);
         JsonNode result = extractResult(codec.readTree(json));
-        emit(ch, codec.parseFrame(result));
+        codec.parseFrame(result).ifPresent(f -> emit(ch, f));
     }
 
     private CompletionStage<InvocationSnapshot> sendForSnapshot(ObjectNode req, String credential,
@@ -263,7 +270,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         return http.sendAsync(httpReq, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenApply(resp -> {
                     JsonNode result = extractResult(codec.readTree(resp.body()));
-                    return snapshotFromFrame(invocationRef, codec.parseFrame(result));
+                    return snapshotFromFrame(invocationRef, codec.parseFrame(result).orElse(null));
                 });
     }
 

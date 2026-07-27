@@ -1,8 +1,9 @@
 package com.huawei.ascend.client.internal;
 
+import com.huawei.ascend.client.tool.spi.ToolExecutionRecord;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.huawei.ascend.client.tool.spi.ToolExecutionRecord;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
