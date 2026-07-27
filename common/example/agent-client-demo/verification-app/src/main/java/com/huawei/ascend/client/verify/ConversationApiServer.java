@@ -45,17 +45,18 @@ import java.util.regex.Pattern;
  * 因为串行组复用 conversationId、s3 用 continueInput 续传，都不支持并发。
  */
 final class ConversationApiServer {
-
     private static final Logger LOG = Logger.getLogger(ConversationApiServer.class.getName());
+
     /** 提取数组内字符串元素的正则：预编译避免重复编译（G.PRM.04）。 */
     private static final Pattern STRING_ITEM_PATTERN = Pattern.compile("\"([^\"]*)\"");
+
     /** JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。 */
     private static final String LF = String.valueOf((char) 10);
     private static final String CR = String.valueOf((char) 13);
+
     /** 按 key 缓存的正则，避免对同一 key 重复预编译（G.PRM.04）。 */
     private static final ConcurrentMap<String, Pattern> STRING_FIELD_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<String, Pattern> ARRAY_FIELD_CACHE = new ConcurrentHashMap<>();
-
     private final int port;
     private final ChatBroadcaster broadcaster = new ChatBroadcaster();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -69,10 +70,8 @@ final class ConversationApiServer {
                 });
                 return t;
             });
-
     private ConversationDriver driver;
     private String gatewayUrl;
-
     ConversationApiServer(int port) {
         this.port = port;
     }
@@ -337,6 +336,13 @@ final class ConversationApiServer {
         }
     }
 
+    /**
+     * contentType。
+     *
+     * @param path String
+     * @return contentType
+     */
+
     private static String contentType(String path) {
         if (path.endsWith(".html")) {
             return "text/html; charset=utf-8";
@@ -349,6 +355,13 @@ final class ConversationApiServer {
         }
         return "application/octet-stream";
     }
+
+    /**
+     * esc。
+     *
+     * @param s String
+     * @return esc
+     */
 
     private static String esc(String s) {
         if (s == null) {

@@ -12,7 +12,8 @@ package com.huawei.ascend.client.api;
  * 可空字段（diagnosticTaskRef/pendingToolCall/outputText/errorCode/message）以 null 表示不适用。
  *
  * @since 2026-07-27
- */
+   * @return InvocationSnapshot
+*/
 public record InvocationSnapshot(
         String invocationRef,
         TaskState state,
@@ -22,7 +23,6 @@ public record InvocationSnapshot(
         String outputText,
         String errorCode,
         String message) {
-
     /**
      * 构造一个"未知"状态的快照（用于查询不到调用时）。
      *

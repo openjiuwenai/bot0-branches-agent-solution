@@ -19,12 +19,18 @@ import java.util.Map;
  * 成功携带结构化结果，失败携带标准化错误分类，保证"结构化错误可透明续传"。
  */
 final class ObservationTextRenderer {
-
     private final ObjectMapper mapper;
 
     ObservationTextRenderer(ObjectMapper mapper) {
         this.mapper = mapper;
     }
+
+    /**
+     * 渲染后的 observation 文本。
+     *
+     * @param record ToolExecutionRecord
+     * @return 渲染后的 observation 文本
+     */
 
     String render(ToolExecutionRecord record) {
         Map<String, Object> out = new LinkedHashMap<>();

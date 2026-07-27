@@ -14,7 +14,8 @@ package com.huawei.ascend.client.tool.spi;
  * {@code payloadRef} 用于大负载的引用式返回（可选）。
  *
  * @since 2026-07-27
- */
+   * @return ToolExecutionRecord
+*/
 public record ToolExecutionRecord(
         String toolCallId,
         Outcome outcome,
@@ -22,7 +23,6 @@ public record ToolExecutionRecord(
         String payloadRef,
         String errorCode,
         String message) {
-
     /**
      * 工具执行结果分类。
      *

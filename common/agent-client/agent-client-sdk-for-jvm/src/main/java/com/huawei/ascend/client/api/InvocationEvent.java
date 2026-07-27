@@ -15,6 +15,8 @@ import java.util.Optional;
  *
  * <p>所有事件都以客户端调用句柄 {@code invocationRef} 归集，业务无需感知服务端 {@code taskId}。
  * 使用 sealed + record，便于 {@code switch} 模式匹配穷尽处理。
+ *
+ * @since 2026-07-27
  */
 public sealed interface InvocationEvent
         permits InvocationEvent.Accepted,
@@ -23,7 +25,11 @@ public sealed interface InvocationEvent
                 InvocationEvent.InputRequired,
                 InvocationEvent.Completed,
                 InvocationEvent.Failed {
-
+    /**
+     * 客户端拥有的调用句柄。
+     *
+     * @return 调用句柄
+     */
     String invocationRef();
 
     /** 调用已被受理。{@code diagnosticTaskRef} 仅用于诊断/日志，非业务主键。 */
@@ -50,7 +56,12 @@ public sealed interface InvocationEvent
      */
     record InputRequired(String invocationRef, ToolCall toolCall, String prompt)
             implements InvocationEvent {
-        /**         * {@code toolCall} 存在与否由调用方判空；此处提供便捷包装。         *         * @return {@code toolCall} 存在与否由调用方判空；此处提供便捷包装。         */        public Optional<ToolCall> maybeToolCall() {
+        /**
+         * {@code toolCall} 存在与否由调用方判空；此处提供便捷包装。
+         *
+         * @return {@code toolCall} 存在与否由调用方判空；此处提供便捷包装。
+         */
+        public Optional<ToolCall> maybeToolCall() {
             return Optional.ofNullable(toolCall);
         }
     }

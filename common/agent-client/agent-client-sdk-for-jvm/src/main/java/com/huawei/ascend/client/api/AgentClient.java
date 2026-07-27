@@ -20,7 +20,6 @@ import com.huawei.ascend.client.tool.spi.ToolExposurePolicy;
  * @since 2026-07-27
  */
 public interface AgentClient extends AutoCloseable {
-
     /**
      * 发起一次调用，立即返回句柄；网络交互在后台进行。
      *

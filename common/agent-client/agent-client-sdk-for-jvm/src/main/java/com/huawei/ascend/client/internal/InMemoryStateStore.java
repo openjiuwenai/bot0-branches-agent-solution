@@ -17,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 2026-07-27
  */
 public final class InMemoryStateStore implements ClientStateStore {
-
     private final ConcurrentHashMap<String, ToolExecutionRecord> records = new ConcurrentHashMap<>();
     private final Set<String> submitted = ConcurrentHashMap.newKeySet();
 

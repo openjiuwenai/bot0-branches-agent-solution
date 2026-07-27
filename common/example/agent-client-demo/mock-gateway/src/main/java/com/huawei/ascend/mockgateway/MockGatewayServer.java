@@ -47,7 +47,6 @@ import java.util.concurrent.TimeUnit;
  * @since 2026-07-27
  */
 public final class MockGatewayServer {
-
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(MockGatewayServer.class.getName());
 
@@ -61,15 +60,12 @@ public final class MockGatewayServer {
         });
         return t;
     };
-
     private final ObjectMapper mapper = new ObjectMapper();
     private final ConcurrentMap<String, TaskSim> tasks = new ConcurrentHashMap<>();
-
     // G4 幂等：创建请求按 message.messageId 去重，重复请求复用同一 Task。
     private final ConcurrentMap<String, String> messageIdToTask = new ConcurrentHashMap<>();
     private final int requestedPort;
     private HttpServer server;
-
     public MockGatewayServer(int port) {
         this.requestedPort = port;
     }
@@ -190,7 +186,7 @@ public final class MockGatewayServer {
                     return;
                 }
             }
-            createAndRespond(ex, rpcId, contextId, message, metadata, messageId, streaming);
+            createAndRespond(ex, rpcId, params, message, streaming);
             return;
         }
 
@@ -210,8 +206,11 @@ public final class MockGatewayServer {
         }
     }
 
-    private void createAndRespond(HttpExchange ex, String rpcId, String contextId, JsonNode message,
-                                  JsonNode metadata, String messageId, boolean streaming) throws IOException {
+    private void createAndRespond(HttpExchange ex, String rpcId, JsonNode params, JsonNode message,
+                                  boolean streaming) throws IOException {
+        String contextId = message.path("contextId").asText(null);
+        JsonNode metadata = params.path("metadata");
+        String messageId = message.path("messageId").asText(null);
         TaskSim task = createTask(contextId, message, metadata);
         if (messageId != null) {
             messageIdToTask.put(messageId, task.taskId);
@@ -232,8 +231,15 @@ public final class MockGatewayServer {
             writeJson(ex, 200, rpcResult(rpcId, buildResult(existing, "task")));
         }
     }
-
     // ---------- task lifecycle ----------
+    /**
+     * createTask。
+     *
+     * @param contextId String
+     * @param message JsonNode
+     * @param metadata JsonNode
+     * @return createTask
+     */
 
     private TaskSim createTask(String contextId, JsonNode message, JsonNode metadata) {
         TaskSim task = new TaskSim();
@@ -339,6 +345,14 @@ public final class MockGatewayServer {
 
     // ---------- result builders ----------
 
+    /**
+     * buildResult。
+     *
+     * @param task TaskSim
+     * @param kind String
+     * @return buildResult
+     */
+
     private ObjectNode buildResult(TaskSim task, String kind) {
         ObjectNode r = mapper.createObjectNode();
         r.put("kind", kind);
@@ -397,6 +411,15 @@ public final class MockGatewayServer {
         }
     }
 
+    /**
+     * buildStatus。
+     *
+     * @param task TaskSim
+     * @param state State
+     * @param finalFlag boolean
+     * @return buildStatus
+     */
+
     private ObjectNode buildStatus(TaskSim task, State state, boolean finalFlag) {
         ObjectNode r = mapper.createObjectNode();
         r.put("kind", "status-update");
@@ -409,6 +432,14 @@ public final class MockGatewayServer {
         return r;
     }
 
+    /**
+     * buildArtifact。
+     *
+     * @param task TaskSim
+     * @param text String
+     * @return buildArtifact
+     */
+
     private ObjectNode buildArtifact(TaskSim task, String text) {
         ObjectNode r = mapper.createObjectNode();
         r.put("kind", "artifact-update");
@@ -417,6 +448,13 @@ public final class MockGatewayServer {
         artifact.putArray("parts").addObject().put("kind", "text").put("text", text);
         return r;
     }
+
+    /**
+     * buildArgs。
+     *
+     * @param inputSchema JsonNode
+     * @return buildArgs
+     */
 
     private ObjectNode buildArgs(JsonNode inputSchema) {
         ObjectNode args = mapper.createObjectNode();
@@ -430,6 +468,14 @@ public final class MockGatewayServer {
 
     // ---------- JSON-RPC helpers ----------
 
+    /**
+     * rpcResult。
+     *
+     * @param id String
+     * @param result ObjectNode
+     * @return rpcResult
+     */
+
     private ObjectNode rpcResult(String id, ObjectNode result) {
         ObjectNode root = mapper.createObjectNode();
         root.put("jsonrpc", "2.0");
@@ -439,6 +485,15 @@ public final class MockGatewayServer {
         root.set("result", result);
         return root;
     }
+
+    /**
+     * rpcError。
+     *
+     * @param id String
+     * @param code int
+     * @param message String
+     * @return rpcError
+     */
 
     private ObjectNode rpcError(String id, int code, String message) {
         ObjectNode root = mapper.createObjectNode();
@@ -460,7 +515,6 @@ public final class MockGatewayServer {
         body.put("message", message);
         writeJson(ex, status, body);
     }
-
     private void writeJson(HttpExchange ex, int status, ObjectNode body) throws IOException {
         byte[] bytes = write(body).getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
@@ -470,6 +524,13 @@ public final class MockGatewayServer {
         }
     }
 
+    /**
+     * JSON 文本。
+     *
+     * @param node ObjectNode
+     * @return JSON 文本
+     */
+
     private String write(ObjectNode node) {
         try {
             return mapper.writeValueAsString(node);
@@ -477,6 +538,13 @@ public final class MockGatewayServer {
             return "{}";
         }
     }
+
+    /**
+     * extractText。
+     *
+     * @param message JsonNode
+     * @return extractText
+     */
 
     private static Optional<String> extractText(JsonNode message) {
         JsonNode parts = message.path("parts");
@@ -489,6 +557,13 @@ public final class MockGatewayServer {
         }
         return Optional.empty();
     }
+
+    /**
+     * extractToolCallId。
+     *
+     * @param message JsonNode
+     * @return extractToolCallId
+     */
 
     private static Optional<String> extractToolCallId(JsonNode message) {
         JsonNode parts = message.path("parts");
@@ -503,6 +578,13 @@ public final class MockGatewayServer {
         return Optional.empty();
     }
 
+    /**
+     * a2aState。
+     *
+     * @param s State
+     * @return a2aState
+     */
+
     private static String a2aState(State s) {
         // 权威值为 TASK_STATE_* 大写带前缀（Feat-Func-009 §6.3 / 006 §3.3）。
         return switch (s) {
@@ -514,6 +596,13 @@ public final class MockGatewayServer {
             case FAILED -> "TASK_STATE_FAILED";
         };
     }
+
+    /**
+     * 布尔结果。
+     *
+     * @param s State
+     * @return 布尔结果
+     */
 
     private static boolean isTerminal(State s) {
         return s == State.COMPLETED || s == State.CANCELED || s == State.FAILED;
@@ -530,6 +619,15 @@ public final class MockGatewayServer {
         String prompt;
         JsonNode arguments;
 
+        /**
+         * client_tool 类型 Pending。
+         *
+         * @param toolCallId String
+         * @param toolName String
+         * @param arguments JsonNode
+         * @return client_tool 类型 Pending
+         */
+
         static Pending clientTool(String toolCallId, String toolName, JsonNode arguments) {
             Pending p = new Pending();
             p.userInput = false;
@@ -538,6 +636,13 @@ public final class MockGatewayServer {
             p.arguments = arguments;
             return p;
         }
+
+        /**
+         * user_input 类型 Pending。
+         *
+         * @param prompt String
+         * @return user_input 类型 Pending
+         */
 
         static Pending userInput(String prompt) {
             Pending p = new Pending();

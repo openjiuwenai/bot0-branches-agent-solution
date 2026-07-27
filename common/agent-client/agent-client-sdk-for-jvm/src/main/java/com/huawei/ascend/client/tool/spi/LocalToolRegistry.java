@@ -16,11 +16,21 @@ import java.util.function.BiFunction;
  * @since 2026-07-27
  */
 public interface LocalToolRegistry {
-
-    /** 注册（或替换同 toolId 的）工具，返回可用于反注册的句柄。 */
+    /**
+     * 注册句柄。
+     *
+     * @param registered LocalTool.Registered
+     * @return 注册句柄
+     */
     Registration register(LocalTool.Registered registered);
 
-    /** 便捷注册：同步实现。 */
+    /**
+     * 注册句柄。
+     *
+     * @param descriptor LocalToolDescriptor
+     * @param fn ToolExecutionRecord>
+     * @return 注册句柄
+     */
     default Registration register(LocalToolDescriptor descriptor,
                                   BiFunction<ToolInvocation, ToolExecutionContext, ToolExecutionRecord> fn) {
         return register(LocalTool.of(descriptor, fn));
@@ -30,14 +40,28 @@ public interface LocalToolRegistry {
 
     Optional<LocalTool.Registered> find(String toolId);
 
-    /** 所有已注册工具的描述符（不含暴露判定）。 */
+    /**
+     * 工具描述符列表。
+     *
+     * @return 工具描述符列表
+     */
     List<LocalToolDescriptor> descriptors();
 
-    /** 依据生效的暴露策略，计算当前应上报的 ToolView。 */
+    /**
+     * 工具视图。
+     *
+     * @param effectivePolicy ToolExposurePolicy
+     * @return 工具视图
+     */
     ToolView toolView(ToolExposurePolicy effectivePolicy);
 
     /** 反注册句柄。 */
     interface Registration extends AutoCloseable {
+        /**
+         * 工具标识。
+         *
+         * @return 工具标识
+         */
         String toolId();
 
         @Override

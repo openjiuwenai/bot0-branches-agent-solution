@@ -32,18 +32,30 @@ import java.util.UUID;
  * 其中 client 工具调用意图来自 {@code metadata._interrupt}（对齐 runtime Feat-Func-009）。
  */
 final class A2aJsonCodec {
-
     private final ObjectMapper mapper;
 
     A2aJsonCodec(ObjectMapper mapper) {
         this.mapper = mapper;
     }
 
+    /**
+     * ObjectMapper。
+     *
+     * @return ObjectMapper
+     */
+
     ObjectMapper mapper() {
         return mapper;
     }
 
     // ---------- 请求构建 ----------
+
+    /**
+     * 新请求 ObjectNode。
+     *
+     * @param method String
+     * @return 新请求 ObjectNode
+     */
 
     ObjectNode newRequest(String method) {
         ObjectNode root = mapper.createObjectNode();
@@ -52,6 +64,13 @@ final class A2aJsonCodec {
         root.put("method", method);
         return root;
     }
+
+    /**
+     * create 请求。
+     *
+     * @param cmd TransportProvider.CreateCommand
+     * @return create 请求
+     */
 
     ObjectNode buildCreate(TransportProvider.CreateCommand cmd) {
         // 仅 STREAMING 交付：创建用 SendStreamingMessage（SSE）；预留模式回退 SendMessage。
@@ -74,6 +93,13 @@ final class A2aJsonCodec {
         fillMetadata(params, cmd.agentId(), cmd.clientTools());
         return root;
     }
+
+    /**
+     * resume 请求。
+     *
+     * @param cmd TransportProvider.ResumeCommand
+     * @return resume 请求
+     */
 
     ObjectNode buildResume(TransportProvider.ResumeCommand cmd) {
         // 工具结果 / 用户输入续跑一律走同步 SendMessage（Feat-Func-011 §5.9.3）：非 SSE、单条 JSON 响应。
@@ -119,11 +145,26 @@ final class A2aJsonCodec {
         }
     }
 
+    /**
+     * get 请求。
+     *
+     * @param taskRef String
+     * @return get 请求
+     */
+
     ObjectNode buildGet(String taskRef) {
         ObjectNode root = newRequest("tasks/get");
         root.putObject("params").put("id", taskRef);
         return root;
     }
+
+    /**
+     * cancel 请求。
+     *
+     * @param taskRef String
+     * @param reason String
+     * @return cancel 请求
+     */
 
     ObjectNode buildCancel(String taskRef, String reason) {
         ObjectNode root = newRequest("tasks/cancel");
@@ -135,6 +176,13 @@ final class A2aJsonCodec {
         return root;
     }
 
+    /**
+     * JSON 文本。
+     *
+     * @param node ObjectNode
+     * @return JSON 文本
+     */
+
     String write(ObjectNode node) {
         try {
             return mapper.writeValueAsString(node);
@@ -142,6 +190,13 @@ final class A2aJsonCodec {
             throw new A2aTransportException("failed to serialize JSON-RPC request", e);
         }
     }
+
+    /**
+     * 解析后的 JsonNode。
+     *
+     * @param body String
+     * @return 解析后的 JsonNode
+     */
 
     JsonNode readTree(String body) {
         try {
@@ -157,10 +212,16 @@ final class A2aJsonCodec {
     record Frame(String taskId, String contextId, TaskState state, Interrupt interrupt,
             String text, String errorCode, String errorMessage) {
     }
-
     record Interrupt(boolean userInput, String toolCallId, String toolName,
             Map<String, Object> arguments, String prompt, Long deadlineMs) {
     }
+
+    /**
+     * 帧 Optional。
+     *
+     * @param result JsonNode
+     * @return 帧 Optional
+     */
 
     Optional<Frame> parseFrame(JsonNode result) {
         if (result == null || result.isNull()) {
@@ -183,6 +244,14 @@ final class A2aJsonCodec {
         String errorCode = result.path("metadata").path("errorCode").asText(null);
         return Optional.of(new Frame(taskId, contextId, state, interrupt, text, errorCode, text));
     }
+
+    /**
+     * parseInterrupt。
+     *
+     * @param result JsonNode
+     * @param status JsonNode
+     * @return parseInterrupt
+     */
 
     private Optional<Interrupt> parseInterrupt(JsonNode result, JsonNode status) {
         // 权威路径：status.message.metadata._interrupt（对齐 Feat-Func-009 §6.3 / 006 §3.5 ② / 007 §3.5 ②）。
@@ -217,6 +286,13 @@ final class A2aJsonCodec {
         return Optional.of(new Interrupt(userInput, toolCallId, toolName, arguments, prompt, deadlineMs));
     }
 
+    /**
+     * collectMessageText。
+     *
+     * @param message JsonNode
+     * @return collectMessageText
+     */
+
     private Optional<String> collectMessageText(JsonNode message) {
         if (message == null || message.isMissingNode() || message.isNull()) {
             return Optional.empty();
@@ -224,12 +300,26 @@ final class A2aJsonCodec {
         return collectPartsText(message.path("parts"));
     }
 
+    /**
+     * collectArtifactText。
+     *
+     * @param artifact JsonNode
+     * @return collectArtifactText
+     */
+
     private Optional<String> collectArtifactText(JsonNode artifact) {
         if (artifact == null || artifact.isMissingNode()) {
             return Optional.empty();
         }
         return collectPartsText(artifact.path("parts"));
     }
+
+    /**
+     * collectPartsText。
+     *
+     * @param parts JsonNode
+     * @return collectPartsText
+     */
 
     private Optional<String> collectPartsText(JsonNode parts) {
         if (parts == null || !parts.isArray()) {
@@ -244,6 +334,14 @@ final class A2aJsonCodec {
         return sb.length() > 0 ? Optional.of(sb.toString()) : Optional.empty();
     }
 
+    /**
+     * firstText。
+     *
+     * @param node JsonNode
+     * @param fields String...
+     * @return firstText
+     */
+
     private static Optional<String> firstText(JsonNode node, String... fields) {
         for (String f : fields) {
             String v = node.path(f).asText(null);
@@ -253,6 +351,13 @@ final class A2aJsonCodec {
         }
         return Optional.empty();
     }
+
+    /**
+     * mapState。
+     *
+     * @param s String
+     * @return mapState
+     */
 
     private static Optional<TaskState> mapState(String s) {
         if (s == null) {

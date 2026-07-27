@@ -19,7 +19,6 @@ import java.util.function.Predicate;
  * @since 2026-07-27
  */
 public final class ToolExposurePolicy {
-
     private final String label;
     private final Predicate<String> predicate;
 

@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * CLI 全量断言模式传入 {@link ToolExecutionObserver#noop()}，行为与原版完全一致。
  */
 final class DemoTools {
-
     static final String READ_PAGE = "readPage";
     static final String SUBMIT_ORDER = "submitOrder";
     static final String PING = "ping";
@@ -44,7 +43,6 @@ final class DemoTools {
         registerSubmitOrder(client, observer);
         registerPing(client, observer);
     }
-
     private void registerReadPage(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(READ_PAGE)
@@ -65,7 +63,6 @@ final class DemoTools {
                     return record;
                 }));
     }
-
     private void registerSubmitOrder(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(SUBMIT_ORDER)
@@ -86,7 +83,6 @@ final class DemoTools {
                     return record;
                 }));
     }
-
     private void registerPing(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(PING)

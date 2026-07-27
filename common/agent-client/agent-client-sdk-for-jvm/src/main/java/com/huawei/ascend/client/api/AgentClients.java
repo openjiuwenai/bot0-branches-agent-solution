@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2026-07-27
  */
 public final class AgentClients {
-
     private AgentClients() {
     }
 
@@ -149,6 +148,12 @@ public final class AgentClients {
             return new DefaultAgentClient(
                     transport, reg, store, guard, approval, exec, mapper, credentialProvider);
         }
+
+        /**
+         * defaultExecutor。
+         *
+         * @return defaultExecutor
+         */
 
         private static ExecutorService defaultExecutor() {
             ThreadFactory tf = new ThreadFactory() {

@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentMap;
  * @since 2026-07-27
  */
 public final class DefaultToolRegistry implements LocalToolRegistry {
-
     private final ConcurrentMap<String, LocalTool.Registered> byId = new ConcurrentHashMap<>();
 
     @Override

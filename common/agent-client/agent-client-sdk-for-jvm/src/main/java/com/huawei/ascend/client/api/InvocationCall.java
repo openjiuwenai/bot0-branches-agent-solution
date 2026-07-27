@@ -17,7 +17,6 @@ import java.util.concurrent.Flow;
  * @since 2026-07-27
  */
 public interface InvocationCall extends AutoCloseable {
-
     /**
      * 客户端拥有的调用句柄，用于 continueInput 等后续操作。
      *
@@ -35,16 +34,24 @@ public interface InvocationCall extends AutoCloseable {
     /**
      * 调用被服务端受理后结算的回执。{@link Handle#diagnosticTaskRef()} 仅用于诊断/日志，非业务主键。
      * 与事件流中的 {@link InvocationEvent.Accepted} 携带同一信息，业务可任选其一消费。
+     *
+     * @return 受理回执 future
      */
     CompletionStage<Handle> accepted();
 
     /**
      * 标准化事件流。对于 client_tool 类型的 {@code INPUT_REQUIRED}，SDK 会自动就地执行并续传，
      * 业务侧订阅到的仍是连续的状态/内容事件，直至终态。
+     *
+     * @return 事件流发布者
      */
     Flow.Publisher<InvocationEvent> events();
 
-    /** 在调用到达终态时完成，携带最终快照。 */
+    /**
+     * 在调用到达终态时完成，携带最终快照。
+     *
+     * @return 终态快照 future
+     */
     CompletionStage<InvocationSnapshot> completion();
 
     /** 关闭本调用句柄，释放本地订阅资源（不影响服务端 Task 状态）。 */

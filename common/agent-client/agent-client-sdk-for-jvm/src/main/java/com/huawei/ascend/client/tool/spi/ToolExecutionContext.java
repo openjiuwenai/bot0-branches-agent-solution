@@ -19,7 +19,8 @@ import java.util.Set;
  * 治理管道据此做"可见性校验"：服务端幻觉调用未暴露的工具 → {@code tool_not_declared} 拒绝（FEAT-007 §3.2 步骤 3）。
  *
  * @since 2026-07-27
- */
+   * @return ToolExecutionContext
+*/
 public record ToolExecutionContext(
         String conversationId,
         String invocationRef,
@@ -27,7 +28,6 @@ public record ToolExecutionContext(
         Duration deadline,
         Map<String, String> attributes,
         Set<String> visibleToolNames) {
-
     public ToolExecutionContext {
         attributes = (attributes == null)
                 ? Map.of()

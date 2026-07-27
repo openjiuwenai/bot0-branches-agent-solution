@@ -21,21 +21,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * payload 若是 Map/可 toString 对象，按 JSON 对象/字符串安全输出。
  */
 final class ChatBroadcaster {
-
     /** JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。 */
     private static final String LF = String.valueOf((char) 10);
     private static final String CR = String.valueOf((char) 13);
-
     private final List<SseClient> clients = new CopyOnWriteArrayList<>();
-
     void addClient(SseClient client) {
         clients.add(client);
     }
-
     void removeClient(SseClient client) {
         clients.remove(client);
     }
-
     void broadcast(ChatMessage msg) {
         String json = toJson(msg);
         List<SseClient> dead = new ArrayList<>();
@@ -50,7 +45,12 @@ final class ChatBroadcaster {
         clients.removeAll(dead);
     }
 
-    /** 把 ChatMessage 序列化为前端可消费的 JSON。 */
+    /**
+     * JSON 文本。
+     *
+     * @param m ChatMessage
+     * @return JSON 文本
+     */
     static String toJson(ChatMessage m) {
         StringBuilder sb = new StringBuilder(160);
         sb.append('{');
@@ -125,6 +125,13 @@ final class ChatBroadcaster {
         return toJsonValue(o);
     }
 
+    /**
+     * toJsonValue。
+     *
+     * @param v Object
+     * @return toJsonValue
+     */
+
     private static String toJsonValue(Object v) {
         if (v == null) {
             return "null";
@@ -137,6 +144,13 @@ final class ChatBroadcaster {
         }
         return "\"" + esc(String.valueOf(v)) + "\"";
     }
+
+    /**
+     * esc。
+     *
+     * @param s String
+     * @return esc
+     */
 
     private static String esc(String s) {
         if (s == null) {
@@ -153,12 +167,10 @@ final class ChatBroadcaster {
         final HttpExchange exchange;
         final OutputStream out;
         final AtomicBoolean closed = new AtomicBoolean(false);
-
         SseClient(HttpExchange exchange) throws IOException {
             this.exchange = exchange;
             this.out = exchange.getResponseBody();
         }
-
         synchronized void send(String event, String data) throws IOException {
             if (closed.get()) {
                 throw new IOException("closed");
@@ -167,7 +179,6 @@ final class ChatBroadcaster {
             out.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             out.flush();
         }
-
         @Override
         public void close() {
             if (closed.compareAndSet(false, true)) {

@@ -9,6 +9,7 @@ package com.huawei.ascend.client.transport.spi;
  * {@code name} 等于工具的 toolId。
  *
  * @since 2026-07-27
- */
+   * @return ToolWireSpec
+*/
 public record ToolWireSpec(String name, String description, String inputSchema) {
 }

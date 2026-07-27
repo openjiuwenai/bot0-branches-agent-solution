@@ -13,9 +13,9 @@ import java.util.List;
  * 使远端智能体得以感知并选择这些 client 工具。到 wire 的具体映射（clientTools 数组）由 transport 层完成。
  *
  * @since 2026-07-27
- */
+   * @return ToolView
+*/
 public record ToolView(List<LocalToolDescriptor> tools) {
-
     public ToolView {
         tools = List.copyOf(tools);
     }

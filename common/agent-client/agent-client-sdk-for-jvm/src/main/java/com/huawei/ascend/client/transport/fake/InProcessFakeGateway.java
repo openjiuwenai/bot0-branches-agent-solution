@@ -37,7 +37,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2026-07-27
  */
 public final class InProcessFakeGateway implements TransportProvider {
-
     private final ObjectMapper mapper = new ObjectMapper();
     private final ConcurrentMap<String, FakeTask> byTaskRef = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, FakeTask> byInvocationRef = new ConcurrentHashMap<>();
