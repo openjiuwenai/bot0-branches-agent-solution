@@ -487,18 +487,17 @@ main() {
     # gateway 进程不变（已带 /a2a/{agentId} 隧道端点；a2a-gateway-test profile 已配
     # base-url=http://localhost:8084，直链 handler 经 A2AGatewayCardResolver 复用）。
     #
-    # 注意：L1 默认 route-cache.enabled=true，而 RouteCacheAutoConfiguration 在 imports
-    # 中先于 DirectChainAutoConfiguration，二者均以 @ConditionalOnMissingBean(AgentHandler.class)
-    # 争抢 AgentHandler 槽位——route-cache 会胜出导致直链 handler 不生效。故 L1 须显式
-    # 关闭 route-cache，让 DirectChainVersatileAgentHandler 取得 AgentHandler 槽位。
+    # DirectChainAutoConfiguration 在 imports 文件中先于 RouteCacheAutoConfiguration，
+    # 故 direct-chain.enabled=true 时 DirectChainVersatileAgentHandler 抢得 AgentHandler
+    # 槽位（@ConditionalOnMissingBean），route-cache 自动让位。L1 保留其默认
+    # route-cache.enabled=true（application-layer1.yml）即可——直链仍生效。
     stop_process_by_name layer1
     stop_process_by_name layer2
     stop_process_by_name downstream
 
     # L1: direct-chain 默认全直链（a2a-forward-agent-cards 留空），agent_card_L2_hotel 走直链
     start_process layer1 "$L1_PORT" "layer1,dev,mock-versatile,a2a-gateway-test" "agent_L1" \
-        --openjiuwen.example.direct-chain.enabled=true \
-        --openjiuwen.service.versatile.route-cache.enabled=false
+        --openjiuwen.example.direct-chain.enabled=true
 
     # L2: direct-chain 默认全直链，agent_card_biz_hotel_domestic 走直链
     start_process layer2 "$L2_PORT" "layer2,dev,mock-versatile,a2a-gateway-test" "agent_L2" \
