@@ -1,5 +1,6 @@
 package com.huawei.ascend.client.transport.fake;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.ascend.client.api.InvocationEvent;
@@ -91,7 +92,7 @@ public final class InProcessFakeGateway implements TransportProvider {
                         args.put(k.asText(), "mock-" + k.asText());
                     }
                 }
-            } catch (Exception ignore) {
+            } catch (JsonProcessingException ignore) {
                 // 无 schema 时不填参数
             }
         }

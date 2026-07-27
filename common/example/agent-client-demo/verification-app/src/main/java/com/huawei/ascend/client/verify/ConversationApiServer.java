@@ -175,7 +175,7 @@ final class ConversationApiServer {
                 ConversationDriver.QueryResult result = driver.runQuery(queryId, sid);
                 broadcaster.broadcast(ChatMessage.info(sid,
                         "query " + queryId + " 完成: " + (result.ok() ? "通过" : "存在失败")));
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 broadcaster.broadcast(ChatMessage.error(sid, null, "unexpected", String.valueOf(e)));
             } finally {
                 running.set(false);
@@ -213,7 +213,7 @@ final class ConversationApiServer {
                 long passed = results.stream().filter(ConversationDriver.QueryResult::ok).count();
                 broadcaster.broadcast(ChatMessage.info(sid,
                         "串行发送完成: " + passed + "/" + results.size() + " 通过"));
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 broadcaster.broadcast(ChatMessage.error(sid, null, "unexpected", String.valueOf(e)));
             } finally {
                 running.set(false);
@@ -278,7 +278,7 @@ final class ConversationApiServer {
             broadcaster.removeClient(client);
             try {
                 ex.close();
-            } catch (Exception ignore) {
+            } catch (RuntimeException ignore) {
             }
         }
     }

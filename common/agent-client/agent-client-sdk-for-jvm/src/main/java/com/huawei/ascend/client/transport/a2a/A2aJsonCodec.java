@@ -1,5 +1,6 @@
 package com.huawei.ascend.client.transport.a2a;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -105,7 +106,7 @@ final class A2aJsonCodec {
                 t.put("description", spec.description());
                 try {
                     t.set("inputSchema", mapper.readTree(spec.inputSchema()));
-                } catch (Exception e) {
+                } catch (JsonProcessingException e) {
                     t.put("inputSchema", spec.inputSchema());
                 }
             }
@@ -131,7 +132,7 @@ final class A2aJsonCodec {
     String write(ObjectNode node) {
         try {
             return mapper.writeValueAsString(node);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             throw new A2aTransportException("failed to serialize JSON-RPC request", e);
         }
     }
@@ -139,7 +140,7 @@ final class A2aJsonCodec {
     JsonNode readTree(String body) {
         try {
             return mapper.readTree(body);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             throw new A2aTransportException("failed to parse JSON-RPC response: " + body, e);
         }
     }

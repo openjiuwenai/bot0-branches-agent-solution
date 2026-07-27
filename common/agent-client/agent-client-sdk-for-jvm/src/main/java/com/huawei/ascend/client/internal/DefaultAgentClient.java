@@ -309,7 +309,7 @@ public final class DefaultAgentClient implements AgentClient {
                 if (subscription != null) {
                     subscription.cancel();
                 }
-            } catch (Exception ignore) {
+            } catch (RuntimeException ignore) {
                 // AutoCloseable 契约：close 不抛异常。
             }
             if (!downstream.isClosed()) {
