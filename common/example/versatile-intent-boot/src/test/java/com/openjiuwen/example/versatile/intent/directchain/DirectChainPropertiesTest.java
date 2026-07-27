@@ -4,10 +4,17 @@
 
 package com.openjiuwen.example.versatile.intent.directchain;
 
-import org.junit.jupiter.api.Test;
-import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+
+/**
+ * {@link DirectChainProperties} 默认值与 setter 验证。
+ *
+ * @since 0.1.0
+ */
 class DirectChainPropertiesTest {
     @Test
     void defaultsAreSane() {

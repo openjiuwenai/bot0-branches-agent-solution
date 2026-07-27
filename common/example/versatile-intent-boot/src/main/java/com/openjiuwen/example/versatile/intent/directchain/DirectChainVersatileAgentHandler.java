@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.directchain;
 
 import com.openjiuwen.example.versatile.intent.a2a.A2AGatewayCardResolver;
@@ -8,6 +12,7 @@ import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.LinkedHashMap;
@@ -25,9 +30,10 @@ import java.util.concurrent.CancellationException;
  * 仅当 agentCard 在 {@code a2aForwardAgentCards} 例外集时，原样转发 a2a_delegate（走 a2a）。
  *
  * <p>非流式 query() 直接委托 delegate（走 a2a_delegate，后续再支持非流直链）。
+ *
+ * @since 0.1.0
  */
 public class DirectChainVersatileAgentHandler implements AgentHandler {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String DIRECT_CHAIN_HEADER = "X-Direct-Chain";
 
@@ -95,7 +101,9 @@ public class DirectChainVersatileAgentHandler implements AgentHandler {
             }
 
             @Override
-            public boolean isCancelled() { return observer.isCancelled(); }
+            public boolean isCancelled() {
+                return observer.isCancelled();
+            }
         });
     }
 
@@ -148,7 +156,7 @@ public class DirectChainVersatileAgentHandler implements AgentHandler {
         }
         try {
             return Optional.of(MAPPER.readValue(payload, Object.class));
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return Optional.empty();
         }
     }
