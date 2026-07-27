@@ -32,6 +32,8 @@
       <groupId>com.openjiuwen</groupId>
       <artifactId>agent-core-java</artifactId>
       <version>${agent-core-java.version}</version>
+      <scope>system</scope>
+      <systemPath>${agent-core-java.jar.path}</systemPath>
     </dependency>
 
     <dependency>
@@ -42,6 +44,27 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <!--
+      agent-core 的 RedisKVStoreProvider 通过反射创建 redis.clients.jedis.Jedis / JedisCluster，
+      而 agent-core-java-730 中 jedis 为 test scope，运行时不可用，故在此显式引入。
+    -->
+    <dependency>
+      <groupId>redis.clients</groupId>
+      <artifactId>jedis</artifactId>
+      <version>5.1.5</version>
+    </dependency>
+
+    <!--
+      agent-core 的 ReActAgent 通过 OkHttp 调用 LLM，但 agent-core-java-730
+      以 system scope 引入，不会传递其 compile scope 的 okhttp 依赖，运行时
+      NoClassDefFoundError: okhttp3/MediaType，故在此显式引入（与 agent-core 版本一致）。
+    -->
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>okhttp</artifactId>
+      <version>4.12.0</version>
     </dependency>
 
     <dependency>
@@ -76,6 +99,8 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
           <mainClass>com.huawei.ascend.edp.EdpApplication</mainClass>
+          <classifier>exec</classifier>
+          <includeSystemScope>true</includeSystemScope>
         </configuration>
       </plugin>
     </plugins>

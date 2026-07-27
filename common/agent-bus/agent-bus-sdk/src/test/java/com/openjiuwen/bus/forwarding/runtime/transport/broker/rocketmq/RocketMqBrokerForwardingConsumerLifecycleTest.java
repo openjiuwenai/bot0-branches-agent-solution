@@ -32,7 +32,7 @@ import java.util.Queue;
  * {@link RocketMqBrokerForwardingConsumer.MessagePollerFactory} seam (no live broker). The real
  * {@code DefaultLitePullConsumer} round-trip is the env-guarded real-broker IT (slice 3 / §6 D4).
  *
- * <p>Mirrors {@link RocketMqBrokerForwardingRelayTest} (fake {@code MessageSender}, no producer) —
+ * <p>Mirrors {@link RocketMqBrokerForwardingProducerTest} (fake {@code MessageSender}, no producer) —
  * the consumer-side twin of that seam-driven unit test.
  *
  * <p>Authority: {@code docs/architecture/l0/10-governance/review-packets/

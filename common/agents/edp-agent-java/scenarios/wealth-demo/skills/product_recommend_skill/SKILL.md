@@ -1,7 +1,7 @@
 ---
 name: product_recommend_skill
 description: >
-  根据用户理财意图进入理财推荐流程并展示推荐产品列表。
+  根据用户理财意图进入理财选品购买流程并展示推荐产品列表。
   触发词：推荐理财产品、帮我看看理财、有什么理财可以买。
   不要用于：产品选择确认、资金筹划、账户查询。
 ---
@@ -10,7 +10,7 @@ description: >
 
 ## 职责
 
-接收用户的理财购买意向，通过 `call_versatile` 触发理财推荐工作流，
+接收用户的理财购买意向，通过 `call_versatile` 触发理财选品购买工作流，
 获取推荐产品列表，按清晰格式展示给用户，并告知用户可进入选品流程。
 
 ## 工具白名单（严格）
@@ -27,11 +27,13 @@ description: >
 本 Skill 调用 `call_versatile` 时的参数分为两类：
 
 **A. 强制写死（【强约束】LLM 不得根据用户原话改写、不得替换）**
-- `query_description`：**固定为 `"推荐理财产品"`**
+- `query_description`：**固定为 `"请推荐低风险理财产品"`**
 - `query_intent`：**固定为 `"理财选品购买"`**
 
-> 说明：用户的风险偏好 / 产品类型等自然语言描述**不要**塞进 `query_description`；
-> 下游工作流由 `query_intent` 路由，本 skill 不依赖 `query_description` 携带筛选条件。
+> 说明：
+> - 用户的风险偏好 / 产品类型等自然语言描述**不要**塞进 `query_description`；下游工作流由 `query_intent` 路由，本 skill 不依赖 `query_description` 携带筛选条件。
+> - `query_intent` 必须为 `"理财选品购买"`（下游低码平台 Mock 的意图识别关键词）。
+>   注意：`query_description` 仍为 `"请推荐低风险理财产品"`（不含"购买"/"买入"，因此 Mock 会走理财选品购买分支，而非购买分支）。
 
 **B. 模板默认值（按本 SKILL.md 给定值传入即可，部署环境/工作流升级时可能调整，不视为 LLM 错填）**
 - `query_response_analysis_scripts`：默认 `"python product_recommend_skill/scripts/run_product_recommend_skill.py"`
@@ -49,8 +51,8 @@ description: >
 
 ```
 call_versatile(
-  query_description="推荐理财产品",
-  query_intent="理财推荐",
+  query_description="请推荐低风险理财产品",
+  query_intent="理财选品购买",
   query_response_analysis_scripts="python product_recommend_skill/scripts/run_product_recommend_skill.py",
   response_template_keys='["product_recommend_success", "product_recommend_empty"]'
 )
@@ -58,9 +60,9 @@ call_versatile(
 
 **严禁**对 `query_description` / `query_intent` 的反例（无论用户原话是什么）：
 - ❌ `query_description="买理财"` / `"我要买理财"` / `"购买理财产品"`
-- ❌ `query_description="查询账户余额"` / `"快速转账"` / `"理财选品购买"`
+- ❌ `query_description="查询账户余额"` / `"快速转账"`
 - ❌ `query_description="推荐低风险理财，关键词：固收，风险等级：R2"`（不要把偏好塞进来）
-- ❌ `query_intent="查询账户余额"` / `"理财选品购买"` / 任何非 `"理财推荐"` 的值
+- ❌ `query_intent="查询账户余额"` / `"快速转账"` / `"理财选品购买"` / 任何非 `"理财选品购买"` 的值
 
 工具返回结构：
 ```json
