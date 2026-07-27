@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>用途：在无网络环境下对 SDK 的多轮工具驱动、幂等去重、治理编排做纯逻辑单测。
  * 行为对齐 {@code mock-gateway}：依据 CreateCommand 携带的 ToolView（clientTools）按序请求各工具一次，
  * 全部完成后结束；并对首个工具故意重复投递一次 INPUT_REQUIRED 以验证客户端去重。
+ * @since 2026-07-27
  */
 public final class InProcessFakeGateway implements TransportProvider {
 

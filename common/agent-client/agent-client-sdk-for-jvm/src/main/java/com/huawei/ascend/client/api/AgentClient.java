@@ -16,6 +16,7 @@ import com.huawei.ascend.client.tool.spi.ToolExposurePolicy;
  * <p>本地工具的注册见 {@link #tools()}；工具在默认情况下不对服务端暴露，
  * 需通过会话级 {@link #exposeInConversation} 或调用级
  * {@link InvocationRequest.Builder#exposure} 显式授权后，才会以 ToolView 形式上报。
+ * @since 2026-07-27
  */
 public interface AgentClient extends AutoCloseable {
 

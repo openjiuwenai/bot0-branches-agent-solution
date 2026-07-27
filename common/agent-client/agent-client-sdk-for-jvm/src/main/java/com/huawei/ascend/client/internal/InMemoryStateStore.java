@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * {@link ClientStateStore} 的内存实现（默认）。基于 {@link ConcurrentHashMap} 保证并发下的幂等原子性。
+ * @since 2026-07-27
  */
 public final class InMemoryStateStore implements ClientStateStore {
 

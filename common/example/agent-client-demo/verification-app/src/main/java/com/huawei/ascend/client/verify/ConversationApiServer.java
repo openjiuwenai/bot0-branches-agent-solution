@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -47,13 +49,20 @@ final class ConversationApiServer {
     private static final Logger LOG = Logger.getLogger(ConversationApiServer.class.getName());
     /** 提取数组内字符串元素的正则：预编译避免重复编译（G.PRM.04）。 */
     private static final Pattern STRING_ITEM_PATTERN = Pattern.compile("\"([^\"]*)\"");
+    /** JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。 */
+    private static final String LF = String.valueOf((char) 10);
+    private static final String CR = String.valueOf((char) 13);
+    /** 按 key 缓存的正则，避免对同一 key 重复预编译（G.PRM.04）。 */
+    private static final ConcurrentMap<String, Pattern> STRING_FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<String, Pattern> ARRAY_FIELD_CACHE = new ConcurrentHashMap<>();
 
     private final int port;
     private final ChatBroadcaster broadcaster = new ChatBroadcaster();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final ExecutorService workers = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
             new SynchronousQueue<>(), r -> {
-                Thread t = new Thread(r, "chat-ui");
+                Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
+                t.setName("chat-ui");
                 t.setDaemon(true);
                 t.setUncaughtExceptionHandler((thread, ex) -> {
                     // best-effort：API 工作线程未捕获异常不中断服务。
@@ -334,12 +343,13 @@ final class ConversationApiServer {
             return "";
         }
         return s.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "");
+                .replace(LF, "\\n").replace(CR, "");
     }
 
     /** 从 JSON body 提取一个字符串字段（简单正则，足够本场景的简单请求体）。 */
     private static Optional<String> extractString(String body, String key) {
-        Pattern p = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\"([^\"]*)\"");
+        Pattern p = STRING_FIELD_CACHE.computeIfAbsent(key,
+                k -> Pattern.compile("\"" + Pattern.quote(k) + "\"\\s*:\\s*\"([^\"]*)\""));
         Matcher m = p.matcher(body);
         return m.find() ? Optional.ofNullable(m.group(1)) : Optional.empty();
     }
@@ -347,7 +357,8 @@ final class ConversationApiServer {
     /** 从 JSON body 提取字符串数组字段。 */
     private static List<String> extractStringList(String body, String key) {
         List<String> out = new ArrayList<>();
-        Pattern p = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\\[([^\\]]*)\\]");
+        Pattern p = ARRAY_FIELD_CACHE.computeIfAbsent(key,
+                k -> Pattern.compile("\"" + Pattern.quote(k) + "\"\\s*:\\s*\\[([^\\]]*)\\]"));
         Matcher m = p.matcher(body);
         if (!m.find()) {
             return out;

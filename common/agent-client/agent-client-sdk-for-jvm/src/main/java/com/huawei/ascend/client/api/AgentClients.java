@@ -107,7 +107,8 @@ public final class AgentClients {
 
                 @Override
                 public Thread newThread(Runnable r) {
-                    Thread t = new Thread(r, "agent-client-tool-" + seq.incrementAndGet());
+                    Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
+                    t.setName("agent-client-tool-" + seq.incrementAndGet());
                     t.setDaemon(true);
                     t.setUncaughtExceptionHandler((thread, ex) -> {
                         // best-effort：工具线程未捕获异常不打断客户端主流程。

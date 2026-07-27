@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>{@code java ... CloudClientVerification} —— CLI，跑完退出，退出码 0/1。</li>
  *   <li>{@code java ... CloudClientVerification --ui} —— 打开薄可视化前端（浏览器）。</li>
  * </ul>
+ * @since 2026-07-27
  */
 public final class CloudClientVerification {
 
@@ -72,8 +73,11 @@ public final class CloudClientVerification {
         System.exit(new CloudClientVerification().run());
     }
 
-    /** 供 Web UI 调用：注入进度回调后跑完全部场景。 */
-    public int runWithProgress(VerificationProgress progress)
+    /**
+     * 供 Web UI 调用：注入进度回调后跑完全部场景。
+     *
+     * @return 供 Web UI 调用：注入进度回调后跑完全部场景。
+     */    public int runWithProgress(VerificationProgress progress)
             throws InterruptedException, ExecutionException, TimeoutException, IOException {
         this.progress = progress;
         return run();

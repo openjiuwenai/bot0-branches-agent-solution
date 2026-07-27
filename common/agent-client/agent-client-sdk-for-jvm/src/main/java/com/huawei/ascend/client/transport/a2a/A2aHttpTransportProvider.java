@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>SSE 语义遵循 Feat-Func-009：服务端在投递 INPUT_REQUIRED 后会关闭当前 SSE 队列；
  * 本实现据此保持调用流开放，待上层完成本地工具执行后由 {@code resumeToolResult} 开启下一段 SSE 续传。
+ * @since 2026-07-27
  */
 public final class A2aHttpTransportProvider implements TransportProvider {
 
@@ -65,7 +66,8 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         this.endpoint = URI.create(normalized.endsWith("/a2a") ? normalized : normalized + "/a2a");
         this.io = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), r -> {
-                    Thread t = new Thread(r, "a2a-transport-io");
+                    Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
+                    t.setName("a2a-transport-io");
                     t.setDaemon(true);
                     t.setUncaughtExceptionHandler((thread, ex) -> {
                         // best-effort：IO 线程未捕获异常不打断传输层主流程。

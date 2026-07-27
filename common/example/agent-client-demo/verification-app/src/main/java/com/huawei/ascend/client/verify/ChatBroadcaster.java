@@ -22,6 +22,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class ChatBroadcaster {
 
+    /** JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。 */
+    private static final String LF = String.valueOf((char) 10);
+    private static final String CR = String.valueOf((char) 13);
+
     private final List<SseClient> clients = new CopyOnWriteArrayList<>();
 
     void addClient(SseClient client) {
@@ -140,8 +144,8 @@ final class ChatBroadcaster {
         }
         return s.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "");
+                .replace(LF, "\\n")
+                .replace(CR, "");
     }
 
     /** 一个 SSE 客户端连接。OutputStream 在构造时获取一次，整个 SSE 会话期间复用，由 close() 关闭。 */

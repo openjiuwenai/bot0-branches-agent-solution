@@ -50,8 +50,7 @@ public sealed interface InvocationEvent
      */
     record InputRequired(String invocationRef, ToolCall toolCall, String prompt)
             implements InvocationEvent {
-        /** {@code toolCall} 存在与否由调用方判空；此处提供便捷包装。 */
-        public Optional<ToolCall> maybeToolCall() {
+        /**         * {@code toolCall} 存在与否由调用方判空；此处提供便捷包装。         *         * @return {@code toolCall} 存在与否由调用方判空；此处提供便捷包装。         */        public Optional<ToolCall> maybeToolCall() {
             return Optional.ofNullable(toolCall);
         }
     }

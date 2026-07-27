@@ -12,6 +12,7 @@ package com.huawei.ascend.client.tool.spi;
  *
  * <p>{@code payload} 是结构化结果对象（成功时），SDK 会将其渲染为服务端可消费的 observation 文本；
  * {@code payloadRef} 用于大负载的引用式返回（可选）。
+ * @since 2026-07-27
  */
 public record ToolExecutionRecord(
         String toolCallId,
@@ -21,6 +22,11 @@ public record ToolExecutionRecord(
         String errorCode,
         String message) {
 
+    /**
+     * 工具执行结果分类。
+     *
+     * @since 2026-07-27
+     */
     public enum Outcome {
         /** 成功产生结果。 */
         OK,
@@ -56,8 +62,11 @@ public record ToolExecutionRecord(
         return new ToolExecutionRecord(toolCallId, Outcome.TIMEOUT, null, null, errorCode, message);
     }
 
-    /** 便捷工厂：errorCode 默认为 {@code timeout}（对齐 007 §5.3 闭集）。 */
-    public static ToolExecutionRecord timeout(String toolCallId, String message) {
+    /**
+     * 便捷工厂：errorCode 默认为 {@code timeout}（对齐 007 §5.3 闭集）。
+     *
+     * @return 便捷工厂：errorCode 默认为 {@code timeout}（对齐 007 §5.3 闭集）。
+     */    public static ToolExecutionRecord timeout(String toolCallId, String message) {
         return timeout(toolCallId, "timeout", message);
     }
 }

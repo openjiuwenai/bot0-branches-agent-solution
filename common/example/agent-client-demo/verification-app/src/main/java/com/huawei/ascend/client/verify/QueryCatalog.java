@@ -86,43 +86,67 @@ final class QueryCatalog {
             QueryConfig config,
             Expectation expectation) {
 
-        /** 所属分组。 */
-        public Group group() {
+        /**
+         * 所属分组。
+         *
+         * @return 所属分组。
+         */        public Group group() {
             return config.group();
         }
 
-        /** 会话策略。 */
-        public ConversationStrategy conversationStrategy() {
+        /**
+         * 会话策略。
+         *
+         * @return 会话策略。
+         */        public ConversationStrategy conversationStrategy() {
             return config.strategy();
         }
 
-        /** 可选 agent 标识。 */
-        public Optional<String> agentId() {
+        /**
+         * 可选 agent 标识。
+         *
+         * @return 可选 agent 标识。
+         */        public Optional<String> agentId() {
             return config.agentId();
         }
 
-        /** 可选工具暴露策略。 */
-        public Optional<ToolExposurePolicy> exposure() {
+        /**
+         * 可选工具暴露策略。
+         *
+         * @return 可选工具暴露策略。
+         */        public Optional<ToolExposurePolicy> exposure() {
             return config.exposure();
         }
 
-        /** 调用模式。 */
-        public String mode() {
+        /**
+         * 调用模式。
+         *
+         * @return 调用模式。
+         */        public String mode() {
             return config.mode();
         }
 
-        /** 是否预期失败。 */
-        public boolean expectedFailed() {
+        /**
+         * 是否预期失败。
+         *
+         * @return 是否预期失败。
+         */        public boolean expectedFailed() {
             return expectation.expectedFailed();
         }
 
-        /** 预期错误码。 */
-        public Optional<String> expectedErrorCode() {
+        /**
+         * 预期错误码。
+         *
+         * @return 预期错误码。
+         */        public Optional<String> expectedErrorCode() {
             return expectation.expectedErrorCode();
         }
 
-        /** 场景说明。 */
-        public String description() {
+        /**
+         * 场景说明。
+         *
+         * @return 场景说明。
+         */        public String description() {
             return expectation.description();
         }
     }
