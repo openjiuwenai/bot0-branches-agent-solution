@@ -1,619 +1,305 @@
-# EvoAgent 部署与运维操作指南
+# EvoAgent 部署指南（Quick Install）
 
-本指南面向初次接触 EvoAgent 的运维人员，覆盖从 **git clone → 构建 → 部署 → 验证 → 日志查看 → 下线** 的完整流程。
-所有命令均来自项目实际脚本，直接复制即可使用。
+本指南采用**最精简方式**完成 EvoAgent + EvoAgentAdapter 双容器部署。所有命令直接复制可用。
 
----
-
-## 0. 架构与依赖概览
-
-EvoAgent 是基于 `agent-core`（PyPI 包名 `openjiuwen`）的自进化元 Agent，以 FastAPI 服务形式对外提供 skill 文档自动优化能力。
-
-### 0.1 关键组件
-
-| 组件 | 说明 |
-|------|------|
-| **EvoAgent API** | FastAPI 服务，镜像内 `uvicorn` 启动，默认监听 8000 端口 |
-| **Adapter Sidecar** | 独立部署的 HTTP 服务（`EVO_ADAPTER_URL`），负责与业务 Agent 通信 + skill 同步 |
-| **LLM 服务** | 通过 `EVO_LLM_BASE_URL` 调用的 OpenAI 兼容接口（默认阿里云 DashScope） |
-| **agent-core 源码** | 位于同仓库 `community/agent-core`，构建时打包为 `openjiuwen-*.whl` |
-
-### 0.2 部署方式
-
-本项目提供 **两种** 部署路径：
-
-| 方式 | 适用场景 | 入口 |
-|------|----------|------|
-| **Docker 部署（推荐）** | 生产 / 线上环境 | `deployment/build.sh` + `run.sh` |
-| **本地开发部署** | 本地调试 / 单元测试 | `Makefile`（`make install` + `make serve`） |
-| **离线打包部署** | 内网无外网环境 | `export-bundle.sh` + `import-bundle.sh` |
+> Quick Install 选择 `--local` 模式：从 PyPI 下载 `openjiuwen` wheel，跳过 agent-core 源码克隆与构建，命令最少、依赖最轻。
 
 ---
 
-## 1. 环境前置条件
+## 0. 架构与前置条件
 
-### 1.1 系统要求
+### 0.1 架构（两个容器）
 
-- **操作系统**: Linux（推荐 Ubuntu 22.04 / CentOS 7+）；macOS / Windows 也可，但脚本以 bash 编写
-- **Python**: 3.12+（本地开发模式必需；Docker 模式不需要）
+```
+┌─────────────┐      EVO_ADAPTER_URL       ┌──────────────────┐
+│  EvoAgent   │ ──────────────────────────▶│  EvoAgentAdapter │
+│  :8000      │   skill 优化 / managed-doc  │  :8900           │
+│  (优化器)    │ ◀──────────────────────────│  (轨迹+调用代理)  │
+└─────────────┘       轨迹 / 调用结果        └──────────────────┘
+                                                │ 挂载
+                                                ▼
+                                     业务 Agent 日志 / skills / AgentRule.md
+```
+
+| 组件 | 端口 | 镜像 | 目录 |
+|------|------|------|------|
+| EvoAgent | 8000 | `evoagent:latest` | `common/agent-evolve/evoagent/deployment/` |
+| EvoAgentAdapter | 8900 | `agent-adapter:latest` | `common/agent-evolve/evoagent-adapter/deployment/` |
+
+### 0.2 前置条件
+
+- **OS**: Linux（Ubuntu 22.04 / CentOS 7+），bash
 - **Docker**: 20.10+（含 buildkit）
-- **磁盘**: 至少 5 GB 可用空间
-- **网络**: 能访问 `https://gitcode.com` 和 pip 镜像源（华为云默认）
-
-### 1.2 外部依赖服务
-
-| 服务 | 用途 | 必需 |
-|------|------|------|
-| **Adapter Sidecar** | 与业务 Agent 通信、skill 同步、轨迹收集 | ✅ |
-| **LLM API** | 优化器 LLM 调用（OpenAI 兼容） | ✅ |
-
-> Adapter Sidecar 的部署请参考同仓库 `common/agent-evolve/evoagent-adapter` 目录或其文档。EvoAgent 启动后通过 `EVO_ADAPTER_URL` 访问它，二者**必须同时可用**。
+- **Python**: 3.12+（仅构建时用，运行在容器内）
+- **git**: 任意版本
+- **网络**: 可访问 `gitcode.com` + pip 镜像源
+- **外部依赖**: LLM API（OpenAI 兼容，如阿里云 DashScope）
 
 ---
 
-## 2. 获取代码（Git Clone）
-
-EvoAgent 的代码在 `agent-solution` 仓库的 `common/agent-evolve/evoagent` 子目录下，`build.sh` 会自动处理克隆逻辑，也可以手动克隆。
-
-### 2.1 方式 A：手动 clone（推荐用于首次了解项目结构）
+## 1. 获取代码
 
 ```bash
-# 1) 克隆 agent-solution 仓库
+# 克隆 agent-solution 仓库 common 分支
 git clone --branch common https://gitcode.com/openJiuwen/agent-solution.git ~/EvoAgent/agent-solution
-cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent
-
-# 2) 查看关键文件
-ls deployment/        # 部署脚本
-ls src/evo_agent/     # 源码
-cat README.md         # 项目简介
+cd ~/EvoAgent/agent-solution
 ```
 
-### 2.2 方式 B：由 `build.sh` 自动 clone
-
-`deployment/build.sh` 内部会自动 clone 到 `$HOME/EvoAgent/agent-solution`，无需手动操作（详见第 3 节）。
-
-### 2.3 目录速览
+目录结构：
 
 ```
-agent-solution/                       # git clone 的根目录
-└── common/
-    └── agent-evolve/
-        └── evoagent/
-            ├── deployment/          # ← 本指南所在目录
-            │   ├── Dockerfile
-            │   ├── build.sh
-            │   ├── run.sh
-            │   ├── stop.sh
-            │   ├── export-bundle.sh
-            │   ├── import-bundle.sh
-            │   └── config/
-            │       └── .env.example
-            ├── src/evo_agent/       # 主源码
-            ├── examples/scenarios/  # 业务场景（edp_agent 等）
-            ├── skills/              # Agent Skill
-            ├── pyproject.toml
-            ├── Makefile
-            └── README.md
+agent-solution/
+└── common/agent-evolve/
+    ├── evoagent/                  # EvoAgent 服务
+    │   └── deployment/            # ← build.sh / run.sh / stop.sh
+    └── evoagent-adapter/          # Adapter 服务
+        └── deployment/            # ← start.sh / stop.sh
 ```
 
 ---
 
-## 3. 构建 Docker 镜像
+## 2. 部署 EvoAgentAdapter（先于 EvoAgent 启动）
 
-进入部署目录并执行 `build.sh`。该脚本会完成 5 个步骤：同步代码 → 获取 openjiuwen wheel → 复制到 vendor 目录 → docker build → 验证镜像。
+EvoAgent 启动后需立即访问 `EVO_ADAPTER_URL`，故 Adapter 必须先就绪。
 
-### 3.1 进入部署目录
+### 2.1 配置
+
+```bash
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent-adapter/deployment
+
+# 从模板创建配置
+cp config/.env.example config/.env
+```
+
+编辑 `config/.env`，**必填**项（其余保持默认即可）：
+
+```bash
+# 业务 Agent 日志父目录（只读挂载，per-agent 子目录）
+HOST_LOG_ROOT=/var/log/agents
+
+# 业务 Agent skills 父目录（读写挂载，per-agent 子目录）
+HOST_SKILLS_ROOT=/opt/agents/skills
+
+# managed-doc 公共父目录（读写挂载，AgentRule.md 等）
+HOST_AGENTS_ROOT=/opt/agents/runtime
+
+# Adapter 输出数据目录（offsets、归档）
+HOST_OUTPUT_DIR=/opt/agent-adapter/data
+
+# Adapter 配置文件持久化路径（首次启动自动从镜像 seed）
+HOST_CONFIG_FILE=/opt/agent-adapter/agent_adapter_config.yaml
+```
+
+创建主机目录（避免挂载失败）：
+
+```bash
+mkdir -p /var/log/agents /opt/agents/skills /opt/agents/runtime /opt/agent-adapter/data
+```
+
+### 2.2 配置 agent_adapter_config.yaml（多业务 Agent）
+
+`config/agent_adapter_config.yaml` 是模板；首次 `start.sh` 会自动 seed 到 `HOST_CONFIG_FILE`。如需自定义业务 Agent，编辑 `HOST_CONFIG_FILE`：
+
+```yaml
+agents:
+  - name: "edp_agent"
+    log_dir: "/data/logs/edp_agent"        # 对应 HOST_LOG_ROOT/edp_agent
+    skills_dir: "/data/skills/edp_agent"   # 对应 HOST_SKILLS_ROOT/edp_agent
+    agent_url: "http://192.168.1.10:8090"  # 业务 Agent 地址（勿用 localhost）
+    project_id: "proj_001"
+    agent_id: "edp_agent"
+    timeout: 300
+```
+
+> 业务 Agent 若端口发布到宿主机，`agent_url` 可写 `http://host.docker.internal:8090`（脚本已注入 host-gateway）。
+
+### 2.3 构建并启动
+
+```bash
+# 一条命令：构建镜像 + 启动容器（首次必须 --build）
+./start.sh --build
+```
+
+脚本行为：
+1. `docker build -t agent-adapter:latest ..`（构建上下文为上级 `evoagent-adapter/`）
+2. 首次启动自动 seed `agent_adapter_config.yaml` 到 `HOST_CONFIG_FILE`
+3. 挂载日志 / skills / agents / 配置文件卷
+4. 健康检查 `GET /api/v1/status`，等待 healthy
+
+### 2.4 验证
+
+```bash
+# 健康检查
+curl http://localhost:8900/api/v1/status
+
+# 查看日志
+docker logs -f agent-adapter
+```
+
+---
+
+## 3. 部署 EvoAgent
+
+### 3.1 配置
 
 ```bash
 cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
-```
 
-### 3.2 选择构建模式
-
-| 模式 | 命令 | 说明 |
-|------|------|------|
-| **源码构建**（默认） | `./build.sh` | clone `agent-core` 源码 → 本地构建 wheel |
-| **PyPI 下载** | `./build.sh --local` | 直接从 PyPI 下载 `openjiuwen==0.1.13` |
-| **跳过拉取** | `./build.sh --skip-pull` | 使用本地已有代码/wheel，不联网 |
-
-> 💡 新手首推 `./build.sh --local`：不需要额外 clone agent-core 仓库，最简单。
-
-### 3.3 常用示例
-
-```bash
-# 示例 1：最简模式（推荐新手）
-./build.sh --local
-
-# 示例 2：完整源码构建（默认路径）
-./build.sh
-
-# 示例 3：指定 agent-solution 路径 + 自定义镜像 tag
-EVOAGENT_IMAGE_TAG=evoagent:v1.0.0 ./build.sh /path/to/agent-solution
-
-# 示例 4：已 clone 代码，仅构建镜像
-./build.sh --skip-pull --local
-```
-
-### 3.4 关键环境变量
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `EVOAGENT_IMAGE_TAG` | `evoagent:latest` | 构建出的镜像 tag |
-| `EVOAGENT_SOLUTION_REPO` | `https://gitcode.com/openJiuwen/agent-solution.git` | agent-solution 地址 |
-| `EVOAGENT_SOLUTION_BRANCH` | `common` | 切换分支 |
-| `EVOAGENT_SOLUTION_DIR` | `$HOME/EvoAgent/agent-solution` | 代码本地存放目录（也可用首个位置参数覆盖） |
-| `EVOAGENT_CORE_REPO` | `https://gitcode.com/openJiuwen/agent-core.git` | 源码构建模式使用的 agent-core 仓库 |
-| `EVOAGENT_CORE_BRANCH` | `main` | agent-core 分支（独立于 solution 分支） |
-| `EVOAGENT_SKIP_PULL` | `0` | `1` 跳过代码拉取 |
-| `EVOAGENT_CORE_VERSION` | `0.1.13` | `--local` 模式下从 PyPI 下载的 openjiuwen 版本 |
-| `PIP_INDEX_URL` | 华为云镜像 | pip 源（内网可替换为私有源） |
-
-### 3.5 验证镜像
-
-构建完成后会输出：
-
-```
-[INFO] 构建成功！
-[INFO] 镜像: evoagent:latest
-```
-
-可手动查看镜像：
-
-```bash
-docker images evoagent:latest
-# 期望输出：
-# REPOSITORY   TAG       IMAGE ID       CREATED          SIZE
-# evoagent     latest    xxxxxxxxxxxx   10 seconds ago   ~350MB
-```
-
----
-
-## 4. 配置环境变量
-
-容器启动前**必须**配置 `config/.env`，`run.sh` 通过 `--env-file` 将其注入容器。
-
-### 4.1 复制模板
-
-```bash
-cd deployment
+# 从模板创建配置
 cp config/.env.example config/.env
-vim config/.env        # 或使用其他编辑器
 ```
 
-### 4.2 必填项
-
-| 变量 | 示例值 | 说明 |
-|------|--------|------|
-| `EVO_ADAPTER_URL` | `http://124.71.234.237:8900` | **Adapter Sidecar 地址**（不填则 `POST /optimize` 返回 500） |
-| `EVO_LLM_API_KEY` | `sk-xxxxxx` | **LLM API 密钥** |
-| `EVO_LLM_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | LLM base URL |
-| `EVO_OPTIMIZER_MODEL` | `qwen3.7-max` | optimizer 用的模型 |
-| `EVO_TARGET_MODEL` | `qwen3.7-max` | 目标 Agent 用的模型 |
-
-### 4.3 数据路径白名单（重要）
-
-```env
-EVO_ALLOWED_DATA_ROOTS=/tmp/evo_agent,/data/evo_agent,/home/evolution/evoagent-studio
-```
-
-**作用**：API 提交优化任务时的 `dataset_path` 必须位于这些根目录下，否则返回 422（防路径穿越）。
-
-**容器内挂载关系**（由 `run.sh` 自动完成）：
-
-| 宿主机路径 | 容器内路径 | 用途 |
-|-----------|-----------|------|
-| `deployment/workspace` | `/app/workspace` | 工作区、输出、artifacts |
-| `/home/evolution/data` | `/data` | 数据集文件 |
-
-> 如果数据集放在 `/data/evo_agent/xxx.json`，宿主机对应 `/home/evolution/data/evo_agent/xxx.json`（因为 `/home/evolution/data` → `/data`）。配置 `EVO_ALLOWED_DATA_ROOTS` 时请保留 `/data/evo_agent`。
-
-### 4.4 可选项（默认值已可用）
-
-```env
-# ── 远程通信（AdapterClient） ──
-EVO_REMOTE_TIMEOUT=300.0        # 远程调用超时（秒）
-EVO_REMOTE_MAX_RETRIES=2        # 失败重试次数
-EVO_REMOTE_PARALLEL=4           # 远程并发数
-
-# ── 优化超参数 ──
-EVO_DEFAULT_EPOCHS=3            # 默认训练轮数
-EVO_DEFAULT_BATCH_SIZE=4        # 默认 batch
-EVO_ACCUMULATION=2              # 梯度累积
-EVO_MINIBATCH_SIZE=8            # minibatch 大小
-EVO_EDIT_BUDGET=10              # 每轮编辑预算
-EVO_SCHEDULER_MODE=constant     # 学习率调度
-EVO_UPDATE_MODE=patch           # 更新模式（patch/overwrite）
-EVO_USE_SLOW_UPDATE=true        # 慢更新（全量重写）
-EVO_USE_META_SKILL=true         # 启用 meta skill
-EVO_SCORE_THRESHOLD=0.5         # 成功/失败分界线
-EVO_PARALLELISM=4               # 并发度
-
-# ── managed-doc 模式 ──
-EVO_MANAGED_DOC_APPLY_DEADLINE=600          # 须 ≥ Adapter max_task_seconds + 10
-EVO_MANAGED_DOC_CANCEL_ROLLBACK_DEADLINE=900 # 必须大于 apply deadline
-
-# ── 路径（容器内，通常无需修改） ──
-EVO_WORKSPACE_ROOT=./workspace
-EVO_OUTPUT_ROOT=./workspace/outputs
-EVO_ARTIFACT_DIR=./workspace/artifacts
-EVOAGENT_CONTROL_DB_PATH=./workspace/evoagent-control.db  # 必须位于持久卷
-```
-
-完整变量含义参见项目根目录的 `docs/api/optimization-api-reference.md`。
-
----
-
-## 5. 启动容器（部署）
-
-### 5.1 默认启动
+编辑 `config/.env`，**必填**项：
 
 ```bash
-cd deployment
+# Adapter 地址（指向刚启动的 Adapter 容器；同机用宿主 IP，勿用 localhost）
+EVO_ADAPTER_URL=http://<宿主IP>:8900
+
+# LLM 配置
+EVO_LLM_API_KEY=sk-xxxxxx
+EVO_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EVO_OPTIMIZER_MODEL=qwen3.7-max
+EVO_EVALUATOR_MODEL=qwen3.7-max
+EVO_TARGET_MODEL=qwen3.7-max
+```
+
+> 其余参数（训练轮数、并发度、路径等）保持默认即可，详见 `config/.env.example` 注释。
+
+### 3.2 构建镜像（Quick Install：--local 模式）
+
+```bash
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
+
+# --local：从 PyPI 下载 openjiuwen wheel，无需克隆 agent-core 源码
+HOME=/home/evolution/build ./build.sh --local
+```
+
+脚本行为（5 步）：
+1. 同步 agent-solution 代码（已 clone 则 pull）
+2. `pip download openjiuwen==0.1.13`（从 PyPI）
+3. 复制 wheel 到 `vendor/`
+4. `docker build -t evoagent:latest`
+5. 验证镜像
+
+### 3.3 启动
+
+```bash
 ./run.sh
 ```
 
-`run.sh` 会自动完成：
-1. 检查镜像 `evoagent:latest` 是否存在
-2. 检查 `config/.env` 是否存在（不存在会自动从模板复制并提示编辑）
-3. 删除同名旧容器
-4. 创建 `workspace/` 目录与 `/home/evolution/data` 目录
-5. 启动容器（带 healthcheck、自动重启策略）
-6. 等待 30 秒内健康检查通过
+脚本行为：
+1. 读取 `config/.env`，校验镜像存在
+2. 清理同名旧容器
+3. 创建 `workspace/` 工作区目录
+4. `docker run` 启动，挂载 workspace + 数据卷
+5. 健康检查 `GET /openapi.json`，等待 healthy
 
-### 5.2 自定义启动参数
-
-```bash
-# 指定镜像 tag 和端口
-./run.sh --image evoagent:v1.0.0 --port 8000
-
-# 指定容器名
-./run.sh --name my-evoagent
-```
-
-### 5.3 容器运行配置说明
-
-`run.sh` 启动命令的关键参数：
+### 3.4 验证
 
 ```bash
-docker run -d \
-    --name evoagent \
-    --init \
-    --add-host "host.docker.internal:host-gateway" \
-    -p 8000:8000 \
-    --env-file config/.env \
-    -v ./workspace:/app/workspace \
-    -v /home/evolution/data:/data \
-    --restart unless-stopped \
-    --health-cmd="python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')\"" \
-    --health-interval=30s \
-    --health-timeout=5s \
-    --health-retries=3 \
-    --health-start-period=15s \
-    evoagent:latest
-```
-
-> ⚠️ **网络模式**：默认 `-p 8000:8000`。如 Adapter Sidecar 与 EvoAgent 部署在同一主机，`.env` 中可将 `EVO_ADAPTER_URL` 设为 `http://host.docker.internal:8900`（容器已自动添加 host-gateway）。
-
----
-
-## 6. 部署验证
-
-### 6.1 查看容器状态
-
-```bash
-docker ps --filter "name=evoagent"
-```
-
-期望 `STATUS` 列显示 `Up X minutes (healthy)`。
-
-### 6.2 健康检查
-
-```bash
+# API 文档
 curl http://localhost:8000/openapi.json | head -c 200
-# 期望返回 JSON：{"openapi":"3.1.0","info":...}
-```
 
-### 6.3 查看 Swagger 文档
+# 健康检查
+curl http://localhost:8000/docs
 
-浏览器访问：
-
-```
-http://<服务器IP>:8000/docs
-```
-
-### 6.4 提交一个优化任务（完整测试）
-
-```bash
-curl -X POST http://localhost:8000/optimize \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task_name": "smoke-test",
-    "agent_name": "edp_agent",
-    "dataset_path": "/data/evo_agent/test.json",
-    "optimizer_template": {
-      "name": "edp_agent",
-      "scenario": "edp_agent",
-      "hyperparams": {"num_epochs": 1},
-      "train_split": 0.8,
-      "val_split": 0.2
-    },
-    "evaluator_template": {
-      "name": "default_eval",
-      "scenario": "edp_agent"
-    }
-  }'
-```
-
-期望返回：
-
-```json
-{"job_id": "job_xxx", "status": "queued"}
-```
-
-查询任务进度：
-
-```bash
-curl http://localhost:8000/optimize/job_xxx
-```
-
----
-
-## 7. 日志查看与排障
-
-### 7.1 实时查看容器日志
-
-```bash
+# 查看日志
 docker logs -f evoagent
 ```
 
-### 7.2 查看最近 200 行
-
-```bash
-docker logs --tail 200 evoagent
-```
-
-### 7.3 带时间戳查看
-
-```bash
-docker logs -t evoagent
-```
-
-### 7.4 工作区 artifacts
-
-EvoAgent 在运行过程中会产出 artifacts 到 `workspace/` 目录（挂载到宿主机 `deployment/workspace/`）：
-
-```
-deployment/workspace/
-├── outputs/         # 优化报告输出
-└── artifacts/       # 训练过程产物（skill patches、meta skill 等）
-```
-
-```bash
-ls -lh deployment/workspace/outputs/
-ls -lh deployment/workspace/artifacts/
-```
-
-### 7.5 进入容器排查
-
-```bash
-docker exec -it evoagent bash
-# 容器内查看进程
-ps aux | grep uvicorn
-# 容器内测试 API
-curl http://localhost:8000/openapi.json | head
-```
-
-### 7.6 常见问题
-
-| 现象 | 原因 / 解决 |
-|------|-------------|
-| `POST /optimize` 返回 500，提示 `EVO_ADAPTER_URL not configured` | `.env` 未填 `EVO_ADAPTER_URL`，或未通过 `run.sh` 加载 |
-| `422 Dataset path must be under allowed roots` | `dataset_path` 不在 `EVO_ALLOWED_DATA_ROOTS` 白名单下 |
-| `422 Dataset file not found` | 文件不存在；注意容器内路径（`/data` 对应宿主机 `/home/evolution/data`） |
-| 容器一直 `starting` 不转 `healthy` | 等待 15 秒启动期后查 `docker logs evoagent`；多为 `.env` 配置缺失 |
-| 优化任务超时 | 调大 `EVO_REMOTE_TIMEOUT` 或检查 Adapter Sidecar 健康 |
-| `docker build` 拉 wheel 失败 | 切换 `PIP_INDEX_URL` 为可用源；或改用 `--local` 模式 |
-
 ---
 
-## 8. 停止与下线
+## 4. 联调验证
 
-### 8.1 停止默认容器
-
-```bash
-./stop.sh
-```
-
-### 8.2 停止指定容器
+两容器均启动后，端到端验证：
 
 ```bash
-./stop.sh my-evoagent
-```
+# 1. Adapter 健康
+curl http://localhost:8900/api/v1/status
 
-### 8.3 停止所有 evoagent* 容器
+# 2. EvoAgent 健康
+curl http://localhost:8000/openapi.json | grep -o '"title":"[^"]*"'
 
-```bash
-./stop.sh --all
-```
-
-### 8.4 清理镜像（可选）
-
-```bash
-docker rmi evoagent:latest
-docker rmi evoagent:v1.0.0
+# 3. EvoAgent 能访问 Adapter（检查 .env 的 EVO_ADAPTER_URL 正确）
+docker exec evoagent curl -s ${EVO_ADAPTER_URL}/api/v1/status
 ```
 
 ---
 
-## 9. 更新与重新部署
+## 5. 运维命令速查
+
+### 5.1 EvoAgent
 
 ```bash
-cd deployment
-
-# 1. 停止旧容器
-./stop.sh
-
-# 2. 拉取最新代码并重建镜像
-./build.sh --local            # 或 ./build.sh 走源码构建
-
-# 3. 启动新容器
-./run.sh
-```
-
-> 如使用 git 版本作为镜像 tag，可保留多版本以备回滚：
-> ```bash
-> EVOAGENT_IMAGE_TAG=evoagent:$(git rev-parse --short HEAD) ./build.sh --skip-pull --local
-> ./run.sh --image evoagent:<short-hash>
-> ```
-
----
-
-## 10. 离线部署（内网环境）
-
-适用于目标服务器无法访问公网 `docker.io` 或 `gitcode.com` 的场景。流程为：**联网机器构建+导出 → 拷贝 tar 包 → 离线机器导入+运行**。
-
-### 10.1 联网机器：导出离线包
-
-```bash
-cd deployment
-
-# 1. 先正常构建镜像
-./build.sh --local
-
-# 2. 导出镜像+脚本+配置为 zip
-./export-bundle.sh evoagent:latest
-# 产物：../evoagent-offline-YYYYMMDD.zip
-```
-
-`export-bundle.sh` 会将以下内容打包：
-- Docker 镜像 tar 文件
-- `run.sh` / `stop.sh` / `import-bundle.sh`
-- `config/` 目录（含 `.env.example`）
-- 部署说明 README
-
-### 10.2 传输到离线机器
-
-```bash
-scp evoagent-offline-YYYYMMDD.zip user@offline-host:/opt/
-```
-
-### 10.3 离线机器：导入并启动
-
-```bash
-cd /opt
-unzip evoagent-offline-YYYYMMDD.zip
-cd evoagent-offline-YYYYMMDD
-
-# 1. 导入镜像（文件名含镜像 tag，用 ls 查看实际文件名）
-ls *.tar
-./import-bundle.sh <镜像tar文件>
-
-# 2. 配置环境变量
-cp config/.env.example config/.env
-vim config/.env
-
-# 3. 启动
-./run.sh
-
-# 4. 验证
-curl http://localhost:8000/openapi.json
-```
-
-> 离线机器仍需预装 Docker（20.10+），并保证 Adapter Sidecar 与 LLM API 在内网可访问。
-
----
-
-## 11. 本地开发模式（替代方案）
-
-如不需要 Docker 化部署（如本地调试、运行单元测试），可直接使用 `Makefile`。
-
-### 11.1 安装工具链
-
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv)（推荐）
-
-```bash
-# 安装 uv（若未安装）
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-### 11.2 安装依赖
-
-```bash
-cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent
-
-cp .env.example .env
-# 编辑 .env 填入配置
-
-make install      # 等价于 uv sync --all-extras
-```
-
-### 11.3 启动开发 API
-
-```bash
-make serve
-# 等价于 uv run uvicorn evo_agent.api.app:app --host 0.0.0.0 --port 8001
-```
-
-> 注意：本地开发模式默认端口为 `8001`，与 Docker 模式的 `8000` 不同。API 文档地址：`http://localhost:8001/docs`。
-
-### 11.4 CLI 模式（对话式优化）
-
-```bash
-make dev          # 等价于 uv run python -m evo_agent
-```
-
-### 11.5 跑测试
-
-```bash
-make test         # 全部测试（含 e2e）
-make test-unit    # 仅单元测试
-make lint         # 静态检查（ruff + mypy）
-make fix          # 自动修复 lint 问题
-```
-
-常用开发命令均集中在 [Makefile](../Makefile) 中，详见根目录 `README.md`。
-
----
-
-## 12. 一线 Quick Reference
-
-```bash
-# === 完整生命周期 ===
 cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
 
-# 构建（首次）
-./build.sh --local
+./run.sh                              # 启动
+./stop.sh                             # 停止
+./stop.sh --all                       # 停止所有 evoagent 容器
+docker logs -f evoagent               # 查看日志
+docker restart evoagent               # 重启
+```
 
-# 配置
-cp config/.env.example config/.env && vim config/.env
+### 5.2 EvoAgentAdapter
 
-# 启动
+```bash
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent-adapter/deployment
+
+./start.sh                            # 启动（镜像已存在）
+./start.sh --build                    # 重新构建并启动
+./stop.sh                             # 停止
+docker logs -f agent-adapter          # 查看日志
+docker restart agent-adapter          # 重启
+```
+
+### 5.3 更新代码后重新部署
+
+```bash
+# EvoAgent（拉新代码 + 重建镜像）
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
+./stop.sh
+HOME=/home/evolution/build ./build.sh --local
 ./run.sh
 
-# 验证
-curl http://localhost:8000/openapi.json
-docker logs -f evoagent
-
-# 停止
+# Adapter（拉新代码 + 重建镜像）
+cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent-adapter/deployment
 ./stop.sh
-
-# 更新
-./stop.sh && ./build.sh --local && ./run.sh
-
-# 离线导出
-./export-bundle.sh evoagent:latest
+./start.sh --build
 ```
 
 ---
 
-## 13. 相关文档索引
+## 6. 常见问题
 
-- 项目根 README：[../README.md](../README.md)
-- API 参考：[../docs/api/optimization-api-reference.md](../docs/api/optimization-api-reference.md)
-- 配置源码：[../src/evo_agent/config.py](../src/evo_agent/config.py)
-- Adapter 部署：`common/agent-evolve/evoagent-adapter/README.md`（同仓库的兄弟目录）
+### Q1: `build.sh --local` 下载 wheel 失败
+
+检查 pip 镜像源与网络。脚本默认使用华为云源，可覆盖：
+
+```bash
+PIP_INDEX_URL=https://pypi.org/simple HOME=/home/evolution/build ./build.sh --local
+```
+
+### Q2: EvoAgent 启动后健康检查不通过
+
+```bash
+docker logs evoagent 2>&1 | tail -50
+```
+
+常见原因：`EVO_ADAPTER_URL` 不可达、LLM API Key 无效、`EVO_LLM_BASE_URL` 错误。
+
+### Q3: Adapter `agent_url` 写 localhost 不通
+
+容器内 `localhost` 指向容器自身。业务 Agent 端口发布到宿主机时，写 `http://host.docker.internal:<port>`（脚本已注入 host-gateway）。
+
+### Q4: 业务 Agent 日志未被读取
+
+确认 `HOST_LOG_ROOT/{agent_name}` 子目录存在且与 `agent_adapter_config.yaml` 的 `log_dir: /data/logs/{agent_name}` 对应。
 
 ---
 
-*本指南基于项目当前实现，若脚本或环境变量发生变化，请以 `deployment/` 实际文件为准。*
+## 附：端口与卷速查
+
+| 容器 | 端口 | 宿主卷 → 容器路径 |
+|------|------|-------------------|
+| evoagent | 8000:8000 | `deployment/workspace` → `/app/workspace`<br>`/home/evolution/data` → `/data` |
+| agent-adapter | 8900:8900 | `HOST_LOG_ROOT` → `/data/logs` (ro)<br>`HOST_SKILLS_ROOT` → `/data/skills` (rw)<br>`HOST_AGENTS_ROOT` → `/data/agents` (rw)<br>`HOST_OUTPUT_DIR` → `/app/data` (rw)<br>`HOST_CONFIG_FILE` → `/app/agent_adapter_config.yaml` (rw) |
