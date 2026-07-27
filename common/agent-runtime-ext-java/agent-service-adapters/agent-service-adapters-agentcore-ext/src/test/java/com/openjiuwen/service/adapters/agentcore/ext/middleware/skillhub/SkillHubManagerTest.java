@@ -8,12 +8,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.service.adapters.common.credential.CredentialDecryptor;
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
 import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -756,6 +758,50 @@ class SkillHubManagerTest {
     }
 
     /**
+     * When CredentialDecryptor.decrypt throws, the AutoConfiguration must
+     * propagate the exception (fail-fast) instead of silently returning
+     * empty string (credential=absent). Spec §5.1.2/§5.1.5: required
+     * credential invalid -> Agent must not enter ready.
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     * @throws Exception if the reflection invoke or assertion fails
+     */
+    @Test
+    void credentialDecryptFailureMustFailFast(@TempDir Path tempDir) throws Exception {
+        SkillHubMiddlewareProperties props = new SkillHubMiddlewareProperties();
+        props.setEnabled(true);
+        props.setEndpoint("https://swarmskills.openjiuwen.com");
+        props.setAuthType("bearer");
+        props.setEncryptedToken("not-a-valid-ciphertext");
+        CredentialDecryptor failingDecryptor = token -> {
+            throw new IllegalStateException("AES-GCM decrypt failed: Tag mismatch");
+        };
+        ObjectProvider<CredentialDecryptor> provider = new SimpleObjectProvider<>(failingDecryptor);
+        assertThatThrownBy(() -> invokeDecrypt(props, provider)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("SkillHub credential decryption failed")
+                .hasMessageContaining("AES-GCM decrypt failed");
+    }
+
+    private static String invokeDecrypt(SkillHubMiddlewareProperties props,
+            ObjectProvider<CredentialDecryptor> provider) throws Exception {
+        java.lang.reflect.Method m = SkillHubMiddlewareAutoConfiguration.class.getDeclaredMethod("decrypt",
+                SkillHubMiddlewareProperties.class, ObjectProvider.class);
+        m.setAccessible(true);
+        try {
+            return (String) m.invoke(null, props, provider);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re) {
+                throw re;
+            }
+            if (cause instanceof Error err) {
+                throw err;
+            }
+            throw new AssertionError("Unexpected checked exception from decrypt", cause);
+        }
+    }
+
+    /**
      * Spawns {@code n} concurrent worker tasks via a thread pool, each calling
      * {@code manager.register(agent)} on the SAME agent instance. Asserts all
      * workers finish within 10s and installer.install was called exactly once.
@@ -797,6 +843,25 @@ class SkillHubManagerTest {
                     .isEqualTo(1);
         } finally {
             pool.shutdownNow();
+        }
+    }
+
+    /** Minimal ObjectProvider wrapper for tests that always returns the same value. */
+    static final class SimpleObjectProvider<T> implements ObjectProvider<T> {
+        private final T value;
+
+        SimpleObjectProvider(T value) {
+            this.value = value;
+        }
+
+        @Override
+        public T getIfAvailable() {
+            return value;
+        }
+
+        @Override
+        public T getObject() throws org.springframework.beans.BeansException {
+            return value;
         }
     }
 }
