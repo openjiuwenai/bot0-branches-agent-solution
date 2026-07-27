@@ -8,7 +8,7 @@
 > - 线协议（对齐 runtime `Feat-Func-009`，拓扑保留 client→gateway）：L2 `architecture/L2-Low-Level-Design/agent-client/Feat-Func-006-*.md` §3.5、`Feat-Func-007-*.md` §3.5，对 gateway 的要求见各 §8
 > - 最佳实践与测试方法：`agent-client/docs/getting-started.md`
 > - 物理边界：`architecture/L1-High-Level-Design/agent-client/physical.md`
-> - 可运行示例：`agent-client/examples/cloud-client/`
+> - 可运行示例：`example/agent-client-demo/`（`agent-client-sdk-for-jvm` 在 `agent-client/` 下，`mock-gateway` / `verification-app` 在 demo 下）
 
 ## 1. 核心定位：这是一个 JVM SDK，不是移动原生 SDK
 
@@ -109,7 +109,7 @@ SDK 至多提供"进程外工具执行"的 transport 适配作为后续候选，
 | # | 交付物 | 说明 |
 |---|---|---|
 | 1 | agent-client SDK 本体 | 单 artifact 内分层（api/spi、core、transport、可选 integration）；公共 API 只用 JDK 类型；transport 藏在 `TransportProvider` SPI 后；JDK 17 基线 |
-| 2 | 云客户端示例（plain Java + Dockerfile） | 即"最佳实践程序"，见 `examples/cloud-client/`；注册 Observation + Action + 占位设备工具，跑通多轮闭环，自校验 |
+| 2 | 云客户端示例（plain Java + Dockerfile） | 即"最佳实践程序"，见 `example/agent-client-demo/`（SDK 本体 `agent-client-sdk-for-jvm` 在 `agent-client/` 下）；注册 Observation + Action + 占位设备工具，跑通多轮闭环，自校验 |
 | 3 | testkit + 四层测试 | 进 CI 作为可执行验收 |
 | 4 | 共享 golden fixtures | 与 bus/runtime 对齐 wire（协议提案 §9 清单） |
 | 5 | 文档 | `getting-started.md` + 本文（设备/可移植性 FAQ） |

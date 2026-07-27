@@ -1,4 +1,4 @@
-# agent-client 原型（cloud-client 多模块工程）
+# agent-client-demo（JVM 端云客户端示例）
 
 > **状态：Prototype / 建立在拟议 API 之上。** 依据 version-scope `FEAT-006`（标准化智能体调用 +
 > 状态管理）与 `FEAT-007`（本地工具 SPI + 远端多轮驱动）重构，wire 对齐 L2
@@ -6,20 +6,24 @@
 > 符号名待协议定稿后机械对齐；架构边界（分层、依赖红线、SPI、治理骨架、
 > “执行成功 ≠ 已被服务端接收”等不变量）保持稳定。
 
-## 交付边界（重点）
+## 工程定位
 
-本工程刻意拆成三个模块，把 **SDK 交付物** 与 **仅为 JVM 验证而写的代码** 物理隔离：
+本 demo 位于 `common/example/agent-client-demo/`，是一个可独立构建的多模块工程，由三部分组成：
 
-| 模块 | 角色 | 是否 SDK 交付 | 说明 |
-|------|------|:---:|------|
-| `agent-client-sdk` | ★ SDK 本体 | **是** | `api` / `*.spi` / `internal` / `transport`。公共 API 不泄漏第三方类型；Jackson 仅在 `transport.a2a` 内部用于编解码 A2A 报文。 |
-| `mock-gateway` | ◇ 模拟网关+runtime | 否 | 纯 JDK `com.sun.net.httpserver` 实现 A2A 入口，可独立运行的小微服务。**SDK 对它零依赖。** |
-| `verification-app` | ◇ 业务样例 + 可执行验收 | 否 | 注册本地工具、发起真实 HTTP 调用打到 `mock-gateway`，用退出码表达成败。 |
+| 模块 | 物理位置 | 角色 | 是否 SDK 交付 | 说明 |
+|------|----------|------|:---:|------|
+| `agent-client-sdk-for-jvm` | `common/agent-client/agent-client-sdk-for-jvm/` | ★ SDK 本体（JVM 版） | **是** | `api` / `*.spi` / `internal` / `transport`。公共 API 不泄漏第三方类型；Jackson 仅在 `transport.a2a` 内部用于编解码 A2A 报文。 |
+| `mock-gateway` | `common/example/agent-client-demo/mock-gateway/` | ◇ 模拟网关+runtime | 否 | 纯 JDK `com.sun.net.httpserver` 实现 A2A 入口，可独立运行的小微服务。**SDK 对它零依赖。** |
+| `verification-app` | `common/example/agent-client-demo/verification-app/` | ◇ 业务样例 + 可执行验收 | 否 | 注册本地工具、发起真实 HTTP 调用打到 `mock-gateway`，用退出码表达成败。 |
 
-> `agent-client-sdk` 内另含 `transport.fake.InProcessFakeGateway`：**测试工具（非交付）**，
+> SDK 命名说明：`agent-client-sdk-for-jvm` 明确这是面向 JVM 环境的 SDK 实现；
+> 未来 `for-android` / `for-ios` / `for-harmony` 等多端 SDK 尚在建设中。
+> 跨端能力由线协议中立性保证，不是靠现在写多份 SDK（详见 `agent-client/docs/device-portability-and-v1-delivery.md`）。
+
+> `agent-client-sdk-for-jvm` 内另含 `transport.fake.InProcessFakeGateway`：**测试工具（非交付）**，
 > 供无网络环境做纯逻辑单测；真实交付路径是 `transport.a2a.A2aHttpTransportProvider`。
 
-## 这个工程验证了什么（全部经真实 HTTP 断言）
+## 这个 demo 验证了什么（全部经真实 HTTP 断言）
 
 `verification-app` 内嵌启动 `mock-gateway`，再由 SDK 经真实 HTTP + SSE 发起调用，覆盖：
 
@@ -40,12 +44,12 @@
 把 API 与字节码锁定在 JDK 17 基线。
 
 ```bash
-cd agent-client/examples/cloud-client
+cd common/example/agent-client-demo
 mvn -q -o clean package
 ```
 
 产物（瘦 jar）：
-- `agent-client-sdk/target/agent-client-sdk.jar`
+- `../../agent-client/agent-client-sdk-for-jvm/target/agent-client-sdk-for-jvm.jar`
 - `mock-gateway/target/mock-gateway.jar`
 - `verification-app/target/verification-app.jar`
 
@@ -54,12 +58,12 @@ mvn -q -o clean package
 
 ## 运行端到端自校验
 
-先拼好 classpath（PowerShell）：
+先拼好 classpath（PowerShell，在 `common/example/agent-client-demo/` 下执行）：
 
 ```powershell
 $m="$env:USERPROFILE\.m2\repository\com\fasterxml\jackson"
 $cp=@(
-  "agent-client-sdk\target\agent-client-sdk.jar",
+  "..\..\agent-client\agent-client-sdk-for-jvm\target\agent-client-sdk-for-jvm.jar",
   "mock-gateway\target\mock-gateway.jar",
   "verification-app\target\verification-app.jar",
   "$m\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar",
@@ -98,7 +102,7 @@ Linux / macOS（classpath 分隔符为 `:`）：
 
 ```bash
 M="$HOME/.m2/repository/com/fasterxml/jackson"
-CP="agent-client-sdk/target/agent-client-sdk.jar:mock-gateway/target/mock-gateway.jar:verification-app/target/verification-app.jar:\
+CP="../../agent-client/agent-client-sdk-for-jvm/target/agent-client-sdk-for-jvm.jar:mock-gateway/target/mock-gateway.jar:verification-app/target/verification-app.jar:\
 $M/core/jackson-databind/2.17.3/jackson-databind-2.17.3.jar:\
 $M/core/jackson-core/2.17.3/jackson-core-2.17.3.jar:\
 $M/core/jackson-annotations/2.17.3/jackson-annotations-2.17.3.jar"
@@ -133,10 +137,20 @@ AGENT_GATEWAY_URL=http://127.0.0.1:8080 java -cp "$CP" com.huawei.ascend.client.
 ALL CHECKS PASSED
 ```
 
+## Docker 一键验收
+
+构建上下文为 `common/` 目录（SDK 与 demo 分属两个子目录，需要同时拷入容器）：
+
+```bash
+cd common
+docker build -t ascend/agent-client-demo:0.2.0 -f example/agent-client-demo/Dockerfile .
+docker run --rm ascend/agent-client-demo:0.2.0   # 退出码 0=全部断言通过，非 0=失败
+```
+
 ## SDK 包结构（对齐设计四层）
 
 ```
-agent-client-sdk : com.huawei.ascend.client
+agent-client-sdk-for-jvm : com.huawei.ascend.client
 ├── api/            公共 API：AgentClient / AgentClients / InvocationRequest / ContinueInputRequest
 │                   / InvocationCall / InvocationEvent / TaskState / InvocationSnapshot / InvocationMode
 ├── tool.spi/       本地工具 SPI：LocalTool / LocalToolDescriptor / ToolExposurePolicy / ToolView
@@ -167,4 +181,3 @@ agent-client-sdk : com.huawei.ascend.client
 - 不做工具沙箱：进程内护栏（有界执行器 + deadline + 异常边界），强隔离属宿主部署能力。
 - 不依赖虚拟线程（JDK 17 基线）；升级 21+ 时执行器可平滑替换，公共 API 不变。
 - 取消 / 重订阅本版本非 MUST：`cancel` 已打通 wire；`mock-gateway` 支持 `tasks/cancel`。
-```

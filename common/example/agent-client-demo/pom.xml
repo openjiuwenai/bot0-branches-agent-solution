@@ -6,34 +6,42 @@
 
     <!--
       独立多模块工程（无 parent），可脱离主 reactor 单独构建：
-        cd agent-client/examples/cloud-client
+        cd common/example/agent-client-demo
         mvn -q clean package
         java -jar verification-app/target/verification-app.jar   # 退出码 0 = 全部断言通过
 
       交付边界（这是本次需求的核心诉求之一）：
-        · agent-client-sdk  —— ★ SDK 交付物（api / *.spi / internal / transport）。真实 SDK 只发布这一件。
-        · mock-gateway      —— ◇ 仅用于 JVM 验证：用纯 JDK HttpServer 模拟 gateway+runtime 的 A2A 入口，
-                                 不在 SDK 交付范围内，物理上是独立 module，SDK 对它零依赖。
-        · verification-app  —— ◇ 仅用于 JVM 验证：注册本地工具并发起真实 HTTP 调用打到 mock-gateway，
-                                 用退出码表达成败，是"可执行验收用例"，不在 SDK 交付范围内。
+        · agent-client-sdk-for-jvm —— ★ SDK 交付物（api / *.spi / internal / transport）。真实 SDK 只发布这一件。
+                                       命名说明：明确这是面向 JVM 环境的 SDK；未来 for-android / for-ios /
+                                       for-harmony 等多端 SDK 尚在建设中。
+        · mock-gateway             —— ◇ 仅用于 JVM 验证：用纯 JDK HttpServer 模拟 gateway+runtime 的 A2A 入口，
+                                       不在 SDK 交付范围内，物理上是独立 module，SDK 对它零依赖。
+        · verification-app         —— ◇ 仅用于 JVM 验证：注册本地工具并发起真实 HTTP 调用打到 mock-gateway，
+                                       用退出码表达成败，是"可执行验收用例"，不在 SDK 交付范围内。
+
+      目录说明：本 demo 工程位于 common/example/agent-client-demo/，其中 mock-gateway 与
+      verification-app 是本目录下的子模块；agent-client-sdk-for-jvm 物理上位于 common/agent-client/
+      下（SDK 本体归 agent-client 模块），通过 <module> 的相对路径 ../agent-client/agent-client-sdk-for-jvm
+      纳入本 reactor 一起构建。
 
       JDK 17 基线：以 <release>17</release> 约束 API 与字节码（本机可为更高 JDK，用 release=17 交叉编译）。
     -->
     <groupId>com.huawei.ascend.client.example</groupId>
-    <artifactId>cloud-client-parent</artifactId>
+    <artifactId>agent-client-demo-parent</artifactId>
     <version>0.2.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>agent-client cloud-client (multi-module)</name>
+    <name>agent-client-demo (multi-module)</name>
     <description>
-        Refactored runnable prototype of the proposed agent-client SDK, aligned with
+        Runnable demo of the proposed agent-client SDK (JVM), aligned with
         version-scope FEAT-006 / FEAT-007 and L2 Feat-Func-006 / Feat-Func-007
-        (wire aligned with runtime Feat-Func-009). Split into SDK deliverable +
+        (wire aligned with runtime Feat-Func-009). Split into SDK deliverable
+        (agent-client-sdk-for-jvm, physically under common/agent-client/) +
         verification-only mock gateway + verification-only self-check app.
     </description>
 
     <modules>
-        <module>agent-client-sdk</module>
+        <module>../../agent-client/agent-client-sdk-for-jvm</module>
         <module>mock-gateway</module>
         <module>verification-app</module>
     </modules>
@@ -53,7 +61,7 @@
             </dependency>
             <dependency>
                 <groupId>com.huawei.ascend.client.example</groupId>
-                <artifactId>agent-client-sdk</artifactId>
+                <artifactId>agent-client-sdk-for-jvm</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
