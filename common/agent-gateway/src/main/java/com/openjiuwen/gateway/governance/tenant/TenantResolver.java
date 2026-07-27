@@ -4,11 +4,11 @@
 
 package com.openjiuwen.gateway.governance.tenant;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
 import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.auth.Principal;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
 
 /**
  * G2 — tenant resolution &amp; self-report cleaning (FEAT-011 L2 §3.4). The

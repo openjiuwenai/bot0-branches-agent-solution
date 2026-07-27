@@ -59,7 +59,20 @@ public record ForwardingOutboxRecord(
         // FEAT-013/014 event-type discriminator (mirrored from ForwardingEnvelope.eventType at enqueue).
         // Nullable: JDBC-loaded rows pass null; non-null when produced from an envelope. The gateway (S2)
         // classifies responses by this field (L2 §4.2), avoiding descriptor-encoding coupling.
-        AgentBusEventType eventType
+        AgentBusEventType eventType,
+        // FEAT-013/014 control plane (P-06): mirrored from ForwardingEnvelope at enqueue so the relay can
+        // publish them as first-class broker headers — they no longer overload payloadRef. Nullable
+        // (JDBC-back-compat rows / control-only); present on data-bearing request/response records.
+        // deadlineMillisEpoch uses Long.MAX_VALUE for "no deadline".
+        String traceId,
+        String idempotencyKey,
+        String capability,
+        long deadlineMillisEpoch,
+        String inlinePayload,
+        // FEAT-013/014 originalCaller (P-06, L2 feat-014 §4): the original gateway/caller serviceId,
+        // mirrored from ForwardingEnvelope at enqueue so the relay can publish it as a first-class header
+        // — the runtime routes the response back to it across the relay hop. Routing/control, not A2A data.
+        String originalCaller
 ) {
     public ForwardingOutboxRecord {
         Objects.requireNonNull(tenantId, "tenantId is required");
@@ -71,6 +84,8 @@ public record ForwardingOutboxRecord(
         requireNonBlank(targetServiceId, "targetServiceId");
         Objects.requireNonNull(routeHandle, "routeHandle is required");
         Objects.requireNonNull(status, "status is required");
+        // payloadRef is the A2A data reference (P-06): null (control-only) or non-blank — NEVER a
+        // control-descriptor token (control rides the first-class fields below).
         if (payloadRef != null && payloadRef.isBlank()) {
             throw new IllegalArgumentException("payloadRef must be null or non-blank");
         }
@@ -87,6 +102,46 @@ public record ForwardingOutboxRecord(
         if (correlationId != null && correlationId.isBlank()) {
             throw new IllegalArgumentException("correlationId must be null or non-blank");
         }
+        // control-plane + inlinePayload: null (control-only / back-compat) or non-blank — blank is an error.
+        requireNullOrNonBlank(traceId, "traceId");
+        requireNullOrNonBlank(idempotencyKey, "idempotencyKey");
+        requireNullOrNonBlank(capability, "capability");
+        requireNullOrNonBlank(inlinePayload, "inlinePayload");
+        requireNullOrNonBlank(originalCaller, "originalCaller");
+    }
+
+    /**
+     * Back-compat canonical constructor (pre-P-06 15-arg form). The control-plane + inlinePayload
+     * fields default to absent (null / no-deadline = {@code Long.MAX_VALUE}). Lets pre-P-06 call
+     * sites compile unchanged; new data-bearing code uses the full constructor so control + data
+     * each ride their own first-class fields. {@code routeHandle} stays on the record (typed).
+     *
+     * @param tenantId                tenant scope
+     * @param messageId               outbox message id
+     * @param sourceServiceId         source service id
+     * @param targetServiceId         target service id
+     * @param routeHandle             opaque typed route handle
+     * @param payloadRef              A2A data reference (null for control-only)
+     * @param status                   outbox status
+     * @param attemptCount            dispatch attempt count
+     * @param nextAttemptAtMillisEpoch scheduled next attempt (epoch millis)
+     * @param createdAtMillisEpoch    creation instant
+     * @param updatedAtMillisEpoch    last-update instant
+     * @param lastFailureCode          last failure code (nullable)
+     * @param lease                    current lease (nullable)
+     * @param correlationId            cross-hop correlation key (nullable)
+     * @param eventType                event-type discriminator (nullable)
+     */
+    public ForwardingOutboxRecord(String tenantId, ForwardingMessageId messageId, String sourceServiceId,
+                                  String targetServiceId, ForwardingRouteHandle routeHandle, String payloadRef,
+                                  ForwardingStatus.Outbox status, int attemptCount, long nextAttemptAtMillisEpoch,
+                                  long createdAtMillisEpoch, long updatedAtMillisEpoch,
+                                  ForwardingFailureCode lastFailureCode, ForwardingLease lease,
+                                  String correlationId, AgentBusEventType eventType) {
+        this(tenantId, messageId, sourceServiceId, targetServiceId, routeHandle, payloadRef, status,
+                attemptCount, nextAttemptAtMillisEpoch, createdAtMillisEpoch, updatedAtMillisEpoch,
+                lastFailureCode, lease, correlationId, eventType,
+                null, null, null, Long.MAX_VALUE, null, null);
     }
 
     /**
@@ -139,6 +194,13 @@ public record ForwardingOutboxRecord(
         Objects.requireNonNull(value, name + " is required");
         if (value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");
+        }
+    }
+
+    private static void requireNullOrNonBlank(String value, String name) {
+        // null = absent (control-only / back-compat); a blank value is a wiring error, not a valid absence.
+        if (value != null && value.isBlank()) {
+            throw new IllegalArgumentException(name + " must be null or non-blank");
         }
     }
 

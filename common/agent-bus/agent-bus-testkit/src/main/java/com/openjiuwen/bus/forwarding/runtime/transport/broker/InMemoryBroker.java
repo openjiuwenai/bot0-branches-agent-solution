@@ -9,7 +9,7 @@ import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * In-memory test double for the broker relay ({@link BrokerForwardingRelayPort}) +
+ * In-memory test double for the broker relay ({@link BrokerForwardingProducerPort}) +
  * the factory for per-consumer {@link BrokerForwardingConsumerPort} doubles —
  * NON-PRODUCTION.
  *
@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @since 0.1.0
  */
 // non-production — test fixture only; real broker adapter is decision §7 / Stage 28
-public final class InMemoryBroker implements BrokerForwardingRelayPort {
+public final class InMemoryBroker implements BrokerForwardingProducerPort {
     private final BrokerTopicResolver resolver;
     private final String suffix;
 
@@ -174,10 +174,16 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
     @Override
     public synchronized BrokerProduceOutcome produce(ForwardingOutboxRecord record, long nowMillisEpoch) {
         Objects.requireNonNull(record, "record is required");
-        // Option B: derive the topic from the record's eventType via the injected resolver
+        return produce(toOutboundMessage(record), nowMillisEpoch);
+    }
+
+    @Override
+    public synchronized BrokerProduceOutcome produce(BrokerOutboundMessage message, long nowMillisEpoch) {
+        Objects.requireNonNull(message, "message is required");
+        // Option B: derive the topic from the message's eventType via the injected resolver
         // (event-type-driven; the opaque routeHandle is never read for the topic — HD4 preserved).
         // A null eventType cannot yield a topic → non-retryable ROUTE_NOT_FOUND.
-        AgentBusEventType eventType = record.eventType();
+        AgentBusEventType eventType = message.headers().eventType();
         if (eventType == null) {
             return BrokerProduceOutcome.routeNotFound(ForwardingFailureCode.ROUTE_NOT_FOUND);
         }
@@ -185,24 +191,42 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             return BrokerProduceOutcome.unavailable(ForwardingFailureCode.RECEIVER_UNAVAILABLE);
         }
         String t = resolver.resolveTopic(eventType, suffix);
-        // §6.2②: body is a routing descriptor only — NEVER the payload body / token stream / Task state.
-        // payloadRef rides as a header (conditionally), NOT in the descriptor.
+        List<QueueEntry> q = queues.computeIfAbsent(t, k -> new ArrayList<>());
+        int index = q.size();
+        q.add(new QueueEntry(sequence.incrementAndGet(), message));
+        locations.put(locationKey(message.headers().tenantId(), message.headers().messageId()),
+                new Location(t, index));
+        return BrokerProduceOutcome.accepted();
+    }
+
+    /**
+     * Map a claimed outbox record to the broker-agnostic {@link BrokerOutboundMessage} this broker
+     * stores. §6.2②: the body is a routing descriptor only — NEVER the payload body / token stream /
+     * Task state; {@code payloadRef} rides as a header (conditionally), NOT in the descriptor. P-06:
+     * the control plane (traceId/idempotencyKey/routeHandle/capability/deadline) + inlinePayload ride
+     * FIRST-CLASS header fields — {@code payloadRef} is the A2A data reference only, never a
+     * control-descriptor token.
+     *
+     * @param record the claimed outbox record to map (required)
+     * @return the broker-agnostic outbound message
+     */
+    private static BrokerOutboundMessage toOutboundMessage(ForwardingOutboxRecord record) {
         BrokerMessageHeaders headers = new BrokerMessageHeaders(
                 record.tenantId(),
                 record.messageId().value(),
                 record.sourceServiceId(),
                 record.targetServiceId(),
-                record.payloadRef(),              // null for CONTROL_ONLY, non-null for DATA_BEARING
+                record.payloadRef(),              // A2A data reference (null for CONTROL_ONLY)
                 record.correlationId(),           // FEAT-013 cross-hop correlation (mirrored from envelope)
-                record.eventType());              // FEAT-013/014 event-type (mirrored from envelope)
-        BrokerOutboundMessage outbound = new BrokerOutboundMessage(
-                "target=" + record.targetServiceId(),   // routing descriptor only
-                headers);
-        List<QueueEntry> q = queues.computeIfAbsent(t, k -> new ArrayList<>());
-        int index = q.size();
-        q.add(new QueueEntry(sequence.incrementAndGet(), outbound));
-        locations.put(locationKey(record.tenantId(), record.messageId().value()), new Location(t, index));
-        return BrokerProduceOutcome.accepted();
+                record.eventType(),               // FEAT-013/014 event-type (mirrored from envelope)
+                record.traceId(),                 // P-06: control plane first-class, not in payloadRef
+                record.idempotencyKey(),
+                record.routeHandle().value(),     // opaque routeHandle value (tenantScope == tenantId)
+                record.capability(),
+                record.deadlineMillisEpoch(),
+                record.inlinePayload(),          // bounded small body (2b); passthrough, never resolved here
+                record.originalCaller());        // P-06: original caller serviceId (response routing)
+        return new BrokerOutboundMessage("target=" + record.targetServiceId(), headers);
     }
 
     /**
@@ -270,7 +294,8 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
             }
             BrokerMessageHeaders h = picked.message.headers();
             // consumerServiceId is materialised into the in-flight message at poll time
-            // (ownership until commit/reject).
+            // (ownership until commit/reject). P-06: control plane + inlinePayload mirrored headers→inbound
+            // as first-class fields — the receiver reconstructs control directly, no descriptor decode.
             return Optional.of(new BrokerInboundMessage(
                     h.tenantId(),
                     h.messageId(),
@@ -279,7 +304,14 @@ public final class InMemoryBroker implements BrokerForwardingRelayPort {
                     consumerServiceId,
                     h.payloadRef(),
                     h.correlationId(),               // FEAT-013 cross-hop correlation (mirrored from headers)
-                    h.eventType()));                  // FEAT-013/014 event-type (mirrored from headers)
+                    h.eventType(),                   // FEAT-013/014 event-type (mirrored from headers)
+                    h.traceId(),                     // P-06: control plane first-class
+                    h.idempotencyKey(),
+                    h.routeHandle(),
+                    h.capability(),
+                    h.deadlineMillisEpoch(),
+                    h.inlinePayload(),             // bounded small body (2b); passthrough
+                    h.originalCaller()));          // P-06: original caller serviceId (response routing)
         }
 
         @Override

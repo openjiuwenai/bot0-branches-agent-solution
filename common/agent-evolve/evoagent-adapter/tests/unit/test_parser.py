@@ -12,7 +12,7 @@ SAMPLE_MESSAGE = json.dumps(
     {
         "id": "uuid-001",
         "type": "GENERATION",
-        "model": "glm-5",
+        "model": "model-sample",
         "input": {"messages": [{"role": "user", "content": "hello"}]},
     },
     ensure_ascii=False,
@@ -53,7 +53,7 @@ class TestParseNormalTagLine:
         assert result.cost == "0"
         assert isinstance(result.message, dict)
         assert result.message["id"] == "uuid-001"
-        assert result.message["model"] == "glm-5"
+        assert result.message["model"] == "model-sample"
 
     def test_end_line_parses_correctly(self):
         end_message = json.dumps(
@@ -144,7 +144,7 @@ class TestParseCorruptedJson:
     """JSON parse failure preserves raw_message and still extracts other fields."""
 
     def test_broken_json_preserves_raw_message(self):
-        broken_message = '{"id": "uuid-001", "model": "glm-5", "input": BROKEN'
+        broken_message = '{"id": "uuid-001", "model": "model-sample", "input": BROKEN'
         line = make_log_line(message=broken_message)
         result = parse_log_line(line, DEFAULT_MATCH_TAGS)
         assert result is not None
@@ -152,14 +152,14 @@ class TestParseCorruptedJson:
         assert result.message is not None
 
     def test_keyword_fallback_extracts_id_and_model(self):
-        broken_message = '{"id": "uuid-001", "model": "glm-5", "type": "GENERATION", bad_field}'
+        broken_message = '{"id": "uuid-001", "model": "model-sample", "type": "GENERATION", bad_field}'
         line = make_log_line(message=broken_message)
         result = parse_log_line(line, DEFAULT_MATCH_TAGS)
         assert result is not None
         # keyword fallback should extract id, model, type
         if isinstance(result.message, dict):
             assert result.message.get("id") == "uuid-001"
-            assert result.message.get("model") == "glm-5"
+            assert result.message.get("model") == "model-sample"
 
     def test_other_fields_still_extracted_when_json_broken(self):
         broken_message = "not json at all"

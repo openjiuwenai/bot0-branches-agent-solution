@@ -5,7 +5,7 @@ Values are resolved in order: CLI arguments > environment variables > defaults.
 Environment variables:
     ADAPTER_URL          Base URL of EvoAgentAdapter (default: http://127.0.0.1:8900)
     ADAPTER_AGENT_NAME   Target agent_name in API body/path (default: edp_agent)
-    ADAPTER_SKILL_NAME   Skill to read/update/restore (default: product_recommend_skill)
+    ADAPTER_SKILL_NAME   Skill to read/update/restore (default: demo_skill)
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _default_agent_name() -> str:
 
 
 def _default_skill_name() -> str:
-    return os.environ.get("ADAPTER_SKILL_NAME", "product_recommend_skill")
+    return os.environ.get("ADAPTER_SKILL_NAME", "demo_skill")
 
 
 def add_hotupdate_args(parser: argparse.ArgumentParser) -> None:

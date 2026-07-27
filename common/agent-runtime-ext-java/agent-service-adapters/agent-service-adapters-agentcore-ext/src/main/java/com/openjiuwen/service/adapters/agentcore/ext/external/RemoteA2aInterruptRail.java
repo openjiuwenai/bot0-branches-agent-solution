@@ -54,8 +54,7 @@ public class RemoteA2aInterruptRail extends BaseInterruptRail {
                 .message(message)
                 .context(Map.of(
                         "agentName", spec.remoteAgentId(),
-                        "_interrupt_kind", "a2a_delegate",
-                        "_stream_mode", "sse"))
+                        "_interrupt_kind", "a2a_delegate"))
                 .build();
         return interrupt(request);
     }

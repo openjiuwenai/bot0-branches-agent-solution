@@ -5,6 +5,9 @@
 package com.openjiuwen.bus.gateway.runtime;
 
 import com.openjiuwen.rdc.model.AgentCardDto;
+import com.openjiuwen.rdc.model.DiscoveryOutcome;
+import com.openjiuwen.rdc.model.DiscoveryQuery;
+import com.openjiuwen.rdc.model.DiscoveryResult;
 import com.openjiuwen.rdc.model.RouteResolution;
 import com.openjiuwen.rdc.service.AgentDiscoveryService;
 
@@ -106,12 +109,25 @@ public final class FakeAgentDiscoveryService implements AgentDiscoveryService {
     }
 
     @Override
+    public DiscoveryResult discover(DiscoveryQuery query) {
+        // Structured logical-card discovery (Feat-015) is not exercised on the agent-bus relay
+        // test path — the registry is wired only for the opaque routeHandle demo (the T4 pub/sub
+        // path rides the envelope handle; the T1 SSE bridge is gateway responsibility, deferred
+        // out of agent-bus this batch). Stub returns NO_MATCH so the fake stays contract-complete
+        // (anti-enumeration: never null, empty candidate list, no continuation token, never throws).
+        Objects.requireNonNull(query, "query is required");
+        String traceId = query.context() != null && query.context().traceId() != null
+                ? query.context().traceId() : "stub";
+        return DiscoveryResult.of(DiscoveryOutcome.NO_MATCH, List.of(), traceId);
+    }
+
+    @Override
     public RouteResolution resolveRouteHandle(String routeHandle, String tenantId) {
         // T1 SSE bridge is gateway responsibility (deferred out of agent-bus this batch). Returns a
         // deterministic stub; the T4 pub/sub path never calls this (the opaque handle rides the envelope).
         requireNonBlank(routeHandle, "routeHandle");
         return new RouteResolution("instance-" + Math.abs(routeHandle.hashCode()),
-                "http://stub-endpoint/" + routeHandle, "stub", "v1");
+                "http://stub-endpoint/" + routeHandle, "stub", "v1", "v1");
     }
 
     private List<AgentCardDto> filter(String contractVersion, java.util.function.Predicate<RegisteredCard> matches) {

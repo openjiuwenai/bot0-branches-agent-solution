@@ -34,13 +34,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * topic=resolver(eventType, suffix), filter={@code MessageSelector.bySql(sql92Expression(filter))})
  * and polls param-less, committing per-message (model B ack-after-consume). The broker-agnostic
  * {@link DeliveryFilter} (D3) is translated to a RocketMQ SQL92 expression HERE — the SPI layer
- * never sees SQL (bySql confined to the adapter, mirroring how {@link RocketMqBrokerForwardingRelay}
+ * never sees SQL (bySql confined to the adapter, mirroring how {@link RocketMqBrokerForwardingProducer}
  * owns the produce-side mapping). The topic is derived from the event type via the injected
  * {@link BrokerTopicResolver} (event-type-driven, decoupled from the opaque routeHandle — Option B).
  *
  * <p><b>Testability seam.</b> {@link MessagePollerFactory} (+ {@link MessagePoller}) isolate the
  * {@code DefaultLitePullConsumer} lifecycle so unit tests inject a fake (no live broker) — the same
- * seam pattern the relay uses ({@link RocketMqBrokerForwardingRelay.MessageSender} for produce).
+ * seam pattern the relay uses ({@link RocketMqBrokerForwardingProducer.MessageSender} for produce).
  * The factory is group-bound lazily at {@link #subscribe}: the consumer-group arrives at subscribe,
  * not construction (§3 "subscribe 懒注册 DefaultLitePullConsumer（group=consumerServiceId）"), so it
  * cannot be pre-constructed like the relay's {@code DefaultMQProducer}. The prod
@@ -78,7 +78,7 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * Seam that constructs the broker poller for a consumer-group (known at subscribe, not
      * construction — §3 lazy registration). Unit tests inject a fake returning a recording poller;
      * prod injects {@code defaultPollerFactory} (live {@code DefaultLitePullConsumer}, slice-3 IT).
-     * Mirrors {@link RocketMqBrokerForwardingRelay.MessageSender} as the injectable broker surface.
+     * Mirrors {@link RocketMqBrokerForwardingProducer.MessageSender} as the injectable broker surface.
      */
     @FunctionalInterface
     public interface MessagePollerFactory {
@@ -195,6 +195,18 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * @return the broker-agnostic inbound message with the dedup/inbox key fields materialised
      */
     private BrokerInboundMessage toInbound(MessageExt m) {
+        // P-06: control plane + inlinePayload read back from first-class user properties — the receiver
+        // reconstructs control directly, no descriptor decode from payloadRef. payloadRef stays
+        // the A2A data reference. Mirrors InMemoryBroker's consume-side mapping.
+        String deadlineProp = m.getProperty("deadlineMillisEpoch");
+        long deadline = Long.MAX_VALUE; // no deadline / absent (control-only / back-compat)
+        if (deadlineProp != null && !deadlineProp.isBlank()) {
+            try {
+                deadline = Long.parseLong(deadlineProp);
+            } catch (NumberFormatException ignored) {
+                // a malformed value leaves the no-deadline default; the relay never writes one malformed
+            }
+        }
         return new BrokerInboundMessage(
                 m.getProperty("tenantId"),
                 m.getProperty("messageId"),
@@ -203,7 +215,14 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
                 consumerServiceId,
                 m.getProperty("payloadRef"),
                 m.getProperty("correlationId"),
-                softEventType(m.getProperty("eventType")).orElse(null));
+                softEventType(m.getProperty("eventType")).orElse(null),
+                m.getProperty("traceId"),
+                m.getProperty("idempotencyKey"),
+                m.getProperty("routeHandle"),
+                m.getProperty("capability"),
+                deadline,
+                m.getProperty("inlinePayload"),
+                m.getProperty("originalCaller"));
     }
 
     /**
@@ -361,7 +380,7 @@ public final class RocketMqBrokerForwardingConsumer implements BrokerForwardingC
      * push-consumer lifecycle RocketMQ expects); subsequent subscribes (multi-topic accumulate) update
      * the subscription post-start (a rebalance picks them up). The real-broker round-trip is the
      * env-guarded IT (slice 3 / §6 D4) — no unit test (a live broker is not a unit). Mirrors
-     * {@link RocketMqBrokerForwardingRelay#defaultSender}.
+     * {@link RocketMqBrokerForwardingProducer#defaultSender}.
      *
      * @param nameserverAddr the RocketMQ nameserver address (e.g. {@code host:9876})
      * @return a factory that, given a consumer-group, constructs (not starts) a {@link DefaultLitePullConsumer}

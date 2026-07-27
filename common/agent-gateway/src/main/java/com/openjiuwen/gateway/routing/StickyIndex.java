@@ -44,7 +44,9 @@ public class StickyIndex {
         return Optional.ofNullable(index.get(taskId));
     }
 
-    /** Clear all bindings (test / admin helper). */
+    /**
+     * Clear all bindings (test / admin helper).
+     */
     public void clear() {
         index.clear();
     }

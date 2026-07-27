@@ -37,17 +37,27 @@ public class FakeRdcRouteClient implements RdcRouteClient {
         this.resolved = resolved;
     }
 
-    /** @return the tenant id of the last search */
+    /**
+     * Return the tenant id recorded from the last search call.
+     *
+     * @return the tenant id of the last search
+     */
     public String lastTenantId() {
         return lastTenantId;
     }
 
-    /** @return the agent id of the last search */
+    /**
+     * Return the agent id recorded from the last search call.
+     *
+     * @return the agent id of the last search
+     */
     public String lastAgentId() {
         return lastAgentId;
     }
 
-    /** Clear recorded search arguments (so tests asserting "no search" start clean). */
+    /**
+     * Clear recorded search arguments (so tests asserting "no search" start clean).
+     */
     public void reset() {
         this.lastTenantId = null;
         this.lastAgentId = null;

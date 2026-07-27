@@ -26,6 +26,14 @@ package com.openjiuwen.bus.forwarding.spi;
  * separate — accepting a Task and a stream becoming ready are distinct
  * observable events (FEAT-013 §2.3.4 / FEAT-014 §2.3.2, RFC 2119 MUST).
  *
+ * <p>{@code INVOCATION_INPUT_REQUIRED} / {@code A2A_CALL_INPUT_REQUIRED} (FEAT-017)
+ * project a Task's wait-for-input state as a bus response event so the gateway /
+ * caller runtime can perceive it promptly — not only via a later GetTask. They
+ * coexist with the FEAT-005 shadow-task resume mechanism: the event is the prompt
+ * notification, the shadow task holds the recoverable resume context. This
+ * reconciles the prior FEAT-013/014 L2 stance (INPUT_REQUIRED as a non-event) with
+ * FEAT-017's RFC 2119 MUST that it be a published projection.
+ *
  * <p>Forbidden-payload invariant (HD4): no event type carries a token chunk,
  * SSE frame, payload body, or Task execution state in the broker message
  * body; the discriminator is control-plane only.
@@ -33,7 +41,9 @@ package com.openjiuwen.bus.forwarding.spi;
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md §2.3.2};
  * {@code architecture/L2-Low-Level-Design/agent-bus/
- * feat-014-a2a-call-event-forwarding.md §2.3.1}.
+ * feat-014-a2a-call-event-forwarding.md §2.3.1};
+ * {@code version-scope/FEAT-017-bus-event-subscription-consumption.md §5.1}
+ * ({@code *_INPUT_REQUIRED} projection).
  *
  * @since 0.1.0
  */
@@ -55,6 +65,12 @@ public enum AgentBusEventType {
     INVOCATION_FAILED,
     /** One-shot A2A response within the blocking window. */
     INVOCATION_RESPONSE,
+    /**
+     * Task entered a wait-for-input state; carries {@code taskId} + a recoverable
+     * context reference (FEAT-017). Projects the input-needed state as a bus response
+     * event so the gateway perceives it promptly — not only via a later GetTask.
+     */
+    INVOCATION_INPUT_REQUIRED,
     /** Task's A2A SSE stream is ready to subscribe (carries stream reference). */
     INVOCATION_STREAM_READY,
     /** Task terminal state (completed/failed/cancelled); carries no token stream. */
@@ -75,6 +91,13 @@ public enum AgentBusEventType {
     A2A_CALL_FAILED,
     /** One-shot A2A response within the waiting window. */
     A2A_CALL_RESPONSE,
+    /**
+     * Remote Task entered a wait-for-input state; carries remote {@code taskId} + a
+     * recoverable context reference (FEAT-017). Coexists with the FEAT-005 shadow-task
+     * resume mechanism: the event is the prompt notification, the shadow task holds the
+     * recoverable resume context.
+     */
+    A2A_CALL_INPUT_REQUIRED,
     /** Remote Task's A2A SSE stream is ready to subscribe (carries stream reference). */
     A2A_STREAM_READY,
     /** Remote Task terminal state (completed/failed/cancelled); carries no token stream. */

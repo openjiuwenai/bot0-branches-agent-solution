@@ -12,11 +12,11 @@ import org.junit.jupiter.api.Test;
  * Unit tests for G4 {@link IdempotencyRule} (FEAT-011 L2 §3.6 T-G4-1..T-G4-5).
  */
 class IdempotencyRuleTest {
-    private final IdempotencyRule rule = new IdempotencyRule();
-
     private static final String TENANT = "tenant-1";
     private static final String BODY_A = "{\"a\":1}";
     private static final String BODY_B = "{\"a\":2}";
+
+    private final IdempotencyRule rule = new IdempotencyRule();
 
     @Test
     void firstCreateRegistersInFlightAndProceeds() {

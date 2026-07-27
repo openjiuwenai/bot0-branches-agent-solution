@@ -4,12 +4,12 @@
 
 package com.openjiuwen.gateway.sse;
 
+import org.springframework.stereotype.Component;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
-
-import org.springframework.stereotype.Component;
 
 /**
  * Bridges runtime SSE frames to the client response (FEAT-011 L2 §4 P3b / §4.10

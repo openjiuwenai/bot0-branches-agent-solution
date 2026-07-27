@@ -9,7 +9,7 @@ import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxClaimPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.spi.ingress.IngressGateway;
 import com.openjiuwen.rdc.service.AgentDiscoveryService;
@@ -30,18 +30,18 @@ import java.util.Map;
  * <p>Prior form (ADR-0163 as-built) constructed 5 concrete-adapter {@code @Bean} HERE
  * — {@code brokerClientProperties}, {@code gatewayProducer} ({@code DefaultMQProducer}),
  * {@code gatewayOutbox} ({@code JdbcForwardingOutbox}), {@code gatewayRelay}
- * ({@code RocketMqBrokerForwardingRelay}), {@code gatewayResponseConsumer}
+ * ({@code RocketMqBrokerForwardingProducer}), {@code gatewayResponseConsumer}
  * ({@code RocketMqBrokerForwardingConsumer}) — importing {@code rocketmq.*} + the JDBC
  * adapter + the transport resolver + broker-common, i.e. crossing the plane into
  * {@code forwarding.runtime.*} (the ADR-0163 accepted drift: the literal
  * {@code gateway↛forwarding.runtime} was infeasible). This change moves that assembly
  * into two forwarding adapter {@code @Configuration}s co-located with their adapters:
- * {@link com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerClientConfiguration}
- * (owns the generic client-side broker beans — {@code defaultProducer} /
- * {@code requestRelay} / {@code responseConsumer}, de-gateway-ified so any caller
- * reuses them) +
- * {@link com.openjiuwen.bus.forwarding.common.AgentBusInfrastructureConfiguration}
- * (owns the shared outbox/inbox/broker-client-properties). This {@code @Configuration}
+ * {@code RocketMqBrokerClientConfiguration}
+ * (owns the generic client-side broker role ports — {@code requestProducer} /
+ * {@code responseConsumer} / {@code runtimeResponseProducer}, de-gateway-ified so any caller
+ * reuses them; the shared {@code defaultProducer} now lives in the broker base) +
+ * {@link com.openjiuwen.bus.forwarding.common.AgentBusReliabilityAutoConfiguration}
+ * (owns the shared outbox/inbox). This {@code @Configuration}
  * now keeps ONLY the 2 SPI-only {@code @Bean} — the {@link GatewayRuntimeService} bean
  * (injects the SPI ports) + the {@code gatewayResponseSubscription} SmartLifecycle
  * (subscribe-at-startup, SPI-only) — and imports only {@code forwarding.spi} +
@@ -51,11 +51,11 @@ import java.util.Map;
  * closed).
  *
  * <p>{@link AgentBusBrokerProperties} is enabled by
- * {@link com.openjiuwen.bus.forwarding.common.AgentBusInfrastructureConfiguration}
- * (the shared infra config, no {@code @Profile}); this config injects it from the shared
+ * {@link com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusBrokerClientBaseAutoConfiguration}
+ * (the broker base autoconfig, no {@code @Profile}); this config injects it from the shared
  * context. The gateway injects the client-side broker beans by qualifier —
- * {@code @Qualifier("requestRelay")} + {@code @Qualifier("responseConsumer")} —
- * provided by {@link com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerClientConfiguration}
+ * {@code @Qualifier("requestProducer")} + {@code @Qualifier("responseConsumer")} —
+ * provided by {@code RocketMqBrokerClientConfiguration}
  * (no {@code @Profile}; the bean names are role-agnostic, de-gateway-ified).
  *
  * <p>Authority: {@code docs/4plus1/delta/gateway-assembly-purify/} (G2 as-is · G3
@@ -90,7 +90,7 @@ public class GatewayRuntimeConfiguration {
     @Bean
     IngressGateway gatewayRuntimeService(ForwardingOutboxPort outbox,
                                          ForwardingOutboxClaimPort outboxClaim,
-                                         @Qualifier("requestRelay") BrokerForwardingRelayPort relay,
+                                         @Qualifier("requestProducer") BrokerForwardingProducerPort relay,
                                          @Qualifier("responseConsumer") BrokerForwardingConsumerPort responseConsumer,
                                          AgentDiscoveryService discovery) {
         return new GatewayRuntimeService(outbox, outboxClaim, relay, responseConsumer,

@@ -6,14 +6,14 @@ package com.openjiuwen.gateway.obs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+
+import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Unit tests for {@link GovernanceAuditor} (FEAT-011 L2 §3.7 T-G5-1..T-G5-3).
@@ -57,9 +57,12 @@ class GovernanceAuditorTest {
 
     @Test
     void rejectedStageInferredForAllGovernanceCodes() {
-        auditor.auditRejected(passedContext(), new GovernanceException(HttpStatus.FORBIDDEN, "TENANT_UNRESOLVED", "x"));
-        auditor.auditRejected(passedContext(), new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_METHOD", "x"));
-        auditor.auditRejected(passedContext(), new GovernanceException(HttpStatus.CONFLICT, "IDEMPOTENCY_PAYLOAD_MISMATCH", "x"));
+        auditor.auditRejected(passedContext(),
+                new GovernanceException(HttpStatus.FORBIDDEN, "TENANT_UNRESOLVED", "x"));
+        auditor.auditRejected(passedContext(),
+                new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_METHOD", "x"));
+        auditor.auditRejected(passedContext(),
+                new GovernanceException(HttpStatus.CONFLICT, "IDEMPOTENCY_PAYLOAD_MISMATCH", "x"));
         assertThat(captured).extracting(AuditEvent::rejectStage, AuditEvent::code)
                 .containsExactly(
                         tuple("G2", "TENANT_UNRESOLVED"),

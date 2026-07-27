@@ -7,13 +7,13 @@ package com.openjiuwen.gateway.routing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-
 import com.openjiuwen.gateway.direct.FakeAgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 /**
  * Unit tests for {@link Router} create path (FEAT-011 L2 §4 T-S2-1/2/5/6/7 +
@@ -21,15 +21,16 @@ import com.openjiuwen.gateway.governance.GovernanceException;
  * DefaultAgentResolver.
  */
 class RouterTest {
+    private static final String ENDPOINT = "http://runtime-1:8000";
+    private static final String TASK_BODY =
+            "{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"kind\":\"task\",\"id\":\"task-7\","
+                    + "\"contextId\":\"c1\"}}";
+
     private final FakeRdcRouteClient rdc = new FakeRdcRouteClient();
     private final FakeAgentRuntimeClient runtime = new FakeAgentRuntimeClient();
     private final StickyIndex sticky = new StickyIndex();
     private final DefaultAgentResolver defaultAgent = new DefaultAgentResolver("default-agent-1");
     private final Router router = new Router(rdc, runtime, sticky, defaultAgent);
-
-    private static final String ENDPOINT = "http://runtime-1:8000";
-    private static final String TASK_BODY =
-            "{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"kind\":\"task\",\"id\":\"task-7\",\"contextId\":\"c1\"}}";
 
     private static GovernanceContext createCtx(String agentId) {
         GovernanceContext ctx = new GovernanceContext();
@@ -88,7 +89,8 @@ class RouterTest {
     @Test
     void emptyCandidatesReturnsRouteNoCandidatesAndDoesNotCallRuntime() {
         rdc.setCandidates(List.of());
-        GovernanceException ge = (GovernanceException) catchThrowable(() -> router.routeCreate(createCtx("agent-9")));
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeCreate(createCtx("agent-9"))));
+
         assertThat(ge).isNotNull();
         assertThat(ge.code()).isEqualTo("ROUTE_NO_CANDIDATES");
         // S5 invariant: no runtime call, no topology in the failure message.
@@ -100,7 +102,8 @@ class RouterTest {
     void resolveFailureReturnsRouteResolveFailedAndDoesNotCallRuntime() {
         rdc.setCandidates(List.of(new AgentCardRoute("h1")));
         rdc.setResolved(null); // resolve throws
-        GovernanceException ge = (GovernanceException) catchThrowable(() -> router.routeCreate(createCtx("agent-9")));
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeCreate(createCtx("agent-9"))));
+
         assertThat(ge).isNotNull();
         assertThat(ge.code()).isEqualTo("ROUTE_RESOLVE_FAILED");
         assertThat(runtime.lastEndpoint()).isNull();
@@ -110,7 +113,8 @@ class RouterTest {
     @Test
     void defaultAgentUnconfiguredIsConfigError() {
         Router unconfigured = new Router(rdc, runtime, sticky, new DefaultAgentResolver(""));
-        GovernanceException ge = (GovernanceException) catchThrowable(() -> unconfigured.routeCreate(createCtx(null)));
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> unconfigured.routeCreate(createCtx(null))));
+
         assertThat(ge).isNotNull();
         assertThat(ge.code()).isEqualTo("DEFAULT_AGENT_UNCONFIGURED");
     }
@@ -139,6 +143,18 @@ class RouterTest {
         assertThat(sticky.find("task-stream")).contains("h1");
     }
 
+    @Test
+    void routeStreamWritesStickyFromResultTaskIdField() {
+        // Real A2A status-update frames use result.taskId (not result.id).
+        rdc.setCandidates(List.of(new AgentCardRoute("h1")));
+        rdc.setResolved(new ResolvedRoute(ENDPOINT));
+        runtime.setFrames(java.util.List.of(
+                "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"status-update\",\"taskId\":\"task-a2a\","
+                        + "\"status\":{\"state\":\"TASK_STATE_WORKING\"}}}"));
+        router.routeStream(createCtx("agent-9")).toList();
+        assertThat(sticky.find("task-a2a")).contains("h1");
+    }
+
     private static GovernanceContext resumeCtx(String taskId) {
         GovernanceContext ctx = new GovernanceContext();
         ctx.setTenantId("tenant-1");
@@ -162,7 +178,8 @@ class RouterTest {
 
     @Test
     void stickyMissReturnsResumeOwnerUnknown() {
-        GovernanceException ge = (GovernanceException) catchThrowable(() -> router.routeResume(resumeCtx("ghost")));
+        GovernanceException ge = asGovernanceException(catchThrowable(() -> router.routeResume(resumeCtx("ghost"))));
+
         assertThat(ge).isNotNull();
         assertThat(ge.code()).isEqualTo("RESUME_OWNER_UNKNOWN");
     }
@@ -171,9 +188,17 @@ class RouterTest {
     void resumePassesThroughRuntimeAssociationError() {
         sticky.put("task-7", "h1");
         rdc.setResolved(new ResolvedRoute(ENDPOINT));
-        runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"error\":{\"code\":-32001,\"message\":\"Task not found\"}}");
+        runtime.setResponse("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"error\":{\"code\":-32001,"
+                + "\"message\":\"Task not found\"}}");
         String resp = router.routeResume(resumeCtx("task-7"));
         // association error passed through as-is, not transformed into a new create
         assertThat(resp).contains("-32001");
+    }
+
+    private static GovernanceException asGovernanceException(Throwable thrown) {
+        if (thrown instanceof GovernanceException ge) {
+            return ge;
+        }
+        throw new AssertionError("expected GovernanceException but got: " + thrown);
     }
 }

@@ -4,18 +4,6 @@
 
 package com.openjiuwen.gateway.facade;
 
-import java.io.IOException;
-import java.util.UUID;
-import java.util.stream.Stream;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.auth.AuthRule;
@@ -28,6 +16,18 @@ import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.sse.SseBridge;
 
 import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * A2A JSON-RPC facade entry — {@code POST /a2a} (FEAT-011 L2 §1.1 / §4.9 GW-1).
@@ -103,18 +103,21 @@ public class A2aController {
             context.setTenantId(tenantId);
             if (context.taskId() == null) {
                 IdempotencyRule.Decision idem = idempotencyRule.check(tenantId, context.messageId(), jsonRpcBody);
-                switch (idem.outcome()) {
-                    case NEW, SKIP -> { /* proceed */ }
-                    case REPLAY -> {
-                        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());
-                    }
-                    case CONFLICT -> throw new GovernanceException(HttpStatus.CONFLICT,
+                IdempotencyRule.Outcome outcome = idem.outcome();
+                if (outcome == IdempotencyRule.Outcome.REPLAY) {
+                    return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(idem.result());
+                }
+                if (outcome == IdempotencyRule.Outcome.CONFLICT) {
+                    throw new GovernanceException(HttpStatus.CONFLICT,
                             "IDEMPOTENCY_PAYLOAD_MISMATCH",
                             "Create idempotency key conflict: payload differs from the first attempt");
-                    case IN_FLIGHT_DUPLICATE -> throw new GovernanceException(HttpStatus.CONFLICT,
+                }
+                if (outcome == IdempotencyRule.Outcome.IN_FLIGHT_DUPLICATE) {
+                    throw new GovernanceException(HttpStatus.CONFLICT,
                             "IDEMPOTENCY_IN_FLIGHT",
                             "A create with this idempotency key is already in progress");
                 }
+                // NEW / SKIP: proceed to later stages
             }
         } catch (GovernanceException ex) {
             ex.setTraceId(context.traceId());
@@ -125,45 +128,70 @@ public class A2aController {
         auditor.auditPassed(context);
 
         if (context.taskId() == null) {
-            if ("SendStreamingMessage".equals(context.method())) {
-                String firstFrame;
-                try {
-                    Stream<String> frames = router.routeStream(context);
-                    // Stream frames synchronously; release happens when consumed or the
-                    // client disconnects (writeSse throws IOException).
-                    response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
-                    response.setCharacterEncoding("UTF-8");
-                    firstFrame = sseBridge.writeSse(response.getOutputStream(), frames);
-                } catch (GovernanceException | IOException ex) {
-                    // failure -> release the in-flight record (P0-1); never complete a failure.
-                    idempotencyRule.abort(context.tenantId(), context.messageId());
-                    if (ex instanceof GovernanceException ge) {
-                        ge.setTraceId(context.traceId());
-                    }
-                    throw ex;
-                }
-                // stream consumed normally -> complete (approach A, TD-8): store the first
-                // frame (task-accept/result surface) as the replayable result; empty stream
-                // -> stable summary. A same-key retry REPLAYs this as a single JSON body.
-                String replayResult = firstFrame != null ? firstFrame
-                        : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
-                idempotencyRule.complete(context.tenantId(), context.messageId(), replayResult);
-                return null;
-            }
-            String runtimeResponse;
-            try {
-                runtimeResponse = router.routeCreate(context);
-            } catch (GovernanceException ex) {
-                idempotencyRule.abort(context.tenantId(), context.messageId());
-                ex.setTraceId(context.traceId());
-                throw ex;
-            }
-            // Mark the create idempotency record completed so a same-key retry
-            // REPLAYs this response instead of re-forwarding (T-G4-2).
-            idempotencyRule.complete(context.tenantId(), context.messageId(), runtimeResponse);
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(runtimeResponse);
+            return forwardCreate(context, response);
         }
-        // resume path — route to the original owner via the sticky index.
+        return forwardResume(context);
+    }
+
+    /**
+     * Forward a create call: streaming (SSE) or sync (JSON), with idempotency complete/abort.
+     *
+     * @param context  governance context after G1–G4
+     * @param response servlet response (used when streaming)
+     * @return sync JSON body, or {@code null} when an SSE stream has been written
+     * @throws IOException if writing the SSE stream fails
+     */
+    private Object forwardCreate(GovernanceContext context, HttpServletResponse response) throws IOException {
+        if ("SendStreamingMessage".equals(context.method())) {
+            return forwardStreaming(context, response);
+        }
+        String runtimeResponse;
+        try {
+            runtimeResponse = router.routeCreate(context);
+        } catch (GovernanceException ex) {
+            idempotencyRule.abort(context.tenantId(), context.messageId());
+            ex.setTraceId(context.traceId());
+            throw ex;
+        }
+        idempotencyRule.complete(context.tenantId(), context.messageId(), runtimeResponse);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(runtimeResponse);
+    }
+
+    /**
+     * Stream SSE frames to the client; complete with first frame on success, abort on failure.
+     *
+     * @param context  governance context after G1–G4
+     * @param response servlet response used to write {@code text/event-stream}
+     * @return {@code null} after the SSE stream has been committed (Spring MVC contract)
+     * @throws IOException if writing the SSE stream fails
+     */
+    private Object forwardStreaming(GovernanceContext context, HttpServletResponse response) throws IOException {
+        String firstFrame;
+        try {
+            Stream<String> frames = router.routeStream(context);
+            response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+            response.setCharacterEncoding("UTF-8");
+            firstFrame = sseBridge.writeSse(response.getOutputStream(), frames);
+        } catch (GovernanceException | IOException ex) {
+            idempotencyRule.abort(context.tenantId(), context.messageId());
+            if (ex instanceof GovernanceException ge) {
+                ge.setTraceId(context.traceId());
+            }
+            throw ex;
+        }
+        String replayResult = firstFrame != null ? firstFrame
+                : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
+        idempotencyRule.complete(context.tenantId(), context.messageId(), replayResult);
+        return null;
+    }
+
+    /**
+     * Forward a resume call to the original Task owner via the sticky index.
+     *
+     * @param context governance context with taskId bound
+     * @return sync JSON response from the sticky owner runtime
+     */
+    private Object forwardResume(GovernanceContext context) {
         try {
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(router.routeResume(context));
         } catch (GovernanceException ex) {

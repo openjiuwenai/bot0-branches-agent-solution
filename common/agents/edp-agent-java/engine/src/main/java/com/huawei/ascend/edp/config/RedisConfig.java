@@ -16,8 +16,6 @@
 
 package com.huawei.ascend.edp.config;
 
-import com.huawei.ascend.edp.todo.RedisTodoStore;
-
 import com.openjiuwen.core.session.checkpointer.Checkpointer;
 import com.openjiuwen.core.session.checkpointer.CheckpointerFactory;
 import com.openjiuwen.extensions.checkpointer.redis.RedisCheckpointer;
@@ -26,6 +24,7 @@ import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.protocol.ProtocolVersion;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +51,9 @@ import java.util.Map;
  * <ul>
  *   <li>UC-01/UC-02：RESP2 强制（{@code ProtocolVersion.RESP2}）。</li>
  *   <li>UC-07/UC-22~UC-24：single/sentinel/cluster 三模式按 {@code mode} 切换。</li>
- *   <li>UC-16：Lettuce 默认连接池，支持 Checkpointer + TodoStore 共存。</li>
+ *   <li>UC-16：Lettuce 默认连接池，支持 Checkpointer 共存。</li>
+ *   <li>Todo 持久化由 agent-core 的 TodoStorage SPI 通过 DeepAgentConfig 配置，
+ *       不再需要自定义 RedisTodoStore Bean。</li>
  * </ul>
  *
  * @since 2026-01-01
@@ -65,24 +66,42 @@ public class RedisConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisConfig.class);
 
     /**
-     * 静态持有 RedisTodoStore 实例，供非 Spring 管理的 EdpaAgentEnhancer 取用。
+     * 静态持有 StringRedisTemplate 实例，供 ExecutionLimitRail 取用。
      */
-    private static volatile RedisTodoStore singletonStore;
+    private static volatile StringRedisTemplate singletonTemplate;
+
+    /**
+     * 静态持有 TodoRedisProperties 实例，供 EdpaExtHandler.buildKvStoreConfig 取用。
+     */
+    private static volatile TodoRedisProperties singletonProps;
+
+    private volatile LettuceConnectionFactory redisFactory;
 
     private final TodoRedisProperties props;
 
     public RedisConfig(TodoRedisProperties props) {
         this.props = props;
+        // 构造时立即赋值静态持有，确保 EdpaExtHandler.performInit（早于 stringRedisTemplate
+        // Bean 初始化）能通过 getRedisProperties() 取到非 null 值，避免 kvStore=none 回落 file。
+        singletonProps = props;
     }
 
-    /** 获取已注册的 RedisTodoStore（未启动 Redis 时返回 null，Rail 回落文件路径）。
+    /**
+     * 获取已注册的 StringRedisTemplate（未启动 Redis 时返回 null）。
      *
-     * @return result
-     *
+     * @return StringRedisTemplate 实例或 null
      */
+    public static StringRedisTemplate getStringRedisTemplate() {
+        return singletonTemplate;
+    }
 
-    public static RedisTodoStore getRedisTodoStore() {
-        return singletonStore;
+    /**
+     * 获取已注册的 TodoRedisProperties（未启动时返回 null）。
+     *
+     * @return TodoRedisProperties 实例或 null
+     */
+    public static TodoRedisProperties getRedisProperties() {
+        return singletonProps;
     }
 
     /**
@@ -153,9 +172,21 @@ public class RedisConfig {
         LettuceConnectionFactory factory = new LettuceConnectionFactory(
                 redisConfig, clientBuilder.build());
         factory.afterPropertiesSet();
+        this.redisFactory = factory;
         LOGGER.info("[EDPA-DIAG] REDIS_CONFIG mode={} host={} port={} db={} resp2=true", mode, props.getHost(),
                 props.getPort(), props.getDatabase());
         return factory;
+    }
+
+    /**
+     * 显式关闭 Redis 连接池，确保在 Spring 容器关闭阶段、沙箱 Hook 之前销毁连接。
+     */
+    @PreDestroy
+    public void destroyRedis() {
+        if (redisFactory != null) {
+            LOGGER.info("[EDP-REDIS] Closing Redis connection factory");
+            redisFactory.destroy();
+        }
     }
 
     /**
@@ -166,25 +197,10 @@ public class RedisConfig {
      */
     @Bean
     public StringRedisTemplate stringRedisTemplate(LettuceConnectionFactory factory) {
-        return new StringRedisTemplate(factory);
-    }
-
-    /**
-     * 注册 RedisTodoStore Bean（UC-03~UC-11 主路径）。
-     *
-     * <p>启动时调用 {@link RedisTodoStore#healthCheck()} 做健康检查（UC-01/UC-02），
-     * 失败则容器启动失败。</p>
-     *
-     * @param redisTemplate the redisTemplate value
-     * @param props the props value
-     * @return the result
-     */
-    @Bean
-    public RedisTodoStore redisTodoStore(StringRedisTemplate redisTemplate, TodoRedisProperties props) {
-        RedisTodoStore store = new RedisTodoStore(redisTemplate, props);
-        store.healthCheck();
-        singletonStore = store;
-        return store;
+        StringRedisTemplate template = new StringRedisTemplate(factory);
+        singletonTemplate = template;
+        singletonProps = props;
+        return template;
     }
 
     private RedisStandaloneConfiguration buildStandaloneConfig(TodoRedisProperties props) {

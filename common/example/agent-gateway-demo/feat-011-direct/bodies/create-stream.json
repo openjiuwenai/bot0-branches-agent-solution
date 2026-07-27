@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": "ex-011-stream",
+  "method": "SendStreamingMessage",
+  "params": {
+    "message": {
+      "messageId": "ex-011-stream-1",
+      "parts": [{ "text": "gateway-example-011-stream" }]
+    },
+    "metadata": {
+      "agentId": "scripted-verify"
+    }
+  }
+}

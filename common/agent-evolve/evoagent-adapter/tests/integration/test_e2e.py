@@ -24,7 +24,7 @@ def make_start_line(
     trace_id: str = "trace-abc",
     agent_id: str = "agent-001",
     time: str = "2026-06-10 14:30:15.123",
-    model: str = "glm-5",
+    model: str = "model-sample",
 ) -> str:
     message = json.dumps({
         "id": call_id,

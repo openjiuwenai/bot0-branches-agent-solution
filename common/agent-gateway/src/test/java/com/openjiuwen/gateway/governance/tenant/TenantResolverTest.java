@@ -7,10 +7,10 @@ package com.openjiuwen.gateway.governance.tenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import org.junit.jupiter.api.Test;
-
 import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.auth.Principal;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for G2 {@link TenantResolver} (FEAT-011 L2 §3.4 T-G2-1..T-G2-4).
@@ -23,8 +23,10 @@ class TenantResolverTest {
     private static GovernanceException govern(Runnable action) {
         Throwable thrown = catchThrowable(action::run);
         assertThat(thrown).as("expected a GovernanceException").isNotNull();
-        assertThat(thrown).isInstanceOf(GovernanceException.class);
-        return (GovernanceException) thrown;
+        if (thrown instanceof GovernanceException ge) {
+            return ge;
+        }
+        throw new AssertionError("expected GovernanceException but got: " + thrown);
     }
 
     @Test

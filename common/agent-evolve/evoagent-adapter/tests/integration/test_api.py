@@ -265,7 +265,7 @@ class TestStatusEndpoint:
         start_line = "\x01".join([
             "2026-06-10 10:00:00.000", "INFO", "src:1", "trace-x", "agent-y",
             "conv-001", "TAG_LLM_CALL_START", "0",
-            json.dumps({"id": "uuid-001", "type": "GENERATION", "model": "glm-5"}),
+            json.dumps({"id": "uuid-001", "type": "GENERATION", "model": "model-sample"}),
         ])
         log_file = log_dir / "process_12345.log"
         log_file.write_text(start_line + "\n", encoding="utf-8")
@@ -402,7 +402,7 @@ class TestAppLifecycle:
         start_line = "\x01".join([
             "2026-06-10 10:00:00.000", "INFO", "src:1", "trace-x", "agent-y",
             "conv-001", "TAG_LLM_CALL_START", "0",
-            json.dumps({"id": "uuid-001", "type": "GENERATION", "model": "glm-5"}),
+            json.dumps({"id": "uuid-001", "type": "GENERATION", "model": "model-sample"}),
         ])
         (log_dir / "process_12345.log").write_text(start_line + "\n", encoding="utf-8")
 

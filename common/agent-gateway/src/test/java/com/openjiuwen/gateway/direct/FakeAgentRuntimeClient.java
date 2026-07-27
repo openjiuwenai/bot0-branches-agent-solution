@@ -39,17 +39,27 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
         this.frames = frames;
     }
 
-    /** @return the endpoint of the last invokeSync */
+    /**
+     * Return the endpoint recorded from the last invokeSync/openStream call.
+     *
+     * @return the endpoint of the last invokeSync
+     */
     public String lastEndpoint() {
         return lastEndpoint;
     }
 
-    /** @return the body of the last invokeSync (after tenant injection) */
+    /**
+     * Return the body recorded from the last invokeSync/openStream call.
+     *
+     * @return the body of the last invokeSync (after tenant injection)
+     */
     public String lastBody() {
         return lastBody;
     }
 
-    /** Clear recorded invocations (so tests asserting "no call" start clean). */
+    /**
+     * Clear recorded invocations (so tests asserting "no call" start clean).
+     */
     public void reset() {
         this.lastEndpoint = null;
         this.lastBody = null;

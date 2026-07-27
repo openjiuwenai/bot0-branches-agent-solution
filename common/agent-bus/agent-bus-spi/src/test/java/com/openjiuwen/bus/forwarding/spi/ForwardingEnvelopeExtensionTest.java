@@ -113,17 +113,28 @@ class ForwardingEnvelopeExtensionTest {
     }
 
     @Test
-    void payload_ref_conditional_invariant_is_preserved() {
-        // DATA_BEARING with a null payloadRef is still rejected
+    void data_bearing_requires_payload_ref_or_inline_payload() {
+        // P-06: DATA_BEARING requires a payloadRef (large/multimodal bodies, 2a) OR an inlinePayload
+        // (small body, 2b); neither is a control-descriptor token. Both absent → rejected.
         assertThatThrownBy(() -> new ForwardingEnvelope(
                 new ForwardingMessageId("msg-db"),
                 AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
                 TENANT, "trace-db", "corr-db", "idem-db",
                 new ForwardingRouteHandle("route-1", TENANT),
                 "cap-db", "src-db", "tgt-db", Long.MAX_VALUE,
-                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessageContaining("payloadRef");
+                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("payloadRef or inlinePayload");
+        // a small body may inline (2b) with no payloadRef — the body is NOT dropped at the envelope
+        ForwardingEnvelope inline = new ForwardingEnvelope(
+                new ForwardingMessageId("msg-db-il"),
+                AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
+                TENANT, "trace-il", "corr-il", "idem-il",
+                new ForwardingRouteHandle("route-1", TENANT),
+                "cap-il", "src-il", "tgt-il", Long.MAX_VALUE,
+                ForwardingEnvelope.PayloadPolicy.DATA_BEARING, null, "inline-body");
+        assertThat(inline.inlinePayload()).isEqualTo("inline-body");
+        assertThat(inline.payloadRef()).isNull();
     }
 
     @Test

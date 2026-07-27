@@ -22,6 +22,7 @@ public class DeepResearchProperties {
     private String agentId = "deep-research-agent";
     private String agentName = "DeepResearchAgent";
     private String agentDescription = "Deep research agent comparing domestic LLM API offerings";
+    private String sysOperationId = "deep-research";
 
     private String provider = "OpenAI";
     private String apiKey = "";
@@ -40,6 +41,7 @@ public class DeepResearchProperties {
 
     private List<String> skillDirectories = new ArrayList<>();
     private String skillMode = "all";
+    private List<String> extraReadableRoots = new ArrayList<>();
 
     private String systemPrompt = """
             You are a Deep Research Agent specialised in comparing domestic LLM API offerings.
@@ -359,6 +361,27 @@ public class DeepResearchProperties {
     }
 
     /**
+     * Gets the sys operation id, used by the inner ReActAgent to scope skill-hub
+     * registration (see {@code ReActAgent.lazyInitSkill}). A null / blank value
+     * causes skill registration to silently no-op, which is why this must be set
+     * before any skill installer (FEAT-005) runs.
+     *
+     * @return the sys operation id
+     */
+    public String getSysOperationId() {
+        return sysOperationId;
+    }
+
+    /**
+     * Sets the sys operation id.
+     *
+     * @param sysOperationId the sys operation id
+     */
+    public void setSysOperationId(String sysOperationId) {
+        this.sysOperationId = sysOperationId;
+    }
+
+    /**
      * Gets the LLM provider name.
      *
      * @return the LLM provider name
@@ -626,6 +649,29 @@ public class DeepResearchProperties {
      */
     public void setSkillMode(String skillMode) {
         this.skillMode = skillMode;
+    }
+
+    /**
+     * Gets the extra directories the demo's {@code read_file} rail is allowed to
+     * serve files from, in addition to the DeepAgent workspace root. Typical use
+     * case: point this at the FEAT-005 SkillHub {@code localDir} so the LLM can
+     * pull the exact SKILL.md contents SkillHub wrote to disk — SkillHub's local
+     * cache lives outside the workspace by default.
+     *
+     * @return the extra readable roots (never {@code null}; empty means the rail
+     *     will only trust the workspace root)
+     */
+    public List<String> getExtraReadableRoots() {
+        return extraReadableRoots;
+    }
+
+    /**
+     * Sets the extra readable roots for the {@code read_file} rail.
+     *
+     * @param extraReadableRoots the extra readable roots
+     */
+    public void setExtraReadableRoots(List<String> extraReadableRoots) {
+        this.extraReadableRoots = extraReadableRoots;
     }
 
     /**
