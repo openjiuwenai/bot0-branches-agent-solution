@@ -1,6 +1,6 @@
 {
   "id": "product_buy",
-  "description": "理财产品购买签署",
+  "description": "理财产品购买签署（对齐 AgentEnvExplorer winvest_buy，首轮直达）",
   "priority": 90,
   "match": {
     "type": "query",
@@ -12,26 +12,13 @@
     ]
   },
   "output": {
+    "omit_end": true,
     "frames": [
-      { "node_type": "Start", "node_name": "StartNode", "delay_ms": 200 },
-      {
-        "node_type": "LLM",
-        "node_name": "{{config.llm_node}}",
-        "text": "正在校验产品信息...",
-        "delay_ms": 200
-      },
-      {
-        "node_type": "LLM",
-        "node_name": "{{config.llm_node}}",
-        "text": "正在执行签署购买...",
-        "delay_ms": 300
-      },
-      {
-        "node_type": "QA",
-        "node_name": "{{config.result_node}}",
-        "text_hook": "product_buy_response_json",
-        "delay_ms": 100
-      }
+      { "kind": "raw_json", "hook": "product_buy_questioner_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "product_buy_gxz_qa_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "product_buy_gxz_summary_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "product_buy_query_end_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "product_buy_event_end_frame", "delay_ms": 0 }
     ]
   }
 }

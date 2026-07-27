@@ -1,6 +1,6 @@
 {
   "id": "transfer_round1",
-  "description": "转账首轮：返回 TRANSFER_MENU 卡片并挂起（不发 End）",
+  "description": "转账首轮：返回确认提示卡片（Custom + menu_type=TRANSFER_MENU），不含 End 和 GXZQAResponseNode，触发 input_required 中断",
   "priority": 50,
   "match": {
     "type": "query",
@@ -15,13 +15,7 @@
   "output": {
     "omit_end": true,
     "frames": [
-      {
-        "node_type": "Custom",
-        "node_name": "transfer_menu",
-        "text": "请确认转账信息",
-        "menu_type": "TRANSFER_MENU",
-        "delay_ms": 50
-      }
+      { "kind": "raw_json", "hook": "transfer_confirm_menu_frame", "delay_ms": 50 }
     ]
   }
 }

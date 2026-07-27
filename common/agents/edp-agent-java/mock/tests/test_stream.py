@@ -16,6 +16,12 @@ from engine.matcher import WorkflowMatcher
 from engine.streamer import stream_workflow
 
 
+def _unwrap_sse_envelope(obj: dict) -> dict:
+    if obj.get("event") and isinstance(obj.get("data"), dict):
+        return obj["data"]
+    return obj
+
+
 async def collect_sse(workflow_id: str, query: str, conversation_id: str = "test-conv") -> list[dict]:
     store = WorkflowStore()
     matcher = WorkflowMatcher(store)
@@ -38,32 +44,76 @@ async def collect_sse(workflow_id: str, query: str, conversation_id: str = "test
     return chunks
 
 
+async def collect_sse_data(workflow_id: str, query: str, conversation_id: str = "test-conv") -> list[dict]:
+    envelopes = await collect_sse(workflow_id, query, conversation_id)
+    return [_unwrap_sse_envelope(item) for item in envelopes]
+
+
 class StreamSmokeTests(unittest.TestCase):
     def test_wealth_recommend_has_qa_product_list(self) -> None:
-        frames = asyncio.run(collect_sse("wealth_recommend", "帮我推荐几款稳健型理财产品"))
+        envelopes = asyncio.run(collect_sse("wealth_recommend", "帮我推荐几款稳健型理财产品"))
+        frames = [_unwrap_sse_envelope(item) for item in envelopes]
         qa_frames = [f for f in frames if f.get("node_type") == "QA"]
         self.assertTrue(qa_frames)
-        payload = json.loads(qa_frames[0]["text"])
-        self.assertIn("productList", payload)
-        self.assertIn("bankCardNumber", payload)
+        display_frame = next(f for f in qa_frames if f.get("node_name") == "问答-产品列表展示")
+        payload = json.loads(display_frame["text"])
+        self.assertIn("responseData", payload)
+        prod_list = payload["responseData"][1]["pageData"]["showData"]["prodList"]
+        self.assertEqual(len(prod_list), 3)
 
-    def test_wealth_recommend_ends_with_end(self) -> None:
-        frames = asyncio.run(collect_sse("wealth_recommend", "帮我推荐理财产品"))
-        self.assertEqual(frames[-1].get("node_type"), "End")
+        gxz_frame = next(f for f in qa_frames if f.get("node_name") == "GXZQAResponseNode")
+        gxz_payload = json.loads(gxz_frame["text"])
+        self.assertIn("productList", gxz_payload)
+        self.assertIn("bankCardNumber", gxz_payload)
+        self.assertIsInstance(gxz_payload["productList"], list)
 
-    def test_transfer_round1_omits_end(self) -> None:
-        frames = asyncio.run(collect_sse("transfer_round1", "转账1000元"))
-        self.assertEqual(frames[0].get("menu_type"), "TRANSFER_MENU")
-        self.assertFalse(any(f.get("node_type") == "End" for f in frames))
+    def test_wealth_recommend_ends_with_event_end(self) -> None:
+        envelopes = asyncio.run(collect_sse("wealth_recommend", "帮我推荐理财产品"))
+        frames = [_unwrap_sse_envelope(item) for item in envelopes]
+        self.assertEqual(frames[-2].get("node_type"), "End")
+        self.assertEqual(envelopes[-1].get("event"), "end")
 
     def test_balance_query_qa_result_node_for_adapter(self) -> None:
-        frames = asyncio.run(collect_sse("balance_query", "查询尾号为6605的卡的余额"))
+        frames = asyncio.run(collect_sse_data("balance_query", "查询尾号为6605的卡的余额"))
         qa_frames = [f for f in frames if f.get("node_type") == "QA"]
-        self.assertTrue(qa_frames, "balance query must emit QA result frame for 8191 adapter")
+        self.assertTrue(qa_frames, "balance query must emit QA result frame")
         self.assertEqual(qa_frames[-1].get("node_name"), "GXZQAResponseNode")
-        payload = json.loads(qa_frames[-1]["text"])
+        payload = json.loads(qa_frames[-1]["summary"])
         self.assertIn("bankCardBalanceList", payload)
-        self.assertEqual(frames[-1].get("node_type"), "End")
+        self.assertEqual(payload.get("queryStatus"), "成功")
+        balance_item = payload["bankCardBalanceList"][0]
+        self.assertEqual(
+            balance_item["currencyBalanceList"][0]["currencyCode"],
+            "001",
+        )
+        self.assertEqual(frames[-2].get("node_type"), "End")
+        envelopes = asyncio.run(collect_sse("balance_query", "查询尾号为6605的卡的余额"))
+        self.assertEqual(envelopes[-1].get("event"), "end")
+
+    def test_transfer_round1_final_output(self) -> None:
+        envelopes = asyncio.run(collect_sse("transfer_round1", "转账1000元"))
+        frames = [_unwrap_sse_envelope(item) for item in envelopes]
+        gxz_frames = [f for f in frames if f.get("node_name") == "GXZQAResponseNode"]
+        self.assertEqual(len(gxz_frames), 2)
+        payload = json.loads(gxz_frames[-1]["summary"])
+        self.assertEqual(payload.get("transferStatus"), "success")
+        self.assertIn("payerCardNumber", payload)
+        self.assertIn("payeeCardNumber", payload)
+        self.assertIn("transferAmount", payload)
+        self.assertEqual(frames[-2].get("node_type"), "End")
+        self.assertEqual(envelopes[-1].get("event"), "end")
+
+    def test_product_buy_final_output(self) -> None:
+        query = "理财产品：产品名称：测试，产品代码：XLT1801，金额：300元"
+        envelopes = asyncio.run(collect_sse("product_buy", query))
+        frames = [_unwrap_sse_envelope(item) for item in envelopes]
+        questioner = next(f for f in frames if f.get("node_type") == "Questioner")
+        self.assertEqual(questioner.get("node_name"), "提问器-理财摸高购买")
+        gxz_frames = [f for f in frames if f.get("node_name") == "GXZQAResponseNode"]
+        payload = json.loads(gxz_frames[-1]["summary"])
+        self.assertEqual(payload["productBuyResponse"]["buyStatus"], "1")
+        self.assertEqual(frames[-2].get("node_type"), "End")
+        self.assertEqual(envelopes[-1].get("event"), "end")
 
 
 if __name__ == "__main__":

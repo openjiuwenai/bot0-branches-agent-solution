@@ -4,9 +4,7 @@
 
 package com.openjiuwen.gateway.routing;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -14,7 +12,11 @@ import com.openjiuwen.gateway.direct.AgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
@@ -76,10 +78,8 @@ public class Router {
         }
         String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
         String response = runtime.invokeSync(resolved.endpointUrl(), outbound);
-        String taskId = extractTaskId(response);
-        if (taskId != null && !taskId.isBlank()) {
-            stickyIndex.put(taskId, chosen.routeHandle());
-        }
+        extractTaskId(response).filter(s -> !s.isBlank()).ifPresent(
+                taskId -> stickyIndex.put(taskId, chosen.routeHandle()));
         return response;
     }
 
@@ -113,10 +113,13 @@ public class Router {
         AtomicBoolean stickyWritten = new AtomicBoolean();
         return frames.peek(frame -> {
             if (!stickyWritten.get()) {
-                String taskId = extractTaskId(frame);
-                if (taskId != null && !taskId.isBlank() && stickyWritten.compareAndSet(false, true)) {
-                    stickyIndex.put(taskId, chosen.routeHandle());
-                }
+                extractTaskId(frame)
+                        .filter(s -> !s.isBlank())
+                        .ifPresent(taskId -> {
+                            if (stickyWritten.compareAndSet(false, true)) {
+                                stickyIndex.put(taskId, chosen.routeHandle());
+                            }
+                        });
             }
         });
     }
@@ -146,7 +149,13 @@ public class Router {
         return runtime.invokeSync(resolved.endpointUrl(), outbound);
     }
 
-    /** Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10). */
+    /**
+     * Inject the authoritative tenant into {@code params.metadata.tenantId} (AC-RT-1 / GW-RT-10).
+     *
+     * @param rawBody  original JSON-RPC body
+     * @param tenantId authoritative tenant from G2
+     * @return body with {@code params.metadata.tenantId} set, or the original body if not an object
+     */
     String injectTenantId(String rawBody, String tenantId) {
         try {
             JsonNode root = mapper.readTree(rawBody);
@@ -157,38 +166,49 @@ public class Router {
                 return mapper.writeValueAsString(root);
             }
             return rawBody;
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             throw new GovernanceException(HttpStatus.BAD_REQUEST, "VALIDATION_JSONRPC",
                     "Cannot inject tenant into body");
         }
     }
 
-    /** Extract the task id from a runtime response (result.id or result.task.id). */
-    String extractTaskId(String response) {
+    /**
+     * Extract the task id from a runtime response / SSE frame.
+     * Accepts A2A shapes used in the wild: {@code result.id}, {@code result.taskId},
+     * {@code result.task.id}, and nested {@code result.statusUpdate.taskId}
+     * (FEAT-001 / status-update frames). Missing any of these left sticky unbound
+     * so tool/user-input resume failed with {@code RESUME_OWNER_UNKNOWN}.
+     *
+     * @param response runtime JSON-RPC body or SSE frame
+     * @return the extracted task id, or empty if not found / unparseable
+     */
+    Optional<String> extractTaskId(String response) {
         try {
             JsonNode root = mapper.readTree(response);
             JsonNode result = root.path("result");
-            String id = text(result, "id");
-            if (id == null || id.isBlank()) {
-                id = text(result.path("task"), "id");
-            }
-            return id;
-        } catch (Exception ex) {
-            return null;
+            return text(result, "id")
+                    .filter(s -> !s.isBlank())
+                    .or(() -> text(result, "taskId").filter(s -> !s.isBlank()))
+                    .or(() -> text(result.path("task"), "id").filter(s -> !s.isBlank()))
+                    .or(() -> text(result.path("statusUpdate"), "taskId").filter(s -> !s.isBlank()));
+        } catch (JsonProcessingException ex) {
+            return Optional.empty();
         }
     }
 
     private static ObjectNode withObject(JsonNode parent, String field) {
         JsonNode child = parent.path(field);
-        if (child.isObject()) {
-            return (ObjectNode) child;
+        if (child instanceof ObjectNode objectChild) {
+            return objectChild;
         }
-        ObjectNode created = ((ObjectNode) parent).putObject(field);
-        return created;
+        if (parent instanceof ObjectNode objectParent) {
+            return objectParent.putObject(field);
+        }
+        throw new ClassCastException("parent JsonNode is not an ObjectNode: " + parent.getNodeType());
     }
 
-    private static String text(JsonNode parent, String field) {
+    private static Optional<String> text(JsonNode parent, String field) {
         JsonNode node = parent.path(field);
-        return (node.isMissingNode() || node.isNull()) ? null : node.asText();
+        return (node.isMissingNode() || node.isNull()) ? Optional.empty() : Optional.of(node.asText());
     }
 }

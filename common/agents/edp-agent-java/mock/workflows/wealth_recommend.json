@@ -1,6 +1,6 @@
 {
   "id": "wealth_recommend",
-  "description": "推荐理财产品",
+  "description": "推荐理财产品（对齐 AgentEnvExplorer winvest_rec_05，首轮直达产品列表）",
   "priority": 30,
   "match": {
     "type": "query",
@@ -17,32 +17,14 @@
     ]
   },
   "output": {
+    "omit_end": true,
     "frames": [
-      { "node_type": "Start", "node_name": "StartNode", "delay_ms": 200 },
-      {
-        "node_type": "LLM",
-        "node_name": "{{config.llm_node}}",
-        "text": "正在分析您的资金情况...",
-        "delay_ms": 300
-      },
-      {
-        "node_type": "LLM",
-        "node_name": "{{config.llm_node}}",
-        "text": "正在匹配理财产品...",
-        "delay_ms": 300
-      },
-      {
-        "node_type": "LLM",
-        "node_name": "{{config.llm_node}}",
-        "text": "正在计算推荐结果...",
-        "delay_ms": 300
-      },
-      {
-        "node_type": "QA",
-        "node_name": "{{config.result_node}}",
-        "text_hook": "wealth_product_filter_json",
-        "delay_ms": 100
-      }
+      { "kind": "raw_json", "hook": "wealth_rec_qa_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "wealth_rec_qa_summary_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "wealth_rec_gxz_qa_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "wealth_rec_gxz_summary_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "wealth_rec_query_end_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "wealth_rec_event_end_frame", "delay_ms": 0 }
     ]
   }
 }

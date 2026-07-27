@@ -4,6 +4,12 @@
 
 package com.openjiuwen.gateway.direct;
 
+import com.openjiuwen.gateway.governance.GovernanceException;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -11,11 +17,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.stream.Stream;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
-import com.openjiuwen.gateway.governance.GovernanceException;
 
 /**
  * 730 default {@link AgentRuntimeClient}: forwards synchronously to the runtime
@@ -30,6 +31,7 @@ import com.openjiuwen.gateway.governance.GovernanceException;
 @Component
 public class HttpAgentRuntimeClient implements AgentRuntimeClient {
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
+
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
 
     @Override
@@ -45,7 +47,8 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             // Pass the body through (A2A errors arrive as 200 + JSON-RPC error; we don't fake success).
             return resp.body();
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
+            // G.CON.10 forbids Thread.interrupt(); map transport failure to FORWARD_FAILED.
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                     "Cannot reach runtime", ex);
         }
@@ -66,7 +69,8 @@ public class HttpAgentRuntimeClient implements AgentRuntimeClient {
                     .filter(line -> line.startsWith("data:"))
                     .map(line -> line.substring("data:".length()).strip())
                     .filter(data -> !data.isEmpty());
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
+            // G.CON.10 forbids Thread.interrupt(); map transport failure to FORWARD_FAILED.
             throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                     "Cannot open runtime stream", ex);
         }

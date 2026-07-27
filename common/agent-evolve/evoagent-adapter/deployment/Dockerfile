@@ -4,35 +4,18 @@
 # ============================================================
 
 # Stage 1: Install adapter dependencies
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-slim AS builder
-
-# 配置华为云镜像加速
-RUN sed -i 's/deb.debian.org/repo.huaweicloud.com/g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's/security.debian.org/repo.huaweicloud.com/g' /etc/apt/sources.list.d/debian.sources
+FROM python:3.12-slim AS builder
 
 WORKDIR /build/adapter
 
 COPY pyproject.toml ./
 
-# 尝试多个 PyPI 镜像源安装依赖
-RUN for idx in \
-    "https://repo.huaweicloud.com/repository/pypi/simple" \
-    "https://mirrors.aliyun.com/pypi/simple/" \
-    "https://pypi.org/simple"; \
-    do \
-    echo "Trying PyPI index: $idx"; \
-    pip install --no-cache-dir -i "$idx" --trusted-host $(echo $idx | awk -F/ '{print $3}') \
-    aiofiles aiokafka asyncpg cramjam fastapi httpx pydantic-settings pyyaml rich structlog typer uvicorn && \
-    echo "pip install succeeded with: $idx" && \
-    break; \
-    done
+# 通过 PyPI 官方源安装依赖
+RUN pip install --no-cache-dir \
+    aiofiles aiokafka asyncpg cramjam fastapi httpx pydantic-settings pyyaml rich structlog typer uvicorn
 
 # Stage 2: Runtime
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-slim
-
-# 配置华为云镜像加速
-RUN sed -i 's/deb.debian.org/repo.huaweicloud.com/g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's/security.debian.org/repo.huaweicloud.com/g' /etc/apt/sources.list.d/debian.sources
+FROM python:3.12-slim
 
 WORKDIR /app
 

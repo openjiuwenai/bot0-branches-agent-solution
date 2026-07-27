@@ -147,4 +147,33 @@ public class EdpConfigValidator {
             }
         }
     }
+
+    /**
+     * 校验沙箱配置完整性。
+     *
+     * fail-fast 校验：sandbox.enabled=true 但 service-url 为空/空白时，
+     * 视为配置缺失，启动失败并报明确错误。
+     * sandbox.enabled=false 时跳过校验（沙箱功能未启用，service-url 无意义）。
+     *
+     * @param sandbox the sandbox config
+     */
+    public static void validateSandboxConfig(SandboxConfig sandbox) {
+        if (sandbox == null || !sandbox.isEnabled()) {
+            LOGGER.info("Sandbox config disabled, skipping validation.");
+            return;
+        }
+        String serviceUrl = sandbox.getServiceUrl();
+        if (serviceUrl == null || serviceUrl.isBlank()) {
+            throw new IllegalStateException(
+                    "Sandbox enabled but service-url is empty. "
+                    + "Set EDPA_SANDBOX_SERVICE_URL to a valid sandbox service address, "
+                    + "or set EDPA_SANDBOX_ENABLED=false to disable sandbox.");
+        }
+        if (!serviceUrl.startsWith("http://") && !serviceUrl.startsWith("https://")) {
+            throw new IllegalStateException(
+                    "Sandbox service-url invalid: " + serviceUrl
+                    + ". Must start with http:// or https://.");
+        }
+        LOGGER.info("Sandbox config validated: enabled=true, serviceUrl={}", serviceUrl);
+    }
 }

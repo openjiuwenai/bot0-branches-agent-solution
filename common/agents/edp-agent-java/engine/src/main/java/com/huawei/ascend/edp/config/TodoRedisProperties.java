@@ -83,13 +83,6 @@ public class TodoRedisProperties {
     private ClusterConfig cluster = new ClusterConfig();
 
     /**
-     * TodoStore 配置。
-     *
-     * @return the result
-     */
-    private TodoConfig todo = new TodoConfig();
-
-    /**
      * Checkpointer TTL（分钟），UC-18。
      */
     private int checkpointerTtlMinutes = 60;
@@ -257,24 +250,6 @@ public class TodoRedisProperties {
     }
 
     /**
-     * Gets the todo.
-     *
-     * @return the result
-     */
-    public TodoConfig getTodo() {
-        return todo;
-    }
-
-    /**
-     * Sets the todo.
-     *
-     * @param todo the todo value
-     */
-    public void setTodo(TodoConfig todo) {
-        this.todo = todo;
-    }
-
-    /**
      * Gets the checkpointer ttl minutes.
      *
      * @return the result
@@ -290,80 +265,6 @@ public class TodoRedisProperties {
      */
     public void setCheckpointerTtlMinutes(int checkpointerTtlMinutes) {
         this.checkpointerTtlMinutes = checkpointerTtlMinutes;
-    }
-
-    /**
-     * TodoStore 配置：Key 前缀、TTL、读时续期。
-     */
-    public static class TodoConfig {
-        /**
-         * Redis Key 前缀，默认 {@code edpa}。
-         */
-        private String keyPrefix = "edpa";
-
-        /**
-         * TTL（秒），默认 3600（60min）。
-         */
-        private long ttlSeconds = 3600L;
-
-        /**
-         * 读时是否续期，默认 true（UC-04）。
-         */
-        private boolean refreshOnRead = true;
-
-        /**
-         * Gets the key prefix.
-         *
-         * @return the result
-         */
-        public String getKeyPrefix() {
-            return keyPrefix;
-        }
-
-        /**
-         * Sets the key prefix.
-         *
-         * @param keyPrefix the keyPrefix value
-         */
-        public void setKeyPrefix(String keyPrefix) {
-            this.keyPrefix = keyPrefix;
-        }
-
-        /**
-         * Gets the ttl seconds.
-         *
-         * @return the result
-         */
-        public long getTtlSeconds() {
-            return ttlSeconds;
-        }
-
-        /**
-         * Sets the ttl seconds.
-         *
-         * @param ttlSeconds the ttlSeconds value
-         */
-        public void setTtlSeconds(long ttlSeconds) {
-            this.ttlSeconds = ttlSeconds;
-        }
-
-        /**
-         * Checks whether refresh on read.
-         *
-         * @return the result
-         */
-        public boolean isRefreshOnRead() {
-            return refreshOnRead;
-        }
-
-        /**
-         * Sets the refresh on read.
-         *
-         * @param refreshOnRead the refreshOnRead value
-         */
-        public void setRefreshOnRead(boolean refreshOnRead) {
-            this.refreshOnRead = refreshOnRead;
-        }
     }
 
     /**

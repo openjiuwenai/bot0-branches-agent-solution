@@ -11,6 +11,7 @@ versatile_main.py — 可配置 Mock Versatile 子 agent 上游。
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re

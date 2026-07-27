@@ -29,6 +29,12 @@
       会导致 agentcore-ext 编译失败。
     -->
     <agent-core-java.version>0.1.13</agent-core-java.version>
+    <!--
+      指向本地 agent-core-java-730 工程构建生成的 jar。${project.basedir}
+      会解析为 engine 模块的 basedir，从而拼出绝对路径（Maven 要求 systemPath
+      必须为绝对路径）。修改 version 时路径会自动跟随。
+    -->
+    <agent-core-java.jar.path>${project.basedir}/../../../../../agent-core-java-730/target/agent-core-java-${agent-core-java.version}.jar</agent-core-java.jar.path>
   </properties>
 
   <modules>

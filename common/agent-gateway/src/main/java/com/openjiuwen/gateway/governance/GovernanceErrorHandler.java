@@ -4,11 +4,11 @@
 
 package com.openjiuwen.gateway.governance;
 
-import java.util.UUID;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.UUID;
 
 /**
  * Maps {@link GovernanceException} (thrown by any G1–G5 step) to a stable HTTP

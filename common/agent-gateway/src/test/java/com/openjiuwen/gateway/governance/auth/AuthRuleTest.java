@@ -7,11 +7,11 @@ package com.openjiuwen.gateway.governance.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import java.util.Optional;
+import com.openjiuwen.gateway.governance.GovernanceException;
 
 import org.junit.jupiter.api.Test;
 
-import com.openjiuwen.gateway.governance.GovernanceException;
+import java.util.Optional;
 
 /**
  * Unit tests for G1 {@link AuthRule} judgment order (FEAT-011 L2 §3.3.1
@@ -24,12 +24,19 @@ class AuthRuleTest {
                     : Optional.empty();
     private final AuthRule rule = new AuthRule(directory);
 
-    /** Runs an action that must throw a GovernanceException and returns it typed. */
+    /**
+     * Runs an action that must throw a GovernanceException and returns it typed.
+     *
+     * @param action callable expected to throw GovernanceException
+     * @return the thrown GovernanceException
+     */
     private static GovernanceException govern(Runnable action) {
         Throwable thrown = catchThrowable(action::run);
         assertThat(thrown).as("expected a GovernanceException").isNotNull();
-        assertThat(thrown).isInstanceOf(GovernanceException.class);
-        return (GovernanceException) thrown;
+        if (thrown instanceof GovernanceException ge) {
+            return ge;
+        }
+        throw new AssertionError("expected GovernanceException but got: " + thrown);
     }
 
     @Test

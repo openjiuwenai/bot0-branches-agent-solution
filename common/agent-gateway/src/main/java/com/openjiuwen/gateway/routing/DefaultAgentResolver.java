@@ -4,11 +4,11 @@
 
 package com.openjiuwen.gateway.routing;
 
+import com.openjiuwen.gateway.governance.GovernanceException;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-
-import com.openjiuwen.gateway.governance.GovernanceException;
 
 /**
  * Resolves the effective logical agent when a create carries no {@code agentId}
@@ -32,6 +32,8 @@ public class DefaultAgentResolver {
     }
 
     /**
+     * Resolve the configured default logical agent id.
+     *
      * @return the configured default agent id
      * @throws GovernanceException 500 {@code DEFAULT_AGENT_UNCONFIGURED} if not configured
      */

@@ -1,7 +1,7 @@
 {
   "port": 30001,
   "host": "127.0.0.1",
-  "sse_format": "raw",
+  "sse_format": "wrapped",
   "result_node": "GXZQAResponseNode",
   "llm_node": "LLMNode",
   "features": {

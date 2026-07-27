@@ -21,7 +21,6 @@ import com.huawei.ascend.edp.config.ActRuleConfig;
 import com.huawei.ascend.edp.config.EdpConfig;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.EdpaTodolist;
-import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.rail.AskUserTemplateRail;
 import com.huawei.ascend.edp.rail.CancelRail;
@@ -34,7 +33,6 @@ import com.huawei.ascend.edp.rail.SandboxInterruptRail;
 import com.huawei.ascend.edp.rail.ScriptsRail;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail.VersatilePassthroughBuffer;
-import com.huawei.ascend.edp.todo.RedisTodoStore;
 import com.huawei.ascend.edp.tools.EdpaBusinessTools;
 
 import com.openjiuwen.core.foundation.tool.Tool;
@@ -345,8 +343,7 @@ public class EdpaAgentEnhancer {
 
         // 增强 Rail（catalog_id 补全 + 依赖闭环 + PLAN_FIRST 守卫），仅当 todolist 非空时注册。
         if (ctx.getDeepAgent() != null && ctx.getEdpaTodolist() != null) {
-            rails.add(new EdpaTodoRail(ctx.getDeepAgent(), ctx.getEdpaTodolist(), ctx.getRedisTodoStore(),
-                    ctx.getActrule()));
+            rails.add(new EdpaTodoRail(ctx.getDeepAgent(), ctx.getEdpaTodolist(), ctx.getActrule()));
         }
 
         // 执行限制 Rail 负责阻断失控循环。
@@ -371,7 +368,7 @@ public class EdpaAgentEnhancer {
                         : null;
         rails.add(new McpInterruptRail(ctx.getEdpConfig(), sharedChannel, ctx.getSkillsDir(),
                 ctx.getSpringBootConfig(), ctx.getAgentName(), ctx.getSysOp(), skillDeployPath,
-                ctx.getDecoratedSandboxClient()));
+                ctx.getDecoratedSandboxClient(), ctx.getScripts()));
         rails.add(
                 new VersatileInterruptRail(ctx.getEdpConfig(),
                         ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,
@@ -384,7 +381,7 @@ public class EdpaAgentEnhancer {
 
         // 思维链事件发射 Rail（todo/tool/think/final_answer 事件流），需要 deepAgent。
         if (ctx.getDeepAgent() != null) {
-            rails.add(new EdpaEventRail(ctx.getDeepAgent(), ctx.getScripts(), ctx.getRedisTodoStore()));
+            rails.add(new EdpaEventRail(ctx.getDeepAgent(), ctx.getScripts()));
         }
 
         // 话术出口 Rail（B 面：首轮/业务话术/出口/合规/Prompt）。
@@ -419,8 +416,6 @@ public class EdpaAgentEnhancer {
      */
 
     private static void registerBusinessRails(DeepAgent agent, EnhanceContext ctx) {
-        // 从 Spring 容器获取 RedisTodoStore（非 Spring 管理类通过静态持有访问）
-        ctx.setRedisTodoStore(RedisConfig.getRedisTodoStore());
         List<AgentRail> rails = buildBusinessRails(ctx);
         for (AgentRail rail : rails) {
             // Rail 注册在底层 BaseAgent 上，ReAct 执行循环会按事件和优先级触发回调。
@@ -482,11 +477,6 @@ public class EdpaAgentEnhancer {
          * 话术配置（注入 EdpaEventRail A 面 + ScriptsRail B 面）。
          */
         private SysScriptsConfig scripts;
-
-        /**
-         * Redis 待办存储（UC-03~UC-11 主路径；null 时 Rail 内部回落文件/缓存）。
-         */
-        private RedisTodoStore redisTodoStore;
 
         /**
          * Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）。
@@ -578,14 +568,6 @@ public class EdpaAgentEnhancer {
 
         public void setScripts(SysScriptsConfig scripts) {
             this.scripts = scripts;
-        }
-
-        public RedisTodoStore getRedisTodoStore() {
-            return redisTodoStore;
-        }
-
-        public void setRedisTodoStore(RedisTodoStore redisTodoStore) {
-            this.redisTodoStore = redisTodoStore;
         }
 
         public String getAgentName() {

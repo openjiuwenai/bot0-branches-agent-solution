@@ -18,9 +18,11 @@ spi_packages:
 # deployable / replaceable and testable with stubs (L2 §1.6, dev-loop D6).
 allowed_dependencies:
   - org.springframework.boot:spring-boot-starter-web
+  - com.openjiuwen:agent-bus-spi     # FEAT-012 BUS path consumes the FEAT-013 forwarding SPI (types/ports only)
 forbidden_dependencies:
   - registry-discovery-center        # RDC is HTTP-only, not a compile dep
-  - agent-bus                        # no in-process bus coupling (FEAT-012 scope)
+  - agent-bus-sdk                    # do NOT pull the heavy bus runtime; BUS path uses the SPI + stubs/SDK-at-deploy
+  - agent-bus-relay
   - agent-runtime
   - agent-core
 deployment_plane: gateway   # Gateway plane (peer to bus_state / runtime)

@@ -49,22 +49,38 @@ public class GovernanceException extends RuntimeException {
         this.code = code;
     }
 
-    /** @return HTTP status to return */
+    /**
+     * Get HTTP status to return.
+     *
+     * @return HTTP status to return
+     */
     public HttpStatusCode httpStatus() {
         return httpStatus;
     }
 
-    /** @return stable error code */
+    /**
+     * Get stable error code.
+     *
+     * @return stable error code
+     */
     public String code() {
         return code;
     }
 
-    /** @return request trace id (set by the audit wrapper; null until then) */
+    /**
+     * Get request trace id.
+     *
+     * @return request trace id (set by the audit wrapper; null until then)
+     */
     public String traceId() {
         return traceId;
     }
 
-    /** Attach the request trace id so the error body and audit share it. */
+    /**
+     * Attach the request trace id so the error body and audit share it.
+     *
+     * @param traceId the request trace id
+     */
     public void setTraceId(String traceId) {
         this.traceId = traceId;
     }

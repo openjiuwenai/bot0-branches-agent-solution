@@ -4,6 +4,14 @@
 
 package com.openjiuwen.gateway.routing;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -14,12 +22,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * 730 default {@link RdcRouteClient}: calls the RDC HTTP API
@@ -76,9 +78,8 @@ public class HttpRdcRouteClient implements RdcRouteClient {
                 }
             }
             return out;
-        } catch (RuntimeException ex) {
-            throw new RouteResolutionException("RDC search failed for " + agentId, ex);
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
+            // G.CON.10 forbids Thread.interrupt(); wrap as route resolution failure.
             throw new RouteResolutionException("RDC search failed for " + agentId, ex);
         }
     }
@@ -88,7 +89,7 @@ public class HttpRdcRouteClient implements RdcRouteClient {
         String body;
         try {
             body = mapper.writeValueAsString(Map.of("routeHandle", routeHandle, "tenantId", tenantId));
-        } catch (Exception ex) {
+        } catch (JsonProcessingException ex) {
             throw new RouteResolutionException("Cannot serialize resolve request", ex);
         }
         HttpRequest req = HttpRequest.newBuilder()
@@ -110,7 +111,8 @@ public class HttpRdcRouteClient implements RdcRouteClient {
             return new ResolvedRoute(endpoint);
         } catch (RouteResolutionException ex) {
             throw ex;
-        } catch (Exception ex) {
+        } catch (IOException | InterruptedException ex) {
+            // G.CON.10 forbids Thread.interrupt(); wrap as route resolution failure.
             throw new RouteResolutionException("RDC resolve failed", ex);
         }
     }

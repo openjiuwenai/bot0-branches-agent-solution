@@ -20,9 +20,11 @@ import java.util.Objects;
  *
  * <p>Backed by a {@link HashMap} keyed by {@code (tenantId, messageId,
  * consumerServiceId)} (the inbox dedup key). Validates every transition through
- * {@link ForwardingStateMachine}. Distinct consumers dedup independently;
- * duplicate arrival returns {@code DUPLICATE_SUPPRESSED} without mutating the
- * stored entry.
+ * {@link ForwardingStateMachine}. Distinct consumers dedup independently. A re-arrival
+ * of an in-flight {@code RECEIVED} row returns {@code RECEIVED} (legal
+ * {@code ARRIVE_REDELIVER} self-loop, row untouched — re-process, at-least-once); a
+ * re-arrival of a terminal row returns {@code DUPLICATE_SUPPRESSED} (suppress, no
+ * re-execution, row untouched).
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/forwarding-outbox-inbox.md §4.2}.
  *
@@ -47,14 +49,22 @@ public final class InMemoryForwardingInbox implements ForwardingInboxPort {
             throw new IllegalArgumentException("consumerServiceId must not be blank");
         }
         Key key = new Key(envelope.tenantId(), envelope.messageId().value(), consumerServiceId);
-        if (store.containsKey(key)) {
-            // duplicate arrival — dedup outcome, do not mutate the stored entry
-            return stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_DUPLICATE);
+        Entry existing = store.get(key);
+        if (existing == null) {
+            ForwardingStatus.Inbox status =
+                    stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_NEW);
+            store.put(key, new Entry(status, nowMillisEpoch, 0L, null));
+            return status;
         }
-        ForwardingStatus.Inbox status =
-                stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_NEW);
-        store.put(key, new Entry(status, nowMillisEpoch, 0L, null));
-        return status;
+        // Re-arrival: an in-flight RECEIVED row (crash between receive and markConsumed) is
+        // re-processed (legal ARRIVE_REDELIVER self-loop, row untouched, at-least-once); a
+        // terminal row is suppressed (DUPLICATE_SUPPRESSED, no re-execution, row untouched).
+        if (existing.status() == ForwardingStatus.Inbox.RECEIVED) {
+            stateMachine.transitInbox(ForwardingStatus.Inbox.RECEIVED,
+                    ForwardingStateMachine.InboxEvent.ARRIVE_REDELIVER);
+            return ForwardingStatus.Inbox.RECEIVED;
+        }
+        return stateMachine.transitInbox(null, ForwardingStateMachine.InboxEvent.ARRIVE_DUPLICATE);
     }
 
     @Override

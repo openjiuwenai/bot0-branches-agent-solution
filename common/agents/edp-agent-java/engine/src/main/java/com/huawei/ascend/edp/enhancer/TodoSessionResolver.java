@@ -16,6 +16,8 @@
 
 package com.huawei.ascend.edp.enhancer;
 
+import com.huawei.ascend.edp.rail.ParseErrorTracker;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
@@ -102,6 +104,10 @@ public final class TodoSessionResolver {
 
     public static String resolveFromInputs(ToolCallInputs inputs) {
         Map<String, Object> args = normalizeArgs(inputs.getToolArgs());
+        if (ParseErrorTracker.hasParseError(args)) {
+            LOGGER.warn("[TodoSessionResolver] LLM output JSON parse failed, toolArgs may be incomplete: err={}",
+                    args.get(ParseErrorTracker.MARKER_KEY));
+        }
         Object value = args.get(FIELD_SESSION_ID);
         if (value != null && !String.valueOf(value).isBlank()) {
             return String.valueOf(value);
@@ -154,9 +160,8 @@ public final class TodoSessionResolver {
                 Map<String, Object> parsed = JSON_MAPPER.readValue(s, Map.class);
                 return parsed != null ? parsed : new LinkedHashMap<>();
             } catch (JsonProcessingException e) {
-                // 降级说明：LLM 传入的 rawArgs 格式异常，返回空 Map 兜底
-                LOGGER.warn("[TodoSessionResolver] normalizeArgs parse failed, returning empty map: err={}",
-                        e.getMessage());
+                ParseErrorTracker.recordFailure("TodoSessionResolver.normalizeArgs", e.getMessage());
+                return ParseErrorTracker.degradedMap(e.getMessage());
             }
         }
         return new LinkedHashMap<>();

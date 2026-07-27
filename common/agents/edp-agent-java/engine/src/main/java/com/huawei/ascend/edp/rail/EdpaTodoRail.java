@@ -20,11 +20,9 @@ import com.huawei.ascend.edp.config.ActRuleConfig;
 import com.huawei.ascend.edp.config.EdpaTodolist;
 import com.huawei.ascend.edp.config.EdpaTodolist.DynamicPath;
 import com.huawei.ascend.edp.config.EdpaTodolist.TodoEntry;
-import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ToolConstants;
 import com.huawei.ascend.edp.enhancer.TodoSessionResolver;
-import com.huawei.ascend.edp.todo.RedisTodoStore;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,9 +34,13 @@ import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.DeepAgentRail;
 import com.openjiuwen.harness.rails.TaskPlanningRail;
+import com.openjiuwen.harness.tools.FileTodoStorage;
+import com.openjiuwen.harness.tools.KvTodoStorage;
 import com.openjiuwen.harness.tools.TodoItem;
 import com.openjiuwen.harness.tools.TodoStatus;
+import com.openjiuwen.harness.tools.TodoStorage;
 import com.openjiuwen.harness.tools.TodoTool;
+import com.openjiuwen.spi.store.BaseKVStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -123,17 +125,15 @@ public class EdpaTodoRail extends DeepAgentRail {
      */
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
-    /**
-     * 持有 DeepAgent 引用，用于在 afterToolCall 中创建 TodoTool（lazy）做dependency closure。
-     */
     private final DeepAgent deepAgent;
 
     private final EdpaTodolist todolist;
 
     /**
-     * Redis Todo 存储（UC-03~UC-11 主路径；可为 null：单测兼容、未启用 Redis 时）。
+     * agent-core TodoStorage（KvTodoStorage 或 FileTodoStorage），lazy 创建。
+     * 替代原 RedisTodoStore，通过 deepAgent.getKvStore() 获取共享 KV 存储。
      */
-    private final RedisTodoStore redisTodoStore;
+    private volatile TodoStorage todoStorage;
 
     /**
      * 行为治理配置，提供 max_subtasks 等执行约束。
@@ -146,18 +146,12 @@ public class EdpaTodoRail extends DeepAgentRail {
     private volatile TodoTool todoTool;
 
     public EdpaTodoRail(DeepAgent deepAgent, EdpaTodolist todolist) {
-        this(deepAgent, todolist, null, null);
+        this(deepAgent, todolist, null);
     }
 
-    public EdpaTodoRail(DeepAgent deepAgent, EdpaTodolist todolist, RedisTodoStore redisTodoStore) {
-        this(deepAgent, todolist, redisTodoStore, null);
-    }
-
-    public EdpaTodoRail(DeepAgent deepAgent, EdpaTodolist todolist, RedisTodoStore redisTodoStore,
-            ActRuleConfig actrule) {
+    public EdpaTodoRail(DeepAgent deepAgent, EdpaTodolist todolist, ActRuleConfig actrule) {
         this.deepAgent = deepAgent;
         this.todolist = todolist;
-        this.redisTodoStore = redisTodoStore;
         this.actrule = actrule;
     }
 
@@ -264,9 +258,14 @@ public class EdpaTodoRail extends DeepAgentRail {
         String realSid = TodoSessionResolver
                 .sanitizeSessionId(ctx.getSession() != null ? ctx.getSession().getSessionId() : null);
         boolean sidChanged = injectRealSessionId(args, realSid);
+
+        // 参数兼容：LLM 有时用 updates[].task_id 而非 todos[].id，
+        // Core TodoTool 只处理 todos，需将 updates 转换为 todos 格式。
+        boolean normalized = normalizeTodoModifyArgs(inputs, args, toolName);
+
         boolean enriched = enrichAndValidateTasks(inputs, args, toolName, ctx);
 
-        if (sidChanged || enriched) {
+        if (sidChanged || enriched || normalized) {
             // 传 Map：railedExecuteSingleToolCall 会序列化为 toolCall.arguments 供 Core 执行。
             inputs.setToolArgs(args);
             if (sidChanged) {
@@ -293,6 +292,43 @@ public class EdpaTodoRail extends DeepAgentRail {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Normalize todo_modify args: convert updates[].task_id to todos[].id format.
+     *
+     * <p>LLM sometimes uses updates[].task_id instead of todos[].id. Core TodoTool only
+     * processes todos, so we need to convert updates to todos format. Also remaps
+     * task_id key to id within each item.</p>
+     *
+     * @param inputs   the tool call inputs
+     * @param args     the normalized tool arguments (mutated in place)
+     * @param toolName the tool name
+     * @return true if args were normalized (updates→todos conversion happened)
+     */
+    private boolean normalizeTodoModifyArgs(ToolCallInputs inputs, Map<String, Object> args, String toolName) {
+        if (!TOOL_TODO_MODIFY.equals(toolName) || !args.containsKey("updates") || args.containsKey("todos")) {
+            return false;
+        }
+        Object updatesObj = args.get("updates");
+        if (!(updatesObj instanceof List<?> updates)) {
+            return false;
+        }
+        List<Map<String, Object>> todos = new ArrayList<>();
+        for (Object u : updates) {
+            if (u instanceof Map<?, ?> raw) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> e : raw.entrySet()) {
+                    String key = "task_id".equals(e.getKey()) ? "id" : String.valueOf(e.getKey());
+                    m.put(key, e.getValue());
+                }
+                todos.add(m);
+            }
+        }
+        args.put("todos", todos);
+        inputs.setToolArgs(args);
+        LOGGER.info("[EDPA-DIAG] NORMALIZE tool=todo_modify updates->todos items={}", todos.size());
+        return true;
     }
 
     /**
@@ -439,40 +475,50 @@ public class EdpaTodoRail extends DeepAgentRail {
         }
         String rawSid = ctx.getSession().getSessionId();
 
-        // ★ UC-09：Redis 主路径（仅 EXISTS，不续期 TTL）
-        RedisTodoStore activeStore = getActiveRedisTodoStore();
-        if (activeStore != null) {
-            return activeStore.exists(rawSid);
-        }
-        try {
-            TodoTool tool = getTodoTool().orElse(null);
-            if (tool != null) {
-                String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
-                List<TodoItem> todos = tool.load(sid);
+        // ★ agent-core TodoStorage：load 后检查非空（TodoStorage 无 exists 方法）
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isPresent()) {
+            String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
+            try {
+                List<TodoItem> todos = storageOpt.get().load(sid);
                 return todos != null && !todos.isEmpty();
+            } catch (IOException | RuntimeException e) {
+                LOGGER.debug("hasPlannedTodos storage load failed: {}", e.getMessage());
             }
-        } catch (IOException | RuntimeException e) {
-            LOGGER.debug("hasPlannedTodos check failed: {}", e.getMessage());
         }
 
-        // 兜底：TodoTool 不可用时从 TaskPlanningRail 缓存读
+        // 兜底：TodoStorage 不可用时从 TaskPlanningRail 缓存读
         List<TodoItem> cached = loadFromTaskPlanningCache(rawSid);
         return cached != null && !cached.isEmpty();
     }
 
     /**
-     * ★ 启动竞态修复：优先使用构造注入的 redisTodoStore，为 null 时动态从 RedisConfig 静态持有者获取。
-     * <p>原因：Rail 注册时机早于 Spring @Bean redisTodoStore 初始化，
-     * 导致构造参数传入的 redisTodoStore 字段始终为 null。</p>
+     * lazy 创建 TodoStorage，通过 deepAgent.getKvStore() 获取共享 KV 存储。
+     * kvStore 为空时回落到 FileTodoStorage。
      *
-     * @return the result
+     * @return TodoStorage 实例的 Optional，workspace 不可用时返回 Optional.empty()
      */
-
-    private RedisTodoStore getActiveRedisTodoStore() {
-        if (this.redisTodoStore != null) {
-            return this.redisTodoStore;
+    private Optional<TodoStorage> getTodoStorage() {
+        if (todoStorage != null) {
+            return Optional.of(todoStorage);
         }
-        return RedisConfig.getRedisTodoStore();
+        try {
+            BaseKVStore kvStore = deepAgent.getKvStore();
+            if (kvStore != null) {
+                todoStorage = new KvTodoStorage(kvStore);
+                return Optional.of(todoStorage);
+            }
+        } catch (IllegalStateException | NullPointerException e) {
+            LOGGER.debug("getTodoStorage: kvStore unavailable: {}", e.getMessage());
+        }
+        try {
+            java.nio.file.Path todoDir = deepAgent.getWorkspace().root().resolve(".todo");
+            todoStorage = new FileTodoStorage(todoDir);
+            return Optional.of(todoStorage);
+        } catch (IllegalStateException | NullPointerException e) {
+            LOGGER.warn("getTodoStorage: workspace unavailable: {}", e.getMessage());
+        }
+        return Optional.empty();
     }
 
     /**
@@ -502,9 +548,8 @@ public class EdpaTodoRail extends DeepAgentRail {
      * <p>todo_create 执行后所有 todo 的 UUID 已生成，从 {@code meta_data.catalog_id} 建 anchors，
      * 查 catalog 的 depends_on 替换成 UUID 写回 save。todo_modify 时不重推（保留 LLM 的 cancel 等改动）。</p>
      *
-     * <p>存储路径选择（方案 A）：Redis 启用时，dependency closure的 load/save 全部走 Redis，
-     * 不再调用 TodoTool 的文件 load/save，消除 EDPA 自身的文件写入路径，避免并发写损坏与文件堆积。
-     * Redis 降级时回落文件路径（兼容单测、旧部署）。</p>
+     * <p>使用 agent-core 的 TodoStorage 统一存储（KvTodoStorage 走 Redis，FileTodoStorage 走文件），
+     * 与 Core TaskPlanningRail 共享同一存储，无需 dual-path sync。</p>
      *
      * @param ctx the ctx value
      */
@@ -525,123 +570,19 @@ public class EdpaTodoRail extends DeepAgentRail {
             return;
         }
 
-        String rawSid = ctx.getSession() != null ? ctx.getSession().getSessionId() : null;
-        RedisTodoStore activeStore = getActiveRedisTodoStore();
-        TodoHandlerContext hc = new TodoHandlerContext(ctx, inputs, rawSid, toolName, isCreate, isModify);
-        if (activeStore != null && rawSid != null && !rawSid.isBlank()) {
-            handleRedisPath(hc);
-            return;
-        }
-        handleFilePath(hc);
-    }
-
-    /**
-     * 传递给 handleRedisPath / handleFilePath 的公共参数上下文，避免方法参数超过 5 个（G.MET.01）。
-     */
-    private record TodoHandlerContext(AgentCallbackContext ctx, ToolCallInputs inputs,
-            String rawSid, String toolName, boolean isCreate, boolean isModify) {
-    }
-
-    /**
-     * Redis path: sync file->Redis, apply dependency closure, check UC-10.
-     *
-     * @param hc the todo handler context value
-     */
-    private void handleRedisPath(TodoHandlerContext hc) {
-        AgentCallbackContext ctx = hc.ctx();
-        ToolCallInputs inputs = hc.inputs();
-        String rawSid = hc.rawSid();
-        String toolName = hc.toolName();
-        boolean isCreate = hc.isCreate();
-        boolean isModify = hc.isModify();
-        RedisTodoStore activeStore = getActiveRedisTodoStore();
-        try {
-            List<TodoItem> todos = null;
-            TodoTool tool = getTodoTool().orElse(null);
-            if (tool != null) {
-                String fileSid = resolveSessionId(inputs);
-                todos = tool.load(fileSid);
-                if (todos != null && !todos.isEmpty()) {
-                    activeStore.save(rawSid, todos);
-                    LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(REDIS) todo_{} file→Redis sync {} entries, sid={}", toolName,
-                            todos.size(), rawSid);
-                }
-            }
-            // fallback: read from Redis if file had no data
-            if (todos == null || todos.isEmpty()) {
-                todos = activeStore.load(rawSid);
-            }
-            if (todos == null || todos.isEmpty()) {
-                LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(REDIS) todo_{} after todos empty, sid={}, skip", toolName,
-                        rawSid);
-                if (isModify) {
-                    injectFinalAnswerDirective(ctx, rawSid, todos);
-                }
-                return;
-            }
-            if (isCreate) {
-                applyRedisDependencyClosure(activeStore, rawSid, inputs, todos);
-            }
+        String sessionId = resolveSessionId(inputs);
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isEmpty()) {
             if (isModify) {
-                injectFinalAnswerDirective(ctx, rawSid, todos);
-            }
-        } catch (IOException | RuntimeException e) {
-            LOGGER.error("[EDPA-DIAG] DEP_CLOSURE(REDIS) dependency closure failed: {}", e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Apply dependency closure on Redis path: build anchors, resolve deps, save back.
-     *
-     * @param activeStore the activeStore value
-     * @param rawSid the rawSid value
-     * @param inputs the inputs value
-     * @param todos the todos value
-     * @throws IOException the io exception
-     */
-    private void applyRedisDependencyClosure(RedisTodoStore activeStore, String rawSid,
-            ToolCallInputs inputs, List<TodoItem> todos) throws IOException {
-        Map<String, String> anchors = buildAnchors(todos);
-        Map<String, List<String>> depMap = resolveDependencyMap(anchors, todolist);
-        boolean changed = applyDependencies(todos, depMap);
-        LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(REDIS) sid={}, todos={}, anchors={}, depChanged={}, depMap={}",
-                rawSid, todos.size(), anchors, changed, depMap);
-        if (!changed) {
-            return;
-        }
-        activeStore.save(rawSid, todos);
-        TodoTool tool = getTodoTool().orElse(null);
-        if (tool != null) {
-            tool.save(resolveSessionId(inputs), todos);
-        }
-        LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(REDIS) deps written back to Redis+file "
-                + "(catalog_id->UUID replacement complete)");
-    }
-
-    /**
-     * File fallback path: load/save via TodoTool when Redis is unavailable.
-     *
-     * @param hc the todo handler context value
-     */
-    private void handleFilePath(TodoHandlerContext hc) {
-        AgentCallbackContext ctx = hc.ctx();
-        ToolCallInputs inputs = hc.inputs();
-        String rawSid = hc.rawSid();
-        String toolName = hc.toolName();
-        boolean isCreate = hc.isCreate();
-        boolean isModify = hc.isModify();
-        TodoTool tool = getTodoTool().orElse(null);
-        if (tool == null) {
-            if (isModify && getActiveRedisTodoStore() != null) {
                 injectFinalAnswerDirective(ctx);
             }
             return;
         }
-        String sessionId = resolveSessionId(inputs);
+        TodoStorage storage = storageOpt.get();
         try {
-            List<TodoItem> todos = tool.load(sessionId);
+            List<TodoItem> todos = storage.load(sessionId);
             if (todos == null || todos.isEmpty()) {
-                LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(FILE) todo_{} after todos empty, sessionId={}, skip", toolName,
+                LOGGER.info("[EDPA-DIAG] DEP_CLOSURE todo_{} after todos empty, sessionId={}, skip", toolName,
                         sessionId);
                 return;
             }
@@ -649,72 +590,59 @@ public class EdpaTodoRail extends DeepAgentRail {
                 Map<String, String> anchors = buildAnchors(todos);
                 Map<String, List<String>> depMap = resolveDependencyMap(anchors, todolist);
                 boolean changed = applyDependencies(todos, depMap);
-                LOGGER.info(
-                        "[EDPA-DIAG] DEP_CLOSURE(FILE) sessionId={}, todos={}, anchors={}, depChanged={}, depMap={}",
+                LOGGER.info("[EDPA-DIAG] DEP_CLOSURE sessionId={}, todos={}, anchors={}, depChanged={}, depMap={}",
                         sessionId, todos.size(), anchors, changed, depMap);
                 if (changed) {
-                    tool.save(sessionId, todos);
-                    LOGGER.info("[EDPA-DIAG] DEP_CLOSURE(FILE) deps written back to save "
+                    storage.save(sessionId, todos);
+                    LOGGER.info("[EDPA-DIAG] DEP_CLOSURE deps written back to storage "
                             + "(catalog_id->UUID replacement complete)");
                 }
             }
-            RedisTodoStore syncStore = getActiveRedisTodoStore();
-            if (syncStore != null && rawSid != null && !rawSid.isBlank()) {
-                List<TodoItem> latest = tool.load(sessionId);
-                syncStore.save(rawSid, latest != null ? latest : new ArrayList<>());
-            }
             if (isModify) {
-                injectFinalAnswerDirective(ctx);
+                injectFinalAnswerDirective(ctx, sessionId, todos);
             }
         } catch (IOException | RuntimeException e) {
-            LOGGER.error("[EDPA-DIAG] DEP_CLOSURE(FILE) dependency closure failed: {}", e.getMessage(), e);
+            LOGGER.error("[EDPA-DIAG] DEP_CLOSURE dependency closure failed: {}", e.getMessage(), e);
         }
     }
 
     /**
      * UC-10：检测全部任务完成后注入 final_answer 指令。
      *
-     * <p>调用时机：afterToolCall 中 todo_modify 后触发。
-     * 从 Redis 读取 todos，如果全部 COMPLETED/DONE，pushSteering 引导 LLM 输出 final_answer。</p>
-     *
-     * <p>Redis 降级时 load() 返回空列表，不注入指令，不影响会话继续执行。</p>
+     * <p>调用时机：afterToolCall 中 todo_modify 后触发（TodoStorage 不可用时的兜底重载）。
+     * 从 TodoStorage 读取 todos，如果全部 COMPLETED/DONE，pushSteering 引导 LLM 输出 final_answer。</p>
      *
      * @param ctx the ctx value
      */
-
     private void injectFinalAnswerDirective(AgentCallbackContext ctx) {
-        RedisTodoStore store = getActiveRedisTodoStore();
-        if (store == null) {
-            return;
-        }
         String rawSid = ctx.getSession() != null ? ctx.getSession().getSessionId() : null;
         if (rawSid == null || rawSid.isBlank()) {
             return;
         }
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isEmpty()) {
+            return;
+        }
+        String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
         try {
-            List<TodoItem> todos = store.load(rawSid);
-            injectFinalAnswerDirective(ctx, rawSid, todos);
-        } catch (IllegalStateException e) {
-            LOGGER.warn("[EDPA-DIAG] UC10_CHECK_FAILED session={} error={}", rawSid, e.getMessage());
+            List<TodoItem> todos = storageOpt.get().load(sid);
+            injectFinalAnswerDirective(ctx, sid, todos);
+        } catch (IOException | IllegalStateException e) {
+            LOGGER.warn("[EDPA-DIAG] UC10_CHECK_FAILED session={} error={}", sid, e.getMessage());
         }
     }
 
     /**
-     * UC-10 重载：使用预读的 todos，避免 afterToolCall Redis 路径重复 load。
+     * UC-10 重载：使用预读的 todos，避免 afterToolCall 重复 load。
      *
      * @param ctx  回调上下文
-     * @param rawSid 原始 sessionId
+     * @param sessionId 会话 ID（已转义）
      * @param todos 预读的 todos（可为 null/空）
-     *
      */
-
-    private void injectFinalAnswerDirective(AgentCallbackContext ctx, String rawSid, List<TodoItem> todos) {
-        if (getActiveRedisTodoStore() == null || rawSid == null || rawSid.isBlank()) {
-            return;
-        }
+    private void injectFinalAnswerDirective(AgentCallbackContext ctx, String sessionId, List<TodoItem> todos) {
         try {
             if (todos == null || todos.isEmpty()) {
-                LOGGER.info("[EDPA-DIAG] UC10_CHECK session={} todos=empty -> skip inject", rawSid);
+                LOGGER.info("[EDPA-DIAG] UC10_CHECK session={} todos=empty -> skip inject", sessionId);
                 return;
             }
             boolean allCompleted = todos.stream().allMatch(EdpaTodoRail::isCompletedLike);
@@ -725,15 +653,15 @@ public class EdpaTodoRail extends DeepAgentRail {
                 LOGGER.info(
                         "[EDPA-DIAG] UC10_ALL_COMPLETED session={} todos={} statuses=[{}] "
                                 + "-> inject final_answer directive",
-                        rawSid, todos.size(), statusSummary);
+                        sessionId, todos.size(), statusSummary);
                 ctx.pushSteering("所有任务已完成。请直接输出最终回答（final_answer），"
                         + "总结执行结果，不要再调用任何工具。");
             } else {
                 LOGGER.info("[EDPA-DIAG] UC10_NOT_ALL_COMPLETED session={} todos={} statuses=[{}] -> skip inject",
-                        rawSid, todos.size(), statusSummary);
+                        sessionId, todos.size(), statusSummary);
             }
         } catch (IllegalStateException e) {
-            LOGGER.warn("[EDPA-DIAG] UC10_CHECK_FAILED session={} error={}", rawSid, e.getMessage());
+            LOGGER.warn("[EDPA-DIAG] UC10_CHECK_FAILED session={} error={}", sessionId, e.getMessage());
         }
     }
 
@@ -742,7 +670,7 @@ public class EdpaTodoRail extends DeepAgentRail {
             return false;
         }
         TodoStatus s = todo.getStatus();
-        return s == TodoStatus.COMPLETED || s == TodoStatus.DONE;
+        return s == TodoStatus.COMPLETED || s == TodoStatus.DONE || s == TodoStatus.CANCELLED;
     }
 
     /**
@@ -1079,73 +1007,90 @@ public class EdpaTodoRail extends DeepAgentRail {
     /**
      * 动态注入当前session的活跃todo状态。
      *
-     * <p>每次工具调用前从Redis加载todo列表，通过pushSteering注入给LLM。
+     * <p>每次工具调用前从 TodoStorage 加载todo列表，通过pushSteering注入给LLM。
      * 使LLM看到已有任务列表，自然不会重复调用todo_create。</p>
      *
      * <p>频率控制：用签名去重（todoId:status拼接），状态没变化时不重复注入。</p>
      *
      * @param ctx the ctx value
      */
-
     private void injectActiveTodoStatus(AgentCallbackContext ctx) {
-        // ★ 启动竞态修复：构造时 redisTodoStore 可能为 null（Rail 注册早于 Redis Bean 初始化），
-        // 动态从 RedisConfig 静态持有者获取最新实例。
-        RedisTodoStore store = getActiveRedisTodoStore();
-        if (store == null) {
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isEmpty()) {
             return;
         }
         String rawSid = ctx.getSession() != null ? ctx.getSession().getSessionId() : null;
         if (rawSid == null || rawSid.isBlank()) {
             return;
         }
+        String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
         try {
-            List<TodoItem> todos = store.load(rawSid);
+            List<TodoItem> todos = storageOpt.get().load(sid);
             if (todos == null || todos.isEmpty()) {
                 return;
             }
-
-            // 签名去重：状态没变就不重复注入
-            String signature = todos.stream()
-                    .map(t -> t.getId() + ":" + (t.getStatus() != null ? t.getStatus().name() : "null"))
-                    .reduce("", (a, b) -> a + "," + b);
-            String sigKey = "_edp_todo_sig";
-            Object prevSig = ctx.getExtra().get(sigKey);
-            if (signature.equals(prevSig)) {
+            if (isSignatureUnchanged(ctx, todos)) {
                 return;
             }
-            ctx.getExtra().put(sigKey, signature);
-
-            // 构建todo状态摘要
-            StringBuilder sb = new StringBuilder("【当前任务状态】\n");
-            for (TodoItem t : todos) {
-                String status = t.getStatus() != null ? t.getStatus().name() : "UNKNOWN";
-                String mark;
-                if (isCompletedLike(t)) {
-                    mark = "✓";
-                } else if ("IN_PROGRESS".equals(status)) {
-                    mark = "▶";
-                } else {
-                    mark = "○";
-                }
-                sb.append(mark).append(" ").append(t.getContent() != null ? t.getContent() : t.getId());
-                if (isCompletedLike(t)) {
-                    sb.append(" (已完成，不可修改)");
-                }
-                sb.append("\n");
-            }
-
-            long active = todos.stream().filter(t -> !isCompletedLike(t) && t.getStatus() != TodoStatus.CANCELLED)
-                    .count();
-            if (active > 0) {
-                sb.append("请使用 todo_modify 推进任务，不要重新 todo_create。");
-            }
-
-            ctx.pushSteering(sb.toString());
-            LOGGER.info("[EDPA-TODO-INJECT] injected active todo status, sid={}, todos={}, active={}", rawSid,
+            String summary = buildTodoStatusSummary(todos);
+            ctx.pushSteering(summary);
+            long active = todos.stream().filter(t -> !isCompletedLike(t)).count();
+            LOGGER.info("[EDPA-TODO-INJECT] injected active todo status, sid={}, todos={}, active={}", sid,
                     todos.size(), active);
-        } catch (IllegalStateException e) {
-            LOGGER.warn("[EDPA-TODO-INJECT] failed, sid={}, error={}", rawSid, e.getMessage());
+        } catch (IOException | IllegalStateException e) {
+            LOGGER.warn("[EDPA-TODO-INJECT] failed, sid={}, error={}", sid, e.getMessage());
         }
+    }
+
+    /**
+     * 签名去重：todoId:status 拼接，状态没变化时不重复注入。
+     *
+     * @param ctx   回调上下文
+     * @param todos 当前 todo 列表
+     * @return true 表示签名未变化（跳过注入）
+     */
+    private boolean isSignatureUnchanged(AgentCallbackContext ctx, List<TodoItem> todos) {
+        String signature = todos.stream()
+                .map(t -> t.getId() + ":" + (t.getStatus() != null ? t.getStatus().name() : "null"))
+                .reduce("", (a, b) -> a + "," + b);
+        String sigKey = "_edp_todo_sig";
+        Object prevSig = ctx.getExtra().get(sigKey);
+        if (signature.equals(prevSig)) {
+            return true;
+        }
+        ctx.getExtra().put(sigKey, signature);
+        return false;
+    }
+
+    /**
+     * 构建 todo 状态摘要文本。
+     *
+     * @param todos 当前 todo 列表
+     * @return 摘要文本
+     */
+    private String buildTodoStatusSummary(List<TodoItem> todos) {
+        StringBuilder sb = new StringBuilder("【当前任务状态】\n");
+        for (TodoItem t : todos) {
+            String status = t.getStatus() != null ? t.getStatus().name() : "UNKNOWN";
+            String mark;
+            if (isCompletedLike(t)) {
+                mark = "✓";
+            } else if ("IN_PROGRESS".equals(status)) {
+                mark = "▶";
+            } else {
+                mark = "○";
+            }
+            sb.append(mark).append(" ").append(t.getContent() != null ? t.getContent() : t.getId());
+            if (isCompletedLike(t)) {
+                sb.append(" (已完成，不可修改)");
+            }
+            sb.append("\n");
+        }
+        long active = todos.stream().filter(t -> !isCompletedLike(t)).count();
+        if (active > 0) {
+            sb.append("请使用 todo_modify 推进任务，不要重新 todo_create。");
+        }
+        return sb.toString();
     }
 }
 

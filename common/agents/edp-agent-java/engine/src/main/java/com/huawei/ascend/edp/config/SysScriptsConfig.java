@@ -135,58 +135,123 @@ public class SysScriptsConfig {
         }
 
         Path filePath = Path.of(configPath).toAbsolutePath().normalize();
-        boolean loadedFromFile = false;
 
         // 1. 尝试从文件系统加载
         if (Files.exists(filePath)) {
             try {
                 loadFromFile(filePath);
                 this.loaded = true;
-                loadedFromFile = true;
                 LOGGER.info("SysScriptsConfig loaded from file: {}", filePath);
             } catch (IOException | RuntimeException e) {
                 throw new IllegalStateException("加载场景话术配置失败: " + filePath, e);
             }
+            return;
         }
 
         // 2. 文件系统路径不存在 → 尝试从 classpath 加载
-        if (!loadedFromFile) {
-            // 从完整路径中提取相对路径
-            // （如 src/main/resources/governance/scriptconfig.yaml -> governance/scriptconfig.yaml）
-            String relativePath = extractClasspathResource(configPath);
-
-            // 尝试多个可能的 classpath 资源路径
-            String[] resourcePaths = {"BOOT-INF/classes/" + relativePath, relativePath, "classes/" + relativePath};
-
-            ClassLoader cl = Thread.currentThread().getContextClassLoader();
-            if (cl == null) {
-                cl = getClass().getClassLoader();
-            }
-
-            for (String resourcePath : resourcePaths) {
-                try (InputStream is = cl.getResourceAsStream(resourcePath)) {
-                    if (is != null) {
-                        Map<String, Object> parsed = YAML_MAPPER.readValue(is, Map.class);
-                        collectQueryPatternsSource(parsed);
-                        parseInterruptSource(parsed);
-                        flatten("", parsed);
-                        aliasCommonKeys();
-                        aliasGovernancePrefixes();
-                        inferScriptKeys(templates, scriptKeysMap);
-                        this.loaded = true;
-                        LOGGER.info("SysScriptsConfig loaded from classpath: {}", resourcePath);
-                        loadedFromFile = true;
-                        break;
-                    }
-                } catch (IOException e) {
-                    LOGGER.debug("Failed to load from classpath {}: {}", resourcePath, e.getMessage());
-                }
-            }
-        }
-
-        if (!loadedFromFile) {
+        boolean loadedFromClasspath = loadFromClasspathFallback(configPath);
+        if (!loadedFromClasspath) {
             throw new IllegalStateException("话术配置不存在: " + configPath
                     + "（文件系统路径不存在，classpath 中也未找到）");
+        }
+    }
+
+    /**
+     * 从 classpath 尝试加载配置（load 方法的回退逻辑）。
+     *
+     * @param configPath 配置文件路径
+     * @return true 表示成功从 classpath 加载
+     */
+    private boolean loadFromClasspathFallback(String configPath) {
+        String relativePath = extractClasspathResource(configPath);
+        String[] resourcePaths = {"BOOT-INF/classes/" + relativePath, relativePath, "classes/" + relativePath};
+
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = getClass().getClassLoader();
+        }
+
+        for (String resourcePath : resourcePaths) {
+            try (InputStream is = cl.getResourceAsStream(resourcePath)) {
+                if (is != null) {
+                    boolean success = parseAndMergeFromInputStream(is, resourcePath);
+                    if (success) {
+                        this.loaded = true;
+                        LOGGER.info("SysScriptsConfig loaded from classpath: {}", resourcePath);
+                        return true;
+                    }
+                }
+            } catch (IOException e) {
+                LOGGER.debug("Failed to load from classpath {}: {}", resourcePath, e.getMessage());
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 从classpath加载scriptconfig.yaml（引擎 JAR 内的默认话术）。
+     *
+     * <p>适用于集成态：当文件系统路径不存在时，从引擎 JAR 内加载框架级默认话术。
+     * 加载策略与 {@link #load(String)} 的 classpath 回退逻辑一致，
+     * 但不抛出异常，仅在 classpath 中无可用资源时返回 false。</p>
+     *
+     * @return true 表示成功从 classpath 加载，false 表示 classpath 中无可用资源
+     */
+
+    public boolean loadFromClasspath() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = SysScriptsConfig.class.getClassLoader();
+        }
+
+        String[] resourcePaths = {
+            "BOOT-INF/classes/governance/scriptconfig.yaml",
+            "governance/scriptconfig.yaml",
+            "classes/governance/scriptconfig.yaml"
+        };
+
+        for (String resourcePath : resourcePaths) {
+            try (InputStream is = cl.getResourceAsStream(resourcePath)) {
+                if (is != null) {
+                    boolean success = parseAndMergeFromInputStream(is, resourcePath);
+                    if (success) {
+                        LOGGER.info("Loaded scriptconfig from classpath: {}", resourcePath);
+                        return true;
+                    }
+                }
+            } catch (IOException e) {
+                LOGGER.debug("Failed to load scriptconfig from classpath {}: {}", resourcePath, e.getMessage());
+            }
+        }
+        LOGGER.info("scriptconfig not found in classpath, using defaults");
+        return false;
+    }
+
+    /**
+     * 从 InputStream 解析 YAML 并合并到当前话术配置（内部方法）。
+     *
+     * <p>复用 {@link #load(String)} 和 {@link #loadFromClasspath()} 的解析逻辑，
+     * 避免代码重复，保持单一解析入口。</p>
+     *
+     * @param is InputStream（由调用方负责关闭）
+     * @param resourcePath 资源路径（用于日志）
+     * @return true 表示成功解析并合并
+     */
+
+    private boolean parseAndMergeFromInputStream(InputStream is, String resourcePath) {
+        try {
+            Map<String, Object> parsed = YAML_MAPPER.readValue(is, Map.class);
+            collectQueryPatternsSource(parsed);
+            parseInterruptSource(parsed);
+            flatten("", parsed);
+            aliasCommonKeys();
+            aliasGovernancePrefixes();
+            inferScriptKeys(templates, scriptKeysMap);
+            LOGGER.info("SysScriptsConfig loaded from classpath: {}", resourcePath);
+            return true;
+        } catch (IOException e) {
+            LOGGER.debug("Failed to parse scriptconfig from classpath {}: {}", resourcePath, e.getMessage());
+            return false;
         }
     }
 
