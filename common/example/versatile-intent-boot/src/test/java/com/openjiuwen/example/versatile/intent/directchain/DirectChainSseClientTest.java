@@ -1,24 +1,38 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.directchain;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.sun.net.httpserver.HttpServer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * {@link DirectChainSseClient} POST body 与 SSE data: 行流式读取验证。
+ *
+ * @since 0.1.0
+ */
 class DirectChainSseClientTest {
     private HttpServer server;
 
     @AfterEach
-    void stop() { if (server != null) server.stop(0); }
+    void stop() {
+        if (server != null) {
+            server.stop(0);
+        }
+    }
 
     @Test
     void postsBodyAndStreamsDataLines() throws Exception {
@@ -30,9 +44,9 @@ class DirectChainSseClientTest {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write("data: {\"a\":1}\n\n".getBytes());
-                os.write("\n".getBytes()); // blank line skipped
-                os.write("data: {\"b\":2}\n\n".getBytes());
+                os.write("data: {\"a\":1}\n\n".getBytes(StandardCharsets.UTF_8));
+                os.write("\n".getBytes(StandardCharsets.UTF_8)); // blank line skipped
+                os.write("data: {\"b\":2}\n\n".getBytes(StandardCharsets.UTF_8));
             }
         });
         server.start();

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.directchain;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,7 +22,6 @@ import java.util.Map;
  * 对每个非空行（含 "data:" 前缀）回调 LineConsumer。供直链 handler 与原始透传 handler 共用。
  */
 final class DirectChainSseClient {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -28,6 +31,13 @@ final class DirectChainSseClient {
 
     @FunctionalInterface
     interface LineConsumer {
+        /**
+         * 处理一行 SSE 响应。
+         *
+         * @param line 非空的 SSE 行（含 "data:" 前缀）
+         * @throws IOException 读取或处理失败
+         * @throws InterruptedException 线程被中断
+         */
         void accept(String line) throws IOException, InterruptedException;
     }
 
@@ -43,9 +53,7 @@ final class DirectChainSseClient {
         HttpResponse<java.io.InputStream> response = httpClient.send(builder.build(),
                 HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            try (var is = response.body()) {
-                // close the InputStream on the error path before throwing
-            }
+            response.body().close();
             throw new IOException("Direct-chain HTTP " + response.statusCode());
         }
         try (BufferedReader reader = new BufferedReader(

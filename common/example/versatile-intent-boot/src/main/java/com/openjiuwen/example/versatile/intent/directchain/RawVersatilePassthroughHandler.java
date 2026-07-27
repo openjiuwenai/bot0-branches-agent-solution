@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.directchain;
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -6,8 +10,10 @@ import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,10 +25,12 @@ import java.util.concurrent.CancellationException;
  * 业务终端 handler：调用自身 versatile mock（url-template），把业务返回的每条 SSE
  * 事件 JSON 原样解析成 Map，以 TYPE_CHUNK 透传给 observer——不做意图识别、不产 a2a_delegate、
  * 不折叠成答案。用于直链场景下让业务的原始结构化 SSE 经 /v1/query 流式端点到达 client。
+ *
+ * @since 0.1.0
  */
 public class RawVersatilePassthroughHandler implements AgentHandler {
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private final VersatileProperties properties;
     private final DirectChainSseClient client;
 
@@ -48,7 +56,7 @@ public class RawVersatilePassthroughHandler implements AgentHandler {
             observer.onComplete();
         } catch (CancellationException ignored) {
             observer.onComplete();
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             observer.onError(e);
         }
     }
@@ -59,7 +67,7 @@ public class RawVersatilePassthroughHandler implements AgentHandler {
         try {
             client.postStream(resolveUrl(request), versatileBody(request), Map.of(),
                     properties.getTimeout(), line -> parseLine(line).ifPresent(collected::add));
-        } catch (Exception e) {
+        } catch (IOException | InterruptedException e) {
             throw new IllegalStateException("Raw passthrough failed", e);
         }
         Map<String, Object> result = new LinkedHashMap<>();
@@ -87,7 +95,7 @@ public class RawVersatilePassthroughHandler implements AgentHandler {
         }
         try {
             return Optional.of(MAPPER.readValue(payload, Object.class));
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return Optional.empty();
         }
     }

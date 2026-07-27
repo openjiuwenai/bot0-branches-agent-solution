@@ -113,7 +113,7 @@ public class MockA2AGatewayController {
      * {@link #ROUTING} defaults.
      */
     public MockA2AGatewayController() {
-        this.routing = ROUTING;
+        this(ROUTING);
     }
 
     /**
@@ -216,7 +216,6 @@ public class MockA2AGatewayController {
                 }
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             throw new IOException("tunnel interrupted", e);
         }
     }

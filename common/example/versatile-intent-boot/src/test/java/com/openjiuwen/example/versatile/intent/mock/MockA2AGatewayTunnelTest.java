@@ -1,25 +1,40 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.mock;
-
-import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.http.MediaType;
-
-import java.net.InetSocketAddress;
-import java.io.OutputStream;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sun.net.httpserver.HttpServer;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * {@link MockA2AGatewayController#tunnel} 直链隧道透传原始 SSE data: 行验证。
+ *
+ * @since 0.1.0
+ */
 class MockA2AGatewayTunnelTest {
     private HttpServer target;
     private MockMvc mockMvc;
 
     @AfterEach
-    void stop() { if (target != null) target.stop(0); }
+    void stop() {
+        if (target != null) {
+            target.stop(0);
+        }
+    }
 
     @Test
     void tunnelsRawDataLinesForDirectChainHeader() throws Exception {
@@ -29,9 +44,9 @@ class MockA2AGatewayTunnelTest {
             String sse = "data: {\"custom_rsp_data\":{\"data\":{\"text\":\"ok\"}}}\n\n";
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
-            OutputStream os = exchange.getResponseBody();
-            os.write(sse.getBytes());
-            os.close();
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(sse.getBytes(StandardCharsets.UTF_8));
+            }
         });
         target.start();
         int port = target.getAddress().getPort();
