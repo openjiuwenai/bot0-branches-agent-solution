@@ -150,20 +150,26 @@ class TestSuccessResponse:
         assert resp.status_code == 200
 
 
-# ── 404 ──
+# ── 422 校验/格式错误 ──
 
 
 class TestNotFound:
-    async def test_missing_trajectory_file_returns_404(
+    async def test_missing_trajectory_file_returns_422(
         self, client: AsyncClient, tmp_path: Path
     ) -> None:
         body = _request_body(str(tmp_path / "missing.json"))
         resp = await client.post("/evaluate", json=body)
-        assert resp.status_code == 404
+        assert resp.status_code == 422
         assert "not found" in resp.json()["detail"].lower()
 
-
-# ── 422 校验/格式错误 ──
+    async def test_empty_messages_returns_422(
+        self, client: AsyncClient, tmp_path: Path
+    ) -> None:
+        """轨迹 messages 为空 [] → 422。"""
+        body = _request_body(_trajectory_json(tmp_path, messages=[]))
+        resp = await client.post("/evaluate", json=body)
+        assert resp.status_code == 422
+        assert "empty" in resp.json()["detail"].lower()
 
 
 class TestValidationError:

@@ -149,9 +149,9 @@ async def test_cancel_endpoint_running_job(api_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_endpoint_nonexistent_job(api_client: AsyncClient) -> None:
-    """POST /optimize/{job_id}/cancel 不存在的 job → 404。"""
+    """POST /optimize/{job_id}/cancel 不存在的 job → 409。"""
     resp = await api_client.post("/optimize/nonexistent_job/cancel")
-    assert resp.status_code == 404
+    assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
