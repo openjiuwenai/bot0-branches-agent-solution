@@ -15,6 +15,7 @@ import java.util.function.Predicate;
  * 既可在会话级 {@code exposeInConversation} 设置默认，也可在调用级
  * {@code InvocationRequest.exposure} 覆盖/收窄。二者通过 {@link #and(ToolExposurePolicy)} 组合，
  * 结果对某工具暴露当且仅当两级都暴露它——保证调用级只能收紧、不能放大会话级授权。
+ *
  * @since 2026-07-27
  */
 public final class ToolExposurePolicy {
@@ -27,10 +28,21 @@ public final class ToolExposurePolicy {
         this.predicate = predicate;
     }
 
+    /**
+     * 判断指定工具是否暴露。
+     *
+     * @param toolId 工具标识
+     * @return 暴露返回 true
+     */
     public boolean isExposed(String toolId) {
         return predicate.test(toolId);
     }
 
+    /**
+     * 策略标签（用于日志/诊断）。
+     *
+     * @return 策略标签
+     */
     public String label() {
         return label;
     }
@@ -38,8 +50,9 @@ public final class ToolExposurePolicy {
     /**
      * 组合两级策略：结果 = 两级取交集（都允许才暴露）。
      *
-     * @return 组合两级策略：结果 = 两级取交集（都允许才暴露）。
-     */    public ToolExposurePolicy and(ToolExposurePolicy other) {
+     * @return 组合后的策略
+     */
+    public ToolExposurePolicy and(ToolExposurePolicy other) {
         if (other == null) {
             return this;
         }
@@ -51,7 +64,8 @@ public final class ToolExposurePolicy {
      * 不暴露任何工具（默认）。
      *
      * @return 不暴露任何工具（默认）。
-     */    public static ToolExposurePolicy none() {
+     */
+    public static ToolExposurePolicy none() {
         return new ToolExposurePolicy("none", id -> false);
     }
 
@@ -59,7 +73,8 @@ public final class ToolExposurePolicy {
      * 暴露全部已注册工具（谨慎使用）。
      *
      * @return 暴露全部已注册工具（谨慎使用）。
-     */    public static ToolExposurePolicy all() {
+     */
+    public static ToolExposurePolicy all() {
         return new ToolExposurePolicy("all", id -> true);
     }
 
@@ -67,7 +82,8 @@ public final class ToolExposurePolicy {
      * 仅暴露白名单内的工具。
      *
      * @return 仅暴露白名单内的工具。
-     */    public static ToolExposurePolicy allow(String... toolIds) {
+     */
+    public static ToolExposurePolicy allow(String... toolIds) {
         Set<String> set = new LinkedHashSet<>();
         for (String id : toolIds) {
             set.add(id);
@@ -79,7 +95,8 @@ public final class ToolExposurePolicy {
      * 暴露除黑名单外的全部工具。
      *
      * @return 暴露除黑名单外的全部工具。
-     */    public static ToolExposurePolicy allExcept(String... toolIds) {
+     */
+    public static ToolExposurePolicy allExcept(String... toolIds) {
         Set<String> set = new LinkedHashSet<>();
         for (String id : toolIds) {
             set.add(id);

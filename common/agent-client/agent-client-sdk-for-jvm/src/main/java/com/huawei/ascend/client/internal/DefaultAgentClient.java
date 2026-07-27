@@ -48,6 +48,7 @@ import java.util.concurrent.Flow;
  *   <li>把 client_tool 类型的 INPUT_REQUIRED 自动就地执行并续传，业务侧只观测到连续事件流。</li>
  *   <li>对续传做"每 toolCallId 只提交一次"的防抖，与调度器的"最多执行一次"配合。</li>
  * </ul>
+ *
  * @since 2026-07-27
  */
 public final class DefaultAgentClient implements AgentClient {

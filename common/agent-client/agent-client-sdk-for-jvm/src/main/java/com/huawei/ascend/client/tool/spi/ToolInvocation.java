@@ -14,6 +14,7 @@ import java.util.Map;
  * 传入 {@link LocalTool#execute}。
  *
  * <p>{@code toolCallId} 是本次工具调用的幂等主键，SDK 依据它做"最多执行一次"去重。
+ *
  * @since 2026-07-27
  */
 public record ToolInvocation(

@@ -34,6 +34,7 @@ import java.util.logging.Logger;
  * java -cp ... com.huawei.ascend.client.verify.CloudClientVerification --ui
  * # 然后打开终端打印的 http://127.0.0.1:9090/
  * </pre>
+ *
  * @since 2026-07-27
  */
 public final class VerificationUiServer {
@@ -58,6 +59,12 @@ public final class VerificationUiServer {
         this.port = port;
     }
 
+    /**
+     * 启动验证 UI 服务主程序。
+     *
+     * @param args 命令行参数，第一个为端口号（可选）
+     * @throws Exception 启动失败时抛出
+     */
     public static void main(String[] args) throws Exception {
         int port = Integer.parseInt(System.getenv().getOrDefault("UI_PORT", "9090"));
         if (args.length > 0) {
@@ -75,6 +82,12 @@ public final class VerificationUiServer {
         Thread.currentThread().join();
     }
 
+    /**
+     * 启动 UI 服务。
+     *
+     * @return 实际监听端口
+     * @throws IOException 启动失败时抛出
+     */
     public int start() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(workers);

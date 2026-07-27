@@ -48,20 +48,43 @@ public interface Governance {
     }
 
     record Decision(boolean allowed, String errorCode, String reason) {
+        /**
+         * 放行决策。
+         *
+         * @return 放行决策
+         */
         public static Decision allow() {
             return new Decision(true, null, null);
         }
 
+        /**
+         * 拒绝决策。
+         *
+         * @param errorCode 错误码
+         * @param reason 拒绝原因
+         * @return 拒绝决策
+         */
         public static Decision deny(String errorCode, String reason) {
             return new Decision(false, errorCode, reason);
         }
     }
 
     record ApprovalDecision(boolean approved, String reason) {
+        /**
+         * 批准决策。
+         *
+         * @return 批准决策
+         */
         public static ApprovalDecision approve() {
             return new ApprovalDecision(true, null);
         }
 
+        /**
+         * 拒绝决策。
+         *
+         * @param reason 拒绝原因
+         * @return 拒绝决策
+         */
         public static ApprovalDecision denied(String reason) {
             return new ApprovalDecision(false, reason);
         }

@@ -152,6 +152,14 @@ final class QueryCatalog {
     }
 
     static List<Query> all() {
+        List<Query> all = new java.util.ArrayList<>();
+        all.addAll(serialQueries());
+        all.addAll(soloQueries());
+        all.addAll(demoQueries());
+        return List.copyOf(all);
+    }
+
+    private static List<Query> serialQueries() {
         return List.of(
                 // ---- 串行组：共享 conv-serial-main，能连贯走通 ----
                 new Query(
@@ -190,8 +198,11 @@ final class QueryCatalog {
                                 Optional.of(ToolExposurePolicy.none()),
                                 "streaming"),
                         new Expectation(false, Optional.empty(),
-                                "显式声明 none → ToolView 为空 → 服务端不可见任何本地工具，直接 COMPLETED")),
+                                "显式声明 none → ToolView 为空 → 服务端不可见任何本地工具，直接 COMPLETED")));
+    }
 
+    private static List<Query> soloQueries() {
+        return List.of(
                 // ---- 单独组：各自独立 conversationId ----
                 new Query(
                         "s3", "S3 · 用户输入续传",
@@ -210,8 +221,11 @@ final class QueryCatalog {
                                 Optional.empty(),
                                 "streaming"),
                         new Expectation(true, Optional.of("transport_error"),
-                                "无凭证 client → 网关 401 AUTH_MISSING → 以 FAILED 终态暴露（预期失败路径）")),
+                                "无凭证 client → 网关 401 AUTH_MISSING → 以 FAILED 终态暴露（预期失败路径）")));
+    }
 
+    private static List<Query> demoQueries() {
+        return List.of(
                 // ---- 口语化 demo：独立会话，自然语言驱动 ----
                 new Query(
                         "d1", "Demo · 帮我读一下首页",
@@ -239,8 +253,7 @@ final class QueryCatalog {
                                 Optional.of(ToolExposurePolicy.allow(DemoTools.PING)),
                                 "streaming"),
                         new Expectation(false, Optional.empty(),
-                                "口语化触发 ping 工具"))
-        );
+                                "口语化触发 ping 工具")));
     }
 
     static Query find(String id) {

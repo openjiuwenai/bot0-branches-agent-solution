@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li>{@code java ... CloudClientVerification} —— CLI，跑完退出，退出码 0/1。</li>
  *   <li>{@code java ... CloudClientVerification --ui} —— 打开薄可视化前端（浏览器）。</li>
  * </ul>
+ *
  * @since 2026-07-27
  */
 public final class CloudClientVerification {
@@ -63,6 +64,12 @@ public final class CloudClientVerification {
         }
     };
 
+    /**
+     * 启动云客户端验证主程序。
+     *
+     * @param args 命令行参数
+     * @throws Exception 执行失败时抛出
+     */
     public static void main(String[] args) throws Exception {
         for (String arg : args) {
             if ("--ui".equals(arg) || "ui".equalsIgnoreCase(arg)) {
@@ -77,7 +84,8 @@ public final class CloudClientVerification {
      * 供 Web UI 调用：注入进度回调后跑完全部场景。
      *
      * @return 供 Web UI 调用：注入进度回调后跑完全部场景。
-     */    public int runWithProgress(VerificationProgress progress)
+     */
+    public int runWithProgress(VerificationProgress progress)
             throws InterruptedException, ExecutionException, TimeoutException, IOException {
         this.progress = progress;
         return run();
@@ -99,18 +107,7 @@ public final class CloudClientVerification {
         }
 
         DemoTools tools = new DemoTools();
-        AgentClient client = AgentClients.builder()
-                .transport(new A2aHttpTransportProvider(url))
-                // 每次到网关的 HTTP 都附带 Bearer（Feat-Func-011 §4.9 强制鉴权）。
-                .credentialProvider(CredentialProvider.staticToken("mock-token"))
-                .policyGuard(Governance.PolicyGuard.allowAll())
-                .approvalProvider((d, i, c) -> {
-                    approvalCount.incrementAndGet();
-                    progress.onEvent(VerificationProgress.Event.info(
-                            null, "approval granted for ACTION tool: " + d.toolId()));
-                    return CompletableFuture.completedFuture(Governance.ApprovalDecision.approve());
-                })
-                .build();
+        AgentClient client = buildClient(url);
         tools.registerInto(client);
 
         try {
@@ -135,6 +132,21 @@ public final class CloudClientVerification {
         String summary = ok ? "ALL CHECKS PASSED" : (failures.size() + " CHECK(S) FAILED");
         progress.onEvent(VerificationProgress.Event.runEnd(ok, summary));
         return ok ? 0 : 1;
+    }
+
+    private AgentClient buildClient(String url) {
+        return AgentClients.builder()
+                .transport(new A2aHttpTransportProvider(url))
+                // 每次到网关的 HTTP 都附带 Bearer（Feat-Func-011 §4.9 强制鉴权）。
+                .credentialProvider(CredentialProvider.staticToken("mock-token"))
+                .policyGuard(Governance.PolicyGuard.allowAll())
+                .approvalProvider((d, i, c) -> {
+                    approvalCount.incrementAndGet();
+                    progress.onEvent(VerificationProgress.Event.info(
+                            null, "approval granted for ACTION tool: " + d.toolId()));
+                    return CompletableFuture.completedFuture(Governance.ApprovalDecision.approve());
+                })
+                .build();
     }
 
     private void scenarioStreamingClientTools(AgentClient client, DemoTools tools)
@@ -227,14 +239,11 @@ public final class CloudClientVerification {
 
         String conversationId = "conv-ui-1";
         // 不指定 agentId：验证 agentId 可选，由网关路由到默认 Agent（Feat-Func-011 §4.9 AC-4）。
-        InvocationRequest request = InvocationRequest.builder()
+        InvocationCall call = client.invoke(InvocationRequest.builder()
                 .conversationId(conversationId)
                 .mode(InvocationMode.STREAMING)
                 .input("NEEDS_USER_INPUT: what is your name?")
-                .build();
-        InvocationCall call = client.invoke(request);
-        progress.onEvent(VerificationProgress.Event.info(id,
-                "waiting for INPUT_REQUIRED (user input), then continueInput"));
+                .build());
 
         call.events().subscribe(new Flow.Subscriber<>() {
             @Override
@@ -245,8 +254,7 @@ public final class CloudClientVerification {
             @Override
             public void onNext(InvocationEvent event) {
                 if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null) {
-                    progress.onEvent(VerificationProgress.Event.info(id,
-                            "got user-input prompt, submitting continueInput=\"Alice\""));
+                    progress.onEvent(VerificationProgress.Event.info(id, "got prompt, submitting continueInput"));
                     client.continueInput(ContinueInputRequest.builder()
                             .conversationId(conversationId)
                             .relatedInvocationRef(call.invocationRef())
@@ -258,10 +266,12 @@ public final class CloudClientVerification {
 
             @Override
             public void onError(Throwable throwable) {
+                // 错误由 completion future 传播，此处无需处理。
             }
 
             @Override
             public void onComplete() {
+                // 由下方 completion 断言处理。
             }
         });
 
@@ -286,22 +296,12 @@ public final class CloudClientVerification {
         int submitBefore = tools.submitOrderCount.get();
         int pingBefore = tools.pingCount.get();
         // 第一轮：不声明 exposure、普通文本，应直接 COMPLETED（IMMEDIATE），无工具调用。
-        InvocationRequest r1 = InvocationRequest.builder()
-                .conversationId(conversationId)
-                .mode(InvocationMode.STREAMING)
-                .input("hello turn 1")
-                .build();
-        InvocationCall c1 = client.invoke(r1);
+        InvocationCall c1 = invokePlain(client, conversationId, "hello turn 1");
         Handle h1 = c1.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
         InvocationSnapshot s1 = c1.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
 
         // 第二轮：复用同一 conversationId，新 invocation，无 taskId（普通多轮=新建 Task）。
-        InvocationRequest r2 = InvocationRequest.builder()
-                .conversationId(conversationId)
-                .mode(InvocationMode.STREAMING)
-                .input("hello turn 2")
-                .build();
-        InvocationCall c2 = client.invoke(r2);
+        InvocationCall c2 = invokePlain(client, conversationId, "hello turn 2");
         Handle h2 = c2.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
         InvocationSnapshot s2 = c2.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
 
@@ -325,6 +325,15 @@ public final class CloudClientVerification {
         c1.close();
         c2.close();
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
+    }
+
+    private InvocationCall invokePlain(AgentClient client, String conversationId, String input) {
+        InvocationRequest r = InvocationRequest.builder()
+                .conversationId(conversationId)
+                .mode(InvocationMode.STREAMING)
+                .input(input)
+                .build();
+        return client.invoke(r);
     }
 
     /** Scenario 5: 默认不暴露（不声明 exposure → ToolView 为空 → 服务端不可见任何本地工具）。 */

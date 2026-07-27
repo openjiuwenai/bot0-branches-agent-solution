@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
  * <p>它按 Feat-Func-009 的语义驱动 client 工具多轮：读取 {@code params.metadata.clientTools}（即 ToolView），
  * 按序对每个工具通过 {@code _interrupt} 请求一次；收到续跑结果后推进到下一个，全部完成则结束。
  * 为验证客户端"最多执行一次 / 最多续跑一次"，流式路径会对首个工具故意重复投递一次 INPUT_REQUIRED。
+ *
  * @since 2026-07-27
  */
 public final class MockGatewayServer {
@@ -73,6 +74,12 @@ public final class MockGatewayServer {
         this.requestedPort = port;
     }
 
+    /**
+     * 启动 Mock 网关进程。
+     *
+     * @param args 命令行参数，第一个为端口号（可选）
+     * @throws Exception 启动失败时抛出
+     */
     public static void main(String[] args) throws Exception {
         int port = (args.length > 0) ? Integer.parseInt(args[0])
                 : Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
@@ -90,7 +97,8 @@ public final class MockGatewayServer {
      * 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
      *
      * @return 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
-     */    public int start() throws IOException {
+     */
+    public int start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", requestedPort), 0);
         server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), WORKER_FACTORY));
@@ -100,6 +108,9 @@ public final class MockGatewayServer {
         return server.getAddress().getPort();
     }
 
+    /**
+     * 停止网关服务。
+     */
     public void stop() {
         if (server != null) {
             server.stop(0);
@@ -179,15 +190,7 @@ public final class MockGatewayServer {
                     return;
                 }
             }
-            TaskSim task = createTask(contextId, message, metadata);
-            if (messageId != null) {
-                messageIdToTask.put(messageId, task.taskId);
-            }
-            if (streaming) {
-                streamCurrent(ex, rpcId, task, true);
-            } else {
-                writeJson(ex, 200, rpcResult(rpcId, buildResult(task, "task")));
-            }
+            createAndRespond(ex, rpcId, contextId, message, metadata, messageId, streaming);
             return;
         }
 
@@ -202,6 +205,19 @@ public final class MockGatewayServer {
         }
         if (streaming) {
             streamCurrent(ex, rpcId, task, false);
+        } else {
+            writeJson(ex, 200, rpcResult(rpcId, buildResult(task, "task")));
+        }
+    }
+
+    private void createAndRespond(HttpExchange ex, String rpcId, String contextId, JsonNode message,
+                                  JsonNode metadata, String messageId, boolean streaming) throws IOException {
+        TaskSim task = createTask(contextId, message, metadata);
+        if (messageId != null) {
+            messageIdToTask.put(messageId, task.taskId);
+        }
+        if (streaming) {
+            streamCurrent(ex, rpcId, task, true);
         } else {
             writeJson(ex, 200, rpcResult(rpcId, buildResult(task, "task")));
         }
@@ -277,6 +293,8 @@ public final class MockGatewayServer {
             task.state = State.COMPLETED;
             task.pending = null;
             task.outputText = "completed with user-provided input";
+        } else {
+            // 其他场景：无需推进（如 PLAIN 直接 COMPLETED）。
         }
     }
 
@@ -342,28 +360,7 @@ public final class MockGatewayServer {
         }
         ObjectNode msgMeta = message.putObject("metadata");
         if (task.state == State.INPUT_REQUIRED && task.pending != null) {
-            // _interrupt 权威路径：status.message.metadata._interrupt；
-            // _interrupt_kind / arguments 嵌套在 context 下；顶层保留 toolCallId / toolName / message。
-            ObjectNode it = msgMeta.putObject("_interrupt");
-            it.put("type", "__interaction__");
-            it.put("index", 0);
-            it.put("toolCallId", task.pending.toolCallId);
-            String interruptMessage = (task.pending.userInput)
-                    ? (task.pending.prompt != null ? task.pending.prompt : "user input required")
-                    : "Client tool invocation required: " + task.pending.toolName;
-            it.put("message", interruptMessage);
-            ObjectNode ctx = it.putObject("context");
-            ctx.put("_interrupt_kind", task.pending.userInput ? "user_input" : "client_tool");
-            if (task.pending.userInput) {
-                if (task.pending.prompt != null) {
-                    ctx.put("prompt", task.pending.prompt);
-                }
-            } else {
-                ctx.put("toolName", task.pending.toolName);
-                ctx.set("arguments", task.pending.arguments);
-                it.put("toolName", task.pending.toolName);
-                it.put("deadlineMs", 30000);
-            }
+            buildInterrupt(msgMeta, task.pending);
         }
         if ("status-update".equals(kind)) {
             r.put("final", isTerminal(task.state));
@@ -373,6 +370,31 @@ public final class MockGatewayServer {
             meta.put("errorCode", task.errorCode);
         }
         return r;
+    }
+
+    private void buildInterrupt(ObjectNode msgMeta, Pending pending) {
+        // _interrupt 权威路径：status.message.metadata._interrupt；
+        // _interrupt_kind / arguments 嵌套在 context 下；顶层保留 toolCallId / toolName / message。
+        ObjectNode it = msgMeta.putObject("_interrupt");
+        it.put("type", "__interaction__");
+        it.put("index", 0);
+        it.put("toolCallId", pending.toolCallId);
+        String interruptMessage = (pending.userInput)
+                ? (pending.prompt != null ? pending.prompt : "user input required")
+                : "Client tool invocation required: " + pending.toolName;
+        it.put("message", interruptMessage);
+        ObjectNode ctx = it.putObject("context");
+        ctx.put("_interrupt_kind", pending.userInput ? "user_input" : "client_tool");
+        if (pending.userInput) {
+            if (pending.prompt != null) {
+                ctx.put("prompt", pending.prompt);
+            }
+        } else {
+            ctx.put("toolName", pending.toolName);
+            ctx.set("arguments", pending.arguments);
+            it.put("toolName", pending.toolName);
+            it.put("deadlineMs", 30000);
+        }
     }
 
     private ObjectNode buildStatus(TaskSim task, State state, boolean finalFlag) {

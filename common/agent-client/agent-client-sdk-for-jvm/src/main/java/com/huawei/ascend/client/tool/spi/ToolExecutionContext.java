@@ -17,6 +17,7 @@ import java.util.Set;
  *
  * <p>{@code visibleToolNames} 是本次 invocation 上报给服务端的 ToolView 投影工具名集合，
  * 治理管道据此做"可见性校验"：服务端幻觉调用未暴露的工具 → {@code tool_not_declared} 拒绝（FEAT-007 §3.2 步骤 3）。
+ *
  * @since 2026-07-27
  */
 public record ToolExecutionContext(
