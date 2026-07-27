@@ -31,6 +31,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Mock A2A Gateway endpoint that forwards inbound JSON-RPC {@code message/send}
@@ -307,9 +308,9 @@ public class MockA2AGatewayController {
             if (!"user".equals(m.path("role").asText())) {
                 continue;
             }
-            String extracted = extractQueryFromContent(m.path("content"));
-            if (extracted != null) {
-                query = extracted;
+            Optional<String> extracted = extractQueryFromContent(m.path("content"));
+            if (extracted.isPresent()) {
+                query = extracted.get();
             }
         }
         return query;
@@ -319,19 +320,19 @@ public class MockA2AGatewayController {
      * 从单条消息 content 中提取 query。
      *
      * @param content serve body 中 message 的 content 节点
-     * @return 提取到的 query；content 形态不支持时返回 {@code null} 表示不覆盖既有值
+     * @return 提取到的 query；content 形态不支持时返回 {@link Optional#empty()} 表示不覆盖既有值
      */
-    private static String extractQueryFromContent(JsonNode content) {
+    private static Optional<String> extractQueryFromContent(JsonNode content) {
         if (content.isTextual()) {
-            return content.asText();
+            return Optional.of(content.asText());
         } else if (content.isObject()) {
             JsonNode q = content.path("query");
             if (q.isTextual()) {
-                return q.asText();
+                return Optional.of(q.asText());
             }
-            return null;
+            return Optional.empty();
         } else {
-            return null;
+            return Optional.empty();
         }
     }
 
