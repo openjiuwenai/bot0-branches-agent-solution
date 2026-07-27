@@ -49,7 +49,7 @@ class BusConsumerAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
             .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
                     "agent-bus.tenant=tenant-a",
-                    "spring.application.name=runtime-a")
+                    "openjiuwen.service.service-id=runtime-a")
             .withBean(RequestHandler.class, BusConsumerAutoConfigurationTest::requestHandler)
             .withBean("runtimeResponseProducer", BrokerForwardingProducerPort.class,
                     () -> new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_in"))
@@ -75,17 +75,21 @@ class BusConsumerAutoConfigurationTest {
     }
 
     @Test
-    void derivesConsumerServiceIdFromApplicationName() {
-        MockEnvironment environment = new MockEnvironment().withProperty("spring.application.name", "runtime-a");
+    void derivesConsumerServiceIdFromConfiguredServiceId() {
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("openjiuwen.service.service-id", "runtime-a");
 
         assertThat(BusConsumerAutoConfiguration.consumerServiceId(environment)).isEqualTo("runtime-runtime-a");
     }
 
     @Test
-    void rejectsMissingApplicationName() {
-        assertThatThrownBy(() -> BusConsumerAutoConfiguration.consumerServiceId(new MockEnvironment()))
+    void rejectsMissingServiceIdEvenWhenApplicationNameIsPresent() {
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("spring.application.name", "runtime-a");
+
+        assertThatThrownBy(() -> BusConsumerAutoConfiguration.consumerServiceId(environment))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("spring.application.name");
+                .hasMessageContaining("openjiuwen.service.service-id");
     }
 
     @Test
@@ -171,7 +175,7 @@ class BusConsumerAutoConfigurationTest {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
                 .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
                         "agent-bus.tenant=tenant-a",
-                        "spring.application.name=runtime-a")
+                        "openjiuwen.service.service-id=runtime-a")
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("RequestHandler");

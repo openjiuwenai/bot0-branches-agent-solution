@@ -5,11 +5,11 @@ spring:
   profiles:
     default: memory
   application:
-    name: ${RUNTIME_SERVICE_ID:agent-bus-consumer-demo}
+    name: agent-bus-consumer-demo
 
 openjiuwen:
   service:
-    agent-id: ${RUNTIME_SERVICE_ID:agent-bus-consumer-demo}
+    service-id: ${RUNTIME_SERVICE_ID:agent-bus-consumer-demo}
     query:
       legacy-path-enabled: true
       webflux:
