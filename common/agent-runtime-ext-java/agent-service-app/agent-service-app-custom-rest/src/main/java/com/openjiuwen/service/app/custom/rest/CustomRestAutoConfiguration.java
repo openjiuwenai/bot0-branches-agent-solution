@@ -132,7 +132,7 @@ public class CustomRestAutoConfiguration {
             try {
                 JsonNode root = objectMapper.readTree(new String(body, StandardCharsets.UTF_8));
                 if (root == null || !root.isObject()) {
-                    throw new CustomRestFailure(400, "invalid_json", "The JSON root must be an object");
+                    throw new CustomRestFailure(400, "invalid_custom_request", "The JSON root must be an object");
                 }
                 return objectMapper.convertValue(root, BODY_TYPE);
             } catch (JsonProcessingException | IllegalArgumentException exception) {
