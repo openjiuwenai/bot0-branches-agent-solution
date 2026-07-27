@@ -86,6 +86,7 @@ agent-solution
 
 ```text
 common/example
+|-- agent-gateway-demo
 |-- agentcore-ext-deepagent-remote-a2a-demo
 |-- agentcore-ext-remote-a2a-tool-demo
 |-- multi-deep-research-demo

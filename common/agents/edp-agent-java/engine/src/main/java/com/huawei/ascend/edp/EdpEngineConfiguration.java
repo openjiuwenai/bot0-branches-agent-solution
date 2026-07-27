@@ -18,7 +18,6 @@ package com.huawei.ascend.edp;
 
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.handler.EdpaExtHandler;
-import com.huawei.ascend.edp.todo.RedisTodoStore;
 
 import com.openjiuwen.core.sysop.sandbox.SandboxClient;
 import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClientFactory;
@@ -42,7 +41,8 @@ import java.util.Optional;
  *     <li>注册 {@link AgentHandler} Bean（适配版SPI），替代原版 AgentRuntimeHandler SPI。</li>
  *     <li>使用 {@link EdpaSpringBootConfig} 统一管理全部配置属性（Phase 2 合并 EdpAgentProperties 到 EdpaSpringBootConfig），
  *         Spring Boot 原生支持 ${ENV_VAR:default} 占位符，不再需要手写 resolveEnvOverrides。</li>
- *     <li>注入 RedisTodoStore（0707新增的Redis Todo持久化），传入 EdpaExtHandler.init()。</li>
+ *     <li>Todo 存储由 agent-core 的 TodoStorage SPI 通过 DeepAgentConfig 配置，
+ *         不再注入 RedisTodoStore Bean。</li>
  * </ul>
  *
  * @since 2024-01-01
@@ -67,26 +67,18 @@ public class EdpEngineConfiguration {
      * @param config EDPAgent 合并后配置属性（含 scenarioHome/model/versatile/mcpsse）
      * @param agentName the agentName value
      * @param sandboxClientFactoryProvider the sandboxClientFactoryProvider value
-     * @param redisTodoStoreProvider the redisTodoStoreProvider value
      * @return 已初始化的 AgentHandler Bean
      */
 
     @Bean
     AgentHandler edpaExtHandler(EdpaSpringBootConfig config,
             @Value("${openjiuwen.service.a2a.agent-name:EDPAgent}") String agentName,
-            ObjectProvider<AgentCoreSandboxClientFactory> sandboxClientFactoryProvider,
-            ObjectProvider<RedisTodoStore> redisTodoStoreProvider) {
-        // 从 Spring 容器注入 RedisTodoStore（确保 Bean 创建顺序：redisTodoStore 先于 edpaExtHandler）
-        RedisTodoStore redisTodoStore = redisTodoStoreProvider.getIfAvailable();
-        if (redisTodoStore == null) {
-            LOGGER.warn("RedisTodoStore not available (Redis not enabled), Todo will use file fallback");
-        }
-
+            ObjectProvider<AgentCoreSandboxClientFactory> sandboxClientFactoryProvider) {
         // 需求2：通过 agent-runtime-java 中转获取治理装饰 SandboxClient
         SandboxClient decoratedSandboxClient = resolveDecoratedSandboxClient(sandboxClientFactoryProvider).orElse(null);
 
         // Bean 创建阶段先完成全部初始化，获取真实 agent 实例
-        EdpaExtHandler.InitResult initResult = EdpaExtHandler.performInit(config, redisTodoStore, agentName,
+        EdpaExtHandler.InitResult initResult = EdpaExtHandler.performInit(config, agentName,
                 decoratedSandboxClient);
 
         // 用真实 agent 实例构造 Handler，消除反射 hack

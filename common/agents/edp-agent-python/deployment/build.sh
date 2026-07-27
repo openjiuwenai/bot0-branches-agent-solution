@@ -4,18 +4,18 @@
 #
 # 工作流程：
 #   1. 从 agent-runtime 取框架代码（a2a_service + versatile_adapter）
-#   2. 把 agent-store 中的 EDPAgent 合并到 a2a_service/agents/EDPAgent/
+#   2. 把 agent-solution 中的 edp-agent-python 合并到 a2a_service/agents/EDPAgent/
 #   3. 基于 Dockerfile 构建镜像 edpagent:latest
 #
 # 使用：
 #   ./build.sh                                       # 默认路径
-#   ./build.sh /path/to/agent-runtime /path/to/agent-store
+#   ./build.sh /path/to/agent-runtime /path/to/agent-solution
 #
 set -euo pipefail
 
 # ── 参数与路径 ─────────────────────────────────────────────────────────
 AGENT_RUNTIME="${1:-$HOME/EDPAgent/agent-runtime}"
-AGENT_STORE="${2:-$HOME/EDPAgent/agent-store}"
+AGENT_STORE="${2:-$HOME/EDPAgent/agent-solution}"
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTEXT_DIR="$BUILD_DIR/.build-context"
 IMAGE_TAG="${EDPAGENT_IMAGE_TAG:-edpagent:latest}"
@@ -30,8 +30,8 @@ VA_ENV_DST="$CONFIG_DIR/versatile_adapter.env"
   || { echo "❌ 未找到 agent-runtime: $AGENT_RUNTIME/applications/a2a_service"; exit 1; }
 [ -d "$AGENT_RUNTIME/applications/versatile_adapter" ] \
   || { echo "❌ 未找到 versatile_adapter: $AGENT_RUNTIME/applications/versatile_adapter"; exit 1; }
-[ -d "$AGENT_STORE/community/EDPAgent" ] \
-  || { echo "❌ 未找到 EDPAgent: $AGENT_STORE/community/EDPAgent"; exit 1; }
+[ -d "$AGENT_STORE/common/agents/edp-agent-python" ] \
+  || { echo "❌ 未找到 edp-agent-python: $AGENT_STORE/common/agents/edp-agent-python"; exit 1; }
 [ -f "$A2A_ENV_SRC" ] \
   || { echo "❌ 未找到 a2a_service 配置模板: $A2A_ENV_SRC"; exit 1; }
 [ -f "$VA_ENV_SRC" ] \
@@ -47,7 +47,7 @@ if [ ! -f "$VA_ENV_DST" ] || [ "${EDPAGENT_REFRESH_ENV:-0}" = "1" ]; then
 fi
 
 echo "✅ agent-runtime:        $AGENT_RUNTIME"
-echo "✅ agent-store:          $AGENT_STORE"
+echo "✅ agent-solution:       $AGENT_STORE"
 echo "✅ build context:        $CONTEXT_DIR"
 echo "✅ image tag:            $IMAGE_TAG"
 echo "✅ a2a env:              $A2A_ENV_DST"
@@ -74,7 +74,7 @@ mkdir -p "$CONTEXT_DIR/a2a_service/agents/EDPAgent"
 
 rsync -a --exclude='__pycache__/' --exclude='*.pyc' \
   --exclude='docs/' --exclude='deployment/' \
-  "$AGENT_STORE/community/EDPAgent/" \
+  "$AGENT_STORE/common/agents/edp-agent-python/" \
   "$CONTEXT_DIR/a2a_service/agents/EDPAgent/"
 
 # 清理可能被 copy 进来的本地 .env（避免把开发环境凭证烘进镜像）

@@ -1,0 +1,53 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.openjiuwen.service.bus.consumer.relay;
+
+import com.openjiuwen.service.bus.consumer.store.InMemoryBusResponseProjectionStore;
+
+import java.util.Objects;
+
+/**
+ * Replays persisted projections left behind by a process crash before publish/mark-published.
+ *
+ * @since 2026-07-22
+ */
+public final class BusProjectionRepairer {
+    private final InMemoryBusResponseProjectionStore store;
+    private final BusResponseRelay relay;
+    private final String tenantId;
+
+    /**
+     * Creates a new instance.
+     *
+     * @param store
+     *            the store value
+     * @param relay
+     *            the relay value
+     * @param tenantId
+     *            the tenantId value
+     */
+    public BusProjectionRepairer(InMemoryBusResponseProjectionStore store, BusResponseRelay relay, String tenantId) {
+        this.store = Objects.requireNonNull(store);
+        this.relay = Objects.requireNonNull(relay);
+        this.tenantId = Objects.requireNonNull(tenantId);
+    }
+
+    /**
+     * Performs the repair operation.
+     *
+     * @param limit
+     *            the limit value
+     *
+     * @return the operation result
+     */
+    public int repair(int limit) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
+        var pending = store.pending(tenantId, limit);
+        pending.forEach(relay::retry);
+        return pending.size();
+    }
+}

@@ -25,14 +25,16 @@ import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.EdpaTodolist;
 import com.huawei.ascend.edp.config.GovernanceConfig;
 import com.huawei.ascend.edp.config.GovernanceConfigLoader;
+import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
+import com.huawei.ascend.edp.config.TodoRedisProperties;
 import com.huawei.ascend.edp.enhancer.EdpaAgentEnhancer;
+import com.huawei.ascend.edp.rail.ParseErrorTracker;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail;
 import com.huawei.ascend.edp.rail.VersatileInterruptRail.VersatilePassthroughBuffer;
 import com.huawei.ascend.edp.stream.PlanrulePromptBuilder;
 import com.huawei.ascend.edp.stream.QueryChunkFormatAdapter;
 import com.huawei.ascend.edp.stream.SkillScriptsCollector;
-import com.huawei.ascend.edp.todo.RedisTodoStore;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -58,6 +60,8 @@ import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -410,14 +414,16 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * model/versatile 从 Spring Boot 绑定获取。
      * 不再需要 EnvOverrides（Spring Boot ${ENV_VAR:default} 自动处理）。</p>
      *
+     * <p>Todo 存储由 agent-core 的 TodoStorage SPI 提供，通过 DeepAgentConfig 的
+     * todoStorageType/kvStoreConfig 配置，不再需要外部传入 RedisTodoStore。</p>
+     *
      * @param config EDPAgent 合并后配置（含 scenarioHome/model/versatile/mcpsse）
-     * @param redisTodoStore Redis Todo 存储（可为null：未启用Redis时回落文件/缓存）
      * @param agentName Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）
      * @param decoratedSandboxClient the decoratedSandboxClient value
      * @return InitResult 包含真实 agent 实例和初始化产物
      */
 
-    public static InitResult performInit(EdpaSpringBootConfig config, RedisTodoStore redisTodoStore, String agentName,
+    public static InitResult performInit(EdpaSpringBootConfig config, String agentName,
             SandboxClient decoratedSandboxClient) {
         LOGGER.info("EdpaExtHandler performInit start (Phase 2)");
         InitResult result = new InitResult();
@@ -519,6 +525,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         // 第五步：配置校验 fail-fast。
         EdpConfigValidator.validateModelConfig(config.getModel());
         EdpConfigValidator.validateVersatileUrl(config.getVersatile());
+        EdpConfigValidator.validateSandboxConfig(config.getSandbox());
         if (result.getScenarioHomePath() != null) {
             EdpConfigValidator.validateScenarioConfig(result.getScenarioHomePath());
         }
@@ -778,7 +785,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
     private Optional<String> extractPassthroughDisplayText(String nodeJson) {
         Map<String, Object> eventMap = parseJsonObject(nodeJson);
-        if (eventMap == null || eventMap.isEmpty()) {
+        if (eventMap == null || eventMap.isEmpty() || ParseErrorTracker.hasParseError(eventMap)) {
             return Optional.empty();
         }
 
@@ -861,8 +868,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             return Collections.emptyMap();
         }
         Map<String, Object> body = parseJsonObject(text);
-        if (body.isEmpty()) {
-            LOGGER.warn("Versatile continuation input JSON parse returned empty");
+        if (body.isEmpty() || ParseErrorTracker.hasParseError(body)) {
+            LOGGER.warn("Versatile continuation input JSON parse failed or empty");
             return Collections.emptyMap();
         }
         Object inputs = body.get("inputs");
@@ -877,9 +884,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
             return OBJECT_MAPPER.readValue(text, new TypeReference<LinkedHashMap<String, Object>>() {
             });
         } catch (JsonProcessingException e) {
-            // 降级说明：JSON 解析失败，返回空 Map 兜底
-            LOGGER.warn("[EDPA-DIAG] parseJsonObject failed, returning empty map: err={}", e.getMessage());
-            return Map.of();
+            ParseErrorTracker.recordFailure("EdpaExtHandler.parseJsonObject", e.getMessage());
+            return ParseErrorTracker.degradedMap(e.getMessage());
         }
     }
 
@@ -1163,6 +1169,13 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         String skillMode = actrule != null && actrule.getSkillMode() != null ? actrule.getSkillMode() : "all";
 
+        // 使用 agent-core 的 KV 存储（Redis）替代自定义 RedisTodoStore。
+        // kvStoreConfig 为空时回落到默认 file 存储。
+        Map<String, Object> kvStoreConfig = buildKvStoreConfig();
+        String todoStorageType = !kvStoreConfig.isEmpty() ? "kv" : "file";
+        LOGGER.info("[EDPA-DIAG] DeepAgent todoStorageType={}, kvStore={}",
+                todoStorageType, !kvStoreConfig.isEmpty() ? "redis" : "none");
+
         return DeepAgentConfig.builder().systemPrompt(systemPrompt != null ? systemPrompt : "")
                 .maxIterations(actrule != null && actrule.getMaxSteps() != null && actrule.getMaxSteps() > 0
                         ? actrule.getMaxSteps()
@@ -1170,7 +1183,109 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
                 .enableTaskLoop(
                         actrule != null && actrule.getEnableTaskLoop() != null ? actrule.getEnableTaskLoop() : false)
                 .enableTaskPlanning(true).skillDirectories(skillDirs).skillMode(skillMode).model(modelMap)
-                .backend(backendMap).build();
+                .backend(backendMap).todoStorageType(todoStorageType).kvStoreConfig(kvStoreConfig).build();
+    }
+
+    /**
+     * 从 RedisConfig 静态持有者获取 TodoRedisProperties，构建 agent-core 的 kvStoreConfig。
+     *
+     * <p>结构: {type: "redis", conf: {host, port, password, cluster}}。
+     * Redis 未配置时返回空 Map，DeepAgent 回落到默认的 file 存储。</p>
+     *
+     * @return kvStoreConfig Map，或空 Map
+     */
+    private static Map<String, Object> buildKvStoreConfig() {
+        TodoRedisProperties redisProps = RedisConfig.getRedisProperties();
+        if (redisProps == null) {
+            return Collections.emptyMap();
+        }
+        Map<String, Object> conf = new LinkedHashMap<>();
+        conf.put("host", redisProps.getHost());
+        conf.put("port", redisProps.getPort());
+        if (redisProps.getPassword() != null && !redisProps.getPassword().isBlank()) {
+            conf.put("password", redisProps.getPassword());
+        }
+        String mode = redisProps.getMode() == null ? "single" : redisProps.getMode().toLowerCase();
+        if ("cluster".equals(mode)) {
+            conf.put("cluster", "true");
+        } else if ("sentinel".equals(mode)) {
+            LOGGER.warn("[EDPA-DIAG] Sentinel mode not supported by agent-core RedisKVStoreProvider, "
+                    + "falling back to single mode");
+        } else {
+            LOGGER.debug("[EDPA-DIAG] Redis mode={} -> single mode config", mode);
+        }
+
+        // 创建带连接池的 UnifiedJedis，通过 redis_client 键传入 agent-core。
+        // agent-core 的 RedisKVStoreProvider.resolveRedisClient() 检查 conf.get("redis_client")，
+        // 如果存在则直接使用，不会创建裸 Jedis 连接（避免 SocketException 断连问题）。
+        // 连接池配置参考 RedisJedisClientFactory：
+        //   testOnBorrow=true（借用前 PING 验证）、testWhileIdle=true（空闲清理）
+        Optional<Object> pooledClient = createPooledRedisClient(redisProps);
+        if (pooledClient.isPresent()) {
+            conf.put("redis_client", pooledClient.get());
+            LOGGER.info("[EDPA-DIAG] Injected pooled Redis client (UnifiedJedis + PooledConnectionProvider), "
+                    + "testOnBorrow=true, testWhileIdle=true, maxTotal=16, maxIdle=8, minIdle=1");
+        }
+
+        Map<String, Object> kvStoreConfig = new LinkedHashMap<>();
+        kvStoreConfig.put("type", "redis");
+        kvStoreConfig.put("conf", conf);
+        return kvStoreConfig;
+    }
+
+    /**
+     * 创建带连接池的 Redis 客户端（UnifiedJedis + PooledConnectionProvider）。
+     *
+     * <p>参考 RedisJedisClientFactory 的连接池配置：
+     * <ul>
+     *   <li>testOnBorrow=true — 借用连接前发送 PING 验证有效性，断连后自动创建新连接</li>
+     *   <li>testWhileIdle=true — evictor 定期清理空闲失效连接</li>
+     * </ul>
+     *
+     * @param redisProps Redis 连接配置
+     * @return UnifiedJedis 实例的 Optional，创建失败返回 Optional.empty()（回退到 agent-core 默认的裸 Jedis）
+     */
+    private static Optional<Object> createPooledRedisClient(TodoRedisProperties redisProps) {
+        try {
+            String host = redisProps.getHost() != null ? redisProps.getHost().trim() : "localhost";
+            int port = redisProps.getPort() > 0 ? redisProps.getPort() : 6379;
+            String password = redisProps.getPassword();
+            boolean hasPassword = password != null && !password.isBlank();
+
+            // 连接池配置（参考 RedisJedisClientFactory.poolConfig()）
+            org.apache.commons.pool2.impl.GenericObjectPoolConfig<redis.clients.jedis.Connection> poolConfig =
+                    new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
+            poolConfig.setMaxTotal(16);
+            poolConfig.setMaxIdle(8);
+            poolConfig.setMinIdle(1);
+            poolConfig.setTestOnBorrow(true);
+            poolConfig.setTestWhileIdle(true);
+
+            // Jedis 客户端配置（密码、数据库、超时）
+            redis.clients.jedis.DefaultJedisClientConfig.Builder builder =
+                    redis.clients.jedis.DefaultJedisClientConfig.builder();
+            int timeoutMs = redisProps.getSocketTimeoutMs() > 0 ? redisProps.getSocketTimeoutMs() : 3000;
+            builder.connectionTimeoutMillis(timeoutMs);
+            builder.socketTimeoutMillis(timeoutMs);
+            if (hasPassword) {
+                builder.password(password);
+            }
+            int database = redisProps.getDatabase();
+            if (database > 0) {
+                builder.database(database);
+            }
+            redis.clients.jedis.JedisClientConfig clientConfig = builder.build();
+
+            // 创建 PooledConnectionProvider + UnifiedJedis
+            redis.clients.jedis.HostAndPort hostAndPort = new redis.clients.jedis.HostAndPort(host, port);
+            redis.clients.jedis.providers.PooledConnectionProvider provider =
+                    new redis.clients.jedis.providers.PooledConnectionProvider(hostAndPort, clientConfig, poolConfig);
+            return Optional.of(new redis.clients.jedis.UnifiedJedis(provider));
+        } catch (JedisConnectionException e) {
+            LOGGER.warn("[EDPA-DIAG] Failed to create pooled Redis client, falling back to default: {}",
+                    e.getMessage());
+            return Optional.empty();
+        }
     }
 
     private static void registerSkills(DeepAgent deepAgent, Path skillsDir, String agentName) {

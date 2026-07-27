@@ -1,0 +1,37 @@
+server:
+  port: ${SERVER_PORT:18081}
+
+spring:
+  profiles:
+    default: memory
+  application:
+    name: agent-bus-consumer-demo
+
+openjiuwen:
+  service:
+    service-id: ${RUNTIME_SERVICE_ID:agent-bus-consumer-demo}
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    bus:
+      consumer:
+        enabled: true
+
+agent-bus:
+  role:
+    runtime:
+      enabled: true
+  reliability:
+    enabled: false
+  nameserver: ${AGENT_BUS_NAMESERVER:127.0.0.1:9876}
+  namespace: ${AGENT_BUS_NAMESPACE:ascend-prod}
+  producer-group: ${AGENT_BUS_RUNTIME_PRODUCER_GROUP:feat017-runtime-producer}
+  tenant: ${AGENT_BUS_TENANT:tenant-a}
+  event-bus-service-id: ${AGENT_BUS_EVENT_BUS_SERVICE_ID:eventbus-01}
+  poll-wait-millis: 3000
+
+logging:
+  level:
+    com.openjiuwen.example.busconsumer: INFO
+    com.openjiuwen.service.bus.consumer: DEBUG

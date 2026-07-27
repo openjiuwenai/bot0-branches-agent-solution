@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "ex-011-default",
+  "method": "SendMessage",
+  "params": {
+    "message": {
+      "messageId": "ex-011-default-1",
+      "parts": [{ "text": "default-agent-path" }]
+    }
+  }
+}

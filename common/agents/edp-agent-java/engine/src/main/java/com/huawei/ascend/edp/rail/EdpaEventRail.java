@@ -21,8 +21,8 @@ import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.ScriptResolver;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.ToolConstants;
+import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.enhancer.TodoSessionResolver;
-import com.huawei.ascend.edp.todo.RedisTodoStore;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.openjiuwen.core.common.exception.BaseError;
@@ -37,12 +37,19 @@ import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.DeepAgentRail;
 import com.openjiuwen.harness.rails.TaskPlanningRail;
+import com.openjiuwen.harness.tools.FileTodoStorage;
+import com.openjiuwen.harness.tools.KvTodoStorage;
 import com.openjiuwen.harness.tools.TodoItem;
 import com.openjiuwen.harness.tools.TodoStatus;
+import com.openjiuwen.harness.tools.TodoStorage;
 import com.openjiuwen.harness.tools.TodoTool;
+import com.openjiuwen.spi.store.BaseKVStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -57,6 +64,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import java.time.Duration;
 import java.util.stream.Stream;
 
 /**
@@ -143,6 +151,11 @@ public class EdpaEventRail extends DeepAgentRail {
      * 固定帧配置 key 前缀
      */
     private static final String FK_PREFIX = "scriptconfig.think_chunk_scripts.think_chunk_fixed_scripts.";
+
+    /**
+     * 任务列表数据 Redis TTL（秒），与会话结束后数据清理周期一致。
+     */
+    private static final int TODO_REDIS_TTL_SECONDS = 3600;
 
     /**
      * 上一轮发射的 todolist 指纹，用于检测任务列表是否变化并决定是否重推。
@@ -246,22 +259,18 @@ public class EdpaEventRail extends DeepAgentRail {
     private volatile Path todoRootPath;
 
     /**
-     * Redis Todo 存储（UC-04 主路径；可为 null：单测兼容、未启用 Redis 时回落文件）。
+     * agent-core TodoStorage（KvTodoStorage 或 FileTodoStorage），lazy 创建。
+     * 替代原 RedisTodoStore，通过 deepAgent.getKvStore() 获取共享 KV 存储。
      */
-    private final RedisTodoStore redisTodoStore;
+    private volatile TodoStorage todoStorage;
 
     public EdpaEventRail(DeepAgent deepAgent) {
-        this(deepAgent, null, null);
+        this(deepAgent, null);
     }
 
     public EdpaEventRail(DeepAgent deepAgent, SysScriptsConfig scripts) {
-        this(deepAgent, scripts, null);
-    }
-
-    public EdpaEventRail(DeepAgent deepAgent, SysScriptsConfig scripts, RedisTodoStore redisTodoStore) {
         this.deepAgent = deepAgent;
         this.scripts = scripts;
-        this.redisTodoStore = redisTodoStore;
     }
 
     @Override
@@ -1227,6 +1236,29 @@ public class EdpaEventRail extends DeepAgentRail {
             lastTodolistFingerprint.put(sid, fp);
         }
         updatePrevTodoStatus(sid, todos);
+
+        setTodoRedisTtl(sid);
+    }
+
+    private void setTodoRedisTtl(String sessionId) {
+        StringRedisTemplate template = RedisConfig.getStringRedisTemplate();
+        if (template == null) {
+            return;
+        }
+        String key = sessionId + ":todo";
+        try {
+            Boolean success = template.expire(key, Duration.ofSeconds(TODO_REDIS_TTL_SECONDS));
+            if (success != null && success) {
+                LOGGER.info("[EDPA-DIAG] setTodoRedisTtl sid={} key={} ttl={}s",
+                        sessionId, key, TODO_REDIS_TTL_SECONDS);
+            } else if (success != null && !success) {
+                LOGGER.debug("[EDPA-DIAG] setTodoRedisTtl sid={} key={} not found", sessionId, key);
+            } else {
+                LOGGER.warn("[EDPA-DIAG] setTodoRedisTtl sid={} key={} expire returned null", sessionId, key);
+            }
+        } catch (RedisConnectionFailureException | RedisSystemException e) {
+            LOGGER.warn("[EDPA-DIAG] setTodoRedisTtl failed sid={}: {}", sessionId, e.getMessage());
+        }
     }
 
     private void emitEmptyTodolistPair(AgentCallbackContext ctx) {
@@ -1357,10 +1389,11 @@ public class EdpaEventRail extends DeepAgentRail {
     /**
      * 读取当前会话的 todos。
      *
-     * <p>主路径：从 TodoTool 落盘文件读，用与 EdpaTodoRail 注入一致的「转义真实 sessionId」，
-     * 保证多会话隔离且能读到 todo_create 写入的数据。</p>
+     * <p>主路径：通过 agent-core 的 TodoStorage 读取（KvTodoStorage 走 Redis，
+     * FileTodoStorage 走文件），与 Core TaskPlanningRail 共享同一存储，
+     * 无需 dual-path sync。</p>
      *
-     * <p>兜底路径：TodoTool 不可用（workspace 未就绪，如单元测试 mock DeepAgent 无 workspace）时，
+     * <p>兜底路径：TodoStorage 不可用（workspace 未就绪，如单元测试 mock DeepAgent 无 workspace）时，
      * 回落到 TaskPlanningRail.cachedTodos 读缓存，保证事件发射逻辑可被确定性单测驱动。</p>
      *
      * @param ctx the ctx value
@@ -1370,34 +1403,56 @@ public class EdpaEventRail extends DeepAgentRail {
     private List<TodoItem> loadCurrentTodos(AgentCallbackContext ctx) {
         String rawSid = sessionId(ctx);
 
-        // ★ Redis 唯一数据源：只从 Redis 读取（EdpaTodoRail 在 todo_create/todo_modify 后
-        // 已将 Core 写入的文件数据同步到 Redis 并删除文件）
-        if (redisTodoStore != null) {
-            List<TodoItem> todos = redisTodoStore.load(rawSid);
-            int size = todos == null ? 0 : todos.size();
-            LOGGER.debug("[EDPA-DIAG] LOAD_CURRENT_TODOS source=REDIS session={} items={}", rawSid, size);
-            return todos != null ? todos : new ArrayList<>();
-        }
-
-        // 兜底：未启用 Redis 时回落文件（单测兼容、旧部署）
-        String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
-        TodoTool tool = getTodoTool().orElse(null);
-        if (tool != null) {
+        // ★ agent-core TodoStorage：与 Core TaskPlanningRail 共享同一 KV 存储
+        Optional<TodoStorage> storageOpt = getTodoStorage();
+        if (storageOpt.isPresent()) {
+            String sid = TodoSessionResolver.sanitizeSessionId(rawSid);
             try {
-                List<TodoItem> todos = tool.load(sid);
+                List<TodoItem> todos = storageOpt.get().load(sid);
                 int size = todos == null ? 0 : todos.size();
-                LOGGER.info("[EDPA-DIAG] LOAD_CURRENT_TODOS source=FILE session={} items={}", rawSid, size);
+                LOGGER.debug("[EDPA-DIAG] LOAD_CURRENT_TODOS source=STORAGE session={} items={}", rawSid, size);
                 return todos != null ? todos : new ArrayList<>();
             } catch (IOException | IllegalStateException e) {
-                LOGGER.debug("EdpaEventRail.loadCurrentTodos from disk failed: {}", e.getMessage());
+                LOGGER.debug("[EDPA-DIAG] LOAD_CURRENT_TODOS storage load failed: {}", e.getMessage());
             }
         }
 
-        // 兜底：TodoTool 不可用时从 TaskPlanningRail 缓存读
+        // 兜底：TodoStorage 不可用时从 TaskPlanningRail 缓存读
         List<TodoItem> cached = loadFromTaskPlanningCache(rawSid);
         int cacheSize = cached == null ? 0 : cached.size();
         LOGGER.debug("[EDPA-DIAG] LOAD_CURRENT_TODOS source=CACHE session={} items={}", rawSid, cacheSize);
         return cached;
+    }
+
+    /**
+     * lazy 创建 TodoStorage，通过 deepAgent.getKvStore() 获取共享 KV 存储。
+     * kvStore 为空时回落到 FileTodoStorage。
+     *
+     * @return TodoStorage 实例的 Optional，workspace 不可用时返回 Optional.empty()
+     */
+    private Optional<TodoStorage> getTodoStorage() {
+        if (todoStorage != null) {
+            return Optional.of(todoStorage);
+        }
+        try {
+            BaseKVStore kvStore = deepAgent.getKvStore();
+            if (kvStore != null) {
+                todoStorage = new KvTodoStorage(kvStore);
+                return Optional.of(todoStorage);
+            }
+        } catch (IllegalStateException | NullPointerException e) {
+            LOGGER.debug("[EDPA-DIAG] getTodoStorage: kvStore unavailable: {}", e.getMessage());
+        }
+        try {
+            Path root = deepAgent.getWorkspace().root();
+            Path todoDir = root.resolve(".todo");
+            todoRootPath = todoDir;
+            todoStorage = new FileTodoStorage(todoDir);
+            return Optional.of(todoStorage);
+        } catch (IllegalStateException | NullPointerException e) {
+            LOGGER.warn("[EDPA-DIAG] getTodoStorage: workspace unavailable: {}", e.getMessage());
+        }
+        return Optional.empty();
     }
 
     /**
