@@ -39,6 +39,8 @@ import java.util.logging.Logger;
  */
 public final class VerificationUiServer {
     private static final Logger LOG = Logger.getLogger(VerificationUiServer.class.getName());
+    private static final String LF = String.valueOf((char) 10);
+    private static final String CR = String.valueOf((char) 13);
 
     private final int port;
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -210,9 +212,6 @@ public final class VerificationUiServer {
         }
         sseClients.removeAll(dead);
     }
-
-    private static final String LF = String.valueOf((char) 10);
-    private static final String CR = String.valueOf((char) 13);
 
     /**
      * JSON 文本。
