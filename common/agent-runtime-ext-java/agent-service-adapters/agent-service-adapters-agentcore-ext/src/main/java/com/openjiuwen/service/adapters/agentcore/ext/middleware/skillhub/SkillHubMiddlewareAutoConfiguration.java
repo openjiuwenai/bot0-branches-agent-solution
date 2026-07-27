@@ -137,7 +137,7 @@ public class SkillHubMiddlewareAutoConfiguration {
         }
         try {
             return decryptor.decrypt(encrypted);
-        } catch (RuntimeException ex) {
+        } catch (IllegalStateException ex) {
             throw new IllegalStateException(
                     "SkillHub credential decryption failed at startup (required, cannot degrade): "
                             + ex.getMessage(), ex);
