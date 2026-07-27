@@ -7,12 +7,14 @@ package com.openjiuwen.service.adapters.versatile.agentfw;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -23,18 +25,28 @@ import java.util.Optional;
 final class VersatileResponseExtractor {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private final String resultNodeName;
+    private final VersatileProperties properties;
+    private final IntentAgentResolver agentResolver;
     private boolean isCompleted;
     private boolean hasFailed;
-    private String result;
+    private final Map<String, String> extractedFields = new LinkedHashMap<>();
     private String error;
+    private boolean pendingInterrupt;
+    private boolean interruptSignalSeen;
+    private String interruptPrompt;
+    private String interruptInputRequirement;
+    private String interruptResumeToken;
 
-    VersatileResponseExtractor(String resultNodeName) {
-        this.resultNodeName = resultNodeName;
+    VersatileResponseExtractor(VersatileProperties properties, IntentAgentResolver agentResolver) {
+        this.properties = Objects.requireNonNull(properties, "properties");
+        this.agentResolver = Objects.requireNonNull(agentResolver, "agentResolver");
     }
 
     List<QueryChunk> consumeLine(String line) {
         if (line == null || line.isBlank()) {
+            return List.of();
+        }
+        if (hasFailed) {
             return List.of();
         }
         Optional<String> data = stripSsePrefix(line);
@@ -43,10 +55,19 @@ final class VersatileResponseExtractor {
         }
 
         Optional<JsonNode> json = readTree(data.get());
+        if (matchesInterruptSignal(data.get(), json)) {
+            interruptSignalSeen = true;
+            extractInterruptFields(json.orElse(null));
+            return new ArrayList<>();
+        }
         if (shouldExtractResult(data.get(), json)) {
-            Optional<String> extracted = extractResult(json.get());
-            if (extracted.isPresent()) {
-                result = extracted.get();
+            if (properties.getResultExtractions() == null || properties.getResultExtractions().isEmpty()) {
+                Optional<String> extracted = extractLegacyText(json.get());
+                if (extracted.isPresent()) {
+                    extractedFields.put("response_content", extracted.get());
+                }
+            } else {
+                extractResultFields(json.get());
             }
             return new ArrayList<>();
         }
@@ -64,44 +85,99 @@ final class VersatileResponseExtractor {
     }
 
     List<QueryChunk> finish() {
+        if (pendingInterrupt) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("message", interruptPrompt);
+            payload.put("input_requirement", interruptInputRequirement);
+            payload.put("resume_token", interruptResumeToken);
+            return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload));
+        }
+        if (!pendingInterrupt
+                && interruptSignalSeenButIncomplete()) {
+            return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                    "{\"code\":\"VERSATILE_INTENT_INTERRUPT_INCOMPLETE\","
+                            + "\"reason\":\"native interrupt missing prompt/input-requirement/resume-token\"}"));
+        }
         if (hasFailed) {
             return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, error));
         }
-        if (isCompleted && result != null) {
-            return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, answerEnvelope(result)));
+        if (isCompleted && !extractedFields.isEmpty()) {
+            if (properties.getResultExtractions() != null && !properties.getResultExtractions().isEmpty()) {
+                String intentId = extractedFields.get("intent_id");
+                if (isAmbiguousIntent(intentId)) {
+                    return List.of(buildAmbiguousChunk(intentId, extractedFields.get("response_content")));
+                }
+                try {
+                    Optional<Map<String, Object>> envelope = buildThreeFieldEnvelope();
+                    if (envelope.isPresent()) {
+                        return List.of(buildA2aDelegateInterrupt(envelope.get()));
+                    }
+                    return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                            "{\"code\":\"VERSATILE_INTENT_RESULT_CONTRACT\","
+                                    + "\"reason\":\"missing or invalid three-field result\"}"));
+                } catch (IllegalStateException ex) {
+                    return List.of(new QueryChunk(QueryChunk.TYPE_ERROR, ex.getMessage()));
+                }
+            }
+            Map<String, Object> legacy = new LinkedHashMap<>();
+            legacy.put("type", "answer");
+            legacy.put("output", extractedFields.get("response_content"));
+            return List.of(new QueryChunk(QueryChunk.TYPE_CHUNK, legacy));
         }
         if (isCompleted) {
             return List.of();
         }
-        return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT, null));
+        return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                "{\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\","
+                        + "\"reason\":\"no End/exception event\"}"));
     }
 
-    static Optional<String> answerText(Object data) {
-        if (!(data instanceof Map<?, ?> envelope) || !"answer".equals(envelope.get("type"))) {
-            return Optional.empty();
-        }
-        Object output = envelope.get("output");
-        if (output != null && !String.valueOf(output).isBlank()) {
-            return Optional.of(String.valueOf(output));
-        }
-        return Optional.empty();
-    }
-
-    private static Map<String, Object> answerEnvelope(String output) {
-        Map<String, Object> envelope = new LinkedHashMap<>();
-        envelope.put("type", "answer");
-        envelope.put("output", output);
-        return envelope;
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private boolean shouldExtractResult(String rawData, Optional<JsonNode> json) {
+        String resultNodeName = properties.getResultNodeName();
         return resultNodeName != null
                 && !resultNodeName.trim().isEmpty()
                 && rawData.contains("\"node_name\":\"" + resultNodeName + "\"")
                 && json.filter(JsonNode::isObject).isPresent();
     }
 
-    private Optional<String> extractResult(JsonNode json) {
+    private boolean matchesInterruptSignal(String rawData, Optional<JsonNode> json) {
+        VersatileProperties.Interrupt interrupt = properties.getInterrupt();
+        if (interrupt == null || !hasText(interrupt.getSignalMatch())) {
+            return false;
+        }
+        return rawData.contains("\"event\":\"" + interrupt.getSignalMatch() + "\"");
+    }
+
+    private void extractInterruptFields(JsonNode json) {
+        VersatileProperties.Interrupt interrupt = properties.getInterrupt();
+        interruptPrompt = readPath(json, interrupt.getPromptGet()).orElse(null);
+        interruptInputRequirement = readPath(json, interrupt.getInputRequirementGet()).orElse(null);
+        interruptResumeToken = readPath(json, interrupt.getResumeTokenGet()).orElse(null);
+        pendingInterrupt = hasText(interruptPrompt)
+                && hasText(interruptInputRequirement)
+                && hasText(interruptResumeToken);
+    }
+
+    private boolean interruptSignalSeenButIncomplete() {
+        return interruptSignalSeen && !pendingInterrupt;
+    }
+
+    private static Optional<String> readPath(JsonNode json, String path) {
+        if (json == null || !hasText(path)) {
+            return Optional.empty();
+        }
+        JsonNode node = json.at(path);
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return Optional.empty();
+        }
+        return Optional.of(node.isTextual() ? node.asText() : node.toString());
+    }
+
+    private Optional<String> extractLegacyText(JsonNode json) {
         JsonNode resultData = json.at("/custom_rsp_data/data");
         if (resultData.isMissingNode() || resultData.isNull()) {
             resultData = json.get("data");
@@ -115,6 +191,130 @@ final class VersatileResponseExtractor {
             return Optional.of(text.asText());
         }
         return Optional.empty();
+    }
+
+    private void extractResultFields(JsonNode json) {
+        for (VersatileProperties.ResultExtraction rule : properties.getResultExtractions()) {
+            if (rule == null || !hasText(rule.getMatch()) || !hasText(rule.getGet())) {
+                continue;
+            }
+            JsonNode node = json.at(rule.getGet());
+            if (node == null || node.isMissingNode() || node.isNull()) {
+                continue;
+            }
+            String match = rule.getMatch();
+            if ("agent_id".equals(match) && node.isArray()) {
+                hasFailed = true;
+                error = "{\"code\":\"VERSATILE_INTENT_AGENT_ID_NOT_UNIQUE\","
+                        + "\"reason\":\"agent_id must be a single string, got array\"}";
+                return;
+            }
+            if (isThreeField(match) && !node.isTextual()) {
+                hasFailed = true;
+                error = "{\"code\":\"VERSATILE_INTENT_RESULT_TYPE\","
+                        + "\"reason\":\"" + match + " must be a string\"}";
+                return;
+            }
+            String value = node.isTextual() ? node.asText() : node.toString();
+            if (hasText(value)) {
+                extractedFields.put(match, value);
+            }
+        }
+    }
+
+    private static boolean isThreeField(String match) {
+        return "response_content".equals(match) || "intent_id".equals(match) || "agent_id".equals(match);
+    }
+
+    private Optional<Map<String, Object>> buildThreeFieldEnvelope() {
+        String responseContent = extractedFields.get("response_content");
+        String intentId = extractedFields.get("intent_id");
+        String workflowAgentId = extractedFields.get("agent_id");
+        if (!hasText(intentId)) {
+            return Optional.empty();
+        }
+        String agentId = agentResolver.resolve(intentId, workflowAgentId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "VERSATILE_INTENT_AGENT_ID_UNMAPPED: intent_id=" + intentId
+                                + " workflow_agent_id=" + workflowAgentId));
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("output", responseContent != null ? responseContent : "");
+        envelope.put("response_content", responseContent != null ? responseContent : "");
+        envelope.put("intent_id", intentId);
+        envelope.put("agent_id", agentId);
+        return Optional.of(envelope);
+    }
+
+    /**
+     * Builds the {@code a2a_delegate} interrupt chunk consumed by the runtime
+     * orchestrator's {@code RemoteInvocationBatchCoordinator}.
+     *
+     * <p>Contract (per {@code A2AEnabledServeOrchestrator.isCoordinatorInterrupt}
+     * and {@code RemoteInvocationBatchCoordinator.parseBatch}):
+     * <ul>
+     *   <li>Top-level {@code type="__interaction__"} and non-blank {@code toolCallId}
+     *       so the orchestrator classifies this as a coordinator interrupt
+     *       (single-item batch form). The {@code toolCallId} is a synthetic UUID
+     *       because the versatile delegate is not a real tool call — it is a
+     *       one-shot forward whose result replaces this layer's answer.</li>
+     *   <li>Nested {@code context} map carrying
+     *       {@code _interrupt_kind="a2a_delegate"}, the target
+     *       {@code agentName} (read by {@code parseBatch} to build
+     *       {@code RemoteCall.agentName}), and {@code resume=false}.</li>
+     *   <li>Top-level {@code responseContent} preserved so
+     *       {@code VersatileAgentHandler.a2aDelegateResult} can set the
+     *       assistant message content; the new SPI does not forward it to the
+     *       caller — the {@code message} field (added by the handler) is what
+     *       the batch coordinator passes as {@code RemoteCall.message}.</li>
+     * </ul>
+     *
+     * <p>{@code resume=false} signals that the orchestrator must NOT re-invoke
+     * this layer's agent after the remote returns — the three-field result was
+     * the layer's final output, and the remote's answer is this layer's
+     * terminal answer. See {@code InterruptData.resume} in the runtime.
+     *
+     * @param envelope the three-field answer envelope (response_content, intent_id, agent_id)
+     * @return the constructed {@code a2a_delegate} interrupt chunk
+     */
+    private static QueryChunk buildA2aDelegateInterrupt(Map<String, Object> envelope) {
+        String agentName = envelope.get("agent_id") instanceof String s ? s : "";
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "__interaction__");
+        payload.put("toolCallId", "versatile-delegate-" + java.util.UUID.randomUUID());
+        payload.put("agentName", agentName);
+        payload.put("responseContent", envelope.get("response_content"));
+        payload.put("resume", false);
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("_interrupt_kind", "a2a_delegate");
+        context.put("agentName", agentName);
+        context.put("resume", false);
+        payload.put("context", context);
+        return new QueryChunk(QueryChunk.TYPE_INTERRUPT, payload);
+    }
+
+    private boolean isAmbiguousIntent(String intentId) {
+        if (!hasText(intentId)) {
+            return false;
+        }
+        String ambiguousIntentId = properties.getAmbiguousIntentId();
+        return ambiguousIntentId != null && intentId.equals(ambiguousIntentId);
+    }
+
+    private QueryChunk buildAmbiguousChunk(String intentId, String responseContent) {
+        String defaultAgentCard = properties.getDefaultWorkflow().getAgentCard();
+        if (hasText(defaultAgentCard)) {
+            Map<String, Object> envelope = new LinkedHashMap<>();
+            envelope.put("agent_id", defaultAgentCard);
+            envelope.put("response_content", responseContent != null ? responseContent : "");
+            return buildA2aDelegateInterrupt(envelope);
+        }
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("type", "answer");
+        envelope.put("intent_id", intentId != null ? intentId : "");
+        envelope.put("response_content", responseContent != null ? responseContent : "");
+        envelope.put("ambiguous", true);
+        return new QueryChunk(QueryChunk.TYPE_CHUNK, envelope);
     }
 
     private boolean containsNodeTypeEnd(JsonNode json) {
