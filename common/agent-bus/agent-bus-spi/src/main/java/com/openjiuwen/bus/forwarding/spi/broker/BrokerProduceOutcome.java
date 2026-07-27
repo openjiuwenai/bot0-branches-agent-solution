@@ -10,7 +10,7 @@ import java.util.Objects;
 
 /**
  * Outcome of a single broker <em>produce</em> attempt, returned by
- * {@link BrokerForwardingRelayPort#produce} (Stage 26, T4 hybrid relay).
+ * {@link BrokerForwardingProducerPort#produce} (Stage 26, T4 hybrid relay).
  *
  * <p><b>Deliberately NOT a {@code ForwardingDeliveryResult}.</b> A broker produce
  * is fire-and-forget: {@link Outcome#ACCEPTED} means the broker accepted the

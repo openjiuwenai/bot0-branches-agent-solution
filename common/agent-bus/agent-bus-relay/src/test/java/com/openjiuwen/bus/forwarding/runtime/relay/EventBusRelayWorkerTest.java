@@ -15,7 +15,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
@@ -145,7 +145,7 @@ class EventBusRelayWorkerTest {
         }
     }
 
-    static final class FakeRelay implements BrokerForwardingRelayPort {
+    static final class FakeRelay implements BrokerForwardingProducerPort {
         final List<ForwardingOutboxRecord> produced = new ArrayList<>();
         BrokerProduceOutcome outcome = BrokerProduceOutcome.accepted();
 

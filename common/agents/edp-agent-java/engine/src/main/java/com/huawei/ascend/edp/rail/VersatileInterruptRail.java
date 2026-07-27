@@ -115,6 +115,16 @@ public class VersatileInterruptRail extends AgentRail {
     static final String HISTORY_INFO_KEY = "history_info";
 
     /**
+     * SSE 响应体最大允许大小（字节），超过则截断并告警，防止 OOM。
+     */
+    private static final int MAX_RESPONSE_BODY_BYTES = 10 * 1024 * 1024; // 10MB
+
+    /**
+     * 截断后的响应体日志摘要长度。
+     */
+    private static final int TRUNCATED_LOG_LENGTH = 500;
+
+    /**
      * 中国银联卡号数字模式：以62开头的16-19位连续数字，覆盖所有银联BIN（工行6222/建行6217/农行6228/招行6225等）。
      */
     private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
@@ -169,6 +179,11 @@ public class VersatileInterruptRail extends AgentRail {
      * 治理装饰 SandboxClient（需求2路径，可为 null）。非 null 时在 SANDBOX 模式优先使用其 shell()。
      */
     private final SandboxClient decoratedClient;
+
+    /**
+     * Versatile 调用熔断器，连续失败达阈值后快速失败，避免线程池耗尽。
+     */
+    private final CircuitBreaker circuitBreaker;
 
     /**
      * 构造 VA 委托 Rail。
@@ -249,6 +264,18 @@ public class VersatileInterruptRail extends AgentRail {
                 : Duration.ofSeconds(30);
         this.httpClient = HttpClient.newBuilder().connectTimeout(timeout).version(HttpClient.Version.HTTP_1_1).build();
 
+        // 初始化熔断器
+        if (versatileConfig != null && versatileConfig.getCircuitBreaker() != null
+                && versatileConfig.getCircuitBreaker().isEnabled()) {
+            var cbConfig = versatileConfig.getCircuitBreaker();
+            this.circuitBreaker = new CircuitBreaker("versatile",
+                    cbConfig.getFailureThreshold(), cbConfig.getResetTimeoutMs());
+            LOGGER.info("[VersatileInterruptRail] circuit breaker enabled: failureThreshold={}, resetTimeoutMs={}",
+                    cbConfig.getFailureThreshold(), cbConfig.getResetTimeoutMs());
+        } else {
+            this.circuitBreaker = null;
+        }
+
         // VA 与 MCP、ask_user 同属工具调用增强类 Rail，使用同一优先级。
         setPriority(85);
     }
@@ -286,14 +313,19 @@ public class VersatileInterruptRail extends AgentRail {
             LOGGER.info("[VersatileInterruptRail] intercept call_versatile: toolCallId={}", toolCallId(inputs));
             String toolCallId = toolCallId(inputs);
 
-            // 续传路径：用户已提交菜单确认等输入，直接回填工具结果，不再重复调 adapter。
+            // 续传路径：中断恢复后拿到用户本轮输入。Versatile 工作流按 conversation_id 逐轮推进，
+            // 用户输入是"下一轮的 query"而不是"本轮的结果"，必须转发给下游续接工作流。
             Object resumeInput = resolveResumeInput(ctx, toolCallId);
             if (resumeInput != null) {
-                LOGGER.info("[VersatileInterruptRail] cascade resume: toolCallId={}, hasResumeInput=true", toolCallId);
+                LOGGER.info("[VersatileInterruptRail] cascade resume: toolCallId={}, forward to versatile", toolCallId);
                 ctx.getExtra().put(ScriptConstants.KEY_SKIP_TOOL, Boolean.TRUE);
-                Object toolResult = normalizeResumeToolResult(resumeInput);
-                inputs.setToolResult(toolResult);
-                inputs.setToolMsg(ToolMessage.builder().content(toJson(toolResult)).toolCallId(toolCallId).build());
+                Map<String, Object> resumeResult = resumeVersatile(inputs, ctx, resumeInput);
+                if (isInputRequired(resumeResult)) {
+                    LOGGER.info("[VersatileInterruptRail] cascade resume still inputRequired: toolCallId={}",
+                            toolCallId);
+                    throw inputRequiredInterrupt(ctx, inputs, resumeResult);
+                }
+                applyNormalizationAndTemplate(inputs, resumeResult, ctx);
                 return;
             }
             LOGGER.info("[VersatileInterruptRail] intercepting call_versatile, direct call to versatile service");
@@ -461,16 +493,57 @@ public class VersatileInterruptRail extends AgentRail {
         return rawInput;
     }
 
-    private Object normalizeResumeToolResult(Object resumeInput) {
-        if (resumeInput instanceof String text && !text.isBlank()) {
-            try {
-                return OBJECT_MAPPER.readValue(text, new TypeReference<LinkedHashMap<String, Object>>() {
-                });
-            } catch (JsonProcessingException e) {
-                return Map.of("source", "versatile", "status", "completed", "content", text);
-            }
+    /**
+     * 中断续传：把用户本轮输入作为下一轮 query 转发给 Versatile，推进同一个 conversation 的工作流。
+     *
+     * <p>沿用本轮 tool_call 的其余参数（query_intent、归一化脚本等），仅替换 query。
+     * 下游按 conversation_id 定位会话状态推进步骤，intent 不参与续轮路由。</p>
+     *
+     * @param inputs 工具调用入参
+     * @param ctx 回调上下文
+     * @param resumeInput 中断恢复时 runtime 回填的用户输入
+     * @return 下游返回的归一化结果
+     */
+    private Map<String, Object> resumeVersatile(ToolCallInputs inputs, AgentCallbackContext ctx, Object resumeInput) {
+        String resumeQuery = extractResumeQuery(resumeInput);
+        if (resumeQuery.isBlank()) {
+            return failedResult("resume input is empty");
         }
-        return resumeInput;
+        try {
+            Map<String, Object> versatileInputs = buildInputs(normalizeArgs(inputs), ctx);
+            versatileInputs.put("query", resumeQuery);
+            versatileInputs.put("query_description", resumeQuery);
+            String conversationId = ctx.getSession() != null && ctx.getSession().getSessionId() != null
+                    ? ctx.getSession().getSessionId()
+                    : "call-versatile-spike";
+            return invokeWithInputs(versatileInputs, conversationId);
+        } catch (IllegalStateException e) {
+            LOGGER.warn("VersatileInterruptRail: resume call failed: {}", e.getMessage());
+            return failedResult(e.getMessage());
+        }
+    }
+
+    /**
+     * 从中断恢复输入中取出要转发给下游的 query 文本。
+     *
+     * <p>runtime 可能回填三种形态：业务报文字符串、带 query 字段的结构化输入、
+     * 或直接就是业务报文对象（此时整体序列化后作为 query 转发）。</p>
+     *
+     * @param resumeInput 中断恢复输入
+     * @return query 文本
+     */
+    private String extractResumeQuery(Object resumeInput) {
+        if (resumeInput instanceof String text) {
+            return text.trim();
+        }
+        if (resumeInput instanceof Map<?, ?> map) {
+            Object query = map.get("query");
+            if (query != null && !String.valueOf(query).isBlank()) {
+                return String.valueOf(query).trim();
+            }
+            return toJson(map);
+        }
+        return resumeInput == null ? "" : String.valueOf(resumeInput).trim();
     }
 
     /**
@@ -490,14 +563,32 @@ public class VersatileInterruptRail extends AgentRail {
         if (!hasAdapterA2a && !hasDirectUrl) {
             return failedResult("versatile config is missing");
         }
+        // 熔断器检查：OPEN 状态下快速失败，避免线程阻塞
+        if (circuitBreaker != null && !circuitBreaker.allowRequest()) {
+            LOGGER.warn("[VersatileInterruptRail] circuit breaker OPEN, returning degraded response, convId={}",
+                    conversationId);
+            return failedResult("工作流暂不可用，请稍后重试");
+        }
         try {
             Map<String, Object> result = hasAdapterA2a
                     ? callVersatileAdapterA2a(versatileInputs, conversationId)
                     : callVersatileDirect(versatileInputs, conversationId);
+            // 记录熔断器状态：HTTP 4xx/5xx 返回 failedResult(status=failed)
+            if (circuitBreaker != null) {
+                String status = String.valueOf(result.getOrDefault("status", ""));
+                if ("failed".equals(status)) {
+                    circuitBreaker.recordFailure();
+                } else {
+                    circuitBreaker.recordSuccess();
+                }
+            }
             storePassthroughNodes(conversationId, result);
             return result;
         } catch (IOException | InterruptedException e) {
             LOGGER.warn("VersatileInterruptRail: direct call failed: {}", e.getMessage());
+            if (circuitBreaker != null) {
+                circuitBreaker.recordFailure();
+            }
             return failedResult(e.getMessage());
         }
     }
@@ -521,12 +612,13 @@ public class VersatileInterruptRail extends AgentRail {
         LOGGER.info("VersatileInterruptRail: POST {}", url);
         HttpResponse<String> response = httpClient.send(builder.build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        String safeBody = checkAndTruncateBody(response.body());
         LOGGER.info("[VersatileInterruptRail] response status={} body={}", response.statusCode(),
-                desensitizeSensitiveFields(abbreviate(response.body())));
+                desensitizeSensitiveFields(abbreviate(safeBody)));
         if (response.statusCode() >= 400) {
-            return failedResult("HTTP " + response.statusCode() + ": " + response.body());
+            return failedResult("HTTP " + response.statusCode() + ": " + safeBody);
         }
-        String content = normalizeContent(response.body());
+        String content = normalizeContent(safeBody);
         LOGGER.info("VersatileInterruptRail: normalized content {}", content);
         return Map.of("source", "versatile", "status", "completed", "content", content);
     }
@@ -572,6 +664,19 @@ public class VersatileInterruptRail extends AgentRail {
         metadata.put("userId", agentName);
         metadata.put("agentId", agentName);
         metadata.put("versatile", Map.of("inputs", versatileInputs));
+        // 透传 query-params（type=controller、workspace_id 等）到 A2A metadata.query，
+        // 供 versatile-agent-java 的 VersatileRequestExtractor 读取并附加到下游 URL，
+        // 否则下游 Mock 因缺 workspace_id 报 422。
+        if (versatileConfig.getQueryParams() != null && !versatileConfig.getQueryParams().isEmpty()) {
+            metadata.put("query", new LinkedHashMap<>(versatileConfig.getQueryParams()));
+        }
+        // 透传前端 custom_data（wap_userName 等业务字段）到 metadata.body.custom_data，
+        // 这是 VersatileRequestExtractor 唯一读取的位置；metadata.versatile 会被它忽略。
+        // 其中的 query/intent 随后会被 adapter 用本轮消息体的语义输入覆盖，不影响路由。
+        Map<String, Object> customData = passthroughBuffer.customData(conversationId);
+        if (!customData.isEmpty()) {
+            metadata.put("body", Map.of("custom_data", customData));
+        }
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("metadata", metadata);
@@ -591,12 +696,13 @@ public class VersatileInterruptRail extends AgentRail {
                 .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8)).build();
         HttpResponse<String> response = httpClient.send(request,
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        String safeBody = checkAndTruncateBody(response.body());
         LOGGER.info("[VersatileInterruptRail] adapter A2A status={} body={}", response.statusCode(),
-                desensitizeSensitiveFields(abbreviate(response.body())));
+                desensitizeSensitiveFields(abbreviate(safeBody)));
         if (response.statusCode() >= 400) {
-            return failedResult("adapter A2A HTTP " + response.statusCode() + ": " + response.body());
+            return failedResult("adapter A2A HTTP " + response.statusCode() + ": " + safeBody);
         }
-        return normalizeA2aAdapterResponse(response.body());
+        return normalizeA2aAdapterResponse(safeBody);
     }
 
     /**
@@ -641,9 +747,12 @@ public class VersatileInterruptRail extends AgentRail {
         if (completedContent.isBlank() && !passthroughNodes.isEmpty()) {
             completedContent = extractContentFromPassthroughNodes(passthroughNodes);
         }
+
+        String status = state.equalsIgnoreCase("TASK_STATE_INPUT_REQUIRED") ? "input_required" : "completed";
+
         Map<String, Object> normalized = new LinkedHashMap<>();
         normalized.put("source", "versatile");
-        normalized.put("status", state.equalsIgnoreCase("TASK_STATE_INPUT_REQUIRED") ? "input_required" : "completed");
+        normalized.put("status", status);
         normalized.put("content", completedContent);
         normalized.put("passthrough_nodes", passthroughNodes);
         return normalized;
@@ -1212,6 +1321,33 @@ public class VersatileInterruptRail extends AgentRail {
         return Map.of("source", "versatile", "status", "failed", "error", error != null ? error : "unknown");
     }
 
+    /**
+     * 检查并截断过大的 SSE 响应体，防止 OOM。
+     *
+     * <p>SSE 流可能包含大量事件帧（artifactUpdate 持续推送），响应体可能达到数十 MB。
+     * 超过 {@link #MAX_RESPONSE_BODY_BYTES} 时截断并输出 WARN 日志。</p>
+     *
+     * @param body the raw response body
+     * @return 原始 body 或截断后的 body
+     */
+    private String checkAndTruncateBody(String body) {
+        if (body == null) {
+            return "";
+        }
+        int byteLen = body.getBytes(StandardCharsets.UTF_8).length;
+        if (byteLen <= MAX_RESPONSE_BODY_BYTES) {
+            return body;
+        }
+        // 按 UTF-8 字节截断，避免截断到多字节字符中间
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        byte[] truncated = new byte[MAX_RESPONSE_BODY_BYTES];
+        System.arraycopy(bytes, 0, truncated, 0, MAX_RESPONSE_BODY_BYTES);
+        String result = new String(truncated, StandardCharsets.UTF_8);
+        LOGGER.warn("[VersatileInterruptRail] response body too large ({} bytes), truncated to {} bytes",
+                byteLen, MAX_RESPONSE_BODY_BYTES);
+        return result;
+    }
+
     private String toJson(Object value) {
         try {
             return OBJECT_MAPPER.writeValueAsString(value);
@@ -1589,6 +1725,15 @@ public class VersatileInterruptRail extends AgentRail {
         private final Map<String, String> interruptIdsByConversation = new HashMap<>();
 
         /**
+         * 前端 A2A 请求 metadata.body.custom_data，按会话保存。
+         *
+         * <p>DeepAgent runtime 构造 Runner inputs 时不携带原始 metadata，
+         * 而下游 Versatile 需要 wap_userName 等业务字段定位用户，
+         * 故由 Handler 在入口写入、Rail 在转发 adapter 时读出。</p>
+         */
+        private final Map<String, Map<String, Object>> customDataByConversation = new HashMap<>();
+
+        /**
          * Add all.
          *
          * @param conversationId the conversationId value
@@ -1688,6 +1833,37 @@ public class VersatileInterruptRail extends AgentRail {
             }
             synchronized (interruptIdsByConversation) {
                 return Optional.ofNullable(interruptIdsByConversation.remove(conversationId));
+            }
+        }
+
+        /**
+         * Remember custom data.
+         *
+         * @param conversationId the conversationId value
+         * @param customData 前端 metadata.body.custom_data
+         */
+        public void rememberCustomData(String conversationId, Map<String, Object> customData) {
+            if (conversationId == null || conversationId.isBlank() || customData == null || customData.isEmpty()) {
+                return;
+            }
+            synchronized (customDataByConversation) {
+                customDataByConversation.put(conversationId, new LinkedHashMap<>(customData));
+            }
+        }
+
+        /**
+         * Custom data.
+         *
+         * @param conversationId the conversationId value
+         * @return 前端 custom_data，缺失时返回空 Map
+         */
+        public Map<String, Object> customData(String conversationId) {
+            if (conversationId == null || conversationId.isBlank()) {
+                return Map.of();
+            }
+            synchronized (customDataByConversation) {
+                Map<String, Object> stored = customDataByConversation.get(conversationId);
+                return stored == null ? Map.of() : new LinkedHashMap<>(stored);
             }
         }
     }

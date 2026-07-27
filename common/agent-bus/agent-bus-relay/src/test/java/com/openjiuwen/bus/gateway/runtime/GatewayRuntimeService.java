@@ -14,7 +14,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.spi.ingress.IngressEnvelope;
 import com.openjiuwen.bus.spi.ingress.IngressGateway;
@@ -94,7 +94,7 @@ public final class GatewayRuntimeService implements IngressGateway {
 
     private final ForwardingOutboxPort outbox;
     private final ForwardingOutboxClaimPort claimPort;
-    private final BrokerForwardingRelayPort relay;
+    private final BrokerForwardingProducerPort relay;
     private final BrokerForwardingConsumerPort responseConsumer;
     private final AgentDiscoveryService discovery;
     private final String sourceServiceId;
@@ -119,7 +119,7 @@ public final class GatewayRuntimeService implements IngressGateway {
      */
     public GatewayRuntimeService(ForwardingOutboxPort outbox,
                                  ForwardingOutboxClaimPort claimPort,
-                                 BrokerForwardingRelayPort relay,
+                                 BrokerForwardingProducerPort relay,
                                  BrokerForwardingConsumerPort responseConsumer,
                                  AgentDiscoveryService discovery,
                                  String sourceServiceId,
@@ -152,7 +152,7 @@ public final class GatewayRuntimeService implements IngressGateway {
 
     /**
      * Build the request {@link ForwardingEnvelope} and synchronously dispatch it:
-     * enqueue → claimDue → {@link BrokerForwardingRelayPort#produce produce} → markAcked.
+     * enqueue → claimDue → {@link BrokerForwardingProducerPort#produce produce} → markAcked.
      * Returns the built envelope so tests can assert the mapped eventType / correlationId /
      * payloadRef descriptor.
      *

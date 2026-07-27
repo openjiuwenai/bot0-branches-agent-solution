@@ -5,6 +5,7 @@
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
@@ -19,6 +20,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Unit tests for {@link SkillHubManager} covering the test matrix T2/T3/T4/T8/T11/T15/T16.
@@ -61,8 +68,7 @@ class SkillHubManagerTest {
         };
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
 
-        assertThatThrownBy(() -> manager.start())
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> manager.start()).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SkillHub[AUTH_FAILED]");
 
         // download must NOT have been called — start failed before reaching download
@@ -217,8 +223,7 @@ class SkillHubManagerTest {
         manager = new SkillHubManager(provider, throwingInstaller, newConfig(tempDir), "");
         manager.start();
 
-        assertThatThrownBy(() -> manager.register(new Object()))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> manager.register(new Object())).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SkillHub[INSTALL_FAILED]");
     }
 
@@ -256,8 +261,7 @@ class SkillHubManagerTest {
             createFakeSkillDir(tempDir, "skill");
             return true;
         };
-        provider.verifyBehavior = path -> Files.isDirectory(path)
-                && Files.isReadable(path.resolve("SKILL.md"));
+        provider.verifyBehavior = path -> Files.isDirectory(path) && Files.isReadable(path.resolve("SKILL.md"));
         manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
         manager.start();
         assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
@@ -338,9 +342,8 @@ class SkillHubManagerTest {
                     // expected: installer no-ops for non-BaseAgent
                 }
             });
-            t.setUncaughtExceptionHandler((thr, ex) ->
-                    java.util.logging.Logger.getLogger("test")
-                            .warning("test worker uncaught: " + thr.getName() + " " + ex));
+            t.setUncaughtExceptionHandler((thr, ex) -> java.util.logging.Logger.getLogger("test")
+                    .warning("test worker uncaught: " + thr.getName() + " " + ex));
             workers.add(t);
             t.start();
         }
@@ -385,15 +388,13 @@ class SkillHubManagerTest {
 
         // First register on agent A throws INSTALL_FAILED
         Object agentA = new Object();
-        assertThatThrownBy(() -> manager.register(agentA))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> manager.register(agentA)).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SkillHub[INSTALL_FAILED]");
 
         // Second register on the SAME agent A must NOT re-throw (path already
         // marked processed-for-this-agent) — otherwise every subsequent request
         // from this agent would be permanently broken.
-        org.assertj.core.api.Assertions.assertThatCode(() -> manager.register(agentA))
-                .doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThatCode(() -> manager.register(agentA)).doesNotThrowAnyException();
 
         // The failing path STAYS in verifiedSkillPaths so a DIFFERENT agent can
         // still try its own handover (per-agent semantics).
@@ -449,8 +450,7 @@ class SkillHubManagerTest {
         // so that a future startBackgroundRetry() call actually starts a loop.
         // We verify by calling a package-private probe.
         assertThat(manager.isBackgroundRetryActiveForTest())
-                .as("after successful retry, the retry flag must be reset so a later failure can restart")
-                .isFalse();
+                .as("after successful retry, the retry flag must be reset so a later failure can restart").isFalse();
     }
 
     /**
@@ -476,8 +476,7 @@ class SkillHubManagerTest {
 
         // Use a capturing installer that records per-agent calls instead of
         // the real SkillHubInstaller (which no-ops on non-BaseAgent).
-        java.util.List<Object> recordedAgents =
-                java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        java.util.List<Object> recordedAgents = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
         SkillHubInstaller recordingInstaller = new SkillHubInstaller() {
             @Override
             public void install(Object agent, List<Path> skillPaths) {
@@ -546,7 +545,8 @@ class SkillHubManagerTest {
         int startCount = 0;
         int stopCount = 0;
         int downloadCount = 0;
-        Runnable startBehavior = () -> { };
+        Runnable startBehavior = () -> {
+        };
         ThrowingFunction<SkillHubConfig, Boolean> downloadBehavior = cfg -> true;
         ThrowingFunction<Path, Boolean> verifyBehavior = path -> true;
 
@@ -606,5 +606,197 @@ class SkillHubManagerTest {
          * @throws IOException if a filesystem or I/O operation fails
          */
         R apply(T t) throws IOException;
+    }
+
+    // ----- layered failure semantics -----
+
+    /**
+     * Required auth failure thrown from provider.download() must
+     * NOT be degraded to background retry. Manager.start() must rethrow so
+     * the handler chain blocks Agent ready (fail fast).
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     */
+    @Test
+    void requiredAuthFailureFromDownloadFailsFast(@TempDir Path tempDir) {
+        CapturingProvider provider = new CapturingProvider();
+        provider.downloadBehavior = cfg -> {
+            throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
+                    com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory.AUTH_FAILED, "status=401");
+        };
+        manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
+
+        assertThatThrownBy(() -> manager.start())
+                .isInstanceOf(com.openjiuwen.service.spec.ext.skillhub.SkillHubException.class)
+                .hasMessageContaining("SkillHub[AUTH_FAILED]");
+
+        // Background retry must NOT have been started for a fatal auth failure.
+        assertThat(manager.isBackgroundRetryActiveForTest()).isFalse();
+        assertThat(manager.getVerifiedSkillPaths()).isEmpty();
+    }
+
+    /**
+     * Required access-denied failure from provider.download() must
+     * also fail fast (no degrade, no background retry).
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     */
+    @Test
+    void requiredAccessDeniedFailureFromDownloadFailsFast(@TempDir Path tempDir) {
+        CapturingProvider provider = new CapturingProvider();
+        provider.downloadBehavior = cfg -> {
+            throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
+                    com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory.ACCESS_DENIED, "status=403");
+        };
+        manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
+
+        assertThatThrownBy(() -> manager.start())
+                .isInstanceOf(com.openjiuwen.service.spec.ext.skillhub.SkillHubException.class)
+                .hasMessageContaining("SkillHub[ACCESS_DENIED]");
+        assertThat(manager.isBackgroundRetryActiveForTest()).isFalse();
+    }
+
+    /**
+     * Required skill not-found failure from provider.download()
+     * must also fail fast (the skill was declared required and is missing).
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     */
+    @Test
+    void requiredNotFoundFailureFromDownloadFailsFast(@TempDir Path tempDir) {
+        CapturingProvider provider = new CapturingProvider();
+        provider.downloadBehavior = cfg -> {
+            throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
+                    com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory.NOT_FOUND, "status=404");
+        };
+        manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
+
+        assertThatThrownBy(() -> manager.start())
+                .isInstanceOf(com.openjiuwen.service.spec.ext.skillhub.SkillHubException.class)
+                .hasMessageContaining("SkillHub[NOT_FOUND]");
+        assertThat(manager.isBackgroundRetryActiveForTest()).isFalse();
+    }
+
+    /**
+     * Download failure (transient) must still degrade — Agent ready
+     * with skill unavailable + background retry. This is the existing behavior
+     * and must be preserved by the layered fix.
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     */
+    @Test
+    void downloadFailureDegradesAndStartsBackgroundRetry(@TempDir Path tempDir) {
+        CapturingProvider provider = new CapturingProvider();
+        provider.downloadBehavior = cfg -> {
+            throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
+                    com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory.DOWNLOAD_FAILED, "transient");
+        };
+        manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
+
+        // Must NOT throw — degrade + background retry.
+        assertThatCode(() -> manager.start()).doesNotThrowAnyException();
+        assertThat(manager.isBackgroundRetryActiveForTest()).isTrue();
+        assertThat(manager.getVerifiedSkillPaths()).isEmpty();
+    }
+
+    /**
+     * Checksum mismatch must degrade (background retry), not fail fast.
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     */
+    @Test
+    void checksumMismatchDegrades(@TempDir Path tempDir) {
+        CapturingProvider provider = new CapturingProvider();
+        provider.downloadBehavior = cfg -> {
+            throw new com.openjiuwen.service.spec.ext.skillhub.SkillHubException(
+                    com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory.CHECKSUM_MISMATCH,
+                    "sha256 mismatch");
+        };
+        manager = new SkillHubManager(provider, new SkillHubInstaller(), newConfig(tempDir), "");
+
+        assertThatCode(() -> manager.start()).doesNotThrowAnyException();
+        assertThat(manager.isBackgroundRetryActiveForTest()).isTrue();
+    }
+
+    // ----- concurrent register on the same agent must not duplicate-install -----
+
+    /**
+     * When 4 concurrent request threads call register() on the SAME agent
+     * instance, installer.install(agent, ...) must be invoked exactly once.
+     * The per-agent lock with double-checked snapshot ensures only the
+     * first thread installs.
+     *
+     * @param tempDir the temporary local dir for fake skill files
+     * @throws Exception if the test fails
+     */
+    @Test
+    void concurrentRegisterSameAgentInstallsOnce(@TempDir Path tempDir) throws Exception {
+        CapturingProvider provider = new CapturingProvider();
+        provider.downloadBehavior = cfg -> {
+            createFakeSkillDir(tempDir, "skill-a");
+            return true;
+        };
+        provider.verifyBehavior = path -> true;
+        AtomicInteger installCount = new AtomicInteger();
+        SkillHubInstaller spyInstaller = new SkillHubInstaller() {
+            @Override
+            public void install(Object agent, List<Path> skillPaths) {
+                installCount.incrementAndGet();
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    // In test context, simply stop sleeping.
+                }
+            }
+        };
+        manager = new SkillHubManager(provider, spyInstaller, newConfig(tempDir), "");
+        manager.start();
+        assertThat(manager.getVerifiedSkillPaths()).hasSize(1);
+        runConcurrentRegister(manager, new Object(), 4, installCount);
+    }
+
+    /**
+     * Spawns {@code n} concurrent worker tasks via a thread pool, each calling
+     * {@code manager.register(agent)} on the SAME agent instance. Asserts all
+     * workers finish within 10s and installer.install was called exactly once.
+     *
+     * @param manager the SkillHubManager under test
+     * @param agent the shared agent instance
+     * @param n number of concurrent workers
+     * @param installCount the shared install invocation counter
+     * @throws InterruptedException if the latch await is interrupted
+     */
+    private static void runConcurrentRegister(SkillHubManager manager, Object agent, int n, AtomicInteger installCount)
+            throws InterruptedException {
+        CountDownLatch startLatch = new CountDownLatch(n);
+        CountDownLatch doneLatch = new CountDownLatch(n);
+        AtomicReference<IllegalStateException> firstError = new AtomicReference<>();
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        try {
+            for (int i = 0; i < n; i++) {
+                pool.submit(() -> {
+                    startLatch.countDown();
+                    try {
+                        startLatch.await();
+                        manager.register(agent);
+                    } catch (InterruptedException ex) {
+                        // In test context, simply proceed to doneLatch.
+                    } catch (IllegalStateException ex) {
+                        firstError.compareAndSet(null, ex);
+                    } finally {
+                        doneLatch.countDown();
+                    }
+                });
+            }
+            assertThat(doneLatch.await(10, TimeUnit.SECONDS)).as("all workers should finish within 10s").isTrue();
+            if (firstError.get() != null) {
+                throw new AssertionError("worker threw", firstError.get());
+            }
+            assertThat(installCount.get()).as(
+                    "installer.install must be called exactly once for the same agent " + "under concurrent register")
+                    .isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 }

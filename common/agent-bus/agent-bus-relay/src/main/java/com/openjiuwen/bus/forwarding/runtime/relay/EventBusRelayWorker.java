@@ -16,7 +16,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 
@@ -40,7 +40,7 @@ import java.util.Set;
  * worker, not a broker-consume→re-publish relay.
  *
  * <p><b>Routing-agnostic and direction-agnostic.</b> The worker produces via the
- * injected {@link BrokerForwardingRelayPort}, whose {@code BrokerTopicResolver}
+ * injected {@link BrokerForwardingProducerPort}, whose {@code BrokerTopicResolver}
  * (+ hop suffix) is wired per relay role (forward relay → req / deliver topics; response relay →
  * resp_in / resp_out topics). The 8-topic distinctness is a wiring concern (Spring
  * profile configs, slice B), not a worker-logic concern. Which eventTypes the relay
@@ -83,7 +83,7 @@ import java.util.Set;
  *
  * <p><b>Re-publish path</b> mirrors {@code GatewayRuntimeService.dispatchRequest} /
  * {@code TestAgentRuntime.produceResponse}: outbox.enqueue → claimDue(1) →
- * {@link BrokerForwardingRelayPort#produce} → markAcked. A produce
+ * {@link BrokerForwardingProducerPort#produce} → markAcked. A produce
  * {@link BrokerProduceOutcome.Outcome#UNAVAILABLE UNAVAILABLE} / {@code ROUTE_NOT_FOUND}
  * → consumer.reject (redeliver; the agent-bus retry policy owns when).
  *
@@ -141,7 +141,7 @@ public final class EventBusRelayWorker {
     private final ForwardingInboxPort inbox;
     private final ForwardingOutboxPort outbox;
     private final ForwardingOutboxClaimPort claimPort;
-    private final BrokerForwardingRelayPort relay;
+    private final BrokerForwardingProducerPort relay;
     private final String consumerServiceId;
     private final String sourceServiceId;
     private final long leaseDurationMillis;
@@ -151,7 +151,7 @@ public final class EventBusRelayWorker {
                                 ForwardingInboxPort inbox,
                                 ForwardingOutboxPort outbox,
                                 ForwardingOutboxClaimPort claimPort,
-                                BrokerForwardingRelayPort relay,
+                                BrokerForwardingProducerPort relay,
                                 String consumerServiceId,
                                 String sourceServiceId,
                                 long leaseDurationMillis,
