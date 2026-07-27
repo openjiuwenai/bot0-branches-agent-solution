@@ -312,6 +312,7 @@ final class ConversationDriver {
             broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(), f.errorCode(), f.message()));
         } else {
             // 其他事件（Accepted/StatusChanged/ContentDelta 等）无需在此场景特殊处理。
+            return;
         }
     }
 
@@ -576,6 +577,7 @@ final class ConversationDriver {
                             f.invocationRef(), f.errorCode(), f.message()));
                 } else {
                     // 其他事件类型（如 client_tool 自动消费后的合成事件）无需前端展示。
+                    return;
                 }
             }
 
@@ -621,6 +623,7 @@ final class ConversationDriver {
         final AtomicInteger approvalCount = new AtomicInteger();
         volatile String conversationId;
         int messageCount = 0;
+
         Session(String id, String label) {
             this.id = id;
             this.label = label;

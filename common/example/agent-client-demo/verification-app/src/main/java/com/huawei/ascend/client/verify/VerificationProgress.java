@@ -9,6 +9,11 @@ package com.huawei.ascend.client.verify;
  */
 @FunctionalInterface
 interface VerificationProgress {
+    /**
+     * 处理一个进度事件。
+     *
+     * @param event 进度事件
+     */
     void onEvent(Event event);
 
     record Event(Kind kind, String scenarioId, String message, Boolean ok) {
@@ -84,6 +89,9 @@ interface VerificationProgress {
         }
     }
 
+    /**
+     * 进度事件类型。
+     */
     enum Kind {
         RUN_START,
         SCENARIO_START,
