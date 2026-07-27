@@ -177,6 +177,10 @@ public final class DefaultAgentClient implements AgentClient {
 
     /**
      * 解析本次请求应附带的凭证：单次覆盖优先，否则回退到客户端级 CredentialProvider。
+     *
+     * @param conversationId 会话标识
+     * @param perRequestToken 单次请求级凭证覆盖
+     * @return 对应结果
      */
     private String resolveCredential(String conversationId, String perRequestToken) {
         if (perRequestToken != null && !perRequestToken.isEmpty()) {
@@ -424,6 +428,8 @@ public final class DefaultAgentClient implements AgentClient {
         /**
          * continueInput 续跑同步响应成功：把响应快照转为面向业务的事件投递到新 Call 的事件流，
          * 并据此完成 completion（006 §3.4.1：新 invocationRef 的 events/completion 复用同一 Task 后续投影）。
+         *
+         * @param snap 续跑响应快照
          */
         void completeFromResume(InvocationSnapshot snap) {
             if (finished.get()) {
@@ -456,16 +462,20 @@ public final class DefaultAgentClient implements AgentClient {
 
         /**
          * continueInput 续跑失败：以 transport_error 终态完成新 Call。
+         *
+         * @param ex 异常
          */
         void failFromResume(Throwable ex) {
             forward(new InvocationEvent.Failed(invocationRef, "transport_error", ex.getMessage()));
             finishTerminal(TaskState.FAILED, "transport_error", ex.getMessage());
         }
+
         private void forward(InvocationEvent event) {
             if (!downstream.isClosed()) {
                 downstream.submit(event);
             }
         }
+
         private void finishTerminal(TaskState state, String errorCode, String message) {
             if (!finished.compareAndSet(false, true)) {
                 return;

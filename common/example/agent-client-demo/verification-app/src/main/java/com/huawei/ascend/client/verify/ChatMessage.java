@@ -22,6 +22,22 @@ import java.util.Map;
  * <li>{@code scenario_start} / {@code scenario_end} —— 场景边界标记。</li>
  * <li>{@code session_created} —— 新会话创建。</li>
  * </ul>
+ *
+ * @param type          消息类型
+ * @param sessionId     会话标识
+ * @param invocationRef 调用句柄
+ * @param toolCallId    工具调用标识
+ * @param text          文本内容
+ * @param state         任务状态
+ * @param detail        详情
+ * @param arguments     工具参数
+ * @param payload       工具执行结果
+ * @param outcome       执行结果
+ * @param errorCode     错误码
+ * @param message       消息文本
+ * @param ok            是否成功
+ * @param scenarioId    场景标识
+ * @param label         标签
  */
 record ChatMessage(
         String type,
@@ -116,6 +132,11 @@ record ChatMessage(
 
     /**
      * 工具结果明细（聚合 outcome/payload/errorCode/message，控制 toolResult 参数数量，G.MET.01）。
+     *
+     * @param outcome 执行结果
+     * @param payload 工具执行结果
+     * @param errorCode 错误码
+     * @param message 消息文本
      */
     record ToolResultDetail(String outcome, Object payload, String errorCode, String message) {
         /**

@@ -36,8 +36,19 @@ public interface LocalToolRegistry {
         return register(LocalTool.of(descriptor, fn));
     }
 
+    /**
+     * 注销指定工具。
+     *
+     * @param toolId 工具标识
+     */
     void unregister(String toolId);
 
+    /**
+     * 查找已注册的工具。
+     *
+     * @param toolId 工具标识
+     * @return 已注册工具（未找到返回 empty）
+     */
     Optional<LocalTool.Registered> find(String toolId);
 
     /**

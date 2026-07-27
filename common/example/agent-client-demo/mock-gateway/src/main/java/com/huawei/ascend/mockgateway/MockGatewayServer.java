@@ -62,6 +62,7 @@ public final class MockGatewayServer {
         });
         return t;
     };
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final ConcurrentMap<String, TaskSim> tasks = new ConcurrentHashMap<>();
 
@@ -97,6 +98,7 @@ public final class MockGatewayServer {
      * 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
      *
      * @return 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
+     * @throws IOException 若发生 IOException
      */
     public int start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", requestedPort), 0);
@@ -199,6 +201,7 @@ public final class MockGatewayServer {
             writeJson(ex, 200, rpcError(rpcId, -32001, "unknown task " + taskId));
             return;
         }
+
         synchronized (task) {
             String submittedToolCallId = extractToolCallId(message).orElse(null);
             advanceOnResume(task, submittedToolCallId);
@@ -228,6 +231,12 @@ public final class MockGatewayServer {
 
     /**
      * 幂等命中时回放既有 Task：流式则推送当前快照，否则返回单条结果。
+     *
+     * @param ex 异常
+     * @param rpcId JSON-RPC 请求标识
+     * @param existing 已存在的任务模拟
+     * @param streaming 是否流式
+     * @throws IOException 若发生 IOException
      */
     private void replayExisting(HttpExchange ex, String rpcId, TaskSim existing, boolean streaming)
             throws IOException {
@@ -337,6 +346,7 @@ public final class MockGatewayServer {
                     }
                     sendFrame(os, rpcId, buildResult(task, "status-update"));
                 }
+
                 default -> sendFrame(os, rpcId, buildResult(task, "status-update"));
             }
         }
@@ -515,6 +525,12 @@ public final class MockGatewayServer {
 
     /**
      * 网关治理错误：以 HTTP 状态码 + {@code {code,message}} 响应体返回（Feat-Func-011 §4.9）。
+     *
+     * @param ex 异常
+     * @param status HTTP 状态码
+     * @param code 错误码
+     * @param message 消息文本
+     * @throws IOException 若发生 IOException
      */
     private void writeGovernanceError(HttpExchange ex, int status, String code, String message)
             throws IOException {
@@ -523,6 +539,7 @@ public final class MockGatewayServer {
         body.put("message", message);
         writeJson(ex, status, body);
     }
+
     private void writeJson(HttpExchange ex, int status, ObjectNode body) throws IOException {
         byte[] bytes = write(body).getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");

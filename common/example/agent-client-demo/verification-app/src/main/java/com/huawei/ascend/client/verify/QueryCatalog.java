@@ -81,6 +81,12 @@ final class QueryCatalog {
     /**
      * 一条验证 query。字段已聚合到 {@link QueryConfig} 与 {@link Expectation}，
      * 通过便捷方法暴露原字段以保持调用方简洁。
+     *
+     * @param id 查询标识
+     * @param displayName 显示名
+     * @param input 输入文本
+     * @param config 查询配置
+     * @param expectation 预期
      */
     record Query(
             String id,

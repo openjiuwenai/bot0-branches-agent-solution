@@ -49,6 +49,7 @@ public final class ToolExposurePolicy {
     /**
      * 组合两级策略：结果 = 两级取交集（都允许才暴露）。
      *
+     * @param other 另一个策略
      * @return 组合后的策略
      */
     public ToolExposurePolicy and(ToolExposurePolicy other) {
@@ -80,6 +81,7 @@ public final class ToolExposurePolicy {
     /**
      * 仅暴露白名单内的工具。
      *
+     * @param toolIds 工具标识集合
      * @return 仅暴露白名单内的工具。
      */
     public static ToolExposurePolicy allow(String... toolIds) {
@@ -93,6 +95,7 @@ public final class ToolExposurePolicy {
     /**
      * 暴露除黑名单外的全部工具。
      *
+     * @param toolIds 工具标识集合
      * @return 暴露除黑名单外的全部工具。
      */
     public static ToolExposurePolicy allExcept(String... toolIds) {

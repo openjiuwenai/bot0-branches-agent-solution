@@ -210,11 +210,20 @@ final class A2aJsonCodec {
 
     /**
      * 中立解析结果。{@code state} 为空表示该帧仅承载内容增量（artifact-update）。
+     *
+     * @param taskId 任务标识
+     * @param contextId 上下文标识
+     * @param state 任务状态
+     * @param interrupt 中断信息
+     * @param text 文本内容
+     * @param errorCode 错误码
+     * @param errorMessage 错误信息
      */
     record Frame(String taskId, String contextId, TaskState state, Interrupt interrupt,
             String text, String errorCode, String errorMessage) {
         // 仅规范构造器，无额外成员。
     }
+
     record Interrupt(boolean userInput, String toolCallId, String toolName,
             Map<String, Object> arguments, String prompt, Long deadlineMs) {
         // 仅规范构造器，无额外成员。

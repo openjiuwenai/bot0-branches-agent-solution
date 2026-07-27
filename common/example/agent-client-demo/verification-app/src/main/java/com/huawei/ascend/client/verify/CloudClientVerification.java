@@ -82,7 +82,12 @@ public final class CloudClientVerification {
     /**
      * 供 Web UI 调用：注入进度回调后跑完全部场景。
      *
+     * @param progress progress
      * @return 供 Web UI 调用：注入进度回调后跑完全部场景。
+     * @throws InterruptedException 若发生 InterruptedException
+     * @throws ExecutionException 若发生 ExecutionException
+     * @throws TimeoutException 若发生 TimeoutException
+     * @throws IOException 若发生 IOException
      */
     public int runWithProgress(VerificationProgress progress)
             throws InterruptedException, ExecutionException, TimeoutException, IOException {
@@ -94,6 +99,10 @@ public final class CloudClientVerification {
      * run。
      *
      * @return run
+     * @throws InterruptedException 若发生 InterruptedException
+     * @throws ExecutionException 若发生 ExecutionException
+     * @throws TimeoutException 若发生 TimeoutException
+     * @throws IOException 若发生 IOException
      */
 
     private int run() throws InterruptedException, ExecutionException, TimeoutException, IOException {
@@ -296,6 +305,12 @@ public final class CloudClientVerification {
 
     /**
      * Scenario 4: 普通多轮对话（复用同一 conversationId 再 invoke 无 taskId 创建，得到新 Task）。
+     *
+     * @param client AgentClient 实例
+     * @param tools tools
+     * @throws InterruptedException 若发生 InterruptedException
+     * @throws ExecutionException 若发生 ExecutionException
+     * @throws TimeoutException 若发生 TimeoutException
      */
     private void scenarioPlainMultiTurn(AgentClient client, DemoTools tools)
             throws InterruptedException, ExecutionException, TimeoutException {
@@ -357,6 +372,12 @@ public final class CloudClientVerification {
 
     /**
      * Scenario 5: 默认不暴露（不声明 exposure → ToolView 为空 → 服务端不可见任何本地工具）。
+     *
+     * @param client AgentClient 实例
+     * @param tools tools
+     * @throws InterruptedException 若发生 InterruptedException
+     * @throws ExecutionException 若发生 ExecutionException
+     * @throws TimeoutException 若发生 TimeoutException
      */
     private void scenarioDefaultNoExposure(AgentClient client, DemoTools tools)
             throws InterruptedException, ExecutionException, TimeoutException {
@@ -390,6 +411,11 @@ public final class CloudClientVerification {
 
     /**
      * Scenario 6: 治理错误（401 AUTH_MISSING）不投影为成功 Task，而是以 Failed 终态暴露。
+     *
+     * @param url url
+     * @throws InterruptedException 若发生 InterruptedException
+     * @throws ExecutionException 若发生 ExecutionException
+     * @throws TimeoutException 若发生 TimeoutException
      */
     private void scenarioGovernanceErrorNotProjected(String url)
             throws InterruptedException, ExecutionException, TimeoutException {
@@ -422,6 +448,7 @@ public final class CloudClientVerification {
         }
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
     }
+
     private void check(String scenarioId, boolean condition, String message) {
         progress.onEvent(VerificationProgress.Event.check(scenarioId, condition, message));
         if (!condition) {

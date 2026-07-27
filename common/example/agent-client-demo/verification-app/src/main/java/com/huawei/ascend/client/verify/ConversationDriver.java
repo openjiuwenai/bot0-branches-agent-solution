@@ -93,6 +93,8 @@ final class ConversationDriver {
     /**
      * 在指定会话上跑一条 query（同步：阻塞到该 query 终态 + 断言完成）。
      *
+     * @param queryId 查询标识
+     * @param sessionId 会话标识
      * @return 该 query 的断言结果汇总（ok=true 表示全部断言通过）。
      */
     QueryResult runQuery(String queryId, String sessionId) {
@@ -287,6 +289,11 @@ final class ConversationDriver {
 
     /**
      * continueInput 场景的事件分发：用户输入提示触发续传；终态事件广播结果。
+     *
+     * @param event 事件
+     * @param s 会话
+     * @param call 调用句柄
+     * @param userPrompt 用户输入提示
      */
     private void handleContinueInputEvent(InvocationEvent event, Session s, InvocationCall call,
                                           CountDownLatch userPrompt) {
@@ -367,6 +374,13 @@ final class ConversationDriver {
 
     /**
      * 串行多轮中的一轮：发起一次 STREAMING 调用并等待终态，失败时记录断言并返回 Optional.empty()。
+     *
+     * @param s 会话
+     * @param q 查询定义
+     * @param out 断言收集器
+     * @param suffix 场景后缀
+     * @param tag 场景标签
+     * @return 对应结果
      */
     private Optional<TurnResult> runPlainSingleTurn(Session s, QueryCatalog.Query q,
                                                     List<Assertion> out, String suffix, String tag) {
@@ -491,6 +505,11 @@ final class ConversationDriver {
 
     /**
      * 发起 STREAMING 调用、广播 user 消息、订阅事件流、等待终态。
+     *
+     * @param s 会话
+     * @param q 查询定义
+     * @param out 断言收集器
+     * @return 对应结果
      */
     private InvocationSnapshot invokeAndWait(Session s, QueryCatalog.Query q, List<Assertion> out) {
         InvocationRequest.Builder b = InvocationRequest.builder()
@@ -517,6 +536,11 @@ final class ConversationDriver {
 
     /**
      * 订阅事件流，把 SDK 事件翻译成对话消息。
+     *
+     * @param s 会话
+     * @param call 调用句柄
+     * @param out 断言收集器
+     * @param scenarioId 场景标识
      */
     private void subscribeEvents(Session s, InvocationCall call, List<Assertion> out, String scenarioId) {
         call.events().subscribe(new Flow.Subscriber<>() {
@@ -524,6 +548,7 @@ final class ConversationDriver {
             public void onSubscribe(Flow.Subscription subscription) {
                 subscription.request(Long.MAX_VALUE);
             }
+
             @Override
             public void onNext(InvocationEvent event) {
                 if (event instanceof InvocationEvent.Accepted a) {
@@ -553,11 +578,13 @@ final class ConversationDriver {
                     // 其他事件类型（如 client_tool 自动消费后的合成事件）无需前端展示。
                 }
             }
+
             @Override
             public void onError(Throwable throwable) {
                 broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(),
                         "subscription_error", throwable.getMessage()));
             }
+
             @Override
             public void onComplete() {
                 // 由 completion future 统一处理，此处无需操作。
@@ -613,6 +640,7 @@ final class ConversationDriver {
             // 工具执行观察者：把 toolName/arguments/payload 推给前端。
             tools.registerInto(client, this::onToolExecuted);
         }
+
         private void onToolExecuted(ToolInvocation invocation, ToolExecutionRecord record) {
             ToolExecutionObserver.Snapshot snap = ToolExecutionObserver.Snapshot.of(invocation, record);
             broadcaster.broadcast(ChatMessage.toolCall(id, invocation.toolCallId(),
@@ -622,12 +650,15 @@ final class ConversationDriver {
                             snap.outcome().name(), snap.payload(), snap.errorCode(), snap.message())));
         }
     }
+
     record SessionInfo(String id, String label, String conversationId, int messageCount) {
         // 仅规范构造器，无额外成员。
     }
+
     record Assertion(String scenarioId, boolean ok, String message) {
         // 仅规范构造器，无额外成员。
     }
+
     record QueryResult(String queryId, String sessionId, boolean ok, List<Assertion> assertions) {
         // 仅规范构造器，无额外成员。
     }

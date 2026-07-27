@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class AgentClients {
     private AgentClients() {
+        // 工具类，禁止实例化。
     }
 
     /**

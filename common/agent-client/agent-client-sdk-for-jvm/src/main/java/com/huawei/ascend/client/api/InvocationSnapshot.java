@@ -11,6 +11,14 @@ package com.huawei.ascend.client.api;
  * 反映"客户端此刻观测到的"状态。它<b>不是</b>服务端权威状态，可能滞后。
  * 可空字段（diagnosticTaskRef/pendingToolCall/outputText/errorCode/message）以 null 表示不适用。
  *
+ * @param invocationRef 调用句柄
+ * @param state 任务状态
+ * @param terminal 是否终态
+ * @param diagnosticTaskRef 诊断任务引用
+ * @param pendingToolCall 待处理工具调用
+ * @param outputText 输出文本
+ * @param errorCode 错误码
+ * @param message 消息文本
  * @since 2026-07-27
  */
 public record InvocationSnapshot(

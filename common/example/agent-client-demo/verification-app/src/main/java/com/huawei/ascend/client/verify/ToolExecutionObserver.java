@@ -42,6 +42,14 @@ interface ToolExecutionObserver {
 
     /**
      * 记录一次工具执行的不可变快照，供 SSE 序列化。
+     *
+     * @param toolCallId 工具调用标识
+     * @param toolName 工具名
+     * @param arguments 工具参数
+     * @param outcome 执行结果
+     * @param payload 工具执行结果
+     * @param errorCode 错误码
+     * @param message 消息文本
      */
     record Snapshot(
             String toolCallId,

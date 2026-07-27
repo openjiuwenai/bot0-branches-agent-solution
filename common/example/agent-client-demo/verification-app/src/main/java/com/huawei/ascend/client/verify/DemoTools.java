@@ -34,6 +34,8 @@ final class DemoTools {
 
     /**
      * 原有入口：不挂观察者，行为与重构前完全一致（CLI 全量断言用）。
+     *
+     * @param client AgentClient 实例
      */
     void registerInto(AgentClient client) {
         registerInto(client, ToolExecutionObserver.noop());
@@ -41,12 +43,16 @@ final class DemoTools {
 
     /**
      * 对话式入口：挂观察者，工具执行后把完整信息推给前端。
+     *
+     * @param client AgentClient 实例
+     * @param observer 工具执行观察者
      */
     void registerInto(AgentClient client, ToolExecutionObserver observer) {
         registerReadPage(client, observer);
         registerSubmitOrder(client, observer);
         registerPing(client, observer);
     }
+
     private void registerReadPage(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(READ_PAGE)
@@ -67,6 +73,7 @@ final class DemoTools {
                     return record;
                 }));
     }
+
     private void registerSubmitOrder(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(SUBMIT_ORDER)
@@ -87,6 +94,7 @@ final class DemoTools {
                     return record;
                 }));
     }
+
     private void registerPing(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(PING)

@@ -182,6 +182,10 @@ public final class A2aHttpTransportProvider implements TransportProvider {
 
     /**
      * 把网关的 HTTP 治理错误（401/403/400/409 等）解析为带稳定 code 的传输异常。
+     *
+     * @param status HTTP 状态码
+     * @param body 请求体或 JSON 文本
+     * @return 对应结果
      */
     private A2aTransportException governanceError(int status, String body) {
         String code = "HTTP_" + status;
@@ -199,6 +203,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         }
         return new A2aTransportException("gateway rejected request [" + status + "/" + code + "]: " + message);
     }
+
     private void openSse(Channel ch, String body, String credential,
                          CompletableFuture<InvocationSnapshot> ack) {
         HttpRequest req = base("text/event-stream", credential, false)
@@ -221,6 +226,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                     io.execute(() -> readSse(ch, resp.body()));
                 });
     }
+
     private void readSse(Channel ch, InputStream in) {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder data = new StringBuilder();
@@ -241,6 +247,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             handleSseReadFailure(ch, e);
         }
     }
+
     private void handleSseReadFailure(Channel ch, Throwable e) {
         if (!ch.terminal.get()) {
             // SSE 连接自然断开且非终态：不制造失败，等待后续 resume 续传。
@@ -345,6 +352,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                     submit(ch, new InvocationEvent.InputRequired(ch.invocationRef, call, null));
                 }
             }
+
             default -> submit(ch, new InvocationEvent.StatusChanged(ch.invocationRef, f.state(), false));
         }
     }
@@ -481,6 +489,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             this.delegate = delegate;
             this.start = start;
         }
+
         @Override
         public void subscribe(Flow.Subscriber<? super InvocationEvent> subscriber) {
             delegate.subscribe(subscriber);

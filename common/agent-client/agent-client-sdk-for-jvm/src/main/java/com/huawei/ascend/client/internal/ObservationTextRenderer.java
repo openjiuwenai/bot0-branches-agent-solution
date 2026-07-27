@@ -45,6 +45,7 @@ final class ObservationTextRenderer {
                     out.put("resultRef", record.payloadRef());
                 }
             }
+
             default -> {
                 if (record.errorCode() != null) {
                     out.put("errorCode", record.errorCode());
