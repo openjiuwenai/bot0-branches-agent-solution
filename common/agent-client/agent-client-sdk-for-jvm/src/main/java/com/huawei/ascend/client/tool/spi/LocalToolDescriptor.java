@@ -21,7 +21,6 @@ import java.util.Set;
  * @since 2026-07-27
  */
 public final class LocalToolDescriptor {
-
     private final String toolId;
     private final String displayName;
     private final String description;
@@ -32,17 +31,10 @@ public final class LocalToolDescriptor {
     private final boolean requiresApproval;
 
     /**
-     * 工具副作用分级，用于治理决策。
+     * LocalToolDescriptor。
      *
-     * @since 2026-07-27
+     * @param b Builder
      */
-    public enum SideEffect {
-        /** 只读/无副作用，可直接执行。 */
-        OBSERVATION,
-        /** 有副作用（写操作等），执行前需经审批。 */
-        ACTION
-    }
-
     private LocalToolDescriptor(Builder b) {
         this.toolId = Objects.requireNonNull(b.toolId, "toolId");
         this.displayName = (b.displayName != null) ? b.displayName : b.toolId;
@@ -56,6 +48,18 @@ public final class LocalToolDescriptor {
         this.requiresApproval = (b.requiresApproval != null)
                 ? b.requiresApproval
                 : (b.sideEffect == SideEffect.ACTION);
+    }
+
+    /**
+     * 工具副作用分级，用于治理决策。
+     *
+     * @since 2026-07-27
+     */
+    public enum SideEffect {
+        /** 只读/无副作用，可直接执行。 */
+        OBSERVATION,
+        /** 有副作用（写操作等），执行前需经审批。 */
+        ACTION
     }
 
     /**

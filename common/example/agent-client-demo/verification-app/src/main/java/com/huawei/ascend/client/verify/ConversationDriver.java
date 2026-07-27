@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </ul>
  */
 final class ConversationDriver {
-
     private final String gatewayUrl;
     private final ChatBroadcaster broadcaster;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
@@ -61,7 +60,12 @@ final class ConversationDriver {
         broadcaster.broadcast(ChatMessage.info(null, "网关: " + gatewayUrl + " (external)"));
     }
 
-    /** 创建一个新会话，返回 sessionId。 */
+    /**
+     * 创建会话。
+     *
+     * @param label String
+     * @return 创建会话
+     */
     String createSession(String label) {
         String id = "session-" + sessionSeq.incrementAndGet();
         Session s = new Session(id, label);
@@ -69,6 +73,12 @@ final class ConversationDriver {
         broadcaster.broadcast(ChatMessage.sessionCreated(id, label));
         return id;
     }
+
+    /**
+     * 会话列表。
+     *
+     * @return 会话列表
+     */
 
     List<SessionInfo> sessions() {
         List<SessionInfo> out = new ArrayList<>();
@@ -117,7 +127,13 @@ final class ConversationDriver {
         return new QueryResult(queryId, activeSessionId, overall, assertions);
     }
 
-    /** 在同一会话上按序串行跑多条 query。 */
+    /**
+     * 串行执行一组 query。
+     *
+     * @param queryIds List<String>
+     * @param sessionId String
+     * @return 串行执行一组 query
+     */
     List<QueryResult> runSerial(List<String> queryIds, String sessionId) {
         List<QueryResult> results = new ArrayList<>();
         for (String qid : queryIds) {
@@ -127,6 +143,15 @@ final class ConversationDriver {
     }
 
     // ---------------------- scenarios ----------------------
+
+    /**
+     * runStreamingClientTools。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runStreamingClientTools
+     */
 
     private boolean runStreamingClientTools(Session s, QueryCatalog.Query q, List<Assertion> out) {
         int readBefore = s.tools.readPageCount.get();
@@ -151,6 +176,15 @@ final class ConversationDriver {
                         + (s.approvalCount.get() - approvalBefore));
         return ok;
     }
+
+    /**
+     * runUnsupportedModeThenPing。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runUnsupportedModeThenPing
+     */
 
     private boolean runUnsupportedModeThenPing(Session s, QueryCatalog.Query q, List<Assertion> out) {
         // 先验证 BLOCKING 被立即拒绝（不产生对话流，仅作为断言）。
@@ -188,6 +222,15 @@ final class ConversationDriver {
         return ok;
     }
 
+    /**
+     * runContinueInput。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runContinueInput
+     */
+
     private boolean runContinueInput(Session s, QueryCatalog.Query q, List<Assertion> out) {
         InvocationRequest request = InvocationRequest.builder()
                 .conversationId(s.conversationId)
@@ -221,6 +264,7 @@ final class ConversationDriver {
 
             @Override
             public void onComplete() {
+                // 由 completion future 统一处理，此处无需操作。
             }
         });
 
@@ -260,6 +304,15 @@ final class ConversationDriver {
         }
     }
 
+    /**
+     * runPlainMultiTurn。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runPlainMultiTurn
+     */
+
     private boolean runPlainMultiTurn(Session s, QueryCatalog.Query q, List<Assertion> out) {
         int readBefore = s.tools.readPageCount.get();
         int submitBefore = s.tools.submitOrderCount.get();
@@ -298,7 +351,6 @@ final class ConversationDriver {
         final String invocationRef;
         final String conversationId;
         final InvocationSnapshot snap;
-
         TurnResult(String invocationRef, String conversationId, InvocationSnapshot snap) {
             this.invocationRef = invocationRef;
             this.conversationId = conversationId;
@@ -330,6 +382,15 @@ final class ConversationDriver {
         }
     }
 
+    /**
+     * runDefaultNoExposure。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runDefaultNoExposure
+     */
+
     private boolean runDefaultNoExposure(Session s, QueryCatalog.Query q, List<Assertion> out) {
         int readBefore = s.tools.readPageCount.get();
         int submitBefore = s.tools.submitOrderCount.get();
@@ -344,6 +405,15 @@ final class ConversationDriver {
                 "no tools executed when no exposure declared (default empty ToolView)");
         return ok;
     }
+
+    /**
+     * runGovernanceError。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runGovernanceError
+     */
 
     private boolean runGovernanceError(Session s, QueryCatalog.Query q, List<Assertion> out) {
         // 构造一个不提供 credential 的 client：每次 HTTP 不带 Authorization → 网关 401 AUTH_MISSING。
@@ -378,6 +448,15 @@ final class ConversationDriver {
         }
     }
 
+    /**
+     * runPlainDemo。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runPlainDemo
+     */
+
     private boolean runPlainDemo(Session s, QueryCatalog.Query q, List<Assertion> out) {
         if (q.exposure().isPresent()) {
             s.client.exposeInConversation(s.conversationId, q.exposure().get());
@@ -410,7 +489,6 @@ final class ConversationDriver {
         q.agentId().ifPresent(b::agentId);
         q.exposure().ifPresent(b::exposure);
         InvocationRequest request = b.build();
-
         InvocationCall call = s.client.invoke(request);
         broadcaster.broadcast(ChatMessage.user(s.id, call.invocationRef(), q.input()));
         subscribeEvents(s, call, out, q.id());
@@ -433,7 +511,6 @@ final class ConversationDriver {
             public void onSubscribe(Flow.Subscription subscription) {
                 subscription.request(Long.MAX_VALUE);
             }
-
             @Override
             public void onNext(InvocationEvent event) {
                 if (event instanceof InvocationEvent.Accepted a) {
@@ -463,18 +540,27 @@ final class ConversationDriver {
                     // 其他事件类型（如 client_tool 自动消费后的合成事件）无需前端展示。
                 }
             }
-
             @Override
             public void onError(Throwable throwable) {
                 broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(),
                         "subscription_error", throwable.getMessage()));
             }
-
             @Override
             public void onComplete() {
+                // 由 completion future 统一处理，此处无需操作。
             }
         });
     }
+
+    /**
+     * 准入决策。
+     *
+     * @param out List<Assertion>
+     * @param scenarioId String
+     * @param condition boolean
+     * @param message String
+     * @return 准入决策
+     */
 
     private boolean check(List<Assertion> out, String scenarioId, boolean condition, String message) {
         out.add(new Assertion(scenarioId, condition, message));
@@ -493,7 +579,6 @@ final class ConversationDriver {
         final AtomicInteger approvalCount = new AtomicInteger();
         volatile String conversationId;
         int messageCount = 0;
-
         Session(String id, String label) {
             this.id = id;
             this.label = label;
@@ -513,7 +598,6 @@ final class ConversationDriver {
             // 工具执行观察者：把 toolName/arguments/payload 推给前端。
             tools.registerInto(client, this::onToolExecuted);
         }
-
         private void onToolExecuted(ToolInvocation invocation, ToolExecutionRecord record) {
             ToolExecutionObserver.Snapshot snap = ToolExecutionObserver.Snapshot.of(invocation, record);
             broadcaster.broadcast(ChatMessage.toolCall(id, invocation.toolCallId(),
@@ -523,13 +607,10 @@ final class ConversationDriver {
                             snap.outcome().name(), snap.payload(), snap.errorCode(), snap.message())));
         }
     }
-
     record SessionInfo(String id, String label, String conversationId, int messageCount) {
     }
-
     record Assertion(String scenarioId, boolean ok, String message) {
     }
-
     record QueryResult(String queryId, String sessionId, boolean ok, List<Assertion> assertions) {
     }
 }

@@ -21,7 +21,6 @@ import java.util.Map;
  */
 @FunctionalInterface
 interface ToolExecutionObserver {
-
     /**
      * 工具执行完成时回调。
      *
@@ -30,9 +29,14 @@ interface ToolExecutionObserver {
      */
     void onExecuted(ToolInvocation invocation, ToolExecutionRecord record);
 
-    /** 空实现（CLI 全量断言模式用，不需要推前端）。 */
+    /**
+     * 空实现观察者。
+     *
+     * @return 空实现观察者
+     */
     static ToolExecutionObserver noop() {
         return (invocation, record) -> {
+            // 空实现：CLI 全量断言模式不需要推前端。
         };
     }
 
@@ -45,7 +49,13 @@ interface ToolExecutionObserver {
             Object payload,
             String errorCode,
             String message) {
-
+        /**
+         * 已注册工具。
+         *
+         * @param invocation ToolInvocation
+         * @param record ToolExecutionRecord
+         * @return 已注册工具
+         */
         static Snapshot of(ToolInvocation invocation, ToolExecutionRecord record) {
             return new Snapshot(
                     invocation.toolCallId(),

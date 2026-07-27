@@ -19,7 +19,6 @@ import java.util.UUID;
  * @since 2026-07-27
  */
 public final class ContinueInputRequest {
-
     private final String conversationId;
     private final String relatedInvocationRef;
     private final String input;

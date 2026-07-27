@@ -52,7 +52,6 @@ import java.util.concurrent.Flow;
  * @since 2026-07-27
  */
 public final class DefaultAgentClient implements AgentClient {
-
     private final TransportProvider transport;
     private final LocalToolRegistry registry;
     private final ClientStateStore store;
@@ -186,6 +185,14 @@ public final class DefaultAgentClient implements AgentClient {
                 .orElse(null);
     }
 
+    /**
+     * effectivePolicy。
+     *
+     * @param conversationId String
+     * @param invocationPolicy ToolExposurePolicy
+     * @return effectivePolicy
+     */
+
     private ToolExposurePolicy effectivePolicy(String conversationId, ToolExposurePolicy invocationPolicy) {
         ToolExposurePolicy conv = conversationExposure.get(conversationId);
         if (conv == null && invocationPolicy == null) {
@@ -199,6 +206,13 @@ public final class DefaultAgentClient implements AgentClient {
         }
         return conv.and(invocationPolicy);
     }
+
+    /**
+     * toWireSpecs。
+     *
+     * @param view ToolView
+     * @return toWireSpecs
+     */
 
     private static List<ToolWireSpec> toWireSpecs(ToolView view) {
         List<ToolWireSpec> out = new ArrayList<>();
@@ -250,7 +264,6 @@ public final class DefaultAgentClient implements AgentClient {
         final List<ToolWireSpec> clientTools;
         final String credentialToken;
         volatile String taskRef;
-
         InvocationState(String invocationRef, String conversationId, InvocationMode mode,
                         List<ToolWireSpec> clientTools, String credentialToken) {
             this.invocationRef = invocationRef;
@@ -394,7 +407,11 @@ public final class DefaultAgentClient implements AgentClient {
             }
         }
 
-        /** 是否正处 client_tool 待执行（SDK 自动续跑路径占用，禁止 continueInput）。 */
+        /**
+         * 有待处理 client_tool 返回 true。
+         *
+         * @return 有待处理 client_tool 返回 true
+         */
         boolean hasPendingClientTool() {
             return pendingClientTool.get();
         }
@@ -437,13 +454,11 @@ public final class DefaultAgentClient implements AgentClient {
             forward(new InvocationEvent.Failed(invocationRef, "transport_error", ex.getMessage()));
             finishTerminal(TaskState.FAILED, "transport_error", ex.getMessage());
         }
-
         private void forward(InvocationEvent event) {
             if (!downstream.isClosed()) {
                 downstream.submit(event);
             }
         }
-
         private void finishTerminal(TaskState state, String errorCode, String message) {
             if (!finished.compareAndSet(false, true)) {
                 return;

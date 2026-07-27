@@ -49,7 +49,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2026-07-27
  */
 public final class A2aHttpTransportProvider implements TransportProvider {
-
     private final URI endpoint;
     private final HttpClient http;
     private final A2aJsonCodec codec;
@@ -198,7 +197,6 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         }
         return new A2aTransportException("gateway rejected request [" + status + "/" + code + "]: " + message);
     }
-
     private void openSse(Channel ch, String body, String credential,
                          CompletableFuture<InvocationSnapshot> ack) {
         HttpRequest req = base("text/event-stream", credential, false)
@@ -221,7 +219,6 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                     io.execute(() -> readSse(ch, resp.body()));
                 });
     }
-
     private void readSse(Channel ch, InputStream in) {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder data = new StringBuilder();
@@ -242,7 +239,6 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             handleSseReadFailure(ch, e);
         }
     }
-
     private void handleSseReadFailure(Channel ch, Throwable e) {
         if (!ch.terminal.get()) {
             // SSE 连接自然断开且非终态：不制造失败，等待后续 resume 续传。
@@ -251,6 +247,13 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             }
         }
     }
+
+    /**
+     * readAll。
+     *
+     * @param in InputStream
+     * @return readAll
+     */
 
     private static String readAll(InputStream in) {
         try (in) {
@@ -269,6 +272,15 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         JsonNode result = extractResult(codec.readTree(json));
         codec.parseFrame(result).ifPresent(f -> emit(ch, f));
     }
+
+    /**
+     * sendForSnapshot。
+     *
+     * @param req ObjectNode
+     * @param credential String
+     * @param invocationRef String
+     * @return sendForSnapshot
+     */
 
     private CompletionStage<InvocationSnapshot> sendForSnapshot(ObjectNode req, String credential,
                                                                String invocationRef) {
@@ -361,10 +373,25 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         }
     }
 
+    /**
+     * workingSnapshot。
+     *
+     * @param ch Channel
+     * @return workingSnapshot
+     */
+
     private InvocationSnapshot workingSnapshot(Channel ch) {
         TaskState st = (ch.lastState != null) ? ch.lastState : TaskState.WORKING;
         return new InvocationSnapshot(ch.invocationRef, st, st.isTerminal(), ch.taskRef, null, null, null, null);
     }
+
+    /**
+     * snapshotFromFrame。
+     *
+     * @param invocationRef String
+     * @param f A2aJsonCodec.Frame
+     * @return snapshotFromFrame
+     */
 
     private InvocationSnapshot snapshotFromFrame(String invocationRef, A2aJsonCodec.Frame f) {
         String ref = (invocationRef != null) ? invocationRef : (f != null ? f.taskId() : null);
@@ -382,10 +409,24 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                 (f != null) ? f.errorMessage() : null);
     }
 
+    /**
+     * resolveInvocationRef。
+     *
+     * @param taskRef String
+     * @return resolveInvocationRef
+     */
+
     private String resolveInvocationRef(String taskRef) {
         Channel ch = byTaskRef.get(taskRef);
         return (ch != null) ? ch.invocationRef : taskRef;
     }
+
+    /**
+     * extractResult。
+     *
+     * @param root JsonNode
+     * @return extractResult
+     */
 
     private static JsonNode extractResult(JsonNode root) {
         if (root.has("error") && !root.path("error").isNull()) {
@@ -395,6 +436,13 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         }
         return root.has("result") ? root.get("result") : root;
     }
+
+    /**
+     * 布尔结果。
+     *
+     * @param e Throwable
+     * @return 布尔结果
+     */
 
     private static boolean isHardFailure(Throwable e) {
         // 读到流末尾/连接优雅关闭视为正常（等待续传）；其余按硬失败处理。
@@ -411,7 +459,6 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         volatile String contextId;
         volatile TaskState lastState;
         final AtomicBoolean terminal = new AtomicBoolean(false);
-
         Channel(String invocationRef) {
             this.invocationRef = invocationRef;
         }
@@ -422,12 +469,10 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         private final SubmissionPublisher<InvocationEvent> delegate;
         private final Runnable start;
         private final AtomicBoolean started = new AtomicBoolean(false);
-
         LazyStartPublisher(SubmissionPublisher<InvocationEvent> delegate, Runnable start) {
             this.delegate = delegate;
             this.start = start;
         }
-
         @Override
         public void subscribe(Flow.Subscriber<? super InvocationEvent> subscriber) {
             delegate.subscribe(subscriber);

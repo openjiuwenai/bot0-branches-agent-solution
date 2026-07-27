@@ -31,7 +31,6 @@ import java.util.concurrent.TimeoutException;
  * 通过 {@link ClientStateStore} 的原子落库 + 进程内 in-flight 合流，抵御 INPUT_REQUIRED 的重复投递。
  */
 final class ToolDispatcher {
-
     private final LocalToolRegistry registry;
     private final ClientStateStore store;
     private final Governance.PolicyGuard policyGuard;
@@ -53,6 +52,14 @@ final class ToolDispatcher {
         this.executor = executor;
     }
 
+    /**
+     * 执行 future。
+     *
+     * @param call InvocationEvent.ToolCall
+     * @param ctx ToolExecutionContext
+     * @return 执行 future
+     */
+
     CompletableFuture<ToolExecutionRecord> dispatch(InvocationEvent.ToolCall call, ToolExecutionContext ctx) {
         String toolCallId = call.toolCallId();
         Optional<ToolExecutionRecord> already = store.findRecord(toolCallId);
@@ -61,6 +68,14 @@ final class ToolDispatcher {
         }
         return inFlight.computeIfAbsent(toolCallId, k -> runPipeline(call, ctx));
     }
+
+    /**
+     * runPipeline。
+     *
+     * @param call InvocationEvent.ToolCall
+     * @param ctx ToolExecutionContext
+     * @return runPipeline
+     */
 
     private CompletableFuture<ToolExecutionRecord> runPipeline(InvocationEvent.ToolCall call,
                                                                ToolExecutionContext ctx) {
@@ -71,6 +86,14 @@ final class ToolDispatcher {
                 .thenApply(rec -> store.saveRecordIfAbsent(toolCallId, rec))
                 .whenComplete((r, e) -> inFlight.remove(toolCallId));
     }
+
+    /**
+     * computeRaw。
+     *
+     * @param call InvocationEvent.ToolCall
+     * @param ctx ToolExecutionContext
+     * @return computeRaw
+     */
 
     private CompletableFuture<ToolExecutionRecord> computeRaw(InvocationEvent.ToolCall call,
                                                               ToolExecutionContext ctx) {
@@ -124,6 +147,15 @@ final class ToolDispatcher {
         });
     }
 
+    /**
+     * runTool。
+     *
+     * @param reg LocalTool.Registered
+     * @param invocation ToolInvocation
+     * @param ctx ToolExecutionContext
+     * @return runTool
+     */
+
     private CompletableFuture<ToolExecutionRecord> runTool(LocalTool.Registered reg,
                                                            ToolInvocation invocation,
                                                            ToolExecutionContext ctx) {
@@ -150,6 +182,13 @@ final class ToolDispatcher {
         });
     }
 
+    /**
+     * unwrap。
+     *
+     * @param ex Throwable
+     * @return unwrap
+     */
+
     private static Throwable unwrap(Throwable ex) {
         Throwable c = ex;
         while ((c instanceof java.util.concurrent.CompletionException
@@ -158,6 +197,13 @@ final class ToolDispatcher {
         }
         return c;
     }
+
+    /**
+     * rootMessage。
+     *
+     * @param ex Throwable
+     * @return rootMessage
+     */
 
     private static String rootMessage(Throwable ex) {
         Throwable c = unwrap(ex);

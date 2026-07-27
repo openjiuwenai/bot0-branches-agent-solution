@@ -38,7 +38,6 @@ import java.util.logging.Logger;
  * @since 2026-07-27
  */
 public final class VerificationUiServer {
-
     private static final Logger LOG = Logger.getLogger(VerificationUiServer.class.getName());
 
     private final int port;
@@ -211,9 +210,26 @@ public final class VerificationUiServer {
         sseClients.removeAll(dead);
     }
 
+    /**
+     * JSON 文本。
+     *
+     * @param e VerificationProgress.Event
+     * @return JSON 文本
+     */
+
     private static String toJson(VerificationProgress.Event e) {
         return jsonEvent(e.kind().name(), e.scenarioId(), e.message(), e.ok());
     }
+
+    /**
+     * jsonEvent。
+     *
+     * @param kind String
+     * @param scenarioId String
+     * @param message String
+     * @param ok Boolean
+     * @return jsonEvent
+     */
 
     private static String jsonEvent(String kind, String scenarioId, String message, Boolean ok) {
         StringBuilder sb = new StringBuilder(128);
@@ -234,6 +250,13 @@ public final class VerificationUiServer {
     private static final String LF = String.valueOf((char) 10);
     private static final String CR = String.valueOf((char) 13);
 
+    /**
+     * esc。
+     *
+     * @param s String
+     * @return esc
+     */
+
     private static String esc(String s) {
         return s.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
@@ -250,6 +273,13 @@ public final class VerificationUiServer {
             os.write(bytes);
         }
     }
+
+    /**
+     * contentType。
+     *
+     * @param path String
+     * @return contentType
+     */
 
     private static String contentType(String path) {
         if (path.endsWith(".html")) {

@@ -21,17 +21,32 @@ import java.util.concurrent.Flow;
  * @since 2026-07-27
  */
 public interface TransportProvider extends AutoCloseable {
-
     /** 创建并开始接收事件流。返回的 Publisher 会持续投递事件直至终态或需要续传。 */
     Flow.Publisher<InvocationEvent> createAndStream(CreateCommand command);
 
-    /** 依据服务端 taskRef 拉取权威快照（{@code tasks/get}）。 */
+    /**
+     * 快照 future。
+     *
+     * @param taskRef String
+     * @return 快照 future
+     */
     CompletionStage<InvocationSnapshot> getTask(String taskRef);
 
-    /** 请求取消（{@code tasks/cancel}）。网关不支持时实现方可返回当前快照以降级。 */
+    /**
+     * 快照 future。
+     *
+     * @param taskRef String
+     * @param reason String
+     * @return 快照 future
+     */
     CompletionStage<InvocationSnapshot> cancel(String taskRef, String reason);
 
-    /** 提交一次本地工具结果续传（对既有 taskRef 的同步 {@code SendMessage}，携带 observation 文本）。 */
+    /**
+     * 快照 future。
+     *
+     * @param command ResumeCommand
+     * @return 快照 future
+     */
     CompletionStage<InvocationSnapshot> resumeToolResult(ResumeCommand command);
 
     @Override

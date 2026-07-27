@@ -28,7 +28,6 @@ import java.util.UUID;
  * @since 2026-07-27
  */
 public final class InvocationRequest {
-
     private final String agentId;
     private final String conversationId;
     private final InvocationMode mode;
@@ -62,6 +61,12 @@ public final class InvocationRequest {
     public Optional<String> agentId() {
         return Optional.ofNullable(agentId);
     }
+
+    /**
+     * 会话标识。
+     *
+     * @return 会话标识
+     */
 
     public String conversationId() {
         return conversationId;

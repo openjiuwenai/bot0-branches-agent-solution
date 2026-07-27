@@ -13,10 +13,11 @@ package com.huawei.ascend.client.transport.spi;
  *
  * <p>{@code InvocationRequest.credentialToken()} 若显式给出则优先于本提供者（便于单次覆盖）。
  * 返回 {@code null} 表示本次不附带（通常仅用于本地假网关/无鉴权环境）。
+ *
+ * @since 2026-07-27
  */
 @FunctionalInterface
 public interface CredentialProvider {
-
     /**
      * 返回用于指定会话的凭证令牌。
      *
@@ -25,7 +26,12 @@ public interface CredentialProvider {
      */
     String tokenFor(String conversationId);
 
-    /** 恒定令牌的便捷实现。 */
+    /**
+     * 静态凭证提供者。
+     *
+     * @param token String
+     * @return 静态凭证提供者
+     */
     static CredentialProvider staticToken(String token) {
         return conversationId -> token;
     }

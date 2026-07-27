@@ -42,7 +42,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2026-07-27
  */
 public final class CloudClientVerification {
-
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(CloudClientVerification.class.getName());
 
@@ -91,6 +90,12 @@ public final class CloudClientVerification {
         return run();
     }
 
+    /**
+     * run。
+     *
+     * @return run
+     */
+
     private int run() throws InterruptedException, ExecutionException, TimeoutException, IOException {
         failures.clear();
         approvalCount.set(0);
@@ -133,6 +138,13 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.runEnd(ok, summary));
         return ok ? 0 : 1;
     }
+
+    /**
+     * buildClient。
+     *
+     * @param url String
+     * @return buildClient
+     */
 
     private AgentClient buildClient(String url) {
         return AgentClients.builder()
@@ -289,7 +301,6 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 4: plain multi-turn (reuse conversationId, new Task each turn)"));
         int beforeFails = failures.size();
-
         String conversationId = "conv-multi-1";
         // 记录本轮开始前的工具执行计数（前面场景已用过工具），断言本轮前后不变。
         int readBefore = tools.readPageCount.get();
@@ -299,12 +310,10 @@ public final class CloudClientVerification {
         InvocationCall c1 = invokePlain(client, conversationId, "hello turn 1");
         Handle h1 = c1.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
         InvocationSnapshot s1 = c1.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-
         // 第二轮：复用同一 conversationId，新 invocation，无 taskId（普通多轮=新建 Task）。
         InvocationCall c2 = invokePlain(client, conversationId, "hello turn 2");
         Handle h2 = c2.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
         InvocationSnapshot s2 = c2.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-
         check(id, s1.state() == TaskState.COMPLETED, "turn 1 completed, state=" + s1.state());
         check(id, s2.state() == TaskState.COMPLETED, "turn 2 completed, state=" + s2.state());
         check(id, !c1.invocationRef().equals(c2.invocationRef()),
@@ -321,11 +330,19 @@ public final class CloudClientVerification {
         check(id, h1.diagnosticTaskRef() != null && h2.diagnosticTaskRef() != null
                         && !h1.diagnosticTaskRef().equals(h2.diagnosticTaskRef()),
                 "accepted() handles carry distinct diagnosticTaskRef across turns");
-
         c1.close();
         c2.close();
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
     }
+
+    /**
+     * invokePlain。
+     *
+     * @param client AgentClient
+     * @param conversationId String
+     * @param input String
+     * @return invokePlain
+     */
 
     private InvocationCall invokePlain(AgentClient client, String conversationId, String input) {
         InvocationRequest r = InvocationRequest.builder()
@@ -343,13 +360,11 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 5: default-no-exposure (no exposure declared → no clientTools on wire)"));
         int beforeFails = failures.size();
-
         // 用一个全新的 conversationId，不 exposeInConversation、不在 request 里声明 exposure。
         String conversationId = "conv-noexp-1";
         int readBefore = tools.readPageCount.get();
         int submitBefore = tools.submitOrderCount.get();
         int pingBefore = tools.pingCount.get();
-
         InvocationRequest request = InvocationRequest.builder()
                 .agentId("agent-x")
                 .conversationId(conversationId)
@@ -358,7 +373,6 @@ public final class CloudClientVerification {
                 .build();
         InvocationCall call = client.invoke(request);
         InvocationSnapshot snapshot = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-
         // 默认不暴露：服务端看不到 clientTools → mock 走 IMMEDIATE 直接 COMPLETED，不请求任何工具。
         check(id, snapshot.state() == TaskState.COMPLETED,
                 "default-no-exposure completed without tool calls, state=" + snapshot.state());
@@ -377,7 +391,6 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 6: governance error (401) not projected as success"));
         int beforeFails = failures.size();
-
         // 构造一个不提供 credential 的 client：每次 HTTP 不带 Authorization → 网关 401 AUTH_MISSING。
         AgentClient noAuthClient = AgentClients.builder()
                 .transport(new A2aHttpTransportProvider(url))
@@ -392,7 +405,6 @@ public final class CloudClientVerification {
                     .build();
             InvocationCall call = noAuthClient.invoke(request);
             InvocationSnapshot snapshot = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-
             // 401 治理错误不应投影为 COMPLETED；应以 FAILED 终态暴露（feat-011 §4.9 AC-7 / 006 §5.3）。
             check(id, snapshot.state() == TaskState.FAILED,
                     "401 governance error surfaced as FAILED, not COMPLETED, state=" + snapshot.state());
@@ -404,7 +416,6 @@ public final class CloudClientVerification {
         }
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
     }
-
     private void check(String scenarioId, boolean condition, String message) {
         progress.onEvent(VerificationProgress.Event.check(scenarioId, condition, message));
         if (!condition) {

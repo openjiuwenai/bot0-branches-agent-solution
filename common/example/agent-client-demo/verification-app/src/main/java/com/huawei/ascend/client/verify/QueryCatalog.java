@@ -23,17 +23,13 @@ import java.util.Optional;
  * </ul>
  */
 final class QueryCatalog {
-
     /** 串行组共享的 conversationId（真·一个对话）。 */
     static final String SERIAL_CONVERSATION_ID = "conv-serial-main";
-
     enum Group {
         SERIAL("串行组（同一对话连续发送）"),
         SOLO("单独组（各自独立会话）"),
         DEMO("口语化 demo（独立会话）");
-
         final String label;
-
         Group(String label) {
             this.label = label;
         }
@@ -85,12 +81,12 @@ final class QueryCatalog {
             String input,
             QueryConfig config,
             Expectation expectation) {
-
         /**
          * 所属分组。
          *
          * @return 所属分组。
-         */        public Group group() {
+         */
+        public Group group() {
             return config.group();
         }
 
@@ -98,7 +94,8 @@ final class QueryCatalog {
          * 会话策略。
          *
          * @return 会话策略。
-         */        public ConversationStrategy conversationStrategy() {
+         */
+        public ConversationStrategy conversationStrategy() {
             return config.strategy();
         }
 
@@ -106,7 +103,8 @@ final class QueryCatalog {
          * 可选 agent 标识。
          *
          * @return 可选 agent 标识。
-         */        public Optional<String> agentId() {
+         */
+        public Optional<String> agentId() {
             return config.agentId();
         }
 
@@ -114,7 +112,8 @@ final class QueryCatalog {
          * 可选工具暴露策略。
          *
          * @return 可选工具暴露策略。
-         */        public Optional<ToolExposurePolicy> exposure() {
+         */
+        public Optional<ToolExposurePolicy> exposure() {
             return config.exposure();
         }
 
@@ -122,7 +121,8 @@ final class QueryCatalog {
          * 调用模式。
          *
          * @return 调用模式。
-         */        public String mode() {
+         */
+        public String mode() {
             return config.mode();
         }
 
@@ -130,7 +130,8 @@ final class QueryCatalog {
          * 是否预期失败。
          *
          * @return 是否预期失败。
-         */        public boolean expectedFailed() {
+         */
+        public boolean expectedFailed() {
             return expectation.expectedFailed();
         }
 
@@ -138,7 +139,8 @@ final class QueryCatalog {
          * 预期错误码。
          *
          * @return 预期错误码。
-         */        public Optional<String> expectedErrorCode() {
+         */
+        public Optional<String> expectedErrorCode() {
             return expectation.expectedErrorCode();
         }
 
@@ -146,10 +148,17 @@ final class QueryCatalog {
          * 场景说明。
          *
          * @return 场景说明。
-         */        public String description() {
+         */
+        public String description() {
             return expectation.description();
         }
     }
+
+    /**
+     * 返回全部条目。
+     *
+     * @return 返回全部条目
+     */
 
     static List<Query> all() {
         List<Query> all = new java.util.ArrayList<>();
@@ -158,6 +167,12 @@ final class QueryCatalog {
         all.addAll(demoQueries());
         return List.copyOf(all);
     }
+
+    /**
+     * serialQueries。
+     *
+     * @return serialQueries
+     */
 
     private static List<Query> serialQueries() {
         return List.of(
@@ -201,6 +216,12 @@ final class QueryCatalog {
                                 "显式声明 none → ToolView 为空 → 服务端不可见任何本地工具，直接 COMPLETED")));
     }
 
+    /**
+     * soloQueries。
+     *
+     * @return soloQueries
+     */
+
     private static List<Query> soloQueries() {
         return List.of(
                 // ---- 单独组：各自独立 conversationId ----
@@ -223,6 +244,12 @@ final class QueryCatalog {
                         new Expectation(true, Optional.of("transport_error"),
                                 "无凭证 client → 网关 401 AUTH_MISSING → 以 FAILED 终态暴露（预期失败路径）")));
     }
+
+    /**
+     * demoQueries。
+     *
+     * @return demoQueries
+     */
 
     private static List<Query> demoQueries() {
         return List.of(
@@ -255,6 +282,13 @@ final class QueryCatalog {
                         new Expectation(false, Optional.empty(),
                                 "口语化触发 ping 工具")));
     }
+
+    /**
+     * 按 id 查找。
+     *
+     * @param id String
+     * @return 按 id 查找
+     */
 
     static Query find(String id) {
         for (Query q : all()) {

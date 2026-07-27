@@ -26,19 +26,36 @@ import java.util.Optional;
  * @since 2026-07-27
  */
 public interface ClientStateStore {
-
-    /** 查找已落库的执行记录（若已存在）。 */
+    /**
+     * 查找已落库的执行记录（若已存在）。
+     *
+     * @param toolCallId 工具调用标识
+     * @return 执行记录的 Optional 包装
+     */
     Optional<ToolExecutionRecord> findRecord(String toolCallId);
 
     /**
      * 原子写入执行记录：若该 {@code toolCallId} 尚无记录则写入 {@code record} 并返回它；
      * 若已存在则返回既有记录。调用方据此合流并发触发的同一次调用，保证"最多执行一次"。
+     *
+     * @param toolCallId 工具调用标识
+     * @param record 执行记录
+     * @return 实际落库的记录（新写入或既有）
      */
     ToolExecutionRecord saveRecordIfAbsent(String toolCallId, ToolExecutionRecord record);
 
-    /** 标记某次工具结果已成功续传给服务端（此后只重投不重跑）。 */
+    /**
+     * 标记某次工具结果已成功续传给服务端（此后只重投不重跑）。
+     *
+     * @param toolCallId 工具调用标识
+     */
     void markSubmitted(String toolCallId);
 
-    /** 判断某次工具结果是否已成功续传过。 */
+    /**
+     * 判断某次工具结果是否已成功续传过。
+     *
+     * @param toolCallId 工具调用标识
+     * @return 已续传返回 true
+     */
     boolean isSubmitted(String toolCallId);
 }
