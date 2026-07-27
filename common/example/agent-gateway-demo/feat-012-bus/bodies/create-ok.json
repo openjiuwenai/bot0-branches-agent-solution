@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": "ex-012-1",
+  "method": "SendMessage",
+  "params": {
+    "message": {
+      "messageId": "ex-012-create-1",
+      "parts": [{ "text": "gateway-example-012" }]
+    },
+    "metadata": {
+      "agentId": "scripted-verify"
+    }
+  }
+}
