@@ -54,6 +54,7 @@ import java.time.Clock;
 @EnableAspectJAutoProxy
 @ConditionalOnProperty(prefix = "openjiuwen.service.bus.consumer", name = "enabled", havingValue = "true")
 public class BusConsumerAutoConfiguration {
+    private static final String SERVICE_ID_PROPERTY = "openjiuwen.service.service-id";
     private static final long STREAM_REF_TTL_SECONDS = 60L * 60L;
 
     @Bean
@@ -212,7 +213,7 @@ public class BusConsumerAutoConfiguration {
     }
 
     private static String serviceId(Environment environment) {
-        return require(environment.getProperty("spring.application.name"), "spring.application.name");
+        return require(environment.getProperty(SERVICE_ID_PROPERTY), SERVICE_ID_PROPERTY);
     }
 
     private static String require(String value, String name) {
