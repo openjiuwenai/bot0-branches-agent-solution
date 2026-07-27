@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "method": "SendMessage",
+  "params": {
+    "message": {
+      "messageId": "m-empty-agent",
+      "parts": [{ "text": "x" }]
+    },
+    "metadata": {
+      "agentId": ""
+    }
+  }
+}
