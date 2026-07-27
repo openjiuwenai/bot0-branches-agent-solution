@@ -45,14 +45,14 @@ public final class CloudClientVerification {
     private VerificationProgress progress = event -> {
         String nl = System.lineSeparator();
         switch (event.kind()) {
-            case RUN_START -> System.out.println("[verify] gateway=" + event.message());
-            case SCENARIO_START -> System.out.println(nl + "== " + event.message() + " ==");
-            case CHECK -> System.out.println((Boolean.TRUE.equals(event.ok()) ? "  [ok]   " : "  [FAIL] ")
+            case RUN_START -> LOG.info("[verify] gateway=" + event.message());
+            case SCENARIO_START -> LOG.info(nl + "== " + event.message() + " ==");
+            case CHECK -> LOG.info((Boolean.TRUE.equals(event.ok()) ? "  [ok]   " : "  [FAIL] ")
                     + event.message());
-            case RUN_END -> System.out.println(nl + event.message());
+            case RUN_END -> LOG.info(nl + event.message());
             default -> {
                 if (event.message() != null) {
-                    System.out.println("  " + event.message());
+                    LOG.info("  " + event.message());
                 }
             }
         }
