@@ -196,21 +196,23 @@ public class MockA2AGatewayController {
                     .build();
             HttpResponse<java.io.InputStream> resp = httpClient.send(forwardReq,
                     HttpResponse.BodyHandlers.ofInputStream());
-            if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-                log.error("Mock A2A Gateway tunnel: target {} returned HTTP {}", targetUrl, resp.statusCode());
-                response.sendError(HttpServletResponse.SC_BAD_GATEWAY);
-                return;
-            }
-            var out = response.getOutputStream();
-            try (var reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(resp.body(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.isBlank()) {
-                        continue;
+            try (var is = resp.body()) {
+                if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
+                    log.error("Mock A2A Gateway tunnel: target {} returned HTTP {}", targetUrl, resp.statusCode());
+                    response.sendError(HttpServletResponse.SC_BAD_GATEWAY);
+                    return;
+                }
+                var out = response.getOutputStream();
+                try (var reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.isBlank()) {
+                            continue;
+                        }
+                        out.write((line + "\n\n").getBytes(StandardCharsets.UTF_8));
+                        out.flush();
                     }
-                    out.write((line + "\n\n").getBytes(StandardCharsets.UTF_8));
-                    out.flush();
                 }
             }
         } catch (InterruptedException e) {
