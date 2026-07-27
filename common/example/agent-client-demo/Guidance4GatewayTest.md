@@ -36,7 +36,7 @@ mvn -version
 ### 一次性准备：构建本工程
 
 ```powershell
-cd "d:\java版EDPA重构\正秋的experimental\spring-ai-ascend\agent-client\examples\cloud-client"
+cd "d:\java版EDPA重构\正秋的agent-solution仓\agent-solution_dxn\common\example\agent-client-demo"
 mvn -q -o clean package
 ```
 
@@ -45,9 +45,9 @@ mvn -q -o clean package
 ### 每次启动 verification-app（三行，顺序执行）
 
 ```powershell
-cd "d:\java版EDPA重构\正秋的experimental\spring-ai-ascend\agent-client\examples\cloud-client"
+cd "d:\java版EDPA重构\正秋的agent-solution仓\agent-solution_dxn\common\example\agent-client-demo"
 set AGENT_GATEWAY_URL=http://127.0.0.1:8080
-java -cp "verification-app\target\verification-app.jar;agent-client-sdk\target\agent-client-sdk.jar;mock-gateway\target\mock-gateway.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.17.3\jackson-core-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.17.3\jackson-annotations-2.17.3.jar" com.huawei.ascend.client.verify.CloudClientVerification --ui
+java -cp "verification-app\target\verification-app.jar;..\..\agent-client\agent-client-sdk-for-jvm\target\agent-client-sdk-for-jvm.jar;mock-gateway\target\mock-gateway.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.17.3\jackson-core-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.17.3\jackson-annotations-2.17.3.jar" com.huawei.ascend.client.verify.CloudClientVerification --ui
 ```
 
 看到下面的输出即启动成功，保持这个终端不要关：
@@ -62,7 +62,7 @@ java -cp "verification-app\target\verification-app.jar;agent-client-sdk\target\a
 
 **说明**：
 - `AGENT_GATEWAY_URL` 必须在启动 verification-app **之前**设好；如果忘了设或设空，verification-app 会直接报错退出，不会启动。
-- classpath 里的三个 jar（`verification-app` / `agent-client-sdk` / `mock-gateway`）都要带上。`mock-gateway.jar` 在页面调试模式下不会真正运行，但代码加载时需要它在 classpath 上。
+- classpath 里的三个 jar（`verification-app` / `agent-client-sdk-for-jvm` / `mock-gateway`）都要带上。`mock-gateway.jar` 在页面调试模式下不会真正运行，但代码加载时需要它在 classpath 上。`agent-client-sdk-for-jvm.jar` 在上级 `..\..\agent-client\agent-client-sdk-for-jvm\target\` 下（SDK 本体归 agent-client 模块）。
 - 三个 Jackson jar 是 SDK 的运行时依赖，首次构建后会在 `%USERPROFILE%\.m2\repository\` 下。如果版本号不同（构建时 Maven 会提示实际版本），按你本地的实际版本号替换。
 - 自己的端口可用 `set UI_PORT=9090` 改（默认 9090）。
 - 启动后**保持终端开着**，所有调试日志都会打印在这里（见 ③）。

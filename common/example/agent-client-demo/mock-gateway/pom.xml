@@ -6,33 +6,28 @@
 
     <parent>
         <groupId>com.huawei.ascend.client.example</groupId>
-        <artifactId>cloud-client-parent</artifactId>
+        <artifactId>agent-client-demo-parent</artifactId>
         <version>0.2.0-SNAPSHOT</version>
     </parent>
 
     <!--
-      ◇ 仅用于验证：注册本地工具的业务样例 + 可执行自校验用例。
-      通过 SDK 对 mock-gateway 发起真实 HTTP（STREAMING/BLOCKING/续传/取消），断言全部通过则退出码 0。
-      注意：本模块依赖 mock-gateway 只是为了"一条命令内嵌启动网关做端到端自检"；
-      真正的 SDK（agent-client-sdk）对 mock-gateway 零依赖。
+      ◇ 仅用于验证：模拟 gateway + runtime 的 A2A 入口。
+      使用纯 JDK 内置 com.sun.net.httpserver，不引入任何 Web 框架。
+      SDK（agent-client-sdk-for-jvm）对本模块零依赖；本模块可独立 java -jar 运行为一个小微服务。
     -->
-    <artifactId>verification-app</artifactId>
+    <artifactId>mock-gateway</artifactId>
     <packaging>jar</packaging>
-    <name>verification-app (verification-only)</name>
+    <name>mock-gateway (verification-only)</name>
 
     <dependencies>
         <dependency>
-            <groupId>com.huawei.ascend.client.example</groupId>
-            <artifactId>agent-client-sdk</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.huawei.ascend.client.example</groupId>
-            <artifactId>mock-gateway</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
     </dependencies>
 
     <build>
-        <finalName>verification-app</finalName>
+        <finalName>mock-gateway</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -40,7 +35,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.huawei.ascend.client.verify.CloudClientVerification</mainClass>
+                            <mainClass>com.huawei.ascend.mockgateway.MockGatewayServer</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
