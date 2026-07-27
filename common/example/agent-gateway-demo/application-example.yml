@@ -1,0 +1,18 @@
+# Reference config for local / 联调 Gateway (NOT loaded automatically).
+# Pass explicitly from repo root, e.g.:
+#   java -jar common/agent-gateway/target/agent-gateway-0.1.0.jar \
+#     --spring.config.additional-location=common/example/agent-gateway-demo/application-example.yml
+
+server:
+  port: 8080
+
+gateway:
+  # FEAT-011 DIRECT
+  path-mode: direct
+  rdc:
+    base-url: http://127.0.0.1:8092
+  default-agent-id: travel-hotel
+  test-credential:
+    token: mock-token
+    principalId: test-principal
+    tenantId: tenant-1
