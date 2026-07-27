@@ -776,7 +776,7 @@ class SkillHubManagerTest {
         CredentialDecryptor failingDecryptor = token -> {
             throw new IllegalStateException("AES-GCM decrypt failed: Tag mismatch");
         };
-        ObjectProvider<CredentialDecryptor> provider = new SimpleObjectProvider<>(failingDecryptor);
+        ObjectProvider<CredentialDecryptor> provider = new SimpleObjectProvider(failingDecryptor);
         assertThatThrownBy(() -> invokeDecrypt(props, provider)).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SkillHub credential decryption failed")
                 .hasMessageContaining("AES-GCM decrypt failed");
@@ -788,11 +788,15 @@ class SkillHubManagerTest {
                 SkillHubMiddlewareProperties.class, ObjectProvider.class);
         m.setAccessible(true);
         try {
-            return (String) m.invoke(null, props, provider);
+            Object result = m.invoke(null, props, provider);
+            if (!(result instanceof String)) {
+                throw new AssertionError("decrypt did not return String: " + result);
+            }
+            return (String) result;
         } catch (java.lang.reflect.InvocationTargetException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException re) {
-                throw re;
+            if (cause instanceof IllegalStateException ise) {
+                throw ise;
             }
             if (cause instanceof Error err) {
                 throw err;
@@ -847,20 +851,20 @@ class SkillHubManagerTest {
     }
 
     /** Minimal ObjectProvider wrapper for tests that always returns the same value. */
-    static final class SimpleObjectProvider<T> implements ObjectProvider<T> {
-        private final T value;
+    static final class SimpleObjectProvider implements ObjectProvider<CredentialDecryptor> {
+        private final CredentialDecryptor value;
 
-        SimpleObjectProvider(T value) {
+        SimpleObjectProvider(CredentialDecryptor value) {
             this.value = value;
         }
 
         @Override
-        public T getIfAvailable() {
+        public CredentialDecryptor getIfAvailable() {
             return value;
         }
 
         @Override
-        public T getObject() throws org.springframework.beans.BeansException {
+        public CredentialDecryptor getObject() throws org.springframework.beans.BeansException {
             return value;
         }
     }
