@@ -109,9 +109,17 @@ public class SkillHubMiddlewareAutoConfiguration {
      * as plaintext, which would encourage deployments to put raw tokens in
      * the {@code encryptedToken} field.
      *
+     * <p>When the encryptedToken is set but decryption fails (wrong key,
+     * malformed ciphertext, etc.), this is a credential-configuration error
+     * that falls under the "authentication stage failure" per spec §5.1.2/§5.1.5.
+     * For required SkillHub (enabled=true), this must fail-fast: the exception
+     * is rethrown to let Spring refuse context startup so the Agent never
+     * enters ready with invalid credentials silently downgraded to absent.
+     *
      * @param properties the SkillHub middleware properties containing encryptedToken
      * @param decryptorProvider the credential decryptor provider (optional)
      * @return the decrypted token, or empty string when no token or no decryptor
+     * @throws IllegalStateException when encryptedToken is set but decryption fails
      */
     private static String decrypt(SkillHubMiddlewareProperties properties,
                                   ObjectProvider<CredentialDecryptor> decryptorProvider) {
@@ -129,9 +137,10 @@ public class SkillHubMiddlewareAutoConfiguration {
         }
         try {
             return decryptor.decrypt(encrypted);
-        } catch (IllegalStateException ex) {
-            log.warn("SkillHub CredentialDecryptor.decrypt failed, reason={}", ex.getMessage());
-            return "";
+        } catch (RuntimeException ex) {
+            throw new IllegalStateException(
+                    "SkillHub credential decryption failed at startup (required, cannot degrade): "
+                            + ex.getMessage(), ex);
         }
     }
 
