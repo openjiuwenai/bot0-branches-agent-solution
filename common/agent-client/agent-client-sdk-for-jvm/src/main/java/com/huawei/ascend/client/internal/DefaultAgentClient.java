@@ -43,10 +43,10 @@ import java.util.concurrent.Flow;
  *
  * <p>关键职责：
  * <ul>
- *   <li>维护 {@code invocationRef → taskRef} 的映射（业务只见 invocationRef，taskRef 内部使用）。</li>
- *   <li>计算生效的工具暴露策略并投影为 ToolView / wire clientTools。</li>
- *   <li>把 client_tool 类型的 INPUT_REQUIRED 自动就地执行并续传，业务侧只观测到连续事件流。</li>
- *   <li>对续传做"每 toolCallId 只提交一次"的防抖，与调度器的"最多执行一次"配合。</li>
+ * <li>维护 {@code invocationRef → taskRef} 的映射（业务只见 invocationRef，taskRef 内部使用）。</li>
+ * <li>计算生效的工具暴露策略并投影为 ToolView / wire clientTools。</li>
+ * <li>把 client_tool 类型的 INPUT_REQUIRED 自动就地执行并续传，业务侧只观测到连续事件流。</li>
+ * <li>对续传做"每 toolCallId 只提交一次"的防抖，与调度器的"最多执行一次"配合。</li>
  * </ul>
  *
  * @since 2026-07-27
@@ -175,7 +175,9 @@ public final class DefaultAgentClient implements AgentClient {
         toolExecutor.shutdownNow();
     }
 
-    /** 解析本次请求应附带的凭证：单次覆盖优先，否则回退到客户端级 CredentialProvider。 */
+    /**
+     * 解析本次请求应附带的凭证：单次覆盖优先，否则回退到客户端级 CredentialProvider。
+     */
     private String resolveCredential(String conversationId, String perRequestToken) {
         if (perRequestToken != null && !perRequestToken.isEmpty()) {
             return perRequestToken;
@@ -256,7 +258,9 @@ public final class DefaultAgentClient implements AgentClient {
         });
     }
 
-    /** 每个 invocationRef 的内部状态（含 taskRef 映射与上报的 ToolView）。 */
+    /**
+     * 每个 invocationRef 的内部状态（含 taskRef 映射与上报的 ToolView）。
+     */
     private static final class InvocationState {
         final String invocationRef;
         final String conversationId;
@@ -264,6 +268,7 @@ public final class DefaultAgentClient implements AgentClient {
         final List<ToolWireSpec> clientTools;
         final String credentialToken;
         volatile String taskRef;
+
         InvocationState(String invocationRef, String conversationId, InvocationMode mode,
                         List<ToolWireSpec> clientTools, String credentialToken) {
             this.invocationRef = invocationRef;
@@ -449,7 +454,9 @@ public final class DefaultAgentClient implements AgentClient {
             finishTerminal(st, snap.errorCode(), snap.message());
         }
 
-        /** continueInput 续跑失败：以 transport_error 终态完成新 Call。 */
+        /**
+         * continueInput 续跑失败：以 transport_error 终态完成新 Call。
+         */
         void failFromResume(Throwable ex) {
             forward(new InvocationEvent.Failed(invocationRef, "transport_error", ex.getMessage()));
             finishTerminal(TaskState.FAILED, "transport_error", ex.getMessage());

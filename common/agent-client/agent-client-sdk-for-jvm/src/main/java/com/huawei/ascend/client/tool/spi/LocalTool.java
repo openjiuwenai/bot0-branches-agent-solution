@@ -51,7 +51,10 @@ public interface LocalTool {
         return new Registered(descriptor, tool);
     }
 
-    /** 描述符 + 实现的绑定，用于注册。 */
+    /**
+     * 描述符 + 实现的绑定，用于注册。
+     */
     record Registered(LocalToolDescriptor descriptor, LocalTool tool) {
+        // 仅规范构造器，无额外成员。
     }
 }

@@ -32,8 +32,8 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>纯 JDK 内置 {@link HttpServer} 实现，暴露单一端点 {@code POST /a2a}（A2A JSON-RPC 2.0 over HTTP + SSE）：
  * <ul>
- *   <li>{@code SendStreamingMessage} —— SSE 事件流（创建调用，对应 STREAMING）。</li>
- *   <li>{@code SendMessage} —— 单条 JSON 响应（本地工具结果 / 用户输入续跑，Feat-Func-011 §5.9.3）。</li>
+ * <li>{@code SendStreamingMessage} —— SSE 事件流（创建调用，对应 STREAMING）。</li>
+ * <li>{@code SendMessage} —— 单条 JSON 响应（本地工具结果 / 用户输入续跑，Feat-Func-011 §5.9.3）。</li>
  * </ul>
  *
  * <p>治理对齐（Feat-Func-011 §4.9）：每个请求强制 Bearer 鉴权（缺失 {@code AUTH_MISSING} / 非法 {@code AUTH_INVALID}，
@@ -50,7 +50,9 @@ public final class MockGatewayServer {
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(MockGatewayServer.class.getName());
 
-    /** 网关工作线程的 ThreadFactory：基于默认工厂包装出 daemon + 未捕获异常处理 + 自定义命名。 */
+    /**
+     * 网关工作线程的 ThreadFactory：基于默认工厂包装出 daemon + 未捕获异常处理 + 自定义命名。
+     */
     private static final java.util.concurrent.ThreadFactory WORKER_FACTORY = r -> {
         Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
         t.setName("mock-gateway");
@@ -62,10 +64,12 @@ public final class MockGatewayServer {
     };
     private final ObjectMapper mapper = new ObjectMapper();
     private final ConcurrentMap<String, TaskSim> tasks = new ConcurrentHashMap<>();
+
     // G4 幂等：创建请求按 message.messageId 去重，重复请求复用同一 Task。
     private final ConcurrentMap<String, String> messageIdToTask = new ConcurrentHashMap<>();
     private final int requestedPort;
     private HttpServer server;
+
     public MockGatewayServer(int port) {
         this.requestedPort = port;
     }
@@ -222,7 +226,9 @@ public final class MockGatewayServer {
         }
     }
 
-    /** 幂等命中时回放既有 Task：流式则推送当前快照，否则返回单条结果。 */
+    /**
+     * 幂等命中时回放既有 Task：流式则推送当前快照，否则返回单条结果。
+     */
     private void replayExisting(HttpExchange ex, String rpcId, TaskSim existing, boolean streaming)
             throws IOException {
         if (streaming) {
@@ -507,7 +513,9 @@ public final class MockGatewayServer {
         return root;
     }
 
-    /** 网关治理错误：以 HTTP 状态码 + {@code {code,message}} 响应体返回（Feat-Func-011 §4.9）。 */
+    /**
+     * 网关治理错误：以 HTTP 状态码 + {@code {code,message}} 响应体返回（Feat-Func-011 §4.9）。
+     */
     private void writeGovernanceError(HttpExchange ex, int status, String code, String message)
             throws IOException {
         ObjectNode body = mapper.createObjectNode();

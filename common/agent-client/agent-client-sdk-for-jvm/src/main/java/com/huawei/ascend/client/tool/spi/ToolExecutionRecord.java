@@ -14,8 +14,7 @@ package com.huawei.ascend.client.tool.spi;
  * {@code payloadRef} 用于大负载的引用式返回（可选）。
  *
  * @since 2026-07-27
-   * @return ToolExecutionRecord
-*/
+ */
 public record ToolExecutionRecord(
         String toolCallId,
         Outcome outcome,
@@ -29,13 +28,21 @@ public record ToolExecutionRecord(
      * @since 2026-07-27
      */
     public enum Outcome {
-        /** 成功产生结果。 */
+        /**
+         * 成功产生结果。
+         */
         OK,
-        /** 工具执行内部错误（结构化失败，可续传给服务端）。 */
+        /**
+         * 工具执行内部错误（结构化失败，可续传给服务端）。
+         */
         ERROR,
-        /** 被本地治理拒绝（策略/审批）。 */
+        /**
+         * 被本地治理拒绝（策略/审批）。
+         */
         REJECTED,
-        /** 超出执行期限。 */
+        /**
+         * 超出执行期限。
+         */
         TIMEOUT
     }
 

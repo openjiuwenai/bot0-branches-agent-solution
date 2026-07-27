@@ -17,25 +17,30 @@ import java.util.Optional;
  *
  * <p>分组语义（已与用户确认）：
  * <ul>
- *   <li>{@link Group#SERIAL} —— 串行组，共享同一 {@code conversationId}，能连贯走通（s1/s2-stream/s4/s5）。</li>
- *   <li>{@link Group#SOLO} —— 单独组，各自独立 {@code conversationId}：s3（异步续传）、s6（预期 401 失败）。</li>
- *   <li>{@link Group#DEMO} —— 口语化 demo，独立会话，展示自然语言驱动的工具调用。</li>
+ * <li>{@link Group#SERIAL} —— 串行组，共享同一 {@code conversationId}，能连贯走通（s1/s2-stream/s4/s5）。</li>
+ * <li>{@link Group#SOLO} —— 单独组，各自独立 {@code conversationId}：s3（异步续传）、s6（预期 401 失败）。</li>
+ * <li>{@link Group#DEMO} —— 口语化 demo，独立会话，展示自然语言驱动的工具调用。</li>
  * </ul>
  */
 final class QueryCatalog {
-    /** 串行组共享的 conversationId（真·一个对话）。 */
+    /**
+     * 串行组共享的 conversationId（真·一个对话）。
+     */
     static final String SERIAL_CONVERSATION_ID = "conv-serial-main";
     enum Group {
         SERIAL("串行组（同一对话连续发送）"),
         SOLO("单独组（各自独立会话）"),
         DEMO("口语化 demo（独立会话）");
         final String label;
+
         Group(String label) {
             this.label = label;
         }
     }
 
-    /** 会话策略：串行复用既有 conversationId；单独/demo 各自新建。 */
+    /**
+     * 会话策略：串行复用既有 conversationId；单独/demo 各自新建。
+     */
     enum ConversationStrategy {
         REUSE_SERIAL,
         FRESH
@@ -56,6 +61,7 @@ final class QueryCatalog {
             Optional<String> agentId,
             Optional<ToolExposurePolicy> exposure,
             String mode) {
+        // 仅规范构造器，无额外成员。
     }
 
     /**
@@ -69,6 +75,7 @@ final class QueryCatalog {
             boolean expectedFailed,
             Optional<String> expectedErrorCode,
             String description) {
+        // 仅规范构造器，无额外成员。
     }
 
     /**

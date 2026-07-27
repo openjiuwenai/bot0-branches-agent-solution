@@ -43,6 +43,7 @@ public final class VerificationUiServer {
     private final int port;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final List<SseClient> sseClients = new CopyOnWriteArrayList<>();
+
     private final ExecutorService workers = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
             new SynchronousQueue<>(), r -> {
                 Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);

@@ -40,7 +40,9 @@ interface ToolExecutionObserver {
         };
     }
 
-    /** 记录一次工具执行的不可变快照，供 SSE 序列化。 */
+    /**
+     * 记录一次工具执行的不可变快照，供 SSE 序列化。
+     */
     record Snapshot(
             String toolCallId,
             String toolName,

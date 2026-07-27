@@ -21,10 +21,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * payload 若是 Map/可 toString 对象，按 JSON 对象/字符串安全输出。
  */
 final class ChatBroadcaster {
-    /** JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。 */
+    /**
+     * JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。
+     */
     private static final String LF = String.valueOf((char) 10);
     private static final String CR = String.valueOf((char) 13);
     private final List<SseClient> clients = new CopyOnWriteArrayList<>();
+
     void addClient(SseClient client) {
         clients.add(client);
     }
@@ -162,11 +165,14 @@ final class ChatBroadcaster {
                 .replace(CR, "");
     }
 
-    /** 一个 SSE 客户端连接。OutputStream 在构造时获取一次，整个 SSE 会话期间复用，由 close() 关闭。 */
+    /**
+     * 一个 SSE 客户端连接。OutputStream 在构造时获取一次，整个 SSE 会话期间复用，由 close() 关闭。
+     */
     static final class SseClient implements AutoCloseable {
         final HttpExchange exchange;
         final OutputStream out;
         final AtomicBoolean closed = new AtomicBoolean(false);
+
         SseClient(HttpExchange exchange) throws IOException {
             this.exchange = exchange;
             this.out = exchange.getResponseBody();

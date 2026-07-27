@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
@@ -28,7 +32,6 @@ import org.junit.jupiter.api.Test;
  * <p>Enforcer ID: E143.
  */
 class EdgeToComputeDirectLinkArchTest {
-
     private static final JavaClasses CLIENT_CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages("com.huawei.ascend.client");
@@ -40,7 +43,7 @@ class EdgeToComputeDirectLinkArchTest {
                 .should().dependOnClassesThat()
                 .resideInAPackage("com.huawei.ascend.service..")
                 .because("Rule R-I sub-clause .b: agent-client MUST route through "
-                       + "com.huawei.ascend.bus.spi.ingress.IngressGateway, not call agent-runtime directly");
+                        + "com.huawei.ascend.bus.spi.ingress.IngressGateway, not call agent-runtime directly");
         rule.check(CLIENT_CLASSES);
     }
 

@@ -208,12 +208,16 @@ final class A2aJsonCodec {
 
     // ---------- 响应解析 ----------
 
-    /** 中立解析结果。{@code state} 为空表示该帧仅承载内容增量（artifact-update）。 */
+    /**
+     * 中立解析结果。{@code state} 为空表示该帧仅承载内容增量（artifact-update）。
+     */
     record Frame(String taskId, String contextId, TaskState state, Interrupt interrupt,
             String text, String errorCode, String errorMessage) {
+        // 仅规范构造器，无额外成员。
     }
     record Interrupt(boolean userInput, String toolCallId, String toolName,
             Map<String, Object> arguments, String prompt, Long deadlineMs) {
+        // 仅规范构造器，无额外成员。
     }
 
     /**
@@ -371,7 +375,7 @@ final class A2aJsonCodec {
             case "TASK_STATE_COMPLETED", "completed" -> TaskState.COMPLETED;
             case "TASK_STATE_FAILED", "failed" -> TaskState.FAILED;
             case "TASK_STATE_CANCELED", "TASK_STATE_CANCELLED",
-                 "canceled", "cancelled" -> TaskState.CANCELED;
+                    "canceled", "cancelled" -> TaskState.CANCELED;
             case "TASK_STATE_REJECTED", "rejected" -> TaskState.REJECTED;
             default -> TaskState.UNKNOWN;
         });

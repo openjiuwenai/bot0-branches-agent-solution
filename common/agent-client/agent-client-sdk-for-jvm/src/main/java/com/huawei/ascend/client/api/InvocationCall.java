@@ -54,7 +54,9 @@ public interface InvocationCall extends AutoCloseable {
      */
     CompletionStage<InvocationSnapshot> completion();
 
-    /** 关闭本调用句柄，释放本地订阅资源（不影响服务端 Task 状态）。 */
+    /**
+     * 关闭本调用句柄，释放本地订阅资源（不影响服务端 Task 状态）。
+     */
     @Override
     void close();
 }

@@ -43,6 +43,11 @@ public final class AgentClients {
         return new Builder();
     }
 
+    /**
+     * {@link AgentClient} 的构造器：按需注入传输、工具注册表、治理、执行器等组件。
+     *
+     * @since 2026-07-27
+     */
     public static final class Builder {
         private TransportProvider transport;
         private LocalToolRegistry registry;

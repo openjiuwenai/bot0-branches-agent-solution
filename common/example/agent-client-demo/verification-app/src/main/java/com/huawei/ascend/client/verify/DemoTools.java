@@ -32,12 +32,16 @@ final class DemoTools {
     final AtomicInteger submitOrderCount = new AtomicInteger();
     final AtomicInteger pingCount = new AtomicInteger();
 
-    /** 原有入口：不挂观察者，行为与重构前完全一致（CLI 全量断言用）。 */
+    /**
+     * 原有入口：不挂观察者，行为与重构前完全一致（CLI 全量断言用）。
+     */
     void registerInto(AgentClient client) {
         registerInto(client, ToolExecutionObserver.noop());
     }
 
-    /** 对话式入口：挂观察者，工具执行后把完整信息推给前端。 */
+    /**
+     * 对话式入口：挂观察者，工具执行后把完整信息推给前端。
+     */
     void registerInto(AgentClient client, ToolExecutionObserver observer) {
         registerReadPage(client, observer);
         registerSubmitOrder(client, observer);
