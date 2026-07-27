@@ -168,6 +168,8 @@ class DirectChainVersatileAgentHandlerTest {
         handler.streamQuery(req, new QueryStreamObserver() {
             /**
              * 接收流式 chunk，累积到列表。
+             *
+             * @param c 流式返回的单个 chunk
              */
             @Override
             public void onNext(QueryChunk c) {
@@ -176,6 +178,8 @@ class DirectChainVersatileAgentHandlerTest {
 
             /**
              * 记录流式错误（当 error 槽非空时）。
+             *
+             * @param e 流式过程中抛出的异常
              */
             @Override
             public void onError(Throwable e) {
