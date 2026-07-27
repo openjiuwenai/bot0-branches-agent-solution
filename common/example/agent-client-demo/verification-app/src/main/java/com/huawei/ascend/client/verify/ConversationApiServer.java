@@ -10,12 +10,13 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,6 +39,10 @@ import java.util.regex.Pattern;
  * 因为串行组复用 conversationId、s3 用 continueInput 续传，都不支持并发。
  */
 final class ConversationApiServer {
+
+    private static final Logger LOG = Logger.getLogger(ConversationApiServer.class.getName());
+    /** 提取数组内字符串元素的正则：预编译避免重复编译（G.PRM.04）。 */
+    private static final Pattern STRING_ITEM_PATTERN = Pattern.compile("\"([^\"]*)\"");
 
     private final int port;
     private final ChatBroadcaster broadcaster = new ChatBroadcaster();
@@ -66,13 +71,13 @@ final class ConversationApiServer {
         }
         ConversationApiServer ui = new ConversationApiServer(port);
         int bound = ui.start();
-        System.out.println();
-        System.out.println("======================================================");
-        System.out.println("  agent-client 对话式验证控制台已启动");
-        System.out.println("  请在浏览器打开: http://127.0.0.1:" + bound + "/");
-        System.out.println("  按 Ctrl+C 结束");
-        System.out.println("======================================================");
-        System.out.println();
+        String banner = System.lineSeparator()
+                + "======================================================" + System.lineSeparator()
+                + "  agent-client 对话式验证控制台已启动" + System.lineSeparator()
+                + "  请在浏览器打开: http://127.0.0.1:" + bound + "/" + System.lineSeparator()
+                + "  按 Ctrl+C 结束" + System.lineSeparator()
+                + "======================================================" + System.lineSeparator();
+        LOG.info(banner);
         Thread.currentThread().join();
     }
 
@@ -160,8 +165,8 @@ final class ConversationApiServer {
             return;
         }
         String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        String queryId = extractString(body, "queryId");
-        String sessionId = extractString(body, "sessionId");
+        String queryId = extractString(body, "queryId").orElse(null);
+        String sessionId = extractString(body, "sessionId").orElse(null);
         if (queryId == null) {
             send(ex, 400, "application/json; charset=utf-8",
                     "{\"accepted\":false,\"message\":\"queryId required\"}");
@@ -181,7 +186,7 @@ final class ConversationApiServer {
                 ConversationDriver.QueryResult result = driver.runQuery(queryId, sid);
                 broadcaster.broadcast(ChatMessage.info(sid,
                         "query " + queryId + " 完成: " + (result.ok() ? "通过" : "存在失败")));
-            } catch (RuntimeException e) {
+            } catch (IllegalStateException | IllegalArgumentException | NullPointerException e) {
                 broadcaster.broadcast(ChatMessage.error(sid, null, "unexpected", String.valueOf(e)));
             } finally {
                 running.set(false);
@@ -196,7 +201,7 @@ final class ConversationApiServer {
         }
         String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         List<String> queryIds = extractStringList(body, "queryIds");
-        String sessionId = extractString(body, "sessionId");
+        String sessionId = extractString(body, "sessionId").orElse(null);
         if (queryIds.isEmpty()) {
             send(ex, 400, "application/json; charset=utf-8",
                     "{\"accepted\":false,\"message\":\"queryIds required\"}");
@@ -219,7 +224,7 @@ final class ConversationApiServer {
                 long passed = results.stream().filter(ConversationDriver.QueryResult::ok).count();
                 broadcaster.broadcast(ChatMessage.info(sid,
                         "串行发送完成: " + passed + "/" + results.size() + " 通过"));
-            } catch (RuntimeException e) {
+            } catch (IllegalStateException | IllegalArgumentException | NullPointerException e) {
                 broadcaster.broadcast(ChatMessage.error(sid, null, "unexpected", String.valueOf(e)));
             } finally {
                 running.set(false);
@@ -233,10 +238,7 @@ final class ConversationApiServer {
             return;
         }
         String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        String label = extractString(body, "label");
-        if (label == null) {
-            label = "新会话";
-        }
+        String label = extractString(body, "label").orElse("新会话");
         String id = driver.createSession(label);
         send(ex, 200, "application/json; charset=utf-8",
                 "{\"sessionId\":\"" + id + "\",\"label\":\"" + esc(label) + "\"}");
@@ -279,7 +281,8 @@ final class ConversationApiServer {
                 client.send("ping", "{}");
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            // 心跳线程被中断即意味着要关闭 SSE 连接，直接退出循环（无需恢复中断标志）。
+            LOG.info("SSE heartbeat interrupted, closing client connection");
         } finally {
             broadcaster.removeClient(client);
             client.close();
@@ -331,10 +334,10 @@ final class ConversationApiServer {
     }
 
     /** 从 JSON body 提取一个字符串字段（简单正则，足够本场景的简单请求体）。 */
-    private static String extractString(String body, String key) {
+    private static Optional<String> extractString(String body, String key) {
         Pattern p = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\"([^\"]*)\"");
         Matcher m = p.matcher(body);
-        return m.find() ? m.group(1) : null;
+        return m.find() ? Optional.ofNullable(m.group(1)) : Optional.empty();
     }
 
     /** 从 JSON body 提取字符串数组字段。 */
@@ -346,8 +349,7 @@ final class ConversationApiServer {
             return out;
         }
         String arr = m.group(1);
-        Pattern item = Pattern.compile("\"([^\"]*)\"");
-        Matcher im = item.matcher(arr);
+        Matcher im = STRING_ITEM_PATTERN.matcher(arr);
         while (im.find()) {
             out.add(im.group(1));
         }
