@@ -44,6 +44,8 @@ class MockA2AGatewayTunnelTest {
     /**
      * 中间跳卡（agent_card_L2_hotel）走哑隧道：原样转发到目标 /v1/query，
      * 透传原始 SSE data: 行，body 不改。
+     *
+     * @throws Exception 启动本地 HttpServer 或执行 MockMvc 请求时发生异常
      */
     @Test
     void tunnelsRawDataLinesForIntermediateCard() throws Exception {
@@ -76,6 +78,8 @@ class MockA2AGatewayTunnelTest {
      * 末端业务卡（agent_card_biz_hotel_domestic）走 versatile 重写：
      * gateway 把 serve body 翻译成 {@code {inputs:{query,messages}}}，
      * 转发到 {@code /v1/proj/agents/agent_biz/conversations/{cid}}，并透传业务原始 SSE。
+     *
+     * @throws Exception 启动本地 HttpServer 或执行 MockMvc 请求时发生异常
      */
     @Test
     void rewritesAndForwardsToVersatileMockForTerminalCard() throws Exception {

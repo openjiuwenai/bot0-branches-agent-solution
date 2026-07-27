@@ -279,20 +279,7 @@ public class MockA2AGatewayController {
             JsonNode msgs = root.path("messages");
             if (msgs.isArray() && msgs.size() > 0) {
                 messages = msgs;
-                for (JsonNode m : msgs) {
-                    if (!"user".equals(m.path("role").asText())) {
-                        continue;
-                    }
-                    JsonNode content = m.path("content");
-                    if (content.isTextual()) {
-                        query = content.asText();
-                    } else if (content.isObject()) {
-                        JsonNode q = content.path("query");
-                        if (q.isTextual()) {
-                            query = q.asText();
-                        }
-                    }
-                }
+                query = extractLastUserQuery(msgs);
             }
         } catch (JsonProcessingException e) {
             log.warn("Mock A2A Gateway tunnel: failed to parse serve body for versatile rewrite: {}",
@@ -306,6 +293,46 @@ public class MockA2AGatewayController {
         String cid = conversationId.isBlank() ? "default" : conversationId;
         String targetUrl = targetBase + "/v1/proj/agents/" + versatileAgent + "/conversations/" + cid;
         return new String[] {targetUrl, versatileBody.toString()};
+    }
+
+    /**
+     * 从 messages 数组中提取最后一条 {@code role=user} 消息的 query。
+     *
+     * @param msgs serve body 中的 messages 数组
+     * @return 最后一条用户消息的 query；无匹配时返回空串
+     */
+    private static String extractLastUserQuery(JsonNode msgs) {
+        String query = "";
+        for (JsonNode m : msgs) {
+            if (!"user".equals(m.path("role").asText())) {
+                continue;
+            }
+            String extracted = extractQueryFromContent(m.path("content"));
+            if (extracted != null) {
+                query = extracted;
+            }
+        }
+        return query;
+    }
+
+    /**
+     * 从单条消息 content 中提取 query。
+     *
+     * @param content serve body 中 message 的 content 节点
+     * @return 提取到的 query；content 形态不支持时返回 {@code null} 表示不覆盖既有值
+     */
+    private static String extractQueryFromContent(JsonNode content) {
+        if (content.isTextual()) {
+            return content.asText();
+        } else if (content.isObject()) {
+            JsonNode q = content.path("query");
+            if (q.isTextual()) {
+                return q.asText();
+            }
+            return null;
+        } else {
+            return null;
+        }
     }
 
     private void logInbound(String agentId, String query, String contextId, HttpServletRequest request) {
