@@ -1,0 +1,42 @@
+server:
+  port: ${CLIENT_TOOL_DEMO_PORT:18210}
+
+spring:
+  application:
+    name: client-tool-deepagent-demo
+
+openjiuwen:
+  service:
+    agent-id: client-tool-deepagent
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: false
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: "ClientToolDeepAgent"
+      agent-description: "DeepAgent runtime for request-scoped client tool calls"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "client_tool_calling"
+          name: "Client Tool Calling"
+          description: "Calls request-scoped tools that execute on the A2A client"
+          tags: ["deepagent", "client-tool"]
+          examples: ["SINGLE_CLIENT_TOOL_DEMO", "MULTI_CLIENT_TOOL_DEMO"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+  demo:
+    llm:
+      provider: ${DEEPSEEK_PROVIDER:OpenAI}
+      api-key: ${DEEPSEEK_API_KEY:}
+      api-base: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      model-name: ${DEEPSEEK_MODEL:deepseek-chat}
+      workspace-path: ${DEEP_AGENT_WORKSPACE:target/client-tool-workspace}
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.agentcore: DEBUG
+    com.openjiuwen.service.app.controller.a2a: DEBUG

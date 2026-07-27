@@ -6,7 +6,7 @@
   On Windows (PowerShell 5.1+ or PowerShell 7) with Docker Desktop
   (Linux containers mode), this script:
     1. Assembles the docker build context from agent-runtime and
-       agent-store (robocopy replaces rsync).
+       agent-solution (robocopy replaces rsync).
     2. docker build -t edpagent:latest
     3. docker save + tar -czf into bundle\edpagent-offline-<stamp>.tar.gz
 
@@ -22,7 +22,7 @@
   agent-runtime repo root. Default: $HOME\EDPAgent\agent-runtime
 
 .PARAMETER AgentStore
-  agent-store repo root. Default: $HOME\EDPAgent\agent-store
+  agent-solution repo root. Default: $HOME\EDPAgent\agent-solution
 
 .PARAMETER ImageTag
   Built image tag. Default: edpagent:latest
@@ -37,7 +37,7 @@
   .\build-and-export.ps1
 
 .EXAMPLE
-  .\build-and-export.ps1 -AgentRuntime D:\repos\agent-runtime -AgentStore D:\repos\agent-store
+  .\build-and-export.ps1 -AgentRuntime D:\repos\agent-runtime -AgentStore D:\repos\agent-solution
 
 .EXAMPLE
   .\build-and-export.ps1 -SkipBuild     # re-pack only
@@ -46,7 +46,7 @@
 [CmdletBinding()]
 param(
     [string]$AgentRuntime = (Join-Path $HOME 'EDPAgent\agent-runtime'),
-    [string]$AgentStore   = (Join-Path $HOME 'EDPAgent\agent-store'),
+    [string]$AgentStore   = (Join-Path $HOME 'EDPAgent\agent-solution'),
     [string]$ImageTag     = 'edpagent:latest',
     [switch]$SkipBuild,
     [switch]$SkipExport
@@ -115,8 +115,8 @@ if (-not (Test-Path (Join-Path $AgentRuntime 'applications\a2a_service'))) {
 if (-not (Test-Path (Join-Path $AgentRuntime 'applications\versatile_adapter'))) {
     throw "agent-runtime/applications/versatile_adapter not found. Check -AgentRuntime: $AgentRuntime"
 }
-if (-not (Test-Path (Join-Path $AgentStore 'community\EDPAgent'))) {
-    throw "agent-store/community/EDPAgent not found. Check -AgentStore: $AgentStore"
+if (-not (Test-Path (Join-Path $AgentStore 'common\agents\edp-agent-python'))) {
+    throw "common/agents/edp-agent-python not found. Check -AgentStore: $AgentStore"
 }
 if (-not (Test-Path $A2AEnvSrc)) {
   throw "a2a_service env template not found: $A2AEnvSrc"
@@ -146,7 +146,7 @@ if (Test-Path $EntrypointSh) {
 }
 
 Write-Host "[ok] agent-runtime:    $AgentRuntime"
-Write-Host "[ok] agent-store:      $AgentStore"
+Write-Host "[ok] agent-solution:   $AgentStore"
 Write-Host "[ok] build context:    $ContextDir"
 Write-Host "[ok] image tag:        $ImageTag"
 Write-Host "[ok] a2a env:          $A2AEnvDst"
@@ -175,7 +175,7 @@ if (-not $SkipBuild) {
     # Merge EDPAgent business code (also excludes docs/ and deployment/)
     $EDPAgentDst = Join-Path $ContextDir 'a2a_service\agents\EDPAgent'
     if (Test-Path $EDPAgentDst) { Remove-Item -Recurse -Force $EDPAgentDst }
-    Invoke-Robocopy (Join-Path $AgentStore 'community\EDPAgent') $EDPAgentDst `
+    Invoke-Robocopy (Join-Path $AgentStore 'common\agents\edp-agent-python') $EDPAgentDst `
                     @('/XD', 'docs', 'deployment', '__pycache__', '/XF', '*.pyc')
 
     if (-not (Test-Path (Join-Path $EDPAgentDst 'agent.py'))) {
@@ -240,7 +240,7 @@ Copy-Item (Join-Path $BuildDir 'import-bundle.sh') $StageDir -Force
 Copy-Item (Join-Path $BuildDir 'run.sh')           $StageDir -Force
 Copy-Item (Join-Path $BuildDir 'stop.sh')          $StageDir -Force
 
-$DeployMd = Join-Path $AgentStore 'community\EDPAgent\docs\deployment.md'
+$DeployMd = Join-Path $AgentStore 'common\agents\edp-agent-python\docs\deployment.md'
 if (-not (Test-Path $DeployMd)) {
     throw "Deployment guide not found: $DeployMd"
 }

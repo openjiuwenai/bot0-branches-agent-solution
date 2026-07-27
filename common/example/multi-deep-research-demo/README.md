@@ -20,6 +20,7 @@
 - [服务器部署（fat jar）](#服务器部署fat-jar)
 - [本地开发（mvn spring-boot:run）](#本地开发mvn-spring-bootrun)
 - [端到端调用](#端到端调用)
+- [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密)
 - [配置字段速查](#配置字段速查)
 - [工作目录产物](#工作目录产物)
 
@@ -77,11 +78,16 @@ multi-deep-research-demo/
 │   │   │   ├── AutoPersistMemoryRail.java  extends MemoryRail；afterInvoke 落盘
 │   │   │   ├── SandboxRail.java            render_comparison_table / render_chart
 │   │   │   ├── UrlVerifyRail.java          verify_urls
+│   │   │   ├── SkillReadFileRail.java      readFile 工具；SkillHub SKILL.md 读取入口（FEAT-005）
+│   │   │   ├── SkillObservationRail.java   观察 rail；打 skills_available / tool_call hit_skill / invoke_summary
 │   │   │   ├── SandboxOps.java             库层窄接口：executeCode / downloadFile
 │   │   │   └── ExecResult.java             record: (ok, exitCode, stdout, stderr, message)
 │   │   └── runtime/                        ← Spring Boot 层
-│   │       ├── DeepResearchRuntimeApplication.java  Spring 装配；SandboxClient → SandboxOps 适配
-│   │       └── DeepResearchSpringProperties.java    继承库层 Properties 加 @ConfigurationProperties
+│   │       ├── DeepResearchRuntimeApplication.java  Spring 装配；SandboxClient → SandboxOps 适配；SKILLHUB_ENABLED→profile 自动激活
+│   │       ├── DeepResearchSpringProperties.java    继承库层 Properties 加 @ConfigurationProperties
+│   │       └── credential/                          FEAT-005 凭据解密
+│   │           ├── DemoAesGcmCredentialDecryptor.java  @ConditionalOnProperty(credential.mode=aes-gcm)
+│   │           └── EncryptTokenCli.java                加密 CLI（`main` 方法，非 Spring bean）
 │   └── src/main/resources/
 │       ├── application.yml                        主配置
 │       └── application-redis-checkpointer.yml     可选 profile：把 checkpointer 切到 Redis
@@ -132,6 +138,10 @@ multi-deep-research-demo/
 | 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application-redis-checkpointer.yml`，支持 standalone / cluster） | 同 `conversationId` 请求走同一状态 |
 | 中文字体 | 沙箱代码内置 | `SandboxRail` Python 头部 | Noto Sans CJK SC → Microsoft YaHei → DejaVu Sans 降级 |
 | Wire 层 metadata 观测 | Servlet filter | `agent-verify` 的 `A2aMetadataLoggingFilter`（`OncePerRequestFilter` + `ContentCachingRequestWrapper`） | 每次 `/a2a` POST 打一行 `[A2A wire] verify-agent received: {method, contextId, params.metadata, params.message.metadata}`，用于 FEAT-004 §Metadata 转发验收 |
+| **SkillHub skill 注入**（可选） | Runtime 中间件 | `agent-service-adapters-agentcore-ext` 的 `SkillHubManager` + `SkillHubInstaller` | opt-in（`SKILLHUB_ENABLED=true`）；启动阶段从 SkillHub 拉 skill 注册为工具。凭据支持**明文透传**与 **AES-256-GCM 加密**两种模式，见 [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密) |
+| **SkillHub SKILL.md 读取**（FEAT-005 L3 收尾） | Harness tool | `SkillReadFileRail` → `readFile(file_path)`，路径必须落在 workspace 或运维显式声明的白名单根目录下 | LLM 按 core-java `SkillUtil.getSkillPrompt` 硬编码指令主动调用；工具名固定 camelCase `readFile`（core-java `warnMissingSkillReadFileTool` 用同一字符串按名查找）；64 KB 上限 + UTF-8 强制解码，成功日志只打 basename + 字节数 |
+| **Skill 观察日志**（FEAT-005 层 2 观察） | 纯观察 Rail | `SkillObservationRail`（priority 90，业务 rail 之后跑） | 每次请求打 `skills_available count=N names=[...]`；名称变化时补 `skills_delta`；每次 tool 决策打 `tool_call iter=N tool=X hit_skill=<bool>`；请求收尾打 `invoke_summary tool_calls=N skill_hits=M` |
+| **SKILL.md 日志脱敏**（FEAT-005 log-leak fix） | Spring profile | `application.yml` 内 `spring.config.activate.on-profile: skillhub-remote` 的多文档块把 `logging.level.tool` / `logging.level.llm` 压到 WARN | 由 `DeepResearchRuntimeApplication.main()` 在 `openjiuwen.service.middleware.skillhub.enabled=true` 时自动 `setAdditionalProfiles("skillhub-remote")`；三种识别源：`--openjiuwen.service.middleware.skillhub.enabled=true` 启动参数、`-Dopenjiuwen.service.middleware.skillhub.enabled=true` sysprop、`SKILLHUB_ENABLED=true` 环境变量。屏蔽 `AbilityManager.logToolResult` 与 `BaseModelClient` 消息历史两处 INFO 泄露通道，参见 [SkillHub 中间件与凭据加密 § SKILL.md 日志脱敏](#skillmd-日志脱敏skillhub-remote-profile) |
 
 `search-agent` 支持 `stub` profile 用本地 fixture 演示，无需 Tavily key；prod profile 需要 `TAVILY_API_KEY`。`verify-agent` 是纯 LLM judge，只需 LLM 环境变量，无外部依赖。
 
@@ -509,6 +519,184 @@ $reader.ReadToEnd()
 
 ---
 
+## SkillHub 中间件与凭据加密
+
+FEAT-005 定义的 opt-in skill 分发能力。默认关闭；开启后 root DeepAgent 在启动阶段从远端 SkillHub 服务拉取 skill 定义（markdown / prompt）并注入为工具。
+
+### 何时用
+
+- 希望 root DeepAgent 具备除内置 rail 工具之外、由平台侧集中管理的**外部 skill**（翻译、代码解释、领域 prompt 等）
+- 不启用时（`SKILLHUB_ENABLED=false`，默认），Spring 跳过 `SkillHubManager` 装配，无外网出站、无凭据需求
+
+### Token 传递：两种模式
+
+deep-research 支持两条独立的 token 提供路径，取决于部署环境是否允许明文 token 进配置中心：
+
+#### 模式 A：明文透传（默认，向后兼容）
+
+```bash
+export SKILLHUB_ENABLED=true
+export SKILLHUB_ENDPOINT=https://swarmskills.openjiuwen.com
+export SKILLHUB_TOKEN=<your-plaintext-bearer-token>
+# 不设 SKILLHUB_CREDENTIAL_MODE
+```
+
+- 后台走 `agent-service-adapters-common` 默认的 `PassthroughCredentialDecryptor`（`decrypt(x) == x` 直通）
+- 适合本地开发、CI、或 token 已由 secret manager 在进程 env 层注入的场景
+
+#### 模式 B：AES-256-GCM 加密（参考实现，FEAT-005 L2 §5.2）
+
+```bash
+export SKILLHUB_ENABLED=true
+export SKILLHUB_ENDPOINT=https://swarmskills.openjiuwen.com
+export SKILLHUB_CREDENTIAL_MODE=aes-gcm
+export SKILLHUB_ENCRYPTED_TOKEN=<base64-ciphertext>
+export SKILLHUB_AES_KEY_HEX=<64-hex-chars>
+```
+
+- 后台走 demo 自带的 [DemoAesGcmCredentialDecryptor](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/credential/DemoAesGcmCredentialDecryptor.java)（`@ConditionalOnProperty` opt-in；激活后覆盖默认 bean）
+- 密文格式：`base64( 12-byte IV || AES-GCM ciphertext || 16-byte GCM auth tag )`，NIST SP 800-38D 标准布局
+- 适合密文可以进配置中心 / gitops 仓，但密钥要单独走 secret 分发通道的场景
+
+**向后兼容规则**：`SKILLHUB_ENCRYPTED_TOKEN` 未设时 yml 自动 fall back 到 `SKILLHUB_TOKEN` 作为 encryptedToken 输入。所以从 A 切 B 只需新增两个 env（`_CREDENTIAL_MODE` + `_AES_KEY_HEX`）并把 `SKILLHUB_TOKEN` 换成 `SKILLHUB_ENCRYPTED_TOKEN`，yml 不用改。
+
+### 生成密文：EncryptTokenCli
+
+demo 附带命令行工具 [EncryptTokenCli](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/credential/EncryptTokenCli.java)（纯 `main` 类，非 Spring bean），用于产生模式 B 的密文。**工具跑在开发机上；密钥只在开发机 + 部署机 env 上出现，只有密文才提交到配置库**。
+
+#### Step 1：生成 32 字节 AES-256 密钥（hex，64 字符）
+
+```bash
+openssl rand -hex 32
+# 示例输出：952193ae8e3cfa254ec9594f4f7c3658f2d0aa788f69658ccb4bf2163b9b873b
+```
+
+#### Step 2：编译并加密明文 token
+
+CLI 是普通 Java 类，用 `target/classes` 引用（Spring Boot fat jar 里的 `BOOT-INF/classes` 路径不能被 `java -cp` 直接引用）：
+
+```powershell
+# 先 compile 出 target/classes（构建过一次就够，不用重复）
+mvn "-Dmaven.repo.local=.m2\repository" `
+  -f "common\example\multi-deep-research-demo\agent-deep-research\pom.xml" `
+  compile
+
+# 方式 1：位置参数传 key + plaintext
+java -cp "common\example\multi-deep-research-demo\agent-deep-research\target\classes" `
+  com.openjiuwen.example.deepresearch.runtime.credential.EncryptTokenCli `
+  <hex-key-64chars> <plaintext-token>
+
+# 方式 2：key 走 env（避免落到命令行历史）
+$env:SKILLHUB_AES_KEY_HEX = "<hex-key-64chars>"
+java -cp "common\example\multi-deep-research-demo\agent-deep-research\target\classes" `
+  com.openjiuwen.example.deepresearch.runtime.credential.EncryptTokenCli `
+  <plaintext-token>
+```
+
+输出是**一行 base64 密文**。复制进 `SKILLHUB_ENCRYPTED_TOKEN`、密钥进 `SKILLHUB_AES_KEY_HEX`、启动 deep-research 即可。
+
+### 端到端联通验证
+
+启用 SkillHub 后，deep-research 启动日志里应能观察到以下 evidence marker：
+
+```
+credential=provided                              (env var 正确绑定，decrypted token 非空)
+list skills page=... (no CONNECT_FAILED)         (endpoint 可达 + auth 通过)
+SkillHub register completed ... registered=N     (完整链路 OK，N = 注册的 skill 数)
+```
+
+诊断参考：
+
+| 症状 | 可能原因 |
+|---|---|
+| 前两行 ✓ + `registered=0` | token 认证 OK，但仓库里对应租户/仓一个 skill 都没有——数据问题，非集成问题 |
+| `credential=provided` 之后无 register completed | token 或 endpoint 有问题；对照日志里的 `SkillHubErrorCategory`（`AUTH_FAILED` / `ACCESS_DENIED` / `NOT_FOUND` / `CONNECT_FAILED`）定位 |
+| 完全看不到 `credential=provided` | env var 未绑到进程；检查 yml 里 `${SKILLHUB_ENCRYPTED_TOKEN:${SKILLHUB_TOKEN:}}` 两级 fallback 是否都为空 |
+| Spring 启动失败：`AES-256-GCM requires a 32-byte key` | `SKILLHUB_AES_KEY_HEX` 长度错——必须是 64 字符 hex（即 32 字节） |
+| Spring 启动失败：`AES-GCM decrypt failed` | 密钥与密文不匹配，或密文被截断/替换。检查 IV 头（前 12 字节）是否完整 |
+
+### readFile 工具（`SkillReadFileRail`）
+
+SkillHub 把 skill 定义作为 SKILL.md 落到本地磁盘（`SKILLHUB_LOCAL_DIR` 指向的目录），core-java 的 `ReActAgent.updateSkillPromptBuilderSection` 会在 system-prompt 里**硬编码**一句 "use the readFile tool to read the corresponding SKILL.md file"，并在 `SkillUtil.getSkillPrompt` / `warnMissingSkillReadFileTool` 里按**精确 camelCase 字符串** `readFile` 查工具。工具缺失时 LLM 能看到 skill 名字（`SkillObservationRail` 会打 `skills_available`）却读不到 body，循环空转到 `maxIterations` 结束。
+
+[SkillReadFileRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/rail/SkillReadFileRail.java) 是这一环的收尾：
+
+- **工具名**：固定为 `readFile`（camelCase，非 `read_file`），跟随 core-java 硬编码
+- **允许读取的根目录**：`DeepResearchAgentFactory.computeAllowedReadRoots(props)` 合并两块 —— `workspace-path`（必含）+ `extra-readable-roots`（运维显式声明）；`DeepResearchRuntimeApplication.mergeSkillHubLocalDirIntoReadableRoots` 会**自动**把 `openjiuwen.service.middleware.skillhub.local-dir` 追加进白名单，避免运维改了 SkillHub 缓存目录却忘了同步 readFile 白名单
+- **路径安全**：`Paths.get(x).toAbsolutePath().normalize()` 去掉 `..`，然后逐个 canonical allowed root 用 `startsWith` 做祖先匹配；未命中 → 拒绝；无根目录 → 拒绝（fail-closed）
+- **大小上限**：64 KB（超限直接返回 `{ok=false, error}`，杜绝大二进制炸上下文）
+- **编码**：UTF-8 强制解码；失败作为显式错误上抛，不返回乱码
+- **日志脱敏**：成功日志只写 basename + 字节数，永不打 body（DA-12 redaction policy 一致）
+- **优先级**：70（rail 内部 wiring 优先级，不影响 LLM 触发时机）
+
+返回 shape：
+```json
+{"ok": true,  "path": "<absolute-path>", "bytes": 1234, "content": "<utf-8 text>"}
+{"ok": false, "path": "<input>",         "error":  "<reason>"}
+```
+
+### Skill 观察日志（`SkillObservationRail`）
+
+[SkillObservationRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/rail/SkillObservationRail.java) 是 FEAT-005 层 2 的观察 rail —— **不改** `SkillManager`、**不拦** tool 调用、**不注册**工具，纯往应用 logger 打事件。挂在任何 agent 上都安全；关掉只需把它的 logger 级别压到 WARN。
+
+| 时机 | 事件 | 内容 |
+|---|---|---|
+| `beforeInvoke` | `skills_available count=N names=[...]` (INFO) | 每次请求进入 ReAct 循环前快照当前 `SkillManager` 里全部 skill 名 |
+| `beforeInvoke`（名称集合变化） | `skills_delta previous=... current=...` (WARN) + 每个 skill 一行 `skill_roster name=... description=...` (INFO) | 用于观察 SkillHub 热加载生效；description 只截首行且最多 120 字符，避免整段 SKILL.md 落日志 |
+| `beforeToolCall` | `tool_call iter=N tool=<name> hit_skill=<bool>` (INFO) | LLM 每次决定调工具都打一行；`hit_skill=true` = 该工具名命中当前 skill 快照的某个 skill（即 SkillHub 灌入的能力被 LLM 动态挑到） |
+| `afterInvoke` | `invoke_summary tool_calls=N skill_hits=M` (INFO) | 单次请求汇总 |
+
+用法典型场景：想快速验证 "SkillHub 拉下来的 skill 有没有真的被 LLM 挑到"，grep 一次 `hit_skill=true` 即可，不用翻整段 A2A wire。
+
+### SKILL.md 日志脱敏（`skillhub-remote` profile）
+
+**背景**：SkillHub 打开后，SKILL.md 内容会通过 `readFile` 工具的结果、以及后续 LLM 请求的 `messages[].content` 字段，同时流经 agent-core 两处 **INFO 级 raw log**：
+
+| 通道 | 源码位置 | 违反 |
+|---|---|---|
+| `[tool] Tool result: ...` | agent-core-java `AbilityManager.logToolResult` (`Loggers.TOOL.info(...)`) | 违反 core-java 自身 `.claude/rules/logging.md:80`（"不得在 INFO+ 级别打印 raw user input / LLM response / tool argument / tool result"） |
+| `[llm] ...messages={"role":"tool","content":"..."}...` | agent-core-java `BaseModelClient` 请求前 `Loggers.LLM.info(...)` 的完整 messages JSON dump | 同上 |
+
+`EventSanitizer` 的 11 字段字段级脱敏只覆盖**结构化事件**，不管上面两处 raw logger 调用，所以在 FEAT-005 DA-12 acceptance test 里 SKILL.md 内容（含 canary 短语）依然会明文出现在应用日志中。
+
+**修法**：mirror agent-solution issue #30 已批准的做法 —— **不修 core-java**（保持 solution 侧的封闭 SDK 边界），而是在 solution 层的 `application.yml` 里加一段 profile-scoped 日志抑制：
+
+```yaml
+---
+spring:
+  config:
+    activate:
+      on-profile: skillhub-remote
+
+logging:
+  level:
+    tool: WARN
+    llm: WARN
+```
+
+这段多文档块用 `spring.config.activate.on-profile: skillhub-remote` 只在 `skillhub-remote` profile 激活时生效，把 `tool` / `llm` 两个 logger 从 INFO 压到 WARN，屏蔽泄露通道且不干扰 demo 自己的 DEBUG 日志。
+
+**profile 自动激活**：[DeepResearchRuntimeApplication.main()](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/DeepResearchRuntimeApplication.java#L71-L92) 在 SpringBoot 起前调 `isSkillHubEnabled(args)`，任一识别源返回 true 就 `app.setAdditionalProfiles("skillhub-remote")`。三种识别源（按优先级）：
+
+1. **CLI 启动参数**：`--openjiuwen.service.middleware.skillhub.enabled=true`
+2. **JVM 系统属性**：`-Dopenjiuwen.service.middleware.skillhub.enabled=true`
+3. **环境变量**：`SKILLHUB_ENABLED=true`
+
+设计这三源是因为 SIT 测试框架（`SutStack.AgentBuilder.property`）走 `--key=value` 启动参数、开发机习惯 `-D`、生产部署走 env —— 三条路都要能触发，不能只挑一条。
+
+**验证**：启用 SkillHub 后，进程启动日志应能看到 Spring Boot 打印：
+```
+The following 1 profile is active: "skillhub-remote"
+```
+以及 `[tool] INFO tool -` / `[llm] INFO llm -` 两类行**不再出现**。若 profile 有激活但日志还在，检查是否在其他 profile / logback.xml 里显式覆盖了这两个 logger 的级别。
+
+**副作用与边界**：
+- 只静音 `tool` / `llm` 两个 logger；agent-core 其它 logger 不受影响
+- 这**不是**根因修复 —— `AbilityManager.logToolResult` / `BaseModelClient` 两处的 INFO logging 依然违反 core-java 自身的 `logging.md:80` 规则；本 demo 选择在应用层规避，方便快速上线；根因修复（demote 到 DEBUG / 在 logger call site 脱敏 / 路由到 `EventSanitizer`）需 core-java owner 决策
+- 未开 SkillHub（`SKILLHUB_ENABLED=false`，默认）时 profile 不激活，`tool` / `llm` 保持 INFO 输出，不影响未接 SkillHub 的既有部署
+
+---
+
 ## 配置字段速查
 
 `agent-deep-research/src/main/resources/application.yml` 关键字段：
@@ -533,6 +721,16 @@ $reader.ReadToEnd()
 | `openjiuwen.demo.deep-research.completion-timeout` | `${DEEP_RESEARCH_COMPLETION_TIMEOUT:600s}` | 单轮 invoke 总超时 |
 | `openjiuwen.demo.deep-research.workspace-path` | `target/deep-research-workspace` | 记忆和报告落盘根目录 |
 | `openjiuwen.demo.deep-research.system-prompt` | 内置 | 含 A2A 调用规范、memory 工具文档、sandbox 工具契约、迭代预算硬规则 |
+| `openjiuwen.demo.deep-research.sys-operation-id` | `deep-research` | 注入到内部 `ReActAgentConfig.sysOperationId` 的稳定 ID；SkillHub 中间件靠它把下载的 skill 挂到本 agent 上，为空则 `registerSkill` 静默 no-op（`BaseAgent.lazyInitSkill`） |
+| `openjiuwen.demo.deep-research.extra-readable-roots` | `[]` | `readFile` 工具白名单额外根目录（`workspace-path` 默认已含）；SkillHub 的 `local-dir` 会由 `DeepResearchRuntimeApplication.mergeSkillHubLocalDirIntoReadableRoots` **自动**追加进白名单，此处只列**再额外**的根目录 |
+| `openjiuwen.service.middleware.skillhub.enabled` | `${SKILLHUB_ENABLED:false}` | 是否启用 SkillHub 中间件（opt-in）；`true` 时 `DeepResearchRuntimeApplication.main()` 自动激活 `skillhub-remote` profile |
+| `openjiuwen.service.middleware.skillhub.endpoint` | `${SKILLHUB_ENDPOINT:https://swarmskills.openjiuwen.com}` | SkillHub 服务地址 |
+| `openjiuwen.service.middleware.skillhub.auth-type` | `${SKILLHUB_AUTH_TYPE:bearer}` | 认证类型 |
+| `openjiuwen.service.middleware.skillhub.encrypted-token` | `${SKILLHUB_ENCRYPTED_TOKEN:${SKILLHUB_TOKEN:}}` | 密文（模式 B）或明文（模式 A）token；两级 env 回退，见 [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密) |
+| `openjiuwen.service.middleware.skillhub.local-dir` | `${SKILLHUB_LOCAL_DIR:./target/skillhub-skills}` | skill 下载后的本地缓存目录 |
+| `openjiuwen.demo.deep-research.credential.mode` | `${SKILLHUB_CREDENTIAL_MODE:}` | 空 = 走 `PassthroughCredentialDecryptor` 明文透传；`aes-gcm` = 激活 [DemoAesGcmCredentialDecryptor](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/credential/DemoAesGcmCredentialDecryptor.java) |
+| `openjiuwen.demo.deep-research.credential.aes-key-hex` | `${SKILLHUB_AES_KEY_HEX:}` | 32 字节 AES-256 密钥的 hex 编码（64 字符）；`credential.mode=aes-gcm` 时必需 |
+| `logging.level.tool` / `logging.level.llm`（`skillhub-remote` profile） | `WARN` | multi-doc YAML 段 —— 只在 `skillhub-remote` profile 激活时生效，屏蔽 core-java `AbilityManager.logToolResult` / `BaseModelClient` 两处 INFO 级 raw log 的 SKILL.md 泄露；见 [SKILL.md 日志脱敏](#skillmd-日志脱敏skillhub-remote-profile) |
 
 `application-redis-checkpointer.yml` 里的 Redis 字段（`openjiuwen.service.middleware.redis.default.*`、`openjiuwen.service.middleware.checkpointer.ttl-seconds`）通过 `--spring.profiles.active=redis-checkpointer` 激活。`agent-search` 有一份镜像 profile，env 变量同名，两个 runtime 共享同一个 Redis 实例（同 host/port/db/password）。`agent-verify` 目前不带 redis profile（无状态 judge，不需要 checkpointer）。
 

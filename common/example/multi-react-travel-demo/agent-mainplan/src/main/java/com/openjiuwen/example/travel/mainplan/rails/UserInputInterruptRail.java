@@ -79,6 +79,6 @@ public class UserInputInterruptRail extends BaseInterruptRail {
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
                 .replace("\r", "\\r");
-        return "{\"response\":\"" + escaped + "\"}";
+        return "{\"follow_up_message\":\"\",\"response\":\"" + escaped + "\"}";
     }
 }

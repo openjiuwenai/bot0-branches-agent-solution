@@ -32,7 +32,7 @@
 | 仓库 | 克隆地址 | 分支 |
 |---|---|---|
 | agent-runtime | `https://gitcode.com/openJiuwen/agent-runtime.git` | `feature/procode_enhancement` |
-| agent-store | `https://gitcode.com/openJiuwen/agent-store.git` | `EDP-agent` |
+| agent-solution | `https://gitcode.com/openJiuwen/agent-solution.git` | `common` |
 
 ### Skill 业务包（不在开源仓内）
 
@@ -40,7 +40,7 @@ EDPAgent 的 skill（含银行产品 ID、固定参数、卡片话术、沙箱�
 到开源社区**，由**业务侧同事**根据具体的业务情况添加相应的skill文件。
 
 获取到业务侧所使用的skill文件后，**在启动服务/打包镜像之前**将其拷贝到
-`agent-store/community/EDPAgent/skills/`，后续 rsync / `build.sh` 会自动合入运行包。
+`agent-solution/common/agents/edp-agent-python/skills/`，后续 rsync / `build.sh` 会自动合入运行包。
 
 **没有 skill 时 agent 也能起来**—— 简单问候都通——但**任何业务
 请求**（理财推荐、资金筹划、产品选品等）会因为没有可调用的 skill 而无效。
@@ -77,9 +77,9 @@ cd agent-runtime
 git checkout feature/procode_enhancement
 cd ..
 
-git clone https://gitcode.com/openJiuwen/agent-store.git
-cd agent-store
-git checkout EDP-agent
+git clone https://gitcode.com/openJiuwen/agent-solution.git
+cd agent-solution
+git checkout common
 cd ..
 ```
 
@@ -97,7 +97,7 @@ mkdir -p "$TARGET"
 #    没斜杠 → 把 EDPAgent 整个目录塞进 TARGET/EDPAgent/（导入会失败）
 rsync -a --exclude='__pycache__/' --exclude='*.pyc' \
       --exclude='docs/' --exclude='deployment/' \
-      agent-store/community/EDPAgent/ "$TARGET/"
+      agent-solution/common/agents/edp-agent-python/ "$TARGET/"
 
 # 验证目录结构 —— 必须直接看到 agent.py 等文件，而不是 EDPAgent 子目录
 ls "$TARGET"
@@ -244,9 +244,9 @@ cd agent-runtime
 git checkout feature/procode_enhancement
 cd ..
 
-git clone https://gitcode.com/openJiuwen/agent-store.git
-cd agent-store
-git checkout EDP-agent
+git clone https://gitcode.com/openJiuwen/agent-solution.git
+cd agent-solution
+git checkout common
 cd ..
 ```
 
@@ -259,7 +259,7 @@ New-Item -ItemType Directory -Path $target | Out-Null
 
 # robocopy 是"拷贝 SOURCE 的内容到 DEST"，不会多出一层 EDPAgent 目录
 robocopy `
-    "$HOME\EDPAgent\agent-store\community\EDPAgent" `
+    "$HOME\EDPAgent\agent-solution\common\agents\edp-agent-python" `
     $target `
     /E /XD docs deployment __pycache__ /XF *.pyc
 
@@ -373,18 +373,18 @@ cd agent-runtime
 git checkout feature/procode_enhancement
 cd ..
 
-git clone https://gitcode.com/openJiuwen/agent-store.git
-cd agent-store
-git checkout EDP-agent
+git clone https://gitcode.com/openJiuwen/agent-solution.git
+cd agent-solution
+git checkout common
 cd ..
 ```
 
-备注：如已获取到业务侧提供的skill文件，可在这一步将其拷贝到`agent-store/community/EDPAgent/skills/`下
+备注：如已获取到业务侧提供的skill文件，可在这一步将其拷贝到`agent-solution/common/agents/edp-agent-python/skills/`下
 
 #### C.1.3 构建镜像
 
 ```bash
-cd ~/EDPAgent/agent-store/community/EDPAgent/deployment
+cd ~/EDPAgent/agent-solution/common/agents/edp-agent-python/deployment
 
 # 新仓 fresh clone 后 .sh 文件没有执行位（Linux 端 git 默认未提交 +x），先补
 chmod +x *.sh
@@ -394,7 +394,7 @@ EDPAGENT_IMAGE_TAG=edpagent:xxxxx ./build.sh # 将版本号注入到shell脚本�
 
 `build.sh` 自动完成：
 1. 从 `agent-runtime/applications/` 拷贝 `a2a_service` + `versatile_adapter`
-2. 合并 `agent-store/community/EDPAgent/` 到 `a2a_service/agents/EDPAgent/`（rsync 自动排除 `docs/` `deployment/` `__pycache__/` `*.pyc`）
+2. 合并 `agent-solution/common/agents/edp-agent-python/` 到 `a2a_service/agents/EDPAgent/`（rsync 自动排除 `docs/` `deployment/` `__pycache__/` `*.pyc`）
 3. `docker build -t edpagent:版本号`。镜像内置：
    - Python 3.11 + 全部 Python 依赖
    - 双进程 entrypoint 启动脚本
@@ -513,25 +513,25 @@ docker inspect edpagent --format '{{.State.Status}}'
 
 > **关键分工**：`build.sh` 做两次独立的 rsync ——
 > - `agent-runtime/applications/` → 框架层（a2a_service + versatile_adapter）
-> - `agent-store/community/EDPAgent/` → 业务层（EDPAgent 本体）
+> - `agent-solution/common/agents/edp-agent-python/` → 业务层（EDPAgent 本体）
 >
 > 因此**业务改动与框架改动可以独立发版**。
 
 #### C.3.1 只改 store 侧（最常见场景）
 
-同事在 `agent-store/community/EDPAgent/` 下改了 `AgentRule.md` / `agent.py` / `tool/*.py` / `rail/*.py` / `prompt.py` 等业务文件，**不动 agent-runtime**。
+同事在 `agent-solution/common/agents/edp-agent-python/` 下改了 `AgentRule.md` / `agent.py` / `tool/*.py` / `rail/*.py` / `prompt.py` 等业务文件，**不动 agent-runtime**。
 
 **构建端 SOP：**
 ```bash
 # 1) 同步两个仓（即使 runtime 没改，也校验干净状态）
-cd ~/EDPAgent/agent-store
-git fetch origin && git checkout EDP-agent && git pull origin EDP-agent
+cd ~/EDPAgent/agent-solution
+git fetch origin && git checkout common && git pull origin common
 
 cd ~/EDPAgent/agent-runtime
 git status   # 应干净；若 HEAD 变化请同步分支
 
 # 2) 重新打包
-cd ~/EDPAgent/agent-store/community/EDPAgent/deployment
+cd ~/EDPAgent/agent-solution/common/agents/edp-agent-python/deployment
 ./build.sh              # rsync 自动带上所有 store 侧改动
 ./export-bundle.sh
 ```
@@ -605,18 +605,18 @@ Set-Location agent-runtime
 git checkout feature/procode_enhancement
 Set-Location ..
 
-git clone https://gitcode.com/openJiuwen/agent-store.git
-Set-Location agent-store
-git checkout EDP-agent
+git clone https://gitcode.com/openJiuwen/agent-solution.git
+Set-Location agent-solution
+git checkout common
 Set-Location ..
 ```
 
-备注：如已获取到业务侧提供的skill文件，可在这一步将其拷贝到`agent-store/community/EDPAgent/skills/`下
+备注：如已获取到业务侧提供的skill文件，可在这一步将其拷贝到`agent-solution/common/agents/edp-agent-python/skills/`下
 
 ### D.3 一键构建 + 打包
 
 ```powershell
-cd $HOME\EDPAgent\agent-store\community\EDPAgent\deployment
+cd $HOME\EDPAgent\agent-solution\common\agents\edp-agent-python\deployment
 .\build-and-export.ps1
 ```
 
@@ -629,7 +629,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 **非默认路径**（源码放在 `D:\repos\...` 等位置）：
 
 ```powershell
-.\build-and-export.ps1 -AgentRuntime D:\repos\agent-runtime -AgentStore D:\repos\agent-store
+.\build-and-export.ps1 -AgentRuntime D:\repos\agent-runtime -AgentStore D:\repos\agent-solution
 ```
 
 **其他开关**（迭代发版常用）：
@@ -650,14 +650,14 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 | Preflight 校验 docker / tar / 输入目录 | 同左 | 额外扫 `entrypoint.sh` 的 CRLF，命中弹 y/N |
 | `chmod +x` | **无** | Windows 文件系统没有 +x 位，离线 Linux 侧必须补（见 §D.5） |
 
-产物：`$HOME\EDPAgent\agent-store\community\EDPAgent\deployment\bundle\edpagent-offline-<时间戳>.tar.gz`。
+产物：`$HOME\EDPAgent\agent-solution\common\agents\edp-agent-python\deployment\bundle\edpagent-offline-<时间戳>.tar.gz`。
 
 ### D.4 传输到离线 Linux 服务器
 
 **Windows 10+ 自带 scp**（推荐，PowerShell 直接能跑）：
 
 ```powershell
-$Bundle = "$HOME\EDPAgent\agent-store\community\EDPAgent\deployment\bundle\edpagent-offline-<时间戳>.tar.gz"
+$Bundle = "$HOME\EDPAgent\agent-solution\common\agents\edp-agent-python\deployment\bundle\edpagent-offline-<时间戳>.tar.gz"
 scp $Bundle user@<离线服务器 IP>:/opt/
 ```
 
@@ -692,11 +692,11 @@ curl http://localhost:8091/health
 同 §C.3 的分工一致：改 store 侧（业务代码）还是框架侧（agent-runtime），用法和坑表完全相通。PowerShell 侧每次新的打包就是：
 
 ```powershell
-cd $HOME\EDPAgent\agent-store
-git pull origin EDP-agent       # 或 myfork <你的分支>
+cd $HOME\EDPAgent\agent-solution
+git pull origin common       # 或 myfork <你的分支>
 cd $HOME\EDPAgent\agent-runtime
 git pull origin feature/procode_enhancement   # 只在框架变更时需要
-cd $HOME\EDPAgent\agent-store\community\EDPAgent\deployment
+cd $HOME\EDPAgent\agent-solution\common\agents\edp-agent-python\deployment
 .\build-and-export.ps1
 ```
 
@@ -924,5 +924,5 @@ DPA_SKILL_REGISTRATION_MODE=filtered
 
 ---
 
-*基线版本：agent-runtime @ `origin/feature/procode_enhancement`，agent-store @ `origin/EDP-agent`（含 MCP 工具链 `tool/call_mcp.py` + `rail/mcp_interrupt_rail.py` 与第 4 个理财交互式重构 skill `rebuild_interact_finance_rec_skill/`）*
+*基线版本：agent-runtime @ `origin/feature/procode_enhancement`，agent-solution @ `origin/common`（含 MCP 工具链 `tool/call_mcp.py` + `rail/mcp_interrupt_rail.py` 与第 4 个理财交互式重构 skill `rebuild_interact_finance_rec_skill/`）*
 *文档日期：2026-05-18*
