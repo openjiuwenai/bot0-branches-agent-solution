@@ -211,6 +211,9 @@ public final class VerificationUiServer {
         sseClients.removeAll(dead);
     }
 
+    private static final String LF = String.valueOf((char) 10);
+    private static final String CR = String.valueOf((char) 13);
+
     /**
      * JSON 文本。
      *
@@ -221,9 +224,6 @@ public final class VerificationUiServer {
     private static String toJson(VerificationProgress.Event e) {
         return jsonEvent(e.kind().name(), e.scenarioId(), e.message(), e.ok());
     }
-
-    private static final String LF = String.valueOf((char) 10);
-    private static final String CR = String.valueOf((char) 13);
 
     /**
      * jsonEvent。
