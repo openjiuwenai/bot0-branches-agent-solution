@@ -95,12 +95,13 @@ SKIP_BUILD=1 ./scripts/local-e2e.sh # 复用已有 jar
 
 ### `scripts/local-e2e-a2a-gateway.sh` — A2A Gateway 模式
 
-跑通 A2A Gateway 转发模式下的完整链路与多场景验证。启动 5 个进程：mock gateway（8084）+ L1（8081）+ L2（8082）+ downstream（8083）+ default-wf（8085），L1/L2 激活 `a2a-gateway-test` profile 走网关转发。分两轮：
+跑通 A2A Gateway 转发模式下的完整链路与多场景验证。启动 5 个进程：mock gateway（8084）+ L1（8081）+ L2（8082）+ downstream（8083）+ default-wf（8085），L1/L2 激活 `a2a-gateway-test` profile 走网关转发。分三轮：
 
 ```
 Round 1: gateway + L1 + L2 + downstream + default-wf
          Client → L1 → gateway → L2 → gateway → downstream / default-wf
 Round 2: 重启 L2（移除 default-workflow 配置）后跑 §6.2.2
+Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock 宿主 → 直链 SSE 透传
 ```
 
 **Round 1** 覆盖三类场景：
@@ -112,6 +113,13 @@ Round 2: 重启 L2（移除 default-workflow 配置）后跑 §6.2.2
 **Round 2** 覆盖：
 
 - **§6.2.2 意图不明回退 L1 重识别**：重启 L2 覆盖 `default-workflow.agent-card` 为空后，`curl L1 "意图不明"` → L2 返回 ambiguous envelope，L1 `ReclassifyServeOrchestrator` 检测后第二次调用 Versatile 直接路由到 downstream，最终响应包含 `"酒店预订成功"`，并断言 L1 至少调用 Versatile 两次、gateway 记录 `agent_card_biz_hotel_domestic` hop。
+
+**Round 3** 覆盖 versatile **直链 SSE 透传**：
+
+- 重启 L1/L2（`direct-chain.enabled=true`，`DirectChainVersatileAgentHandler` 截胡 `a2a_delegate` 走 gateway 隧道）；downstream 仅作 versatile mock server 宿主（`dev,mock-versatile`，不开 direct-chain）。gateway 隧道对**末端业务卡**（如 `agent_card_biz_hotel_domestic`）直接转发到 downstream 的 versatile 端点 `/v1/proj/agents/agent_biz/conversations/{cid}`（mock 内硬编码 `versatileAgentId=agent_biz`），并把 serve 协议 body 翻译成 versatile `{inputs:{query,messages}}`——业务原始 versatile SSE **不经任何业务终端 handler** 直接透传给 client；对**中间跳卡**（如 `agent_card_L2_hotel`）仍是哑隧道，原样转发到 `/v1/query`。
+- `curl L1 stream=true "订酒店"` → 客户端直接收到业务原始 versatile SSE 事件，响应体断言包含 `custom_rsp_data` 与 `"酒店预订成功"`，且**不含** a2a JSON-RPC 折叠痕迹（无 `TASK_STATE_COMPLETED`）。
+- 断言 gateway 日志记录两跳直链隧道：`TUNNEL agentId=agent_card_L2_hotel -> http://localhost:8082/v1/query`（中间跳，哑隧道）与 `TUNNEL agentId=agent_card_biz_hotel_domestic -> http://localhost:8083/v1/proj/agents/agent_biz/conversations/c5-direct-chain`（末端跳，versatile 直连）。
+- `DirectChainAutoConfiguration` 在 `AutoConfiguration.imports` 中先于 `RouteCacheAutoConfiguration`，故 `direct-chain.enabled=true` 时 `DirectChainVersatileAgentHandler` 经 `@ConditionalOnMissingBean(AgentHandler.class)` 抢得 AgentHandler 槽位，route-cache 自动让位——L1 保留其默认 `route-cache.enabled=true`（`application-layer1.yml`）即可，直链仍生效（无需显式关闭 route-cache）。
 
 Round 1 还统一验证 **header 透传**（gateway 日志以 INFO 记录全部入站 header）：
 
@@ -129,7 +137,7 @@ SKIP_BUILD=1 ./scripts/local-e2e-a2a-gateway.sh # 复用已有 jar
 | 需求 | 脚本 |
 |------|------|
 | 验证 Local HTTP 转发 + 中断 + 重新分类基础链路 | `local-e2e.sh` |
-| 验证 A2A Gateway 转发、header 透传、自消/重识别、多轮路由缓存 | `local-e2e-a2a-gateway.sh` |
+| 验证 A2A Gateway 转发、header 透传、自消/重识别、多轮路由缓存、直链 SSE 透传 | `local-e2e-a2a-gateway.sh` |
 | 两者都想覆盖 | 先跑 `local-e2e.sh` 再跑 `local-e2e-a2a-gateway.sh` |
 
 ## 配置

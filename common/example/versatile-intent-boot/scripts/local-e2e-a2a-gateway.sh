@@ -11,8 +11,10 @@
 #   - Round 1: L2 with default-workflow → §6.2.1 + §6.2.4 self-heal
 #     + multi-turn route cache (conv_id=c4-multi-turn, two client turns)
 #   - Round 2: L2 without default-workflow → §6.2.2 reclassify
-#   - Round 3: L1/L2/downstream restarted with direct-chain enabled →
-#     versatile direct-chain SSE passthrough (client receives raw data: lines)
+#   - Round 3: L1/L2 restarted with direct-chain enabled; downstream is a plain
+#     versatile mock server. gateway tunnels the terminal biz card directly to
+#     the mock (/v1/proj/agents/agent_biz/conversations/{cid}, serve body
+#     rewritten to {inputs:...}); client receives raw versatile SSE data: lines.
 #
 # §6.2.2 signal path (L2 ambiguous → L1 reclassify):
 #   1. Client → L1 /v1/query "意图不明"
@@ -482,8 +484,10 @@ main() {
     echo
     echo "==================== 重启 L1 + L2 + downstream（直链模式）===================="
     # 直链场景：L1/L2 以 direct-chain.enabled=true 启动（DirectChainVersatileAgentHandler
-    # 截胡 a2a_delegate，改走 gateway 隧道 X-Direct-Chain:true）；downstream 额外开启
-    # raw-passthrough=true（RawVersatilePassthroughHandler 直接透传业务原始 SSE 事件）。
+    # 截胡 a2a_delegate，改走 gateway 隧道 X-Direct-Chain:true）。downstream 仅作 versatile
+    # mock server 宿主，不开 direct-chain——末端业务卡由 gateway 隧道直接转发到 downstream 的
+    # /v1/proj/agents/agent_biz/conversations/{cid}（gateway 内硬编码 versatileAgentId=agent_biz，
+    # 并把 serve body 翻译成 {inputs:...}），业务原始 SSE 不经任何业务终端 handler。
     # gateway 进程不变（已带 /a2a/{agentId} 隧道端点；a2a-gateway-test profile 已配
     # base-url=http://localhost:8084，直链 handler 经 A2AGatewayCardResolver 复用）。
     #
@@ -503,13 +507,12 @@ main() {
     start_process layer2 "$L2_PORT" "layer2,dev,mock-versatile,a2a-gateway-test" "agent_L2" \
         --openjiuwen.example.direct-chain.enabled=true
 
-    # downstream: 业务终端 raw-passthrough，注册 RawVersatilePassthroughHandler
-    # 保留 Round 1 的 result-node-name / messages.required 参数
-    start_process downstream "$DOWNSTREAM_PORT" "dev,mock-versatile" "agent_biz" \
-        --openjiuwen.service.versatile.result-node-name=AnswerNode \
-        --openjiuwen.service.versatile.messages.required=true \
-        --openjiuwen.example.direct-chain.enabled=true \
-        --openjiuwen.example.direct-chain.raw-passthrough=true
+    # downstream: 仅作 versatile mock server 宿主（MockVersatileController）。
+    # 直链末端业务卡由 gateway 隧道直接转发到 downstream 的
+    # /v1/proj/agents/agent_biz/conversations/{cid}（gateway 内硬编码 versatileAgentId=agent_biz，
+    # 并把 serve body 翻译成 {inputs:...}），业务原始 SSE 不经任何业务终端 handler。
+    # 故 downstream 不开 direct-chain / raw-passthrough，不注册 RawVersatilePassthroughHandler。
+    start_process downstream "$DOWNSTREAM_PORT" "dev,mock-versatile" "agent_biz"
 
     wait_for_health "$L1_PORT" layer1
     wait_for_health "$L2_PORT" layer2
@@ -543,10 +546,11 @@ main() {
 
     echo
     echo "==================== 验证 gateway 日志：两跳直链隧道 ===================="
-    # hop 1: L1 → gateway 隧道 → L2 (agentId=agent_card_L2_hotel, X-Direct-Chain=true)
+    # hop 1: L1 → gateway 哑隧道 → L2 /v1/query (agentId=agent_card_L2_hotel, X-Direct-Chain=true)
     assert_log_contains "dc-hop1-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_L2_hotel -> http://localhost:${L2_PORT}/v1/query"
-    # hop 2: L2 → gateway 隧道 → downstream (agentId=agent_card_biz_hotel_domestic, X-Direct-Chain=true)
-    assert_log_contains "dc-hop2-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_biz_hotel_domestic -> http://localhost:${DOWNSTREAM_PORT}/v1/query"
+    # hop 2: L2 → gateway 隧道 → downstream versatile mock（末端业务卡：gateway 翻译 body
+    #        并直连 /v1/proj/agents/agent_biz/conversations/{cid}，不经业务终端 handler）
+    assert_log_contains "dc-hop2-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_biz_hotel_domestic -> http://localhost:${DOWNSTREAM_PORT}/v1/proj/agents/agent_biz/conversations/c5-direct-chain"
 
     echo
     echo "==> All scenarios passed."

@@ -28,9 +28,6 @@ public class DirectChainProperties {
     /** 直链 SSE 调用超时。 */
     private Duration timeout = Duration.ofSeconds(600);
 
-    /** true=业务终端注册 RawVersatilePassthroughHandler；false=中间层注册 DirectChainVersatileAgentHandler。 */
-    private boolean rawPassthrough = false;
-
     public boolean isEnabled() {
         return enabled;
     }
@@ -53,14 +50,6 @@ public class DirectChainProperties {
 
     public void setTimeout(Duration timeout) {
         this.timeout = timeout;
-    }
-
-    public boolean isRawPassthrough() {
-        return rawPassthrough;
-    }
-
-    public void setRawPassthrough(boolean rawPassthrough) {
-        this.rawPassthrough = rawPassthrough;
     }
 
     /**

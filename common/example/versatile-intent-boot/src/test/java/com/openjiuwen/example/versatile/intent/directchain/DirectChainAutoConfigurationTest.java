@@ -14,8 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 /**
- * {@link DirectChainAutoConfiguration} 装配验证：启用时按 raw-passthrough 开关注册对应 handler，
- * 关闭时不注册。
+ * {@link DirectChainAutoConfiguration} 装配验证：启用时注册直链 handler，关闭时不注册。
  *
  * @since 0.1.0
  */
@@ -33,20 +32,9 @@ class DirectChainAutoConfigurationTest {
 
     @Test
     void registersDirectChainHandlerWhenEnabled() {
-        runner.withPropertyValues(
-                "openjiuwen.example.direct-chain.enabled=true",
-                "openjiuwen.example.direct-chain.raw-passthrough=false")
+        runner.withPropertyValues("openjiuwen.example.direct-chain.enabled=true")
                 .run(ctx -> assertThat(ctx).getBean(AgentHandler.class)
                         .isInstanceOf(DirectChainVersatileAgentHandler.class));
-    }
-
-    @Test
-    void registersRawPassthroughWhenRawMode() {
-        runner.withPropertyValues(
-                "openjiuwen.example.direct-chain.enabled=true",
-                "openjiuwen.example.direct-chain.raw-passthrough=true")
-                .run(ctx -> assertThat(ctx).getBean(AgentHandler.class)
-                        .isInstanceOf(RawVersatilePassthroughHandler.class));
     }
 
     @Test
