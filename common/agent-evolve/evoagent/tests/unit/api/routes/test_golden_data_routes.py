@@ -101,16 +101,16 @@ def test_build_skill_provider_local_missing_root() -> None:
         )
 
 
-def test_build_skill_provider_adapter_unsupported() -> None:
-    with pytest.raises(Exception):  # HTTPException 501
-        gd._build_skill_provider(
-            gd.BuildGUConfig(
-                source="adapter",
-                adapter_url="http://adapter",
-                agent_name="a",
-                llm_config=gd.LLMConfig(**_llm_config()),
-            )
+def test_build_skill_provider_adapter_supported() -> None:
+    sp = gd._build_skill_provider(
+        gd.BuildGUConfig(
+            source="adapter",
+            adapter_url="http://adapter",
+            agent_name="a",
+            llm_config=gd.LLMConfig(**_llm_config()),
         )
+    )
+    assert sp.__class__.__name__ == "AdapterSkillProvider"
 
 
 # ---------------------------------------------------------------------------
