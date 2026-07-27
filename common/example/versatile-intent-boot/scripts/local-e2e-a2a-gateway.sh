@@ -11,6 +11,8 @@
 #   - Round 1: L2 with default-workflow → §6.2.1 + §6.2.4 self-heal
 #     + multi-turn route cache (conv_id=c4-multi-turn, two client turns)
 #   - Round 2: L2 without default-workflow → §6.2.2 reclassify
+#   - Round 3: L1/L2/downstream restarted with direct-chain enabled →
+#     versatile direct-chain SSE passthrough (client receives raw data: lines)
 #
 # §6.2.2 signal path (L2 ambiguous → L1 reclassify):
 #   1. Client → L1 /v1/query "意图不明"
@@ -258,6 +260,27 @@ assert_log_contains() {
     return 1
 }
 
+assert_eq() {
+    local expected="$1" actual="$2" label="$3"
+    if [ "$expected" = "$actual" ]; then
+        echo "    PASS: $label == $expected"
+        return 0
+    fi
+    echo "    FAIL: $label expected=$expected actual=$actual" >&2
+    return 1
+}
+
+assert_not_contains() {
+    local label="$1" body="$2" pattern="$3"
+    if echo "$body" | grep -q "$pattern"; then
+        echo "    FAIL: $label expected NOT to contain '$pattern'" >&2
+        echo "    body: $body" >&2
+        return 1
+    fi
+    echo "    PASS: $label does not contain '$pattern'"
+    return 0
+}
+
 main() {
     echo "==> A2A Gateway 全链路联调 (L2 §6.2.1 + §6.2.4 自消 + 多轮路由缓存 + §6.2.2 重识别)"
     build_if_needed
@@ -452,6 +475,79 @@ main() {
     echo "==================== 验证 L2 日志：首次 ambiguous 调用 ===================="
     # L2 收到一次 意图不明 调用，返回 ambiguous envelope
     assert_log_contains "l2-ambiguous-call" "$LOG_DIR/layer2.log" "Mock Versatile agentId=agent_L2 conversationId=c3-gateway-reclassify query=意图不明"
+
+    echo
+    echo "======================================== Round 3: versatile direct-chain SSE 透传 ========================================"
+
+    echo
+    echo "==================== 重启 L1 + L2 + downstream（直链模式）===================="
+    # 直链场景：L1/L2 以 direct-chain.enabled=true 启动（DirectChainVersatileAgentHandler
+    # 截胡 a2a_delegate，改走 gateway 隧道 X-Direct-Chain:true）；downstream 额外开启
+    # raw-passthrough=true（RawVersatilePassthroughHandler 直接透传业务原始 SSE 事件）。
+    # gateway 进程不变（已带 /a2a/{agentId} 隧道端点；a2a-gateway-test profile 已配
+    # base-url=http://localhost:8084，直链 handler 经 A2AGatewayCardResolver 复用）。
+    #
+    # 注意：L1 默认 route-cache.enabled=true，而 RouteCacheAutoConfiguration 在 imports
+    # 中先于 DirectChainAutoConfiguration，二者均以 @ConditionalOnMissingBean(AgentHandler.class)
+    # 争抢 AgentHandler 槽位——route-cache 会胜出导致直链 handler 不生效。故 L1 须显式
+    # 关闭 route-cache，让 DirectChainVersatileAgentHandler 取得 AgentHandler 槽位。
+    stop_process_by_name layer1
+    stop_process_by_name layer2
+    stop_process_by_name downstream
+
+    # L1: direct-chain 默认全直链（a2a-forward-agent-cards 留空），agent_card_L2_hotel 走直链
+    start_process layer1 "$L1_PORT" "layer1,dev,mock-versatile,a2a-gateway-test" "agent_L1" \
+        --openjiuwen.example.direct-chain.enabled=true \
+        --openjiuwen.service.versatile.route-cache.enabled=false
+
+    # L2: direct-chain 默认全直链，agent_card_biz_hotel_domestic 走直链
+    start_process layer2 "$L2_PORT" "layer2,dev,mock-versatile,a2a-gateway-test" "agent_L2" \
+        --openjiuwen.example.direct-chain.enabled=true
+
+    # downstream: 业务终端 raw-passthrough，注册 RawVersatilePassthroughHandler
+    # 保留 Round 1 的 result-node-name / messages.required 参数
+    start_process downstream "$DOWNSTREAM_PORT" "dev,mock-versatile" "agent_biz" \
+        --openjiuwen.service.versatile.result-node-name=AnswerNode \
+        --openjiuwen.service.versatile.messages.required=true \
+        --openjiuwen.example.direct-chain.enabled=true \
+        --openjiuwen.example.direct-chain.raw-passthrough=true
+
+    wait_for_health "$L1_PORT" layer1
+    wait_for_health "$L2_PORT" layer2
+    wait_for_health "$DOWNSTREAM_PORT" downstream
+
+    echo
+    echo "==================== Scenario: versatile direct-chain client stream:true ==================="
+    echo "    POST http://localhost:${L1_PORT}/v1/query  stream=true  messages=[{user, 订酒店}]"
+    echo "    Expected: client 收到业务原始 versatile SSE 事件 (custom_rsp_data + 酒店预订成功)"
+    echo "              且无 a2a JSON-RPC 折叠痕迹 (无 TASK_STATE_COMPLETED)"
+    local dc_body_file dc_status
+    dc_body_file="$(mktemp)"
+    dc_status=$(curl -s -o "$dc_body_file" -w "%{http_code}" \
+        -X POST "http://localhost:${L1_PORT}/v1/query" \
+        -H "Content-Type: application/json" \
+        -d '{"conversation_id":"c5-direct-chain","stream":true,"user_id":"u-42","messages":[{"role":"user","content":"订酒店"}]}')
+    local dc_body
+    dc_body="$(cat "$dc_body_file")"
+    echo "    http_status: $dc_status"
+    echo "    body: $(echo "$dc_body" | head -c 1200)"
+
+    # HTTP 200
+    assert_eq "200" "$dc_status" "direct-chain stream HTTP"
+
+    # 响应体包含业务原始 versatile SSE 事件（经 Map 再序列化，字段名不变）
+    assert_contains "direct-chain-raw-event" "$dc_body" "custom_rsp_data"
+    assert_contains "direct-chain-business-output" "$dc_body" "酒店预订成功"
+
+    # 响应体不含 a2a JSON-RPC 折叠痕迹（直链隧道透传原始 SSE，不产 task 状态事件）
+    assert_not_contains "direct-chain-no-a2a-fold" "$dc_body" "TASK_STATE_COMPLETED"
+
+    echo
+    echo "==================== 验证 gateway 日志：两跳直链隧道 ===================="
+    # hop 1: L1 → gateway 隧道 → L2 (agentId=agent_card_L2_hotel, X-Direct-Chain=true)
+    assert_log_contains "dc-hop1-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_L2_hotel -> http://localhost:${L2_PORT}/v1/query"
+    # hop 2: L2 → gateway 隧道 → downstream (agentId=agent_card_biz_hotel_domestic, X-Direct-Chain=true)
+    assert_log_contains "dc-hop2-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_biz_hotel_domestic -> http://localhost:${DOWNSTREAM_PORT}/v1/query"
 
     echo
     echo "==> All scenarios passed."
