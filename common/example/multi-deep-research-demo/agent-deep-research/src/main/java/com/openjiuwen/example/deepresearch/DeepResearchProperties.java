@@ -42,6 +42,7 @@ public class DeepResearchProperties {
     private List<String> skillDirectories = new ArrayList<>();
     private String skillMode = "all";
     private List<String> extraReadableRoots = new ArrayList<>();
+    private List<McpServerSetting> mcpServers = new ArrayList<>();
 
     private String systemPrompt = """
             You are a Deep Research Agent specialised in comparing domestic LLM API offerings.
@@ -672,6 +673,28 @@ public class DeepResearchProperties {
      */
     public void setExtraReadableRoots(List<String> extraReadableRoots) {
         this.extraReadableRoots = extraReadableRoots;
+    }
+
+    /**
+     * Gets the MCP servers to probe and register at startup. The demo layer forwards
+     * this list to {@link McpRegistrar#probeAndRegister(List)} so any spec-compliant
+     * MCP server reachable via a core-java client type ({@code streamable_http} /
+     * {@code sse} / {@code stdio}) can be attached by editing yaml alone. Empty list
+     * or {@code null} entries are safe no-ops.
+     *
+     * @return the configured MCP servers (never {@code null})
+     */
+    public List<McpServerSetting> getMcpServers() {
+        return mcpServers;
+    }
+
+    /**
+     * Sets the MCP servers list.
+     *
+     * @param mcpServers the MCP servers to attach at startup
+     */
+    public void setMcpServers(List<McpServerSetting> mcpServers) {
+        this.mcpServers = mcpServers == null ? new ArrayList<>() : mcpServers;
     }
 
     /**
