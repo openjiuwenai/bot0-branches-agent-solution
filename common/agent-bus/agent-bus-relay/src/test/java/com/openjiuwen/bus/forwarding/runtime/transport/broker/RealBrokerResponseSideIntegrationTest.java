@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
-import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingProducer;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
@@ -207,8 +207,8 @@ class RealBrokerResponseSideIntegrationTest {
     private void wireGateway(long acceptTimeoutMs, long responseTimeoutMs) {
         InMemoryForwardingOutbox outbox = new InMemoryForwardingOutbox();
         DefaultBrokerTopicResolver resolver = new DefaultBrokerTopicResolver();
-        RocketMqBrokerForwardingRelay relay = new RocketMqBrokerForwardingRelay(
-                resolver, "req", RocketMqBrokerForwardingRelay.defaultSender(gatewayProducer));
+        RocketMqBrokerForwardingProducer relay = new RocketMqBrokerForwardingProducer(
+                resolver, "req", RocketMqBrokerForwardingProducer.defaultSender(gatewayProducer));
         // Discovery fake: register the runtime card so dispatchRequest can resolve the target
         // (serviceId=RUNTIME → routeHandle=ROUTE_INVOCATION, which the test envelopes assert).
         FakeAgentDiscoveryService discovery = new FakeAgentDiscoveryService()
@@ -521,7 +521,7 @@ class RealBrokerResponseSideIntegrationTest {
      * poll-loop consumes request events from {@code ascend_bus_invocation_req} (broker-side bySql
      * filter = this runtime's tenant + targetServiceId), "processes" per the L2 §4.3 response state
      * machine, and produces response events back onto {@code ascend_bus_invocation_resp_out} via a
-     * {@link DefaultMQProducer}, mirroring {@link RocketMqBrokerForwardingRelay#buildMessage} so the
+     * {@link DefaultMQProducer}, mirroring {@link RocketMqBrokerForwardingProducer#buildMessage} so the
      * response adapters read the same routing user-properties. §6 D4: request consumption is via the
      * adapter (no DefaultMQPushConsumer / MessageListener / MessageExt here).
      */
@@ -531,7 +531,7 @@ class RealBrokerResponseSideIntegrationTest {
 
         // SPI relay port (suffix "resp_out") — wraps the raw producer so produceResponse reuses the SDK
         // wire-format encoder instead of hand-rolling Message + putUserProperty.
-        private final RocketMqBrokerForwardingRelay respProducer;
+        private final RocketMqBrokerForwardingProducer respProducer;
         private final AtomicLong taskSeq = new AtomicLong();
         private final AtomicLong respSeq = new AtomicLong();
         private final Map<String, TaskEntry> taskByKey = new ConcurrentHashMap<>();
@@ -548,8 +548,8 @@ class RealBrokerResponseSideIntegrationTest {
             producer.setNamesrvAddr(nameserver);
             // suffix "resp_out": this double produces DIRECTLY to resp_out (bypassing the relay response
             // hop) to exercise the gateway response side in isolation (UC-6/D9 inject eventType directly).
-            this.respProducer = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_out",
-                    RocketMqBrokerForwardingRelay.defaultSender(this.producer));
+            this.respProducer = new RocketMqBrokerForwardingProducer(new DefaultBrokerTopicResolver(), "resp_out",
+                    RocketMqBrokerForwardingProducer.defaultSender(this.producer));
         }
 
         /** Configurable response behaviour for a consumed REQUESTED event (mirrors TestAgentRuntime). */
@@ -708,7 +708,7 @@ class RealBrokerResponseSideIntegrationTest {
 
         /**
          * Build a response {@link BrokerOutboundMessage} and produce it to {@code resp_out} via the SPI
-         * relay port ({@link #respProducer}) — reuses {@link RocketMqBrokerForwardingRelay#buildMessage}
+         * relay port ({@link #respProducer}) — reuses {@link RocketMqBrokerForwardingProducer#buildMessage}
          * so the response's first-class control headers + {@code inlinePayload} wire format matches what
          * the gateway reads. Package-private so UC-6 (per-eventType classify) + D9 can inject a chosen
          * eventType directly; {@code source=RUNTIME}, {@code target=GATEWAY} (the response swap).

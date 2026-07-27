@@ -13,7 +13,7 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.ForwardingStatus;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
@@ -382,7 +382,7 @@ public final class TestAgentRuntime {
 
     /**
      * Simplified-but-realistic produce path (mirrors the gateway): enqueue into
-     * the runtime's own outbox → claim → {@link BrokerForwardingRelayPort#produce}
+     * the runtime's own outbox → claim → {@link BrokerForwardingProducerPort#produce}
      * → markAcked. A full worker loop is intentionally not modelled.
      *
      * @param env           the response envelope to produce

@@ -7,7 +7,7 @@ package com.openjiuwen.bus.forwarding.runtime.transport.broker;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
-import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingProducer;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingFailureCode;
@@ -48,8 +48,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * (REQ-2026-001 集成联调, env-guarded).
  *
  * <p>Validates the S2/S3 produce path against a real broker:
- * {@link GatewayRuntimeService#dispatchRequest} → {@link RocketMqBrokerForwardingRelay}
- * (real {@link DefaultMQProducer} via {@link RocketMqBrokerForwardingRelay#defaultSender})
+ * {@link GatewayRuntimeService#dispatchRequest} → {@link RocketMqBrokerForwardingProducer}
+ * (real {@link DefaultMQProducer} via {@link RocketMqBrokerForwardingProducer#defaultSender})
  * → broker topic, drained by a temp {@link DefaultMQPushConsumer} that mimics the
  * consume side (S4 receiver consumer is deferred, so this is the联调 bridge). Asserts
  * the message lands on the right topic with all routing user-properties
@@ -104,7 +104,7 @@ class RealBrokerProduceSideIntegrationTest {
     private static final ConcurrentLinkedQueue<MessageExt> captured = new ConcurrentLinkedQueue<>();
 
     private InMemoryForwardingOutbox outbox;
-    private RocketMqBrokerForwardingRelay relay;
+    private RocketMqBrokerForwardingProducer relay;
     private GatewayRuntimeService gateway;
 
     @BeforeAll
@@ -145,8 +145,8 @@ class RealBrokerProduceSideIntegrationTest {
         captured.clear();
         outbox = new InMemoryForwardingOutbox();
         DefaultBrokerTopicResolver resolver = new DefaultBrokerTopicResolver();
-        relay = new RocketMqBrokerForwardingRelay(
-                resolver, "req", RocketMqBrokerForwardingRelay.defaultSender(producer));
+        relay = new RocketMqBrokerForwardingProducer(
+                resolver, "req", RocketMqBrokerForwardingProducer.defaultSender(producer));
         // Produce-side tests do not poll responses; a no-op responseConsumer satisfies the ctor.
         BrokerForwardingConsumerPort noopConsumer = new BrokerForwardingConsumerPort() {
             @Override

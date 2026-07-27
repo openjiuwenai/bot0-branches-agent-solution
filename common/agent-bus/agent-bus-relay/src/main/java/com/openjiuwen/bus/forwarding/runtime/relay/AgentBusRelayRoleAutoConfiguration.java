@@ -9,29 +9,34 @@ import com.openjiuwen.bus.forwarding.runtime.persistence.jdbc.JdbcForwardingOutb
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerClientProperties;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
-import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingProducer;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingInboxPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
-import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingRelayPort;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 
 import java.util.Map;
 
 /**
- * Event-bus+registry process-form wiring (arch-driven G5-B, decision-tree Q2a —
- * {@link Profile @Profile("eventbus")} on the single {@code AgentBusApplication}).
+ * Relay-role auto-configuration — the two-hop governance relay wiring
+ * (arch-driven G5-B, decision-tree Q2a). Activates only when the deployment
+ * opts in via {@code agent-bus.role.relay.enabled=true}, so a pure caller /
+ * gateway / runtime deployment is NOT wired with the relay ports.
  *
- * <p>Wires the two-hop governance relay as TWO {@link EventBusRelayWorker} instances:
+ * <p>MOVED verbatim from the former {@code EventBusRelayConfiguration} (a
+ * {@code @Profile("eventbus") @Configuration}); the profile gate is replaced by
+ * the role property gate, the bean wiring is unchanged. Wires the two-hop
+ * governance relay as TWO {@link EventBusRelayWorker} instances:
  * <ul>
  *   <li><b>forward relay</b> — consume hop1 req ({@code ascend_bus_*_req}) → inbox dedup /
  *       tenant / correlation / audit → re-publish hop2 deliver
@@ -41,8 +46,9 @@ import java.util.Map;
  * </ul>
  * The registry plane boots alongside (component-scanned {@code @Configuration} classes in
  * {@code registry.runtime} are already on the classpath). The durable outbox + inbox are
- * provided by {@link com.openjiuwen.bus.forwarding.common.AgentBusInfrastructureConfiguration}
- * (shared infra config, no {@code @Profile}); this config injects them by type.
+ * provided by {@link com.openjiuwen.bus.forwarding.common.AgentBusReliabilityAutoConfiguration}
+ * (the JDBC reliability autoconfig, conditional on a {@code DataSource}); this autoconfig
+ * injects them by type.
  *
  * <p><b>Relay consumer filters are tenant-only</b> ({@code DeliveryFilter(Map.of("tenantId", …))})
  * — the relay is the intermediary for its tenant, so it consumes every in-tenant message on
@@ -51,13 +57,24 @@ import java.util.Map;
  * from the gateway response consumer's targetServiceId-only filter (D13).
  *
  * <p><b>Shared infra moved out.</b> The {@code brokerClientProperties} /
- * {@code relayOutbox} / {@code relayInbox} beans previously declared here are now provided
- * by {@link com.openjiuwen.bus.forwarding.runtime.AgentBusInfrastructureConfiguration}
- * (shared with the gateway process form). {@link AgentBusBrokerProperties} is likewise
- * enabled there. This config keeps ONLY the event-bus-role beans — the relay producer
+ * {@code relayOutbox} / {@code relayInbox} beans previously declared in the old config are now
+ * provided by the broker base ({@link 
+ * com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusBrokerClientBaseAutoConfiguration},
+ * which owns {@code brokerClientProperties} + {@link AgentBusBrokerProperties}) and the
+ * JDBC reliability autoconfig ({@link com.openjiuwen.bus.forwarding.common.AgentBusReliabilityAutoConfiguration},
+ * which owns {@code forwardingOutbox} / {@code forwardingInbox}), shared with the gateway process
+ * form. This autoconfig keeps ONLY the relay-role beans — the relay producer
  * (group={@code props.producerGroup() + "-relay"}, distinct from the gateway's
  * {@code props.producerGroup()}), the forward/response relay consumers + producers
  * (role-specific topic suffixes), the workers, the ticks, and the subscribe-at-startup.
+ *
+ * <p><b>The dedicated relay scheduler</b> ({@code relayTaskScheduler} + {@code relayScheduler},
+ * which drive {@code forwardRelayTick} / {@code responseRelayTick} programmatically) stays in
+ * the separate {@link EventBusRelaySchedulingConfig} (still {@code @Profile("eventbus")} — the
+ * relay fat-jar activates it via the {@code eventbus} profile, kept as a compat alias alongside
+ * {@code agent-bus.role.relay.enabled=true}). Both must be active together for a fully-wired
+ * relay; the {@code eventbus} profile remains the CLI-driven activation
+ * ({@code --spring.profiles.active=eventbus}), the property gates the role autoconfig.
  *
  * <p><b>Verification:</b> compile-verified (full suite green); producer {@code start()} +
  * subscribe-at-startup boot-correctness is verified by the two-hop IT (G5-E, env-guarded
@@ -67,16 +84,24 @@ import java.util.Map;
  * broker+Postgres remains env-deferred. See
  * {@code docs/4plus1/delta/event-bus-relay/deviations.md}.
  *
+ * <p>Registered as an {@link AutoConfiguration @AutoConfiguration} (not plain
+ * {@code @Configuration}); a later task lists it in
+ * {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports}.
+ * Until then it is meta-annotated with {@code @Configuration} (via {@link AutoConfiguration}),
+ * so it remains discoverable by the relay app's component scan
+ * ({@code @SpringBootApplication(scanBasePackages = "com.openjiuwen.bus")}) when the imports
+ * metadata has not landed.
+ *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
  * feat-013-client-invocation-event-forwarding.md §1.2 / §4.1 / §5.1};
  * {@code docs/4plus1/delta/event-bus-relay/decision-tree.md} Q1a/Q2a.
  *
  * @since 0.1.0
  */
-@Configuration
-@Profile("eventbus")
-public class EventBusRelayConfiguration {
-    private static final Logger log = LoggerFactory.getLogger(EventBusRelayConfiguration.class);
+@AutoConfiguration
+@ConditionalOnProperty(prefix = "agent-bus.role.relay", name = "enabled", havingValue = "true")
+public class AgentBusRelayRoleAutoConfiguration {
+    private static final Logger log = LoggerFactory.getLogger(AgentBusRelayRoleAutoConfiguration.class);
 
     /**
      * Relay RocketMQ producer (hop2 deliver + resp_out produce). Group is suffixed
@@ -103,15 +128,15 @@ public class EventBusRelayConfiguration {
     }
 
     @Bean(name = "forwardRelayProducer")
-    BrokerForwardingRelayPort forwardRelayProducer(DefaultMQProducer relayProducer) {
-        return new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "deliver",
-                RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
+    BrokerForwardingProducerPort forwardRelayProducer(DefaultMQProducer relayProducer) {
+        return new RocketMqBrokerForwardingProducer(new DefaultBrokerTopicResolver(), "deliver",
+                RocketMqBrokerForwardingProducer.defaultSender(relayProducer));
     }
 
     @Bean(name = "forwardRelayWorker")
     EventBusRelayWorker forwardRelayWorker(@Qualifier("forwardRelayConsumer") BrokerForwardingConsumerPort consumer,
                                            ForwardingInboxPort inbox, JdbcForwardingOutbox outbox,
-                                           @Qualifier("forwardRelayProducer") BrokerForwardingRelayPort relay,
+                                           @Qualifier("forwardRelayProducer") BrokerForwardingProducerPort relay,
                                            AgentBusBrokerProperties props) {
         return new EventBusRelayWorker(consumer, inbox, outbox, outbox, relay,
                 props.eventBusServiceId(), props.eventBusServiceId(), props.leaseDurationMs(),
@@ -126,15 +151,15 @@ public class EventBusRelayConfiguration {
     }
 
     @Bean(name = "responseRelayProducer")
-    BrokerForwardingRelayPort responseRelayProducer(DefaultMQProducer relayProducer) {
-        return new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_out",
-                RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
+    BrokerForwardingProducerPort responseRelayProducer(DefaultMQProducer relayProducer) {
+        return new RocketMqBrokerForwardingProducer(new DefaultBrokerTopicResolver(), "resp_out",
+                RocketMqBrokerForwardingProducer.defaultSender(relayProducer));
     }
 
     @Bean(name = "responseRelayWorker")
     EventBusRelayWorker responseRelayWorker(@Qualifier("responseRelayConsumer") BrokerForwardingConsumerPort consumer,
                                             ForwardingInboxPort inbox, JdbcForwardingOutbox outbox,
-                                            @Qualifier("responseRelayProducer") BrokerForwardingRelayPort relay,
+                                            @Qualifier("responseRelayProducer") BrokerForwardingProducerPort relay,
                                             AgentBusBrokerProperties props) {
         return new EventBusRelayWorker(consumer, inbox, outbox, outbox, relay,
                 props.eventBusServiceId() + "-resp", props.eventBusServiceId(), props.leaseDurationMs(),
