@@ -1,0 +1,15 @@
+# agent-bus SDK 公共配置——所有角色(relay/gateway/runtime)加载。
+# broker 连接 + 逻辑身份默认值;生产用环境变量覆盖。
+# 角色专属配置(datasource/Flyway/role.*.enabled)在各角色的 profile 配置里(application-eventbus.yml / application-gateway.yml)。
+
+agent-bus:
+  nameserver: ${AGENT_BUS_NAMESERVER:localhost:9876}
+  namespace: ${AGENT_BUS_NAMESPACE:ascend-prod}
+  producer-group: ${AGENT_BUS_PRODUCER_GROUP:eventbus-producer}
+  tenant: ${AGENT_BUS_TENANT:tenant-a}
+  gateway-service-id: ${AGENT_BUS_GATEWAY_SERVICE_ID:gateway-01}
+  event-bus-service-id: ${AGENT_BUS_EVENT_BUS_SERVICE_ID:eventbus-01}
+
+spring:
+  jackson:
+    default-property-inclusion: non_null

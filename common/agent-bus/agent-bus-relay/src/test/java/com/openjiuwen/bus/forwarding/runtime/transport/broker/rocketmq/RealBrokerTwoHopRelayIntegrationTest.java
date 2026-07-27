@@ -161,10 +161,10 @@ class RealBrokerTwoHopRelayIntegrationTest {
     private static JdbcForwardingOutbox relayOutbox;
     private static JdbcForwardingInbox relayInbox;
     private static RocketMqBrokerForwardingConsumer forwardRelayConsumer;
-    private static RocketMqBrokerForwardingRelay forwardRelayProducer;
+    private static RocketMqBrokerForwardingProducer forwardRelayProducer;
     private static EventBusRelayWorker forwardRelayWorker;
     private static RocketMqBrokerForwardingConsumer responseRelayConsumer;
-    private static RocketMqBrokerForwardingRelay responseRelayProducer;
+    private static RocketMqBrokerForwardingProducer responseRelayProducer;
     private static EventBusRelayWorker responseRelayWorker;
 
     // a direct producer for controlled hop1 injection (dedup / cross-tenant / corr tests
@@ -215,9 +215,9 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
     private static void wireGateway(String nameserver, String runId) {
         // gateway form: hop1 produce (req) + response consume (resp_out, targetServiceId-only D13 filter).
-        RocketMqBrokerForwardingRelay gatewayRelay = new RocketMqBrokerForwardingRelay(
+        RocketMqBrokerForwardingProducer gatewayRelay = new RocketMqBrokerForwardingProducer(
                 new DefaultBrokerTopicResolver(), "req",
-                RocketMqBrokerForwardingRelay.defaultSender(gatewayProducer));
+                RocketMqBrokerForwardingProducer.defaultSender(gatewayProducer));
         gatewayResponseConsumer = new RocketMqBrokerForwardingConsumer(
                 new DefaultBrokerTopicResolver(), "resp_out",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
@@ -236,9 +236,9 @@ class RealBrokerTwoHopRelayIntegrationTest {
         forwardRelayConsumer = new RocketMqBrokerForwardingConsumer(
                 new DefaultBrokerTopicResolver(), "req",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
-        forwardRelayProducer = new RocketMqBrokerForwardingRelay(
+        forwardRelayProducer = new RocketMqBrokerForwardingProducer(
                 new DefaultBrokerTopicResolver(), "deliver",
-                RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
+                RocketMqBrokerForwardingProducer.defaultSender(relayProducer));
         forwardRelayConsumer.subscribe(GROUP_FWD + runId,
                 AgentBusEventType.CLIENT_INVOCATION_REQUESTED, tenantFilter);
         forwardRelayWorker = new EventBusRelayWorker(forwardRelayConsumer, relayInbox, relayOutbox, relayOutbox,
@@ -246,9 +246,9 @@ class RealBrokerTwoHopRelayIntegrationTest {
         responseRelayConsumer = new RocketMqBrokerForwardingConsumer(
                 new DefaultBrokerTopicResolver(), "resp_in",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(nameserver), POLL_WAIT_MS);
-        responseRelayProducer = new RocketMqBrokerForwardingRelay(
+        responseRelayProducer = new RocketMqBrokerForwardingProducer(
                 new DefaultBrokerTopicResolver(), "resp_out",
-                RocketMqBrokerForwardingRelay.defaultSender(relayProducer));
+                RocketMqBrokerForwardingProducer.defaultSender(relayProducer));
         responseRelayConsumer.subscribe(GROUP_RESP + runId,
                 AgentBusEventType.INVOCATION_RESPONSE, tenantFilter);
         responseRelayWorker = new EventBusRelayWorker(responseRelayConsumer, relayInbox, relayOutbox, relayOutbox,
@@ -454,7 +454,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
     /**
      * Produce a hop1 request onto {@code ascend_bus_invocation_req} with a controlled
-     * messageId (mirrors {@code RocketMqBrokerForwardingRelay#buildMessage} user-properties
+     * messageId (mirrors {@code RocketMqBrokerForwardingProducer#buildMessage} user-properties
      * so the forward relay's poll adapter reads the first-class control fields).
      *
      * @param producer  the MQ producer to send the hop1 on
@@ -572,7 +572,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
         // SPI relay port (suffix "resp_in") — wraps the raw producer so produceResponse reuses the SDK
         // wire-format encoder instead of hand-rolling Message + putUserProperty.
-        private final RocketMqBrokerForwardingRelay respProducer;
+        private final RocketMqBrokerForwardingProducer respProducer;
         private final AtomicLong taskSeq = new AtomicLong();
         private final AtomicLong respSeq = new AtomicLong();
         private final String runId;
@@ -587,8 +587,8 @@ class RealBrokerTwoHopRelayIntegrationTest {
             this.producer.setNamesrvAddr(nameserver);
             // suffix "resp_in": produce responses to ascend_bus_invocation_resp_in (the response relay
             // governs them and re-publishes to resp_out for the gateway).
-            this.respProducer = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_in",
-                    RocketMqBrokerForwardingRelay.defaultSender(this.producer));
+            this.respProducer = new RocketMqBrokerForwardingProducer(new DefaultBrokerTopicResolver(), "resp_in",
+                    RocketMqBrokerForwardingProducer.defaultSender(this.producer));
             this.runId = runId;
         }
 
@@ -665,7 +665,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
 
         /**
          * Build a response {@link BrokerOutboundMessage} and produce it to {@code resp_in} via the SPI
-         * relay port ({@link #respProducer}) — reuses {@code RocketMqBrokerForwardingRelay.buildMessage}
+         * relay port ({@link #respProducer}) — reuses {@code RocketMqBrokerForwardingProducer.buildMessage}
          * so the response's first-class control headers + {@code inlinePayload} wire format matches what
          * the response relay decodes (resp_in → resp_out).
          *
