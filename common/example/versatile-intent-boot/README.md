@@ -57,41 +57,80 @@ Local HTTP 模式直接 POST 到目标 runtime 的 `/a2a/{agentId}`，适合本�
 | `mock-a2a-gateway` | 激活 `MockA2AGatewayController`（转发代理，端口 8084） |
 | `a2a-gateway-test` | 覆盖 `a2a-gateway.enabled=true` 并指向本地 mock gateway（8084） |
 
+## 前置依赖
+
+- Java 17+（运行时需 17+，构建用 Maven）
+- `com.openjiuwen:agent-service-app` 0.1.0
+- `com.openjiuwen:agent-service-adapters-versatile` 0.1.0
+
 ## 本地联调脚本
+
+`scripts/` 下提供两个端到端联调脚本，覆盖 L2 设计文档的全部场景。两个脚本都会自动启动所需进程、等待健康检查、发请求并断言响应/日志，最后清理进程。脚本会在 `target/` 下生成各进程的日志文件（`layer1.log`、`layer2.log`、`downstream.log`、`gateway.log`、`default-wf.log`），断言失败时可直接查看定位。
+
+### 测试上手步骤
+
+1. 确认环境：Java 17+ 在 `PATH` 上（`java -version` 检查），Maven 可用。
+2. 在模块根目录执行任一脚本即可。首次运行若 `target/versatile-intent-boot-0.1.0.jar` 不存在，脚本会自动 `mvn -q package -DskipTests` 打包；已存在则直接复用。
+3. 重复运行时建议加 `SKIP_BUILD=1` 跳过打包检查，加快启动。
+4. 脚本以 `set -euo pipefail` 运行，任一断言失败即立即退出并打印失败原因与响应体；通过则结尾输出 `==> All scenarios passed.`。
+5. 可通过环境变量覆盖端口与超时：`L1_PORT` / `L2_PORT` / `DOWNSTREAM_PORT` / `GATEWAY_PORT` / `DEFAULT_WF_PORT` / `HEALTH_TIMEOUT_SECONDS`。
 
 ### `scripts/local-e2e.sh` — Local HTTP 模式
 
-跑通 L2 §6.2 的三个场景（Local HTTP 转发）：
+跑通 L2 §6.2 的三个场景（Local HTTP 转发，`a2a-gateway.enabled=false`）：
 
 - §6.2.1 两层识别 + 下游业务：`curl L1 "订酒店"` → `"酒店预订成功"`
-- §6.2.3 显式中断：`curl L1 "中断"` → `_interrupt` payload
+- §6.2.3 显式中断：`curl L1 "中断"` → `_interrupt` payload（并断言包含 resume token `tok-123`）
 - §6.2.2 重新分类：`curl downstream "重分类"` → `"重新分类：国内酒店"`
 
-分两轮启动：Round 1 跑场景 1+3（L1/L2 三字段模式 + downstream 终端），Round 2 跑场景 2（downstream 三字段模式 + L1 终端）。
+分两轮启动，每轮结束后停止全部进程再启动下一轮：
+
+- **Round 1**：L1/L2 三字段模式（`layer1`/`layer2` profile）+ downstream 终端模式（无 `result-extractions`，直接返回最终答案）。跑场景 1（L1→L2→downstream）与场景 3（interrupt）。
+- **Round 2**：downstream 三字段模式（`downstream` profile，返回指向 L1 的 `agent_id`）+ L1 终端模式。跑场景 2（downstream→L1 重新分类）。
 
 ```bash
-./scripts/local-e2e.sh              # 首次运行会 mvn package
+./scripts/local-e2e.sh              # 首次运行会自动 mvn package
 SKIP_BUILD=1 ./scripts/local-e2e.sh # 复用已有 jar
 ```
 
 ### `scripts/local-e2e-a2a-gateway.sh` — A2A Gateway 模式
 
-跑通 L2 §6.2.1 的完整链路（A2A Gateway 转发）：
+跑通 A2A Gateway 转发模式下的完整链路与多场景验证。启动 5 个进程：mock gateway（8084）+ L1（8081）+ L2（8082）+ downstream（8083）+ default-wf（8085），L1/L2 激活 `a2a-gateway-test` profile 走网关转发。分两轮：
 
 ```
-Client → L1 → gateway → L2 → gateway → downstream
-              (8084)        (8084)
+Round 1: gateway + L1 + L2 + downstream + default-wf
+         Client → L1 → gateway → L2 → gateway → downstream / default-wf
+Round 2: 重启 L2（移除 default-workflow 配置）后跑 §6.2.2
 ```
 
-启动 4 个进程：mock gateway（8084）+ L1（8081）+ L2（8082）+ downstream（8083），L1/L2 激活 `a2a-gateway-test` profile 走网关转发。除了验证最终响应包含 `"酒店预订成功"`，还断言：
+**Round 1** 覆盖三类场景：
 
-- gateway 日志记录两次转发 hop（`agent_card_L2_hotel`、`agent_card_biz_hotel_domestic`）
-- header 透传：`token` / `userId` / `versionNode` / `X-B3-TraceId` / `X-B3-ParentSpanId` / `X-B3-Sampled` / `X-Biz-Tag`
-- L1/L2 日志出现 `A2AGateway call agent=...`
+- **§6.2.1 两层识别 + 下游业务**：`curl L1 "订酒店"` → 最终响应包含 `"酒店预订成功"`，并断言 gateway 日志记录两次转发 hop（`agent_card_L2_hotel`、`agent_card_biz_hotel_domestic`）、L1/L2 日志出现 `A2AGateway call agent=...`。
+- **§6.2.4 意图不明自消**：`curl L1 "意图不明"` → L2 检测到 ambiguous intent（`intent_id=1`）后通过 `a2a_delegate` 自消到 default-wf，最终响应包含 `"默认工作流兜底"`，并断言 gateway 日志记录 `agent_card_L2_default` hop。
+- **多轮路由缓存**：同一 `conversationId=c4-multi-turn` 连发两轮（`"订酒店"` / `"再订一晚"`），两轮响应都包含 `"酒店预订成功"`，并断言 L1 Versatile 仅被调用一次（第二轮命中缓存）、L2 调用两次、gateway 两轮各触发一次 L1→L2 与 L2→downstream hop。
+
+**Round 2** 覆盖：
+
+- **§6.2.2 意图不明回退 L1 重识别**：重启 L2 覆盖 `default-workflow.agent-card` 为空后，`curl L1 "意图不明"` → L2 返回 ambiguous envelope，L1 `ReclassifyServeOrchestrator` 检测后第二次调用 Versatile 直接路由到 downstream，最终响应包含 `"酒店预订成功"`，并断言 L1 至少调用 Versatile 两次、gateway 记录 `agent_card_biz_hotel_domestic` hop。
+
+Round 1 还统一验证 **header 透传**（gateway 日志以 INFO 记录全部入站 header）：
+
+- `token`（出于安全仅记录 `tokenPresent=true`）/ `userId` / `versionNode`
+- B3 链路：`X-B3-TraceId` / `X-B3-ParentSpanId` / `X-B3-Sampled`
+- 业务标签：`X-Biz-Tag`
 
 ```bash
-./scripts/local-e2e-a2a-gateway.sh
+./scripts/local-e2e-a2a-gateway.sh              # 首次运行会自动 mvn package
+SKIP_BUILD=1 ./scripts/local-e2e-a2a-gateway.sh # 复用已有 jar
 ```
+
+### 选择哪个脚本
+
+| 需求 | 脚本 |
+|------|------|
+| 验证 Local HTTP 转发 + 中断 + 重新分类基础链路 | `local-e2e.sh` |
+| 验证 A2A Gateway 转发、header 透传、自消/重识别、多轮路由缓存 | `local-e2e-a2a-gateway.sh` |
+| 两者都想覆盖 | 先跑 `local-e2e.sh` 再跑 `local-e2e-a2a-gateway.sh` |
 
 ## 配置
 
@@ -162,43 +201,30 @@ src/main/java/com/openjiuwen/example/versatile/intent/
     └── MockA2AGatewayController.java     # mock A2A Gateway（转发代理，仅 mock-a2a-gateway profile）
 ```
 
-## 前置依赖
+## 多轮路由缓存（Multi-Turn Route Cache）
 
-- Java 17+（运行时需 17+，构建用 Maven）
-- `com.openjiuwen:agent-service-app` 0.1.0
-- `com.openjiuwen:agent-service-adapters-versatile` 0.1.0
+在 L1 profile 上启用后，路由缓存会为每个 `conversationId` 记录 L1 Versatile 工作流解析出的下一跳 `agent_id`。同一会话的后续轮次将跳过 L1，直接向已缓存的 L2 agent 发出一个合成的 `a2a_delegate` 中断。
 
-## Multi-Turn Route Cache
-
-When enabled on the L1 profile, the route cache stores the next-hop `agent_id`
-resolved by the L1 Versatile workflow for each `conversationId`. Subsequent
-turns in the same conversation skip L1 and emit a synthetic `a2a_delegate`
-interrupt directly to the cached L2 agent.
-
-### Configuration
+### 配置
 
 ```yaml
 openjiuwen:
   service:
     versatile:
       route-cache:
-        enabled: true      # default false; enabled on layer1 profile
-        ttl: 30m           # default 30 minutes
+        enabled: true      # 默认 false；layer1 profile 下默认开启
+        ttl: 30m           # 默认 30 分钟
 ```
 
-### Invalidation
+### 失效条件
 
-The cache is invalidated when:
-- TTL expires (lazy eviction on read).
-- `clearSession(conversationId)` is called (transitively via
-  `A2AEnabledServeOrchestrator.resetConversation`).
-- `ReclassifyServeOrchestrator` detects a reclassify signal.
+缓存会在以下情况下失效：
+- TTL 到期（读取时惰性淘汰）。
+- 调用 `clearSession(conversationId)`（经 `A2AEnabledServeOrchestrator.resetConversation` 传递触发）。
+- `ReclassifyServeOrchestrator` 检测到重新分类信号。
 
-### Caveats
+### 注意事项
 
-- Cache is process-local (no Redis). Loss of cache causes L1 to re-run on
-  the next turn — acceptable for this lossy-tolerant optimization.
-- Only L1 routing is cached. L2 still runs every turn.
-- On cache hit, the synthetic `a2a_delegate` payload uses empty
-  `responseContent` (the original L1 output is already in the conversation
-  history forwarded by RemoteAgentCaller).
+- 缓存为进程内本地缓存（无 Redis）。缓存丢失会导致下一轮重新跑一次 L1 —— 对这一可容忍有损的优化而言是可接受的。
+- 仅缓存 L1 的路由结果，L2 每轮仍然执行。
+- 缓存命中时，合成的 `a2a_delegate` payload 使用空的 `responseContent`（L1 的原始输出已在 RemoteAgentCaller 转发的会话历史中）。
