@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.api;
 
 /**
@@ -11,6 +15,8 @@ package com.huawei.ascend.client.api;
  *   <li>{@link #BLOCKING} —— 语义上"一次拿到最终结果"，wire 上拟用 {@code SendMessage}（单条 JSON）。<b>预留、未交付</b>。</li>
  *   <li>{@link #ASYNC} —— 提交即返回句柄，随后按需拉取状态。<b>预留、未交付</b>。</li>
  * </ul>
+ *
+ * @since 2026-07-27
  */
 public enum InvocationMode {
     BLOCKING,

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.spi;
 
 import com.huawei.ascend.client.tool.spi.LocalToolDescriptor;
@@ -12,6 +16,8 @@ import java.util.concurrent.CompletionStage;
  *
  * <p>SDK 编排顺序：PolicyGuard（同步硬门禁）→ 若 {@code requiresApproval} 则 ApprovalProvider（可异步）
  * → 通过后才真正执行工具。任一环节拒绝都会产出 {@code REJECTED} 结果续传给服务端，且工具不被执行。
+ *
+ * @since 2026-07-27
  */
 public interface Governance {
 

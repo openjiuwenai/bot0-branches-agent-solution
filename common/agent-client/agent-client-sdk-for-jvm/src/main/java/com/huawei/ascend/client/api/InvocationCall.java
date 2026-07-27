@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.api;
 
 import java.util.concurrent.CompletionStage;
@@ -12,9 +16,18 @@ import java.util.concurrent.Flow;
  */
 public interface InvocationCall extends AutoCloseable {
 
-    /** 客户端拥有的调用句柄，用于 continueInput 等后续操作。 */
+    /**
+     * 客户端拥有的调用句柄，用于 continueInput 等后续操作。
+     *
+     * @return 调用句柄
+     */
     String invocationRef();
 
+    /**
+     * 当前调用所属的会话标识。
+     *
+     * @return 会话标识
+     */
     String conversationId();
 
     /**

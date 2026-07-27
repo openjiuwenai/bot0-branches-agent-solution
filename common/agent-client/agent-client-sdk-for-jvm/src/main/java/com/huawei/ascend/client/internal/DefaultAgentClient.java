@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.internal;
 
 import com.huawei.ascend.client.api.AgentClient;
@@ -369,6 +373,8 @@ public final class DefaultAgentClient implements AgentClient {
             } else if (event instanceof InvocationEvent.Failed f) {
                 forward(f);
                 finishTerminal(TaskState.FAILED, f.errorCode(), f.message());
+            } else {
+                // Accepted/StatusChanged/ContentDelta 等非终态事件无需特殊处理。
             }
         }
 
@@ -418,6 +424,8 @@ public final class DefaultAgentClient implements AgentClient {
                 forward(new InvocationEvent.Failed(invocationRef, code, snap.message()));
             } else if (st != null && st.isTerminal()) {
                 forward(new InvocationEvent.StatusChanged(invocationRef, st, true));
+            } else {
+                // 非终态或未知状态：交由上层事件流处理。
             }
             finishTerminal(st, snap.errorCode(), snap.message());
         }

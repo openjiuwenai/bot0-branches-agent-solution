@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.api;
 
 /**
@@ -7,6 +11,8 @@ package com.huawei.ascend.client.api;
  * 客户端仅缓存最近一次观测到的状态，任何操作前应容忍其滞后并允许通过 {@code tasks/get} 校正。
  *
  * <p>与 A2A wire 的 {@code TaskState} 一一对应，额外增加 {@link #UNKNOWN} 表示"本地暂不可判定"。
+ *
+ * @since 2026-07-27
  */
 public enum TaskState {
     SUBMITTED,

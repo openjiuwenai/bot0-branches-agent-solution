@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.api;
 
 import com.huawei.ascend.client.tool.spi.LocalToolRegistry;
@@ -20,16 +24,33 @@ public interface AgentClient extends AutoCloseable {
      *
      * <p>本迭代（730）仅交付 {@link InvocationMode#STREAMING}；传入 {@code BLOCKING}/{@code ASYNC}
      * 会抛出 {@link UnsupportedOperationException}（{@code UNSUPPORTED_MODE}）。
+     *
+     * @param request 调用请求
+     * @return 调用句柄
      */
     InvocationCall invoke(InvocationRequest request);
 
-    /** 把用户补充输入续传给处于 INPUT_REQUIRED（非 client_tool）的既有调用，返回续传句柄。 */
+    /**
+     * 把用户补充输入续传给处于 INPUT_REQUIRED（非 client_tool）的既有调用，返回续传句柄。
+     *
+     * @param request 续传请求
+     * @return 续传句柄
+     */
     InvocationCall continueInput(ContinueInputRequest request);
 
-    /** 声明某个会话级别的工具暴露策略，对该会话后续的所有调用生效。 */
+    /**
+     * 声明某个会话级别的工具暴露策略，对该会话后续的所有调用生效。
+     *
+     * @param conversationId 会话标识
+     * @param policy 暴露策略
+     */
     void exposeInConversation(String conversationId, ToolExposurePolicy policy);
 
-    /** 本地工具注册表（FEAT-007 SPI 入口）。 */
+    /**
+     * 本地工具注册表（FEAT-007 SPI 入口）。
+     *
+     * @return 工具注册表
+     */
     LocalToolRegistry tools();
 
     @Override

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.verify;
 
 import com.huawei.ascend.client.api.AgentClient;
@@ -80,13 +84,13 @@ final class ConversationDriver {
      */
     QueryResult runQuery(String queryId, String sessionId) {
         QueryCatalog.Query q = QueryCatalog.find(queryId);
-        Session session = sessions.get(sessionId);
+        String activeSessionId = sessionId;
+        Session session = sessions.get(activeSessionId);
         if (session == null) {
-            String newId = createSession(q.id());
-            session = sessions.get(newId);
-            sessionId = newId;
+            activeSessionId = createSession(q.id());
+            session = sessions.get(activeSessionId);
         }
-        broadcaster.broadcast(ChatMessage.scenarioStart(sessionId, queryId, q.displayName()));
+        broadcaster.broadcast(ChatMessage.scenarioStart(activeSessionId, queryId, q.displayName()));
 
         // 串行组首次进入时，把 conversationId 固化为串行共享值；后续串行 query 复用。
         if (q.conversationStrategy() == QueryCatalog.ConversationStrategy.REUSE_SERIAL
@@ -107,9 +111,9 @@ final class ConversationDriver {
             default -> overall = runPlainDemo(session, q, assertions);
         }
 
-        broadcaster.broadcast(ChatMessage.scenarioEnd(sessionId, queryId, overall));
+        broadcaster.broadcast(ChatMessage.scenarioEnd(activeSessionId, queryId, overall));
         session.messageCount++;
-        return new QueryResult(queryId, sessionId, overall, assertions);
+        return new QueryResult(queryId, activeSessionId, overall, assertions);
     }
 
     /** 在同一会话上按序串行跑多条 query。 */
@@ -205,23 +209,7 @@ final class ConversationDriver {
 
             @Override
             public void onNext(InvocationEvent event) {
-                if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null) {
-                    broadcaster.broadcast(ChatMessage.info(s.id,
-                            "收到用户输入提示，续传 continueInput=\"Alice\""));
-                    s.client.continueInput(ContinueInputRequest.builder()
-                            .conversationId(s.conversationId)
-                            .relatedInvocationRef(call.invocationRef())
-                            .mode(InvocationMode.STREAMING)
-                            .input("Alice")
-                            .build());
-                    userPrompt.countDown();
-                } else if (event instanceof InvocationEvent.Completed c) {
-                    broadcaster.broadcast(ChatMessage.assistantFinal(s.id,
-                            call.invocationRef(), c.outputText()));
-                } else if (event instanceof InvocationEvent.Failed f) {
-                    broadcaster.broadcast(ChatMessage.error(s.id,
-                            call.invocationRef(), f.errorCode(), f.message()));
-                }
+                handleContinueInputEvent(event, s, call, userPrompt);
             }
 
             @Override
@@ -250,65 +238,91 @@ final class ConversationDriver {
         }
     }
 
+    /** continueInput 场景的事件分发：用户输入提示触发续传；终态事件广播结果。 */
+    private void handleContinueInputEvent(InvocationEvent event, Session s, InvocationCall call,
+                                          CountDownLatch userPrompt) {
+        if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null) {
+            broadcaster.broadcast(ChatMessage.info(s.id, "收到用户输入提示，续传 continueInput=\"Alice\""));
+            s.client.continueInput(ContinueInputRequest.builder()
+                    .conversationId(s.conversationId)
+                    .relatedInvocationRef(call.invocationRef())
+                    .mode(InvocationMode.STREAMING)
+                    .input("Alice")
+                    .build());
+            userPrompt.countDown();
+        } else if (event instanceof InvocationEvent.Completed c) {
+            broadcaster.broadcast(ChatMessage.assistantFinal(s.id, call.invocationRef(), c.outputText()));
+        } else if (event instanceof InvocationEvent.Failed f) {
+            broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(), f.errorCode(), f.message()));
+        }
+    }
+
     private boolean runPlainMultiTurn(Session s, QueryCatalog.Query q, List<Assertion> out) {
         int readBefore = s.tools.readPageCount.get();
         int submitBefore = s.tools.submitOrderCount.get();
         int pingBefore = s.tools.pingCount.get();
 
-        InvocationRequest r1 = InvocationRequest.builder()
-                .conversationId(s.conversationId)
-                .mode(InvocationMode.STREAMING)
-                .input(q.input() + " 1")
-                .exposure(q.exposure().orElse(ToolExposurePolicy.none()))
-                .build();
-        InvocationCall c1 = s.client.invoke(r1);
-        broadcaster.broadcast(ChatMessage.user(s.id, c1.invocationRef(), r1.input()));
-        InvocationSnapshot s1;
-        try {
-            c1.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
-            s1 = c1.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-            broadcaster.broadcast(ChatMessage.assistantFinal(s.id, c1.invocationRef(), s1.outputText()));
-        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
-            out.add(new Assertion("s4", false, "turn 1 failed: " + e));
-            c1.close();
+        TurnResult t1 = runPlainSingleTurn(s, q, out, " 1", "s4");
+        if (t1 == null) {
             return false;
         }
-
-        InvocationRequest r2 = InvocationRequest.builder()
-                .conversationId(s.conversationId)
-                .mode(InvocationMode.STREAMING)
-                .input(q.input() + " 2")
-                .exposure(q.exposure().orElse(ToolExposurePolicy.none()))
-                .build();
-        InvocationCall c2 = s.client.invoke(r2);
-        broadcaster.broadcast(ChatMessage.user(s.id, c2.invocationRef(), r2.input()));
-        InvocationSnapshot s2;
-        try {
-            c2.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
-            s2 = c2.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-            broadcaster.broadcast(ChatMessage.assistantFinal(s.id, c2.invocationRef(), s2.outputText()));
-        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
-            out.add(new Assertion("s4", false, "turn 2 failed: " + e));
-            c2.close();
-            c1.close();
+        TurnResult t2 = runPlainSingleTurn(s, q, out, " 2", "s4");
+        if (t2 == null) {
             return false;
         }
 
         boolean ok = true;
-        ok &= check(out, "s4", s1.state() == TaskState.COMPLETED, "turn 1 completed, state=" + s1.state());
-        ok &= check(out, "s4", s2.state() == TaskState.COMPLETED, "turn 2 completed, state=" + s2.state());
-        ok &= check(out, "s4", !c1.invocationRef().equals(c2.invocationRef()),
+        ok &= check(out, "s4", t1.snap.state() == TaskState.COMPLETED,
+                "turn 1 completed, state=" + t1.snap.state());
+        ok &= check(out, "s4", t2.snap.state() == TaskState.COMPLETED,
+                "turn 2 completed, state=" + t2.snap.state());
+        ok &= check(out, "s4", !t1.invocationRef.equals(t2.invocationRef),
                 "two turns have distinct invocationRef");
-        ok &= check(out, "s4", s.conversationId.equals(c1.conversationId())
-                        && s.conversationId.equals(c2.conversationId()),
+        ok &= check(out, "s4", s.conversationId.equals(t1.conversationId)
+                        && s.conversationId.equals(t2.conversationId),
                 "two turns share the same conversationId");
         ok &= check(out, "s4", s.tools.readPageCount.get() == readBefore
                         && s.tools.submitOrderCount.get() == submitBefore
                         && s.tools.pingCount.get() == pingBefore,
                 "no tools executed during plain multi-turn");
-        c1.close();
-        c2.close();
         return ok;
+    }
+
+    /** 串行多轮中单轮的结果快照（含调用句柄信息，用于跨轮断言）。 */
+    private static final class TurnResult {
+        final String invocationRef;
+        final String conversationId;
+        final InvocationSnapshot snap;
+
+        TurnResult(String invocationRef, String conversationId, InvocationSnapshot snap) {
+            this.invocationRef = invocationRef;
+            this.conversationId = conversationId;
+            this.snap = snap;
+        }
+    }
+
+    /** 串行多轮中的一轮：发起一次 STREAMING 调用并等待终态，失败时记录断言并返回 null。 */
+    private TurnResult runPlainSingleTurn(Session s, QueryCatalog.Query q,
+                                          List<Assertion> out, String suffix, String tag) {
+        InvocationRequest req = InvocationRequest.builder()
+                .conversationId(s.conversationId)
+                .mode(InvocationMode.STREAMING)
+                .input(q.input() + suffix)
+                .exposure(q.exposure().orElse(ToolExposurePolicy.none()))
+                .build();
+        InvocationCall call = s.client.invoke(req);
+        broadcaster.broadcast(ChatMessage.user(s.id, call.invocationRef(), req.input()));
+        try {
+            call.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
+            InvocationSnapshot snap = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+            broadcaster.broadcast(ChatMessage.assistantFinal(s.id, call.invocationRef(), snap.outputText()));
+            return new TurnResult(call.invocationRef(), call.conversationId(), snap);
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
+            out.add(new Assertion(tag, false, "turn" + suffix + " failed: " + e));
+            return null;
+        } finally {
+            call.close();
+        }
     }
 
     private boolean runDefaultNoExposure(Session s, QueryCatalog.Query q, List<Assertion> out) {
@@ -498,7 +512,8 @@ final class ConversationDriver {
             broadcaster.broadcast(ChatMessage.toolCall(id, invocation.toolCallId(),
                     snap.toolName(), snap.arguments()));
             broadcaster.broadcast(ChatMessage.toolResult(id, invocation.toolCallId(),
-                    snap.outcome().name(), snap.payload(), snap.errorCode(), snap.message()));
+                    ChatMessage.ToolResultDetail.of(
+                            snap.outcome().name(), snap.payload(), snap.errorCode(), snap.message())));
         }
     }
 
