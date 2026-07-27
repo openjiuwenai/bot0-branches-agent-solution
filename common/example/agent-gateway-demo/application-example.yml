@@ -2,12 +2,16 @@
 # Pass explicitly from repo root, e.g.:
 #   java -jar common/agent-gateway/target/agent-gateway-0.1.0.jar \
 #     --spring.config.additional-location=common/example/agent-gateway-demo/application-example.yml
+#
+# BUS path — either --spring.profiles.active=bus (application-bus.yml) or uncomment
+# below. Gateway compiles against agent-bus-spi only; for runtime BUS put
+# agent-bus-sdk on the classpath (provides requestRelay / responseConsumer).
 
 server:
   port: 8080
 
 gateway:
-  # FEAT-011 DIRECT
+  # FEAT-011 DIRECT (default) | FEAT-012 BUS
   path-mode: direct
   rdc:
     base-url: http://127.0.0.1:8092
@@ -16,3 +20,21 @@ gateway:
     token: mock-token
     principalId: test-principal
     tenantId: tenant-1
+
+# --- FEAT-012 caller (uncomment + path-mode=bus for 联调) ---
+# gateway:
+#   path-mode: bus
+# agent-bus:
+#   reliability:
+#     enabled: false
+#   role:
+#     caller:
+#       enabled: true
+#   nameserver: ${AGENT_BUS_NAMESERVER:localhost:9876}
+#   namespace: ${AGENT_BUS_NAMESPACE:ascend-prod}
+#   producer-group: ${AGENT_BUS_PRODUCER_GROUP:gateway-producer}
+#   tenant: ${AGENT_BUS_TENANT:tenant-a}
+#   gateway-service-id: ${AGENT_BUS_GATEWAY_SERVICE_ID:gateway-01}
+#   event-bus-service-id: ${AGENT_BUS_EVENT_BUS_SERVICE_ID:eventbus-01}
+#   accept-timeout-ms: 30000
+#   response-timeout-ms: 60000
