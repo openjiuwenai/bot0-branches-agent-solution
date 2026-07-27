@@ -12,6 +12,7 @@ import java.util.List;
  * <p>它是"注册表 ∩ 暴露策略"的结果，随每次调用（或续传）一并上报给网关/runtime，
  * 使远端智能体得以感知并选择这些 client 工具。到 wire 的具体映射（clientTools 数组）由 transport 层完成。
  *
+ * @param tools tools
  * @since 2026-07-27
  */
 public record ToolView(List<LocalToolDescriptor> tools) {

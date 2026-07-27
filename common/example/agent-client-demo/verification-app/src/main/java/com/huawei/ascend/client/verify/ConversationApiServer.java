@@ -381,6 +381,10 @@ final class ConversationApiServer {
 
     /**
      * 从 JSON body 提取一个字符串字段（简单正则，足够本场景的简单请求体）。
+     *
+     * @param body 请求体或 JSON 文本
+     * @param key 键名
+     * @return 对应结果
      */
     private static Optional<String> extractString(String body, String key) {
         Pattern p = STRING_FIELD_CACHE.computeIfAbsent(key,
@@ -391,6 +395,10 @@ final class ConversationApiServer {
 
     /**
      * 从 JSON body 提取字符串数组字段。
+     *
+     * @param body 请求体或 JSON 文本
+     * @param key 键名
+     * @return 对应结果
      */
     private static List<String> extractStringList(String body, String key) {
         List<String> out = new ArrayList<>();

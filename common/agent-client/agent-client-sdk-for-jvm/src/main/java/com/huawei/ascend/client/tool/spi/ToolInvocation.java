@@ -15,6 +15,10 @@ import java.util.Map;
  *
  * <p>{@code toolCallId} 是本次工具调用的幂等主键，SDK 依据它做"最多执行一次"去重。
  *
+ * @param toolCallId 工具调用标识
+ * @param toolId 工具标识
+ * @param arguments 工具参数
+ * @param deadline 截止时间
  * @since 2026-07-27
  */
 public record ToolInvocation(

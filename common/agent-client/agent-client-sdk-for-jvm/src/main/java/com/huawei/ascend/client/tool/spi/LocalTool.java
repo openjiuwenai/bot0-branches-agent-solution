@@ -53,6 +53,9 @@ public interface LocalTool {
 
     /**
      * 描述符 + 实现的绑定，用于注册。
+     *
+     * @param descriptor descriptor
+     * @param tool tool
      */
     record Registered(LocalToolDescriptor descriptor, LocalTool tool) {
         // 仅规范构造器，无额外成员。

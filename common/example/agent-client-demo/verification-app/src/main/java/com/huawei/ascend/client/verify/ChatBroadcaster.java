@@ -31,9 +31,11 @@ final class ChatBroadcaster {
     void addClient(SseClient client) {
         clients.add(client);
     }
+
     void removeClient(SseClient client) {
         clients.remove(client);
     }
+
     void broadcast(ChatMessage msg) {
         String json = toJson(msg);
         List<SseClient> dead = new ArrayList<>();
@@ -177,6 +179,7 @@ final class ChatBroadcaster {
             this.exchange = exchange;
             this.out = exchange.getResponseBody();
         }
+
         synchronized void send(String event, String data) throws IOException {
             if (closed.get()) {
                 throw new IOException("closed");
@@ -185,6 +188,7 @@ final class ChatBroadcaster {
             out.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             out.flush();
         }
+
         @Override
         public void close() {
             if (closed.compareAndSet(false, true)) {

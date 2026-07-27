@@ -34,6 +34,10 @@ public sealed interface InvocationEvent
 
     /**
      * 调用已被受理。{@code diagnosticTaskRef} 仅用于诊断/日志，非业务主键。
+     *
+     * @param invocationRef 调用句柄
+     * @param diagnosticTaskRef 诊断任务引用
+     * @param conversationId 会话标识
      */
     record Accepted(String invocationRef, String diagnosticTaskRef, String conversationId)
             implements InvocationEvent {
@@ -42,6 +46,10 @@ public sealed interface InvocationEvent
 
     /**
      * 状态投影发生变化。
+     *
+     * @param invocationRef 调用句柄
+     * @param state 任务状态
+     * @param terminal 是否终态
      */
     record StatusChanged(String invocationRef, TaskState state, boolean terminal)
             implements InvocationEvent {
@@ -50,6 +58,9 @@ public sealed interface InvocationEvent
 
     /**
      * 增量输出内容（流式）。
+     *
+     * @param invocationRef 调用句柄
+     * @param text 文本内容
      */
     record ContentDelta(String invocationRef, String text) implements InvocationEvent {
         // 仅规范构造器，无额外成员。
@@ -62,6 +73,10 @@ public sealed interface InvocationEvent
      * <li>{@code toolCall} 为空 —— 属于需要用户补充输入，业务应调用
      * {@link AgentClient#continueInput}。</li>
      * </ul>
+     *
+     * @param invocationRef 调用句柄
+     * @param toolCall 工具调用
+     * @param prompt 提示文本
      */
     record InputRequired(String invocationRef, ToolCall toolCall, String prompt)
             implements InvocationEvent {
@@ -77,6 +92,9 @@ public sealed interface InvocationEvent
 
     /**
      * 调用完成（终态）。
+     *
+     * @param invocationRef 调用句柄
+     * @param outputText 输出文本
      */
     record Completed(String invocationRef, String outputText) implements InvocationEvent {
         // 仅规范构造器，无额外成员。
@@ -84,6 +102,10 @@ public sealed interface InvocationEvent
 
     /**
      * 调用失败（终态）。{@code errorCode} 为标准化错误分类。
+     *
+     * @param invocationRef 调用句柄
+     * @param errorCode 错误码
+     * @param message 消息文本
      */
     record Failed(String invocationRef, String errorCode, String message) implements InvocationEvent {
         // 仅规范构造器，无额外成员。
@@ -92,6 +114,11 @@ public sealed interface InvocationEvent
     /**
      * 服务端请求的一次 client 工具调用意图（对应 runtime {@code _interrupt} 投影，见 Feat-Func-009）。
      * {@code toolName} 即客户端上报 ToolView 时使用的工具名（等于 toolId）。
+     *
+     * @param toolCallId 工具调用标识
+     * @param toolName 工具名
+     * @param arguments 工具参数
+     * @param deadline 截止时间
      */
     record ToolCall(String toolCallId, String toolName, Map<String, Object> arguments, Duration deadline) {
         public ToolCall {
