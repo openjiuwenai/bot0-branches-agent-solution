@@ -31,9 +31,10 @@ public record RegistryRequestContext(
     }
 
     private static void requireNonBlank(String value, String name, String traceId) {
-        Objects.requireNonNull(value, name + " is required");
-        if (value.isBlank()) {
-            throw new InvalidDiscoveryQueryException("INVALID_QUERY", name + " must not be blank", traceId);
+        // null must map to INVALID_QUERY (HTTP 400), not NPE → 500 (SIT Bug #1).
+        if (value == null || value.isBlank()) {
+            throw new InvalidDiscoveryQueryException(
+                    "INVALID_QUERY", name + " must not be blank", traceId != null ? traceId : "");
         }
     }
 

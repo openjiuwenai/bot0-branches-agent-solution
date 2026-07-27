@@ -5,6 +5,8 @@
 package com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub;
 
 import com.openjiuwen.service.spec.ext.skillhub.SkillHubConfig;
+import com.openjiuwen.service.spec.ext.skillhub.SkillHubErrorCategory;
+import com.openjiuwen.service.spec.ext.skillhub.SkillHubException;
 import com.openjiuwen.service.spec.ext.skillhub.spi.SkillHubProvider;
 
 import org.slf4j.Logger;
@@ -136,6 +138,24 @@ public class SkillHubManager {
      */
     private final WeakHashMap<Object, Set<Path>> processedForAgent = new WeakHashMap<>();
 
+    /**
+     * Per-agent install lock. Keyed by agent reference (same key as
+     * {@link #processedForAgent}) so each agent gets its own monitor and
+     * different agents can install concurrently. Guarded by {@link #listLock}
+     * for creation/lookup; the monitor itself is then used to serialize
+     * install+mark-processed for that specific agent.
+     *
+     * <p>Why: the historical two-state (processed/not-processed) bookkeeping
+     * released {@code listLock} before install, so N concurrent request
+     * threads on the SAME agent could all pass the "not processed" check and
+     * each call installer.install(agent, paths). Because agent-core's
+     * SkillManager is non-thread-safe, this caused duplicate registrations
+     * The per-agent lock with double-checked snapshot ensures
+     * only the first thread installs; followers observe the updated
+     * processed-set under the agent lock and become no-ops.
+     */
+    private final WeakHashMap<Object, Object> registerLocks = new WeakHashMap<>();
+
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final AtomicBoolean backgroundRetryStarted = new AtomicBoolean(false);
 
@@ -152,10 +172,8 @@ public class SkillHubManager {
      * @param config the SkillHub connection config
      * @param decryptedToken the already-decrypted bearer/system token (empty for anonymous)
      */
-    public SkillHubManager(SkillHubProvider provider,
-                           SkillHubInstaller installer,
-                           SkillHubConfig config,
-                           String decryptedToken) {
+    public SkillHubManager(SkillHubProvider provider, SkillHubInstaller installer, SkillHubConfig config,
+            String decryptedToken) {
         this.provider = Objects.requireNonNull(provider, "provider");
         this.installer = Objects.requireNonNull(installer, "installer");
         this.config = Objects.requireNonNull(config, "config");
@@ -186,16 +204,23 @@ public class SkillHubManager {
             return;
         }
         this.provider.start(this.config, this.decryptedToken);
-        log.info("SkillHub manager started credential={}",
-                this.decryptedToken.isEmpty() ? "absent" : "provided");
+        log.info("SkillHub manager started credential={}", this.decryptedToken.isEmpty() ? "absent" : "provided");
         try {
             boolean ok = doDownloadAndVerify();
             if (!ok) {
                 startBackgroundRetry();
             }
-        } catch (IllegalStateException ex) {
-            log.warn("SkillHub first download failed, will retry in background reason={}",
-                    ex.getMessage());
+        } catch (SkillHubException ex) {
+            // Layered failure semantics:
+            // fatal categories (auth/access/not-found) propagate to block Agent ready;
+            // degradable categories (download/checksum) are swallowed + retried.
+            if (isFatal(ex.category())) {
+                log.warn("SkillHub first download failed with fatal category={}, " + "Agent will not be ready",
+                        ex.category());
+                throw ex;
+            }
+            log.warn("SkillHub first download failed with degradable category={}, "
+                    + "will retry in background reason={}", ex.category(), ex.getMessage());
             startBackgroundRetry();
         }
     }
@@ -243,50 +268,67 @@ public class SkillHubManager {
      *         request from the same agent doesn't re-throw
      */
     public void register(Object agent) {
-        List<Path> toInstall;
+        // Acquire the per-agent lock under listLock, then release listLock
+        // and run install under the agent lock. This closes the race window
+        // follower threads on the SAME agent block on the agent
+        // lock and, once they enter, the double-checked snapshot sees the
+        // paths already processed and returns without calling install.
+        Object agentLock;
         synchronized (listLock) {
-            if (verifiedSkillPaths.isEmpty()) {
-                return;
-            }
-            Set<Path> processed = processedForAgent.get(agent);
-            if (processed != null && processed.size() == verifiedSkillPaths.size()) {
-                // All known paths already processed for this agent — nothing to do.
-                return;
-            }
-            toInstall = new ArrayList<>();
-            for (Path p : verifiedSkillPaths) {
-                if (processed == null || !processed.contains(p)) {
-                    toInstall.add(p);
+            agentLock = registerLocks.computeIfAbsent(agent, k -> new Object());
+        }
+        synchronized (agentLock) {
+            // Double-checked snapshot under the agent lock: recompute pending
+            // paths for this agent. The first thread gets a non-empty list and
+            // installs; followers see an empty list (paths were marked
+            // processed by the first thread) and no-op.
+            List<Path> toInstall;
+            synchronized (listLock) {
+                if (verifiedSkillPaths.isEmpty()) {
+                    return;
+                }
+                Set<Path> processed = processedForAgent.get(agent);
+                if (processed != null && processed.size() == verifiedSkillPaths.size()) {
+                    return;
+                }
+                toInstall = new ArrayList<>();
+                for (Path p : verifiedSkillPaths) {
+                    if (processed == null || !processed.contains(p)) {
+                        toInstall.add(p);
+                    }
+                }
+                if (toInstall.isEmpty()) {
+                    return;
                 }
             }
-            if (toInstall.isEmpty()) {
-                return;
+            // install() may throw INSTALL_FAILED — we still mark these paths
+            // as processed-for-this-agent below so the same agent isn't retried.
+            // install runs WITHOUT listLock so the background retry thread can
+            // keep updating verifiedSkillPaths concurrently; the agent lock is
+            // sufficient because SkillManager is agent-private and only the
+            // request thread touches it.
+            IllegalStateException installError = null;
+            try {
+                installer.install(agent, toInstall);
+            } catch (IllegalStateException ex) {
+                installError = ex;
             }
-        }
-        // install() may throw INSTALL_FAILED — we still mark these paths as
-        // processed-for-this-agent below so the same agent isn't retried.
-        IllegalStateException installError = null;
-        try {
-            installer.install(agent, toInstall);
-        } catch (IllegalStateException ex) {
-            installError = ex;
-        }
-        synchronized (listLock) {
-            Set<Path> processed = processedForAgent.get(agent);
-            if (processed == null) {
-                processed = new HashSet<>();
-                processedForAgent.put(agent, processed);
+            synchronized (listLock) {
+                Set<Path> processed = processedForAgent.get(agent);
+                if (processed == null) {
+                    processed = new HashSet<>();
+                    processedForAgent.put(agent, processed);
+                }
+                for (Path p : toInstall) {
+                    processed.add(p);
+                }
             }
-            for (Path p : toInstall) {
-                processed.add(p);
+            if (installError != null) {
+                throw installError;
             }
+            log.info("SkillHub register completed forAgent={} registered={} verifiedTotal={}",
+                    Integer.toHexString(System.identityHashCode(agent)), toInstall.size(), verifiedSkillPaths.size());
         }
-        if (installError != null) {
-            throw installError;
-        }
-        log.info("SkillHub register completed forAgent={} registered={} verifiedTotal={}",
-                Integer.toHexString(System.identityHashCode(agent)),
-                toInstall.size(), verifiedSkillPaths.size());
     }
 
     /**
@@ -383,9 +425,20 @@ public class SkillHubManager {
         boolean downloadOk;
         try {
             downloadOk = provider.download(config, decryptedToken);
+        } catch (SkillHubException ex) {
+            // Layered: fatal categories propagate to start() which rethrows;
+            // degradable categories are logged and turned into a false return
+            // so start() can start background retry.
+            if (isFatal(ex.category())) {
+                throw ex;
+            }
+            log.warn("SkillHub download threw degradable category={} reason={}", ex.category(), ex.getMessage());
+            return false;
         } catch (IllegalStateException ex) {
-            log.warn("SkillHub download threw category={} reason={}",
-                    categoryOf(ex), ex.getMessage());
+            // Legacy/unclassified exception — treat as degradable to preserve
+            // the historical "swallow + retry" behavior for providers that still
+            // throw raw IllegalStateException without a category.
+            log.warn("SkillHub download threw unclassified exception reason={}", ex.getMessage());
             return false;
         }
         if (!downloadOk) {
@@ -422,10 +475,8 @@ public class SkillHubManager {
         // skill zip) on every background retry, which is wasteful.
         List<Path> candidates;
         try (var stream = Files.walk(root, 4)) {
-            candidates = stream
-                    .filter(Files::isDirectory)
-                    .filter(p -> Files.isReadable(p.resolve("SKILL.md"))
-                            || Files.isReadable(p.resolve("Skill.md")))
+            candidates = stream.filter(Files::isDirectory)
+                    .filter(p -> Files.isReadable(p.resolve("SKILL.md")) || Files.isReadable(p.resolve("Skill.md")))
                     .toList();
         } catch (IOException ex) {
             // Don't abort the whole downloadAndVerify cycle just because the
@@ -450,8 +501,8 @@ public class SkillHubManager {
             try {
                 verified = provider.verify(candidate);
             } catch (IllegalStateException ex) {
-                log.warn("SkillHub verify threw skillPath={} category={} reason={}",
-                        sanitize(candidate), categoryOf(ex), ex.getMessage());
+                log.warn("SkillHub verify threw skillPath={} category={} reason={}", sanitize(candidate),
+                        categoryOf(ex), ex.getMessage());
                 continue;
             }
             if (verified) {
@@ -473,15 +524,15 @@ public class SkillHubManager {
             backgroundExecutor = new java.util.concurrent.ScheduledThreadPoolExecutor(1, r -> {
                 Thread t = new Thread(r, "skillhub-retry");
                 t.setDaemon(true);
-                t.setUncaughtExceptionHandler((thr, ex) ->
-                        log.error("SkillHub background retry thread uncaught exception thread={} reason={}",
-                                thr.getName(), ex.toString()));
+                t.setUncaughtExceptionHandler((thr, ex) -> log.error(
+                        "SkillHub background retry thread uncaught exception thread={} reason={}", thr.getName(),
+                        ex.toString()));
                 return t;
             });
-            backgroundExecutor.scheduleWithFixedDelay(this::retryOnce,
-                    RETRY_INITIAL_DELAY_MS, RETRY_PERIOD_MS, TimeUnit.MILLISECONDS);
-            log.info("SkillHub background retry started initialDelayMs={} periodMs={}",
-                    RETRY_INITIAL_DELAY_MS, RETRY_PERIOD_MS);
+            backgroundExecutor.scheduleWithFixedDelay(this::retryOnce, RETRY_INITIAL_DELAY_MS, RETRY_PERIOD_MS,
+                    TimeUnit.MILLISECONDS);
+            log.info("SkillHub background retry started initialDelayMs={} periodMs={}", RETRY_INITIAL_DELAY_MS,
+                    RETRY_PERIOD_MS);
         }
     }
 
@@ -507,25 +558,54 @@ public class SkillHubManager {
     }
 
     /**
-     * Best-effort category extraction from a SkillHub[CATEGORY] message.
+     * Extract the structured error category from a SkillHub exception.
+     * Prefers the typed {@link SkillHubException#category()} accessor; falls
+     * back to parsing the legacy {@code SkillHub[CATEGORY]} message prefix
+     * for exceptions thrown by providers that still use the string form.
      *
-     * @param ex the exception whose message starts with {@code SkillHub[}
-     * @return the parsed category, or {@code "UNKNOWN"} when the message format is unrecognized
+     * @param ex the exception thrown by a SkillHub operation
+     * @return the resolved category, never null ({@link SkillHubErrorCategory#UNKNOWN} when unclassified)
      */
-    private static String categoryOf(IllegalStateException ex) {
-        if (ex.getMessage() != null
-                && ex.getMessage().startsWith("SkillHub[")) {
+    private static SkillHubErrorCategory categoryOf(IllegalStateException ex) {
+        if (ex instanceof SkillHubException typed) {
+            return typed.category();
+        }
+        if (ex.getMessage() != null && ex.getMessage().startsWith("SkillHub[")) {
             try {
                 int start = "SkillHub[".length();
                 int end = ex.getMessage().indexOf(']', start);
                 if (end > start) {
-                    return ex.getMessage().substring(start, end);
+                    return SkillHubErrorCategory.valueOf(ex.getMessage().substring(start, end));
                 }
             } catch (IllegalArgumentException ignored) {
-                // fall through
+                // fall through to UNKNOWN
             }
         }
-        return "UNKNOWN";
+        return SkillHubErrorCategory.UNKNOWN;
+    }
+
+    /**
+     * Whether a category is fatal (fail-fast) for required skills.
+     * Fatal categories block Agent ready; degradable categories allow the
+     * Agent to become ready with skills unavailable and trigger background retry.
+     *
+     * <p>Fatal: {@link SkillHubErrorCategory#AUTH_FAILED AUTH_FAILED},
+     * {@link SkillHubErrorCategory#ACCESS_DENIED ACCESS_DENIED},
+     * {@link SkillHubErrorCategory#NOT_FOUND NOT_FOUND}.
+     * Degradable: {@link SkillHubErrorCategory#DOWNLOAD_FAILED DOWNLOAD_FAILED},
+     * {@link SkillHubErrorCategory#CHECKSUM_MISMATCH CHECKSUM_MISMATCH}.
+     * {@link SkillHubErrorCategory#CONNECT_FAILED CONNECT_FAILED} is treated
+     * as degradable (transient network), not fatal — endpoint config errors
+     * are caught earlier by the AutoConfiguration endpoint fail-fast check.
+     *
+     * @param category the resolved error category
+     * @return true if the category must block Agent ready (fail fast)
+     */
+    private static boolean isFatal(SkillHubErrorCategory category) {
+        return switch (category) {
+        case AUTH_FAILED, ACCESS_DENIED, NOT_FOUND -> true;
+        default -> false;
+        };
     }
 
     private static String sanitize(Path path) {

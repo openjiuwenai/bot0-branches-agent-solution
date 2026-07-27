@@ -4,11 +4,14 @@
 
 package com.openjiuwen.example.versatile.orchestration.planagent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
 import com.openjiuwen.core.singleagent.ReActAgent;
 import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
+import com.openjiuwen.example.versatile.orchestration.planagent.gateway.GatewayProtocolAdapter;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
+import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -84,6 +87,11 @@ public class PlanAgentConfiguration {
             @Value("${plan-agent.ssl-verify:true}") boolean sslVerify) {
         return new JiuwenCoreAgentExtHandler(
                 buildReActAgent(modelProvider, apiKey, apiBase, modelName, sslVerify));
+    }
+
+    @Bean
+    CustomRestProtocolAdapter gatewayProtocolAdapter(ObjectMapper objectMapper) {
+        return new GatewayProtocolAdapter(objectMapper);
     }
 
     static ReActAgent buildReActAgent(String modelProvider, String apiKey, String apiBase,

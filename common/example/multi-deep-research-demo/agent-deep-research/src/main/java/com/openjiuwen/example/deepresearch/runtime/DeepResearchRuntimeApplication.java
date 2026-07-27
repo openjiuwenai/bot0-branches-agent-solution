@@ -22,11 +22,14 @@ import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -51,13 +54,41 @@ import java.util.function.Supplier;
 public class DeepResearchRuntimeApplication {
     private static final int DOWNLOAD_CHUNK_SIZE = 65536;
 
+    private static final String SKILLHUB_ENABLED_PROPERTY = "openjiuwen.service.middleware.skillhub.enabled";
+    private static final String SKILLHUB_ENABLED_ARG_PREFIX = "--" + SKILLHUB_ENABLED_PROPERTY + "=";
+    private static final String SKILLHUB_ENABLED_ENV = "SKILLHUB_ENABLED";
+    private static final String SKILLHUB_REMOTE_PROFILE = "skillhub-remote";
+
     /**
-     * Spring Boot entry point.
+     * Spring Boot entry point. Auto-activates the {@code skillhub-remote} profile so
+     * the profile-scoped log suppression in {@code application.yml} kicks in whenever
+     * SkillHub is on. Mirrors agent-solution issue #30's decision to fix the SKILL.md
+     * plaintext-log leak in the solution layer via profile-scoped {@code logging.level}
+     * instead of touching agent-core.
      *
      * @param args standard command-line arguments forwarded to Spring
      */
     public static void main(String[] args) {
-        SpringApplication.run(DeepResearchRuntimeApplication.class, args);
+        SpringApplication app = new SpringApplication(DeepResearchRuntimeApplication.class);
+        if (isSkillHubEnabled(args)) {
+            app.setAdditionalProfiles(SKILLHUB_REMOTE_PROFILE);
+        }
+        app.run(args);
+    }
+
+    private static boolean isSkillHubEnabled(String[] args) {
+        // SIT harness passes Spring properties as `--key=value` launch args (SutStack.AgentBuilder.property).
+        for (String arg : args) {
+            if (arg != null && arg.startsWith(SKILLHUB_ENABLED_ARG_PREFIX)) {
+                return Boolean.parseBoolean(arg.substring(SKILLHUB_ENABLED_ARG_PREFIX.length()));
+            }
+        }
+        String sys = System.getProperty(SKILLHUB_ENABLED_PROPERTY);
+        if (sys != null) {
+            return Boolean.parseBoolean(sys);
+        }
+        String env = System.getenv(SKILLHUB_ENABLED_ENV);
+        return env != null && Boolean.parseBoolean(env);
     }
 
     /**
@@ -67,19 +98,56 @@ public class DeepResearchRuntimeApplication {
      * @param properties runtime configuration bound from {@code application.yml}
      * @param registrar optional middleware registrar provider
      * @param sandboxFactoryProvider optional sandbox client factory provider
+     * @param skillHubLocalDir SkillHub middleware's local staging dir (may be blank when the
+     *     middleware is off); when non-blank it is merged into the demo's extra readable roots
+     *     so the {@code readFile} rail can serve SKILL.md content
      * @return the configured {@link AgentHandler}
      */
     @Bean
     AgentHandler deepResearchHandler(DeepResearchSpringProperties properties,
                                      ObjectProvider<MiddlewareAdapterRegistrar> registrar,
-                                     ObjectProvider<AgentCoreSandboxClientFactory> sandboxFactoryProvider) {
+                                     ObjectProvider<AgentCoreSandboxClientFactory> sandboxFactoryProvider,
+                                     @Value("${openjiuwen.service.middleware.skillhub.local-dir:}")
+                                     String skillHubLocalDir) {
         AgentCoreSandboxClientFactory sandboxFactory = sandboxFactoryProvider.getIfAvailable();
         Supplier<SandboxOps> sandboxOpsSupplier = sandboxFactory != null
                 ? () -> resolveSandboxOps(sandboxFactory).orElse(null)
                 : null;
+        mergeSkillHubLocalDirIntoReadableRoots(properties, skillHubLocalDir);
         return new JiuwenCoreAgentExtHandler(
                 DeepResearchAgentFactory.build(properties, sandboxOpsSupplier),
                 registrar.getIfAvailable());
+    }
+
+    /**
+     * Auto-append the SkillHub middleware's {@code local-dir} to the demo's
+     * {@code extra-readable-roots} so the {@code readFile} rail always trusts
+     * whatever path SkillHub actually writes SKILL.md into. Without this merge,
+     * an operator (or a SIT acceptance test like F005-DA-12) that overrides
+     * {@code openjiuwen.service.middleware.skillhub.local-dir} to a temp path
+     * would silently break skill consumption: the LLM would still call
+     * {@code readFile}, but the rail would reject the path as outside its
+     * allow-list. Merging here — rather than in the library-tier factory —
+     * keeps {@code DeepResearchProperties} free of Spring-only concerns while
+     * still guaranteeing the two knobs stay in sync.
+     *
+     * @param properties demo configuration whose {@code extra-readable-roots} is mutated in place
+     * @param skillHubLocalDir SkillHub middleware's local staging directory; blank or {@code null}
+     *     is a no-op (SkillHub off or misconfigured)
+     */
+    private static void mergeSkillHubLocalDirIntoReadableRoots(
+            DeepResearchSpringProperties properties, String skillHubLocalDir) {
+        if (skillHubLocalDir == null || skillHubLocalDir.isBlank()) {
+            return;
+        }
+        List<String> roots = properties.getExtraReadableRoots();
+        if (roots == null) {
+            roots = new ArrayList<>();
+            properties.setExtraReadableRoots(roots);
+        }
+        if (!roots.contains(skillHubLocalDir)) {
+            roots.add(skillHubLocalDir);
+        }
     }
 
     /**

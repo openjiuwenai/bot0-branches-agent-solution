@@ -5,10 +5,11 @@
 package com.openjiuwen.rdc.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.openjiuwen.rdc.config.RegistryObjectMapper;
 import com.openjiuwen.rdc.config.RegistryObservabilityConfig;
 import com.openjiuwen.rdc.controller.MvpRegistryController;
-import com.openjiuwen.rdc.config.RegistryObjectMapper;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryQuery;
 import com.openjiuwen.rdc.model.AgentCardDiscoveryResult;
 import com.openjiuwen.rdc.model.AgentRegistryEntry;
@@ -16,6 +17,7 @@ import com.openjiuwen.rdc.model.DiscoveryConstraints;
 import com.openjiuwen.rdc.model.DiscoveryOutcome;
 import com.openjiuwen.rdc.model.DiscoveryResult;
 import com.openjiuwen.rdc.model.FrameworkType;
+import com.openjiuwen.rdc.model.InvalidDiscoveryQueryException;
 import com.openjiuwen.rdc.model.RegistryRequestContext;
 import com.openjiuwen.rdc.repository.EmbeddedPostgresTestSupport;
 import com.openjiuwen.rdc.repository.JdbcAgentRegistryRepository;
@@ -137,6 +139,27 @@ class StructuredDiscoveryIntegrationTest {
 
         assertThat(result.outcome()).isEqualTo(DiscoveryOutcome.SUCCESS);
         assertThat(result.candidates()).isNotEmpty();
+    }
+
+    @Test
+    void http_discover_missing_tenant_id_raises_invalid_query() {
+        MvpRegistryController.DiscoverRequest request = new MvpRegistryController.DiscoverRequest(
+                new MvpRegistryController.ContextRequest(null, "test-client", "req-1",
+                        Instant.now().plusSeconds(30)),
+                "agent-http",
+                null,
+                null,
+                null,
+                10,
+                null);
+
+        assertThatThrownBy(() -> controller.discover(request, null, null, "trace-missing-tenant"))
+                .isInstanceOf(InvalidDiscoveryQueryException.class)
+                .satisfies(ex -> {
+                    if (ex instanceof InvalidDiscoveryQueryException iq) {
+                        assertThat(iq.failureCode()).isEqualTo("INVALID_QUERY");
+                    }
+                });
     }
 
     private static AgentCardDiscoveryResult discoverAgentCards(String tenantId, String agentId, String serviceId,

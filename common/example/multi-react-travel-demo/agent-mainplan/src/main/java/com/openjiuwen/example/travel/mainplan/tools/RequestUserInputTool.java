@@ -7,6 +7,7 @@ package com.openjiuwen.example.travel.mainplan.tools;
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -46,25 +47,25 @@ public class RequestUserInputTool extends LocalFunction {
                 ToolCard.builder()
                         .id(TOOL_REQUEST_USER_INPUT)
                         .name(TOOL_REQUEST_USER_INPUT)
-                        .description("当用户提供的出差信息不充分时（如缺少目的地、出发日期等），向用户追问缺失信息")
+                        .description("【警告：禁止直接文本回复】当且仅当目的地、出发日期、差标任一缺失时，必须调用此工具。")
                         .inputParams(Map.of(
-                                "type", "object",
-                                "properties", Map.of(
-                                        "missing_fields", Map.of(
-                                                "type", "array",
-                                                "items", Map.of("type", "string"),
-                                                "description", "缺失的字段列表，如[\"目的地\",\"出发日期\"]（LLM 追问时填写）"
-                                        ),
-                                        "follow_up_message", Map.of(
-                                                "type", "string",
-                                                "description", "向用户追问的自然语言消息（LLM 追问时填写）"
-                                        ),
-                                        "response", Map.of(
-                                                "type", "string",
-                                                "description", "用户在续轮中提供的回答（由 UserInputInterruptRail 在 resume 时注入）"
-                                        )
+                            "type", "object",
+                            "properties", Map.of(
+                                "missing_fields", Map.of(
+                                    "type", "array",
+                                    "items", Map.of("type", "string"),
+                                    "description", "缺失的字段列表，可选值：['目的地', '出发日期', '差标']"
+                                ),
+                                "follow_up_message", Map.of(
+                                    "type", "string",
+                                    "description", "向用户发起追问的自然语言消息。例如：'请提供本次出差的差标。'"
+                                ),
+                                "response", Map.of(
+                                    "type", "string",
+                                    "description", "【LLM严禁填写】用户在下一轮中提供的回答。大模型在发起追问时绝对不要填写此字段！"
                                 )
-                        // 不设 required：LLM 追问路径会被 rail 中断、不会真正执行；只有 resume 路径会执行+校验，而该路径入参仅含 response。
+                            ),
+                            "required", List.of("follow_up_message")
                         ))
                         .build(),
                 // Resume 契约（对齐框架 AskUserTool）：返回 UserInputInterruptRail.toJsonArgs

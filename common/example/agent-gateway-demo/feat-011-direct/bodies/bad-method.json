@@ -1,0 +1,6 @@
+{
+  "jsonrpc": "2.0",
+  "id": "ex-011-bad",
+  "method": "FooBar",
+  "params": {}
+}

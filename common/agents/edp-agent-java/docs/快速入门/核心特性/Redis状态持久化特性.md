@@ -8,22 +8,24 @@ Redis 状态持久化是 EDPAgent 的核心基础设施特性，为 Agent 提供
 - **Todo 列表持久化**：Agent 规划的任务列表存储在 Redis 中，跨实例共享，跨会话恢复
 - **会话中断恢复**：Agent 执行过程中的状态快照（Checkpoint）持久化到 Redis，中断后从最近 Checkpoint 恢复
 - **读时续期**：每次读取 Todo/Checkpoint 时自动刷新 TTL，避免长会话中途过期导致状态丢失
-- **多实例隔离**：通过 Key 前缀隔离不同 EDPAgent 实例，支持多实例共用同一 Redis
+- **多实例隔离**：通过 Redis `database` 编号或独立 Redis 实例隔离不同 EDPAgent 部署
 
 ---
 
 ## 核心能力
 
-### 1. Todo 列表持久化（RedisTodoStore）
+### 1. Todo 列表持久化（KvTodoStorage）
 
-Agent 通过 `todo_create`、`todo_modify` 等工具管理任务列表时，任务数据自动持久化到 Redis。
+Agent 通过 `todo_create`、`todo_modify` 等工具管理任务列表时，任务数据通过 agent-core 的 `KvTodoStorage`（基于 `BaseKVStore` SPI）持久化到 Redis。
 
 | 操作 | Redis 命令 | Key | 说明 |
 |------|-----------|-----|------|
-| 创建/修改 Todo | `SET` + `EXPIRE` | `{prefix}:todo:{sessionId}` | 写入任务列表 JSON，刷新 TTL |
-| 读取 Todo | `GET` + `EXPIRE` | `{prefix}:todo:{sessionId}` | 读取任务列表，读时续期 |
-| 检查是否存在 | `EXISTS` | `{prefix}:todo:{sessionId}` | 不触发 TTL 续期 |
-| 删除 Todo | `DEL` | `{prefix}:todo:{sessionId}` | 会话结束时清理 |
+| 创建/修改 Todo | `SET` + `EXPIRE` | `{sessionId}:todo` | 写入任务列表 JSON，刷新 TTL |
+| 读取 Todo | `GET` + `EXPIRE` | `{sessionId}:todo` | 读取任务列表，读时续期 |
+| 检查是否存在 | `EXISTS` | `{sessionId}:todo` | 不触发 TTL 续期 |
+| 删除 Todo | `DEL` | `{sessionId}:todo` | 会话结束时清理 |
+
+> 存储类型通过 `DeepAgentConfig.todoStorageType` 配置（`"kv"` 或 `"file"`）。`"kv"` 模式走 Redis，`"file"` 模式走本地文件。
 
 ### 2. 会话中断恢复（RedisCheckpointer）
 
@@ -55,17 +57,22 @@ Agent 执行过程中，DeepAgent 引擎定期将执行状态快照保存为 Che
 │       │      └── 注册 RedisCheckpointer 为全局默认           │
 │       │          （Core SDK 会话状态持久化到 Redis）          │
 │       │                                                     │
-│       └── 3. @Bean redisTodoStore()                         │
-│              ├── new RedisTodoStore(redisTemplate, props)   │
-│              ├── store.healthCheck()  ← PING + 版本检查      │
-│              └── singletonStore = store                     │
+│       └── 3. 构造 StringRedisTemplate Bean                  │
+│              （供 ExecutionLimitRail 工具计数持久化）         │
+│                                                             │
+│  EdpaExtHandler.performInit()                               │
+│       │                                                     │
+│       └── buildDeepAgentConfig()                            │
+│              ├── kvStoreConfig = buildKvStoreConfig()       │
+│              │   （type=redis, host/port/password/...）      │
+│              └── todoStorageType = "kv"                     │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
               │                              │
               ▼                              ▼
 ┌─────────────────────────┐    ┌─────────────────────────────┐
-│    RedisTodoStore        │    │    RedisCheckpointer          │
-│                          │    │                              │
+│    KvTodoStorage         │    │    RedisCheckpointer          │
+│  （via BaseKVStore）     │    │                              │
 │  save(sessionId, todos)  │    │  save(sessionId, checkpoint) │
 │  load(sessionId)         │    │  load(sessionId)             │
 │  exists(sessionId)       │    │                              │
@@ -79,13 +86,14 @@ Agent 执行过程中，DeepAgent 引擎定期将执行状态快照保存为 Che
             └──────────┬───────────────────────┘
                        │
                        ▼
-              ┌────────────────┐
-              │     Redis      │
-              │  (>= 5.0)      │
-              │                │
-              │  {prefix}:todo:{sessionId}       │
-              │  {prefix}:checkpoint:{sessionId} │
-              └────────────────┘
+              ┌──────────────────────┐
+              │       Redis          │
+              │    (>= 5.0)          │
+              │                      │
+              │  {sessionId}:todo                  │
+              │  {sessionId}:agent:{agentId}:...   │
+              │  edpa:toolcount:{sessionId}        │
+              └──────────────────────┘
 ```
 
 ---
@@ -97,7 +105,7 @@ Agent 执行过程中，DeepAgent 引擎定期将执行状态快照保存为 Che
 | 分布式无状态部署 | Agent 实例无本地状态，可水平扩缩容，请求路由到任意实例均可继续会话 |
 | 跨实例会话共享 | 同一会话的 Todo 和 Checkpoint 在所有实例间共享，无需会话亲和 |
 | 中断自动恢复 | 会话中断后重连，引擎从最近 Checkpoint 恢复，Todo 状态延续 |
-| 多实例隔离 | 通过 `key-prefix` 隔离不同 EDPAgent 部署，共用同一 Redis 集群 |
+| 多实例隔离 | 通过 Redis `database` 编号或独立 Redis 实例隔离不同 EDPAgent 部署 |
 
 ---
 
