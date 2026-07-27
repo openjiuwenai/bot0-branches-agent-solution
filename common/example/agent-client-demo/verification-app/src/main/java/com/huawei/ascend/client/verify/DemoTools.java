@@ -40,6 +40,12 @@ final class DemoTools {
 
     /** 对话式入口：挂观察者，工具执行后把完整信息推给前端。 */
     void registerInto(AgentClient client, ToolExecutionObserver observer) {
+        registerReadPage(client, observer);
+        registerSubmitOrder(client, observer);
+        registerPing(client, observer);
+    }
+
+    private void registerReadPage(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(READ_PAGE)
                         .displayName("Read current page")
@@ -58,7 +64,9 @@ final class DemoTools {
                     observer.onExecuted(invocation, record);
                     return record;
                 }));
+    }
 
+    private void registerSubmitOrder(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(SUBMIT_ORDER)
                         .displayName("Submit order")
@@ -77,7 +85,9 @@ final class DemoTools {
                     observer.onExecuted(invocation, record);
                     return record;
                 }));
+    }
 
+    private void registerPing(AgentClient client, ToolExecutionObserver observer) {
         client.tools().register(LocalTool.of(
                 LocalToolDescriptor.builder(PING)
                         .displayName("Ping")

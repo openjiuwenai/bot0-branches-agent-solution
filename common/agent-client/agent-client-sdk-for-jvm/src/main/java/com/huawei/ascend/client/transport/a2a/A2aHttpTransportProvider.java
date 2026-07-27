@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>SSE 语义遵循 Feat-Func-009：服务端在投递 INPUT_REQUIRED 后会关闭当前 SSE 队列；
  * 本实现据此保持调用流开放，待上层完成本地工具执行后由 {@code resumeToolResult} 开启下一段 SSE 续传。
+ *
  * @since 2026-07-27
  */
 public final class A2aHttpTransportProvider implements TransportProvider {
@@ -230,8 +231,9 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                     flushFrame(ch, data);
                 } else if (line.startsWith("data:")) {
                     data.append(line.substring(5).trim());
+                } else {
+                    // 忽略 event:/id:/注释行
                 }
-                // 忽略 event:/id:/注释行
             }
             flushFrame(ch, data);
         } catch (IOException e) {

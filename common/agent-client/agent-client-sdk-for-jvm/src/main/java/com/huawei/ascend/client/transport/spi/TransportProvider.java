@@ -17,6 +17,7 @@ import java.util.concurrent.Flow;
  *
  * <p>该接口是 SDK 内核与"协议/网络"之间的抽象缝，便于替换真实网关传输与进程内假网关（测试用）。
  * 传输层只处理"单次调用/单个 Task"的 wire 交互，不承担幂等去重、治理、多轮编排——那些在 internal 内核。
+ *
  * @since 2026-07-27
  */
 public interface TransportProvider extends AutoCloseable {

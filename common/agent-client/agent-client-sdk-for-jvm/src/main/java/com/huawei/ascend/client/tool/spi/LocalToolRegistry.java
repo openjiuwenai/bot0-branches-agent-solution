@@ -12,6 +12,7 @@ import java.util.function.BiFunction;
  * 本地工具注册表（FEAT-007 SPI）。以 {@code toolId} 为唯一键管理工具的注册与查找。
  *
  * <p>注册本身不等于暴露：注册后默认不对服务端可见，需配合 {@link ToolExposurePolicy} 才会进入 ToolView。
+ *
  * @since 2026-07-27
  */
 public interface LocalToolRegistry {

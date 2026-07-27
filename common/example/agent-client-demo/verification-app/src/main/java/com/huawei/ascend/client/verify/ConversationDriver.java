@@ -255,6 +255,8 @@ final class ConversationDriver {
             broadcaster.broadcast(ChatMessage.assistantFinal(s.id, call.invocationRef(), c.outputText()));
         } else if (event instanceof InvocationEvent.Failed f) {
             broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(), f.errorCode(), f.message()));
+        } else {
+            // 其他事件（Accepted/StatusChanged/ContentDelta 等）无需在此场景特殊处理。
         }
     }
 
@@ -457,6 +459,8 @@ final class ConversationDriver {
                 } else if (event instanceof InvocationEvent.Failed f) {
                     broadcaster.broadcast(ChatMessage.error(s.id,
                             f.invocationRef(), f.errorCode(), f.message()));
+                } else {
+                    // 其他事件类型（如 client_tool 自动消费后的合成事件）无需前端展示。
                 }
             }
 

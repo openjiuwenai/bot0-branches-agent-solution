@@ -13,6 +13,7 @@ package com.huawei.ascend.client.api;
  *
  * <p>业务用 {@code invocationRef} 发起后续操作（如 {@link AgentClient#continueInput}），
  * 不应直接使用 {@code diagnosticTaskRef} 操作 Task。
+ *
  * @since 2026-07-27
  */
 public record Handle(String invocationRef, String conversationId, String diagnosticTaskRef) {

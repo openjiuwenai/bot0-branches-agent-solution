@@ -35,6 +35,11 @@ public final class AgentClients {
     private AgentClients() {
     }
 
+    /**
+     * 创建构造器。
+     *
+     * @return 构造器实例
+     */
     public static Builder builder() {
         return new Builder();
     }
@@ -48,6 +53,12 @@ public final class AgentClients {
         private ExecutorService toolExecutor;
         private CredentialProvider credentialProvider;
 
+        /**
+         * 设置传输提供者（必填，决定 wire 协议与网关地址）。
+         *
+         * @param v 传输提供者
+         * @return 本构造器
+         */
         public Builder transport(TransportProvider v) {
             this.transport = v;
             return this;
@@ -56,37 +67,75 @@ public final class AgentClients {
         /**
          * 凭证提供者：为到网关的每一次 HTTP 请求附带 Bearer 令牌（Feat-Func-011 强制鉴权）。
          * 连接真实网关时必需；本地假网关可省略。
+         *
+         * @param v 凭证提供者
+         * @return 本构造器
          */
         public Builder credentialProvider(CredentialProvider v) {
             this.credentialProvider = v;
             return this;
         }
 
+        /**
+         * 设置本地工具注册表（默认空实现）。
+         *
+         * @param v 工具注册表
+         * @return 本构造器
+         */
         public Builder toolRegistry(LocalToolRegistry v) {
             this.registry = v;
             return this;
         }
 
+        /**
+         * 设置状态存储（默认内存实现）。
+         *
+         * @param v 状态存储
+         * @return 本构造器
+         */
         public Builder stateStore(ClientStateStore v) {
             this.stateStore = v;
             return this;
         }
 
+        /**
+         * 设置策略门禁（默认放行一切）。
+         *
+         * @param v 策略门禁
+         * @return 本构造器
+         */
         public Builder policyGuard(Governance.PolicyGuard v) {
             this.policyGuard = v;
             return this;
         }
 
+        /**
+         * 设置审批提供者（默认自动批准）。
+         *
+         * @param v 审批提供者
+         * @return 本构造器
+         */
         public Builder approvalProvider(Governance.ApprovalProvider v) {
             this.approvalProvider = v;
             return this;
         }
 
+        /**
+         * 设置工具执行线程池（默认 4 线程守护池）。
+         *
+         * @param v 工具执行线程池
+         * @return 本构造器
+         */
         public Builder toolExecutor(ExecutorService v) {
             this.toolExecutor = v;
             return this;
         }
 
+        /**
+         * 构建客户端实例。
+         *
+         * @return 客户端实例
+         */
         public AgentClient build() {
             Objects.requireNonNull(transport, "transport must be provided");
             LocalToolRegistry reg = (registry != null) ? registry : new DefaultToolRegistry();

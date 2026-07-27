@@ -77,6 +77,12 @@ final class ConversationApiServer {
         this.port = port;
     }
 
+    /**
+     * 启动会话 API 服务主程序。
+     *
+     * @param args 命令行参数，第一个为端口号（可选）
+     * @throws Exception 启动失败时抛出
+     */
     public static void main(String[] args) throws Exception {
         int port = Integer.parseInt(System.getenv().getOrDefault("UI_PORT", "9090"));
         if (args.length > 0) {
@@ -94,6 +100,12 @@ final class ConversationApiServer {
         Thread.currentThread().join();
     }
 
+    /**
+     * 启动会话 API 服务。
+     *
+     * @return 实际监听端口
+     * @throws IOException 启动失败时抛出
+     */
     int start() throws IOException {
         // 必须由环境变量 AGENT_GATEWAY_URL 指向一个已在外部独立运行的 gateway 进程。
         String url = System.getenv("AGENT_GATEWAY_URL");

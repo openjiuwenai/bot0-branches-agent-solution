@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentMap;
 
 /**
  * {@link LocalToolRegistry} 的默认实现，以 {@code toolId} 为唯一键。线程安全。
+ *
  * @since 2026-07-27
  */
 public final class DefaultToolRegistry implements LocalToolRegistry {

@@ -15,6 +15,7 @@ import java.util.UUID;
  * 同步 {@code SendMessage}（携带用户输入 {@code TextPart}，Feat-Func-011 §5.9.3）。
  *
  * <p>{@code relatedInvocationRef} 指向那次处于 INPUT_REQUIRED 的调用句柄，SDK 借此解析出内部 {@code taskId}。
+ *
  * @since 2026-07-27
  */
 public final class ContinueInputRequest {
