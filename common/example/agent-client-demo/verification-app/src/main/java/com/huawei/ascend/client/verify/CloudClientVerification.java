@@ -37,15 +37,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class CloudClientVerification {
 
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger(CloudClientVerification.class.getName());
+
     private final List<String> failures = new ArrayList<>();
     private final AtomicInteger approvalCount = new AtomicInteger();
     private VerificationProgress progress = event -> {
+        String nl = System.lineSeparator();
         switch (event.kind()) {
             case RUN_START -> System.out.println("[verify] gateway=" + event.message());
-            case SCENARIO_START -> System.out.println("\n== " + event.message() + " ==");
+            case SCENARIO_START -> System.out.println(nl + "== " + event.message() + " ==");
             case CHECK -> System.out.println((Boolean.TRUE.equals(event.ok()) ? "  [ok]   " : "  [FAIL] ")
                     + event.message());
-            case RUN_END -> System.out.println("\n" + event.message());
+            case RUN_END -> System.out.println(nl + event.message());
             default -> {
                 if (event.message() != null) {
                     System.out.println("  " + event.message());
@@ -111,7 +115,7 @@ public final class CloudClientVerification {
         } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             failures.add("unexpected exception: " + e);
             progress.onEvent(VerificationProgress.Event.info(null, "unexpected exception: " + e));
-            e.printStackTrace();
+            LOG.log(java.util.logging.Level.WARNING, "verification failed", e);
         } finally {
             client.close();
             if (embedded != null) {

@@ -18,6 +18,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
 
 /**
  * 薄可视化前端（<b>验证用，非 SDK 交付</b>）。
@@ -31,6 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * </pre>
  */
 public final class VerificationUiServer {
+
+    private static final Logger LOG = Logger.getLogger(VerificationUiServer.class.getName());
 
     private final int port;
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -56,13 +59,13 @@ public final class VerificationUiServer {
         }
         VerificationUiServer ui = new VerificationUiServer(port);
         int bound = ui.start();
-        System.out.println();
-        System.out.println("======================================================");
-        System.out.println("  agent-client 验证控制台已启动");
-        System.out.println("  请在浏览器打开: http://127.0.0.1:" + bound + "/");
-        System.out.println("  按 Ctrl+C 结束");
-        System.out.println("======================================================");
-        System.out.println();
+        String banner = System.lineSeparator()
+                + "======================================================" + System.lineSeparator()
+                + "  agent-client 验证控制台已启动" + System.lineSeparator()
+                + "  请在浏览器打开: http://127.0.0.1:" + bound + "/" + System.lineSeparator()
+                + "  按 Ctrl+C 结束" + System.lineSeparator()
+                + "======================================================" + System.lineSeparator();
+        LOG.info(banner);
         Thread.currentThread().join();
     }
 
@@ -131,7 +134,8 @@ public final class VerificationUiServer {
                 client.send("ping", "{}");
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            // 心跳线程被中断即意味着要关闭 SSE 连接，直接退出循环（无需恢复中断标志）。
+            LOG.info("SSE heartbeat interrupted, closing client connection");
         } finally {
             sseClients.remove(client);
             client.close();
@@ -160,15 +164,15 @@ public final class VerificationUiServer {
                 broadcast("info", jsonEvent("INFO", null, "verification started from UI", null));
                 new CloudClientVerification().runWithProgress(event -> {
                     broadcast("progress", toJson(event));
-                    // 同步打印到终端，方便对照
-                    System.out.println("[ui] " + event.kind() + " "
+                    // 同步记录到日志，方便对照
+                    LOG.info("[ui] " + event.kind() + " "
                             + (event.scenarioId() != null ? event.scenarioId() + " " : "")
                             + event.message());
                 });
             } catch (InterruptedException | ExecutionException | TimeoutException | IOException | RuntimeException e) {
                 broadcast("progress", jsonEvent("RUN_END", null,
                         "unexpected failure: " + e.getMessage(), false));
-                e.printStackTrace();
+                LOG.log(java.util.logging.Level.WARNING, "verification run failed", e);
             } finally {
                 running.set(false);
             }
