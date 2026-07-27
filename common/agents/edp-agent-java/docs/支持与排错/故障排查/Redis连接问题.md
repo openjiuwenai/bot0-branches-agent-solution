@@ -2,7 +2,7 @@
 
 ## 问题描述
 
-EDPAgent-Java服务启动或运行过程中无法连接到Redis服务器，导致服务启动失败或会话状态无法持久化。Redis是EDPAgent的核心依赖，用于存储Todo任务列表（RedisTodoStore）和会话Checkpoint（中断恢复点）。
+EDPAgent-Java服务启动或运行过程中无法连接到Redis服务器，导致服务启动失败或会话状态无法持久化。Redis是EDPAgent的核心依赖，用于存储Todo任务列表（通过 agent-core 的 `KvTodoStorage` / `TodoStorage` SPI 实现）和会话Checkpoint（中断恢复点）。
 
 ## 常见症状
 
@@ -14,6 +14,51 @@ EDPAgent-Java服务启动或运行过程中无法连接到Redis服务器，导�
    - `Redis Checkpointer registration failed`
    - `Redis health check failed`
 5. **版本不兼容错误**：`Redis version too low: x.x.x, require >= 5.0`
+6. **运行中Redis停止**：服务运行过程中Redis停止，导致以下症状：
+   - lettuce客户端日志：`WARN i.l.core.protocol.ConnectionWatchdog - Cannot reconnect to [host:6379]`
+   - A2A请求返回500错误：`{"error":{"code":-32603,"message":"TaskStore persistence failed"}}`
+   - EDPAgent日志：`ERROR [A2A-Bridge] blocking request failed, likely Redis/TaskStore unavailable`
+   - 工具调用计数降级：`ERROR [ExecutionLimitRail] session {} Redis GET failed, starting from 0`
+
+## 运行中Redis停止的影响与处理
+
+### 影响范围
+
+当Redis在EDPAgent运行过程中停止时，各组件的降级行为如下：
+
+| 组件 | 正常行为 | Redis停止时的降级行为 | 恢复方式 |
+|------|---------|----------------------|---------|
+| **A2A TaskStore** | Task状态持久化到Redis（key: `a2a:task:<taskId>`） | ❌ 持久化失败，请求返回500 `TaskStore persistence failed` | Redis恢复后自动恢复 |
+| **Todolist**（KvTodoStorage） | 读写Redis（key: `{sessionId}:todo`） | ⚠️ KvTodoStorage读写异常，EdpaTodoRail回落到FileTodoStorage | Redis恢复后自动切回KvTodoStorage |
+| **工具调用计数**（ExecutionLimitRail） | beforeInvoke从Redis恢复，afterInvoke持久化到Redis | ⚠️ 计数从0开始（降级），afterInvoke持久化失败但不阻断业务 | Redis恢复后下次会话恢复正常 |
+| **Checkpointer** | 会话中断点持久化到Redis | ⚠️ 运行时Checkpoint保存/加载失败由agent-core内部处理 | Redis恢复后自动恢复 |
+| **lettuce连接** | 长连接保持 | 🔁 ConnectionWatchdog自动重连，每秒尝试 | Redis恢复后自动重连 |
+
+### 日志关键词
+
+运行中Redis停止时，搜索以下日志关键词定位问题：
+
+| 日志关键词 | 来源 | 说明 |
+|-----------|------|------|
+| `Cannot reconnect to` | lettuce ConnectionWatchdog | Redis连接断开，自动重连失败 |
+| `[A2A-Bridge] blocking request failed` | CustomRestA2ABridge | A2A请求执行失败，可能是TaskStore持久化失败 |
+| `[A2A-Bridge] stream request failed` | CustomRestA2ABridge | A2A流式请求启动失败 |
+| `[ExecutionLimitRail] Redis GET failed` | ExecutionLimitRail | 工具调用计数从Redis恢复失败 |
+| `[ExecutionLimitRail] failed to persist tool counts` | ExecutionLimitRail | 工具调用计数持久化到Redis失败 |
+| `task_store_unavailable` | CustomRestA2ATaskResolver | TaskStore读取失败（503错误） |
+
+### 处理步骤
+
+1. **检查Redis服务状态**：确认Redis是否真的停止，是否需要重启
+2. **查看EDPAgent日志**：搜索上述关键词，确认影响范围
+3. **重启Redis**：`systemctl start redis` 或 `docker start redis`
+4. **验证恢复**：lettuce ConnectionWatchdog会自动重连，发送测试请求验证
+
+### 预防措施
+
+- **部署Redis高可用**：使用Sentinel或Cluster模式，避免单点故障
+- **配置lettuce重连策略**：默认已启用自动重连，无需额外配置
+- **监控告警**：监控Redis存活状态和EDPAgent的 `[A2A-Bridge]` 错误日志
 
 ## 可能原因
 
@@ -256,7 +301,7 @@ EDPA_REDIS_SOCKET_TIMEOUT=30000     # 读写超时30秒
 2. 设置合适的淘汰策略（如`allkeys-lru`）
 3. 检查EDPAgent的TTL配置：
    - `EDPA_REDIS_CHECKPOINTER_TTL=60`（Checkpoint TTL，分钟）
-   - `EDPA_REDIS_TODO_TTL=3600`（Todo TTL，秒）
+   - Todo 数据 TTL 由 agent-core 的 `KvTodoStorage` 统一管理，不再通过环境变量配置
 
 ## 相关配置/日志关键词
 
@@ -280,9 +325,9 @@ EDPA_REDIS_SOCKET_TIMEOUT=30000     # 读写超时30秒
 - `NOAUTH` - 需要认证
 
 ### 代码位置
-- Redis配置类：`engine/src/main/java/com/huawei/ascend/edp/config/RedisConfig.java`
-- Redis健康检查：`engine/src/main/java/com/huawei/ascend/edp/todo/RedisTodoStore.java:52-76`
-- TodoRedis属性配置：`engine/src/main/java/com/huawei/ascend/edp/config/TodoRedisProperties.java`
+- Redis配置类：`engine/src/main/java/com/huawei/ascend/edp/config/RedisConfig.java`（创建 `StringRedisTemplate` 和 `RedisCheckpointer`，不再创建 `RedisTodoStore` Bean）
+- Todo 持久化实现：原 `RedisTodoStore.java` 已删除，改用 agent-core 的 `KvTodoStorage`（通过 `TodoStorage` SPI 加载，在 `EdpaTodoRail` 中初始化）
+- TodoRedis属性配置：`engine/src/main/java/com/huawei/ascend/edp/config/TodoRedisProperties.java`（承载 Redis 连接参数与 Checkpointer TTL，不再包含 Todo 专用配置子类）
 
 ## 预防措施
 
