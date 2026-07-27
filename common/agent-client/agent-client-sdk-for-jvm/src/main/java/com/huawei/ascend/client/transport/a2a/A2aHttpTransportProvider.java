@@ -180,7 +180,9 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                 });
     }
 
-    /** 把网关的 HTTP 治理错误（401/403/400/409 等）解析为带稳定 code 的传输异常。 */
+    /**
+     * 把网关的 HTTP 治理错误（401/403/400/409 等）解析为带稳定 code 的传输异常。
+     */
     private A2aTransportException governanceError(int status, String body) {
         String code = "HTTP_" + status;
         String message = body;
@@ -450,7 +452,9 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         return !(e instanceof java.io.EOFException) && !msg.contains("closed") && !msg.contains("EOF");
     }
 
-    /** 一次调用对应的通道：承载事件发布者与 taskRef 映射，可跨多段 SSE/单发续传复用。 */
+    /**
+     * 一次调用对应的通道：承载事件发布者与 taskRef 映射，可跨多段 SSE/单发续传复用。
+     */
     private static final class Channel {
         final String invocationRef;
         final SubmissionPublisher<InvocationEvent> publisher =
@@ -459,16 +463,20 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         volatile String contextId;
         volatile TaskState lastState;
         final AtomicBoolean terminal = new AtomicBoolean(false);
+
         Channel(String invocationRef) {
             this.invocationRef = invocationRef;
         }
     }
 
-    /** 首个订阅者到达后才真正发起 HTTP，避免事件早于订阅而丢失。 */
+    /**
+     * 首个订阅者到达后才真正发起 HTTP，避免事件早于订阅而丢失。
+     */
     private static final class LazyStartPublisher implements Flow.Publisher<InvocationEvent> {
         private final SubmissionPublisher<InvocationEvent> delegate;
         private final Runnable start;
         private final AtomicBoolean started = new AtomicBoolean(false);
+
         LazyStartPublisher(SubmissionPublisher<InvocationEvent> delegate, Runnable start) {
             this.delegate = delegate;
             this.start = start;

@@ -19,9 +19,9 @@ import java.util.UUID;
  *
  * <p>标识符所有权：
  * <ul>
- *   <li>{@code conversationId} —— 业务应用拥有，表达上下文生命周期（映射到 A2A {@code message.contextId}）。</li>
- *   <li>{@code invocationId} —— 客户端拥有的调用事务标识（映射到 A2A {@code message.messageId}），
- *       同时用作幂等键的默认值。</li>
+ * <li>{@code conversationId} —— 业务应用拥有，表达上下文生命周期（映射到 A2A {@code message.contextId}）。</li>
+ * <li>{@code invocationId} —— 客户端拥有的调用事务标识（映射到 A2A {@code message.messageId}），
+ * 同时用作幂等键的默认值。</li>
  * </ul>
  * runtime 侧的 {@code taskId} 不由业务传入，由 SDK 在收到受理事件后内部映射。
  *
@@ -153,6 +153,11 @@ public final class InvocationRequest {
         return new Builder();
     }
 
+    /**
+     * {@link InvocationRequest} 的构造器。
+     *
+     * @since 2026-07-27
+     */
     public static final class Builder {
         private String agentId;
         private String conversationId;

@@ -22,7 +22,9 @@ public enum TaskState {
     FAILED,
     CANCELED,
     REJECTED,
-    /** 本地无法判定（如映射缺失、连接中断且未取得权威快照）。需通过 tasks/get 校正。 */
+    /**
+     * 本地无法判定（如映射缺失、连接中断且未取得权威快照）。需通过 tasks/get 校正。
+     */
     UNKNOWN;
 
     /**

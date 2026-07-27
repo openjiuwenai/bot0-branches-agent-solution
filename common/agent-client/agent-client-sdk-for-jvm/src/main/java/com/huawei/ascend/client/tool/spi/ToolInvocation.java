@@ -16,8 +16,7 @@ import java.util.Map;
  * <p>{@code toolCallId} 是本次工具调用的幂等主键，SDK 依据它做"最多执行一次"去重。
  *
  * @since 2026-07-27
-   * @return ToolInvocation
-*/
+ */
 public record ToolInvocation(
         String toolCallId,
         String toolId,

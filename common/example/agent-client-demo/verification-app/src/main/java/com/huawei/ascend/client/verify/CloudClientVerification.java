@@ -35,8 +35,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>用法：
  * <ul>
- *   <li>{@code java ... CloudClientVerification} —— CLI，跑完退出，退出码 0/1。</li>
- *   <li>{@code java ... CloudClientVerification --ui} —— 打开薄可视化前端（浏览器）。</li>
+ * <li>{@code java ... CloudClientVerification} —— CLI，跑完退出，退出码 0/1。</li>
+ * <li>{@code java ... CloudClientVerification --ui} —— 打开薄可视化前端（浏览器）。</li>
  * </ul>
  *
  * @since 2026-07-27
@@ -294,7 +294,9 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
     }
 
-    /** Scenario 4: 普通多轮对话（复用同一 conversationId 再 invoke 无 taskId 创建，得到新 Task）。 */
+    /**
+     * Scenario 4: 普通多轮对话（复用同一 conversationId 再 invoke 无 taskId 创建，得到新 Task）。
+     */
     private void scenarioPlainMultiTurn(AgentClient client, DemoTools tools)
             throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s4";
@@ -353,7 +355,9 @@ public final class CloudClientVerification {
         return client.invoke(r);
     }
 
-    /** Scenario 5: 默认不暴露（不声明 exposure → ToolView 为空 → 服务端不可见任何本地工具）。 */
+    /**
+     * Scenario 5: 默认不暴露（不声明 exposure → ToolView 为空 → 服务端不可见任何本地工具）。
+     */
     private void scenarioDefaultNoExposure(AgentClient client, DemoTools tools)
             throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s5";
@@ -384,7 +388,9 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
     }
 
-    /** Scenario 6: 治理错误（401 AUTH_MISSING）不投影为成功 Task，而是以 Failed 终态暴露。 */
+    /**
+     * Scenario 6: 治理错误（401 AUTH_MISSING）不投影为成功 Task，而是以 Failed 终态暴露。
+     */
     private void scenarioGovernanceErrorNotProjected(String url)
             throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s6";

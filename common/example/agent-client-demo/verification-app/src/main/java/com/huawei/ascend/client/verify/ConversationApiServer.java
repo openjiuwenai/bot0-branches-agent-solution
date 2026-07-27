@@ -31,14 +31,14 @@ import java.util.regex.Pattern;
  *
  * <p>纯 JDK {@link HttpServer}，无 Node、无前端构建。端点：
  * <ul>
- *   <li>{@code GET /} —— 静态首页（三栏对话布局）。</li>
- *   <li>{@code GET /api/queries} —— query 目录（前端渲染按钮）。</li>
- *   <li>{@code POST /api/chat/send} —— 单发一条 query，body {@code {queryId,sessionId}}。</li>
- *   <li>{@code POST /api/chat/send-serial} —— 串行发多条，body {@code {queryIds:[...],sessionId}}。</li>
- *   <li>{@code GET /api/chat/events} —— SSE，实时推送对话消息。</li>
- *   <li>{@code GET /api/chat/sessions} —— 当前会话列表。</li>
- *   <li>{@code POST /api/chat/new-session} —— 新建会话，body {@code {label}}。</li>
- *   <li>{@code GET /api/status} —— {@code {running}}。</li>
+ * <li>{@code GET /} —— 静态首页（三栏对话布局）。</li>
+ * <li>{@code GET /api/queries} —— query 目录（前端渲染按钮）。</li>
+ * <li>{@code POST /api/chat/send} —— 单发一条 query，body {@code {queryId,sessionId}}。</li>
+ * <li>{@code POST /api/chat/send-serial} —— 串行发多条，body {@code {queryIds:[...],sessionId}}。</li>
+ * <li>{@code GET /api/chat/events} —— SSE，实时推送对话消息。</li>
+ * <li>{@code GET /api/chat/sessions} —— 当前会话列表。</li>
+ * <li>{@code POST /api/chat/new-session} —— 新建会话，body {@code {label}}。</li>
+ * <li>{@code GET /api/status} —— {@code {running}}。</li>
  * </ul>
  *
  * <p>并发约束：同一时刻只允许一个 query/串行组在跑（全局 running 标志），
@@ -47,19 +47,26 @@ import java.util.regex.Pattern;
 final class ConversationApiServer {
     private static final Logger LOG = Logger.getLogger(ConversationApiServer.class.getName());
 
-    /** 提取数组内字符串元素的正则：预编译避免重复编译（G.PRM.04）。 */
+    /**
+     * 提取数组内字符串元素的正则：预编译避免重复编译（G.PRM.04）。
+     */
     private static final Pattern STRING_ITEM_PATTERN = Pattern.compile("\"([^\"]*)\"");
 
-    /** JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。 */
+    /**
+     * JSON 转义用的换行字符常量（避免硬编码 \n/\r，G.TYP.07）。
+     */
     private static final String LF = String.valueOf((char) 10);
     private static final String CR = String.valueOf((char) 13);
 
-    /** 按 key 缓存的正则，避免对同一 key 重复预编译（G.PRM.04）。 */
+    /**
+     * 按 key 缓存的正则，避免对同一 key 重复预编译（G.PRM.04）。
+     */
     private static final ConcurrentMap<String, Pattern> STRING_FIELD_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<String, Pattern> ARRAY_FIELD_CACHE = new ConcurrentHashMap<>();
     private final int port;
     private final ChatBroadcaster broadcaster = new ChatBroadcaster();
     private final AtomicBoolean running = new AtomicBoolean(false);
+
     private final ExecutorService workers = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
             new SynchronousQueue<>(), r -> {
                 Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
@@ -72,6 +79,7 @@ final class ConversationApiServer {
             });
     private ConversationDriver driver;
     private String gatewayUrl;
+
     ConversationApiServer(int port) {
         this.port = port;
     }
@@ -371,7 +379,9 @@ final class ConversationApiServer {
                 .replace(LF, "\\n").replace(CR, "");
     }
 
-    /** 从 JSON body 提取一个字符串字段（简单正则，足够本场景的简单请求体）。 */
+    /**
+     * 从 JSON body 提取一个字符串字段（简单正则，足够本场景的简单请求体）。
+     */
     private static Optional<String> extractString(String body, String key) {
         Pattern p = STRING_FIELD_CACHE.computeIfAbsent(key,
                 k -> Pattern.compile("\"" + Pattern.quote(k) + "\"\\s*:\\s*\"([^\"]*)\""));
@@ -379,7 +389,9 @@ final class ConversationApiServer {
         return m.find() ? Optional.ofNullable(m.group(1)) : Optional.empty();
     }
 
-    /** 从 JSON body 提取字符串数组字段。 */
+    /**
+     * 从 JSON body 提取字符串数组字段。
+     */
     private static List<String> extractStringList(String body, String key) {
         List<String> out = new ArrayList<>();
         Pattern p = ARRAY_FIELD_CACHE.computeIfAbsent(key,

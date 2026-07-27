@@ -32,26 +32,35 @@ public sealed interface InvocationEvent
      */
     String invocationRef();
 
-    /** 调用已被受理。{@code diagnosticTaskRef} 仅用于诊断/日志，非业务主键。 */
+    /**
+     * 调用已被受理。{@code diagnosticTaskRef} 仅用于诊断/日志，非业务主键。
+     */
     record Accepted(String invocationRef, String diagnosticTaskRef, String conversationId)
             implements InvocationEvent {
+        // 仅规范构造器，无额外成员。
     }
 
-    /** 状态投影发生变化。 */
+    /**
+     * 状态投影发生变化。
+     */
     record StatusChanged(String invocationRef, TaskState state, boolean terminal)
             implements InvocationEvent {
+        // 仅规范构造器，无额外成员。
     }
 
-    /** 增量输出内容（流式）。 */
+    /**
+     * 增量输出内容（流式）。
+     */
     record ContentDelta(String invocationRef, String text) implements InvocationEvent {
+        // 仅规范构造器，无额外成员。
     }
 
     /**
      * 需要客户端提供输入。
      * <ul>
-     *   <li>{@code toolCall} 存在 —— 属于 client_tool 类型，SDK 会自动就地执行并续传（FEAT-007）。</li>
-     *   <li>{@code toolCall} 为空 —— 属于需要用户补充输入，业务应调用
-     *       {@link AgentClient#continueInput}。</li>
+     * <li>{@code toolCall} 存在 —— 属于 client_tool 类型，SDK 会自动就地执行并续传（FEAT-007）。</li>
+     * <li>{@code toolCall} 为空 —— 属于需要用户补充输入，业务应调用
+     * {@link AgentClient#continueInput}。</li>
      * </ul>
      */
     record InputRequired(String invocationRef, ToolCall toolCall, String prompt)
@@ -66,12 +75,18 @@ public sealed interface InvocationEvent
         }
     }
 
-    /** 调用完成（终态）。 */
+    /**
+     * 调用完成（终态）。
+     */
     record Completed(String invocationRef, String outputText) implements InvocationEvent {
+        // 仅规范构造器，无额外成员。
     }
 
-    /** 调用失败（终态）。{@code errorCode} 为标准化错误分类。 */
+    /**
+     * 调用失败（终态）。{@code errorCode} 为标准化错误分类。
+     */
     record Failed(String invocationRef, String errorCode, String message) implements InvocationEvent {
+        // 仅规范构造器，无额外成员。
     }
 
     /**

@@ -55,7 +55,9 @@ public interface LocalToolRegistry {
      */
     ToolView toolView(ToolExposurePolicy effectivePolicy);
 
-    /** 反注册句柄。 */
+    /**
+     * 反注册句柄。
+     */
     interface Registration extends AutoCloseable {
         /**
          * 工具标识。

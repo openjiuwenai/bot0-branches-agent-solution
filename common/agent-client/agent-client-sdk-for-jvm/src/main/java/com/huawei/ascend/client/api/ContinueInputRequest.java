@@ -98,6 +98,11 @@ public final class ContinueInputRequest {
         return new Builder();
     }
 
+    /**
+     * {@link ContinueInputRequest} 的构造器。
+     *
+     * @since 2026-07-27
+     */
     public static final class Builder {
         private String conversationId;
         private String relatedInvocationRef;

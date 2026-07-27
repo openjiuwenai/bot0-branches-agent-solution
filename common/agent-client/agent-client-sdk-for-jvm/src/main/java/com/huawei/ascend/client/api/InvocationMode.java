@@ -11,9 +11,9 @@ package com.huawei.ascend.client.api;
  * 传入时 {@code invoke()} 会以 {@code UNSUPPORTED_MODE} 拒绝（交付面即能力面）。
  *
  * <ul>
- *   <li>{@link #STREAMING} —— 增量事件流，wire 上用 A2A {@code SendStreamingMessage}（HTTP + SSE）。<b>已交付</b>。</li>
- *   <li>{@link #BLOCKING} —— 语义上"一次拿到最终结果"，wire 上拟用 {@code SendMessage}（单条 JSON）。<b>预留、未交付</b>。</li>
- *   <li>{@link #ASYNC} —— 提交即返回句柄，随后按需拉取状态。<b>预留、未交付</b>。</li>
+ * <li>{@link #STREAMING} —— 增量事件流，wire 上用 A2A {@code SendStreamingMessage}（HTTP + SSE）。<b>已交付</b>。</li>
+ * <li>{@link #BLOCKING} —— 语义上"一次拿到最终结果"，wire 上拟用 {@code SendMessage}（单条 JSON）。<b>预留、未交付</b>。</li>
+ * <li>{@link #ASYNC} —— 提交即返回句柄，随后按需拉取状态。<b>预留、未交付</b>。</li>
  * </ul>
  *
  * @since 2026-07-27

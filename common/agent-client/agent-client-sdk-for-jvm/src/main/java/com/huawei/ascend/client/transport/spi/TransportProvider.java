@@ -21,7 +21,9 @@ import java.util.concurrent.Flow;
  * @since 2026-07-27
  */
 public interface TransportProvider extends AutoCloseable {
-    /** 创建并开始接收事件流。返回的 Publisher 会持续投递事件直至终态或需要续传。 */
+    /**
+     * 创建并开始接收事件流。返回的 Publisher 会持续投递事件直至终态或需要续传。
+     */
     Flow.Publisher<InvocationEvent> createAndStream(CreateCommand command);
 
     /**
@@ -52,7 +54,9 @@ public interface TransportProvider extends AutoCloseable {
     @Override
     void close();
 
-    /** 创建调用的指令。 */
+    /**
+     * 创建调用的指令。
+     */
     record CreateCommand(
             String invocationRef,
             String invocationId,
@@ -64,9 +68,12 @@ public interface TransportProvider extends AutoCloseable {
             List<ToolWireSpec> clientTools,
             String credentialToken,
             String relatedTaskRef) {
+        // 仅规范构造器，无额外成员。
     }
 
-    /** 续传工具结果的指令。{@code observationText} 是已渲染好的服务端可消费文本。 */
+    /**
+     * 续传工具结果的指令。{@code observationText} 是已渲染好的服务端可消费文本。
+     */
     record ResumeCommand(
             String invocationRef,
             String taskRef,
@@ -77,5 +84,6 @@ public interface TransportProvider extends AutoCloseable {
             List<ToolWireSpec> clientTools,
             String credentialToken,
             String conversationId) {
+        // 仅规范构造器，无额外成员。
     }
 }

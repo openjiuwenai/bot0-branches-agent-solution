@@ -15,7 +15,7 @@ package com.huawei.ascend.client.api;
  * 不应直接使用 {@code diagnosticTaskRef} 操作 Task。
  *
  * @since 2026-07-27
-   * @return Handle
-*/
+ */
 public record Handle(String invocationRef, String conversationId, String diagnosticTaskRef) {
+    // 仅规范构造器，无额外成员。
 }

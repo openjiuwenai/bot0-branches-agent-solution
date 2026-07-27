@@ -40,8 +40,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>会话模型：
  * <ul>
- *   <li>串行组 query 复用同一 {@link Session}（同一 {@code AgentClient} + 同一 {@code conversationId}）。</li>
- *   <li>单独组 / demo 组每次新建 {@link Session}。</li>
+ * <li>串行组 query 复用同一 {@link Session}（同一 {@code AgentClient} + 同一 {@code conversationId}）。</li>
+ * <li>单独组 / demo 组每次新建 {@link Session}。</li>
  * </ul>
  */
 final class ConversationDriver {
@@ -55,7 +55,9 @@ final class ConversationDriver {
         this.broadcaster = broadcaster;
     }
 
-    /** 启动时广播网关信息。 */
+    /**
+     * 启动时广播网关信息。
+     */
     void announceGateway() {
         broadcaster.broadcast(ChatMessage.info(null, "网关: " + gatewayUrl + " (external)"));
     }
@@ -283,7 +285,9 @@ final class ConversationDriver {
         }
     }
 
-    /** continueInput 场景的事件分发：用户输入提示触发续传；终态事件广播结果。 */
+    /**
+     * continueInput 场景的事件分发：用户输入提示触发续传；终态事件广播结果。
+     */
     private void handleContinueInputEvent(InvocationEvent event, Session s, InvocationCall call,
                                           CountDownLatch userPrompt) {
         if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null) {
@@ -346,11 +350,14 @@ final class ConversationDriver {
         return ok;
     }
 
-    /** 串行多轮中单轮的结果快照（含调用句柄信息，用于跨轮断言）。 */
+    /**
+     * 串行多轮中单轮的结果快照（含调用句柄信息，用于跨轮断言）。
+     */
     private static final class TurnResult {
         final String invocationRef;
         final String conversationId;
         final InvocationSnapshot snap;
+
         TurnResult(String invocationRef, String conversationId, InvocationSnapshot snap) {
             this.invocationRef = invocationRef;
             this.conversationId = conversationId;
@@ -358,7 +365,9 @@ final class ConversationDriver {
         }
     }
 
-    /** 串行多轮中的一轮：发起一次 STREAMING 调用并等待终态，失败时记录断言并返回 Optional.empty()。 */
+    /**
+     * 串行多轮中的一轮：发起一次 STREAMING 调用并等待终态，失败时记录断言并返回 Optional.empty()。
+     */
     private Optional<TurnResult> runPlainSingleTurn(Session s, QueryCatalog.Query q,
                                                     List<Assertion> out, String suffix, String tag) {
         InvocationRequest req = InvocationRequest.builder()
@@ -480,7 +489,9 @@ final class ConversationDriver {
 
     // ---------------------- helpers ----------------------
 
-    /** 发起 STREAMING 调用、广播 user 消息、订阅事件流、等待终态。 */
+    /**
+     * 发起 STREAMING 调用、广播 user 消息、订阅事件流、等待终态。
+     */
     private InvocationSnapshot invokeAndWait(Session s, QueryCatalog.Query q, List<Assertion> out) {
         InvocationRequest.Builder b = InvocationRequest.builder()
                 .conversationId(s.conversationId)
@@ -504,7 +515,9 @@ final class ConversationDriver {
         }
     }
 
-    /** 订阅事件流，把 SDK 事件翻译成对话消息。 */
+    /**
+     * 订阅事件流，把 SDK 事件翻译成对话消息。
+     */
     private void subscribeEvents(Session s, InvocationCall call, List<Assertion> out, String scenarioId) {
         call.events().subscribe(new Flow.Subscriber<>() {
             @Override
@@ -570,7 +583,9 @@ final class ConversationDriver {
 
     // ---------------------- 内部类型 ----------------------
 
-    /** 一个对话会话：拥有独立的 client / conversationId / 工具计数快照。 */
+    /**
+     * 一个对话会话：拥有独立的 client / conversationId / 工具计数快照。
+     */
     final class Session {
         final String id;
         final String label;
@@ -608,9 +623,12 @@ final class ConversationDriver {
         }
     }
     record SessionInfo(String id, String label, String conversationId, int messageCount) {
+        // 仅规范构造器，无额外成员。
     }
     record Assertion(String scenarioId, boolean ok, String message) {
+        // 仅规范构造器，无额外成员。
     }
     record QueryResult(String queryId, String sessionId, boolean ok, List<Assertion> assertions) {
+        // 仅规范构造器，无额外成员。
     }
 }

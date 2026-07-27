@@ -20,7 +20,9 @@ import java.util.concurrent.CompletionStage;
  * @since 2026-07-27
  */
 public interface Governance {
-    /** 策略门禁：对将要执行的工具调用做同步准入判定。 */
+    /**
+     * 策略门禁：对将要执行的工具调用做同步准入判定。
+     */
     interface PolicyGuard {
         /**
          * 准入决策。
@@ -42,7 +44,9 @@ public interface Governance {
         }
     }
 
-    /** 审批提供者：对需要审批的工具调用给出批准/拒绝。 */
+    /**
+     * 审批提供者：对需要审批的工具调用给出批准/拒绝。
+     */
     interface ApprovalProvider {
         /**
          * 审批决策 future。

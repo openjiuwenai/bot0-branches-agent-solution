@@ -56,9 +56,13 @@ public final class LocalToolDescriptor {
      * @since 2026-07-27
      */
     public enum SideEffect {
-        /** 只读/无副作用，可直接执行。 */
+        /**
+         * 只读/无副作用，可直接执行。
+         */
         OBSERVATION,
-        /** 有副作用（写操作等），执行前需经审批。 */
+        /**
+         * 有副作用（写操作等），执行前需经审批。
+         */
         ACTION
     }
 
@@ -153,6 +157,11 @@ public final class LocalToolDescriptor {
         return new Builder(toolId);
     }
 
+    /**
+     * {@link LocalToolDescriptor} 的构造器。
+     *
+     * @since 2026-07-27
+     */
     public static final class Builder {
         private final String toolId;
         private String displayName;

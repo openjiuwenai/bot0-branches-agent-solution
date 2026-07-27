@@ -13,11 +13,11 @@ import java.util.Optional;
  *
  * <p>承担两类职责：
  * <ul>
- *   <li><b>执行记录 outbox</b>：以 {@code toolCallId} 为主键的"最多执行一次"幂等保证。
- *       {@link #saveRecordIfAbsent} 利用底层存储的原子写语义，使得同一 toolCallId
- *       即使被并发触发也只会写入并返回同一份记录。</li>
- *   <li><b>续传 ACK 簿记</b>：{@link #markSubmitted} / {@link #isSubmitted} 记录某次工具结果
- *       是否已成功续传给服务端，避免对同一 toolCallId 重复提交续跑请求。</li>
+ * <li><b>执行记录 outbox</b>：以 {@code toolCallId} 为主键的"最多执行一次"幂等保证。
+ * {@link #saveRecordIfAbsent} 利用底层存储的原子写语义，使得同一 toolCallId
+ * 即使被并发触发也只会写入并返回同一份记录。</li>
+ * <li><b>续传 ACK 簿记</b>：{@link #markSubmitted} / {@link #isSubmitted} 记录某次工具结果
+ * 是否已成功续传给服务端，避免对同一 toolCallId 重复提交续跑请求。</li>
  * </ul>
  *
  * <p>默认实现为进程内内存版本（{@code InMemoryStateStore}）；可替换为持久化实现以支持跨重启恢复。
