@@ -34,7 +34,7 @@ final class ChatBroadcaster {
         for (SseClient c : clients) {
             try {
                 c.send("chat", json);
-            } catch (Exception e) {
+            } catch (IOException e) {
                 c.closed.set(true);
                 dead.add(c);
             }

@@ -16,11 +16,14 @@ import com.huawei.ascend.client.transport.a2a.A2aHttpTransportProvider;
 import com.huawei.ascend.client.transport.spi.CredentialProvider;
 import com.huawei.ascend.mockgateway.MockGatewayServer;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -62,12 +65,13 @@ public final class CloudClientVerification {
     }
 
     /** 供 Web UI 调用：注入进度回调后跑完全部场景。 */
-    public int runWithProgress(VerificationProgress progress) throws Exception {
+    public int runWithProgress(VerificationProgress progress)
+            throws InterruptedException, ExecutionException, TimeoutException, IOException {
         this.progress = progress;
         return run();
     }
 
-    private int run() throws Exception {
+    private int run() throws InterruptedException, ExecutionException, TimeoutException, IOException {
         failures.clear();
         approvalCount.set(0);
 
@@ -104,7 +108,7 @@ public final class CloudClientVerification {
             scenarioPlainMultiTurn(client, tools);
             scenarioDefaultNoExposure(client, tools);
             scenarioGovernanceErrorNotProjected(url);
-        } catch (Exception e) {
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             failures.add("unexpected exception: " + e);
             progress.onEvent(VerificationProgress.Event.info(null, "unexpected exception: " + e));
             e.printStackTrace();
@@ -121,7 +125,8 @@ public final class CloudClientVerification {
         return ok ? 0 : 1;
     }
 
-    private void scenarioStreamingClientTools(AgentClient client, DemoTools tools) throws Exception {
+    private void scenarioStreamingClientTools(AgentClient client, DemoTools tools)
+            throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s1";
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 1: STREAMING + client tools (real HTTP + SSE)"));
@@ -154,7 +159,8 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
     }
 
-    private void scenarioUnsupportedModeRejected(AgentClient client, DemoTools tools) throws Exception {
+    private void scenarioUnsupportedModeRejected(AgentClient client, DemoTools tools)
+            throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s2";
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 2: unsupported mode rejected + STREAMING ping (交付面即能力面)"));
@@ -200,7 +206,8 @@ public final class CloudClientVerification {
         progress.onEvent(VerificationProgress.Event.scenarioEnd(id, failures.size() == beforeFails));
     }
 
-    private void scenarioContinueInput(AgentClient client) throws Exception {
+    private void scenarioContinueInput(AgentClient client)
+            throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s3";
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 3: user-input continuation (continueInput over real HTTP)"));
@@ -254,7 +261,8 @@ public final class CloudClientVerification {
     }
 
     /** Scenario 4: 普通多轮对话（复用同一 conversationId 再 invoke 无 taskId 创建，得到新 Task）。 */
-    private void scenarioPlainMultiTurn(AgentClient client, DemoTools tools) throws Exception {
+    private void scenarioPlainMultiTurn(AgentClient client, DemoTools tools)
+            throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s4";
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 4: plain multi-turn (reuse conversationId, new Task each turn)"));
@@ -308,7 +316,8 @@ public final class CloudClientVerification {
     }
 
     /** Scenario 5: 默认不暴露（不声明 exposure → ToolView 为空 → 服务端不可见任何本地工具）。 */
-    private void scenarioDefaultNoExposure(AgentClient client, DemoTools tools) throws Exception {
+    private void scenarioDefaultNoExposure(AgentClient client, DemoTools tools)
+            throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s5";
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 5: default-no-exposure (no exposure declared → no clientTools on wire)"));
@@ -341,7 +350,8 @@ public final class CloudClientVerification {
     }
 
     /** Scenario 6: 治理错误（401 AUTH_MISSING）不投影为成功 Task，而是以 Failed 终态暴露。 */
-    private void scenarioGovernanceErrorNotProjected(String url) throws Exception {
+    private void scenarioGovernanceErrorNotProjected(String url)
+            throws InterruptedException, ExecutionException, TimeoutException {
         String id = "s6";
         progress.onEvent(VerificationProgress.Event.scenarioStart(id,
                 "Scenario 6: governance error (401) not projected as success"));

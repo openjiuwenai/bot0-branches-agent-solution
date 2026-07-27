@@ -10,6 +10,7 @@ import com.huawei.ascend.client.api.TaskState;
 import com.huawei.ascend.client.transport.spi.TransportProvider;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -160,7 +161,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                         if (ack != null) {
                             ack.complete(workingSnapshot(ch));
                         }
-                    } catch (Exception e) {
+                    } catch (RuntimeException e) {
                         failChannel(ch, ack, e);
                     }
                 });
@@ -178,7 +179,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             if (node.hasNonNull("message")) {
                 message = node.get("message").asText(body);
             }
-        } catch (Exception ignore) {
+        } catch (RuntimeException ignore) {
             // 非 JSON 响应体：保留原始文本。
         }
         return new A2aTransportException("gateway rejected request [" + status + "/" + code + "]: " + message);
@@ -220,12 +221,18 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                 // 忽略 event:/id:/注释行
             }
             flushFrame(ch, data);
-        } catch (Exception e) {
-            if (!ch.terminal.get()) {
-                // SSE 连接自然断开且非终态：不制造失败，等待后续 resume 续传。
-                if (isHardFailure(e)) {
-                    ch.publisher.closeExceptionally(e);
-                }
+        } catch (IOException e) {
+            handleSseReadFailure(ch, e);
+        } catch (RuntimeException e) {
+            handleSseReadFailure(ch, e);
+        }
+    }
+
+    private void handleSseReadFailure(Channel ch, Throwable e) {
+        if (!ch.terminal.get()) {
+            // SSE 连接自然断开且非终态：不制造失败，等待后续 resume 续传。
+            if (isHardFailure(e)) {
+                ch.publisher.closeExceptionally(e);
             }
         }
     }
@@ -233,7 +240,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
     private static String readAll(InputStream in) {
         try (in) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception e) {
+        } catch (IOException e) {
             return "";
         }
     }

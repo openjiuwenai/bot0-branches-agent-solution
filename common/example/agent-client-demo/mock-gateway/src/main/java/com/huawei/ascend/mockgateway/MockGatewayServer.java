@@ -1,5 +1,6 @@
 package com.huawei.ascend.mockgateway;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -111,7 +112,7 @@ public final class MockGatewayServer {
         try {
             byte[] body = ex.getRequestBody().readAllBytes();
             req = mapper.readTree(body);
-        } catch (Exception e) {
+        } catch (IOException e) {
             writeGovernanceError(ex, 400, "VALIDATION_BODY", "malformed JSON body");
             return;
         }
@@ -124,7 +125,7 @@ public final class MockGatewayServer {
                 case "SendStreamingMessage" -> handleMessage(ex, id, params, true);
                 default -> writeJson(ex, 200, rpcError(id, -32601, "method not found: " + method));
             }
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
             writeJson(ex, 200, rpcError(id, -32603, "internal error: " + e.getMessage()));
         }
     }
@@ -417,7 +418,7 @@ public final class MockGatewayServer {
     private String write(ObjectNode node) {
         try {
             return mapper.writeValueAsString(node);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return "{}";
         }
     }

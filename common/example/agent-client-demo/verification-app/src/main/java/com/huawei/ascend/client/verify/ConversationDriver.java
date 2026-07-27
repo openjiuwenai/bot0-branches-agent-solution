@@ -24,8 +24,10 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -242,7 +244,7 @@ final class ConversationDriver {
                     "user-input continuation completed, state=" + snap.state());
             call.close();
             return ok;
-        } catch (Exception e) {
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             broadcaster.broadcast(ChatMessage.error(s.id,
                     call.invocationRef(), "unexpected", String.valueOf(e)));
             out.add(new Assertion("s3", false, "unexpected exception: " + e));
@@ -269,7 +271,7 @@ final class ConversationDriver {
             c1.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
             s1 = c1.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
             broadcaster.broadcast(ChatMessage.assistantFinal(s.id, c1.invocationRef(), s1.outputText()));
-        } catch (Exception e) {
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             out.add(new Assertion("s4", false, "turn 1 failed: " + e));
             c1.close();
             return false;
@@ -288,7 +290,7 @@ final class ConversationDriver {
             c2.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
             s2 = c2.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
             broadcaster.broadcast(ChatMessage.assistantFinal(s.id, c2.invocationRef(), s2.outputText()));
-        } catch (Exception e) {
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             out.add(new Assertion("s4", false, "turn 2 failed: " + e));
             c2.close();
             c1.close();
@@ -351,7 +353,7 @@ final class ConversationDriver {
                     "failed snapshot carries an errorCode, errorCode=" + snap.errorCode());
             call.close();
             return ok;
-        } catch (Exception e) {
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             broadcaster.broadcast(ChatMessage.error(s.id, null, "unexpected", String.valueOf(e)));
             out.add(new Assertion("s6", false, "unexpected exception: " + e));
             return false;
@@ -400,7 +402,7 @@ final class ConversationDriver {
             InvocationSnapshot snap = call.completion().toCompletableFuture().get(30, TimeUnit.SECONDS);
             call.close();
             return snap;
-        } catch (Exception e) {
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(), "unexpected", String.valueOf(e)));
             out.add(new Assertion(q.id(), false, "unexpected exception: " + e));
             call.close();

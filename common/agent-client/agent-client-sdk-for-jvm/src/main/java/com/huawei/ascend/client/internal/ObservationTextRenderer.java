@@ -1,5 +1,6 @@
 package com.huawei.ascend.client.internal;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.ascend.client.tool.spi.ToolExecutionRecord;
 
@@ -44,7 +45,7 @@ final class ObservationTextRenderer {
         }
         try {
             return mapper.writeValueAsString(out);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             // 渲染兜底：绝不因序列化失败而阻断续传。
             return "{\"toolCallId\":\"" + record.toolCallId() + "\",\"status\":\""
                     + record.outcome().name().toLowerCase() + "\"}";

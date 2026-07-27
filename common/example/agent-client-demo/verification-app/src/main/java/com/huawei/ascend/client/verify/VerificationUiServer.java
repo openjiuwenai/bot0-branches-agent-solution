@@ -11,8 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -128,7 +130,7 @@ public final class VerificationUiServer {
             sseClients.remove(client);
             try {
                 ex.close();
-            } catch (Exception ignore) {
+            } catch (RuntimeException ignore) {
             }
         }
     }
@@ -155,7 +157,7 @@ public final class VerificationUiServer {
                             + (event.scenarioId() != null ? event.scenarioId() + " " : "")
                             + event.message());
                 });
-            } catch (Exception e) {
+            } catch (InterruptedException | ExecutionException | TimeoutException | IOException | RuntimeException e) {
                 broadcast("progress", jsonEvent("RUN_END", null,
                         "unexpected failure: " + e.getMessage(), false));
                 e.printStackTrace();
@@ -170,7 +172,7 @@ public final class VerificationUiServer {
         for (SseClient c : sseClients) {
             try {
                 c.send(eventName, dataJson);
-            } catch (Exception e) {
+            } catch (IOException e) {
                 c.closed.set(true);
                 dead.add(c);
             }
