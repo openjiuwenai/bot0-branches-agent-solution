@@ -8,7 +8,7 @@ import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolve
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerOutboundMessage;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingConsumer;
-import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingRelay;
+import com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.RocketMqBrokerForwardingProducer;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
@@ -102,7 +102,7 @@ public final class TempRuntimeMain {
     private final boolean verbose;
 
     private final DefaultMQProducer producer;
-    private final RocketMqBrokerForwardingRelay respProducer;
+    private final RocketMqBrokerForwardingProducer respProducer;
     private final RocketMqBrokerForwardingConsumer consumer;
     private final String consumerGroup;
     private final String respInTopic;
@@ -138,10 +138,10 @@ public final class TempRuntimeMain {
         this.producer = new DefaultMQProducer(producerGroupResolved);
         this.producer.setNamesrvAddr(nameserver);
         // Wrap the raw producer in the SPI relay port (suffix "resp_in") so produceResponse reuses the
-        // SDK wire-format encoder (RocketMqBrokerForwardingRelay.buildMessage) instead of hand-rolling
+        // SDK wire-format encoder (RocketMqBrokerForwardingProducer.buildMessage) instead of hand-rolling
         // Message + putUserProperty — the wire format cannot drift from what the response relay decodes.
-        this.respProducer = new RocketMqBrokerForwardingRelay(new DefaultBrokerTopicResolver(), "resp_in",
-                RocketMqBrokerForwardingRelay.defaultSender(this.producer));
+        this.respProducer = new RocketMqBrokerForwardingProducer(new DefaultBrokerTopicResolver(), "resp_in",
+                RocketMqBrokerForwardingProducer.defaultSender(this.producer));
     }
 
     /** Configurable response behaviour for a REQUESTED event (FEAT-013 S6 scenarios). */
@@ -394,7 +394,7 @@ public final class TempRuntimeMain {
 
     /**
      * Build a response {@link BrokerOutboundMessage} and produce it to {@code resp_in} via the SPI relay
-     * port ({@link #respProducer}) — reuses {@code RocketMqBrokerForwardingRelay.buildMessage} so the
+     * port ({@link #respProducer}) — reuses {@code RocketMqBrokerForwardingProducer.buildMessage} so the
      * response's first-class control headers + {@code inlinePayload} wire format matches what the response
      * relay decodes (its poison guard requires traceId/idempotencyKey/routeHandle/capability present).
      *

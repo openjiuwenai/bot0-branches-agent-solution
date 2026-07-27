@@ -17,7 +17,7 @@ import java.util.Objects;
  *
  * <p>{@link #forRuntime(String, String)} stamps the tenant + target-serviceId a runtime
  * wants to receive: the producer already sets {@code targetServiceId} as a userProperty
- * ({@code RocketMqBrokerForwardingRelay}), so this is the matching half of a shared-property
+ * ({@code RocketMqBrokerForwardingProducer}), so this is the matching half of a shared-property
  * contract (D2 / D12 — no producer filter parameter; targeting is expressed via the envelope
  * property, not a producer-side filter argument).
  *

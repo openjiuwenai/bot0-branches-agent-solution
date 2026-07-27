@@ -1,0 +1,4 @@
+com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusBrokerClientBaseAutoConfiguration
+com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusRuntimeRoleAutoConfiguration
+com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusCallerRoleAutoConfiguration
+com.openjiuwen.bus.forwarding.common.AgentBusReliabilityAutoConfiguration
