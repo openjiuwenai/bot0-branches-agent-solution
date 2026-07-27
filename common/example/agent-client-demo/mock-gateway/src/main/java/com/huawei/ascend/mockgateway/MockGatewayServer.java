@@ -185,9 +185,8 @@ public final class MockGatewayServer {
             // G4 幂等：同一 messageId 的重复创建复用既有 Task，不新建。
             if (messageId != null && messageIdToTask.containsKey(messageId)) {
                 TaskSim existing = tasks.get(messageIdToTask.get(messageId));
-                if (existing == null) {
-                    // 索引残留但 Task 已丢失：落到下方新建分支重建。
-                } else {
+                // 索引残留但 Task 已丢失：落到下方新建分支重建。
+                if (existing != null) {
                     replayExisting(ex, rpcId, existing, streaming);
                     return;
                 }
@@ -316,6 +315,7 @@ public final class MockGatewayServer {
             task.outputText = "completed with user-provided input";
         } else {
             // 其他场景：无需推进（如 PLAIN 直接 COMPLETED）。
+            return;
         }
     }
 

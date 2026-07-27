@@ -27,6 +27,7 @@ final class QueryCatalog {
      * 串行组共享的 conversationId（真·一个对话）。
      */
     static final String SERIAL_CONVERSATION_ID = "conv-serial-main";
+
     enum Group {
         SERIAL("串行组（同一对话连续发送）"),
         SOLO("单独组（各自独立会话）"),

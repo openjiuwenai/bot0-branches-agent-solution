@@ -238,6 +238,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                     data.append(line.substring(5).trim());
                 } else {
                     // 忽略 event:/id:/注释行
+                    continue;
                 }
             }
             flushFrame(ch, data);

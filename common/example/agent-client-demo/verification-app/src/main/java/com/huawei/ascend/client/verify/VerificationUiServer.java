@@ -222,6 +222,9 @@ public final class VerificationUiServer {
         return jsonEvent(e.kind().name(), e.scenarioId(), e.message(), e.ok());
     }
 
+    private static final String LF = String.valueOf((char) 10);
+    private static final String CR = String.valueOf((char) 13);
+
     /**
      * jsonEvent。
      *
@@ -247,9 +250,6 @@ public final class VerificationUiServer {
         sb.append('}');
         return sb.toString();
     }
-
-    private static final String LF = String.valueOf((char) 10);
-    private static final String CR = String.valueOf((char) 13);
 
     /**
      * esc。

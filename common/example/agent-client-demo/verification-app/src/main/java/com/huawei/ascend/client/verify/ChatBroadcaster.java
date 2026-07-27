@@ -26,6 +26,7 @@ final class ChatBroadcaster {
      */
     private static final String LF = String.valueOf((char) 10);
     private static final String CR = String.valueOf((char) 13);
+
     private final List<SseClient> clients = new CopyOnWriteArrayList<>();
 
     void addClient(SseClient client) {

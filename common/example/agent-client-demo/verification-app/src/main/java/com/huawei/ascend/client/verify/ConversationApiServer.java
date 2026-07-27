@@ -63,6 +63,7 @@ final class ConversationApiServer {
      */
     private static final ConcurrentMap<String, Pattern> STRING_FIELD_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<String, Pattern> ARRAY_FIELD_CACHE = new ConcurrentHashMap<>();
+
     private final int port;
     private final ChatBroadcaster broadcaster = new ChatBroadcaster();
     private final AtomicBoolean running = new AtomicBoolean(false);

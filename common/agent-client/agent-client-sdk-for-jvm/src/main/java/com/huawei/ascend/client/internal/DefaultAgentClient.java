@@ -398,7 +398,8 @@ public final class DefaultAgentClient implements AgentClient {
                 forward(f);
                 finishTerminal(TaskState.FAILED, f.errorCode(), f.message());
             } else {
-                // Accepted/StatusChanged/ContentDelta 等非终态事件无需特殊处理。
+                // 理论不可达：所有 InvocationEvent 子类型均已覆盖。
+                throw new IllegalStateException("unexpected event: " + event);
             }
         }
 
@@ -455,7 +456,10 @@ public final class DefaultAgentClient implements AgentClient {
             } else if (st != null && st.isTerminal()) {
                 forward(new InvocationEvent.StatusChanged(invocationRef, st, true));
             } else {
-                // 非终态或未知状态：交由上层事件流处理。
+                // 非终态或未知状态：记录最后状态，交由上层事件流处理。
+                if (st != null) {
+                    lastState = st;
+                }
             }
             finishTerminal(st, snap.errorCode(), snap.message());
         }
