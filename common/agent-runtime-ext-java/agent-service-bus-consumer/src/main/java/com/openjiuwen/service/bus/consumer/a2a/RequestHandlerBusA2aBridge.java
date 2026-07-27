@@ -45,13 +45,6 @@ public class RequestHandlerBusA2aBridge {
     private final RequestHandler requestHandler;
 
     /**
-     * Creates an unbound bridge for SDK-internal test doubles.
-     */
-    protected RequestHandlerBusA2aBridge() {
-        this.requestHandler = null;
-    }
-
-    /**
      * Creates a new instance.
      *
      * @param requestHandler
@@ -59,6 +52,13 @@ public class RequestHandlerBusA2aBridge {
      */
     public RequestHandlerBusA2aBridge(RequestHandler requestHandler) {
         this.requestHandler = requestHandler;
+    }
+
+    /**
+     * Creates an unbound bridge for SDK-internal test doubles.
+     */
+    protected RequestHandlerBusA2aBridge() {
+        this(null);
     }
 
     /**
@@ -196,7 +196,6 @@ public class RequestHandlerBusA2aBridge {
         try {
             return first.get(FIRST_STREAM_EVENT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while waiting for the first A2A stream event", failure);
         } catch (ExecutionException failure) {
             throw new IllegalStateException("A2A stream failed before its first event", failure.getCause());

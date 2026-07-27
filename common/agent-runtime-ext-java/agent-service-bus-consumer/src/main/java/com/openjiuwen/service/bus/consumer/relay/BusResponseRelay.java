@@ -126,6 +126,7 @@ public final class BusResponseRelay implements AutoCloseable {
             }
         }
     }
+
     /** {@inheritDoc} */
     @Override
     public void close() {
