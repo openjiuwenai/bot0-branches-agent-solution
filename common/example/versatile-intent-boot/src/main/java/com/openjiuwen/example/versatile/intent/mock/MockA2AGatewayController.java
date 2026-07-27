@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,10 +101,35 @@ public class MockA2AGatewayController {
             .build();
 
     /**
+     * Instance-level routing table. Defaults to {@link #ROUTING} via the
+     * no-arg constructor; the package-private constructor allows tests to
+     * inject a custom routing map (e.g. pointing at an in-process target).
+     */
+    private final Map<String, String> routing;
+
+    /**
+     * Default constructor used by Spring for {@code @Profile("mock-a2a-gateway")}
+     * instantiation. Binds the instance routing table to the static
+     * {@link #ROUTING} defaults.
+     */
+    public MockA2AGatewayController() {
+        this.routing = ROUTING;
+    }
+
+    /**
+     * Test-friendly constructor that overrides the routing table.
+     *
+     * @param routing agentCard → target runtime base URL map
+     */
+    MockA2AGatewayController(Map<String, String> routing) {
+        this.routing = routing;
+    }
+
+    /**
      * Handles an inbound mock A2A Gateway JSON-RPC request, forwarding it to
      * the mapped target runtime and returning a synthetic JSON-RPC completion.
      *
-     * @param agentId the path variable agent identifier (mapped via {@link #ROUTING})
+     * @param agentId the path variable agent identifier (mapped via {@link #routing})
      * @param request the servlet request, source of propagated headers
      * @param body    the raw JSON-RPC request body (may be {@code null})
      * @return a {@code 200 OK} with JSON-RPC completion or error envelope
@@ -118,7 +144,7 @@ public class MockA2AGatewayController {
         String jsonRpcId = extractJsonRpcId(body);
         logInbound(agentId, query, contextId, request);
 
-        String targetBase = ROUTING.get(agentId);
+        String targetBase = routing.get(agentId);
         if (targetBase == null) {
             log.error("Mock A2A Gateway: no routing entry for agentId={}", agentId);
             return ResponseEntity.ok()
@@ -130,6 +156,67 @@ public class MockA2AGatewayController {
         String queryBody = buildQueryBody(contextId, query, request.getHeader("userId"));
         log.info("Mock A2A Gateway forwarding agentId={} -> {} body={}", agentId, targetUrl, queryBody);
         return forwardAndBuildResponse(agentId, targetUrl, queryBody, jsonRpcId);
+    }
+
+    /**
+     * Direct-chain tunnel endpoint. Activated by the {@code X-Direct-Chain=true}
+     * header (matched by Spring's {@code headers} attribute, taking precedence
+     * over the no-header {@link #handle} mapping). Forwards the inbound body
+     * verbatim to {@code routing[agentId] + "/v1/query"} and streams the
+     * target's raw {@code data:} lines back to the response output stream as
+     * {@code text/event-stream} without parsing or rewrapping.
+     *
+     * @param agentId  the path variable agent identifier (mapped via {@link #routing})
+     * @param body     the raw inbound request body (may be {@code null})
+     * @param response the servlet response used to stream SSE bytes
+     * @throws IOException if the forward/stream is interrupted or fails
+     */
+    @PostMapping(value = "/a2a/{agentId}", headers = "X-Direct-Chain=true")
+    public void tunnel(
+            @PathVariable String agentId,
+            @RequestBody(required = false) String body,
+            HttpServletResponse response) throws IOException {
+        response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+        String targetBase = routing.get(agentId);
+        if (targetBase == null) {
+            log.error("Mock A2A Gateway tunnel: no routing for agentId={}", agentId);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    "no routing for agentId=" + agentId);
+            return;
+        }
+        String targetUrl = targetBase + QUERY_PATH;
+        log.info("Mock A2A Gateway TUNNEL agentId={} -> {}", agentId, targetUrl);
+        try {
+            HttpRequest forwardReq = HttpRequest.newBuilder()
+                    .uri(URI.create(targetUrl))
+                    .timeout(Duration.ofMinutes(5))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body != null && !body.isBlank() ? body : "{}",
+                            StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<java.io.InputStream> resp = httpClient.send(forwardReq,
+                    HttpResponse.BodyHandlers.ofInputStream());
+            if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
+                log.error("Mock A2A Gateway tunnel: target {} returned HTTP {}", targetUrl, resp.statusCode());
+                response.sendError(HttpServletResponse.SC_BAD_GATEWAY);
+                return;
+            }
+            var out = response.getOutputStream();
+            try (var reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(resp.body(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    out.write((line + "\n\n").getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("tunnel interrupted", e);
+        }
     }
 
     private void logInbound(String agentId, String query, String contextId, HttpServletRequest request) {
