@@ -23,6 +23,7 @@ import com.huawei.ascend.client.transport.spi.CredentialProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -262,24 +263,26 @@ final class ConversationDriver {
         int submitBefore = s.tools.submitOrderCount.get();
         int pingBefore = s.tools.pingCount.get();
 
-        TurnResult t1 = runPlainSingleTurn(s, q, out, " 1", "s4");
-        if (t1 == null) {
+        Optional<TurnResult> t1 = runPlainSingleTurn(s, q, out, " 1", "s4");
+        if (t1.isEmpty()) {
             return false;
         }
-        TurnResult t2 = runPlainSingleTurn(s, q, out, " 2", "s4");
-        if (t2 == null) {
+        Optional<TurnResult> t2 = runPlainSingleTurn(s, q, out, " 2", "s4");
+        if (t2.isEmpty()) {
             return false;
         }
+        TurnResult r1 = t1.get();
+        TurnResult r2 = t2.get();
 
         boolean ok = true;
-        ok &= check(out, "s4", t1.snap.state() == TaskState.COMPLETED,
-                "turn 1 completed, state=" + t1.snap.state());
-        ok &= check(out, "s4", t2.snap.state() == TaskState.COMPLETED,
-                "turn 2 completed, state=" + t2.snap.state());
-        ok &= check(out, "s4", !t1.invocationRef.equals(t2.invocationRef),
+        ok &= check(out, "s4", r1.snap.state() == TaskState.COMPLETED,
+                "turn 1 completed, state=" + r1.snap.state());
+        ok &= check(out, "s4", r2.snap.state() == TaskState.COMPLETED,
+                "turn 2 completed, state=" + r2.snap.state());
+        ok &= check(out, "s4", !r1.invocationRef.equals(r2.invocationRef),
                 "two turns have distinct invocationRef");
-        ok &= check(out, "s4", s.conversationId.equals(t1.conversationId)
-                        && s.conversationId.equals(t2.conversationId),
+        ok &= check(out, "s4", s.conversationId.equals(r1.conversationId)
+                        && s.conversationId.equals(r2.conversationId),
                 "two turns share the same conversationId");
         ok &= check(out, "s4", s.tools.readPageCount.get() == readBefore
                         && s.tools.submitOrderCount.get() == submitBefore
@@ -301,9 +304,9 @@ final class ConversationDriver {
         }
     }
 
-    /** 串行多轮中的一轮：发起一次 STREAMING 调用并等待终态，失败时记录断言并返回 null。 */
-    private TurnResult runPlainSingleTurn(Session s, QueryCatalog.Query q,
-                                          List<Assertion> out, String suffix, String tag) {
+    /** 串行多轮中的一轮：发起一次 STREAMING 调用并等待终态，失败时记录断言并返回 Optional.empty()。 */
+    private Optional<TurnResult> runPlainSingleTurn(Session s, QueryCatalog.Query q,
+                                                    List<Assertion> out, String suffix, String tag) {
         InvocationRequest req = InvocationRequest.builder()
                 .conversationId(s.conversationId)
                 .mode(InvocationMode.STREAMING)
@@ -316,10 +319,10 @@ final class ConversationDriver {
             call.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
             InvocationSnapshot snap = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
             broadcaster.broadcast(ChatMessage.assistantFinal(s.id, call.invocationRef(), snap.outputText()));
-            return new TurnResult(call.invocationRef(), call.conversationId(), snap);
+            return Optional.of(new TurnResult(call.invocationRef(), call.conversationId(), snap));
         } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
             out.add(new Assertion(tag, false, "turn" + suffix + " failed: " + e));
-            return null;
+            return Optional.empty();
         } finally {
             call.close();
         }

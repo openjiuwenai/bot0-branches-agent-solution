@@ -13,6 +13,7 @@ import java.util.concurrent.Flow;
  *
  * <p>受理回执通过 {@link #accepted()} 结算为 {@link Handle}（携带诊断用 {@code diagnosticTaskRef}），
  * 也可经 {@link #events()} 订阅 {@link InvocationEvent.Accepted} 事件获取同一信息。
+ * @since 2026-07-27
  */
 public interface InvocationCall extends AutoCloseable {
 

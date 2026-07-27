@@ -43,15 +43,17 @@ import java.util.concurrent.TimeUnit;
  * <p>它按 Feat-Func-009 的语义驱动 client 工具多轮：读取 {@code params.metadata.clientTools}（即 ToolView），
  * 按序对每个工具通过 {@code _interrupt} 请求一次；收到续跑结果后推进到下一个，全部完成则结束。
  * 为验证客户端"最多执行一次 / 最多续跑一次"，流式路径会对首个工具故意重复投递一次 INPUT_REQUIRED。
+ * @since 2026-07-27
  */
 public final class MockGatewayServer {
 
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(MockGatewayServer.class.getName());
 
-    /** 网关工作线程的 ThreadFactory：统一命名 + daemon + 未捕获异常处理。 */
+    /** 网关工作线程的 ThreadFactory：基于默认工厂包装出 daemon + 未捕获异常处理 + 自定义命名。 */
     private static final java.util.concurrent.ThreadFactory WORKER_FACTORY = r -> {
-        Thread t = new Thread(r, "mock-gateway");
+        Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
+        t.setName("mock-gateway");
         t.setDaemon(true);
         t.setUncaughtExceptionHandler((thread, ex) -> {
             // best-effort：网关工作线程未捕获异常不中断服务。
@@ -84,8 +86,11 @@ public final class MockGatewayServer {
         Thread.currentThread().join();
     }
 
-    /** 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。 */
-    public int start() throws IOException {
+    /**
+     * 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
+     *
+     * @return 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
+     */    public int start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", requestedPort), 0);
         server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), WORKER_FACTORY));

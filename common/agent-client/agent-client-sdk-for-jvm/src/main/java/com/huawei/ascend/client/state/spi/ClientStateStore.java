@@ -22,6 +22,7 @@ import java.util.Optional;
  *
  * <p>默认实现为进程内内存版本（{@code InMemoryStateStore}）；可替换为持久化实现以支持跨重启恢复。
  * 实现需保证线程安全。
+ * @since 2026-07-27
  */
 public interface ClientStateStore {
 

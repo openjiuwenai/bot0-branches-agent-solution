@@ -17,6 +17,7 @@ import java.util.Set;
  *
  * <p>{@code visibleToolNames} 是本次 invocation 上报给服务端的 ToolView 投影工具名集合，
  * 治理管道据此做"可见性校验"：服务端幻觉调用未暴露的工具 → {@code tool_not_declared} 拒绝（FEAT-007 §3.2 步骤 3）。
+ * @since 2026-07-27
  */
 public record ToolExecutionContext(
         String conversationId,
@@ -35,7 +36,15 @@ public record ToolExecutionContext(
                 : Collections.unmodifiableSet(new LinkedHashSet<>(visibleToolNames));
     }
 
-    /** 便捷构造（无可见工具集合，仅用于不需要可见性校验的场景）。 */
+    /**
+     * 便捷构造（无可见工具集合，仅用于不需要可见性校验的场景）。
+     *
+     * @param conversationId 会话标识
+     * @param invocationRef 调用句柄
+     * @param traceId 跟踪标识
+     * @param deadline 截止时间
+     * @param attributes 附加属性
+     */
     public ToolExecutionContext(String conversationId, String invocationRef, String traceId,
                                 Duration deadline, Map<String, String> attributes) {
         this(conversationId, invocationRef, traceId, deadline, attributes, Set.of());

@@ -17,6 +17,7 @@ import java.util.Set;
  * （见 L2 Feat-Func-007：{@code clientTools[].name = toolId}，{@code _interrupt.toolName = toolId}）。
  *
  * <p>副作用分级（Observation/Action）用于治理：ACTION 通常需要审批，OBSERVATION 一般可直接执行。
+ * @since 2026-07-27
  */
 public final class LocalToolDescriptor {
 
@@ -29,6 +30,11 @@ public final class LocalToolDescriptor {
     private final Duration timeout;
     private final boolean requiresApproval;
 
+    /**
+     * 工具副作用分级，用于治理决策。
+     *
+     * @since 2026-07-27
+     */
     public enum SideEffect {
         /** 只读/无副作用，可直接执行。 */
         OBSERVATION,
@@ -55,8 +61,11 @@ public final class LocalToolDescriptor {
         return toolId;
     }
 
-    /** wire 上使用的工具名，等于 toolId。 */
-    public String wireName() {
+    /**
+     * wire 上使用的工具名，等于 toolId。
+     *
+     * @return wire 上使用的工具名，等于 toolId。
+     */    public String wireName() {
         return toolId;
     }
 
@@ -72,13 +81,19 @@ public final class LocalToolDescriptor {
         return sideEffect;
     }
 
-    /** JSON Schema 文本，用于生成 ToolView 的 inputSchema。 */
-    public String inputSchema() {
+    /**
+     * JSON Schema 文本，用于生成 ToolView 的 inputSchema。
+     *
+     * @return JSON Schema 文本，用于生成 ToolView 的 inputSchema。
+     */    public String inputSchema() {
         return inputSchema;
     }
 
-    /** 供 SDK 无第三方依赖地做最小参数校验（键存在性）。 */
-    public Set<String> requiredArgumentKeys() {
+    /**
+     * 供 SDK 无第三方依赖地做最小参数校验（键存在性）。
+     *
+     * @return 供 SDK 无第三方依赖地做最小参数校验（键存在性）。
+     */    public Set<String> requiredArgumentKeys() {
         return requiredArgumentKeys;
     }
 

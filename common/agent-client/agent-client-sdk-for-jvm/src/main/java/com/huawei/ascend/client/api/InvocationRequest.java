@@ -24,6 +24,7 @@ import java.util.UUID;
  *       同时用作幂等键的默认值。</li>
  * </ul>
  * runtime 侧的 {@code taskId} 不由业务传入，由 SDK 在收到受理事件后内部映射。
+ * @since 2026-07-27
  */
 public final class InvocationRequest {
 
@@ -52,8 +53,11 @@ public final class InvocationRequest {
         this.credentialToken = b.credentialToken;
     }
 
-    /** 目标 Agent 标识；为空表示不指定，交由网关按默认 Agent 路由（Feat-Func-011 §4.9 AC-4）。 */
-    public Optional<String> agentId() {
+    /**
+     * 目标 Agent 标识；为空表示不指定，交由网关按默认 Agent 路由（Feat-Func-011 §4.9 AC-4）。
+     *
+     * @return 目标 Agent 标识；为空表示不指定，交由网关按默认 Agent 路由（Feat-Func-011 §4.9 AC-4）。
+     */    public Optional<String> agentId() {
         return Optional.ofNullable(agentId);
     }
 
@@ -69,8 +73,11 @@ public final class InvocationRequest {
         return input;
     }
 
-    /** 客户端调用事务标识，同时是公开的调用句柄 {@code invocationRef}。 */
-    public String invocationId() {
+    /**
+     * 客户端调用事务标识，同时是公开的调用句柄 {@code invocationRef}。
+     *
+     * @return 客户端调用事务标识，同时是公开的调用句柄 {@code invocationRef}。
+     */    public String invocationId() {
         return invocationId;
     }
 
@@ -82,8 +89,11 @@ public final class InvocationRequest {
         return Optional.ofNullable(deadline);
     }
 
-    /** 本次调用级别的工具暴露策略；为空表示不额外暴露（沿用会话级默认）。 */
-    public Optional<ToolExposurePolicy> exposure() {
+    /**
+     * 本次调用级别的工具暴露策略；为空表示不额外暴露（沿用会话级默认）。
+     *
+     * @return 本次调用级别的工具暴露策略；为空表示不额外暴露（沿用会话级默认）。
+     */    public Optional<ToolExposurePolicy> exposure() {
         return Optional.ofNullable(exposure);
     }
 
@@ -91,8 +101,11 @@ public final class InvocationRequest {
         return attributes;
     }
 
-    /** 透传给网关的凭证（如 Bearer token）；SDK 不解释其内容。 */
-    public Optional<String> credentialToken() {
+    /**
+     * 透传给网关的凭证（如 Bearer token）；SDK 不解释其内容。
+     *
+     * @return 透传给网关的凭证（如 Bearer token）；SDK 不解释其内容。
+     */    public Optional<String> credentialToken() {
         return Optional.ofNullable(credentialToken);
     }
 

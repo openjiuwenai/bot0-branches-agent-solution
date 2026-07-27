@@ -25,7 +25,11 @@ public enum TaskState {
     /** 本地无法判定（如映射缺失、连接中断且未取得权威快照）。需通过 tasks/get 校正。 */
     UNKNOWN;
 
-    /** 是否为终态（不会再自发变化）。 */
+    /**
+     * 是否为终态（不会再自发变化）。
+     *
+     * @return 终态返回 true，否则 false
+     */
     public boolean isTerminal() {
         return this == COMPLETED || this == FAILED || this == CANCELED || this == REJECTED;
     }

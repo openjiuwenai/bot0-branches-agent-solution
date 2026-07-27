@@ -34,6 +34,7 @@ import java.util.logging.Logger;
  * java -cp ... com.huawei.ascend.client.verify.CloudClientVerification --ui
  * # 然后打开终端打印的 http://127.0.0.1:9090/
  * </pre>
+ * @since 2026-07-27
  */
 public final class VerificationUiServer {
 
@@ -44,7 +45,8 @@ public final class VerificationUiServer {
     private final List<SseClient> sseClients = new CopyOnWriteArrayList<>();
     private final ExecutorService workers = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
             new SynchronousQueue<>(), r -> {
-                Thread t = new Thread(r, "verify-ui");
+                Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
+                t.setName("verify-ui");
                 t.setDaemon(true);
                 t.setUncaughtExceptionHandler((thread, ex) -> {
                     // best-effort：UI 工作线程未捕获异常不中断服务。
@@ -216,11 +218,14 @@ public final class VerificationUiServer {
         return sb.toString();
     }
 
+    private static final String LF = String.valueOf((char) 10);
+    private static final String CR = String.valueOf((char) 13);
+
     private static String esc(String s) {
         return s.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "");
+                .replace(LF, "\\n")
+                .replace(CR, "");
     }
 
     private static void send(HttpExchange ex, int status, String contentType, String body)
