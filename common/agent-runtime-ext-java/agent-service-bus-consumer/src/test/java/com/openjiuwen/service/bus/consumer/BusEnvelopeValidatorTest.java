@@ -46,9 +46,9 @@ class BusEnvelopeValidatorTest {
 
     @Test
     void rejectsEnvelopeOutsideConfiguredAgentBusTenant() {
-        assertThat(validator.validate(
-                event("CLIENT_INVOCATION_REQUESTED", "runtime-a", now.plusSeconds(10), new byte[]{1}, null,
-                        "tenant-b")))
+        AgentBusEventEnvelope event = event("CLIENT_INVOCATION_REQUESTED", "runtime-a", now.plusSeconds(10),
+                new byte[]{1}, null);
+        assertThat(validator.validate(withTenant(event, "tenant-b")))
                 .contains("TENANT_SCOPE_VIOLATION");
     }
 
@@ -68,12 +68,15 @@ class BusEnvelopeValidatorTest {
     }
 
     private AgentBusEventEnvelope event(String type, String target, Instant deadline, byte[] inline, String ref) {
-        return event(type, target, deadline, inline, ref, "tenant-a");
+        return new AgentBusEventEnvelope("1.0", type, "m-1", "tenant-a", "source", target, null, "corr-1", "trace-1",
+                "idem-1", deadline, "application/json", inline, ref, Map.of());
     }
 
-    private AgentBusEventEnvelope event(String type, String target, Instant deadline, byte[] inline, String ref,
-            String tenantId) {
-        return new AgentBusEventEnvelope("1.0", type, "m-1", tenantId, "source", target, null, "corr-1", "trace-1",
-                "idem-1", deadline, "application/json", inline, ref, Map.of());
+    private AgentBusEventEnvelope withTenant(AgentBusEventEnvelope event, String tenantId) {
+        return new AgentBusEventEnvelope(event.schemaVersion(), event.eventType(), event.messageId(), tenantId,
+                event.sourceServiceId(), event.targetServiceId(), event.routeHandle(), event.correlationId(),
+                event.traceId(), event.idempotencyKey(), event.deadline(), event.payloadContentType(),
+                event.inlinePayload(),
+                event.payloadRef(), event.metadata());
     }
 }

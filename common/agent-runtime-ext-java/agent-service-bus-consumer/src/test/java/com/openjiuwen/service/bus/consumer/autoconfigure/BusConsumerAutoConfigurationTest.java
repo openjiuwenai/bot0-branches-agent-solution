@@ -183,7 +183,7 @@ class BusConsumerAutoConfigurationTest {
     }
 
     private static RequestHandler requestHandler() {
-        return (RequestHandler) Proxy.newProxyInstance(RequestHandler.class.getClassLoader(),
+        Object candidate = Proxy.newProxyInstance(RequestHandler.class.getClassLoader(),
                 new Class<?>[]{RequestHandler.class},
                 (proxy, method, arguments) -> {
                     if ("onSubscribeToTask".equals(method.getName())) {
@@ -191,5 +191,9 @@ class BusConsumerAutoConfigurationTest {
                     }
                     throw new UnsupportedOperationException(method.getName());
                 });
+        if (candidate instanceof RequestHandler handler) {
+            return handler;
+        }
+        throw new AssertionError("RequestHandler proxy has an incompatible type");
     }
 }

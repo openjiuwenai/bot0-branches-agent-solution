@@ -150,12 +150,12 @@ class RequestHandlerBusA2aBridgeTest {
             called.set(method.getName());
             if ("onMessageSend".equals(method.getName()) || "onGetTask".equals(method.getName())) {
                 if ("onMessageSend".equals(method.getName())) {
-                    streamFlag.set(streamFlag(args));
+                    streamFlag.set(streamFlag(args[1]));
                 }
                 return task("task-1");
             }
             if ("onMessageSendStream".equals(method.getName())) {
-                streamFlag.set(streamFlag(args));
+                streamFlag.set(streamFlag(args[1]));
                 return firstEventPublisher(TaskStatusUpdateEvent.builder().taskId("task-1").contextId("ctx")
                         .status(new TaskStatus(TaskState.TASK_STATE_WORKING)).build());
             }
@@ -166,8 +166,12 @@ class RequestHandlerBusA2aBridgeTest {
         });
     }
 
-    private static Boolean streamFlag(Object[] args) {
-        return (Boolean) ((ServerCallContext) args[1]).getState().get("_a2a_stream");
+    private static Boolean streamFlag(Object candidate) {
+        if (candidate instanceof ServerCallContext context
+                && context.getState().get("_a2a_stream") instanceof Boolean streamFlag) {
+            return streamFlag;
+        }
+        throw new AssertionError("ServerCallContext does not contain the stream flag");
     }
 
     private static Flow.Publisher<StreamingEventKind> firstEventPublisher(StreamingEventKind event) {

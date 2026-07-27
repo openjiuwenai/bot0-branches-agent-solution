@@ -15,6 +15,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Clock;
+import java.util.Optional;
 
 /**
  * Validates FEAT-017 stream references before the standard A2A Task subscription is opened.
@@ -42,8 +43,8 @@ public final class StreamReferenceSubscriptionAspect {
      * @param clock
      *            the validation clock
      */
-    public StreamReferenceSubscriptionAspect(StreamReferenceService references, InMemoryBusTaskAdmissionStore admissions,
-            String runtimeTenantId, Clock clock) {
+    public StreamReferenceSubscriptionAspect(StreamReferenceService references,
+            InMemoryBusTaskAdmissionStore admissions, String runtimeTenantId, Clock clock) {
         this.references = references;
         this.admissions = admissions;
         this.runtimeTenantId = runtimeTenantId;
@@ -65,14 +66,14 @@ public final class StreamReferenceSubscriptionAspect {
             + ".onSubscribeToTask(..)) && args(params,..)")
     public Object validate(ProceedingJoinPoint invocation, TaskIdParams params) throws Throwable {
         boolean busTask = admissions.findByTaskId(runtimeTenantId, params.id()).isPresent();
-        ServletRequestAttributes request = currentRequest();
-        if (request == null) {
+        Optional<ServletRequestAttributes> request = currentRequest();
+        if (request.isEmpty()) {
             if (busTask) {
                 throw new TaskNotFoundError();
             }
             return invocation.proceed();
         }
-        String streamReference = request.getRequest().getHeader(STREAM_REFERENCE_HEADER);
+        String streamReference = request.orElseThrow().getRequest().getHeader(STREAM_REFERENCE_HEADER);
         if (streamReference == null || streamReference.isBlank()) {
             if (busTask) {
                 throw new TaskNotFoundError();
@@ -90,10 +91,10 @@ public final class StreamReferenceSubscriptionAspect {
         return invocation.proceed();
     }
 
-    private static ServletRequestAttributes currentRequest() {
+    private static Optional<ServletRequestAttributes> currentRequest() {
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
-            return attributes;
+            return Optional.of(attributes);
         }
-        return null;
+        return Optional.empty();
     }
 }
