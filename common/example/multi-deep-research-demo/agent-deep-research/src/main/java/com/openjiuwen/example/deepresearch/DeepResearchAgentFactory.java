@@ -4,10 +4,13 @@
 
 package com.openjiuwen.example.deepresearch;
 
+import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.example.deepresearch.rail.AutoPersistMemoryRail;
 import com.openjiuwen.example.deepresearch.rail.SandboxOps;
 import com.openjiuwen.example.deepresearch.rail.SandboxRail;
+import com.openjiuwen.example.deepresearch.rail.SkillObservationRail;
+import com.openjiuwen.example.deepresearch.rail.SkillReadFileRail;
 import com.openjiuwen.example.deepresearch.rail.UrlVerifyRail;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.MemoryRail;
@@ -85,7 +88,29 @@ public final class DeepResearchAgentFactory {
                 .name(props.getAgentName())
                 .description(props.getAgentDescription())
                 .build();
-        return new DeepAgent(card, config, workspace);
+        DeepAgent deepAgent = new DeepAgent(card, config, workspace);
+        applySysOperationId(deepAgent, props.getSysOperationId());
+        return deepAgent;
+    }
+
+    /**
+     * Injects {@code sysOperationId} onto the inner ReActAgent's config after
+     * DeepAgent construction. {@link DeepAgentConfig} does not carry this field,
+     * so without this step {@code ReActAgent.registerSkill(...)} silently no-ops
+     * (see {@code BaseAgent.lazyInitSkill}). Setting it enables the FEAT-005
+     * SkillHub middleware to actually register downloaded skills onto the agent.
+     *
+     * @param deepAgent the freshly built agent whose inner ReActAgent config receives the id
+     * @param sysOperationId FEAT-005 operation id; blank or {@code null} is treated as a no-op
+     */
+    private static void applySysOperationId(DeepAgent deepAgent, String sysOperationId) {
+        if (sysOperationId == null || sysOperationId.isBlank()) {
+            return;
+        }
+        Object inner = deepAgent.getAgent().getConfig();
+        if (inner instanceof ReActAgentConfig reactConfig) {
+            reactConfig.setSysOperationId(sysOperationId);
+        }
     }
 
     private static List<Object> buildRails(DeepResearchProperties props,
@@ -99,6 +124,29 @@ public final class DeepResearchAgentFactory {
             rails.add(new SandboxRail(sandboxOpsSupplier, props.getWorkspacePath()));
             rails.add(new UrlVerifyRail(sandboxOpsSupplier));
         }
+        rails.add(new SkillObservationRail());
+        rails.add(new SkillReadFileRail(computeAllowedReadRoots(props)));
         return rails;
+    }
+
+    /**
+     * Compose the allow-listed roots the demo's {@code read_file} rail may serve
+     * files from. Always includes the workspace root; layers on any operator-
+     * supplied {@code extra-readable-roots} (typically the FEAT-005 SkillHub
+     * {@code localDir} so SKILL.md contents are readable by the LLM).
+     *
+     * @param props deep-research configuration whose workspace root and extra readable roots
+     *     feed the allow-list
+     * @return ordered list of allow-listed roots (workspace root first, then extras); may be empty
+     */
+    private static List<String> computeAllowedReadRoots(DeepResearchProperties props) {
+        List<String> roots = new ArrayList<>();
+        if (props.getWorkspacePath() != null && !props.getWorkspacePath().isBlank()) {
+            roots.add(props.getWorkspacePath());
+        }
+        if (props.getExtraReadableRoots() != null) {
+            roots.addAll(props.getExtraReadableRoots());
+        }
+        return roots;
     }
 }
