@@ -59,3 +59,9 @@ openjiuwen:
       token: ${A2A_GATEWAY_TOKEN:dev-token}
       version-node: ${A2A_GATEWAY_VERSION_NODE:v1}
       json-rpc-path: /a2a/{agentCard}
+
+  example:
+    direct-chain:
+      enabled: false
+      a2a-forward-agent-cards: []
+      raw-passthrough: false
