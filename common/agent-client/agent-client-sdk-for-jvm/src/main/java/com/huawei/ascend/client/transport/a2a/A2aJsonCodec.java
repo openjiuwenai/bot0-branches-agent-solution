@@ -1,17 +1,19 @@
 package com.huawei.ascend.client.transport.a2a;
 
+import com.huawei.ascend.client.api.TaskState;
+import com.huawei.ascend.client.transport.spi.ToolWireSpec;
+import com.huawei.ascend.client.transport.spi.TransportProvider;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.huawei.ascend.client.api.TaskState;
-import com.huawei.ascend.client.transport.spi.ToolWireSpec;
-import com.huawei.ascend.client.transport.spi.TransportProvider;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -156,29 +158,29 @@ final class A2aJsonCodec {
                      Map<String, Object> arguments, String prompt, Long deadlineMs) {
     }
 
-    Frame parseFrame(JsonNode result) {
+    Optional<Frame> parseFrame(JsonNode result) {
         if (result == null || result.isNull()) {
-            return null;
+            return Optional.empty();
         }
         String kind = result.path("kind").asText("");
-        String taskId = firstText(result, "id", "taskId");
+        String taskId = firstText(result, "id", "taskId").orElse(null);
         String contextId = result.path("contextId").asText(null);
 
         if ("artifact-update".equals(kind)) {
-            String text = collectArtifactText(result.path("artifact"));
-            return new Frame(taskId, contextId, null, null, text, null, null);
+            String text = collectArtifactText(result.path("artifact")).orElse(null);
+            return Optional.of(new Frame(taskId, contextId, null, null, text, null, null));
         }
 
         JsonNode status = result.path("status");
         String stateStr = status.path("state").asText(null);
-        TaskState state = mapState(stateStr);
-        String text = collectMessageText(status.path("message"));
-        Interrupt interrupt = parseInterrupt(result, status);
+        TaskState state = mapState(stateStr).orElse(null);
+        String text = collectMessageText(status.path("message")).orElse(null);
+        Interrupt interrupt = parseInterrupt(result, status).orElse(null);
         String errorCode = result.path("metadata").path("errorCode").asText(null);
-        return new Frame(taskId, contextId, state, interrupt, text, errorCode, text);
+        return Optional.of(new Frame(taskId, contextId, state, interrupt, text, errorCode, text));
     }
 
-    private Interrupt parseInterrupt(JsonNode result, JsonNode status) {
+    private Optional<Interrupt> parseInterrupt(JsonNode result, JsonNode status) {
         // 权威路径：status.message.metadata._interrupt（对齐 Feat-Func-009 §6.3 / 006 §3.5 ② / 007 §3.5 ②）。
         // 兼容回退：部分旧形态可能置于 status.metadata 或 result.metadata。
         JsonNode node = status.path("message").path("metadata").path("_interrupt");
@@ -189,7 +191,7 @@ final class A2aJsonCodec {
             node = result.path("metadata").path("_interrupt");
         }
         if (node.isMissingNode() || node.isNull()) {
-            return null;
+            return Optional.empty();
         }
         // _interrupt_kind 与 arguments 嵌套在 context 下（权威）；兼容回退到顶层扁平形态。
         JsonNode context = node.path("context");
@@ -208,26 +210,26 @@ final class A2aJsonCodec {
             arguments = mapper.convertValue(argsNode, Map.class);
         }
         boolean userInput = "user_input".equals(ikind);
-        return new Interrupt(userInput, toolCallId, toolName, arguments, prompt, deadlineMs);
+        return Optional.of(new Interrupt(userInput, toolCallId, toolName, arguments, prompt, deadlineMs));
     }
 
-    private String collectMessageText(JsonNode message) {
+    private Optional<String> collectMessageText(JsonNode message) {
         if (message == null || message.isMissingNode() || message.isNull()) {
-            return null;
+            return Optional.empty();
         }
         return collectPartsText(message.path("parts"));
     }
 
-    private String collectArtifactText(JsonNode artifact) {
+    private Optional<String> collectArtifactText(JsonNode artifact) {
         if (artifact == null || artifact.isMissingNode()) {
-            return null;
+            return Optional.empty();
         }
         return collectPartsText(artifact.path("parts"));
     }
 
-    private String collectPartsText(JsonNode parts) {
+    private Optional<String> collectPartsText(JsonNode parts) {
         if (parts == null || !parts.isArray()) {
-            return null;
+            return Optional.empty();
         }
         StringBuilder sb = new StringBuilder();
         for (JsonNode p : parts) {
@@ -235,25 +237,25 @@ final class A2aJsonCodec {
                 sb.append(p.path("text").asText(""));
             }
         }
-        return sb.length() > 0 ? sb.toString() : null;
+        return sb.length() > 0 ? Optional.of(sb.toString()) : Optional.empty();
     }
 
-    private static String firstText(JsonNode node, String... fields) {
+    private static Optional<String> firstText(JsonNode node, String... fields) {
         for (String f : fields) {
             String v = node.path(f).asText(null);
             if (v != null && !v.isEmpty()) {
-                return v;
+                return Optional.of(v);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
-    private static TaskState mapState(String s) {
+    private static Optional<TaskState> mapState(String s) {
         if (s == null) {
-            return null;
+            return Optional.empty();
         }
         // 权威值为 TASK_STATE_* 大写带前缀（Feat-Func-009 §6.3 / 006 §3.3）；兼容小写过渡期形态。
-        return switch (s) {
+        return Optional.of(switch (s) {
             case "TASK_STATE_SUBMITTED", "submitted" -> TaskState.SUBMITTED;
             case "TASK_STATE_WORKING", "working" -> TaskState.WORKING;
             case "TASK_STATE_INPUT_REQUIRED", "input-required" -> TaskState.INPUT_REQUIRED;
@@ -263,6 +265,6 @@ final class A2aJsonCodec {
                  "canceled", "cancelled" -> TaskState.CANCELED;
             case "TASK_STATE_REJECTED", "rejected" -> TaskState.REJECTED;
             default -> TaskState.UNKNOWN;
-        };
+        });
     }
 }

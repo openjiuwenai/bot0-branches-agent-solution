@@ -12,7 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,11 +42,15 @@ final class ConversationApiServer {
     private final int port;
     private final ChatBroadcaster broadcaster = new ChatBroadcaster();
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "chat-ui");
-        t.setDaemon(true);
-        return t;
-    });
+    private final ExecutorService workers = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
+            new SynchronousQueue<>(), r -> {
+                Thread t = new Thread(r, "chat-ui");
+                t.setDaemon(true);
+                t.setUncaughtExceptionHandler((thread, ex) -> {
+                    // best-effort：API 工作线程未捕获异常不中断服务。
+                });
+                return t;
+            });
 
     private ConversationDriver driver;
     private String gatewayUrl;
@@ -112,17 +118,17 @@ final class ConversationApiServer {
             return;
         }
         String resource = "web" + path;
-        InputStream in = ConversationApiServer.class.getClassLoader().getResourceAsStream(resource);
-        if (in == null) {
-            send(ex, 404, "text/plain", "not found: " + path);
-            return;
-        }
-        byte[] body = in.readAllBytes();
-        in.close();
-        ex.getResponseHeaders().set("Content-Type", contentType(path));
-        ex.sendResponseHeaders(200, body.length);
-        try (OutputStream os = ex.getResponseBody()) {
-            os.write(body);
+        try (InputStream in = ConversationApiServer.class.getClassLoader().getResourceAsStream(resource)) {
+            if (in == null) {
+                send(ex, 404, "text/plain", "not found: " + path);
+                return;
+            }
+            byte[] body = in.readAllBytes();
+            ex.getResponseHeaders().set("Content-Type", contentType(path));
+            ex.sendResponseHeaders(200, body.length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(body);
+            }
         }
     }
 
@@ -276,9 +282,11 @@ final class ConversationApiServer {
             Thread.currentThread().interrupt();
         } finally {
             broadcaster.removeClient(client);
+            client.close();
             try {
                 ex.close();
-            } catch (RuntimeException ignore) {
+            } catch (IllegalStateException ignore) {
+                // best-effort：exchange 已关闭。
             }
         }
     }

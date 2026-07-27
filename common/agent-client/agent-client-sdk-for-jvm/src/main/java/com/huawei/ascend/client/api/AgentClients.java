@@ -1,6 +1,5 @@
 package com.huawei.ascend.client.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huawei.ascend.client.internal.DefaultAgentClient;
 import com.huawei.ascend.client.internal.DefaultToolRegistry;
 import com.huawei.ascend.client.internal.InMemoryStateStore;
@@ -10,10 +9,14 @@ import com.huawei.ascend.client.tool.spi.LocalToolRegistry;
 import com.huawei.ascend.client.transport.spi.CredentialProvider;
 import com.huawei.ascend.client.transport.spi.TransportProvider;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -100,10 +103,14 @@ public final class AgentClients {
                 public Thread newThread(Runnable r) {
                     Thread t = new Thread(r, "agent-client-tool-" + seq.incrementAndGet());
                     t.setDaemon(true);
+                    t.setUncaughtExceptionHandler((thread, ex) -> {
+                        // best-effort：工具线程未捕获异常不打断客户端主流程。
+                    });
                     return t;
                 }
             };
-            return Executors.newFixedThreadPool(4, tf);
+            return new ThreadPoolExecutor(4, 4, 0L, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<>(), tf);
         }
     }
 }

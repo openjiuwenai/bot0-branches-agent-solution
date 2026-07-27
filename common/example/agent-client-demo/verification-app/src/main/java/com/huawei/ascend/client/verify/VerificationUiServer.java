@@ -13,8 +13,10 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -33,11 +35,15 @@ public final class VerificationUiServer {
     private final int port;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final List<SseClient> sseClients = new CopyOnWriteArrayList<>();
-    private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "verify-ui");
-        t.setDaemon(true);
-        return t;
-    });
+    private final ExecutorService workers = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
+            new SynchronousQueue<>(), r -> {
+                Thread t = new Thread(r, "verify-ui");
+                t.setDaemon(true);
+                t.setUncaughtExceptionHandler((thread, ex) -> {
+                    // best-effort：UI 工作线程未捕获异常不中断服务。
+                });
+                return t;
+            });
 
     public VerificationUiServer(int port) {
         this.port = port;
@@ -86,18 +92,18 @@ public final class VerificationUiServer {
             return;
         }
         String resource = "web" + path;
-        InputStream in = VerificationUiServer.class.getClassLoader().getResourceAsStream(resource);
-        if (in == null) {
-            send(ex, 404, "text/plain", "not found: " + path);
-            return;
-        }
-        byte[] body = in.readAllBytes();
-        in.close();
-        String ct = contentType(path);
-        ex.getResponseHeaders().set("Content-Type", ct);
-        ex.sendResponseHeaders(200, body.length);
-        try (OutputStream os = ex.getResponseBody()) {
-            os.write(body);
+        try (InputStream in = VerificationUiServer.class.getClassLoader().getResourceAsStream(resource)) {
+            if (in == null) {
+                send(ex, 404, "text/plain", "not found: " + path);
+                return;
+            }
+            byte[] body = in.readAllBytes();
+            String ct = contentType(path);
+            ex.getResponseHeaders().set("Content-Type", ct);
+            ex.sendResponseHeaders(200, body.length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(body);
+            }
         }
     }
 
@@ -128,9 +134,11 @@ public final class VerificationUiServer {
             Thread.currentThread().interrupt();
         } finally {
             sseClients.remove(client);
+            client.close();
             try {
                 ex.close();
-            } catch (RuntimeException ignore) {
+            } catch (IllegalStateException ignore) {
+                // best-effort：exchange 已关闭。
             }
         }
     }
@@ -230,12 +238,14 @@ public final class VerificationUiServer {
         return "application/octet-stream";
     }
 
-    private static final class SseClient {
+    private static final class SseClient implements AutoCloseable {
         final HttpExchange exchange;
+        final OutputStream out;
         final AtomicBoolean closed = new AtomicBoolean(false);
 
-        SseClient(HttpExchange exchange) {
+        SseClient(HttpExchange exchange) throws IOException {
             this.exchange = exchange;
+            this.out = exchange.getResponseBody();
         }
 
         synchronized void send(String event, String data) throws IOException {
@@ -243,9 +253,19 @@ public final class VerificationUiServer {
                 throw new IOException("closed");
             }
             String payload = "event: " + event + "\ndata: " + data + "\n\n";
-            OutputStream os = exchange.getResponseBody();
-            os.write(payload.getBytes(StandardCharsets.UTF_8));
-            os.flush();
+            out.write(payload.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        }
+
+        @Override
+        public void close() {
+            if (closed.compareAndSet(false, true)) {
+                try {
+                    out.close();
+                } catch (IOException ignore) {
+                    // best-effort：连接已断开时关闭忽略。
+                }
+            }
         }
     }
 }

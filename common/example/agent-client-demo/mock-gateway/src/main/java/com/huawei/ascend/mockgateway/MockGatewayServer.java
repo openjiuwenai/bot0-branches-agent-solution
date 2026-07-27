@@ -16,10 +16,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 模拟 gateway + runtime 的 A2A 入口（<b>验证用，非 SDK 交付</b>）。
@@ -57,18 +60,26 @@ public final class MockGatewayServer {
         MockGatewayServer server = new MockGatewayServer(port);
         int bound = server.start();
         System.out.println("[mock-gateway] A2A endpoint listening on http://127.0.0.1:" + bound + "/a2a");
-        Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
+        Thread shutdownHook = new Thread(server::stop, "mock-gateway-shutdown");
+        shutdownHook.setUncaughtExceptionHandler((thread, ex) -> {
+            // best-effort：JVM 关闭阶段的异常无法恢复。
+        });
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
         Thread.currentThread().join();
     }
 
     /** 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。 */
     public int start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", requestedPort), 0);
-        server.setExecutor(Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "mock-gateway");
-            t.setDaemon(true);
-            return t;
-        }));
+        server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
+                new SynchronousQueue<>(), r -> {
+                    Thread t = new Thread(r, "mock-gateway");
+                    t.setDaemon(true);
+                    t.setUncaughtExceptionHandler((thread, ex) -> {
+                        // best-effort：网关工作线程未捕获异常不中断服务。
+                    });
+                    return t;
+                }));
         server.createContext("/a2a", this::handleA2a);
         server.createContext("/.well-known/agent-card.json", this::handleAgentCard);
         server.start();
@@ -174,7 +185,7 @@ public final class MockGatewayServer {
             return;
         }
         synchronized (task) {
-            String submittedToolCallId = extractToolCallId(message);
+            String submittedToolCallId = extractToolCallId(message).orElse(null);
             advanceOnResume(task, submittedToolCallId);
         }
         if (streaming) {
@@ -198,7 +209,7 @@ public final class MockGatewayServer {
                 task.toolSchemas.put(name, t.path("inputSchema"));
             }
         }
-        String input = extractText(message);
+        String input = extractText(message).orElse(null);
         tasks.put(task.taskId, task);
 
         if (!task.toolNames.isEmpty()) {
@@ -423,29 +434,29 @@ public final class MockGatewayServer {
         }
     }
 
-    private static String extractText(JsonNode message) {
+    private static Optional<String> extractText(JsonNode message) {
         JsonNode parts = message.path("parts");
         if (parts.isArray()) {
             for (JsonNode p : parts) {
                 if ("text".equals(p.path("kind").asText(""))) {
-                    return p.path("text").asText("");
+                    return Optional.of(p.path("text").asText(""));
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
-    private static String extractToolCallId(JsonNode message) {
+    private static Optional<String> extractToolCallId(JsonNode message) {
         JsonNode parts = message.path("parts");
         if (parts.isArray()) {
             for (JsonNode p : parts) {
                 String id = p.path("metadata").path("toolCallId").asText(null);
                 if (id != null && !id.isEmpty()) {
-                    return id;
+                    return Optional.of(id);
                 }
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static String a2aState(State s) {
