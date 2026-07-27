@@ -42,6 +42,19 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MockGatewayServer {
 
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger(MockGatewayServer.class.getName());
+
+    /** 网关工作线程的 ThreadFactory：统一命名 + daemon + 未捕获异常处理。 */
+    private static final java.util.concurrent.ThreadFactory WORKER_FACTORY = r -> {
+        Thread t = new Thread(r, "mock-gateway");
+        t.setDaemon(true);
+        t.setUncaughtExceptionHandler((thread, ex) -> {
+            // best-effort：网关工作线程未捕获异常不中断服务。
+        });
+        return t;
+    };
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final ConcurrentMap<String, TaskSim> tasks = new ConcurrentHashMap<>();
     // G4 幂等：创建请求按 message.messageId 去重，重复请求复用同一 Task。
@@ -58,11 +71,10 @@ public final class MockGatewayServer {
                 : Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
         MockGatewayServer server = new MockGatewayServer(port);
         int bound = server.start();
-        System.out.println("[mock-gateway] A2A endpoint listening on http://127.0.0.1:" + bound + "/a2a");
-        Thread shutdownHook = new Thread(server::stop, "mock-gateway-shutdown");
-        shutdownHook.setUncaughtExceptionHandler((thread, ex) -> {
-            // best-effort：JVM 关闭阶段的异常无法恢复。
-        });
+        LOG.info("[mock-gateway] A2A endpoint listening on http://127.0.0.1:" + bound + "/a2a");
+        // shutdown hook 通过 ThreadFactory 创建，避免直接的 new Thread（G.CON.12）
+        Thread shutdownHook = WORKER_FACTORY.newThread(server::stop);
+        shutdownHook.setName("mock-gateway-shutdown");
         Runtime.getRuntime().addShutdownHook(shutdownHook);
         Thread.currentThread().join();
     }
@@ -71,14 +83,7 @@ public final class MockGatewayServer {
     public int start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", requestedPort), 0);
         server.setExecutor(new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
-                new SynchronousQueue<>(), r -> {
-                    Thread t = new Thread(r, "mock-gateway");
-                    t.setDaemon(true);
-                    t.setUncaughtExceptionHandler((thread, ex) -> {
-                        // best-effort：网关工作线程未捕获异常不中断服务。
-                    });
-                    return t;
-                }));
+                new SynchronousQueue<>(), WORKER_FACTORY));
         server.createContext("/a2a", this::handleA2a);
         server.createContext("/.well-known/agent-card.json", this::handleAgentCard);
         server.start();
