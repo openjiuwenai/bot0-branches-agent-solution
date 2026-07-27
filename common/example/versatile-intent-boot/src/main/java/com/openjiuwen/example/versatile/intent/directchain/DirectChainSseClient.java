@@ -43,6 +43,9 @@ final class DirectChainSseClient {
         HttpResponse<java.io.InputStream> response = httpClient.send(builder.build(),
                 HttpResponse.BodyHandlers.ofInputStream());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            try (var is = response.body()) {
+                // close the InputStream on the error path before throwing
+            }
             throw new IOException("Direct-chain HTTP " + response.statusCode());
         }
         try (BufferedReader reader = new BufferedReader(

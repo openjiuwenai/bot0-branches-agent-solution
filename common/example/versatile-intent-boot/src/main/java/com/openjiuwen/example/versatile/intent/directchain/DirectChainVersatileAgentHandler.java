@@ -58,14 +58,18 @@ public class DirectChainVersatileAgentHandler implements AgentHandler {
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
         delegate.streamQuery(request, new QueryStreamObserver() {
             private boolean directChained = false;
+            private boolean terminated = false;
 
             @Override
             public void onNext(QueryChunk chunk) {
-                if (!directChained && isA2aDelegate(chunk)) {
+                if (directChained) {
+                    return;   // suppress everything after direct-chain takeover
+                }
+                if (isA2aDelegate(chunk)) {
                     String agentName = agentNameOf(chunk);
                     if (props.shouldDirectChain(agentName)) {
                         directChained = true;
-                        doDirectChain(agentName, request, observer);
+                        doDirectChain(agentName, request, observer, this);
                         return;
                     }
                 }
@@ -73,30 +77,46 @@ public class DirectChainVersatileAgentHandler implements AgentHandler {
             }
 
             @Override
-            public void onError(Throwable error) { observer.onError(error); }
+            public void onError(Throwable error) {
+                if (terminated) {
+                    return;
+                }
+                terminated = true;
+                observer.onError(error);
+            }
 
             @Override
-            public void onComplete() { observer.onComplete(); }
+            public void onComplete() {
+                if (terminated) {
+                    return;
+                }
+                terminated = true;
+                observer.onComplete();
+            }
 
             @Override
             public boolean isCancelled() { return observer.isCancelled(); }
         });
     }
 
-    private void doDirectChain(String agentCard, ServeRequest request, QueryStreamObserver observer) {
+    private void doDirectChain(String agentCard, ServeRequest request, QueryStreamObserver observer,
+            QueryStreamObserver wrapper) {
         try {
             String url = gatewayResolver.resolveJsonRpcUrl(agentCard);
             client.postStream(url, queryBody(request), Map.of(DIRECT_CHAIN_HEADER, "true"),
                     props.getTimeout(), line -> {
-                        if (observer.isCancelled()) {
+                        if (wrapper.isCancelled()) {
                             throw new CancellationException();
                         }
+                        // Streamed direct-chain chunks bypass the wrapper's directChained
+                        // guard (which would suppress them) and go straight to the outer
+                        // observer; the wrapper is only used for terminal-state routing.
                         parseLine(line).ifPresent(p -> observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, p)));
                     });
         } catch (CancellationException ignored) {
             // 下游会 onComplete
         } catch (Exception e) {
-            observer.onError(e);
+            wrapper.onError(e);
         }
     }
 
