@@ -23,10 +23,26 @@ docker image inspect \
 
 预期 `uname -m` 为 `aarch64` 或 `arm64`，`getconf LONG_BIT` 为 `64`，基础镜像为 `linux/arm64`。本手册不覆盖 32 位 ARM（如 `armv7l`）。如果镜像来自企业私有仓库或镜像代理，还必须确认该仓库实际同步了 arm64 版本。
 
+部署前先一次性确认上述工具均已就位且版本符合要求（git 任意现代版本、Docker 引擎可用且守护进程已运行、JDK 必须为 17、Maven 不低于 3.8）：
+
+```bash
+git --version
+
+docker --version
+docker info --format '{{.ServerVersion}}'
+
+java -version 2>&1
+
+mvn -version
+```
+
+预期 `git --version` 显示 `git version 2.x`；`docker --version` 显示 `Docker version 20.10` 或更高，且 `docker info` 能正常输出（说明守护进程已启动，否则后续 `docker build`/`docker run` 都会失败）；`java -version` 显示主版本为 `17`（切勿使用 11 或 21，本 adapter 依赖的 `agent-core-java:0.1.13` 是 JDK 17 构建）；`mvn -version` 显示 `Apache Maven 3.8.x` 或更高，且其下 `Java version` 行同样指向 17。任一项不满足，先安装或切换到对应版本再继续。
+
+
 ```bash
 # 1) 拉取代码仓
 git clone <你们的仓库地址> && cd agent-solution
-cd common/agents/adapter-versatile-agent-java
+cd common/agents/versatile-agent-java
 
 # 2) 准备配置（必须填写真实 VERSATILE_URL）
 cp deploy/.env.example deploy/.env
@@ -92,7 +108,7 @@ bash deploy/deploy.sh
 在代码仓内执行（脚本会先 `install` 共享依赖 `agent-runtime-ext-java`，再只构建 adapter，不构建 edp-agent）：
 
 ```bash
-cd common/agents/adapter-versatile-agent-java
+cd common/agents/versatile-agent-java
 bash deploy/build-jar.sh
 ```
 
@@ -116,7 +132,7 @@ mvn -f pom.xml clean package -DskipTests
 在 Windows 仓库中打 tar 包再上传 Linux：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File common\agents\adapter-versatile-agent-java\deploy\pack-for-linux.ps1
+powershell -ExecutionPolicy Bypass -File common\agents\versatile-agent-java\deploy\pack-for-linux.ps1
 # jar 已存在时可加 -SkipBuild 复用
 ```
 
