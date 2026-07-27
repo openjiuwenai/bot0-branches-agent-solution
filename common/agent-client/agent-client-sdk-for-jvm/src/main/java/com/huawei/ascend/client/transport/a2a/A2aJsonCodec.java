@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.transport.a2a;
 
 import com.huawei.ascend.client.api.TaskState;
@@ -151,11 +155,11 @@ final class A2aJsonCodec {
 
     /** 中立解析结果。{@code state} 为空表示该帧仅承载内容增量（artifact-update）。 */
     record Frame(String taskId, String contextId, TaskState state, Interrupt interrupt,
-                 String text, String errorCode, String errorMessage) {
+            String text, String errorCode, String errorMessage) {
     }
 
     record Interrupt(boolean userInput, String toolCallId, String toolName,
-                     Map<String, Object> arguments, String prompt, Long deadlineMs) {
+            Map<String, Object> arguments, String prompt, Long deadlineMs) {
     }
 
     Optional<Frame> parseFrame(JsonNode result) {

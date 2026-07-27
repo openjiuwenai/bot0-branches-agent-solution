@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.verify;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -164,12 +168,10 @@ public final class VerificationUiServer {
                 broadcast("info", jsonEvent("INFO", null, "verification started from UI", null));
                 new CloudClientVerification().runWithProgress(event -> {
                     broadcast("progress", toJson(event));
-                    // 同步记录到日志，方便对照（用 Supplier 避免禁用级别时仍拼接字符串，G.LOG.03）
-                    if (LOG.isLoggable(java.util.logging.Level.INFO)) {
-                        LOG.info("[ui] " + event.kind() + " "
-                                + (event.scenarioId() != null ? event.scenarioId() + " " : "")
-                                + event.message());
-                    }
+                    // 同步记录到日志，方便对照；用 {N} 占位符避免禁用级别时拼接字符串（G.LOG.03）。
+                    String scenario = (event.scenarioId() != null) ? event.scenarioId() + " " : "";
+                    LOG.log(java.util.logging.Level.INFO, "[ui] {0} {1}{2}",
+                            new Object[] {event.kind(), scenario, event.message()});
                 });
             } catch (InterruptedException | ExecutionException | TimeoutException | IOException | RuntimeException e) {
                 broadcast("progress", jsonEvent("RUN_END", null,

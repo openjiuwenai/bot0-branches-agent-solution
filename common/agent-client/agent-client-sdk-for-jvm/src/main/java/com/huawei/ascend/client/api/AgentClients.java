@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.api;
 
 import com.huawei.ascend.client.internal.DefaultAgentClient;
@@ -23,6 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 构造 {@link AgentClient} 的入口工厂。业务通过它注入具体传输实现与治理/状态存储策略。
  *
  * <p>唯一必需项是 {@link Builder#transport}（决定 wire 协议与网关地址）。其余均有可用于验证/开发的默认值。
+ *
+ * @since 2026-07-27
  */
 public final class AgentClients {
 

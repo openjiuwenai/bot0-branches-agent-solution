@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.verify;
 
 import com.huawei.ascend.client.api.AgentClient;
@@ -21,13 +25,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 final class DemoTools {
 
-    final AtomicInteger readPageCount = new AtomicInteger();
-    final AtomicInteger submitOrderCount = new AtomicInteger();
-    final AtomicInteger pingCount = new AtomicInteger();
-
     static final String READ_PAGE = "readPage";
     static final String SUBMIT_ORDER = "submitOrder";
     static final String PING = "ping";
+
+    final AtomicInteger readPageCount = new AtomicInteger();
+    final AtomicInteger submitOrderCount = new AtomicInteger();
+    final AtomicInteger pingCount = new AtomicInteger();
 
     /** 原有入口：不挂观察者，行为与重构前完全一致（CLI 全量断言用）。 */
     void registerInto(AgentClient client) {

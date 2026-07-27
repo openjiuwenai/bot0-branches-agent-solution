@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.mockgateway;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -57,6 +61,7 @@ public final class MockGatewayServer {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final ConcurrentMap<String, TaskSim> tasks = new ConcurrentHashMap<>();
+
     // G4 幂等：创建请求按 message.messageId 去重，重复请求复用同一 Task。
     private final ConcurrentMap<String, String> messageIdToTask = new ConcurrentHashMap<>();
     private final int requestedPort;
@@ -162,12 +167,10 @@ public final class MockGatewayServer {
             // G4 幂等：同一 messageId 的重复创建复用既有 Task，不新建。
             if (messageId != null && messageIdToTask.containsKey(messageId)) {
                 TaskSim existing = tasks.get(messageIdToTask.get(messageId));
-                if (existing != null) {
-                    if (streaming) {
-                        streamCurrent(ex, rpcId, existing, true);
-                    } else {
-                        writeJson(ex, 200, rpcResult(rpcId, buildResult(existing, "task")));
-                    }
+                if (existing == null) {
+                    // 索引残留但 Task 已丢失：落到下方新建分支重建。
+                } else {
+                    replayExisting(ex, rpcId, existing, streaming);
                     return;
                 }
             }
@@ -196,6 +199,16 @@ public final class MockGatewayServer {
             streamCurrent(ex, rpcId, task, false);
         } else {
             writeJson(ex, 200, rpcResult(rpcId, buildResult(task, "task")));
+        }
+    }
+
+    /** 幂等命中时回放既有 Task：流式则推送当前快照，否则返回单条结果。 */
+    private void replayExisting(HttpExchange ex, String rpcId, TaskSim existing, boolean streaming)
+            throws IOException {
+        if (streaming) {
+            streamCurrent(ex, rpcId, existing, true);
+        } else {
+            writeJson(ex, 200, rpcResult(rpcId, buildResult(existing, "task")));
         }
     }
 

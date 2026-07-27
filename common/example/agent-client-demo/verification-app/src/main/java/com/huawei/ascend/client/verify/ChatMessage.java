@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.verify;
 
 import java.util.Map;
@@ -59,10 +63,19 @@ record ChatMessage(
                 null, null, arguments, null, null, null, null, null, null, null);
     }
 
-    static ChatMessage toolResult(String sessionId, String toolCallId, String outcome,
-                                  Object payload, String errorCode, String message) {
+    static ChatMessage toolResult(String sessionId, String toolCallId, ToolResultDetail detail) {
         return new ChatMessage("tool_result", sessionId, null, toolCallId, null,
-                null, null, null, payload, outcome, errorCode, message, null, null, null);
+                null, null, null, detail.payload(), detail.outcome(),
+                detail.errorCode(), detail.message(), null, null, null);
+    }
+
+    /** 工具结果明细（聚合 outcome/payload/errorCode/message，控制 toolResult 参数数量，G.MET.01）。 */
+    record ToolResultDetail(String outcome, Object payload, String errorCode, String message) {
+
+        /** 构造便捷工厂。 */
+        static ToolResultDetail of(String outcome, Object payload, String errorCode, String message) {
+            return new ToolResultDetail(outcome, payload, errorCode, message);
+        }
     }
 
     static ChatMessage status(String sessionId, String invocationRef, String state, String detail) {

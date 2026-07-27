@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.huawei.ascend.client.tool.spi;
 
 import java.time.Duration;
@@ -16,13 +20,6 @@ import java.util.Set;
  */
 public final class LocalToolDescriptor {
 
-    public enum SideEffect {
-        /** 只读/无副作用，可直接执行。 */
-        OBSERVATION,
-        /** 有副作用（写操作等），执行前需经审批。 */
-        ACTION
-    }
-
     private final String toolId;
     private final String displayName;
     private final String description;
@@ -31,6 +28,13 @@ public final class LocalToolDescriptor {
     private final Set<String> requiredArgumentKeys;
     private final Duration timeout;
     private final boolean requiresApproval;
+
+    public enum SideEffect {
+        /** 只读/无副作用，可直接执行。 */
+        OBSERVATION,
+        /** 有副作用（写操作等），执行前需经审批。 */
+        ACTION
+    }
 
     private LocalToolDescriptor(Builder b) {
         this.toolId = Objects.requireNonNull(b.toolId, "toolId");
