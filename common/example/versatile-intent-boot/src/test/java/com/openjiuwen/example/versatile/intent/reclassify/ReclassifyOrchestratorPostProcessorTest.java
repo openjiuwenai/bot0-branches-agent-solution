@@ -6,6 +6,7 @@ package com.openjiuwen.example.versatile.intent.reclassify;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -76,16 +77,22 @@ class ReclassifyOrchestratorPostProcessorTest {
         // Issue #50 regression: the wrapped bean must still expose the
         // A2aPushNotificationCallbackHandler interface, otherwise injection
         // points expecting that type fail with BeanNotOfRequiredTypeException.
-        assertThat(proxy).isInstanceOf(ServeOrchestrator.class);
-        assertThat(proxy).isInstanceOf(A2aPushNotificationCallbackHandler.class);
         assertThat(proxy).isNotSameAs(wrapped);
 
         // ServeOrchestrator calls are routed through the reclassify decorator.
-        assertThat(((ServeOrchestrator) proxy).query(mock(ServeRequest.class))).isSameAs(stubbedResponse);
-        verify(wrapped).query(any());
+        if (proxy instanceof ServeOrchestrator serveProxy) {
+            assertThat(serveProxy.query(mock(ServeRequest.class))).isSameAs(stubbedResponse);
+            verify(wrapped).query(any());
+        } else {
+            fail("proxy must implement ServeOrchestrator");
+        }
 
         // Secondary-interface calls fall through to the wrapped bean unchanged.
-        assertThat(((A2aPushNotificationCallbackHandler) proxy).onAccepted(null)).isTrue();
-        verify(wrapped).onAccepted(any());
+        if (proxy instanceof A2aPushNotificationCallbackHandler callbackProxy) {
+            assertThat(callbackProxy.onAccepted(null)).isTrue();
+            verify(wrapped).onAccepted(any());
+        } else {
+            fail("proxy must implement A2aPushNotificationCallbackHandler");
+        }
     }
 }
