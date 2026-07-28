@@ -15,6 +15,7 @@ import org.a2aproject.sdk.jsonrpc.common.wrappers.ListTasksResult;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.TaskStore;
 import org.a2aproject.sdk.spec.A2AError;
+import org.a2aproject.sdk.spec.ListTasksParams;
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.Task;
@@ -35,17 +36,18 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 class CustomRestA2ABridgeTest {
     @Test
-    void rebuildsFrameworkOwnedFieldsAndUsesBlockingRequestHandler() {
+    void preservesBusinessConversationIdForTaskLookupAndRequestHandler() {
         CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
         RequestHandler handler = mock(RequestHandler.class);
         TaskStore store = mock(TaskStore.class);
         when(store.list(any())).thenReturn(new ListTasksResult(List.of()));
         Message original = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello"))
-                .messageId("message-id").contextId("adapter-context").metadata(Map.of("message", "kept")).build();
+                .messageId("message-id").contextId("external-conversation")
+                .metadata(Map.of("message", "kept")).build();
         MessageSendParams params = MessageSendParams.builder().message(original)
                 .metadata(Map.of("request", "kept")).tenant("tenant").build();
         when(adapter.toA2ARequest(any())).thenReturn(
-                new CustomRestProtocolAdapter.A2ASendCommand(params, "external-conversation", false));
+                new CustomRestProtocolAdapter.A2ASendCommand(params, false));
         Task result = Task.builder().id("task").contextId("context")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).history(List.of()).build();
         when(handler.onMessageSend(any(), any())).thenReturn(result);
@@ -54,12 +56,15 @@ class CustomRestA2ABridgeTest {
 
         assertThat(bridge.executeBlocking(bridge.prepare(context(), true))).isEqualTo(Map.of("ok", true));
 
+        ArgumentCaptor<ListTasksParams> listParamsCaptor = ArgumentCaptor.forClass(ListTasksParams.class);
         ArgumentCaptor<MessageSendParams> paramsCaptor = ArgumentCaptor.forClass(MessageSendParams.class);
         ArgumentCaptor<org.a2aproject.sdk.server.ServerCallContext> contextCaptor =
                 ArgumentCaptor.forClass(org.a2aproject.sdk.server.ServerCallContext.class);
+        verify(store).list(listParamsCaptor.capture());
         verify(handler).onMessageSend(paramsCaptor.capture(), contextCaptor.capture());
-        assertThat(paramsCaptor.getValue().message().contextId()).startsWith("custom-rest:v1:");
-        assertThat(paramsCaptor.getValue().message().contextId()).isNotEqualTo("adapter-context");
+        assertThat(listParamsCaptor.getValue().contextId()).isEqualTo("external-conversation");
+        assertThat(paramsCaptor.getValue()).isSameAs(params);
+        assertThat(paramsCaptor.getValue().message().contextId()).isEqualTo("external-conversation");
         assertThat(paramsCaptor.getValue().message().metadata()).containsEntry("message", "kept");
         assertThat(paramsCaptor.getValue().metadata()).containsEntry("request", "kept");
         assertThat(paramsCaptor.getValue().tenant()).isEqualTo("tenant");
@@ -67,11 +72,37 @@ class CustomRestA2ABridgeTest {
     }
 
     @Test
+    void rebuildsParamsOnlyWhenAddingResolvedTaskId() {
+        CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
+        TaskStore store = mock(TaskStore.class);
+        Task resumable = Task.builder().id("resumable").contextId("conversation")
+                .status(new TaskStatus(TaskState.TASK_STATE_INPUT_REQUIRED)).history(List.of()).build();
+        when(store.list(any())).thenReturn(new ListTasksResult(List.of(resumable)));
+        when(store.get("resumable")).thenReturn(resumable);
+        Message original = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("continue"))
+                .messageId("message-id").contextId("conversation").build();
+        MessageSendParams params = MessageSendParams.builder().message(original)
+                .metadata(Map.of("request", "kept")).tenant("tenant").build();
+        when(adapter.toA2ARequest(any())).thenReturn(new CustomRestProtocolAdapter.A2ASendCommand(params, false));
+        CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, mock(RequestHandler.class), store, null);
+
+        CustomRestA2ABridge.Prepared prepared = bridge.prepare(context(), true);
+
+        assertThat(prepared.params()).isNotSameAs(params);
+        assertThat(prepared.params().message().taskId()).isEqualTo("resumable");
+        assertThat(prepared.params().message().contextId()).isEqualTo("conversation");
+        assertThat(prepared.params().metadata()).containsEntry("request", "kept");
+        assertThat(prepared.params().tenant()).isEqualTo("tenant");
+        bridge.release(prepared);
+    }
+
+    @Test
     void validatesConversationBeforeAcquiringReservation() {
         CustomRestProtocolAdapter adapter = mock(CustomRestProtocolAdapter.class);
-        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello")).build();
+        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello"))
+                .contextId(" ").build();
         when(adapter.toA2ARequest(any())).thenReturn(new CustomRestProtocolAdapter.A2ASendCommand(
-                MessageSendParams.builder().message(message).build(), " ", false));
+                MessageSendParams.builder().message(message).build(), false));
         CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, mock(RequestHandler.class),
                 mock(TaskStore.class), null);
 
@@ -97,9 +128,10 @@ class CustomRestA2ABridgeTest {
         RequestHandler handler = mock(RequestHandler.class);
         TaskStore store = mock(TaskStore.class);
         when(store.list(any())).thenReturn(new ListTasksResult(List.of()));
-        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello")).build();
+        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello"))
+                .contextId("conversation").build();
         var command = new CustomRestProtocolAdapter.A2ASendCommand(
-                MessageSendParams.builder().message(message).build(), "conversation", false);
+                MessageSendParams.builder().message(message).build(), false);
         when(adapter.toA2ARequest(any())).thenReturn(command);
         Task task = Task.builder().id("task").contextId("context")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).history(List.of()).build();
@@ -123,9 +155,10 @@ class CustomRestA2ABridgeTest {
         RequestHandler handler = mock(RequestHandler.class);
         TaskStore store = mock(TaskStore.class);
         when(store.list(any())).thenReturn(new ListTasksResult(List.of()));
-        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello")).build();
+        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello"))
+                .contextId("conversation").build();
         when(adapter.toA2ARequest(any())).thenReturn(new CustomRestProtocolAdapter.A2ASendCommand(
-                MessageSendParams.builder().message(message).build(), "conversation", false));
+                MessageSendParams.builder().message(message).build(), false));
         when(handler.onMessageSend(any(), any())).thenThrow(new IllegalStateException("internal detail"));
         CustomRestA2ABridge bridge = new CustomRestA2ABridge(adapter, handler, store, null);
 
@@ -190,9 +223,10 @@ class CustomRestA2ABridgeTest {
         RequestHandler handler = mock(RequestHandler.class);
         TaskStore store = mock(TaskStore.class);
         when(store.list(any())).thenReturn(new ListTasksResult(List.of()));
-        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello")).build();
+        Message message = Message.builder().role(Message.Role.ROLE_USER).parts(new TextPart("hello"))
+                .contextId("conversation").build();
         when(adapter.toA2ARequest(any())).thenReturn(new CustomRestProtocolAdapter.A2ASendCommand(
-                MessageSendParams.builder().message(message).build(), "conversation", false));
+                MessageSendParams.builder().message(message).build(), false));
         Task task = Task.builder().id("task").contextId("context")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).history(List.of()).build();
         when(handler.onMessageSend(any(), any())).thenReturn(task);
