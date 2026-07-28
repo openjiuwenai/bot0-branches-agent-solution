@@ -43,9 +43,9 @@ cd ~/EvoAgent/agent-solution
 
 ---
 
-## 2. 一次性配置
+## 2. 部署配置
 
-### 2.1 生成两份 .env
+### 2.1 从模板生成配置文件 .env
 
 ```bash
 # Adapter 配置
@@ -69,7 +69,7 @@ HOST_OUTPUT_DIR=/opt/agent-adapter/data # Adapter输出目录（offsets/归档�
 HOST_CONFIG_FILE=/opt/agent-adapter/agent_adapter_config.yaml  # 配置文件持久化路径
 ```
 
-### 2.3 创建主机目录
+### 2.3 创建 Adapter 依赖的主机目录
 
 按上面 `config/.env` 规划的路径创建对应目录（不存在则补充，确保挂载不出错）：
 
