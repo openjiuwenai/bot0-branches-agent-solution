@@ -1,0 +1,7 @@
+: provenance=synthetic
+: description=Synthetic three-field SSE sample for VersatileSseContractTest skeleton.
+: note=Replace with desensitized production recordings before relying on this test for
+: note=compatibility detection. See L2 §5.5.6 for masking requirements.
+data: {"custom_rsp_data":{"node_name":"AnswerNode","data":{"node_type":"QA","response_content":"__SYNTHETIC_L1_OUTPUT__","intent_id":"intent_L1_hotel","agent_id":"agent_card_L2_hotel"}}}
+
+data: {"data":{"node_type":"End"}}
