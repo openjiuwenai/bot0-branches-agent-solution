@@ -12,6 +12,8 @@ import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.governance.tenant.TenantResolver;
 import com.openjiuwen.gateway.governance.validate.ParamValidator;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
+import com.openjiuwen.gateway.bus.BusForwarder;
+import com.openjiuwen.gateway.path.PathSelector;
 import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.sse.SseBridge;
 
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -49,6 +52,8 @@ public class A2aController {
     private final GovernanceAuditor auditor;
     private final Router router;
     private final SseBridge sseBridge;
+    private final PathSelector pathSelector;
+    private final Optional<BusForwarder> busForwarder;
 
     /**
      * Construct.
@@ -63,7 +68,7 @@ public class A2aController {
      */
     public A2aController(AuthRule authRule, TenantResolver tenantResolver, ParamValidator paramValidator,
                          IdempotencyRule idempotencyRule, GovernanceAuditor auditor, Router router,
-                         SseBridge sseBridge) {
+                         SseBridge sseBridge, PathSelector pathSelector, Optional<BusForwarder> busForwarder) {
         this.authRule = authRule;
         this.tenantResolver = tenantResolver;
         this.paramValidator = paramValidator;
@@ -71,6 +76,8 @@ public class A2aController {
         this.auditor = auditor;
         this.router = router;
         this.sseBridge = sseBridge;
+        this.pathSelector = pathSelector;
+        this.busForwarder = busForwarder;
     }
 
     /**
@@ -142,6 +149,12 @@ public class A2aController {
      * @throws IOException if writing the SSE stream fails
      */
     private Object forwardCreate(GovernanceContext context, HttpServletResponse response) throws IOException {
+        if (pathSelector.isBus() && busForwarder.isPresent()
+                && !"SendStreamingMessage".equals(context.method())) {
+            // FEAT-012 BUS path: the blocking wait window + projection fold run inside BusForwarder,
+            // which also completes/aborts G4 via G4BusWiring — skip the DIRECT router + G4 here.
+            return busForwarder.get().forwardSync(context);
+        }
         if ("SendStreamingMessage".equals(context.method())) {
             return forwardStreaming(context, response);
         }

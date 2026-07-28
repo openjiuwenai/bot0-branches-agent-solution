@@ -29,11 +29,26 @@ public interface ProjectionFeed {
      * @param taskId task id when present
      * @param streamRef opaque stream ref when present
      * @param payloadRef payload ref when present
+     * @param body decoded A2A response (RESPONSE/TERMINAL) or reason/error (REJECTED/FAILED)
+     *             or input descriptor (INPUT_REQUIRED); {@code null} when the projection
+     *             carries no body (ACCEPTED/STREAM_READY)
      */
     record ProjectionEvent(
             AgentBusEventType eventType,
             String taskId,
             String streamRef,
-            String payloadRef) {
+            String payloadRef,
+            String body) {
+        /**
+         * Convenience for projections without a decoded response/reason body.
+         *
+         * @param eventType bus event type
+         * @param taskId task id when present
+         * @param streamRef opaque stream ref when present
+         * @param payloadRef payload ref when present
+         */
+        public ProjectionEvent(AgentBusEventType eventType, String taskId, String streamRef, String payloadRef) {
+            this(eventType, taskId, streamRef, payloadRef, null);
+        }
     }
 }

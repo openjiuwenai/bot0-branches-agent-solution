@@ -6,9 +6,14 @@ package com.openjiuwen.gateway.path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.gateway.bus.control.FakeBrokerForwardingConsumerPort;
+import com.openjiuwen.gateway.bus.control.FakeBrokerForwardingProducerPort;
+import com.openjiuwen.gateway.bus.control.FakeForwardingOutboxPort;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 
 /**
  * Integration test: {@link PathSelector} is wired by Spring from
@@ -21,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * @since 2026-07-24
  */
 @SpringBootTest(properties = "gateway.path-mode=bus")
+@Import({FakeForwardingOutboxPort.class, FakeBrokerForwardingConsumerPort.class, FakeBrokerForwardingProducerPort.class})
 class PathSelectorWiringTest {
     @Autowired
     private PathSelector pathSelector;

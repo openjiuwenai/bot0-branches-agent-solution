@@ -21,6 +21,7 @@ import com.openjiuwen.gateway.governance.validate.ParamValidator;
 import com.openjiuwen.gateway.obs.AuditEvent;
 import com.openjiuwen.gateway.obs.AuditSink;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
+import com.openjiuwen.gateway.path.PathSelector;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
 import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
@@ -52,7 +53,7 @@ import java.util.Optional;
 @WebMvcTest(controllers = A2aController.class)
 @Import({AuthRule.class, TenantResolver.class, ParamValidator.class, IdempotencyRule.class,
         GovernanceAuditor.class, GovernanceErrorHandler.class, Router.class, StickyIndex.class,
-        DefaultAgentResolver.class, SseBridge.class})
+        DefaultAgentResolver.class, SseBridge.class, PathSelector.class})
 @TestPropertySource(properties = "gateway.default-agent-id=default-agent-1")
 class A2aControllerWebMvcTest {
     private static final String VALID_CREATE =
