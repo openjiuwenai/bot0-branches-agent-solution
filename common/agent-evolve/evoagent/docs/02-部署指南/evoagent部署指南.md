@@ -96,26 +96,6 @@ EVO_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EVO_OPTIMIZER_MODEL=qwen3.7-max
 ```
 
-### 2.5（可选）配置业务 Agent 列表
-
-Adapter 首次启动会自动 seed `agent_adapter_config.yaml` 到 `HOST_CONFIG_FILE`。需自定义业务 Agent 时，编辑该文件：
-
-```yaml
-# /opt/agent-adapter/agent_adapter_config.yaml
-agents:
-  - name: "edp_agent"
-    log_dir: "/data/logs/edp_agent"        # 对应 HOST_LOG_ROOT/edp_agent
-    skills_dir: "/data/skills/edp_agent"   # 对应 HOST_SKILLS_ROOT/edp_agent
-    agent_url: "http://192.168.1.10:8090"  # 业务Agent地址（勿用localhost）
-    project_id: "proj_001"
-    agent_id: "edp_agent"
-    timeout: 300
-```
-
-> 业务 Agent 端口发布到宿主机时，`agent_url` 写 `http://host.docker.internal:<port>`（脚本已注入 host-gateway）。
-
----
-
 ## 3. 构建并启动（先 Adapter 后 EvoAgent）
 
 ```bash
