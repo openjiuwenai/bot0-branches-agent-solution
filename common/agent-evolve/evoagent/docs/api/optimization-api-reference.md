@@ -35,8 +35,8 @@
   "skills": ["product_recommend_skill", "fund_planning_skill"],
   "dataset_path": "/data/evo_agent/finance_cases.json",
   "optimizer_template": {
-    "name": "skillopt",
-    "scenario": "skillopt",
+    "name": "edp_agent",
+    "scenario": "金融客服",
     "hyperparams": {
       "num_epochs": 5,
       "batch_size": 8,
@@ -72,7 +72,7 @@
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | `name` | `string` | ✅ | — | 场景名称（映射到 `examples/scenarios/<name>/`） |
-| `scenario` | `string` | ✅ | — | 场景目录名（用于选择场景；若为空回退到 `name`） |
+| `scenario` | `string` | ✅ | — | 业务场景标签（仅元数据，用于平台分类） |
 | `hyperparams` | `object` | ❌ | `{}` | 优化超参数（`num_epochs`、`batch_size` 会被提取为 typed 字段） |
 | `train_split` | `float` | ❌ | `0.8` | 训练集比例（需满足 `train_split + val_split == 1.0`） |
 | `val_split` | `float` | ❌ | `0.2` | 验证集比例（需满足 `train_split + val_split == 1.0`） |
@@ -98,7 +98,7 @@
 
 请求经过 `_normalize()` 处理：
 
-- `optimizer_template.scenario`（非空）或 `optimizer_template.name` → 内部 `scenario` 字段
+- `optimizer_template.name` → 内部 `scenario` 字段
 - `evaluator_template.prompt` → 内部 `evaluator_prompt` 字段
 - 从 `hyperparams` 中提取 `num_epochs`、`batch_size` 为 typed 字段
 - 剩余 `hyperparams` 保留在 dict 中，注入到优化器 dependencies
@@ -677,7 +677,7 @@ eventSource.addEventListener('error', (event) => {
 
 ### 实现说明
 
-当前 Trainer 回调仅有 4 个钩子（`on_train_begin/end`, `on_train_epoch_begin/end`），无法直接推送 phase 级别事件。需要在 `SkillOptOptimizer` 中注入 phase callback：
+当前 Trainer 回调仅有 4 个钩子（`on_train_begin/end`, `on_train_epoch_begin/end`），无法直接推送 phase 级别事件。需要在 `EDPAgentOptimizer` 中注入 phase callback：
 
 | 阶段 | 注入点 | 方式 |
 |------|--------|------|
@@ -705,19 +705,11 @@ eventSource.addEventListener('error', (event) => {
 ```json
 [
   {
-    "name": "skillopt",
-    "optimizer_class": "optimizer.SkillOptOptimizer",
-    "hyperparams": {
-      "batch_size": 8,
-      "num_parallel": 8
-    }
-  },
-  {
     "name": "edp_agent",
-    "optimizer_class": "optimizer.EDPAgentOptimizer",
+    "optimizer_class": "scenarios.edp_agent.optimizer.EDPAgentOptimizer",
     "hyperparams": {
-      "batch_size": 8,
-      "num_parallel": 8
+      "trace_max_retries": 3,
+      "trace_retry_backoff": 2.0
     }
   },
   {
@@ -803,8 +795,8 @@ curl -X POST http://localhost:5050/optimize \
     "agent_name": "edp_agent",
     "dataset_path": "/data/evo_agent/finance_cases.json",
     "optimizer_template": {
-      "name": "skillopt",
-      "scenario": "skillopt",
+      "name": "edp_agent",
+      "scenario": "金融客服",
       "hyperparams": {"num_epochs": 5},
       "train_split": 0.8,
       "val_split": 0.2
