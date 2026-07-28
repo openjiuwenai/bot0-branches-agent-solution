@@ -607,7 +607,6 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         // --- 第十二步：注册 EDPAgent 内置业务工具和业务 Rails（13参数版，含沙箱）。
         // Versatile 委派由 VersatileDelegateRail 拦截 call_versatile 构造 a2a_delegate 中断，
         // 框架 A2AEnabledServeOrchestrator 接管远端调用与续传。
-
         // --- 沙箱特性：创建SysOperation双模式门面 ---
         if (params.config.getSandbox() != null && params.config.getSandbox().isEnabled()) {
             result.setSandboxGatewayConfig(buildSandboxGatewayConfig(params.config.getSandbox()));
