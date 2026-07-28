@@ -131,7 +131,7 @@ class VersatileHttpClientTest {
     }
 
     @Test
-    void buildsFullRequestForLogs() {
+    void masksRequestValuesForLogs() {
         VersatileRequestExtractor.RemoteRequest request = new VersatileRequestExtractor.RemoteRequest(
                 "https://example.test/run",
                 Map.of("Authorization", "Bearer token", "x-user-id", "u-1"),
@@ -139,12 +139,39 @@ class VersatileHttpClientTest {
                 Map.of("custom_data", Map.of("password", "pwd", "query", "q"))
         );
 
-        Map<String, Object> logRequest = VersatileHttpClient.logRequest(request, "https://example.test/run?api_key=x");
+        Map<String, Object> logRequest = VersatileHttpClient.logRequest(
+                request, "https://example.test/run", true);
+
+        assertThat(logRequest).containsEntry("url", "https://example.test/run");
+        assertThat(logRequest.get("headers")).isEqualTo(
+                Map.of("Authorization", "***masked***", "x-user-id", "***masked***"));
+        assertThat(logRequest.get("params")).isEqualTo(
+                Map.of("api_key", "***masked***", "workspace_id", "***masked***"));
+        assertThat(logRequest.get("body")).isEqualTo(Map.of("custom_data", "***masked***"));
+        assertThat(request.headers()).containsEntry("Authorization", "Bearer token");
+        assertThat(request.params()).containsEntry("api_key", "query-secret");
+        assertThat(request.body()).containsKey("custom_data");
+    }
+
+    @Test
+    void buildsFullRequestForLogsWhenMaskingDisabled() {
+        VersatileRequestExtractor.RemoteRequest request = new VersatileRequestExtractor.RemoteRequest(
+                "https://example.test/run",
+                Map.of("Authorization", "Bearer token", "x-user-id", "u-1"),
+                Map.of("api_key", "query-secret", "workspace_id", "w-1"),
+                Map.of("custom_data", Map.of("password", "pwd", "query", "q"))
+        );
+
+        Map<String, Object> logRequest = VersatileHttpClient.logRequest(
+                request, "https://example.test/run?api_key=x", false);
 
         assertThat(logRequest).containsEntry("url", "https://example.test/run?api_key=x");
-        assertThat(logRequest.get("headers")).isEqualTo(Map.of("Authorization", "Bearer token", "x-user-id", "u-1"));
-        assertThat(logRequest.get("params")).isEqualTo(Map.of("api_key", "query-secret", "workspace_id", "w-1"));
-        assertThat(logRequest.get("body")).isEqualTo(Map.of("custom_data", Map.of("password", "pwd", "query", "q")));
+        assertThat(logRequest.get("headers")).isEqualTo(
+                Map.of("Authorization", "Bearer token", "x-user-id", "u-1"));
+        assertThat(logRequest.get("params")).isEqualTo(
+                Map.of("api_key", "query-secret", "workspace_id", "w-1"));
+        assertThat(logRequest.get("body")).isEqualTo(
+                Map.of("custom_data", Map.of("password", "pwd", "query", "q")));
     }
 
     @Test
