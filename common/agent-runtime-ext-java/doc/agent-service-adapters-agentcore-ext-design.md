@@ -182,18 +182,17 @@ jsonRpcUrl = baseUrl 去掉末尾斜杠 + openjiuwen.service.a2a.json-rpc-path
 http://127.0.0.1:18091/a2a
 ```
 
-远端工具描述来自发现到的 card。`RemoteA2aToolInstaller.description(...)` 当前规则：
+远端工具只从声明了至少一个 skill 的 card 生成。`RemoteA2aToolInstaller.toSpec(...)` 首先执行门禁：
 
 ```text
-1. card.skills 非空，并且存在非空 skill.description：
-   取所有非空 skill.description，trim 后用换行符合并。
-2. 否则，如果 card.description 非空：
-   使用 card.description.trim()。
-3. 否则：
-   使用默认描述 Delegate this request to remote A2A agent '<name>'.
+1. card 不可用：不注入工具。
+2. card.skills 为 null 或空列表：不注入工具。
+3. card.skills 至少包含一个 skill：生成一个远端委托工具。
 ```
 
-Agent B 侧如果希望大模型按能力选择工具，应至少在 card 中提供 `skills[].description`。示例最小配置：
+通过门禁后，工具描述按以下优先级生成：所有非空 `skill.description` trim 后用换行符合并；如果没有可用的 skill 描述，则使用 `card.description.trim()`；仍为空时使用默认描述 `Delegate this request to remote A2A agent '<name>'.`。
+
+Agent B 侧如果需要被注入为远端工具，必须在 card 中声明至少一个 skill；为了让大模型按能力选择工具，还应提供 `skills[].description`。示例最小配置：
 
 ```yaml
 openjiuwen:
@@ -205,7 +204,7 @@ openjiuwen:
           description: "Process banking workflow requests such as account balance lookup, transfer preparation, and follow-up business steps through the configured Versatile HTTP/SSE workflow."
 ```
 
-`a2a.agent-description` 不是通信必需项；当 `skills[].description` 存在时，也不是工具描述的首选来源。它主要是 card 自描述和 skill 描述缺失时的 fallback。
+`a2a.agent-description` 不是通信必需项，也不能代替 skills 门禁；当 card 已声明 skill 但 `skills[].description` 缺失时，它才作为工具描述的 fallback。
 
 ## 8. RemoteA2aToolInstaller
 
@@ -250,7 +249,7 @@ private final Map<Object, Set<String>> installedRemoteAgentNames =
 4. 从 installedRemoteAgentNames 获取该 agent 已安装 name 集合。
 5. 在 synchronized(installedNames) 内读取 registry.getAll()。
 6. 过滤掉已安装的 entry.name()。
-7. 将每个 entry 映射成 RemoteA2aToolSpec。
+7. 跳过 card 不可用或未声明 skills 的 entry，将其余 entry 映射成 RemoteA2aToolSpec。
 8. 如果没有新增 spec，返回。
 9. 用新增 spec 创建一个 RemoteA2aInterruptRail。
 10. target.registerRail(rail)。
@@ -280,7 +279,7 @@ public record RemoteA2aToolSpec(
 ```text
 remoteAgentId = entry.name()
 toolName = entry.name()
-description = card.skills[].description 合并值；否则 card.description；否则默认描述
+description = card.skills[].description 合并值；无可用 skill 描述时回退到 card.description；否则使用默认描述
 inputSchema = 固定 remoteInput envelope
 ```
 

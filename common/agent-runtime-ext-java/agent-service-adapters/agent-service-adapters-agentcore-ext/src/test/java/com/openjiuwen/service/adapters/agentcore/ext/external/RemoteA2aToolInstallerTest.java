@@ -36,7 +36,7 @@ class RemoteA2aToolInstallerTest {
     void installsRailToolCardIntoBaseAgent(CapturedOutput output) {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
-        registry.register("agent-b", null);
+        registry.register("agent-b", callableRemoteCard());
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
 
         installer.install(agent);
@@ -46,7 +46,7 @@ class RemoteA2aToolInstallerTest {
                 .filteredOn(tool -> "agent-b".equals(tool.getName()))
                 .singleElement()
                 .satisfies(tool -> {
-                    assertThat(tool.getDescription()).contains("remote A2A agent 'agent-b'");
+                    assertThat(tool.getDescription()).isEqualTo("Remote skill");
                     assertThat(tool.getParameters()).containsEntry("type", "object");
                 });
         assertThat(agent.getAbilityManager().listToolInfo())
@@ -59,7 +59,7 @@ class RemoteA2aToolInstallerTest {
     @Test
     void skipsStringAgentIdMode(CapturedOutput output) {
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
-        registry.register("agent-b", null);
+        registry.register("agent-b", callableRemoteCard());
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
 
         installer.install("agent-id");
@@ -75,7 +75,7 @@ class RemoteA2aToolInstallerTest {
                 .description("Deep Agent A")
                 .build(), DeepAgentConfig.builder().enableTaskLoop(false).build(), null);
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
-        registry.register("agent-b", null);
+        registry.register("agent-b", callableRemoteCard());
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
 
         installer.install(deepAgent);
@@ -83,7 +83,7 @@ class RemoteA2aToolInstallerTest {
         assertThat(deepAgent.getAgent().getAbilityManager().listToolInfo())
                 .filteredOn(tool -> "agent-b".equals(tool.getName()))
                 .singleElement()
-                .satisfies(tool -> assertThat(tool.getDescription()).contains("remote A2A agent 'agent-b'"));
+                .satisfies(tool -> assertThat(tool.getDescription()).isEqualTo("Remote skill"));
     }
 
     @Test
@@ -107,19 +107,33 @@ class RemoteA2aToolInstallerTest {
     }
 
     @Test
-    void fallsBackToRemoteCardDescriptionWhenSkillsAreEmpty() {
+    void skipsToolInjectionWhenRemoteCardIsMissing() {
+        assertRemoteAgentNotInjected(null);
+    }
+
+    @Test
+    void skipsToolInjectionWhenRemoteCardSkillsAreEmpty() {
+        assertRemoteAgentNotInjected(remoteCard("Remote card fallback description", List.of()));
+    }
+
+    @Test
+    void installsToolAfterSkippedRegistryEntryGainsSkills() {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
         registry.register("agent-b", remoteCard("Remote card fallback description", List.of()));
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
 
         installer.install(agent);
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .noneMatch(tool -> "agent-b".equals(tool.getName()));
+
+        registry.register("agent-b", callableRemoteCard());
+        installer.install(agent);
 
         assertThat(agent.getAbilityManager().listToolInfo())
                 .filteredOn(tool -> "agent-b".equals(tool.getName()))
                 .singleElement()
-                .satisfies(tool -> assertThat(tool.getDescription())
-                        .isEqualTo("Remote card fallback description"));
+                .satisfies(tool -> assertThat(tool.getDescription()).isEqualTo("Remote skill"));
     }
 
     @Test
@@ -146,7 +160,7 @@ class RemoteA2aToolInstallerTest {
     void preservesRegistryEntryNameAsToolNameWithoutFormatValidation() {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
-        registry.register("Agent B", null);
+        registry.register("Agent B", callableRemoteCard());
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
 
         installer.install(agent);
@@ -154,14 +168,14 @@ class RemoteA2aToolInstallerTest {
         assertThat(agent.getAbilityManager().listToolInfo())
                 .filteredOn(tool -> "Agent B".equals(tool.getName()))
                 .singleElement()
-                .satisfies(tool -> assertThat(tool.getDescription()).contains("remote A2A agent 'Agent B'"));
+                .satisfies(tool -> assertThat(tool.getDescription()).isEqualTo("Remote skill"));
     }
 
     @Test
     void preservesRegistryEntryNameAsToolNameWithoutTrimming() {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
-        registry.register(" agent-b ", null);
+        registry.register(" agent-b ", callableRemoteCard());
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
 
         installer.install(agent);
@@ -169,8 +183,7 @@ class RemoteA2aToolInstallerTest {
         assertThat(agent.getAbilityManager().listToolInfo())
                 .filteredOn(tool -> " agent-b ".equals(tool.getName()))
                 .singleElement()
-                .satisfies(tool -> assertThat(tool.getDescription())
-                        .contains("remote A2A agent ' agent-b '"));
+                .satisfies(tool -> assertThat(tool.getDescription()).isEqualTo("Remote skill"));
         assertThat(agent.getAbilityManager().listToolInfo())
                 .noneMatch(tool -> "agent-b".equals(tool.getName()));
     }
@@ -179,11 +192,11 @@ class RemoteA2aToolInstallerTest {
     void installsNewRegistryEntriesIncrementally() {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
-        registry.register("agent-b", null);
+        registry.register("agent-b", callableRemoteCard());
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
 
         installer.install(agent);
-        registry.register("agent-c", null);
+        registry.register("agent-c", callableRemoteCard());
         installer.install(agent);
 
         assertThat(agent.getAbilityManager().listToolInfo())
@@ -196,7 +209,7 @@ class RemoteA2aToolInstallerTest {
     void concurrentInstallDoesNotDuplicateRemoteTool() throws Exception {
         ReActAgent agent = reactAgent();
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
-        registry.register("agent-b", null);
+        registry.register("agent-b", callableRemoteCard());
         RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
         int workers = 8;
         CountDownLatch start = new CountDownLatch(1);
@@ -223,12 +236,28 @@ class RemoteA2aToolInstallerTest {
                 .singleElement();
     }
 
+    private static void assertRemoteAgentNotInjected(org.a2aproject.sdk.spec.AgentCard remoteCard) {
+        ReActAgent agent = reactAgent();
+        A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
+        registry.register("agent-b", remoteCard);
+        RemoteA2aToolInstaller installer = RemoteA2aToolInstaller.create(registry);
+
+        installer.install(agent);
+
+        assertThat(agent.getAbilityManager().listToolInfo())
+                .noneMatch(tool -> "agent-b".equals(tool.getName()));
+    }
+
     private static ReActAgent reactAgent() {
         return new ReActAgent(AgentCard.builder()
                 .id("agent-a")
                 .name("Agent A")
                 .description("Agent A")
                 .build());
+    }
+
+    private static org.a2aproject.sdk.spec.AgentCard callableRemoteCard() {
+        return remoteCard("Remote card fallback description", List.of(skill("Remote skill")));
     }
 
     private static org.a2aproject.sdk.spec.AgentCard remoteCard(String description,
