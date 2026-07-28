@@ -16,7 +16,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
 
 /**
  * Verifies conditional Custom REST auto-configuration and path validation.
@@ -25,11 +27,22 @@ import org.springframework.context.annotation.Configuration;
  */
 class CustomRestAutoConfigurationTest {
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(CustomRestAutoConfiguration.class));
+            .withConfiguration(AutoConfigurations.of(CustomRestAutoConfiguration.class))
+            .withUserConfiguration(HandlerScanningConfiguration.class);
 
     @Test
     void doesNotEnableHandlerWithoutConfiguredPath() {
         contextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).doesNotHaveBean(CustomRestA2ABridge.class);
+            assertThat(context).doesNotHaveBean(CustomRestAutoConfiguration.CustomRestHandler.class);
+        });
+    }
+
+    @Test
+    void doesNotEnableHandlerWhenExplicitlyDisabled() {
+        contextRunner.withPropertyValues("openjiuwen.service.custom-rest.query-path=false").run(context -> {
+            assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(CustomRestA2ABridge.class);
             assertThat(context).doesNotHaveBean(CustomRestAutoConfiguration.CustomRestHandler.class);
         });
@@ -53,6 +66,16 @@ class CustomRestAutoConfigurationTest {
         assertThatThrownBy(() -> CustomRestAutoConfiguration.validateQueryPath("relative/{id}"))
                 .isInstanceOf(IllegalArgumentException.class);
         CustomRestAutoConfiguration.validateQueryPath("/custom/{id}");
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ComponentScan(
+            basePackageClasses = CustomRestAutoConfiguration.class,
+            includeFilters = @ComponentScan.Filter(
+                    type = FilterType.ASSIGNABLE_TYPE,
+                    classes = CustomRestAutoConfiguration.CustomRestHandler.class),
+            useDefaultFilters = false)
+    static class HandlerScanningConfiguration {
     }
 
     @Configuration(proxyBeanMethods = false)
