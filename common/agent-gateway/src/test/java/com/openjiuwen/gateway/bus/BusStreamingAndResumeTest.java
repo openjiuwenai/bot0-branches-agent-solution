@@ -74,8 +74,8 @@ class BusStreamingAndResumeTest {
         var resp = forwarder().forwardSync(createCtx("agent-1", "ms1"));
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).contains("COMPLETED_RESPONSE");
-        assertThat(outbox.enqueued().get(0).carriesPayloadRef()).isTrue();
-        assertThat(outbox.enqueued().get(0).payloadRef()).doesNotContain("token");
+        assertThat(outbox.enqueued().get(0).inlinePayload()).isNotNull();
+        assertThat(outbox.enqueued().get(0).inlinePayload()).doesNotContain("token");
     }
 
     @Test

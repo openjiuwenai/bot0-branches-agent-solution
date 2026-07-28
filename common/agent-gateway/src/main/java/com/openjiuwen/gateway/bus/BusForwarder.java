@@ -19,6 +19,8 @@ import com.openjiuwen.gateway.routing.RdcRouteClient;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -35,6 +37,7 @@ public class BusForwarder {
     private final String sourceServiceId;
     private final long acceptWindowMillis;
     private final long responseWindowMillis;
+    private static final Logger log = LoggerFactory.getLogger(BusForwarder.class);
 
     /**
      * Creates a forwarder wired with RDC search, control enqueue, projection feed, and G4.
@@ -78,6 +81,7 @@ public class BusForwarder {
         ForwardingEnvelope env = control.forward(ctx, chosen.routeHandle(), chosen.targetServiceId(),
                 sourceServiceId, System.currentTimeMillis() + 30000);
         String correlationId = env.correlationId();
+        log.info("forwardSync start corrId={} tenant={} target={}", correlationId, ctx.tenantId(), chosen.targetServiceId());
 
         long now = System.currentTimeMillis();
         WaitWindow window = new WaitWindow(now, acceptWindowMillis, responseWindowMillis);
@@ -88,28 +92,60 @@ public class BusForwarder {
             var timedOut = window.checkTimeout(System.currentTimeMillis());
             if (timedOut.isPresent()) {
                 InvocationResponseStatus status = timedOut.get();
-                g4w.onFold(status, ctx.tenantId(), ctx.messageId(), statusBody(status));
-                return ResponseEntity.ok().body(statusBody(status));
+                String body = statusBody(status, window.taskId(), null);
+                log.info("forwardSync corrId={} TIMEOUT→{} taskId={}", correlationId, status, window.taskId());
+                g4w.onFold(status, ctx.tenantId(), ctx.messageId(), body);
+                return ResponseEntity.ok().body(body);
             }
             var proj = projectionFeed.poll(correlationId);
-            if (proj.isPresent()) {
-                var event = proj.get();
-                InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
-                if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
-                    window.onProjection(folded, event.taskId(), System.currentTimeMillis());
-                } else if (FiveStateFolder.isTerminal(folded)) {
-                    window.onProjection(folded, null, System.currentTimeMillis());
-                } else {
-                    // non-terminal non-accept (e.g. STREAM_READY): keep polling
-                    continue;
-                }
+            if (proj.isEmpty()) {
+                continue;
             }
+            var event = proj.get();
+            InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
+            if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
+                window.onProjection(folded, event.taskId(), System.currentTimeMillis());
+            } else if (FiveStateFolder.isTerminal(folded)
+                    || folded == InvocationResponseStatus.INPUT_REQUIRED) {
+                // terminal or wait-for-input: surface to the client and end the blocking call
+                String taskId = event.taskId() != null ? event.taskId() : window.taskId();
+                String body = statusBody(folded, taskId, event.body());
+                log.info("forwardSync corrId={} folded={} taskId={} bodyPresent={}", correlationId, folded, taskId, event.body() != null);
+                g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
+                return ResponseEntity.ok().body(body);
+            }
+            // non-terminal non-accept (e.g. STREAM_READY): keep polling
         }
-        g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), null);
-        return ResponseEntity.ok().body(statusBody(InvocationResponseStatus.UNKNOWN));
+        String unknownBody = statusBody(InvocationResponseStatus.UNKNOWN, null, null);
+        log.info("forwardSync corrId={} UNKNOWN (no projection matched within accept+response window)", correlationId);
+        g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), unknownBody);
+        return ResponseEntity.ok().body(unknownBody);
     }
 
-    private static String statusBody(InvocationResponseStatus s) {
-        return "{\"result\":{\"status\":\"" + s.name() + "\"}}";
+    /**
+     * Builds the client-facing status body. COMPLETED_RESPONSE with a decoded A2A response
+     * returns that response directly (the gateway forwards the A2A JSON-RPC response); other
+     * statuses return {@code {"result":{"status":...}}}, with {@code taskId} when known and
+     * {@code reason} for REJECTED/FAILED.
+     *
+     * @param s folded invocation status
+     * @param taskId task id when known (ACCEPTED_WITH_TASK / INPUT_REQUIRED / accepted-then-response)
+     * @param body decoded A2A response (RESPONSE/TERMINAL) or reason (REJECTED/FAILED)
+     * @return the HTTP response body
+     */
+    private static String statusBody(InvocationResponseStatus s, String taskId, String body) {
+        if (s == InvocationResponseStatus.COMPLETED_RESPONSE && body != null && !body.isBlank()) {
+            return body;
+        }
+        StringBuilder sb = new StringBuilder("{\"result\":{\"status\":\"").append(s.name()).append("\"");
+        if (taskId != null && !taskId.isBlank()) {
+            sb.append(",\"taskId\":\"").append(taskId).append("\"");
+        }
+        if ((s == InvocationResponseStatus.REJECTED || s == InvocationResponseStatus.FAILED)
+                && body != null && !body.isBlank()) {
+            sb.append(",\"reason\":\"").append(body).append("\"");
+        }
+        sb.append("}}");
+        return sb.toString();
     }
 }

@@ -86,6 +86,30 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <!-- Plain (library) jar with the 'lib' classifier so the launcher module can depend
+                 on agent-gateway and see com.openjiuwen.gateway.* on its compile/runtime classpath
+                 (the main artifact is the executable fat-jar whose BOOT-INF hides classes). The
+                 main artifact stays the fat-jar for DIRECT-mode `java -jar`; this lib jar is
+                 attached separately. Runtime config is excluded — the launcher owns deployment
+                 config (registry-discovery-center convention). -->
+            <id>lib-jar</id>
+            <phase>package</phase>
+            <goals><goal>jar</goal></goals>
+            <configuration>
+              <classifier>lib</classifier>
+              <excludes>
+                <exclude>application*.yml</exclude>
+                <exclude>application*.properties</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>

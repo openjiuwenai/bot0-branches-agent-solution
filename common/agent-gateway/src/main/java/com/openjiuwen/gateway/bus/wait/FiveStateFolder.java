@@ -25,6 +25,7 @@ public final class FiveStateFolder {
             case INVOCATION_ACCEPTED -> InvocationResponseStatus.ACCEPTED_WITH_TASK;
             case INVOCATION_REJECTED -> InvocationResponseStatus.REJECTED;
             case INVOCATION_FAILED -> InvocationResponseStatus.FAILED;
+            case INVOCATION_INPUT_REQUIRED -> InvocationResponseStatus.INPUT_REQUIRED;
             case INVOCATION_STREAM_READY -> InvocationResponseStatus.STREAM_READY;
             default -> throw new IllegalArgumentException("Unexpected projection event: " + eventType);
         };

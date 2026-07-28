@@ -137,4 +137,23 @@ class BusForwarderTest {
         forwarder.forwardSync(ctx("agent-1", "m10"));
         assertThat(g4.isCompleted("T1", "m10")).contains(true);
     }
+
+    @Test
+    void syncCreateReturnsInputRequired() {
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        g4.check("T1", "m-ir", "fp");
+        feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "ti-1", null);
+        var resp = forwarder.forwardSync(ctx("agent-1", "m-ir"));
+        assertThat(resp.getBody()).contains("INPUT_REQUIRED").contains("ti-1");
+        assertThat(g4.isCompleted("T1", "m-ir")).contains(true);
+    }
+
+    @Test
+    void completedResponseSurfacesA2aBody() {
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null, null,
+                "{\"result\":{\"id\":\"t9\"}}");
+        var resp = forwarder.forwardSync(ctx("agent-1", "m-body"));
+        assertThat(resp.getBody()).isEqualTo("{\"result\":{\"id\":\"t9\"}}");
+    }
 }

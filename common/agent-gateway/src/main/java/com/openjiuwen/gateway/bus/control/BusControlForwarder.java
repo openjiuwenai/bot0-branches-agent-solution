@@ -53,15 +53,19 @@ public class BusControlForwarder {
                                      String targetServiceId, String sourceServiceId,
                                      long deadlineMillisEpoch) {
         String payloadRef = null;
+        String inlinePayload = null;
         if (ctx.rawBody() != null && !ctx.rawBody().isBlank()) {
-            payloadRef = payloadStore.stash(ctx.rawBody());
+            // P-06 2b: inline the small A2A body so a separate-process consumer reads it directly.
+            // Do NOT stash a process-internal payloadRef — the consumer's BusEnvelopeValidator rejects
+            // a non-null payloadRef that isn't a valid external reference (PAYLOAD_REFERENCE_INVALID).
+            inlinePayload = ctx.rawBody();
         }
         String idempotencyKey = ctx.messageId() != null && !ctx.messageId().isBlank()
                 ? ctx.messageId() : "gw-idem-" + UUID.randomUUID();
         ForwardingEnvelope envelope = envelopeBuilder.buildEnvelope(new EnvelopeBuilder.BuildRequest(
                 ctx.tenantId(), ctx.traceId(), idempotencyKey,
                 routeHandleValue, targetServiceId, sourceServiceId,
-                payloadRef, deadlineMillisEpoch));
+                payloadRef, deadlineMillisEpoch), inlinePayload);
         try {
             outboxPort.enqueue(envelope, sourceServiceId, targetServiceId, System.currentTimeMillis());
             return envelope;
