@@ -61,13 +61,14 @@ final class ReclassifyOrchestratorProxy {
     }
 
     private static void collectInterfaces(Class<?> type, Set<Class<?>> out) {
-        while (type != null && type != Object.class) {
-            for (Class<?> iface : type.getInterfaces()) {
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            for (Class<?> iface : current.getInterfaces()) {
                 if (out.add(iface)) {
                     collectInterfaces(iface, out);
                 }
             }
-            type = type.getSuperclass();
+            current = current.getSuperclass();
         }
     }
 
