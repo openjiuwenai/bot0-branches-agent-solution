@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.app.custom.rest;
 
+import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Converts a host-specific REST protocol to and from the runtime A2A contract.
@@ -28,8 +30,8 @@ public interface CustomRestProtocolAdapter {
     A2ASendCommand toA2ARequest(Context context);
 
     /**
-     * Projects an A2A Task to the customer response. Implementations must not expose the
-     * framework-generated internal context id.
+     * Projects an A2A Task to the customer response. The task context id is the business conversation id
+     * supplied in {@link MessageSendParams#message()}.
      *
      * @param task A2A task returned by the runtime
      * @param context immutable host request context
@@ -38,8 +40,8 @@ public interface CustomRestProtocolAdapter {
     Object fromA2ATask(Task task, Context context);
 
     /**
-     * Projects a streaming event to the customer response. Implementations must not expose the
-     * framework-generated internal context id.
+     * Projects a streaming event to the customer response. Event context ids preserve the business conversation id
+     * supplied in {@link MessageSendParams#message()}.
      *
      * @param event A2A streaming event
      * @param context immutable host request context
@@ -65,7 +67,34 @@ public interface CustomRestProtocolAdapter {
      */
     SseEvent fromStreamError(CustomRestError error, Context context);
 
-    record A2ASendCommand(MessageSendParams params, String conversationId, boolean stream) {
+    /**
+     * A Custom REST request mapped to the runtime A2A contract.
+     *
+     * @param params A2A message parameters
+     * @param stream whether to execute through the streaming request handler
+     */
+    record A2ASendCommand(MessageSendParams params, boolean stream) {
+        /**
+         * Creates a command from the legacy contract where the conversation id was a separate argument.
+         *
+         * @param params A2A message parameters
+         * @param conversationId business conversation id to store in the A2A message
+         * @param stream whether to execute through the streaming request handler
+         * @deprecated set {@link Message#contextId()} in {@code params} and use
+         *             {@link #A2ASendCommand(MessageSendParams, boolean)}
+         */
+        @Deprecated
+        public A2ASendCommand(MessageSendParams params, String conversationId, boolean stream) {
+            this(withConversationId(params, conversationId), stream);
+        }
+
+        private static MessageSendParams withConversationId(MessageSendParams params, String conversationId) {
+            if (params == null || Objects.equals(params.message().contextId(), conversationId)) {
+                return params;
+            }
+            Message message = Message.builder(params.message()).contextId(conversationId).build();
+            return new MessageSendParams(message, params.configuration(), params.metadata(), params.tenant());
+        }
     }
 
     record SseEvent(String event, Object data) {

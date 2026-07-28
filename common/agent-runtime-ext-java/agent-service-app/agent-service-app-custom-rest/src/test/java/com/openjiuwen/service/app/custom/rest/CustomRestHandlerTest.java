@@ -33,9 +33,7 @@ class CustomRestHandlerTest {
     void nonSerializableBlockingProjectionUsesStableAdapterErrorResponse() throws Exception {
         CustomRestA2ABridge bridge = mock(CustomRestA2ABridge.class);
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
-        var command = mock(CustomRestProtocolAdapter.A2ASendCommand.class);
-        when(command.stream()).thenReturn(false);
-        when(prepared.command()).thenReturn(command);
+        when(prepared.stream()).thenReturn(false);
         when(bridge.prepare(any(), anyBoolean())).thenReturn(prepared);
         when(bridge.executeBlocking(prepared)).thenReturn(new SelfReference());
         when(bridge.projectError(any(), any())).thenReturn(Map.of("error", "safe"));
@@ -111,9 +109,7 @@ class CustomRestHandlerTest {
     void streamingResponseDisablesProxyCachingAndBuffering() throws Exception {
         CustomRestA2ABridge bridge = mock(CustomRestA2ABridge.class);
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
-        var command = mock(CustomRestProtocolAdapter.A2ASendCommand.class);
-        when(command.stream()).thenReturn(true);
-        when(prepared.command()).thenReturn(command);
+        when(prepared.stream()).thenReturn(true);
         when(bridge.prepare(any(), anyBoolean())).thenReturn(prepared);
         Flow.Publisher<StreamingEventKind> publisher = subscriber -> {
         };
@@ -147,9 +143,7 @@ class CustomRestHandlerTest {
 
     private static CustomRestA2ABridge.Prepared blockingPrepared() {
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
-        var command = mock(CustomRestProtocolAdapter.A2ASendCommand.class);
-        when(command.stream()).thenReturn(false);
-        when(prepared.command()).thenReturn(command);
+        when(prepared.stream()).thenReturn(false);
         return prepared;
     }
 

@@ -20,13 +20,7 @@ import org.a2aproject.sdk.spec.ListTasksParams;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskState;
 
-import java.io.ByteArrayOutputStream;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -34,12 +28,11 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Resolves resumable formal A2A tasks within an isolated Custom REST conversation context.
+ * Resolves resumable formal A2A tasks within a Custom REST conversation context.
  *
  * @since 0.1.0
  */
 final class CustomRestA2ATaskResolver {
-    private static final String CONTEXT_PREFIX = "custom-rest:v1:";
     private static final int PAGE_SIZE = 100;
 
     private final TaskStore taskStore;
@@ -48,26 +41,8 @@ final class CustomRestA2ATaskResolver {
         this.taskStore = Objects.requireNonNull(taskStore, "taskStore");
     }
 
-    static String internalContextId(String tenantId, String conversationId) {
-        Objects.requireNonNull(conversationId, "conversationId");
-        try {
-            ByteArrayOutputStream framed = new ByteArrayOutputStream();
-            if (tenantId == null) {
-                framed.write(0);
-            } else {
-                framed.write(1);
-                writeFramed(framed, tenantId);
-            }
-            writeFramed(framed, conversationId);
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(framed.toByteArray());
-            return CONTEXT_PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
-
-    Optional<String> resolveTaskId(String tenantId, String internalContextId) {
-        List<Task> tasks = loadTasks(tenantId, internalContextId);
+    Optional<String> resolveTaskId(String tenantId, String conversationId) {
+        List<Task> tasks = loadTasks(tenantId, conversationId);
         List<Task> activeFormalTasks = new ArrayList<>();
         for (Task task : tasks) {
             TaskState state = stateOf(task);
@@ -108,19 +83,19 @@ final class CustomRestA2ATaskResolver {
                 "The conversation task state is unrecognized");
     }
 
-    boolean isObservableFormalParent(String taskId, String internalContextId) {
+    boolean isObservableFormalParent(String taskId, String conversationId) {
         if (taskId == null) {
             return false;
         }
         try {
             Task task = taskStore.get(taskId);
-            return task != null && internalContextId.equals(task.contextId()) && isFormal(task);
+            return task != null && conversationId.equals(task.contextId()) && isFormal(task);
         } catch (TaskStoreException | IllegalStateException exception) {
             throw new CustomRestFailure(503, "task_store_unavailable", "The task store is unavailable");
         }
     }
 
-    private List<Task> loadTasks(String tenantId, String internalContextId) {
+    private List<Task> loadTasks(String tenantId, String conversationId) {
         try {
             List<Task> tasks = new ArrayList<>();
             Set<String> seenTokens = new HashSet<>();
@@ -130,7 +105,7 @@ final class CustomRestA2ATaskResolver {
                     throw new IllegalStateException("TaskStore returned a repeated page token");
                 }
                 ListTasksParams params = ListTasksParams.builder()
-                        .contextId(internalContextId)
+                        .contextId(conversationId)
                         .pageSize(PAGE_SIZE)
                         .pageToken(pageToken)
                         .historyLength(0)
@@ -149,7 +124,7 @@ final class CustomRestA2ATaskResolver {
                         continue;
                     }
                     Task current = taskStore.get(summary.id());
-                    if (current != null && internalContextId.equals(current.contextId())) {
+                    if (current != null && conversationId.equals(current.contextId())) {
                         tasks.add(current);
                     }
                 }
@@ -179,11 +154,5 @@ final class CustomRestA2ATaskResolver {
     private static boolean isKnownTerminal(TaskState state) {
         return state == TASK_STATE_COMPLETED || state == TASK_STATE_FAILED || state == TASK_STATE_CANCELED
                 || state == TASK_STATE_REJECTED;
-    }
-
-    private static void writeFramed(ByteArrayOutputStream output, String value) {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        output.writeBytes(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
-        output.writeBytes(bytes);
     }
 }

@@ -96,7 +96,7 @@ public class CustomRestAutoConfiguration {
                 context = new CustomRestProtocolAdapter.Context(headers, pathVariables, query, body);
                 boolean acceptsSse = acceptsSse(headers.get(HttpHeaders.ACCEPT.toLowerCase(Locale.ROOT)));
                 CustomRestA2ABridge.Prepared prepared = bridge.prepare(context, acceptsSse);
-                if (prepared.command().stream()) {
+                if (prepared.stream()) {
                     SseEmitter emitter = sseTransport.connect(bridge.executeStream(prepared), prepared);
                     return ResponseEntity.ok()
                             .contentType(MediaType.TEXT_EVENT_STREAM)
