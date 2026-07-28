@@ -1,0 +1,44 @@
+[
+  {
+    "rule_id": "C001",
+    "cause": "S_high",
+    "condition": "sulfur > 1500",
+    "effect": "dcc_risk",
+    "reason": "硫含量偏高，DCC装置腐蚀风险增加，建议优先选择柴油加氢或蜡油加氢裂化"
+  },
+  {
+    "rule_id": "C002",
+    "cause": "N_high",
+    "condition": "N > 40",
+    "effect": "wax_crack_catalyst_deactivation",
+    "reason": "环烷烃含量高，蜡油加氢裂化催化剂活性好，轻油收率高"
+  },
+  {
+    "rule_id": "C003",
+    "cause": "A_high",
+    "condition": "A > 30",
+    "effect": "dcc_propylene_boost",
+    "reason": "芳烃含量高有利于DCC丙烯收率提升，经济效益显著"
+  },
+  {
+    "rule_id": "C004",
+    "cause": "density_high",
+    "condition": "density > 0.78",
+    "effect": "dcc_prefer",
+    "reason": "高密度原料分子量较大，DCC裂解效果好，轻烃产率高"
+  },
+  {
+    "rule_id": "C005",
+    "cause": "BMCI_low",
+    "condition": "P > 50",
+    "effect": "diesel_hydro_prefer",
+    "reason": "烷烃含量高（BMCI偏低），柴油加氢收率稳定，加工成本低"
+  },
+  {
+    "rule_id": "C006",
+    "cause": "N_high_density_high",
+    "condition": "N > 35 and density > 0.76",
+    "effect": "wax_crack_high_yield",
+    "reason": "环烷烃含量高+密度适中，蜡油加氢裂化轻油收率最优"
+  }
+]

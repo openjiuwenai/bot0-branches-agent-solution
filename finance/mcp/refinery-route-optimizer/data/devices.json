@@ -1,0 +1,38 @@
+[
+  {
+    "device_id": "diesel_hydro",
+    "name": "柴油加氢",
+    "device_type": "diesel_hydro",
+    "ontology_device_id": "HU-01",
+    "capacity": 5000,
+    "sulfur_limit": 2000,
+    "nitrogen_limit": 500,
+    "carbon_residue_limit": 2.0,
+    "density_min": 0.70,
+    "density_max": 0.85
+  },
+  {
+    "device_id": "wax_hydro_crack",
+    "name": "蜡油加氢裂化",
+    "device_type": "wax_hydro_crack",
+    "ontology_device_id": "HU-02",
+    "capacity": 4000,
+    "sulfur_limit": 3000,
+    "nitrogen_limit": 800,
+    "carbon_residue_limit": 3.0,
+    "density_min": 0.72,
+    "density_max": 0.90
+  },
+  {
+    "device_id": "dcc",
+    "name": "DCC",
+    "device_type": "dcc",
+    "ontology_device_id": "DCC-01",
+    "capacity": 4500,
+    "sulfur_limit": 1500,
+    "nitrogen_limit": 600,
+    "carbon_residue_limit": 4.0,
+    "density_min": 0.72,
+    "density_max": 0.92
+  }
+]

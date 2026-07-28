@@ -1,0 +1,82 @@
+[
+  {
+    "rule_id": "S001",
+    "device_id": "diesel_hydro",
+    "field": "sulfur",
+    "operator": "lte",
+    "threshold": 2000,
+    "unit": "ppm",
+    "message": "柴油加氢进料硫含量不得超过2000ppm",
+    "severity": "error"
+  },
+  {
+    "rule_id": "S002",
+    "device_id": "diesel_hydro",
+    "field": "nitrogen",
+    "operator": "lte",
+    "threshold": 500,
+    "unit": "ppm",
+    "message": "柴油加氢进料氮含量不得超过500ppm",
+    "severity": "error"
+  },
+  {
+    "rule_id": "S003",
+    "device_id": "diesel_hydro",
+    "field": "carbon_residue",
+    "operator": "lte",
+    "threshold": 2.0,
+    "unit": "%",
+    "message": "柴油加氢进料残炭不得超过2.0%",
+    "severity": "error"
+  },
+  {
+    "rule_id": "S004",
+    "device_id": "wax_hydro_crack",
+    "field": "sulfur",
+    "operator": "lte",
+    "threshold": 3000,
+    "unit": "ppm",
+    "message": "蜡油加氢裂化进料硫含量不得超过3000ppm",
+    "severity": "error"
+  },
+  {
+    "rule_id": "S005",
+    "device_id": "wax_hydro_crack",
+    "field": "nitrogen",
+    "operator": "lte",
+    "threshold": 800,
+    "unit": "ppm",
+    "message": "蜡油加氢裂化进料氮含量不得超过800ppm",
+    "severity": "error"
+  },
+  {
+    "rule_id": "S006",
+    "device_id": "dcc",
+    "field": "sulfur",
+    "operator": "lte",
+    "threshold": 1500,
+    "unit": "ppm",
+    "message": "DCC进料硫含量不得超过1500ppm",
+    "severity": "error"
+  },
+  {
+    "rule_id": "S007",
+    "device_id": "dcc",
+    "field": "carbon_residue",
+    "operator": "lte",
+    "threshold": 4.0,
+    "unit": "%",
+    "message": "DCC进料残炭不得超过4.0%",
+    "severity": "warning"
+  },
+  {
+    "rule_id": "S008",
+    "device_id": "diesel_hydro",
+    "field": "density",
+    "operator": "lte",
+    "threshold": 0.85,
+    "unit": "g/ml",
+    "message": "柴油加氢进料密度不得超过0.85g/ml",
+    "severity": "warning"
+  }
+]
