@@ -20,7 +20,6 @@ import com.huawei.ascend.edp.channel.ToolDataChannel;
 import com.huawei.ascend.edp.channel.ToolDataKey;
 import com.huawei.ascend.edp.channel.ToolDataKeyFactory;
 import com.huawei.ascend.edp.config.EdpConfig;
-import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig.VersatileConfig;
 import com.huawei.ascend.edp.config.ScriptConstants;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
@@ -34,9 +33,7 @@ import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.foundation.llm.schema.ToolMessage;
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.session.SessionContextHolder;
-import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.singleagent.interrupt.InterruptRequest;
-import com.openjiuwen.core.singleagent.interrupt.ToolInterruptionState;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.core.sysop.OperationMode;
@@ -92,6 +89,15 @@ import java.util.regex.Pattern;
  */
 
 public class VersatileDelegateRail extends BaseInterruptRail {
+    /** 远端 versatile-agent 的 agentName（对应 application.yml 的 remote-agents[].name）。 */
+    public static final String REMOTE_AGENT_NAME = "versatile-agent";
+
+    /** pre-delegate guard 计数器在 ToolDataChannel 中的 state_key 前缀。 */
+    static final String GUARD_STATE_KEY_PREFIX = "_pre_delegate_guard:";
+
+    /** history_info 持久化键（与 McpInterruptRail 同名，共享四元组隔离）。 */
+    static final String HISTORY_INFO_KEY = "history_info";
+
     private static final Logger LOGGER = LoggerFactory.getLogger(VersatileDelegateRail.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -101,9 +107,6 @@ public class VersatileDelegateRail extends BaseInterruptRail {
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
     };
 
-    /** 远端 versatile-agent 的 agentName（对应 application.yml 的 remote-agents[].name）。 */
-    public static final String REMOTE_AGENT_NAME = "versatile-agent";
-
     /**
      * afterToolCall 归一化挂载标志。
      *
@@ -112,12 +115,6 @@ public class VersatileDelegateRail extends BaseInterruptRail {
      * 设置此标志，afterToolCall 检测到 true 才执行归一化并清除标志。</p>
      */
     private static final String KEY_NORMALIZE_PENDING = "_edp_versatile_normalize_pending";
-
-    /** pre-delegate guard 计数器在 ToolDataChannel 中的 state_key 前缀。 */
-    static final String GUARD_STATE_KEY_PREFIX = "_pre_delegate_guard:";
-
-    /** history_info 持久化键（与 McpInterruptRail 同名，共享四元组隔离）。 */
-    static final String HISTORY_INFO_KEY = "history_info";
 
     /** 银联卡号正则：以 62 开头的 16-19 位连续数字。 */
     private static final Pattern BANK_CARD_NUMBER_PATTERN = Pattern.compile("(62\\d{14,17})");
@@ -686,6 +683,9 @@ public class VersatileDelegateRail extends BaseInterruptRail {
                 if (depth == 0) {
                     return Optional.of(source.substring(braceStart, i + 1));
                 }
+            } else {
+                // 其他字符（普通内容、空白等）无需处理，继续扫描下一个字符。
+                continue;
             }
         }
         return Optional.empty();
@@ -792,6 +792,10 @@ public class VersatileDelegateRail extends BaseInterruptRail {
      *
      * <p>远端 VersatileRequestExtractor 把 message.parts[0].text 当 JSON 解析，
      * 从中读 {@code query} 和 {@code intent}。必须扁平化这两个键，否则 intent 为空。</p>
+     *
+     * @param toolCall LLM 工具调用对象（保留用于后续扩展，当前未读取）
+     * @param args 已解析的工具参数 Map，将扁平化 query/intent 后序列化
+     * @return 远端期望的 JSON 字符串；参数为空或序列化失败时返回 "{}"
      */
     private static String extractRemoteInput(ToolCall toolCall, Map<String, Object> args) {
         if (args == null || args.isEmpty()) {
