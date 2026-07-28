@@ -60,6 +60,7 @@ common/agents/edpa-alpha/
 TestRun/
 TestRun.rar
 /.pipeline/
+docs/superpowers/
 
 # Local test reports and tools — not for production
 common/agents/edp-agent-java/scenarios/wealth-demo/test/git_changes_report.md

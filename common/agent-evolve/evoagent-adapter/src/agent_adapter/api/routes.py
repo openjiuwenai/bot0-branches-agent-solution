@@ -328,10 +328,24 @@ def _trace_source(request: Request):
     return request.app.state.trace_source
 
 
-def _filter_complete(records: list[dict], complete: bool | None) -> list[dict]:
-    """按 _incomplete 标记过滤 (log 模式 trace_assembler 产出的完整性标记)。"""
+def _filter_complete(
+    records: list[dict],
+    complete: bool | None,
+    *,
+    complete_signal: bool | None = None,
+) -> list[dict]:
+    """按完整性过滤 records。
+
+    - complete is None: 原样返回 (不过滤)。
+    - standard 模式 (complete_signal 显式传入): records 无 _incomplete 标记,
+      按会话级 complete_signal 整体过滤——请求值与信号一致则保留全部 records, 否则空。
+    - log 模式 (complete_signal 默认 None): 按 record 级 _incomplete 逐条过滤
+      (trace_assembler 产出的完整性标记)。
+    """
     if complete is None:
         return records
+    if complete_signal is not None:
+        return records if complete_signal == complete else []
     return [r for r in records if r.get("_incomplete", False) != complete]
 
 
@@ -394,7 +408,15 @@ async def get_agent_traces(
 
     await pipelines[agent_name].poll()
     records = await _trace_source(request).get_records(agent_name, conversation_id)
-    records = _filter_complete(records, complete)
+
+    repo = getattr(request.app.state, "repo", None)
+    if repo is not None and complete is not None:
+        # standard 模式: records 无 _incomplete, 按会话级信号整体过滤 (非等待, 仅查当前根 span 状态)。
+        root = await repo.get_root_span(conversation_id)
+        signal = root is not None and bool(root.get("end_time"))
+        records = _filter_complete(records, complete, complete_signal=signal)
+    else:
+        records = _filter_complete(records, complete)
 
     total = len(records)
     if limit is not None:
@@ -441,11 +463,11 @@ async def get_traces(
     if repo is not None:  # standard: 先等根 span, 再取 spans
         complete_signal = await _await_root_span(repo, conversation_id, config.trace_wait_timeout)
         records = await trace_source.get_records(None, conversation_id)
+        records = _filter_complete(records, complete, complete_signal=complete_signal)
     else:  # log: 取归档, complete 按完整性标记
         records = await trace_source.get_records(None, conversation_id)
         complete_signal = not any(r.get("_incomplete", False) for r in records)
-
-    records = _filter_complete(records, complete)
+        records = _filter_complete(records, complete)
 
     total = len(records)
     if limit is not None:

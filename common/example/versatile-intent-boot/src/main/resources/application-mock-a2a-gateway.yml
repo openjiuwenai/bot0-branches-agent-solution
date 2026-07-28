@@ -1,0 +1,14 @@
+# Profile: mock-a2a-gateway
+# 独立的 mock A2A Gateway 进程，仅暴露 POST /a2a/{agentId} 端点，用于验证
+# a2a-gateway.enabled=true 时 A2AGatewayRemoteAgentCaller 的 header 透传与
+# URL 路由行为。
+#
+# 该进程不注册 VersatileAgentHandler（无 url-template），也不激活
+# A2AGateway caller（enabled=false）— 它只接收 inbound A2A 请求。
+server:
+  port: 8084
+
+openjiuwen:
+  service:
+    a2a-gateway:
+      enabled: false

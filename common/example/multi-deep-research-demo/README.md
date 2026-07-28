@@ -21,6 +21,7 @@
 - [本地开发（mvn spring-boot:run）](#本地开发mvn-spring-bootrun)
 - [端到端调用](#端到端调用)
 - [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密)
+- [MCP 服务器接入](#mcp-服务器接入)
 - [配置字段速查](#配置字段速查)
 - [工作目录产物](#工作目录产物)
 
@@ -142,6 +143,7 @@ multi-deep-research-demo/
 | **SkillHub SKILL.md 读取**（FEAT-005 L3 收尾） | Harness tool | `SkillReadFileRail` → `readFile(file_path)`，路径必须落在 workspace 或运维显式声明的白名单根目录下 | LLM 按 core-java `SkillUtil.getSkillPrompt` 硬编码指令主动调用；工具名固定 camelCase `readFile`（core-java `warnMissingSkillReadFileTool` 用同一字符串按名查找）；64 KB 上限 + UTF-8 强制解码，成功日志只打 basename + 字节数 |
 | **Skill 观察日志**（FEAT-005 层 2 观察） | 纯观察 Rail | `SkillObservationRail`（priority 90，业务 rail 之后跑） | 每次请求打 `skills_available count=N names=[...]`；名称变化时补 `skills_delta`；每次 tool 决策打 `tool_call iter=N tool=X hit_skill=<bool>`；请求收尾打 `invoke_summary tool_calls=N skill_hits=M` |
 | **SKILL.md 日志脱敏**（FEAT-005 log-leak fix） | Spring profile | `application.yml` 内 `spring.config.activate.on-profile: skillhub-remote` 的多文档块把 `logging.level.tool` / `logging.level.llm` 压到 WARN | 由 `DeepResearchRuntimeApplication.main()` 在 `openjiuwen.service.middleware.skillhub.enabled=true` 时自动 `setAdditionalProfiles("skillhub-remote")`；三种识别源：`--openjiuwen.service.middleware.skillhub.enabled=true` 启动参数、`-Dopenjiuwen.service.middleware.skillhub.enabled=true` sysprop、`SKILLHUB_ENABLED=true` 环境变量。屏蔽 `AbilityManager.logToolResult` 与 `BaseModelClient` 消息历史两处 INFO 泄露通道，参见 [SkillHub 中间件与凭据加密 § SKILL.md 日志脱敏](#skillmd-日志脱敏skillhub-remote-profile) |
+| **MCP 服务器接入**（可选） | 启动期 probe + 注册 | `McpRegistrar` → `Runner.resourceMgr().addMcpServer()`；配套独立子项目 `agent-mcp-docserver` 提供 spec-compliant MCP docserver 测桩 | opt-in（`MCP_DOCSERVER_URL` 非空即启用）；启动前 HTTP `initialize` probe，通过则注册，失败降级不阻塞启动。工具集通过 `DeepAgent.syncMcpServersFromResourceMgr()` 曝光给 LLM。见 [MCP 服务器接入](#mcp-服务器接入) |
 
 `search-agent` 支持 `stub` profile 用本地 fixture 演示，无需 Tavily key；prod profile 需要 `TAVILY_API_KEY`。`verify-agent` 是纯 LLM judge，只需 LLM 环境变量，无外部依赖。
 
@@ -697,6 +699,116 @@ The following 1 profile is active: "skillhub-remote"
 
 ---
 
+## MCP 服务器接入
+
+opt-in 能力：deep-research root DeepAgent 启动阶段可以 probe 一组 MCP 服务器并把 spec-compliant 的工具注册到 `Runner.resourceMgr()`，之后由 `DeepAgent.syncMcpServersFromResourceMgr()` 曝光给 LLM。库层不感知具体 MCP 实现，切换服务器只改 yaml。
+
+### 何时用
+
+- 需要接入外部 MCP 服务器（内部文档检索、代码索引、第三方 SaaS 的 MCP endpoint 等），且服务器满足 MCP 标准（`initialize` / `tools/list` / `tools/call` / 可选 `resources/list` / `resources/read`）
+- 不启用时（`MCP_DOCSERVER_URL` 空，默认），`McpRegistrar` 不会向 `Runner.resourceMgr()` 注册任何 MCP server，`DeepAgent` 的工具集不变
+
+### 组件分工
+
+- [McpRegistrar](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/McpRegistrar.java)：`DeepResearchAgentFactory.build()` 在构造 `DeepAgent` 之前调 `probeAndRegister(props.getMcpServers())`。每个 server 先用 `HttpURLConnection` 发一次 MCP `initialize`，通过才 `Runner.resourceMgr().addMcpServer()`；probe 失败**只日志、不抛**，绝不阻塞 agent 启动。
+- [McpServerSetting](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/McpServerSetting.java)：yaml 绑定 POJO，传输无关（`streamable_http` / `sse` / `stdio` 都可）。
+- `DeepAgent.ensureInitialized()` → `syncMcpServersFromResourceMgr()`：DeepAgent 首次执行时把已注册的 MCP servers 同步到内部 `AbilityManager`，工具才对 LLM 可见。**注册必须早于 DeepAgent 构造**，否则 sync 抓不到。
+
+### 快速上手（配合本仓测桩 docserver）
+
+配套子项目 [agent-mcp-docserver](agent-mcp-docserver/) 是**独立可运行**的 spec-compliant MCP docserver 测桩，内置 6 份国产 LLM 定价 fixture（`baichuan` / `deepseek` / `minimax` / `moonshot` / `qwen` / `zhipu`）。用它可以脱离外部依赖端到端跑通 MCP 接入流程。
+
+**启动 docserver**（默认端口 18095）：
+
+```bash
+mvn -f common/example/multi-deep-research-demo/agent-mcp-docserver/pom.xml \
+    spring-boot:run
+# 或先 mvn package，然后 java -jar target/agent-mcp-docserver-0.1.0-SNAPSHOT.jar
+
+# 验活
+curl -s http://127.0.0.1:18095/actuator/health   # {"status":"UP"}
+```
+
+**启用 deep-research 侧接入**：
+
+```bash
+export MCP_DOCSERVER_URL=http://127.0.0.1:18095/mcp
+# 可选覆盖：
+# export MCP_DOCSERVER_NAME=deep-research-doc-lib
+# export MCP_DOCSERVER_CLIENT_TYPE=streamable_http
+# export MCP_DOCSERVER_CONNECT_TIMEOUT=3
+# export MCP_DOCSERVER_CALL_TIMEOUT=5
+
+# 起 deep-research，日志观察：
+grep -E "McpRegistrar|addMcpServer|syncMcpServers" deep-research.log
+```
+
+期望的 evidence：
+```
+McpRegistrar probing server name=deep-research-doc-lib url=http://127.0.0.1:18095/mcp
+McpRegistrar probe OK, registering with resourceMgr
+add mcp server succeed, serverId=<uuid>, serverName=deep-research-doc-lib
+DeepAgent syncMcpServersFromResourceMgr picked up N MCP tools
+```
+
+之后 LLM 的 tool list 里会出现 docserver 暴露的 `search_knowledge_base` / `get_document_summary` 等工具。
+
+### 接第三方 MCP 服务器
+
+任何 spec-compliant MCP 服务器都可以替换测桩。直接改 yaml（或用 env 覆盖）：
+
+```yaml
+openjiuwen:
+  demo:
+    deep-research:
+      mcp-servers:
+        - name: acme-docs
+          url: https://mcp.acme.com/v1
+          client-type: streamable_http
+          connect-timeout-seconds: 5
+          call-timeout-seconds: 10
+          auth-headers:
+            Authorization: "Bearer ${ACME_TOKEN}"
+```
+
+支持多个 server 同时接入 —— `mcp-servers` 是 list，每个元素独立 probe 和注册；一个不可达不影响其他 server。
+
+### 失败降级
+
+`McpRegistrar` 对所有异常一律**吞掉 + 日志**，因为 MCP 服务器是外部依赖，可用性不能绑定到 root DeepAgent 的启动路径上：
+
+| 失败模式 | 行为 |
+|---|---|
+| `url` 空 / null | 跳过，日志 `McpRegistrar skipping empty url` |
+| Probe HTTP 连接超时 | `connect-timeout-seconds` 秒后放弃，日志 `probe failed` |
+| Probe 返回非 2xx | 放弃注册，日志带 status code |
+| `addMcpServer` 抛异常 | 吞掉，日志带异常 message |
+
+任一失败都不阻塞 DeepAgent 启动，LLM 的 tool list 里只是少了对应 server 的工具而已。
+
+### 测桩子项目结构
+
+```
+agent-mcp-docserver/
+├── pom.xml                                     ← 独立 Spring Boot 应用，不属于 multi-deep-research-demo parent
+├── src/main/java/com/openjiuwen/example/deepresearch/mcp/
+│   ├── McpDocServerApplication.java            SpringBoot 入口
+│   ├── McpDocServerConfiguration.java          @Configuration
+│   ├── McpDocServerProperties.java             mcp-doc-server.* 配置
+│   ├── McpJsonRpcController.java               POST /mcp — 分发 initialize / tools/list / tools/call / resources/*
+│   ├── McpToolHandlers.java                    tools/call 实现
+│   ├── McpResourceHandlers.java                resources/list + resources/read 实现
+│   ├── DocumentFixtureStore.java               fixture 加载（classpath: fixtures/）
+│   └── DocumentIndexEntry.java                 fixture POJO
+└── src/main/resources/
+    ├── application.yml                         端口 / 路径 / server-name 配置
+    └── fixtures/
+        ├── index.json                          fixture 索引
+        └── docs/*.md                           6 份国产 LLM 定价 fixture
+```
+
+---
+
 ## 配置字段速查
 
 `agent-deep-research/src/main/resources/application.yml` 关键字段：
@@ -723,6 +835,12 @@ The following 1 profile is active: "skillhub-remote"
 | `openjiuwen.demo.deep-research.system-prompt` | 内置 | 含 A2A 调用规范、memory 工具文档、sandbox 工具契约、迭代预算硬规则 |
 | `openjiuwen.demo.deep-research.sys-operation-id` | `deep-research` | 注入到内部 `ReActAgentConfig.sysOperationId` 的稳定 ID；SkillHub 中间件靠它把下载的 skill 挂到本 agent 上，为空则 `registerSkill` 静默 no-op（`BaseAgent.lazyInitSkill`） |
 | `openjiuwen.demo.deep-research.extra-readable-roots` | `[]` | `readFile` 工具白名单额外根目录（`workspace-path` 默认已含）；SkillHub 的 `local-dir` 会由 `DeepResearchRuntimeApplication.mergeSkillHubLocalDirIntoReadableRoots` **自动**追加进白名单，此处只列**再额外**的根目录 |
+| `openjiuwen.demo.deep-research.mcp-servers[0].name` | `${MCP_DOCSERVER_NAME:deep-research-doc-lib}` | MCP server 显示名（用于日志和 `server_name` 字段） |
+| `openjiuwen.demo.deep-research.mcp-servers[0].url` | `${MCP_DOCSERVER_URL:}` | MCP server endpoint；**空即禁用**接入。参见 [MCP 服务器接入](#mcp-服务器接入) |
+| `openjiuwen.demo.deep-research.mcp-servers[0].client-type` | `${MCP_DOCSERVER_CLIENT_TYPE:streamable_http}` | core-java 客户端类型（`streamable_http` / `sse` / `stdio`） |
+| `openjiuwen.demo.deep-research.mcp-servers[0].connect-timeout-seconds` | `${MCP_DOCSERVER_CONNECT_TIMEOUT:3}` | `McpRegistrar` probe 阶段 HTTP 连接超时；也传给 `McpServerConfig` 供 core-java client 使用（core-java 730 后支持） |
+| `openjiuwen.demo.deep-research.mcp-servers[0].call-timeout-seconds` | `${MCP_DOCSERVER_CALL_TIMEOUT:5}` | tool call 单次超时；同上传给 `McpServerConfig`（core-java 730 后支持） |
+| `openjiuwen.demo.deep-research.mcp-servers[0].auth-headers` | `{}` | 认证 header map（如 `Authorization: Bearer <token>`）；空即匿名 |
 | `openjiuwen.service.middleware.skillhub.enabled` | `${SKILLHUB_ENABLED:false}` | 是否启用 SkillHub 中间件（opt-in）；`true` 时 `DeepResearchRuntimeApplication.main()` 自动激活 `skillhub-remote` profile |
 | `openjiuwen.service.middleware.skillhub.endpoint` | `${SKILLHUB_ENDPOINT:https://swarmskills.openjiuwen.com}` | SkillHub 服务地址 |
 | `openjiuwen.service.middleware.skillhub.auth-type` | `${SKILLHUB_AUTH_TYPE:bearer}` | 认证类型 |

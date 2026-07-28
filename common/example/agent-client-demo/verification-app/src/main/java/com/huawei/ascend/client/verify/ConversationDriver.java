@@ -1,0 +1,668 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
+package com.huawei.ascend.client.verify;
+
+import com.huawei.ascend.client.api.AgentClient;
+import com.huawei.ascend.client.api.AgentClients;
+import com.huawei.ascend.client.api.ContinueInputRequest;
+import com.huawei.ascend.client.api.InvocationCall;
+import com.huawei.ascend.client.api.InvocationEvent;
+import com.huawei.ascend.client.api.InvocationMode;
+import com.huawei.ascend.client.api.InvocationRequest;
+import com.huawei.ascend.client.api.InvocationSnapshot;
+import com.huawei.ascend.client.api.TaskState;
+import com.huawei.ascend.client.spi.Governance;
+import com.huawei.ascend.client.tool.spi.ToolExecutionRecord;
+import com.huawei.ascend.client.tool.spi.ToolExposurePolicy;
+import com.huawei.ascend.client.tool.spi.ToolInvocation;
+import com.huawei.ascend.client.transport.a2a.A2aHttpTransportProvider;
+import com.huawei.ascend.client.transport.spi.CredentialProvider;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 对话式驱动器（<b>验证用，非 SDK 交付</b>）。
+ *
+ * <p>编排"发起一次 query → 订阅 SDK 事件流 → 翻译成对话消息 → 跑断言"的全过程，
+ * 把消息经 {@link ChatBroadcaster} 推给前端 SSE。
+ *
+ * <p>会话模型：
+ * <ul>
+ * <li>串行组 query 复用同一 {@link Session}（同一 {@code AgentClient} + 同一 {@code conversationId}）。</li>
+ * <li>单独组 / demo 组每次新建 {@link Session}。</li>
+ * </ul>
+ */
+final class ConversationDriver {
+    private final String gatewayUrl;
+    private final ChatBroadcaster broadcaster;
+    private final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private final AtomicInteger sessionSeq = new AtomicInteger();
+
+    ConversationDriver(String gatewayUrl, ChatBroadcaster broadcaster) {
+        this.gatewayUrl = gatewayUrl;
+        this.broadcaster = broadcaster;
+    }
+
+    /**
+     * 启动时广播网关信息。
+     */
+    void announceGateway() {
+        broadcaster.broadcast(ChatMessage.info(null, "网关: " + gatewayUrl + " (external)"));
+    }
+
+    /**
+     * 创建会话。
+     *
+     * @param label String
+     * @return 创建会话
+     */
+    String createSession(String label) {
+        String id = "session-" + sessionSeq.incrementAndGet();
+        Session s = new Session(id, label);
+        sessions.put(id, s);
+        broadcaster.broadcast(ChatMessage.sessionCreated(id, label));
+        return id;
+    }
+
+    /**
+     * 会话列表。
+     *
+     * @return 会话列表
+     */
+
+    List<SessionInfo> sessions() {
+        List<SessionInfo> out = new ArrayList<>();
+        for (Session s : sessions.values()) {
+            out.add(new SessionInfo(s.id, s.label, s.conversationId, s.messageCount));
+        }
+        return out;
+    }
+
+    /**
+     * 在指定会话上跑一条 query（同步：阻塞到该 query 终态 + 断言完成）。
+     *
+     * @param queryId 查询标识
+     * @param sessionId 会话标识
+     * @return 该 query 的断言结果汇总（ok=true 表示全部断言通过）。
+     */
+    QueryResult runQuery(String queryId, String sessionId) {
+        QueryCatalog.Query q = QueryCatalog.find(queryId);
+        String activeSessionId = sessionId;
+        Session session = sessions.get(activeSessionId);
+        if (session == null) {
+            activeSessionId = createSession(q.id());
+            session = sessions.get(activeSessionId);
+        }
+        broadcaster.broadcast(ChatMessage.scenarioStart(activeSessionId, queryId, q.displayName()));
+
+        // 串行组首次进入时，把 conversationId 固化为串行共享值；后续串行 query 复用。
+        if (q.conversationStrategy() == QueryCatalog.ConversationStrategy.REUSE_SERIAL
+                && session.conversationId == null) {
+            session.conversationId = QueryCatalog.SERIAL_CONVERSATION_ID;
+        }
+
+        List<Assertion> assertions = new ArrayList<>();
+        boolean overall;
+
+        switch (queryId) {
+            case "s1" -> overall = runStreamingClientTools(session, q, assertions);
+            case "s2" -> overall = runUnsupportedModeThenPing(session, q, assertions);
+            case "s3" -> overall = runContinueInput(session, q, assertions);
+            case "s4" -> overall = runPlainMultiTurn(session, q, assertions);
+            case "s5" -> overall = runDefaultNoExposure(session, q, assertions);
+            case "s6" -> overall = runGovernanceError(session, q, assertions);
+            default -> overall = runPlainDemo(session, q, assertions);
+        }
+
+        broadcaster.broadcast(ChatMessage.scenarioEnd(activeSessionId, queryId, overall));
+        session.messageCount++;
+        return new QueryResult(queryId, activeSessionId, overall, assertions);
+    }
+
+    /**
+     * 串行执行一组 query。
+     *
+     * @param queryIds List<String>
+     * @param sessionId String
+     * @return 串行执行一组 query
+     */
+    List<QueryResult> runSerial(List<String> queryIds, String sessionId) {
+        List<QueryResult> results = new ArrayList<>();
+        for (String qid : queryIds) {
+            results.add(runQuery(qid, sessionId));
+        }
+        return results;
+    }
+
+    // ---------------------- scenarios ----------------------
+
+    /**
+     * runStreamingClientTools。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runStreamingClientTools
+     */
+
+    private boolean runStreamingClientTools(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        int readBefore = s.tools.readPageCount.get();
+        int submitBefore = s.tools.submitOrderCount.get();
+        int approvalBefore = s.approvalCount.get();
+
+        if (q.exposure().isPresent()) {
+            s.client.exposeInConversation(s.conversationId, q.exposure().get());
+        }
+        InvocationSnapshot snap = invokeAndWait(s, q, out);
+        boolean ok = true;
+        ok &= check(out, "s1", snap.state() == TaskState.COMPLETED,
+                "streaming invocation completed, state=" + snap.state());
+        ok &= check(out, "s1", s.tools.readPageCount.get() == readBefore + 1,
+                "readPage executed exactly once despite duplicate INPUT_REQUIRED, actual="
+                        + (s.tools.readPageCount.get() - readBefore));
+        ok &= check(out, "s1", s.tools.submitOrderCount.get() == submitBefore + 1,
+                "submitOrder executed exactly once, actual="
+                        + (s.tools.submitOrderCount.get() - submitBefore));
+        ok &= check(out, "s1", s.approvalCount.get() == approvalBefore + 1,
+                "approval requested exactly once for the ACTION tool, actual="
+                        + (s.approvalCount.get() - approvalBefore));
+        return ok;
+    }
+
+    /**
+     * runUnsupportedModeThenPing。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runUnsupportedModeThenPing
+     */
+
+    private boolean runUnsupportedModeThenPing(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        // 先验证 BLOCKING 被立即拒绝（不产生对话流，仅作为断言）。
+        boolean rejected = false;
+        String detail = "";
+        try {
+            s.client.invoke(InvocationRequest.builder()
+                    .agentId(q.agentId().orElse(null))
+                    .conversationId(s.conversationId)
+                    .mode(InvocationMode.BLOCKING)
+                    .input(q.input())
+                    .build());
+        } catch (UnsupportedOperationException e) {
+            rejected = true;
+            detail = String.valueOf(e.getMessage());
+        }
+        boolean ok = true;
+        ok &= check(out, "s2", rejected && detail.contains("UNSUPPORTED_MODE"),
+                "BLOCKING rejected with UNSUPPORTED_MODE, detail=" + detail);
+        if (rejected) {
+            broadcaster.broadcast(ChatMessage.info(s.id,
+                    "BLOCKING 已被 SDK 拒绝: " + detail));
+        }
+
+        // 再跑 STREAMING ping，产生对话流。
+        if (q.exposure().isPresent()) {
+            s.client.exposeInConversation(s.conversationId, q.exposure().get());
+        }
+        int pingBefore = s.tools.pingCount.get();
+        InvocationSnapshot snap = invokeAndWait(s, q, out);
+        ok &= check(out, "s2", snap.state() == TaskState.COMPLETED,
+                "streaming ping invocation completed, state=" + snap.state());
+        ok &= check(out, "s2", s.tools.pingCount.get() == pingBefore + 1,
+                "ping executed exactly once, actual=" + (s.tools.pingCount.get() - pingBefore));
+        return ok;
+    }
+
+    /**
+     * runContinueInput。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runContinueInput
+     */
+
+    private boolean runContinueInput(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        InvocationRequest request = InvocationRequest.builder()
+                .conversationId(s.conversationId)
+                .mode(InvocationMode.STREAMING)
+                .input(q.input())
+                .build();
+        InvocationCall call = s.client.invoke(request);
+        broadcaster.broadcast(ChatMessage.user(s.id, call.invocationRef(), q.input()));
+        broadcaster.broadcast(ChatMessage.status(s.id, call.invocationRef(), "INPUT_REQUIRED", "等待用户输入…"));
+
+        CountDownLatch userPrompt = new CountDownLatch(1);
+        call.events().subscribe(new Flow.Subscriber<>() {
+            Flow.Subscription sub;
+
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                this.sub = subscription;
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(InvocationEvent event) {
+                handleContinueInputEvent(event, s, call, userPrompt);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                broadcaster.broadcast(ChatMessage.error(s.id,
+                        call.invocationRef(), "subscription_error", throwable.getMessage()));
+            }
+
+            @Override
+            public void onComplete() {
+                // 由 completion future 统一处理，此处无需操作。
+            }
+        });
+
+        try {
+            InvocationSnapshot snap = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+            boolean ok = check(out, "s3", snap.state() == TaskState.COMPLETED,
+                    "user-input continuation completed, state=" + snap.state());
+            call.close();
+            return ok;
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
+            broadcaster.broadcast(ChatMessage.error(s.id,
+                    call.invocationRef(), "unexpected", String.valueOf(e)));
+            out.add(new Assertion("s3", false, "unexpected exception: " + e));
+            call.close();
+            return false;
+        }
+    }
+
+    /**
+     * continueInput 场景的事件分发：用户输入提示触发续传；终态事件广播结果。
+     *
+     * @param event 事件
+     * @param s 会话
+     * @param call 调用句柄
+     * @param userPrompt 用户输入提示
+     */
+    private void handleContinueInputEvent(InvocationEvent event, Session s, InvocationCall call,
+                                          CountDownLatch userPrompt) {
+        if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null) {
+            broadcaster.broadcast(ChatMessage.info(s.id, "收到用户输入提示，续传 continueInput=\"Alice\""));
+            s.client.continueInput(ContinueInputRequest.builder()
+                    .conversationId(s.conversationId)
+                    .relatedInvocationRef(call.invocationRef())
+                    .mode(InvocationMode.STREAMING)
+                    .input("Alice")
+                    .build());
+            userPrompt.countDown();
+        } else if (event instanceof InvocationEvent.Completed c) {
+            broadcaster.broadcast(ChatMessage.assistantFinal(s.id, call.invocationRef(), c.outputText()));
+        } else if (event instanceof InvocationEvent.Failed f) {
+            broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(), f.errorCode(), f.message()));
+        } else {
+            // 其他事件（Accepted/StatusChanged/ContentDelta 等）无需在此场景特殊处理。
+            return;
+        }
+    }
+
+    /**
+     * runPlainMultiTurn。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runPlainMultiTurn
+     */
+
+    private boolean runPlainMultiTurn(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        int readBefore = s.tools.readPageCount.get();
+        int submitBefore = s.tools.submitOrderCount.get();
+        int pingBefore = s.tools.pingCount.get();
+
+        Optional<TurnResult> t1 = runPlainSingleTurn(s, q, out, " 1", "s4");
+        if (t1.isEmpty()) {
+            return false;
+        }
+        Optional<TurnResult> t2 = runPlainSingleTurn(s, q, out, " 2", "s4");
+        if (t2.isEmpty()) {
+            return false;
+        }
+        TurnResult r1 = t1.get();
+        TurnResult r2 = t2.get();
+
+        boolean ok = true;
+        ok &= check(out, "s4", r1.snap.state() == TaskState.COMPLETED,
+                "turn 1 completed, state=" + r1.snap.state());
+        ok &= check(out, "s4", r2.snap.state() == TaskState.COMPLETED,
+                "turn 2 completed, state=" + r2.snap.state());
+        ok &= check(out, "s4", !r1.invocationRef.equals(r2.invocationRef),
+                "two turns have distinct invocationRef");
+        ok &= check(out, "s4", s.conversationId.equals(r1.conversationId)
+                        && s.conversationId.equals(r2.conversationId),
+                "two turns share the same conversationId");
+        ok &= check(out, "s4", s.tools.readPageCount.get() == readBefore
+                        && s.tools.submitOrderCount.get() == submitBefore
+                        && s.tools.pingCount.get() == pingBefore,
+                "no tools executed during plain multi-turn");
+        return ok;
+    }
+
+    /**
+     * 串行多轮中单轮的结果快照（含调用句柄信息，用于跨轮断言）。
+     */
+    private static final class TurnResult {
+        final String invocationRef;
+        final String conversationId;
+        final InvocationSnapshot snap;
+
+        TurnResult(String invocationRef, String conversationId, InvocationSnapshot snap) {
+            this.invocationRef = invocationRef;
+            this.conversationId = conversationId;
+            this.snap = snap;
+        }
+    }
+
+    /**
+     * 串行多轮中的一轮：发起一次 STREAMING 调用并等待终态，失败时记录断言并返回 Optional.empty()。
+     *
+     * @param s 会话
+     * @param q 查询定义
+     * @param out 断言收集器
+     * @param suffix 场景后缀
+     * @param tag 场景标签
+     * @return 对应结果
+     */
+    private Optional<TurnResult> runPlainSingleTurn(Session s, QueryCatalog.Query q,
+                                                    List<Assertion> out, String suffix, String tag) {
+        InvocationRequest req = InvocationRequest.builder()
+                .conversationId(s.conversationId)
+                .mode(InvocationMode.STREAMING)
+                .input(q.input() + suffix)
+                .exposure(q.exposure().orElse(ToolExposurePolicy.none()))
+                .build();
+        InvocationCall call = s.client.invoke(req);
+        broadcaster.broadcast(ChatMessage.user(s.id, call.invocationRef(), req.input()));
+        try {
+            call.accepted().toCompletableFuture().get(10, TimeUnit.SECONDS);
+            InvocationSnapshot snap = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+            broadcaster.broadcast(ChatMessage.assistantFinal(s.id, call.invocationRef(), snap.outputText()));
+            return Optional.of(new TurnResult(call.invocationRef(), call.conversationId(), snap));
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
+            out.add(new Assertion(tag, false, "turn" + suffix + " failed: " + e));
+            return Optional.empty();
+        } finally {
+            call.close();
+        }
+    }
+
+    /**
+     * runDefaultNoExposure。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runDefaultNoExposure
+     */
+
+    private boolean runDefaultNoExposure(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        int readBefore = s.tools.readPageCount.get();
+        int submitBefore = s.tools.submitOrderCount.get();
+        int pingBefore = s.tools.pingCount.get();
+        InvocationSnapshot snap = invokeAndWait(s, q, out);
+        boolean ok = true;
+        ok &= check(out, "s5", snap.state() == TaskState.COMPLETED,
+                "default-no-exposure completed without tool calls, state=" + snap.state());
+        ok &= check(out, "s5", s.tools.readPageCount.get() == readBefore
+                        && s.tools.submitOrderCount.get() == submitBefore
+                        && s.tools.pingCount.get() == pingBefore,
+                "no tools executed when no exposure declared (default empty ToolView)");
+        return ok;
+    }
+
+    /**
+     * runGovernanceError。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runGovernanceError
+     */
+
+    private boolean runGovernanceError(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        // 构造一个不提供 credential 的 client：每次 HTTP 不带 Authorization → 网关 401 AUTH_MISSING。
+        AgentClient noAuthClient = AgentClients.builder()
+                .transport(new A2aHttpTransportProvider(gatewayUrl))
+                .policyGuard(Governance.PolicyGuard.allowAll())
+                .approvalProvider(Governance.ApprovalProvider.autoApprove())
+                .build();
+        try {
+            InvocationRequest request = InvocationRequest.builder()
+                    .conversationId(s.conversationId)
+                    .mode(InvocationMode.STREAMING)
+                    .input(q.input())
+                    .build();
+            InvocationCall call = noAuthClient.invoke(request);
+            broadcaster.broadcast(ChatMessage.user(s.id, call.invocationRef(), q.input()));
+            subscribeEvents(s, call, out, "s6");
+            InvocationSnapshot snap = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+            boolean ok = true;
+            ok &= check(out, "s6", snap.state() == TaskState.FAILED,
+                    "401 governance error surfaced as FAILED, not COMPLETED, state=" + snap.state());
+            ok &= check(out, "s6", snap.errorCode() != null && !snap.errorCode().isEmpty(),
+                    "failed snapshot carries an errorCode, errorCode=" + snap.errorCode());
+            call.close();
+            return ok;
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
+            broadcaster.broadcast(ChatMessage.error(s.id, null, "unexpected", String.valueOf(e)));
+            out.add(new Assertion("s6", false, "unexpected exception: " + e));
+            return false;
+        } finally {
+            noAuthClient.close();
+        }
+    }
+
+    /**
+     * runPlainDemo。
+     *
+     * @param s Session
+     * @param q QueryCatalog.Query
+     * @param out List<Assertion>
+     * @return runPlainDemo
+     */
+
+    private boolean runPlainDemo(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        if (q.exposure().isPresent()) {
+            s.client.exposeInConversation(s.conversationId, q.exposure().get());
+        }
+        int readBefore = s.tools.readPageCount.get();
+        int submitBefore = s.tools.submitOrderCount.get();
+        int pingBefore = s.tools.pingCount.get();
+        InvocationSnapshot snap = invokeAndWait(s, q, out);
+        boolean ok = check(out, q.id(), snap.state() == TaskState.COMPLETED,
+                "demo invocation completed, state=" + snap.state());
+        // demo 不强断言工具执行次数，仅作信息提示。
+        int toolsRun = (s.tools.readPageCount.get() - readBefore)
+                + (s.tools.submitOrderCount.get() - submitBefore)
+                + (s.tools.pingCount.get() - pingBefore);
+        if (toolsRun > 0) {
+            broadcaster.broadcast(ChatMessage.info(s.id,
+                    "demo 触发了 " + toolsRun + " 次本地工具执行"));
+        }
+        return ok;
+    }
+
+    // ---------------------- helpers ----------------------
+
+    /**
+     * 发起 STREAMING 调用、广播 user 消息、订阅事件流、等待终态。
+     *
+     * @param s 会话
+     * @param q 查询定义
+     * @param out 断言收集器
+     * @return 对应结果
+     */
+    private InvocationSnapshot invokeAndWait(Session s, QueryCatalog.Query q, List<Assertion> out) {
+        InvocationRequest.Builder b = InvocationRequest.builder()
+                .conversationId(s.conversationId)
+                .mode(InvocationMode.STREAMING)
+                .input(q.input());
+        q.agentId().ifPresent(b::agentId);
+        q.exposure().ifPresent(b::exposure);
+        InvocationRequest request = b.build();
+        InvocationCall call = s.client.invoke(request);
+        broadcaster.broadcast(ChatMessage.user(s.id, call.invocationRef(), q.input()));
+        subscribeEvents(s, call, out, q.id());
+        try {
+            InvocationSnapshot snap = call.completion().toCompletableFuture().get(30, TimeUnit.SECONDS);
+            call.close();
+            return snap;
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
+            broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(), "unexpected", String.valueOf(e)));
+            out.add(new Assertion(q.id(), false, "unexpected exception: " + e));
+            call.close();
+            return InvocationSnapshot.unknown(call.invocationRef());
+        }
+    }
+
+    /**
+     * 订阅事件流，把 SDK 事件翻译成对话消息。
+     *
+     * @param s 会话
+     * @param call 调用句柄
+     * @param out 断言收集器
+     * @param scenarioId 场景标识
+     */
+    private void subscribeEvents(Session s, InvocationCall call, List<Assertion> out, String scenarioId) {
+        call.events().subscribe(new Flow.Subscriber<>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(InvocationEvent event) {
+                if (event instanceof InvocationEvent.Accepted a) {
+                    broadcaster.broadcast(ChatMessage.status(s.id, a.invocationRef(),
+                            "ACCEPTED", "已受理 taskRef=" + a.diagnosticTaskRef()));
+                } else if (event instanceof InvocationEvent.StatusChanged sc) {
+                    broadcaster.broadcast(ChatMessage.status(s.id, sc.invocationRef(),
+                            sc.state().name(), "状态变更: " + sc.state()
+                                    + (sc.terminal() ? " (终态)" : "")));
+                } else if (event instanceof InvocationEvent.ContentDelta cd) {
+                    broadcaster.broadcast(ChatMessage.assistantDelta(s.id, cd.invocationRef(), cd.text()));
+                } else if (event instanceof InvocationEvent.InputRequired ir) {
+                    if (ir.toolCall() == null) {
+                        broadcaster.broadcast(ChatMessage.status(s.id, ir.invocationRef(),
+                                "INPUT_REQUIRED", "需要用户补充输入"));
+                    }
+                    // client_tool 类型的 InputRequired 由 SDK 自动消费，不会到这里。
+                } else if (event instanceof InvocationEvent.Completed c) {
+                    if (c.outputText() != null && !c.outputText().isEmpty()) {
+                        broadcaster.broadcast(ChatMessage.assistantFinal(s.id,
+                                c.invocationRef(), c.outputText()));
+                    }
+                } else if (event instanceof InvocationEvent.Failed f) {
+                    broadcaster.broadcast(ChatMessage.error(s.id,
+                            f.invocationRef(), f.errorCode(), f.message()));
+                } else {
+                    // 其他事件类型（如 client_tool 自动消费后的合成事件）无需前端展示。
+                    return;
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                broadcaster.broadcast(ChatMessage.error(s.id, call.invocationRef(),
+                        "subscription_error", throwable.getMessage()));
+            }
+
+            @Override
+            public void onComplete() {
+                // 由 completion future 统一处理，此处无需操作。
+            }
+        });
+    }
+
+    /**
+     * 准入决策。
+     *
+     * @param out List<Assertion>
+     * @param scenarioId String
+     * @param condition boolean
+     * @param message String
+     * @return 准入决策
+     */
+
+    private boolean check(List<Assertion> out, String scenarioId, boolean condition, String message) {
+        out.add(new Assertion(scenarioId, condition, message));
+        broadcaster.broadcast(ChatMessage.assertion(null, scenarioId, condition, message));
+        return condition;
+    }
+
+    // ---------------------- 内部类型 ----------------------
+
+    /**
+     * 一个对话会话：拥有独立的 client / conversationId / 工具计数快照。
+     */
+    final class Session {
+        final String id;
+        final String label;
+        final AgentClient client;
+        final DemoTools tools = new DemoTools();
+        final AtomicInteger approvalCount = new AtomicInteger();
+        volatile String conversationId;
+        int messageCount = 0;
+
+        Session(String id, String label) {
+            this.id = id;
+            this.label = label;
+            this.conversationId = "conv-" + id;
+            this.client = AgentClients.builder()
+                    .transport(new A2aHttpTransportProvider(gatewayUrl))
+                    .credentialProvider(CredentialProvider.staticToken("mock-token"))
+                    .policyGuard(Governance.PolicyGuard.allowAll())
+                    .approvalProvider((d, i, c) -> {
+                        approvalCount.incrementAndGet();
+                        broadcaster.broadcast(ChatMessage.info(this.id,
+                                "审批通过 ACTION 工具: " + d.toolId()));
+                        return java.util.concurrent.CompletableFuture.completedFuture(
+                                Governance.ApprovalDecision.approve());
+                    })
+                    .build();
+            // 工具执行观察者：把 toolName/arguments/payload 推给前端。
+            tools.registerInto(client, this::onToolExecuted);
+        }
+
+        private void onToolExecuted(ToolInvocation invocation, ToolExecutionRecord record) {
+            ToolExecutionObserver.Snapshot snap = ToolExecutionObserver.Snapshot.of(invocation, record);
+            broadcaster.broadcast(ChatMessage.toolCall(id, invocation.toolCallId(),
+                    snap.toolName(), snap.arguments()));
+            broadcaster.broadcast(ChatMessage.toolResult(id, invocation.toolCallId(),
+                    ChatMessage.ToolResultDetail.of(
+                            snap.outcome().name(), snap.payload(), snap.errorCode(), snap.message())));
+        }
+    }
+
+    record SessionInfo(String id, String label, String conversationId, int messageCount) {
+        // 仅规范构造器，无额外成员。
+    }
+
+    record Assertion(String scenarioId, boolean ok, String message) {
+        // 仅规范构造器，无额外成员。
+    }
+
+    record QueryResult(String queryId, String sessionId, boolean ok, List<Assertion> assertions) {
+        // 仅规范构造器，无额外成员。
+    }
+}

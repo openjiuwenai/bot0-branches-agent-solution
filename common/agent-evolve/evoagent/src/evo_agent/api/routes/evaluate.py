@@ -306,7 +306,7 @@ async def evaluate_trajectory(request: EvaluateRequest) -> EvaluateResponse:
     traj_path = Path(request.trajectory_path)
     if not traj_path.exists():
         raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail=f"Trajectory file not found: {request.trajectory_path}",
         )
 
@@ -317,6 +317,12 @@ async def evaluate_trajectory(request: EvaluateRequest) -> EvaluateResponse:
             status_code=422,
             detail=f"Invalid trajectory format: {e}",
         ) from e
+
+    if not trajectory.messages:
+        raise HTTPException(
+            status_code=422,
+            detail="Trajectory messages must not be empty",
+        )
 
     # 2. 构建 EvaluationInput
     evaluation_input = EvaluationInput(
