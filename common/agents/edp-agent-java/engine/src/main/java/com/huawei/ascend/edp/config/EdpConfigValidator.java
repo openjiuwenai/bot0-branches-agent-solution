@@ -68,32 +68,6 @@ public class EdpConfigValidator {
     }
 
     /**
-     * 校验 Versatile URL 合法性。
-     *
-     * @param versatile description
-     */
-
-    public static void validateVersatileUrl(EdpaSpringBootConfig.VersatileConfig versatile) {
-        if (versatile != null && versatile.getUrl() != null) {
-            String url = versatile.getUrl();
-            if (url.startsWith("${")) {
-                String envUrl = System.getenv("EDP_AGENT_VERSATILE_URL");
-                if (envUrl != null && !envUrl.isBlank()) {
-                    LOGGER.info("Versatile URL from env var validated: {}", envUrl);
-                } else {
-                    throw new IllegalStateException(
-                            "Versatile URL is a Spring placeholder but env var EDP_AGENT_VERSATILE_URL not set.");
-                }
-            } else if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                throw new IllegalStateException(
-                        "Versatile URL invalid: " + url + ". Must start with http:// or https://.");
-            } else {
-                LOGGER.info("Versatile URL validated: {}", url);
-            }
-        }
-    }
-
-    /**
      * 校验 Skill 目录存在。
      *
      * @param skillDir description

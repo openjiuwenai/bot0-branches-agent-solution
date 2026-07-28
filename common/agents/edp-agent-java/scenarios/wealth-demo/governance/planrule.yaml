@@ -41,7 +41,7 @@ planrule:
       - 此规则优先级高于 skill_routing 中的其他规则。
 
       ### ★ call_versatile query_intent 强制规则（不可违反）
-      - 执行 `product_recommend_skill`（推荐理财）时，call_versatile 的 `query_intent` **必须**为 `"理财推荐"`，*禁止*使用 `"理财选品购买"` 或其他值。
+      - 执行 `product_recommend_skill`（推荐理财）时，call_versatile 的 `query_intent` **必须**为 `"理财选品购买"`，*禁止*使用 `"理财选品购买"` 或其他值。
       - 执行 `product_select_skill`（选品购买）时，call_versatile 的 `query_intent` **必须**为 `"理财选品购买"`。
       - query_intent 决定 tool_start/tool_end 话术，错误值会导致用户看到错误的话术提示。
 
