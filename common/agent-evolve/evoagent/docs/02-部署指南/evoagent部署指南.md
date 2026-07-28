@@ -87,8 +87,6 @@ EVO_ADAPTER_URL=http://<宿主IP>:8900    # 指向Adapter容器（勿用localhos
 EVO_LLM_API_KEY=sk-xxxxxx
 EVO_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EVO_OPTIMIZER_MODEL=qwen3.7-max
-EVO_EVALUATOR_MODEL=qwen3.7-max
-EVO_TARGET_MODEL=qwen3.7-max
 ```
 
 ### 2.5（可选）配置业务 Agent 列表
@@ -120,7 +118,7 @@ cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent-adapter/deployment
 
 # ── 3.2 EvoAgent：构建（--local 从 PyPI 下载 wheel） ──
 cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
-HOME=/home/evolution/build ./build.sh --local
+./build.sh --local
 
 # ── 3.3 EvoAgent：启动 ──
 ./run.sh
@@ -168,7 +166,7 @@ $EVOAGENT_DIR/run.sh
 
 # 更新代码后重建
 cd $ADAPTER_DIR  && ./stop.sh && ./start.sh --build
-cd $EVOAGENT_DIR && ./stop.sh && HOME=/home/evolution/build ./build.sh --local && ./run.sh
+cd $EVOAGENT_DIR && ./stop.sh && ./build.sh --local && ./run.sh
 ```
 
 ---
@@ -177,7 +175,7 @@ cd $EVOAGENT_DIR && ./stop.sh && HOME=/home/evolution/build ./build.sh --local &
 
 | 问题 | 解决 |
 |------|------|
-| `build.sh --local` 下载 wheel 失败 | 覆盖 pip 源：`PIP_INDEX_URL=https://pypi.org/simple HOME=/home/evolution/build ./build.sh --local` |
+| `build.sh --local` 下载 wheel 失败 | 覆盖 pip 源：`PIP_INDEX_URL=https://pypi.org/simple ./build.sh --local` |
 | EvoAgent 健康检查不通过 | `docker logs evoagent` 排查：`EVO_ADAPTER_URL` 不可达 / LLM Key 无效 / `EVO_LLM_BASE_URL` 错误 |
 | Adapter `agent_url` 写 localhost 不通 | 容器内 localhost 指向自身；改用 `http://host.docker.internal:<port>` |
 | 业务 Agent 日志未读取 | 确认 `HOST_LOG_ROOT/{agent_name}` 子目录存在，与 `agent_adapter_config.yaml` 的 `log_dir` 对应 |
