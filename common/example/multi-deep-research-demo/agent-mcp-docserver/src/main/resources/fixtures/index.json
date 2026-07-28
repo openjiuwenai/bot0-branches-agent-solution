@@ -1,0 +1,58 @@
+{
+  "documents": [
+    {
+      "uri": "doc://research/deepseek-pricing-2026Q2",
+      "path": "docs/deepseek-pricing-2026Q2.md",
+      "title": "DeepSeek API pricing snapshot (2026 Q2)",
+      "summary": "深度求索 DeepSeek Chat/Reasoner 输入输出定价、上下文窗口、限流政策。含 anchor tag DEEPSEEK-2026Q2-VERIFIED。",
+      "vendors": ["deepseek", "深度求索"],
+      "dimensions": ["pricing", "context_length", "rate_limit"],
+      "mime_type": "text/markdown"
+    },
+    {
+      "uri": "doc://research/zhipu-glm-pricing-2026Q2",
+      "path": "docs/zhipu-glm-pricing-2026Q2.md",
+      "title": "智谱 GLM-4 系列 API pricing snapshot (2026 Q2)",
+      "summary": "智谱 GLM-4 / GLM-4-Air / GLM-4-Flash 定价与限流。含 anchor tag ZHIPU-2026Q2-VERIFIED。",
+      "vendors": ["zhipu", "智谱", "glm"],
+      "dimensions": ["pricing", "context_length", "rate_limit", "function_calling"],
+      "mime_type": "text/markdown"
+    },
+    {
+      "uri": "doc://research/moonshot-kimi-pricing-2026Q2",
+      "path": "docs/moonshot-kimi-pricing-2026Q2.md",
+      "title": "月之暗面 Kimi (Moonshot) API pricing snapshot (2026 Q2)",
+      "summary": "Moonshot v1-8k/32k/128k 定价、上下文窗口、function-calling 支持。含 anchor tag MOONSHOT-2026Q2-VERIFIED。",
+      "vendors": ["moonshot", "kimi", "月之暗面"],
+      "dimensions": ["pricing", "context_length", "function_calling", "specialty"],
+      "mime_type": "text/markdown"
+    },
+    {
+      "uri": "doc://research/minimax-abab-pricing-2026Q2",
+      "path": "docs/minimax-abab-pricing-2026Q2.md",
+      "title": "MiniMax abab 系列 API pricing snapshot (2026 Q2)",
+      "summary": "MiniMax abab6.5s / abab6.5g 定价与限流。含 anchor tag MINIMAX-2026Q2-VERIFIED。",
+      "vendors": ["minimax", "abab"],
+      "dimensions": ["pricing", "context_length", "rate_limit", "specialty"],
+      "mime_type": "text/markdown"
+    },
+    {
+      "uri": "doc://research/baichuan-pricing-2026Q2",
+      "path": "docs/baichuan-pricing-2026Q2.md",
+      "title": "百川 Baichuan API pricing snapshot (2026 Q2)",
+      "summary": "Baichuan4-Turbo / Baichuan4-Air 定价、上下文、function-calling。含 anchor tag BAICHUAN-2026Q2-VERIFIED。",
+      "vendors": ["baichuan", "百川"],
+      "dimensions": ["pricing", "context_length", "function_calling"],
+      "mime_type": "text/markdown"
+    },
+    {
+      "uri": "doc://research/qwen-alibaba-pricing-2026Q2",
+      "path": "docs/qwen-alibaba-pricing-2026Q2.md",
+      "title": "阿里 Qwen / 通义千问 API pricing snapshot (2026 Q2)",
+      "summary": "Qwen-Max / Qwen-Plus / Qwen-Turbo 定价、上下文、限流、function-calling。含 anchor tag QWEN-2026Q2-VERIFIED。",
+      "vendors": ["qwen", "通义", "阿里", "alibaba"],
+      "dimensions": ["pricing", "context_length", "rate_limit", "function_calling", "specialty"],
+      "mime_type": "text/markdown"
+    }
+  ]
+}

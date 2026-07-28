@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.huawei.ascend.client.example</groupId>
+        <artifactId>agent-client-demo-parent</artifactId>
+        <version>0.2.0-SNAPSHOT</version>
+        <relativePath>../../example/agent-client-demo/pom.xml</relativePath>
+    </parent>
+
+    <!--
+      ★ SDK 交付物模块（JVM 版）。
+      命名为 agent-client-sdk-for-jvm：明确这是面向 JVM 环境的 SDK 实现；
+      未来 for-android / for-ios / for-harmony 等多端 SDK 尚在建设中。
+      公共 API 与 SPI（api / tool.spi / spi / state.spi / transport.spi）不泄漏任何第三方类型。
+      Jackson 仅在 transport.a2a 内部使用（编解码 A2A JSON-RPC 报文），属于实现细节。
+
+      物理位置：本模块在 common/agent-client/ 下；其父 pom（agent-client-demo-parent）
+      在 common/example/agent-client-demo/ 下，故 <relativePath> 跨到 example 目录。
+    -->
+    <artifactId>agent-client-sdk-for-jvm</artifactId>
+    <packaging>jar</packaging>
+    <name>agent-client-sdk-for-jvm (SDK deliverable, JVM)</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>agent-client-sdk-for-jvm</finalName>
+    </build>
+</project>
