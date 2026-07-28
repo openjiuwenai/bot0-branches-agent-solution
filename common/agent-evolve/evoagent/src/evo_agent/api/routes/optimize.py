@@ -617,12 +617,11 @@ async def cancel_job(job_id: str) -> JobResponse:
     """取消一个运行中或排队中的优化任务。
 
     - 202: 已接受取消请求
-    - 404: 任务不存在
-    - 409: 任务已处于终态（completed / failed / cancelled），不可取消
+    - 409: 任务不存在，或已处于终态（completed / failed / cancelled），不可取消
     """
     job = job_manager.get(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        raise HTTPException(status_code=409, detail=f"Job not found: {job_id}")
     if not job_manager.cancel(job_id):
         raise HTTPException(
             status_code=409,

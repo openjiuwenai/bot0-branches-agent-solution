@@ -235,6 +235,14 @@ public class EdpaEventRail extends DeepAgentRail {
     private final Set<String> skippedToolCallIds = ConcurrentHashMap.newKeySet();
 
     /**
+     * 出口话术（response_template）跨 ReAct 迭代持久化。
+     * VersatileInterruptRail 在 beforeToolCall 写入 ctx.getExtra()，但框架在下次 LLM 调用时
+     * 可能重建 extra map，导致 afterInvoke 读不到。此处用类级 map 在 afterToolCall 时快照，
+     * afterInvoke 优先从此读取。
+     */
+    private final Map<String, String> responseTemplate = new ConcurrentHashMap<>();
+
+    /**
      * 持有 DeepAgent 引用，用于在 afterToolCall 中查找 TaskPlanningRail 读取最新 todos 缓存。
      *
      */
@@ -300,6 +308,7 @@ public class EdpaEventRail extends DeepAgentRail {
     public void beforeInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
         conversationClosed.remove(sid);
+        responseTemplate.remove(sid);
 
         // 会话开始时 workspace 一定就绪，提前缓存 .todo 根目录路径
         if (todoRootPath == null) {
@@ -549,6 +558,11 @@ public class EdpaEventRail extends DeepAgentRail {
         // 业务工具完成 → tool_end
         if (isBusinessTool(toolName)) {
             emitBusinessToolEnd(ctx, inputs, toolName, sid);
+            // 快照 KEY_RESPONSE_TEMPLATE 到类级 map，防止 ReAct 下次迭代 extra map 重建后丢失
+            Object rt = ctx.getExtra().get(ScriptConstants.KEY_RESPONSE_TEMPLATE);
+            if (rt != null && !String.valueOf(rt).isBlank()) {
+                responseTemplate.put(sid, String.valueOf(rt));
+            }
             return;
         }
 
@@ -585,8 +599,10 @@ public class EdpaEventRail extends DeepAgentRail {
         String qi = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, ""));
         String toolEndContent = resolveToolEndContent(qi, toolName, uiNoticeText);
 
-        // UC-A05: ui_notice.event=="interrupt_start" 时，不发射 tool_end
-        boolean skipToolEndForInterrupt = "interrupt_start".equals(uiNoticeEvent);
+        // UC-A05: ui_notice.event=="interrupt_start" 或 onToolException 已发射 interrupt_start
+        // （ToolInterruptException 路径，interruptActive=true）时，不发射 tool_end
+        boolean skipToolEndForInterrupt = "interrupt_start".equals(uiNoticeEvent)
+                || interruptActive.getOrDefault(sid, false);
         if (!skipToolEndForInterrupt) {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("tool", toolName);
@@ -660,9 +676,12 @@ public class EdpaEventRail extends DeepAgentRail {
         }
         if ("interrupt_start".equals(noticeEvent)) {
             // 中断话术：走 response_template 机制，由 afterInvoke 发射
+            // 保留 noticeEvent 供 emitBusinessToolEnd 的 skipToolEndForInterrupt 判断，
+            // text 置 null（已存入 response_template，无需重复传递给 tool_end content）
             ctx.getExtra().put(ScriptConstants.KEY_RESPONSE_TEMPLATE, noticeText);
-            LOGGER.info("[EDPA-DIAG] ui_notice interrupt_start: key={}, text={}", noticeKey, noticeText);
-            return new String[] {null, null};
+            LOGGER.info("[EDPA-DIAG] ui_notice interrupt_start: key={}, text={}", noticeKey,
+                    noticeText);
+            return new String[] {noticeEvent, null};
         }
         // 非中断话术（tool_end/todo_end）：uiNoticeText 会被后续优先级逻辑使用
         LOGGER.info("[EDPA-DIAG] ui_notice {}: key={}, text={}", noticeEvent, noticeKey, noticeText);
@@ -862,17 +881,17 @@ public class EdpaEventRail extends DeepAgentRail {
         // 中断路径（onToolException 的 uuid）区分，前端可按 interrupt_id 判断来源（UC-C03 验收 8）。
         // 当本轮有 interrupt_start（ask_user 中断）时不发射——interrupt_start.content 已携带话术文本，出口冗余。
         String exitContent = "";
-        Object rt = ctx.getExtra().get(ScriptConstants.KEY_RESPONSE_TEMPLATE);
-        if (rt != null && !String.valueOf(rt).isBlank()) {
+        // 优先从类级 map 读取（跨 ReAct 迭代持久），回退到 ctx.getExtra()（同迭代场景）
+        String rt = responseTemplate.get(sid);
+        if (rt == null || rt.isBlank()) {
+            Object rtExtra = ctx.getExtra().get(ScriptConstants.KEY_RESPONSE_TEMPLATE);
+            if (rtExtra != null) {
+                rt = String.valueOf(rtExtra);
+            }
+        }
+        if (rt != null && !rt.isBlank()) {
             if (!interruptActive.getOrDefault(sid, false)) {
-                exitContent = String.valueOf(rt);
-
-                // 合规把关：配置外话术 → 替换为 out_of_scope（使用配置驱动的键映射）
-                Object lastKey = ctx.getExtra().get(ScriptConstants.KEY_LAST_SCRIPT);
-                if (scripts != null && lastKey != null && !scripts.has(String.valueOf(lastKey))) {
-                    exitContent = scripts.getScriptOrDefault("SCRIPT_OUT_OF_SCOPE", "");
-                    LOGGER.info("[EDPA-DIAG] afterInvoke sid={} -> compliance gate replaced key={}", sid, lastKey);
-                }
+                exitContent = rt;
                 LOGGER.info("[EDPA-DIAG] afterInvoke sid={} -> emit exit interrupt_start (before conversation_end)",
                         sid);
                 emit(ctx, EdpaEventType.INTERRUPT_START,
@@ -885,8 +904,8 @@ public class EdpaEventRail extends DeepAgentRail {
                         sid);
             }
             ctx.getExtra().remove(ScriptConstants.KEY_RESPONSE_TEMPLATE);
+            responseTemplate.remove(sid);
         }
-        LOGGER.info("[EDPA-DIAG] afterInvoke sid={} -> emit conversation_end (if not already closed)", sid);
         emitConversationEnd(ctx, sid, exitContent);
 
         // 清理本轮状态（interruptActive/interruptIdMap 跨轮持久化，不在此清理）

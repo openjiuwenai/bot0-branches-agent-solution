@@ -1,0 +1,6 @@
+openjiuwen:
+  service:
+    versatile:
+      url-template: http://localhost:9090/mock/versatile/{conversation_id}
+    a2a-gateway:
+      enabled: false

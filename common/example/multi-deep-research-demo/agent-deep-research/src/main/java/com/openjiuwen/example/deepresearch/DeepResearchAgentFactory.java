@@ -66,6 +66,12 @@ public final class DeepResearchAgentFactory {
                                   Supplier<SandboxOps> sandboxOpsSupplier) {
         props.requireConfigured();
 
+        // Attach MCP servers into Runner.resourceMgr() BEFORE constructing DeepAgent —
+        // DeepAgent.ensureInitialized() calls syncMcpServersFromResourceMgr() and only
+        // picks up servers already registered at that moment. Registration is fail-open,
+        // so an unreachable MCP server never blocks the agent from serving traffic.
+        McpRegistrar.probeAndRegister(props.getMcpServers());
+
         List<Object> rails = buildRails(props, sandboxOpsSupplier);
         DeepAgentConfig config = DeepAgentConfig.builder()
                 .systemPrompt(props.getSystemPrompt())

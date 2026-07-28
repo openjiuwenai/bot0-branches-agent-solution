@@ -95,6 +95,19 @@ openjiuwen:
       credential:
         mode: ${SKILLHUB_CREDENTIAL_MODE:}
         aes-key-hex: ${SKILLHUB_AES_KEY_HEX:}
+      # MCP servers to probe + attach to Runner.resourceMgr() at startup.
+      # Used to verify core-java gitcode issue #44 Part B end-to-end:
+      # tools published by an MCP server should flow through DeepAgent.
+      # syncMcpServersFromResourceMgr() → AbilityManager.mcpServers →
+      # get exposed to the LLM in the tool list. Leave MCP_DOCSERVER_URL
+      # blank to disable (default). Set to e.g. http://127.0.0.1:18095/mcp
+      # to attach the deep-research-doc-lib MCP server.
+      mcp-servers:
+        - name: ${MCP_DOCSERVER_NAME:deep-research-doc-lib}
+          url: ${MCP_DOCSERVER_URL:}
+          client-type: ${MCP_DOCSERVER_CLIENT_TYPE:streamable_http}
+          connect-timeout-seconds: ${MCP_DOCSERVER_CONNECT_TIMEOUT:3}
+          call-timeout-seconds: ${MCP_DOCSERVER_CALL_TIMEOUT:5}
 
 logging:
   level:

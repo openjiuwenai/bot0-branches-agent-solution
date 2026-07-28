@@ -10,8 +10,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -35,19 +37,22 @@ final class VersatileRequestExtractor {
     }
 
     RemoteRequest extract(ServeRequest request) {
-        SemanticInput semanticInput = extractSemanticInput(request);
         Map<String, Object> sourceBody = mapValue(request.getMetadata().get("body"));
         Map<String, Object> remoteBody = new LinkedHashMap<>(mapValue(sourceBody.get("custom_data")));
         Map<String, Object> inputs = new LinkedHashMap<>(mapValue(remoteBody.get("inputs")));
+        SemanticInput semanticInput = extractSemanticInput(request);
         if (hasText(semanticInput.query())) {
             inputs.put("query", semanticInput.query());
         }
         if (hasText(semanticInput.intent())) {
             inputs.put("intent", semanticInput.intent());
         }
+        serializeIntents().ifPresent(json -> inputs.put("intents", json));
+        serializeMessages(request).ifPresent(json -> inputs.put("messages", json));
         if (!inputs.isEmpty()) {
             remoteBody.put("inputs", inputs);
         }
+        fillResumeRequestTemplate(remoteBody, request);
 
         Map<String, String> headers = new LinkedHashMap<>();
         Map<String, Object> sourceHeaders = mapValue(request.getMetadata().get("headers"));
@@ -81,6 +86,120 @@ final class VersatileRequestExtractor {
         }
         String intent = stringValue(structuredContent.get("intent")).orElse(null);
         return new SemanticInput(query, intent);
+    }
+
+    private Optional<String> serializeIntents() {
+        List<VersatileProperties.Intent> intents = properties.getIntents();
+        if (intents == null || intents.isEmpty()) {
+            return Optional.empty();
+        }
+        for (int i = 0; i < intents.size(); i++) {
+            VersatileProperties.Intent intent = intents.get(i);
+            if (intent == null || !hasText(intent.getId()) || !hasText(intent.getName())) {
+                throw new IllegalArgumentException(
+                        "VERSATILE_INTENT_CONFIG_MISSING: intents[" + i + "] id/name must be non-blank");
+            }
+        }
+        try {
+            return Optional.of(OBJECT_MAPPER.writeValueAsString(intents));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("VERSATILE_INTENT_CONFIG_MISSING: failed to serialize intents", ex);
+        }
+    }
+
+    private Optional<String> serializeMessages(ServeRequest request) {
+        List<Map<String, Object>> messages = request.getMessages();
+        boolean required = properties.getMessages() != null && properties.getMessages().isRequired();
+        if (messages == null || messages.isEmpty()) {
+            if (required) {
+                throw new IllegalArgumentException(
+                        "VERSATILE_INTENT_INPUT_MISSING: ServeRequest.messages must be non-empty");
+            }
+            return Optional.empty();
+        }
+        List<Map<String, String>> serialized = new ArrayList<>();
+        for (int i = 0; i < messages.size(); i++) {
+            Map<String, Object> message = messages.get(i);
+            if (message == null) {
+                continue;
+            }
+            Object role = message.get("role");
+            Object content = message.get("content");
+            if (role == null || String.valueOf(role).isBlank()
+                    || content == null || String.valueOf(content).isBlank()) {
+                if (required) {
+                    throw new IllegalArgumentException(
+                            "VERSATILE_INTENT_INPUT_MISSING: messages[" + i + "] role/content must be non-blank");
+                }
+                continue;
+            }
+            Map<String, String> entry = new LinkedHashMap<>();
+            entry.put("role", String.valueOf(role));
+            entry.put("content", String.valueOf(content));
+            serialized.add(entry);
+        }
+        if (serialized.isEmpty()) {
+            if (required) {
+                throw new IllegalArgumentException(
+                        "VERSATILE_INTENT_INPUT_MISSING: ServeRequest.messages has no valid role/content entries");
+            }
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(OBJECT_MAPPER.writeValueAsString(serialized));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("VERSATILE_INTENT_INPUT_MISSING: failed to serialize messages", ex);
+        }
+    }
+
+    private void fillResumeRequestTemplate(Map<String, Object> remoteBody, ServeRequest request) {
+        VersatileProperties.Interrupt interrupt = properties.getInterrupt();
+        if (interrupt == null || interrupt.getResumeRequestTemplate() == null) {
+            return;
+        }
+        Map<String, Object> template = interrupt.getResumeRequestTemplate().getBody();
+        if (template == null || template.isEmpty()) {
+            return;
+        }
+        Map<String, Object> source = mapValue(request.getMetadata().get("body"));
+        Map<String, Object> filled = deepFill(template, source);
+        remoteBody.putAll(filled);
+    }
+
+    private static Map<String, Object> deepFill(Map<String, Object> template, Map<String, Object> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : template.entrySet()) {
+            result.put(entry.getKey(), resolveTemplateValue(entry.getValue(), source));
+        }
+        return result;
+    }
+
+    private static Object resolveTemplateValue(Object value, Map<String, Object> source) {
+        if (value instanceof String text) {
+            return resolvePlaceholders(text, source);
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> nested = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    nested.put(String.valueOf(entry.getKey()),
+                            resolveTemplateValue(entry.getValue(), source));
+                }
+            }
+            return nested;
+        }
+        return value;
+    }
+
+    private static String resolvePlaceholders(String text, Map<String, Object> source) {
+        String result = text;
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (entry.getValue() == null) {
+                continue;
+            }
+            result = result.replace("{" + entry.getKey() + "}", String.valueOf(entry.getValue()));
+        }
+        return result;
     }
 
     private Optional<Object> latestUserContent(ServeRequest request) {
