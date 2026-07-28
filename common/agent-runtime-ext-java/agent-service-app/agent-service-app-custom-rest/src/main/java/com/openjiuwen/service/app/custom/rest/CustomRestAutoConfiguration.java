@@ -68,6 +68,9 @@ public class CustomRestAutoConfiguration {
     }
 
     @Controller
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    @ConditionalOnClass({DispatcherServlet.class, RequestHandler.class})
+    @ConditionalOnProperty(prefix = "openjiuwen.service.custom-rest", name = "query-path")
     static final class CustomRestHandler {
         private static final TypeReference<Map<String, Object>> BODY_TYPE = new TypeReference<>() {
         };
