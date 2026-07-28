@@ -45,15 +45,7 @@ cd ~/EvoAgent/agent-solution
 
 ## 2. 一次性配置
 
-### 2.1 创建主机目录
-
-```bash
-# Adapter 挂载所需目录（业务 Agent 日志/skills/agents + Adapter 数据/配置）
-mkdir -p /var/log/agents /opt/agents/skills /opt/agents/runtime \
-         /opt/agent-adapter/data /opt/agent-adapter
-```
-
-### 2.2 生成两份 .env
+### 2.1 生成两份 .env
 
 ```bash
 # Adapter 配置
@@ -65,7 +57,7 @@ cd ~/EvoAgent/agent-solution/common/agent-evolve/evoagent/deployment
 cp config/.env.example config/.env
 ```
 
-### 2.3 编辑 Adapter 的 `config/.env`（必填项，其余保持默认）
+### 2.2 编辑 Adapter 的 `config/.env`（必填项，其余保持默认）
 
 文件：`evoagent-adapter/deployment/config/.env`
 
@@ -76,6 +68,21 @@ HOST_AGENTS_ROOT=/opt/agents/runtime    # managed-doc父目录（读写挂载）
 HOST_OUTPUT_DIR=/opt/agent-adapter/data # Adapter输出目录（offsets/归档）
 HOST_CONFIG_FILE=/opt/agent-adapter/agent_adapter_config.yaml  # 配置文件持久化路径
 ```
+
+### 2.3 创建主机目录
+
+按上面 `config/.env` 规划的路径创建对应目录（不存在则补充，确保挂载不出错）：
+
+```bash
+# 与 Adapter .env 中五个 HOST_* 路径一一对应
+mkdir -p /var/log/agents                   # HOST_LOG_ROOT
+mkdir -p /opt/agents/skills                # HOST_SKILLS_ROOT
+mkdir -p /opt/agents/runtime               # HOST_AGENTS_ROOT
+mkdir -p /opt/agent-adapter/data           # HOST_OUTPUT_DIR
+mkdir -p "$(dirname /opt/agent-adapter/agent_adapter_config.yaml)"  # HOST_CONFIG_FILE 所在目录
+```
+
+> 如修改了 `.env` 中的路径，请按实际配置创建对应目录。
 
 ### 2.4 编辑 EvoAgent 的 `config/.env`（必填项，其余保持默认）
 
