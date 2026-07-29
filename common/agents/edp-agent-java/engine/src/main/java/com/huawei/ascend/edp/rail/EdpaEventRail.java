@@ -832,6 +832,11 @@ public class EdpaEventRail extends DeepAgentRail {
             String llmQuestion = extractAskUserQuestion(ctx);
             content = llmQuestion.isBlank() ? ScriptResolver.interruptStart(scripts) : llmQuestion;
         }
+        // a2a_delegate 中断（call_versatile）不发射 interrupt_start 事件
+        if (TOOL_CALL_VERSATILE.equals(toolName)) {
+            LOGGER.info("[EDPA-DIAG] skipping interrupt_start for a2a_delegate, tool={}", toolName);
+            return;
+        }
         LOGGER.info(
                 "[EDPA-DIAG] onToolException ToolInterruptException -> emit interrupt_start"
                         + "(tool={}, interrupt_id={}, source={})",
