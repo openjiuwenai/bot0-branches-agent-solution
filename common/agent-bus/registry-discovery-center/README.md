@@ -49,7 +49,7 @@ docker run -d --name registry-discovery-center-pg \
 本模块为独立 Maven 工程（无父 reactor），在模块目录执行：
 
 ```bash
-cd agent-solution/common/registry-discovery-center
+cd agent-solution/common/agent-bus/registry-discovery-center
 mvn compile
 ```
 
