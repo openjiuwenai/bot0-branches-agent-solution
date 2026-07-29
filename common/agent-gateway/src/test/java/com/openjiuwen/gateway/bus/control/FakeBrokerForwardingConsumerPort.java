@@ -23,15 +23,15 @@ import java.util.Queue;
  * @since 2026-07-27
  */
 public class FakeBrokerForwardingConsumerPort implements BrokerForwardingConsumerPort {
-    /** One recorded subscribe call. */
-    public record Subscription(String consumerServiceId, AgentBusEventType eventType, DeliveryFilter filter) {
-    }
-
     private final List<Subscription> subscriptions = new ArrayList<>();
     private final Queue<BrokerInboundMessage> inbound = new LinkedList<>();
     private final List<BrokerInboundMessage> committed = new ArrayList<>();
     private final List<BrokerInboundMessage> rejected = new ArrayList<>();
     private boolean closed = false;
+
+    /** One recorded subscribe call. */
+    public record Subscription(String consumerServiceId, AgentBusEventType eventType, DeliveryFilter filter) {
+    }
 
     /**
      * Returns recorded subscribe calls in order.

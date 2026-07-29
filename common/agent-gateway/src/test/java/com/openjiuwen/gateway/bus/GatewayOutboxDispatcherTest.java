@@ -29,6 +29,7 @@ import java.util.List;
 class GatewayOutboxDispatcherTest {
     private final FakeForwardingOutboxPort outbox = new FakeForwardingOutboxPort();
     private final FakeBrokerForwardingProducerPort producer = new FakeBrokerForwardingProducerPort();
+
     // claimPort + outbox are the same Fake (mirrors JdbcForwardingOutbox implementing both)
     private final GatewayOutboxDispatcher dispatcher = new GatewayOutboxDispatcher(
             outbox, producer, outbox, "tenant-a", "gateway-01", 60_000L, 1_000L, 10);

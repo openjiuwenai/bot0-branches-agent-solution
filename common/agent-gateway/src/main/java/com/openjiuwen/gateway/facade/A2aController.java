@@ -65,6 +65,8 @@ public class A2aController {
      * @param auditor         G5 governance auditor
      * @param router          direct-route router
      * @param sseBridge       SSE stream bridge
+     * @param pathSelector    BUS/DIRECT path selector
+     * @param busForwarder    BUS forwarder (empty when the BUS path is disabled)
      */
     public A2aController(AuthRule authRule, TenantResolver tenantResolver, ParamValidator paramValidator,
                          IdempotencyRule idempotencyRule, GovernanceAuditor auditor, Router router,
@@ -152,12 +154,14 @@ public class A2aController {
         if (pathSelector.isBus() && busForwarder.isPresent()) {
             if ("SendStreamingMessage".equals(context.method())) {
                 // FEAT-012 IN-4 BUS streaming: enqueue → poll ACCEPTED + STREAM_READY → SSE bridge.
-                String firstFrame = busForwarder.get().forwardStreaming(context, response, sseBridge);
-                if (firstFrame == null) {
-                    return null;  // SSE stream written to response
+                Optional<String> firstFrame = busForwarder.get().forwardStreaming(context, response, sseBridge);
+                if (firstFrame.isEmpty()) {
+                    // Spring MVC contract: null tells the framework the SSE stream is already committed.
+                    return null;
                 }
-                idempotencyRule.complete(context.tenantId(), context.messageId(), firstFrame);
-                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(firstFrame);
+                String frame = firstFrame.get();
+                idempotencyRule.complete(context.tenantId(), context.messageId(), frame);
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(frame);
             }
             // FEAT-012 BUS sync path: the blocking wait window + projection fold run inside BusForwarder,
             // which also completes/aborts G4 via G4BusWiring — skip the DIRECT router + G4 here.

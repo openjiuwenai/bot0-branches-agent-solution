@@ -31,6 +31,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * B5 (streaming STREAM_READY) + B6 (S5 extras) + B7 (S3 resume) + B8 (S4 wire) tests.
@@ -70,9 +71,9 @@ class BusStreamingAndResumeTest {
         feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-s", "sr-1");
         runtime.setFrames(List.of("{\"result\":{\"id\":\"task-s\",\"status\":\"working\"}}"));
         MockHttpServletResponse mockResponse = new MockHttpServletResponse();
-        String result = forwarder().forwardStreaming(createCtx("agent-1", "ms1"), mockResponse, sseBridge);
-        // SSE was written → result is null
-        assertThat(result).isNull();
+        Optional<String> result = forwarder().forwardStreaming(createCtx("agent-1", "ms1"), mockResponse, sseBridge);
+        // SSE was written → result is empty
+        assertThat(result).isEmpty();
         // SSE content written
         String sseOutput = mockResponse.getContentAsString();
         assertThat(sseOutput).contains("event: jsonrpc");
@@ -91,8 +92,8 @@ class BusStreamingAndResumeTest {
         feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-x", "sr-2");
         runtime.setFrames(List.of("{\"result\":{\"id\":\"task-x\",\"status\":\"working\"}}"));
         MockHttpServletResponse mockResponse = new MockHttpServletResponse();
-        String result = forwarder().forwardStreaming(createCtx("agent-1", "ms2"), mockResponse, sseBridge);
-        assertThat(result).isNull();
+        Optional<String> result = forwarder().forwardStreaming(createCtx("agent-1", "ms2"), mockResponse, sseBridge);
+        assertThat(result).isEmpty();
         assertThat(mockResponse.getContentAsString()).contains("event: jsonrpc");
     }
 
@@ -110,8 +111,9 @@ class BusStreamingAndResumeTest {
         BusForwarder f = forwarder();
         f.setStreamFirstFrameDeadlineMillis(300L);
         MockHttpServletResponse mockResponse = new MockHttpServletResponse();
-        String result = f.forwardStreaming(createCtx("agent-1", "m-nc"), mockResponse, sseBridge);
-        assertThat(result).contains("FAILED").contains("STREAM_DEADLINE_EXCEEDED");
+        Optional<String> result = f.forwardStreaming(createCtx("agent-1", "m-nc"), mockResponse, sseBridge);
+        assertThat(result).hasValueSatisfying(
+                s -> assertThat(s).contains("FAILED").contains("STREAM_DEADLINE_EXCEEDED"));
     }
 
     @Test
@@ -125,8 +127,9 @@ class BusStreamingAndResumeTest {
         runtime.setStreamException(new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
                 "Runtime rejected SubscribeToTask subscription: HTTP 400 bad"));
         MockHttpServletResponse mockResponse = new MockHttpServletResponse();
-        String result = forwarder().forwardStreaming(createCtx("agent-1", "m-f"), mockResponse, sseBridge);
-        assertThat(result).contains("FAILED").contains("HTTP 400");
+        Optional<String> result = forwarder().forwardStreaming(createCtx("agent-1", "m-f"), mockResponse, sseBridge);
+        assertThat(result).hasValueSatisfying(
+                s -> assertThat(s).contains("FAILED").contains("HTTP 400"));
     }
 
     @Test
@@ -202,7 +205,8 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b7_inputRequiredStubBranch() {
-        assertThat(FiveStateFolder.isTerminal(com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus.ACCEPTED_WITH_TASK)).isFalse();
+        assertThat(FiveStateFolder.isTerminal(
+                com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus.ACCEPTED_WITH_TASK)).isFalse();
     }
 
     @Test

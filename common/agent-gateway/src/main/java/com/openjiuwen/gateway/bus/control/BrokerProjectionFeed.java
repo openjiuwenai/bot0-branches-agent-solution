@@ -9,15 +9,15 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.SmartLifecycle;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.SmartLifecycle;
 
 /**
  * Gateway-side projection feed backed by the agent-bus SDK {@code responseConsumer}
@@ -74,7 +74,7 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
             consumer.subscribe(gatewayServiceId, type, filter);
         }
         running = true;
-        log.info("SUBSCRIBE responseConsumer gateway={} to {} INVOCATION_* response types on resp_out, filter targetServiceId={}",
+        log.info("SUBSCRIBE gateway={} to {} INVOCATION_* response types on resp_out (filter targetServiceId={})",
                 gatewayServiceId, RESPONSE_FAMILY.length, gatewayServiceId);
     }
 
@@ -106,7 +106,7 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
                     m.correlationId(), evt.eventType(), evt.taskId(), evt.streamRef(), evt.body() != null);
             consumer.commit(m);
             return Optional.of(evt);
-        } catch (RuntimeException decodeFailure) {
+        } catch (IllegalArgumentException decodeFailure) {
             // a malformed projection must not wedge the wait loop; commit + drop so the broker advances
             log.warn("decode failure corrId={} → drop", m.correlationId(), decodeFailure);
             consumer.commit(m);
