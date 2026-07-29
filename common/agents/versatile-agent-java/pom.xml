@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.6</version>
+  </parent>
+
+  <groupId>com.huawei.ascend</groupId>
+  <artifactId>adapter-versatile-agent-java</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <name>adapter-versatile-agent-java</name>
+  <description>
+    Standalone A2A process that proxies A2A requests to a remote Versatile REST
+    workflow API. Reuses agent-runtime VersatileAgentHandler so that
+    non-result nodes stream through to the caller (Target.USER), missing End
+    nodes raise an interruption, and the result node feeds back to the LLM
+    (Target.LLM).
+  </description>
+
+  <properties>
+    <java.version>17</java.version>
+    <maven.compiler.release>17</maven.compiler.release>
+    <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+    <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.openjiuwen</groupId>
+      <artifactId>agent-service-app</artifactId>
+      <version>${agent-runtime-java.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.openjiuwen</groupId>
+      <artifactId>agent-service-adapters-versatile</artifactId>
+      <version>${agent-runtime-ext-java.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <release>17</release>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>com.huawei.ascend.versatile.VersatileAgentApplication</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>net.revelc.code.formatter</groupId>
+        <artifactId>formatter-maven-plugin</artifactId>
+        <version>2.23.0</version>
+        <configuration>
+          <configFile>D:\JW\edpa-git\agent-solution\common\agents\.devtools\eclipse-java-formatter.xml</configFile>
+          <includes>
+            <include>**/*.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
