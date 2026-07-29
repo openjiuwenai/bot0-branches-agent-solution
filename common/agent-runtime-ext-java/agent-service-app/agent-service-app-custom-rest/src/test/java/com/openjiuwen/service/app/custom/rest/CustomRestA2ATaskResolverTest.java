@@ -30,26 +30,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Verifies isolated context generation and resumable A2A task selection.
+ * Verifies resumable A2A task selection by business conversation id.
  *
  * @since 0.1.0
  */
 class CustomRestA2ATaskResolverTest {
     @Test
-    void contextIdIsStableIsolatedAndOpaque() {
-        String value = CustomRestA2ATaskResolver.internalContextId(null, "customer-session");
-
-        assertThat(value).startsWith("custom-rest:v1:").hasSize(58).doesNotContain("customer-session");
-        assertThat(CustomRestA2ATaskResolver.internalContextId(null, "customer-session")).isEqualTo(value);
-        assertThat(CustomRestA2ATaskResolver.internalContextId("", "customer-session")).isNotEqualTo(value);
-        assertThat(CustomRestA2ATaskResolver.internalContextId("tenant-a", "customer-session")).isNotEqualTo(value);
-        assertThat(CustomRestA2ATaskResolver.internalContextId(null, "other-session")).isNotEqualTo(value);
-    }
-
-    @Test
     void listsEveryPageFetchesFullTasksAndResumesFormalInputRequiredTask() {
         TaskStore store = mock(TaskStore.class);
-        String contextId = CustomRestA2ATaskResolver.internalContextId(null, "session");
+        String contextId = "session";
         Task summary = task("formal", contextId, TASK_STATE_INPUT_REQUIRED, List.of());
         Task shadow = task("shadow:remote:session", contextId, TASK_STATE_INPUT_REQUIRED, List.of());
         Task formal = task("formal", contextId, TASK_STATE_INPUT_REQUIRED, List.of(message(contextId)));
@@ -78,7 +67,7 @@ class CustomRestA2ATaskResolverTest {
 
     @Test
     void resumesAndObservesFormalInputRequiredTaskWithoutHistory() {
-        String contextId = CustomRestA2ATaskResolver.internalContextId(null, "session");
+        String contextId = "session";
         TaskStore store = storeWith(task("formal", contextId, TASK_STATE_INPUT_REQUIRED, List.of()));
         CustomRestA2ATaskResolver resolver = new CustomRestA2ATaskResolver(store);
 

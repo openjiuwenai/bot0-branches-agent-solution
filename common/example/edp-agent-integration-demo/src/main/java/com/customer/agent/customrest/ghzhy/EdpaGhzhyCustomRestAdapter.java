@@ -79,6 +79,7 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
                 .role(Message.Role.ROLE_USER)
                 .parts(new TextPart(inputText))
                 .messageId(UUID.randomUUID().toString())
+                .contextId(conversationId)
                 .build();
 
         Map<String, Object> metadata = new LinkedHashMap<>();
@@ -100,32 +101,28 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         LOGGER.info("[EDP-CUSTOM-REST] Mapped request to A2A: conversationId={}, messageId={}, streaming={}",
                 abbreviate(conversationId, 8), message.messageId(), streaming);
 
-        return new A2ASendCommand(params, conversationId, streaming);
+        return new A2ASendCommand(params, streaming);
     }
 
     @Override
     public Object fromA2ATask(Task task, Context context) {
-        String externalId = context.pathVariables().getOrDefault("conversation_id", "");
-
         LOGGER.debug("[EDP-CUSTOM-REST-RSP] Building sync response: taskId={}, state={}, conversationId={}",
                 task.id(),
                 task.status() != null ? task.status().state() : "null",
-                abbreviate(externalId, 8));
+                abbreviate(task.contextId(), 8));
 
-        Map<String, Object> flatData = unwrapTaskToFlat(task, externalId);
+        Map<String, Object> flatData = unwrapTaskToFlat(task);
         return envelope(true, "", flatData, context);
     }
 
     @Override
     public SseEvent fromA2AStreamEvent(StreamingEventKind event, Context context) {
-        String externalId = context.pathVariables().getOrDefault("conversation_id", "");
         String sseType = detectEventType(event);
 
-        LOGGER.debug("[EDP-CUSTOM-REST-RSP] Processing stream event: eventType={}, conversationId={}",
-                event.getClass().getSimpleName(),
-                abbreviate(externalId, 8));
+        LOGGER.debug("[EDP-CUSTOM-REST-RSP] Processing stream event: eventType={}",
+                event.getClass().getSimpleName());
 
-        Map<String, Object> flatData = unwrapToFlat(event, externalId);
+        Map<String, Object> flatData = unwrapToFlat(event);
         return new SseEvent(sseType, envelope(true, "", flatData, context));
     }
 
@@ -159,18 +156,17 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
      * Unwrap any StreamingEventKind to flat format for frontend consumption.
      *
      * @param event A2A SDK StreamingEventKind 事件对象
-     * @param externalId 外部 conversation ID
      * @return 扁平化后的 {event, content, data} 格式 Map
      */
-    private Map<String, Object> unwrapToFlat(StreamingEventKind event, String externalId) {
+    private Map<String, Object> unwrapToFlat(StreamingEventKind event) {
         if (event instanceof TaskArtifactUpdateEvent artifact) {
-            return unwrapArtifactToFlat(artifact, externalId);
+            return unwrapArtifactToFlat(artifact);
         }
         if (event instanceof TaskStatusUpdateEvent status) {
             return mapStatusToFlat(status);
         }
         if (event instanceof Task task) {
-            return unwrapTaskToFlat(task, externalId);
+            return unwrapTaskToFlat(task);
         }
         if (event instanceof Message msg) {
             return unwrapMessageToFlat(msg);
@@ -189,11 +185,9 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
      * artifact.parts[].text (double-JSON-encoded), lift to flat format.
      *
      * @param artifactEvent A2A SDK TaskArtifactUpdateEvent 事件对象
-     * @param externalId 外部 conversation ID
      * @return 扁平化后的 {event, content, data} 格式 Map
      */
-    private Map<String, Object> unwrapArtifactToFlat(TaskArtifactUpdateEvent artifactEvent,
-            String externalId) {
+    private Map<String, Object> unwrapArtifactToFlat(TaskArtifactUpdateEvent artifactEvent) {
         Artifact artifact = artifactEvent.artifact();
         if (artifact == null || artifact.parts() == null || artifact.parts().isEmpty()) {
             LOGGER.debug("[EDP-CUSTOM-REST-RSP] Received empty artifact in TaskArtifactUpdateEvent");
@@ -207,7 +201,7 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
         }
 
         // 尝试 JSON 解析，失败则当作 plain text
-        Map<String, Object> parsed = parseArtifactJsonEnvelope(text, externalId);
+        Map<String, Object> parsed = parseArtifactJsonEnvelope(text);
         if (!parsed.isEmpty()) {
             return parsed;
         }
@@ -241,10 +235,9 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
      * 解析失败时返回 null（由调用方决定回退策略）。
      *
      * @param text JSON 文本内容
-     * @param externalId 外部 conversation ID
      * @return 扁平化 Map，解析失败时返回 null
      */
-    private Map<String, Object> parseArtifactJsonEnvelope(String text, String externalId) {
+    private Map<String, Object> parseArtifactJsonEnvelope(String text) {
         try {
             Map<String, Object> parsed = objectMapper.readValue(text,
                     new TypeReference<Map<String, Object>>() {});
@@ -263,19 +256,12 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
                 }
                 copyIfPresent(flat, payloadMap, "tool", "interrupt_id", "timestamp",
                         "conversation_id", "index");
-                if (flat.containsKey("conversation_id")) {
-                    flat.put("conversation_id", externalId);
-                }
                 return flat;
             }
 
             // Shape 2: already flat {event, content, data}
             if (parsed.containsKey("event")) {
-                Map<String, Object> flat = new LinkedHashMap<>(parsed);
-                if (flat.containsKey("conversation_id")) {
-                    flat.put("conversation_id", externalId);
-                }
-                return flat;
+                return new LinkedHashMap<>(parsed);
             }
 
             // Shape 3: LLM output {type:"llm_output", ...}
@@ -332,10 +318,9 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
      * Unwrap Task (final result) to flat format.
      *
      * @param task A2A SDK Task 最终结果对象
-     * @param externalId 外部 conversation ID
      * @return 包含 event/content/data 的扁平化 Map
      */
-    private Map<String, Object> unwrapTaskToFlat(Task task, String externalId) {
+    private Map<String, Object> unwrapTaskToFlat(Task task) {
         String eventName;
         if (task.status() != null && task.status().state() != null) {
             eventName = STATUS_EVENT_MAP.getOrDefault(task.status().state(), "task_result");
@@ -348,11 +333,11 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
 
         LOGGER.debug("[EDP-CUSTOM-REST-RSP] Unwrapped task result: state={}, taskId={}, conversationId={}",
                 task.status() != null ? task.status().state() : "null",
-                task.id(), abbreviate(externalId, 8));
+                task.id(), abbreviate(task.contextId(), 8));
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("taskId", task.id());
-        data.put("contextId", externalId);
+        data.put("contextId", task.contextId());
         if (task.status() != null) {
             data.put("state", task.status().state().name());
         }
