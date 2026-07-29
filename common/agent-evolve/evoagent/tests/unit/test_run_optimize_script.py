@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -48,6 +49,17 @@ def _make_args(**overrides: object) -> argparse.Namespace:
     }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
+
+
+def test_parse_args_default_scenario_is_skillopt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """只传必填参数时，parse_args 应使用 CLI 默认 scenario。"""
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_optimize.py", "--dataset-manifest", "data/dataset.yaml"],
+    )
+    ns = _run_optimize.parse_args()
+    assert ns.scenario == "skillopt"
 
 
 def _make_config(**overrides: object):  # type: ignore[no-untyped-def]

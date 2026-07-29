@@ -234,26 +234,27 @@ class ScenarioOpt:
 # ── 默认场景 ──
 
 
-def test_registry_default_scenarios_dir_loads_edp_agent() -> None:
-    """验证默认 registry 能找到 examples/scenarios/edp_agent。"""
-    request = _make_request(scenario="edp_agent")
-    try:
-        optimizer = ScenarioRegistry().build_optimizer(
-            request,
-            dependencies={
-                "agent": MagicMock(),
-                "evaluator": MagicMock(),
-                "llm": MagicMock(),
-                "model": "test-model",
-                "train_cases": MagicMock(),
-                "adapter_client": MagicMock(),
-                "operators": {},
-            },
-        )
-    except (FileNotFoundError, ImportError, ValueError):
-        pytest.skip("examples/scenarios/edp_agent/ not available")
+def test_registry_default_scenarios_dir_loads_skillopt_and_edp_agent() -> None:
+    """验证默认 registry 能找到 examples/scenarios/skillopt 与 edp_agent。"""
+    for scenario_name in ["skillopt", "edp_agent"]:
+        request = _make_request(scenario=scenario_name)
+        try:
+            optimizer = ScenarioRegistry().build_optimizer(
+                request,
+                dependencies={
+                    "agent": MagicMock(),
+                    "evaluator": MagicMock(),
+                    "llm": MagicMock(),
+                    "model": "test-model",
+                    "train_cases": MagicMock(),
+                    "adapter_client": MagicMock(),
+                    "operators": {},
+                },
+            )
+        except (FileNotFoundError, ImportError, ValueError):
+            pytest.skip(f"examples/scenarios/{scenario_name}/ not available")
 
-    assert optimizer is not None
+        assert optimizer is not None
 
 
 # ── Wave 3 依赖注入 ──
