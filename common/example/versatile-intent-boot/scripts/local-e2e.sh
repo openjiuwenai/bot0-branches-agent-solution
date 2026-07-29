@@ -25,7 +25,9 @@
 #   ./scripts/local-e2e.sh            # build if needed, run all scenarios
 #   SKIP_BUILD=1 ./scripts/local-e2e.sh   # skip build (use existing jar)
 #
-# Prerequisites: Java 17 on PATH.
+# Prerequisites: Java 17 on PATH, and the prerequisite artifacts
+# (agent-service-app / agent-service-adapters-versatile) installed in the
+# local Maven repository — see README.md「前置依赖 → 首次构建」.
 
 set -euo pipefail
 
@@ -37,6 +39,17 @@ L2_PORT="${L2_PORT:-8082}"
 DOWNSTREAM_PORT="${DOWNSTREAM_PORT:-8083}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 JAR_FILE="$MODULE_DIR/target/versatile-intent-boot-0.1.0.jar"
+
+# Local Maven repository (override via M2_REPO). Used only to give a helpful
+# early error when prerequisite artifacts are missing — not a build input.
+M2_REPO="${M2_REPO:-$HOME/.m2/repository}"
+
+# Prerequisite artifacts this example depends on. They are NOT built by this
+# script — they must be installed first (see README.md「前置依赖 → 首次构建」).
+PREREQ_JARS=(
+    "com/openjiuwen/agent-service-app/0.1.0/agent-service-app-0.1.0.jar"
+    "com/openjiuwen/agent-service-adapters-versatile/0.1.0/agent-service-adapters-versatile-0.1.0.jar"
+)
 
 PIDS=()
 LOG_DIR="$MODULE_DIR/target"
@@ -67,6 +80,35 @@ build_if_needed() {
     else
         echo "==> Using existing jar: $JAR_FILE"
     fi
+}
+
+# Verifies the prerequisite artifacts exist in the local Maven repository.
+# This script only packages this module's jar — it does NOT build the
+# prerequisites. Failing fast here avoids a confusing 73-error compile failure.
+check_dependencies() {
+    local missing=()
+    for rel in "${PREREQ_JARS[@]}"; do
+        if [ ! -f "$M2_REPO/$rel" ]; then
+            missing+=("$rel")
+        fi
+    done
+    if [ ${#missing[@]} -ne 0 ]; then
+        echo "ERROR: 缺少前置依赖，无法编译本模块：" >&2
+        for rel in "${missing[@]}"; do
+            echo "  - $M2_REPO/$rel" >&2
+        done
+        cat >&2 <<'EOF'
+本脚本仅构建 versatile-intent-boot 自身 jar，不构建前置依赖。
+请先按 README.md「前置依赖 → 首次构建」安装前置依赖，例如：
+  # 1. 构建外部 runtime 核心（提供 agent-service-app）
+  cd <agent-runtime-java> && mvn clean install -DskipTests
+  # 2. 构建本仓 extension 模块（提供 agent-service-adapters-versatile）
+  mvn -f common/agent-runtime-ext-java/pom.xml clean install -DskipTests
+详见仓库根 CONTRIBUTING.md「Development Setup」。
+EOF
+        return 1
+    fi
+    echo "==> Prerequisite artifacts present in $M2_REPO"
 }
 
 wait_for_health() {
@@ -201,6 +243,7 @@ run_round_two() {
 
 main() {
     echo "==> L2 §5.5.3 方案 B mock 联调 (three scenarios)"
+    check_dependencies
     build_if_needed
     run_round_one
     run_round_two
