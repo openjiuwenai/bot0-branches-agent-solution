@@ -667,7 +667,7 @@ public class EdpaEventRail extends DeepAgentRail {
         String uiNoticeEvent = uiNotice[0];
         String uiNoticeText = uiNotice[1];
 
-        resolveAndEmitToolEndContent(ctx, toolName, sid, toolResult, uiNoticeEvent, uiNoticeText);
+        resolveAndEmitToolEndContent(ctx, new ToolEndParams(toolName, sid, toolResult, uiNoticeEvent, uiNoticeText));
         emitInterruptEndForResume(ctx, toolName, sid);
 
         if (!Boolean.TRUE.equals(a2aResuming.getOrDefault(sid, false))) {
@@ -676,40 +676,55 @@ public class EdpaEventRail extends DeepAgentRail {
     }
 
     /**
-     * 解析并发射 tool_end 话术内容。
+     * tool_end 解析所需参数封装，避免方法参数超过 5 个（G.MET.01）。
      */
-    private void resolveAndEmitToolEndContent(AgentCallbackContext ctx, String toolName, String sid,
-            Object toolResult, String uiNoticeEvent, String uiNoticeText) {
+    private record ToolEndParams(String toolName, String sid, Object toolResult,
+            String uiNoticeEvent, String uiNoticeText) {
+    }
+
+    /**
+     * 解析并发射 tool_end 话术内容。
+     *
+     * @param ctx 回调上下文
+     * @param params tool_end 解析参数封装
+     */
+    private void resolveAndEmitToolEndContent(AgentCallbackContext ctx, ToolEndParams params) {
         String qi = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, ""));
         String qdCached = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_DESCRIPTION, ""));
         String effectiveIntent = resolveEffectiveTextIntent(qi, qdCached);
-        String toolEndContent = resolveToolEndContent(effectiveIntent, toolName, uiNoticeText);
+        String toolEndContent = resolveToolEndContent(effectiveIntent, params.toolName(), params.uiNoticeText());
 
-        boolean skipToolEndForInterrupt = "interrupt_start".equals(uiNoticeEvent)
-                || interruptActive.getOrDefault(sid, false);
+        boolean skipToolEndForInterrupt = "interrupt_start".equals(params.uiNoticeEvent())
+                || interruptActive.getOrDefault(params.sid(), false);
         if (!skipToolEndForInterrupt) {
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("tool", toolName);
-            payload.put("data", toolResult != null ? toolResult : "");
+            payload.put("tool", params.toolName());
+            payload.put("data", params.toolResult() != null ? params.toolResult() : "");
             payload.put("content", toolEndContent);
             LOGGER.info(
                     "[EDPA-DIAG] afterToolCall tool={} queryIntent={} effectiveIntent={} "
                             + "uiNoticeText={} -> emit tool_end content={}",
-                    toolName, qi, effectiveIntent, uiNoticeText != null ? "SET" : "null", toolEndContent);
+                    params.toolName(), qi, effectiveIntent,
+                    params.uiNoticeText() != null ? "SET" : "null", toolEndContent);
             emit(ctx, EdpaEventType.TOOL_END, payload);
         } else {
             LOGGER.info(
                     "[EDPA-DIAG] afterToolCall tool={} uiNoticeEvent=interrupt_start "
                             + "-> skip tool_end (handled by exit interrupt)",
-                    toolName);
+                    params.toolName());
         }
-        if ("todo_end".equals(uiNoticeEvent)) {
-            emit(ctx, EdpaEventType.TODO_END, Map.of("content", uiNoticeText, "status", "done"));
+        if ("todo_end".equals(params.uiNoticeEvent())) {
+            emit(ctx, EdpaEventType.TODO_END,
+                    Map.of("content", params.uiNoticeText(), "status", "done"));
         }
     }
 
     /**
      * call_versatile 中断恢复后发 interrupt_end，清除 interruptActive。
+     *
+     * @param ctx 回调上下文
+     * @param toolName 工具名称
+     * @param sid 会话 ID
      */
     private void emitInterruptEndForResume(AgentCallbackContext ctx, String toolName, String sid) {
         if (!TOOL_CALL_VERSATILE.equals(toolName) || !interruptActive.getOrDefault(sid, false)) {
