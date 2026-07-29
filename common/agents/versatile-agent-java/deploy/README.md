@@ -8,7 +8,7 @@
 
 前置：Linux 上已装 `git`、`docker`、`JDK 17`、`Maven 3.8+`。
 
-ARM64 服务器在部署前先确认操作系统、Docker 和基础镜像均为 64 位 ARM：
+ARM64 服务器（建议配置16CPU、32G，可根据生产和测试环境适当调整）在部署前，先确认操作系统、Docker 和基础镜像均为 64 位 ARM：
 
 ```bash
 uname -m
