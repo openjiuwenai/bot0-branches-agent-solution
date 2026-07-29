@@ -81,6 +81,19 @@ class HttpRdcRouteClientTest {
     }
 
     @Test
+    void searchMapsServiceIdToTargetServiceId() throws InterruptedException {
+        // FEAT-012 BUS path needs targetServiceId (the runtime's serviceId) in the envelope;
+        // DIRECT never read it, so HttpRdcRouteClient must populate it from the RDC dto's serviceId.
+        mockRdc.enqueue(new MockResponse()
+                .setBody("[{\"routeHandle\":\"v2:h1\",\"serviceId\":\"agent-bus-consumer-demo\"}]")
+                .addHeader("Content-Type", "application/json"));
+        List<AgentCardRoute> result = client.searchInstancesByAgentId("tenant-a", "travel-hotel");
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).routeHandle()).isEqualTo("v2:h1");
+        assertThat(result.get(0).targetServiceId()).isEqualTo("agent-bus-consumer-demo");
+    }
+
+    @Test
     void resolveReturnsEndpointAndPostsHandleAndTenant() throws Exception {
         mockRdc.enqueue(new MockResponse()
                 .setBody("{\"endpointUrl\":\"http://runtime-1:8000\"}")

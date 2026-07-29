@@ -54,7 +54,8 @@ public class G4BusWiring {
      * @param resultBody optional result body for complete path
      */
     public void onFold(InvocationResponseStatus status, String tenantId, String messageId, String resultBody) {
-        if (FiveStateFolder.isTerminal(status) || status == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
+        if (FiveStateFolder.isTerminal(status) || status == InvocationResponseStatus.ACCEPTED_WITH_TASK
+                || status == InvocationResponseStatus.INPUT_REQUIRED) {
             onComplete(tenantId, messageId, resultBody);
         } else {
             onAbort(tenantId, messageId);

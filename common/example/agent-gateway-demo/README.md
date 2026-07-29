@@ -6,7 +6,7 @@
 | 角色 | 目录 | 职责 |
 |------|------|------|
 | Client example | `agent-client/examples/cloud-client` | 验证台 UI / SDK 打桩对接 |
-| **Gateway example（本目录）** | `common/example/agent-gateway-demo` | 起 Gateway、直打 `/a2a` smoke、配置说明 |
+| **Gateway example（本目录）** | `common/example/agent-gateway-demo` | BUS launcher 制品（fat-jar 把 `agent-bus-sdk` 上 classpath）+ 直打 `/a2a` smoke + 配置 |
 
 与同目录下 travel / deep-research 等 demo 并列；本工程测的是 **agent-gateway** 接入面，不是多 Agent 业务链。
 
@@ -15,14 +15,17 @@
 ```text
 agent-gateway-demo/
 ├── README.md                 # 本文件
-├── application-example.yml   # 本地起 Gateway 的参考配置
+├── pom.xml                   # BUS launcher 模块（agent-gateway lib + agent-bus-sdk，spring-boot repackage）
+├── application-example.yml   # DIRECT 参考配置（--spring.config.additional-location 指向它）
 ├── validate.sh               # 校验 example 自身（结构 + 可选联机 / bus unit）
-├── feat-011-direct/          # FEAT-011 DIRECT 路径
+├── src/main/resources/
+│   └── application-bus.yml   # BUS profile 配置（打进 fat-jar，--spring.profiles.active=bus 加载）
+├── feat-011-direct/          # FEAT-011 DIRECT 路径 smoke
 │   ├── README.md
 │   ├── smoke.sh
 │   ├── bodies/
 │   └── stubs/
-└── feat-012-bus/             # FEAT-012 BUS 路径
+└── feat-012-bus/             # FEAT-012 BUS 路径 smoke
     ├── README.md
     ├── smoke.sh
     └── bodies/
