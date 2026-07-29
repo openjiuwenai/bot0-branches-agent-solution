@@ -561,12 +561,12 @@ public class EdpaEventRail extends DeepAgentRail {
      * 获取工具参数中的 query_description 值。
      *
      * @param inputs 工具调用输入
-     * @return query_description 字符串值，无则返回 null
+     * @return query_description 字符串值，无则返回空串
      */
     private String getQueryDescription(ToolCallInputs inputs) {
         Map<String, Object> args = normalizeToolArgs(inputs.getToolArgs());
         Object qd = args.get("query_description");
-        return qd != null ? String.valueOf(qd) : null;
+        return qd != null ? String.valueOf(qd) : "";
     }
 
     /**
