@@ -30,8 +30,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Mock A2A Gateway endpoint that forwards inbound JSON-RPC {@code message/send}
@@ -120,13 +122,22 @@ public class MockA2AGatewayController {
      */
     private final Map<String, String> routing;
 
+    private final Set<String> passthroughCards;
+
     /**
-     * Default constructor used by Spring for {@code @Profile("mock-a2a-gateway")}
-     * instantiation. Binds the instance routing table to the static
-     * {@link #ROUTING} defaults.
+     * Spring constructor. Builds the effective routing table by overlaying
+     * configured overrides onto the static {@link #ROUTING} defaults, and
+     * reads the passthrough card set. With empty config (the default for
+     * {@code local-e2e-a2a-gateway.sh}) behavior is unchanged.
      */
-    public MockA2AGatewayController() {
-        this(ROUTING);
+    public MockA2AGatewayController(MockA2aGatewayProperties properties) {
+        Map<String, String> effective = new LinkedHashMap<>(ROUTING);
+        if (properties != null && properties.getRouting() != null) {
+            effective.putAll(properties.getRouting());
+        }
+        this.routing = effective;
+        this.passthroughCards = properties == null || properties.getPassthroughCards() == null
+                ? Set.of() : Set.copyOf(properties.getPassthroughCards());
     }
 
     /**
@@ -135,7 +146,15 @@ public class MockA2AGatewayController {
      * @param routing agentCard → target runtime base URL map
      */
     MockA2AGatewayController(Map<String, String> routing) {
+        this(routing, Set.of());
+    }
+
+    /**
+     * Test-friendly constructor with explicit routing and passthrough set.
+     */
+    MockA2AGatewayController(Map<String, String> routing, Set<String> passthroughCards) {
         this.routing = routing;
+        this.passthroughCards = passthroughCards == null ? Set.of() : Set.copyOf(passthroughCards);
     }
 
     /**
@@ -151,7 +170,8 @@ public class MockA2AGatewayController {
     public ResponseEntity<String> handle(
             @PathVariable String agentId,
             HttpServletRequest request,
-            @RequestBody(required = false) String body) {
+            HttpServletResponse response,
+            @RequestBody(required = false) String body) throws IOException {
         String query = extractMessageText(body);
         String contextId = extractContextId(body);
         String jsonRpcId = extractJsonRpcId(body);
@@ -163,6 +183,12 @@ public class MockA2AGatewayController {
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(errorJson(jsonRpcId, "no routing for agentId=" + agentId));
+        }
+
+        if (passthroughCards.contains(agentId)) {
+            log.info("Mock A2A Gateway PASSTHROUGH agentId={} -> {}/a2a/", agentId, targetBase);
+            new A2aPassthroughForwarder().forward(targetBase, agentId, body, response);
+            return null;
         }
 
         String targetUrl = targetBase + QUERY_PATH;
