@@ -15,8 +15,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Replaces the runtime's {@link A2AEnabledServeOrchestrator} bean with a
- * {@link ReclassifyServeOrchestrator} wrapper after initialization. Other
+ * Wraps the runtime's {@link A2AEnabledServeOrchestrator} bean with a
+ * {@link ReclassifyServeOrchestrator} decorator after initialization. Other
  * beans that inject {@code ServeOrchestrator} receive the decorator without
  * any change to their own wiring.
  *
@@ -24,6 +24,13 @@ import java.util.Optional;
  * {@code A2AEnabledServeOrchestrator} type (not the {@code ServeOrchestrator}
  * interface) so it does not accidentally wrap itself or other custom
  * orchestrators.
+ *
+ * <p>Rather than returning the bare decorator (which only implements
+ * {@code ServeOrchestrator}), the bean is exposed through
+ * {@link ReclassifyOrchestratorProxy}. The proxy implements every interface
+ * of the wrapped bean, so secondary interfaces such as
+ * {@code A2aPushNotificationCallbackHandler} are preserved and the injection
+ * points that depend on them keep resolving — see issue #50.
  *
  * <p>An {@link ObjectProvider} for {@link RouteCache} is used so the
  * decorator can be created even when route-cache support is disabled at
@@ -46,8 +53,9 @@ public class ReclassifyOrchestratorPostProcessor implements BeanPostProcessor {
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
         if (bean instanceof A2AEnabledServeOrchestrator wrapped) {
             RouteCache cache = routeCacheProvider.getIfAvailable();
-            return new ReclassifyServeOrchestrator(wrapped, properties,
+            ReclassifyServeOrchestrator decorator = new ReclassifyServeOrchestrator(wrapped, properties,
                     cache == null ? Optional.empty() : Optional.of(cache));
+            return ReclassifyOrchestratorProxy.wrap(wrapped, decorator);
         }
         return bean;
     }
