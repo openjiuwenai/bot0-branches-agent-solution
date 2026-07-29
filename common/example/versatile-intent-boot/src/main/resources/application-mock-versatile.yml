@@ -5,7 +5,7 @@
 #
 # The e2e script overrides versatile.url-template per process to point at the
 # process's own mock endpoint. This file only carries the card-resolver
-# local-mapping that all three processes share.
+# local-mapping that all processes (L1/L2/downstream/default-wf) share.
 openjiuwen:
   service:
     a2a-gateway:
@@ -23,5 +23,10 @@ openjiuwen:
         agent_card_biz_hotel_domestic: http://localhost:8083
         agent_card_biz_hotel_international: http://localhost:8083
         agent_card_biz_flight_domestic: http://localhost:8083
+        # L2 self-heals an ambiguous intent (intent_id="1") by delegating to
+        # the default-wf process (hosting agent_L2_default), which returns a
+        # fallback business answer. Without this mapping the a2a_delegate
+        # fails and the /v1/query response comes back empty.
+        agent_card_L2_default: http://localhost:8085
         # Reclassification: downstream forwards back to L1
         agent_L1: http://localhost:8081
