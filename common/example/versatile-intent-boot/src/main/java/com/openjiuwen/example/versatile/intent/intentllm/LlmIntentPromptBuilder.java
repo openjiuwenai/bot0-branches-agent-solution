@@ -28,10 +28,23 @@ class LlmIntentPromptBuilder {
     }
 
     List<Map<String, Object>> build(ServeRequest request) {
+        return buildConversation(extractTurns(request));
+    }
+
+    /**
+     * Builds chat messages (system + conversation turns) from an explicit turn
+     * list. The {@link LlmIntentAgentHandler} maintains per-conversation user
+     * history and passes it here so the LLM sees prior inputs when classifying a
+     * follow-up message (e.g. {@code "500元"} as a hotel-budget answer).
+     *
+     * @param turns ordered conversation turns (role/content maps); may be empty
+     * @return system message followed by the supplied turns
+     */
+    List<Map<String, Object>> buildConversation(List<Map<String, Object>> turns) {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt()));
-        if (request.getMessages() != null) {
-            for (Map<String, Object> m : request.getMessages()) {
+        if (turns != null) {
+            for (Map<String, Object> m : turns) {
                 Object role = m.get("role");
                 Object content = m.get("content");
                 if (role != null && content != null) {
@@ -40,6 +53,20 @@ class LlmIntentPromptBuilder {
             }
         }
         return messages;
+    }
+
+    private List<Map<String, Object>> extractTurns(ServeRequest request) {
+        List<Map<String, Object>> turns = new ArrayList<>();
+        if (request.getMessages() != null) {
+            for (Map<String, Object> m : request.getMessages()) {
+                Object role = m.get("role");
+                Object content = m.get("content");
+                if (role != null && content != null) {
+                    turns.add(Map.of("role", role, "content", String.valueOf(content)));
+                }
+            }
+        }
+        return turns;
     }
 
     private String systemPrompt() {
@@ -52,7 +79,12 @@ class LlmIntentPromptBuilder {
         sb.append("你是一个意图分类器，负责").append(domainText).append("的意图识别。")
                 .append("可选目标 agent（agent_id）：").append(availableAgentCards()).append("。")
                 .append("仅输出 JSON，不要输出任何其他文字。")
-                .append("若用户请求属于你的领域，输出：")
+                .append("请根据对话中【最后一条用户消息】判断当前意图。");
+        if (domain == null || domain.isBlank()) {
+            sb.append("用户可能中途切换话题（例如先订酒店再买机票）；无论之前讨论什么，都按最后一条消息的意图分类，")
+                    .append("不要因为话题切换或前文上下文而输出 ambiguous。");
+        }
+        sb.append("若用户请求属于你的领域，输出：")
                 .append("{\"action\":\"classify\",\"intent_id\":\"<意图id>\",")
                 .append("\"agent_id\":\"<可选目标agent之一>\",\"response_content\":\"<简短中文描述>\"}。")
                 .append("若不属于你的领域（无法处理），输出：")

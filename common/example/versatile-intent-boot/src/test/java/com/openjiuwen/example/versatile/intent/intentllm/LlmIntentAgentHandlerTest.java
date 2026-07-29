@@ -2,7 +2,10 @@ package com.openjiuwen.example.versatile.intent.intentllm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
@@ -13,6 +16,7 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +32,8 @@ class LlmIntentAgentHandlerTest {
     void setUp() {
         client = mock(LlmIntentClient.class);
         promptBuilder = mock(LlmIntentPromptBuilder.class);
-        when(promptBuilder.build(any())).thenReturn(List.of(Map.of("role", "user", "content", "x")));
+        when(promptBuilder.buildConversation(anyList()))
+                .thenReturn(List.of(Map.of("role", "user", "content", "x")));
         props = new LlmIntentProperties();
         versatile = new VersatileProperties();
         versatile.setAmbiguousIntentId("1");
@@ -84,5 +89,45 @@ class LlmIntentAgentHandlerTest {
         r.setStream(false);
         r.setMessages(List.of(Map.of("role", "user", "content", text)));
         return r;
+    }
+
+    @Test
+    void maintainsConversationHistoryAcrossTurns() {
+        // Use a real prompt builder so the messages passed to the client reflect
+        // accumulated history (system + N user turns) as freshly built lists.
+        LlmIntentPromptBuilder realBuilder = new LlmIntentPromptBuilder(versatile, props);
+        LlmIntentAgentHandler h = new LlmIntentAgentHandler(props, versatile, client, realBuilder);
+        when(client.complete(any())).thenReturn(
+                "{\"action\":\"classify\",\"intent_id\":\"x\","
+                        + "\"agent_id\":\"agent_card_biz_hotel_domestic\","
+                        + "\"response_content\":\"国内酒店\"}");
+        h.query(serveRequest("订酒店"));
+        h.query(serveRequest("500元"));
+
+        ArgumentCaptor<List<Map<String, Object>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(client, times(2)).complete(captor.capture());
+        List<List<Map<String, Object>>> calls = captor.getAllValues();
+        // system + 1 turn, then system + 2 turns (history accumulated).
+        assertThat(calls.get(0)).hasSize(2);
+        assertThat(calls.get(1)).hasSize(3);
+        assertThat(String.valueOf(calls.get(1).get(2).get("content"))).contains("500元");
+    }
+
+    @Test
+    void clearSessionDropsConversationHistory() {
+        LlmIntentPromptBuilder realBuilder = new LlmIntentPromptBuilder(versatile, props);
+        LlmIntentAgentHandler h = new LlmIntentAgentHandler(props, versatile, client, realBuilder);
+        when(client.complete(any())).thenReturn(
+                "{\"action\":\"classify\",\"intent_id\":\"x\","
+                        + "\"agent_id\":\"agent_card_biz_hotel_domestic\","
+                        + "\"response_content\":\"国内酒店\"}");
+        h.query(serveRequest("订酒店"));
+        h.clearSession("c-test");
+        h.query(serveRequest("500元"));
+
+        ArgumentCaptor<List<Map<String, Object>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(client, times(2)).complete(captor.capture());
+        // After clearSession the history is reset: the second turn is classified alone.
+        assertThat(captor.getAllValues().get(1)).hasSize(2);
     }
 }

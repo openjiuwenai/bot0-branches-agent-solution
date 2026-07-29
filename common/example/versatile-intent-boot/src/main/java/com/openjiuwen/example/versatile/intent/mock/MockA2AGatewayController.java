@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -130,6 +131,7 @@ public class MockA2AGatewayController {
      * reads the passthrough card set. With empty config (the default for
      * {@code local-e2e-a2a-gateway.sh}) behavior is unchanged.
      */
+    @Autowired
     public MockA2AGatewayController(MockA2aGatewayProperties properties) {
         Map<String, String> effective = new LinkedHashMap<>(ROUTING);
         if (properties != null && properties.getRouting() != null) {
