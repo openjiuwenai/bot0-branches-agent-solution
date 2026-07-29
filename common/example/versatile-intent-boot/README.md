@@ -51,17 +51,23 @@ Local HTTP 模式直接 POST 到目标 runtime 的 `/a2a/{agentId}`，适合本�
 |---------|------|
 | `layer1` | L1 配置：intents（酒店/机票/其他）+ intent-agent-mapping → L2，端口 8081 |
 | `layer2` | L2 配置：intents（国内/国际酒店、国内机票）+ mapping → downstream，端口 8082 |
+| `layer2-flight` | L2 机票配置：intents（国内机票）+ mapping → downstream，端口 8086 |
 | `downstream` | 下游业务配置：无 intents / mapping（终端节点，可触发重新分类），端口 8083 |
 | `dev` | 把 `versatile.url-template` 指向本地 mock 端点 |
 | `mock-versatile` | 激活 `MockVersatileController` + 共享的 `card-resolver.local-mapping` |
 | `mock-a2a-gateway` | 激活 `MockA2AGatewayController`（转发代理，端口 8084） |
 | `a2a-gateway-test` | 覆盖 `a2a-gateway.enabled=true` 并指向本地 mock gateway（8084） |
+| `llm-intent` | 激活 `LlmIntentAgentHandler`，支持真实 LLM 意图分类（与 `VersatileAgentHandler` 二选一） |
 
 ## 前置依赖
 
 - Java 17+（运行时需 17+，构建用 Maven 3.9+）
 - `com.openjiuwen:agent-service-app` 0.1.0 — 来自外部 [agent-runtime-java](https://gitcode.com/openJiuwen/agent-runtime-java) 仓库
 - `com.openjiuwen:agent-service-adapters-versatile` 0.1.0 — 来自本仓 `common/agent-runtime-ext-java` 模块
+- `com.openjiuwen:agent-core-java` — LLM 意图 demo 中 `LlmIntentClient` 通过此模块访问 LLM
+- `protobuf-java:4.33.2` — 在 `<dependencyManagement>` 中固定版本，解决 agent-core-java→milvus 与 a2a SDK 的 protobuf 版本冲突
+
+> ⚠️ 这两个制品**必须先 `mvn install` 到本地 Maven 仓库（`~/.m2/repository`）**，否则本模块会编译失败（报大量 `cannot find symbol`，如 `RemoteAgentCaller`、`RemoteAgentCardResolver`、`A2aPushNotificationCallback` 等）。联调脚本只负责打包本模块自身 jar，**不会**构建这些前置依赖。
 
 > ⚠️ 这两个制品**必须先 `mvn install` 到本地 Maven 仓库（`~/.m2/repository`）**，否则本模块会编译失败（报大量 `cannot find symbol`，如 `RemoteAgentCaller`、`RemoteAgentCardResolver`、`A2aPushNotificationCallback` 等）。联调脚本只负责打包本模块自身 jar，**不会**构建这些前置依赖。
 
@@ -151,6 +157,31 @@ Round 2: 重启 L2（移除 default-workflow 配置）后跑 §6.2.2
 Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock 宿主 → 直链 SSE 透传
 ```
 
+### `scripts/local-e2e-llm-intent.sh` — LLM 意图驱动演示
+
+真实 LLM 驱动的意图识别 + 真实 DeepAgent downstream。需设置环境变量 `LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL`（L1/L2 分类用，OpenAI 兼容）与 `DEEPSEEK_API_KEY`/`DEEPSEEK_BASE_URL`/`DEEPSEEK_MODEL`（两个 Agent B 业务 agent 用）。启动 6 个进程：gateway + L1 + L2_hotel + L2_flight + Agent B hotel + Agent B flight，演示三场景（单 conversation_id）：
+
+- **场景 A**：订酒店多轮 ask-user（Agent B hotel 追问预算/星级），中途未出单。
+- **场景 B**：跳转买机票——L1 路由缓存命中错领域 L2_hotel，返回 `intent_id=1`，L1 重识别后路由到 L2_flight → Agent B flight。
+- **场景 C**：回跳完成酒店——L1 缓存命中 L2_flight 返回 ambiguous，重识别回 L2_hotel → Agent B hotel 恢复 shadow task 完成出单。
+
+新增 `llm-intent` profile（激活 `LlmIntentAgentHandler`，与 `VersatileAgentHandler` 二选一，即意图对接 SPI）与 `layer2-flight` profile（机票专属 L2，端口 8086）。断言为结构/关键字（非精确串），依赖真实 LLM 故不进 CI。
+
+```bash
+./scripts/local-e2e-llm-intent.sh              # 首次运行会自动 mvn package
+SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh # 复用已有 jar
+```
+
+### 选择哪个脚本
+
+| 需求 | 脚本 |
+|------|------|
+| 验证 Local HTTP 转发 + 中断 + 重新分类基础链路 | `local-e2e.sh` |
+| 验证 A2A Gateway 转发、header 透传、自消/重识别、多轮路由缓存、直链 SSE 透传 | `local-e2e-a2a-gateway.sh` |
+| 验证 LLM 意图驱动 + 真实 DeepAgent downstream | `local-e2e-llm-intent.sh` |
+| 两者都想覆盖 | 先跑 `local-e2e.sh` 再跑 `local-e2e-a2a-gateway.sh` |
+| 全部覆盖 | 按顺序运行全部三个脚本 |
+
 **Round 1** 覆盖三类场景：
 
 - **§6.2.1 两层识别 + 下游业务**：`curl L1 "订酒店"` → 最终响应包含 `"酒店预订成功"`，并断言 gateway 日志记录两次转发 hop（`agent_card_L2_hotel`、`agent_card_biz_hotel_domestic`）、L1/L2 日志出现 `A2AGateway call agent=...`。
@@ -224,6 +255,13 @@ openjiuwen:
       local-mapping:                    # Local HTTP 模式的路由表
         agent_card_L2_hotel: http://localhost:8082
         agent_card_L2_default: http://localhost:8085   # L2 ambiguous 自消到 default-wf
+
+  example:
+    mock-a2a-gateway:
+      passthrough-cards: [...]          # A2A 透传卡列表（Set），默认空
+      routing: [...]                    # 路由覆盖配置（Map），默认空
+      # llm-intent demo 用途：把 biz 卡 A2A 透传到真实 Agent B（18191/18192）
+      # 示例：passthrough-cards: agent_card_biz_hotel_domestic,agent_card_biz_flight_domestic
 ```
 
 ## 构建 & 测试
