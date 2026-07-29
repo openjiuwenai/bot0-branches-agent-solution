@@ -814,7 +814,8 @@ public class VersatileDelegateRail extends BaseInterruptRail {
             LOGGER.info("[VersatileDelegateRail] query_description: fromArgs=false, fallbackToCache=true, finalLen={}",
                     cachedQuery.length());
         } else {
-            LOGGER.warn("[VersatileDelegateRail] query_description: fromArgs=false, fallbackToCache=false, cache empty");
+            LOGGER.warn("[VersatileDelegateRail] query_description: fromArgs=false, "
+                    + "fallbackToCache=false, cache empty");
         }
     }
 
@@ -828,6 +829,9 @@ public class VersatileDelegateRail extends BaseInterruptRail {
      *   <li>全部缓存为空时返回空串</li>
      * </ol>
      * </p>
+     *
+     * @param channelKey 工具数据通道的键，用于从 ToolDataChannel 中读取缓存数据
+     * @return 缓存命中的 query_description 字符串；全部缓存为空时返回空串
      */
     private String readCachedQuery(ToolDataKey channelKey) {
         // 第一级：从 mcp_to_versatile_information 读取（McpInterruptRail.persistMcpResult 写入）
