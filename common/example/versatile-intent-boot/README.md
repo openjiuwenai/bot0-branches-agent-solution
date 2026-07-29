@@ -77,16 +77,18 @@ Local HTTP 模式直接 POST 到目标 runtime 的 `/a2a/{agentId}`，适合本�
 
 ### `scripts/local-e2e.sh` — Local HTTP 模式
 
-跑通 L2 §6.2 的三个场景（Local HTTP 转发，`a2a-gateway.enabled=false`）：
+跑通 L2 §6.2 的四个场景（Local HTTP 转发，`a2a-gateway.enabled=false`）：
 
 - §6.2.1 两层识别 + 下游业务：`curl L1 "订酒店"` → `"酒店预订成功"`
 - §6.2.3 显式中断：`curl L1 "中断"` → `_interrupt` payload（并断言包含 resume token `tok-123`）
 - §6.2.2 重新分类：`curl downstream "重分类"` → `"重新分类：国内酒店"`
+- §6.2.4 意图不明自消：`curl L1 "意图不明"` → L2 检测到 ambiguous intent（`intent_id=1`）后通过 `a2a_delegate` 自消到 default-wf，最终响应包含 `"默认工作流兜底"`
 
-分两轮启动，每轮结束后停止全部进程再启动下一轮：
+分三轮启动，每轮结束后停止全部进程再启动下一轮：
 
 - **Round 1**：L1/L2 三字段模式（`layer1`/`layer2` profile）+ downstream 终端模式（无 `result-extractions`，直接返回最终答案）。跑场景 1（L1→L2→downstream）与场景 3（interrupt）。
 - **Round 2**：downstream 三字段模式（`downstream` profile，返回指向 L1 的 `agent_id`）+ L1 终端模式。跑场景 2（downstream→L1 重新分类）。
+- **Round 3**：L1/L2 三字段模式 + default-wf 终端节点（hosting `agent_L2_default`，返回兜底业务输出）。跑场景 4（L1→L2→default-wf 意图不明自消）。依赖 `application-mock-versatile.yml` 中 `agent_card_L2_default → http://localhost:8085` 的 local-mapping。
 
 ```bash
 ./scripts/local-e2e.sh              # 首次运行会自动 mvn package
@@ -176,6 +178,7 @@ openjiuwen:
     card-resolver:
       local-mapping:                    # Local HTTP 模式的路由表
         agent_card_L2_hotel: http://localhost:8082
+        agent_card_L2_default: http://localhost:8085   # L2 ambiguous 自消到 default-wf
 ```
 
 ## 构建 & 测试
