@@ -517,6 +517,15 @@ public class EdpaEventRail extends DeepAgentRail {
                 ? "interrupt-handled"
                 : "real-exec";
 
+        // A2A 续传 Round 2：handleToolInterrupt 已补发 tool_start（toolOpen=true），跳过重复发射
+        if (Boolean.TRUE.equals(toolOpen.get(sid))) {
+            // 仍需缓存 query_intent/query_description 供 afterToolCall 解析 tool_end 话术
+            cacheQueryParams(ctx, inputs, toolName);
+            LOGGER.info("[EDPA-DIAG] beforeToolCall tool={} toolOpen already true -> skip "
+                    + "(already emitted by handleToolInterrupt)", toolName);
+            return;
+        }
+
         // 缓存 query_intent 和 query_description（供 afterToolCall 联合判断话术）
         String queryIntent = cacheQueryParams(ctx, inputs, toolName);
 
@@ -648,6 +657,12 @@ public class EdpaEventRail extends DeepAgentRail {
             LOGGER.info("[EDPA-DIAG] afterToolCall tool={} Skip (PLAN_FIRST blocked, skip tool_end)", toolName);
             return;
         }
+        // A2A 续传 Round 1（interrupt 阶段）的 afterToolCall 跳过 tool_end，
+        // 由 resume 阶段的 afterToolCall 正常发射，避免重复。
+        if (Boolean.TRUE.equals(a2aResuming.getOrDefault(sid, false))) {
+            LOGGER.info("[EDPA-DIAG] afterToolCall tool={} Skip (A2A resume pending, tool_end deferred)", toolName);
+            return;
+        }
         Object toolResult = inputs.getToolResult();
 
         // UC-A05: 解析 ui_notice（对齐 Python versatile_interrupt_rail.py L196-230）
@@ -704,7 +719,10 @@ public class EdpaEventRail extends DeepAgentRail {
             ctx.getExtra().put(KEY_JUST_RESUMED, true);
         }
 
-        toolOpen.put(sid, false);
+        // A2A 续传 Round 1：保留 toolOpen=true，让 Round 2 beforeToolCall 跳过重复 tool_start
+        if (!Boolean.TRUE.equals(a2aResuming.getOrDefault(sid, false))) {
+            toolOpen.put(sid, false);
+        }
     }
 
     private String[] resolveUiNotice(AgentCallbackContext ctx, Object toolResult) {
@@ -920,9 +938,8 @@ public class EdpaEventRail extends DeepAgentRail {
             content = llmQuestion.isBlank() ? ScriptResolver.interruptStart(scripts) : llmQuestion;
         }
         // a2a_delegate 中断（call_versatile）不发射 interrupt_start 事件，也不置位 interruptActive
-        // 避免 interruptActive 泄漏导致后续 tool_end 被误跳过和孤儿 interrupt_end
-        // 但 beforeToolCall(80) 被 VersatileDelegateRail(85) 的 ToolInterruptException 跳过，
-        // tool_start 从未发射，需在此补发（含 query_intent 缓存 + toolOpen 置位 + emit TOOL_START）
+        // 避免 interruptActive 泄漏导致后续 tool_end 被误跳过和孤儿 interrupt_end。
+        // 仅缓存参数和标记 A2A 续传，tool_start/tool_end 由 resume 阶段的 beforeToolCall/afterToolCall 发射。
         if (TOOL_CALL_VERSATILE.equals(toolName)) {
             handleCallVersatileInterrupt(ctx, sid, toolName);
             return;
@@ -939,13 +956,14 @@ public class EdpaEventRail extends DeepAgentRail {
 
     /**
      * 处理 call_versatile 的 ToolInterruptException：补发 tool_start，标记 A2A 续传。
+     * beforeToolCall(80) 被 VersatileDelegateRail(85) 的 ToolInterruptException 跳过，需在此补发。
+     * 设置 toolOpen 延迟到 Round 2 beforeToolCall 检测到后跳过重复发射。
      *
      * @param ctx 回调上下文
      * @param sid 会话 ID
      * @param toolName 工具名称
      */
     private void handleCallVersatileInterrupt(AgentCallbackContext ctx, String sid, String toolName) {
-        // 标记 A2A 续传：afterInvoke 跳过 conversation_end，下次 beforeInvoke 跳过 conversation_start
         a2aResuming.put(sid, true);
         if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
             return;
@@ -954,11 +972,10 @@ public class EdpaEventRail extends DeepAgentRail {
         String toolStartContent = resolveToolStartContent(inputs, toolName, queryIntent);
         String effectiveIntent = resolveEffectiveTextIntent(queryIntent, getQueryDescription(inputs));
         toolOpen.put(sid, true);
+        emit(ctx, EdpaEventType.TOOL_START, Map.of("tool", toolName, "content", toolStartContent));
         LOGGER.info("[EDPA-DIAG] handleToolInterrupt call_versatile -> emit tool_start "
                 + "(query_intent={}, effectiveIntent={}, content={})", queryIntent, effectiveIntent,
                 toolStartContent);
-        emit(ctx, EdpaEventType.TOOL_START, Map.of("tool", toolName, "content", toolStartContent));
-        LOGGER.info("[EDPA-DIAG] skipping interrupt_start for a2a_delegate, tool={}", toolName);
     }
 
     private void handleGeneralToolError(AgentCallbackContext ctx, String sid, Exception exception) {
@@ -1003,7 +1020,7 @@ public class EdpaEventRail extends DeepAgentRail {
             LOGGER.info("[EDPA-DIAG] afterInvoke sid={} -> A2A resume pending, skip conversation_end", sid);
             lastTodolistFingerprint.remove(sid);
             thinkOpen.remove(sid);
-            toolOpen.remove(sid);
+            // 保留 toolOpen=true，让 Round 2 beforeToolCall 跳过重复 tool_start
             conversationClosed.remove(sid);
             prevTodoStatus.remove(sid);
             return;
