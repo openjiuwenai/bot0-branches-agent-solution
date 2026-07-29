@@ -7,7 +7,10 @@
 #   B: 跳转买机票（L1 缓存命中错领域 L2 → ambiguous → L1 重识别 → 机票工作流）
 #   C: 回跳完成酒店（Agent B hotel shadow-task 恢复）
 #
-# Requires: Java 17, DEEPSEEK_API_KEY/BASE_URL/MODEL, LLM_API_KEY/BASE_URL/MODEL.
+# Requires: Java 17, LLM_API_KEY/BASE_URL/MODEL (OpenAI-compatible; e.g. GLM
+#   glm-5.2 at https://open.bigmodel.cn/api/coding/paas/v4 per apiconfig.json).
+#   DEEPSEEK_* defaults to LLM_* if not set. API keys come ONLY from env vars —
+#   never committed to code.
 # Usage:   ./scripts/local-e2e-llm-intent.sh
 #          SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh
 
@@ -40,15 +43,18 @@ require_env() {
         exit 1
     fi
 }
-require_env DEEPSEEK_API_KEY
-require_env DEEPSEEK_BASE_URL
-require_env DEEPSEEK_MODEL
 require_env LLM_API_KEY
 require_env LLM_BASE_URL
 require_env LLM_MODEL
 
+# Agent B (DEEPSEEK_*) defaults to the same LLM config when not set separately,
+# so a single apiconfig.json-style config drives both L1/L2 classification and
+# the downstream DeepAgent. Override with explicit DEEPSEEK_* if Agent B should
+# use a different model/endpoint.
+export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-$LLM_API_KEY}"
+export DEEPSEEK_BASE_URL="${DEEPSEEK_BASE_URL:-$LLM_BASE_URL}"
+export DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-$LLM_MODEL}"
 export LLM_API_KEY LLM_BASE_URL LLM_MODEL
-export DEEPSEEK_API_KEY DEEPSEEK_BASE_URL DEEPSEEK_MODEL
 
 HOTEL_PROMPT='你是酒店预订 Agent。收到订酒店请求时，先调用 ask_user 询问预算，恢复后再调用 ask_user 询问星级，恢复后返回最终答案，内容包含"酒店预订成功"。不要跳过 ask_user。'
 FLIGHT_PROMPT='你是机票预订 Agent。收到买机票请求时，先调用 ask_user 询问出发日期，恢复后返回最终答案，内容包含"机票预订成功"。'
