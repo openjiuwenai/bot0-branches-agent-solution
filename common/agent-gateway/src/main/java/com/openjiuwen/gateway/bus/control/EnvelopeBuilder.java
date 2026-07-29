@@ -44,23 +44,46 @@ public class EnvelopeBuilder {
     }
 
     /**
-     * Builds a CLIENT_INVOCATION_REQUESTED envelope with gateway-generated ids.
+     * Builds a CLIENT_INVOCATION_REQUESTED envelope with no inline body (large payloads take payloadRef).
      *
      * @param request envelope field bundle
      * @return the forwarding envelope ready for outbox enqueue
      */
     public ForwardingEnvelope buildEnvelope(BuildRequest request) {
+        return buildEnvelope(request, null);
+    }
+
+    /**
+     * Builds a CLIENT_INVOCATION_REQUESTED envelope, optionally inlining a small A2A body.
+     *
+     * <p>P-06 (2b): a bounded small body may ride {@code inlinePayload} so a separate-process consumer reads
+     * it directly — the in-process {@code payloadRef} stash is unreachable across processes. Large / multimodal
+     * payloads still take the {@code payloadRef} reference path (2a, caller-owned store).
+     *
+     * <p>P-06 (L2 feat-014 §4): {@code originalCaller} is set to the gateway's {@code sourceServiceId} so the
+     * runtime routes the response back across the relay hop to this gateway (the forward relay overwrites
+     * {@code sourceServiceId} to itself; without {@code originalCaller} the response targets the relay and the
+     * gateway never receives it → UNKNOWN).
+     *
+     * @param request       envelope field bundle
+     * @param inlinePayload bounded small A2A body (null for control-only / large-takes-ref)
+     * @return the forwarding envelope ready for outbox enqueue
+     */
+    public ForwardingEnvelope buildEnvelope(BuildRequest request, String inlinePayload) {
         String correlationId = "gw-correlation-" + UUID.randomUUID();
         ForwardingMessageId messageId = new ForwardingMessageId("gw-" + UUID.randomUUID());
         ForwardingRouteHandle routeHandle = new ForwardingRouteHandle(
                 request.routeHandleValue(), request.tenantId());
-        ForwardingEnvelope.PayloadPolicy policy = request.payloadRef() != null
+        boolean hasData = (request.payloadRef() != null)
+                || (inlinePayload != null && !inlinePayload.isBlank());
+        ForwardingEnvelope.PayloadPolicy policy = hasData
                 ? ForwardingEnvelope.PayloadPolicy.DATA_BEARING
                 : ForwardingEnvelope.PayloadPolicy.CONTROL_ONLY;
         return new ForwardingEnvelope(
                 messageId, AgentBusEventType.CLIENT_INVOCATION_REQUESTED,
                 request.tenantId(), request.traceId(), correlationId, request.idempotencyKey(),
                 routeHandle, "client-invocation", request.sourceServiceId(), request.targetServiceId(),
-                request.deadlineMillisEpoch(), policy, request.payloadRef());
+                request.deadlineMillisEpoch(), policy, request.payloadRef(), inlinePayload,
+                request.sourceServiceId());
     }
 }

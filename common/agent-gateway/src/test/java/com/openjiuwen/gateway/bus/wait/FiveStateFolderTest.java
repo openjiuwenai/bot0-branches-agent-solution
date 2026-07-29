@@ -60,5 +60,14 @@ class FiveStateFolderTest {
         assertThat(FiveStateFolder.isTerminal(InvocationResponseStatus.FAILED)).isTrue();
         assertThat(FiveStateFolder.isTerminal(InvocationResponseStatus.ACCEPTED_WITH_TASK)).isFalse();
         assertThat(FiveStateFolder.isTerminal(InvocationResponseStatus.UNKNOWN)).isFalse();
+        assertThat(FiveStateFolder.isTerminal(InvocationResponseStatus.INPUT_REQUIRED)).isFalse();
+        assertThat(FiveStateFolder.isTerminal(InvocationResponseStatus.STREAM_READY)).isFalse();
+    }
+
+    @Test
+    void inputRequiredToInputRequired() {
+        // FEAT-017: INPUT_REQUIRED is a non-terminal projection the gateway surfaces to the client.
+        assertThat(FiveStateFolder.fold(AgentBusEventType.INVOCATION_INPUT_REQUIRED))
+                .isEqualTo(InvocationResponseStatus.INPUT_REQUIRED);
     }
 }
