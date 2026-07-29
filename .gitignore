@@ -71,3 +71,12 @@ redis_hgetall2.py
 redis_query.ps1
 redis_query.py
 tool-counter-redis-plan.md
+
+# Trae skill — 本地EDPA测试定位skill，不提交
+.trae/skills/edpa-test-locator/
+
+# 本地调试文件 — 不提交
+common/agents/edp-agent-java/engine/src/main/resources/application.yml
+common/agents/edp-agent-java/pom.xml
+common/agents/versatile-agent-java/pom.xml
+temp/
