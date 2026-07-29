@@ -657,28 +657,34 @@ public class EdpaEventRail extends DeepAgentRail {
             LOGGER.info("[EDPA-DIAG] afterToolCall tool={} Skip (PLAN_FIRST blocked, skip tool_end)", toolName);
             return;
         }
-        // A2A 续传 Round 1（interrupt 阶段）的 afterToolCall 跳过 tool_end，
-        // 由 resume 阶段的 afterToolCall 正常发射，避免重复。
+        // A2A 续传 Round 1（interrupt 阶段）跳过 tool_end，由 resume 阶段正常发射
         if (Boolean.TRUE.equals(a2aResuming.getOrDefault(sid, false))) {
             LOGGER.info("[EDPA-DIAG] afterToolCall tool={} Skip (A2A resume pending, tool_end deferred)", toolName);
             return;
         }
         Object toolResult = inputs.getToolResult();
-
-        // UC-A05: 解析 ui_notice（对齐 Python versatile_interrupt_rail.py L196-230）
         String[] uiNotice = resolveUiNotice(ctx, toolResult);
         String uiNoticeEvent = uiNotice[0];
         String uiNoticeText = uiNotice[1];
 
-        // UC-A05: ui_notice > query_intent_tool_text[effectiveIntent].tool_end > general_scripts.tool_end
-        // effectiveIntent 由 query_intent + query_description 联合判断（业务变动适配）
+        resolveAndEmitToolEndContent(ctx, toolName, sid, toolResult, uiNoticeEvent, uiNoticeText);
+        emitInterruptEndForResume(ctx, toolName, sid);
+
+        if (!Boolean.TRUE.equals(a2aResuming.getOrDefault(sid, false))) {
+            toolOpen.put(sid, false);
+        }
+    }
+
+    /**
+     * 解析并发射 tool_end 话术内容。
+     */
+    private void resolveAndEmitToolEndContent(AgentCallbackContext ctx, String toolName, String sid,
+            Object toolResult, String uiNoticeEvent, String uiNoticeText) {
         String qi = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, ""));
         String qdCached = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_DESCRIPTION, ""));
         String effectiveIntent = resolveEffectiveTextIntent(qi, qdCached);
         String toolEndContent = resolveToolEndContent(effectiveIntent, toolName, uiNoticeText);
 
-        // UC-A05: ui_notice.event=="interrupt_start" 或 onToolException 已发射 interrupt_start
-        // （ToolInterruptException 路径，interruptActive=true）时，不发射 tool_end
         boolean skipToolEndForInterrupt = "interrupt_start".equals(uiNoticeEvent)
                 || interruptActive.getOrDefault(sid, false);
         if (!skipToolEndForInterrupt) {
@@ -697,32 +703,29 @@ public class EdpaEventRail extends DeepAgentRail {
                             + "-> skip tool_end (handled by exit interrupt)",
                     toolName);
         }
-
-        // UC-A05: ui_notice 的 todo_end 事件直发（interrupt_start 已由 exit 路径处理，此处不重复）
         if ("todo_end".equals(uiNoticeEvent)) {
             emit(ctx, EdpaEventType.TODO_END, Map.of("content", uiNoticeText, "status", "done"));
         }
+    }
 
-        // call_versatile 中断恢复：cascade inputRequired 导致的 interrupt 在下一轮恢复后，
-        // 需要发 interrupt_end 清除 interruptActive，否则 afterInvoke 跳过 response_template 的 exit interrupt_start。
-        if (TOOL_CALL_VERSATILE.equals(toolName) && interruptActive.getOrDefault(sid, false)) {
-            String interruptId = interruptIdMap.remove(sid);
-            LOGGER.info(
-                    "[EDPA-DIAG] afterToolCall tool=call_versatile interrupt active "
-                            + "-> emit interrupt_end(interrupt_id={})",
-                    interruptId);
-            Map<String, Object> endPayload = new java.util.LinkedHashMap<>();
-            endPayload.put("tool", toolName);
-            endPayload.put("interrupt_id", interruptId != null ? interruptId : "");
-            emit(ctx, EdpaEventType.INTERRUPT_END, endPayload);
-            interruptActive.remove(sid);
-            ctx.getExtra().put(KEY_JUST_RESUMED, true);
+    /**
+     * call_versatile 中断恢复后发 interrupt_end，清除 interruptActive。
+     */
+    private void emitInterruptEndForResume(AgentCallbackContext ctx, String toolName, String sid) {
+        if (!TOOL_CALL_VERSATILE.equals(toolName) || !interruptActive.getOrDefault(sid, false)) {
+            return;
         }
-
-        // A2A 续传 Round 1：保留 toolOpen=true，让 Round 2 beforeToolCall 跳过重复 tool_start
-        if (!Boolean.TRUE.equals(a2aResuming.getOrDefault(sid, false))) {
-            toolOpen.put(sid, false);
-        }
+        String interruptId = interruptIdMap.remove(sid);
+        LOGGER.info(
+                "[EDPA-DIAG] afterToolCall tool=call_versatile interrupt active "
+                        + "-> emit interrupt_end(interrupt_id={})",
+                interruptId);
+        Map<String, Object> endPayload = new LinkedHashMap<>();
+        endPayload.put("tool", toolName);
+        endPayload.put("interrupt_id", interruptId != null ? interruptId : "");
+        emit(ctx, EdpaEventType.INTERRUPT_END, endPayload);
+        interruptActive.remove(sid);
+        ctx.getExtra().put(KEY_JUST_RESUMED, true);
     }
 
     private String[] resolveUiNotice(AgentCallbackContext ctx, Object toolResult) {
