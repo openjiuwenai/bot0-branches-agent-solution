@@ -8,7 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
-import com.openjiuwen.bus.forwarding.spi.broker.DeliveryFilter;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -16,8 +17,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
-import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link BrokerProjectionFeed}: subscribe family + poll/match/map/commit on the

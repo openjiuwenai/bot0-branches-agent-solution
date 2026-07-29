@@ -121,7 +121,7 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
                     try {
                         Thread.sleep(Long.MAX_VALUE);
                     } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+                        // G.CON.10: do not re-interrupt; the blocking iterator ends on interrupt.
                     }
                     return false;
                 }

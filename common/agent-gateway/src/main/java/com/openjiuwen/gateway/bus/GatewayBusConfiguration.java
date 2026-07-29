@@ -37,7 +37,6 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConditionalOnProperty(prefix = "gateway", name = "path-mode", havingValue = "bus")
 public class GatewayBusConfiguration {
-
     /**
      * I-04 outbound: build envelope + enqueue (FEAT-012 §4.4 P3).
      *
@@ -102,6 +101,9 @@ public class GatewayBusConfiguration {
      * @param sourceServiceId gateway service identity for envelope audit
      * @param acceptWindowMillis accept-phase timeout
      * @param responseWindowMillis response-phase timeout after accept
+     * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY
+     * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
+     * @param streamFirstFrameDeadlineMillis deadline to read the first SSE frame
      * @return the bus forwarder
      */
     @Bean

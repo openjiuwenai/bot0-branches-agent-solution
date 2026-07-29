@@ -11,11 +11,13 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerProduceOutcome;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
 import java.util.List;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -37,6 +39,8 @@ import java.util.concurrent.TimeUnit;
  * @since 2026-07-28
  */
 public class GatewayOutboxDispatcher implements SmartLifecycle {
+    private static final Logger log = LoggerFactory.getLogger(GatewayOutboxDispatcher.class);
+
     private final ForwardingOutboxClaimPort claimPort;
     private final BrokerForwardingProducerPort producer;
     private final ForwardingOutboxPort outbox;
@@ -109,9 +113,11 @@ public class GatewayOutboxDispatcher implements SmartLifecycle {
     @Override
     public void start() {
         running = true;
-        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        scheduler = new ScheduledThreadPoolExecutor(1, r -> {
             Thread t = new Thread(r, "gateway-outbox-dispatcher");
             t.setDaemon(true);
+            t.setUncaughtExceptionHandler((thread, ex) ->
+                    log.warn("outbox dispatch tick uncaught", ex));
             return t;
         });
         scheduler.scheduleAtFixedRate(

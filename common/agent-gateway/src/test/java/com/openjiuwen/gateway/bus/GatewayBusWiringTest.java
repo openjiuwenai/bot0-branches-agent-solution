@@ -28,7 +28,11 @@ import org.springframework.context.annotation.Import;
  * @since 2026-07-27
  */
 @SpringBootTest(properties = "gateway.path-mode=bus")
-@Import({FakeForwardingOutboxPort.class, FakeBrokerForwardingConsumerPort.class, FakeBrokerForwardingProducerPort.class})
+@Import({
+        FakeForwardingOutboxPort.class,
+        FakeBrokerForwardingConsumerPort.class,
+        FakeBrokerForwardingProducerPort.class
+})
 class GatewayBusWiringTest {
     @Autowired
     private BusForwarder busForwarder;
