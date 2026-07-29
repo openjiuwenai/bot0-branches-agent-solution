@@ -1,7 +1,7 @@
-# FEAT-012 BUS profile for the agent-gateway-bus-launcher.
+# FEAT-012 BUS profile for the agent-gateway-demo launcher module.
 #
-# Run: java -jar target/agent-gateway-bus-0.1.0.jar --spring.profiles.active=bus
-# The launcher puts agent-bus-sdk on the classpath; this profile activates the FEAT-013
+# Run: java -jar target/agent-gateway-demo-0.1.0.jar --spring.profiles.active=bus
+# The demo module puts agent-bus-sdk on the classpath; this profile activates the FEAT-013
 # caller-role + reliability autoconfigs (requestProducer / responseConsumer / forwardingOutbox)
 # and turns on the gateway BUS path (gateway.path-mode=bus → GatewayBusConfiguration).
 #
