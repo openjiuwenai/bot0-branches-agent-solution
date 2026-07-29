@@ -5,23 +5,30 @@
 package com.openjiuwen.gateway.bus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
-import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 import com.openjiuwen.gateway.bus.control.BusControlForwarder;
 import com.openjiuwen.gateway.bus.control.EnvelopeBuilder;
 import com.openjiuwen.gateway.bus.control.FakeForwardingOutboxPort;
 import com.openjiuwen.gateway.bus.control.FakeProjectionFeed;
-import com.openjiuwen.gateway.bus.control.FakeStreamRefResolver;
 import com.openjiuwen.gateway.bus.control.InMemoryPayloadStore;
 import com.openjiuwen.gateway.bus.wait.FiveStateFolder;
+import com.openjiuwen.gateway.direct.FakeAgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceContext;
+import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
+import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
+import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.routing.StickyIndex;
+import com.openjiuwen.gateway.sse.SseBridge;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.util.List;
 
@@ -34,9 +41,10 @@ class BusStreamingAndResumeTest {
     private final FakeRdcRouteClient rdc = new FakeRdcRouteClient();
     private final FakeForwardingOutboxPort outbox = new FakeForwardingOutboxPort();
     private final FakeProjectionFeed feed = new FakeProjectionFeed();
-    private final FakeStreamRefResolver streamResolver = new FakeStreamRefResolver();
+    private final FakeAgentRuntimeClient runtime = new FakeAgentRuntimeClient();
     private final IdempotencyRule g4 = new IdempotencyRule();
     private final StickyIndex sticky = new StickyIndex();
+    private final SseBridge sseBridge = new SseBridge();
 
     private GovernanceContext createCtx(String agentId, String messageId) {
         GovernanceContext c = new GovernanceContext();
@@ -48,43 +56,77 @@ class BusStreamingAndResumeTest {
         return c;
     }
 
-    private GovernanceContext resumeCtx(String taskId, String messageId) {
-        GovernanceContext c = new GovernanceContext();
-        c.setTenantId("T1");
-        c.setTaskId(taskId);
-        c.setMessageId(messageId);
-        c.setTraceId("trace-1");
-        c.setRawBody("{\"jsonrpc\":\"2.0\",\"params\":{\"message\":{\"taskId\":\""
-                + taskId + "\"}}}");
-        return c;
-    }
-
     private BusForwarder forwarder() {
         return new BusForwarder(rdc,
                 new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
-                feed, g4, "svc-gw", 30_000L, 60_000L);
+                feed, g4, "svc-gw", 30_000L, 60_000L, runtime, new DefaultAgentResolver(""));
     }
 
     @Test
-    void b5_streamingReadyResolvesEndpoint() {
+    void b5_streamingReadyBridgesSseToClient() throws Exception {
         rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
         feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-s", null);
         feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-s", "sr-1");
-        feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
-        var resp = forwarder().forwardSync(createCtx("agent-1", "ms1"));
-        assertThat(resp.getStatusCode().value()).isEqualTo(200);
-        assertThat(resp.getBody()).contains("COMPLETED_RESPONSE");
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-s\",\"status\":\"working\"}}"));
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        String result = forwarder().forwardStreaming(createCtx("agent-1", "ms1"), mockResponse, sseBridge);
+        // SSE was written → result is null
+        assertThat(result).isNull();
+        // SSE content written
+        String sseOutput = mockResponse.getContentAsString();
+        assertThat(sseOutput).contains("event: jsonrpc");
+        assertThat(sseOutput).contains("data: {\"result\":{\"id\":\"task-s\",\"status\":\"working\"}}");
+        // runtime was called via openStreamByRef with the resolved endpoint
+        assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
+        // control event was enqueued (inlinePayload = A2A body, no token)
         assertThat(outbox.enqueued().get(0).inlinePayload()).isNotNull();
         assertThat(outbox.enqueued().get(0).inlinePayload()).doesNotContain("token");
     }
 
     @Test
-    void b5_streamReadySeparableFromAccepted() {
+    void b5_streamReadySeparableFromAccepted() throws Exception {
         rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
         feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-x", "sr-2");
-        feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
-        var resp = forwarder().forwardSync(createCtx("agent-1", "ms2"));
-        assertThat(resp.getBody()).contains("COMPLETED_RESPONSE");
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-x\",\"status\":\"working\"}}"));
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        String result = forwarder().forwardStreaming(createCtx("agent-1", "ms2"), mockResponse, sseBridge);
+        assertThat(result).isNull();
+        assertThat(mockResponse.getContentAsString()).contains("event: jsonrpc");
+    }
+
+    @Test
+    @Timeout(5)
+    void b5_streamingNonClosingRuntimeTimesOut() throws Exception {
+        // A runtime that accepts SubscribeToTask but never sends a frame / never closes must not
+        // hang the gateway's servlet thread forever — the forwarder aborts with STREAM_DEADLINE_EXCEEDED
+        // before committing the SSE response.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-nc", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-nc", "sr-nc");
+        runtime.setNeverClosingStream(true);
+        BusForwarder f = forwarder();
+        f.setStreamFirstFrameDeadlineMillis(300L);
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        String result = f.forwardStreaming(createCtx("agent-1", "m-nc"), mockResponse, sseBridge);
+        assertThat(result).contains("FAILED").contains("STREAM_DEADLINE_EXCEEDED");
+    }
+
+    @Test
+    void b5_streamingOpenRejectedReturnsFailed() throws Exception {
+        // A runtime that rejects SubscribeToTask (e.g. HTTP 4xx) must surface the rejection reason
+        // in a FAILED body (logged + returned), not propagate uncaught and leave the cause invisible.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-f", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-f", "sr-f");
+        runtime.setStreamException(new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
+                "Runtime rejected SubscribeToTask subscription: HTTP 400 bad"));
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        String result = forwarder().forwardStreaming(createCtx("agent-1", "m-f"), mockResponse, sseBridge);
+        assertThat(result).contains("FAILED").contains("HTTP 400");
     }
 
     @Test
@@ -97,13 +139,6 @@ class BusStreamingAndResumeTest {
     }
 
     @Test
-    void b5_streamRefResolvesToEndpoint() {
-        assertThat(streamResolver.resolve("sr-1")).contains("http://rt:8000");
-        streamResolver.setFail();
-        assertThat(streamResolver.resolve("sr-1")).isEmpty();
-    }
-
-    @Test
     void b6_governanceRejectNotS5() {
         rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
@@ -113,10 +148,28 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b6_defaultAgentMissingIsConfigError() {
+        // No agentId AND no default configured → clean DEFAULT_AGENT_UNCONFIGURED governance
+        // error, not an NPE (the BUS path must mirror the DIRECT Router's fallback).
         rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
-        var resp = forwarder().forwardSync(createCtx(null, "m-da"));
-        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        var thrown = catchThrowable(() -> forwarder().forwardSync(createCtx(null, "m-da")));
+        assertThat(thrown).isInstanceOf(GovernanceException.class);
+        if (thrown instanceof GovernanceException ge) {
+            assertThat(ge.code()).isEqualTo("DEFAULT_AGENT_UNCONFIGURED");
+        }
+    }
+
+    @Test
+    void b6_streamingNullAgentIsConfigError() {
+        // Same fallback for the streaming path: null agentId + no default → config error,
+        // not an NPE inside HttpRdcRouteClient.enc.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        var thrown = catchThrowable(() -> forwarder().forwardStreaming(createCtx(null, "m-da-s"),
+                new MockHttpServletResponse(), sseBridge));
+        assertThat(thrown).isInstanceOf(GovernanceException.class);
+        if (thrown instanceof GovernanceException ge) {
+            assertThat(ge.code()).isEqualTo("DEFAULT_AGENT_UNCONFIGURED");
+        }
     }
 
     @Test
@@ -149,7 +202,7 @@ class BusStreamingAndResumeTest {
 
     @Test
     void b7_inputRequiredStubBranch() {
-        assertThat(FiveStateFolder.isTerminal(InvocationResponseStatus.ACCEPTED_WITH_TASK)).isFalse();
+        assertThat(FiveStateFolder.isTerminal(com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus.ACCEPTED_WITH_TASK)).isFalse();
     }
 
     @Test

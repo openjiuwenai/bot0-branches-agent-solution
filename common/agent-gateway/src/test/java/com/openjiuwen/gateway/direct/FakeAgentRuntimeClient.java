@@ -4,9 +4,13 @@
 
 package com.openjiuwen.gateway.direct;
 
+import com.openjiuwen.gateway.governance.GovernanceException;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Spliterators;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * Test double for {@link AgentRuntimeClient}. Returns a canned response body and
@@ -20,6 +24,8 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     private List<String> frames = new ArrayList<>();
     private String lastEndpoint;
     private String lastBody;
+    private boolean neverClosingStream;
+    private GovernanceException streamException;
 
     /**
      * Configure the canned response body returned by invokeSync.
@@ -37,6 +43,27 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
      */
     public void setFrames(List<String> frames) {
         this.frames = frames;
+    }
+
+    /**
+     * When set, {@code openStreamByRef} returns a stream whose iterator blocks forever
+     * (interruptible) — simulates a runtime that accepts SubscribeToTask but never sends a
+     * frame and never closes (e.g. an already-terminal task whose subscription hangs).
+     *
+     * @param neverClosingStream when {@code true}, the stream never produces a frame
+     */
+    public void setNeverClosingStream(boolean neverClosingStream) {
+        this.neverClosingStream = neverClosingStream;
+    }
+
+    /**
+     * When set, {@code openStreamByRef} throws this exception — simulates a runtime that rejects
+     * the SubscribeToTask subscription (e.g. HTTP 4xx from the A2A framework).
+     *
+     * @param streamException the exception to throw, or {@code null} to clear
+     */
+    public void setStreamException(GovernanceException streamException) {
+        this.streamException = streamException;
     }
 
     /**
@@ -76,6 +103,36 @@ public class FakeAgentRuntimeClient implements AgentRuntimeClient {
     public Stream<String> openStream(String endpointUrl, String jsonRpcBody) {
         this.lastEndpoint = endpointUrl;
         this.lastBody = jsonRpcBody;
+        return new ArrayList<>(frames).stream();
+    }
+
+    @Override
+    public Stream<String> openStreamByRef(String endpointUrl, String streamRef, String taskId, String tenantId) {
+        this.lastEndpoint = endpointUrl;
+        this.lastBody = "SubscribeToRef:" + streamRef + ":" + taskId;
+        if (streamException != null) {
+            throw streamException;
+        }
+        if (neverClosingStream) {
+            // Iterator that blocks on hasNext until interrupted (simulates a non-closing runtime).
+            var blocking = new java.util.Iterator<String>() {
+                @Override
+                public boolean hasNext() {
+                    try {
+                        Thread.sleep(Long.MAX_VALUE);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return false;
+                }
+
+                @Override
+                public String next() {
+                    return null;
+                }
+            };
+            return StreamSupport.stream(Spliterators.spliteratorUnknownSize(blocking, 0), false);
+        }
         return new ArrayList<>(frames).stream();
     }
 }

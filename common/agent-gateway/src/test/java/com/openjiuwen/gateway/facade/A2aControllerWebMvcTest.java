@@ -377,6 +377,19 @@ class A2aControllerWebMvcTest {
         assertThat(runtime.lastEndpoint()).isNull();
     }
 
+    @Test
+    void streamingRequestAcceptEventStreamReturnsJsonErrorNot406() throws Exception {
+        // A streaming client sends Accept: text/event-stream. When routing fails (no candidates),
+        // the gateway must still return the stable JSON GatewayError — not a 406 from content
+        // negotiation having no text/event-stream converter for the error body.
+        rdc.setCandidates(List.of());
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .accept(MediaType.TEXT_EVENT_STREAM)
+                        .contentType(MediaType.APPLICATION_JSON).content(STREAM_CREATE))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("ROUTE_NO_CANDIDATES"));
+    }
+
     // --- S3 resume (sticky) ---
 
     @Test

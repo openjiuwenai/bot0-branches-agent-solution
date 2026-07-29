@@ -29,6 +29,11 @@ gateway:
     # → ACCEPTED_WITH_TASK (must NOT downgrade to UNKNOWN).
     accept-window-ms: ${GATEWAY_BUS_ACCEPT_WINDOW_MS:30000}
     response-window-ms: ${GATEWAY_BUS_RESPONSE_WINDOW_MS:60000}
+    # FEAT-012 IN-4: deadline to read the first SSE frame after STREAM_READY. A runtime that
+    # accepts SubscribeToTask but never sends a frame (e.g. an already-terminal task whose
+    # subscription does not close) is aborted with STREAM_DEADLINE_EXCEEDED instead of hanging
+    # the servlet thread. Tune below the client's own timeout so the gateway fails fast.
+    stream-first-frame-deadline-ms: ${GATEWAY_BUS_STREAM_FIRST_FRAME_DEADLINE_MS:10000}
 
 agent-bus:
   nameserver: ${AGENT_BUS_NAMESERVER:localhost:9876}

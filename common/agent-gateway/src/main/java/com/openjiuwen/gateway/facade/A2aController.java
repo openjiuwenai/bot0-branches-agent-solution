@@ -149,9 +149,17 @@ public class A2aController {
      * @throws IOException if writing the SSE stream fails
      */
     private Object forwardCreate(GovernanceContext context, HttpServletResponse response) throws IOException {
-        if (pathSelector.isBus() && busForwarder.isPresent()
-                && !"SendStreamingMessage".equals(context.method())) {
-            // FEAT-012 BUS path: the blocking wait window + projection fold run inside BusForwarder,
+        if (pathSelector.isBus() && busForwarder.isPresent()) {
+            if ("SendStreamingMessage".equals(context.method())) {
+                // FEAT-012 IN-4 BUS streaming: enqueue → poll ACCEPTED + STREAM_READY → SSE bridge.
+                String firstFrame = busForwarder.get().forwardStreaming(context, response, sseBridge);
+                if (firstFrame == null) {
+                    return null;  // SSE stream written to response
+                }
+                idempotencyRule.complete(context.tenantId(), context.messageId(), firstFrame);
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(firstFrame);
+            }
+            // FEAT-012 BUS sync path: the blocking wait window + projection fold run inside BusForwarder,
             // which also completes/aborts G4 via G4BusWiring — skip the DIRECT router + G4 here.
             return busForwarder.get().forwardSync(context);
         }

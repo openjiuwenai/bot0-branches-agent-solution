@@ -11,18 +11,35 @@ import com.openjiuwen.gateway.bus.control.ProjectionFeed;
 import com.openjiuwen.gateway.bus.wait.FiveStateFolder;
 import com.openjiuwen.gateway.bus.wait.G4BusWiring;
 import com.openjiuwen.gateway.bus.wait.WaitWindow;
+import com.openjiuwen.gateway.direct.AgentRuntimeClient;
 import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
+import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.RdcRouteClient;
+import com.openjiuwen.gateway.routing.ResolvedRoute;
+import com.openjiuwen.gateway.routing.RouteResolutionException;
+import com.openjiuwen.gateway.sse.SseBridge;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 
 /**
  * Orchestrates the BUS sync create path (FEAT-012 §4): search→enqueue→wait→fold→respond.
@@ -37,10 +54,37 @@ public class BusForwarder {
     private final String sourceServiceId;
     private final long acceptWindowMillis;
     private final long responseWindowMillis;
+    private final AgentRuntimeClient agentRuntimeClient;
+    private final DefaultAgentResolver defaultAgentResolver;
+    private long streamFirstFrameDeadlineMillis = 10_000L;
     private static final Logger log = LoggerFactory.getLogger(BusForwarder.class);
 
     /**
-     * Creates a forwarder wired with RDC search, control enqueue, projection feed, and G4.
+     * Sets the deadline to read the first SSE frame after STREAM_READY (FEAT-012 IN-4 robustness).
+     * A runtime that accepts SubscribeToTask but never sends a frame (e.g. an already-terminal
+     * task whose subscription does not close) must not hang the servlet thread forever; the
+     * forwarder aborts with {@code STREAM_DEADLINE_EXCEEDED} once the deadline elapses.
+     *
+     * @param streamFirstFrameDeadlineMillis deadline in milliseconds (default 10s)
+     */
+    public void setStreamFirstFrameDeadlineMillis(long streamFirstFrameDeadlineMillis) {
+        this.streamFirstFrameDeadlineMillis = streamFirstFrameDeadlineMillis;
+    }
+
+    /** Dedicated daemon threads for bounded first-frame reads (never blocks a caller thread). */
+    private final ExecutorService firstFrameExec = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "bus-forwarder-firstframe");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * Creates a forwarder wired with RDC search, control enqueue, projection feed, G4,
+     * SSE-bridge runtime client, and the default-agent fallback.
+     *
+     * <p>When a create carries no {@code agentId}, the {@link DefaultAgentResolver} supplies
+     * the configured default (mirrors {@code Router}); a missing default is a clean
+     * {@code DEFAULT_AGENT_UNCONFIGURED} governance error rather than an NPE.
      *
      * @param rdc route discovery client
      * @param control I-04 outbound forwarder
@@ -49,10 +93,13 @@ public class BusForwarder {
      * @param sourceServiceId gateway service identity for envelope audit
      * @param acceptWindowMillis accept-phase timeout window
      * @param responseWindowMillis response-phase timeout window after accept
+     * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY (null on sync-only wiring)
+     * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
      */
     public BusForwarder(RdcRouteClient rdc, BusControlForwarder control, ProjectionFeed projectionFeed,
                         IdempotencyRule g4, String sourceServiceId,
-                        long acceptWindowMillis, long responseWindowMillis) {
+                        long acceptWindowMillis, long responseWindowMillis,
+                        AgentRuntimeClient agentRuntimeClient, DefaultAgentResolver defaultAgentResolver) {
         this.rdc = rdc;
         this.control = control;
         this.projectionFeed = projectionFeed;
@@ -60,6 +107,8 @@ public class BusForwarder {
         this.sourceServiceId = sourceServiceId;
         this.acceptWindowMillis = acceptWindowMillis;
         this.responseWindowMillis = responseWindowMillis;
+        this.agentRuntimeClient = agentRuntimeClient;
+        this.defaultAgentResolver = defaultAgentResolver;
     }
 
     /**
@@ -70,7 +119,7 @@ public class BusForwarder {
      * @throws GovernanceException when no routable instance or enqueue fails
      */
     public ResponseEntity<String> forwardSync(GovernanceContext ctx) {
-        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : null;
+        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();
         List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
         if (candidates.isEmpty()) {
             throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
@@ -120,6 +169,199 @@ public class BusForwarder {
         log.info("forwardSync corrId={} UNKNOWN (no projection matched within accept+response window)", correlationId);
         g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), unknownBody);
         return ResponseEntity.ok().body(unknownBody);
+    }
+
+    /**
+     * Runs the BUS streaming create path (FEAT-012 IN-4): enqueue control event, poll for
+     * ACCEPTED + STREAM_READY projections, then bridge point-to-point SSE to the client.
+     *
+     * <p>Flow: search RDC → enqueue → poll ACCEPTED(taskId) → poll STREAM_READY(streamRef) →
+     * resolve routeHandle → connect runtime SSE via SubscribeToTask + X-OpenJiuwen-Stream-Ref →
+     * bridge SSE frames to the client's HttpServletResponse.
+     *
+     * @param ctx governance context (tenant, agent, message, trace, body)
+     * @param response servlet response for writing the SSE stream
+     * @param sseBridge SSE bridge (path-agnostic, reused from DIRECT)
+     * @return {@code null} if SSE was written to the response; non-null error/status body if
+     *         STREAM_READY was not reached (timeout, rejection, failure)
+     * @throws GovernanceException when no routable instance or enqueue fails
+     * @throws IOException when writing the SSE stream fails (client disconnect)
+     */
+    public String forwardStreaming(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge)
+            throws IOException {
+        String effectiveAgentId = ctx.agentId() != null ? ctx.agentId() : defaultAgentResolver.resolve();
+        List<AgentCardRoute> candidates = rdc.searchInstancesByAgentId(ctx.tenantId(), effectiveAgentId);
+        if (candidates.isEmpty()) {
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_NO_CANDIDATES",
+                    "No routable instance for agent " + effectiveAgentId);
+        }
+        AgentCardRoute chosen = candidates.get(0);
+
+        ForwardingEnvelope env = control.forward(ctx, chosen.routeHandle(), chosen.targetServiceId(),
+                sourceServiceId, System.currentTimeMillis() + 30000);
+        String correlationId = env.correlationId();
+        log.info("forwardStreaming start corrId={} tenant={} target={}", correlationId, ctx.tenantId(), chosen.targetServiceId());
+
+        long now = System.currentTimeMillis();
+        WaitWindow window = new WaitWindow(now, acceptWindowMillis, responseWindowMillis);
+        G4BusWiring g4w = new G4BusWiring(g4);
+
+        ProjectionFeed.ProjectionEvent streamReadyEvent = null;
+        int maxPolls = 100;
+        for (int i = 0; i < maxPolls; i++) {
+            var timedOut = window.checkTimeout(System.currentTimeMillis());
+            if (timedOut.isPresent()) {
+                InvocationResponseStatus status = timedOut.get();
+                String body = statusBody(status, window.taskId(), null);
+                log.info("forwardStreaming corrId={} TIMEOUT→{} taskId={}", correlationId, status, window.taskId());
+                g4w.onFold(status, ctx.tenantId(), ctx.messageId(), body);
+                return body;
+            }
+            var proj = projectionFeed.poll(correlationId);
+            if (proj.isEmpty()) {
+                continue;
+            }
+            var event = proj.get();
+            InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
+            if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
+                window.onProjection(folded, event.taskId(), System.currentTimeMillis());
+            } else if (folded == InvocationResponseStatus.STREAM_READY) {
+                streamReadyEvent = event;
+                break;
+            } else if (FiveStateFolder.isTerminal(folded)
+                    || folded == InvocationResponseStatus.INPUT_REQUIRED) {
+                String taskId = event.taskId() != null ? event.taskId() : window.taskId();
+                String body = statusBody(folded, taskId, event.body());
+                log.info("forwardStreaming corrId={} folded={} taskId={}", correlationId, folded, taskId);
+                g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
+                return body;
+            }
+        }
+
+        if (streamReadyEvent == null) {
+            String unknownBody = statusBody(InvocationResponseStatus.UNKNOWN, null, null);
+            log.info("forwardStreaming corrId={} UNKNOWN (no STREAM_READY within window)", correlationId);
+            g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), unknownBody);
+            return unknownBody;
+        }
+
+        String streamRef = streamReadyEvent.streamRef();
+        String taskId = streamReadyEvent.taskId() != null ? streamReadyEvent.taskId() : window.taskId();
+        log.info("forwardStreaming corrId={} STREAM_READY streamRef={} taskId={}", correlationId, streamRef, taskId);
+
+        if (streamRef == null || streamRef.isBlank() || taskId == null) {
+            String body = statusBody(InvocationResponseStatus.FAILED, taskId, "STREAM_READY without streamRef or taskId");
+            g4w.onFold(InvocationResponseStatus.FAILED, ctx.tenantId(), ctx.messageId(), body);
+            return body;
+        }
+
+        ResolvedRoute resolved;
+        try {
+            resolved = rdc.resolveRouteHandle(chosen.routeHandle(), ctx.tenantId());
+        } catch (RouteResolutionException ex) {
+            String body = statusBody(InvocationResponseStatus.FAILED, taskId, "Cannot resolve route for SSE bridge");
+            g4w.onFold(InvocationResponseStatus.FAILED, ctx.tenantId(), ctx.messageId(), body);
+            return body;
+        }
+        log.info("forwardStreaming corrId={} resolved endpoint={}", correlationId, resolved.endpointUrl());
+
+        window.release();
+
+        Stream<String> frames;
+        try {
+            frames = agentRuntimeClient.openStreamByRef(resolved.endpointUrl(), streamRef, taskId, ctx.tenantId());
+        } catch (GovernanceException ex) {
+            // Runtime rejected SubscribeToTask (e.g. HTTP 4xx). Surface the reason (status + first
+            // body line, captured by HttpAgentRuntimeClient) in a FAILED body before the response is
+            // committed — and log it, so the cause is visible (the global handler would log nothing).
+            log.warn("forwardStreaming corrId={} openStreamByRef rejected: {}", correlationId, ex.getMessage());
+            String body = statusBody(InvocationResponseStatus.FAILED, taskId, ex.getMessage());
+            g4w.onFold(InvocationResponseStatus.FAILED, ctx.tenantId(), ctx.messageId(), body);
+            return body;
+        }
+        log.info("forwardStreaming corrId={} openStreamByRef returned; reading first frame (deadline {}ms)",
+                correlationId, streamFirstFrameDeadlineMillis);
+
+        // Read the first frame with a deadline BEFORE committing the SSE response. A runtime that
+        // accepts SubscribeToTask but never sends a frame (e.g. an already-terminal task whose
+        // subscription does not close) must not hang the servlet thread forever.
+        Iterator<String> frameIterator = frames.iterator();
+        String firstFrame;
+        try {
+            firstFrame = readFirstFrameOrTimeout(frameIterator, frames);
+        } catch (TimeoutException ex) {
+            log.warn("forwardStreaming corrId={} STREAM_DEADLINE_EXCEEDED (no first frame within {}ms)",
+                    correlationId, streamFirstFrameDeadlineMillis);
+            String body = statusBody(InvocationResponseStatus.FAILED, taskId, "STREAM_DEADLINE_EXCEEDED");
+            g4w.onFold(InvocationResponseStatus.FAILED, ctx.tenantId(), ctx.messageId(), body);
+            return body;
+        } catch (GovernanceException ex) {
+            log.warn("forwardStreaming corrId={} stream read failed: {}", correlationId, ex.getMessage());
+            String body = statusBody(InvocationResponseStatus.FAILED, taskId, ex.getMessage());
+            g4w.onFold(InvocationResponseStatus.FAILED, ctx.tenantId(), ctx.messageId(), body);
+            return body;
+        }
+        log.info("forwardStreaming corrId={} firstFrame obtained present={}", correlationId, firstFrame != null);
+
+        // First frame obtained (or stream empty) — commit the SSE response and drain the rest.
+        response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        String replayResult = firstFrame != null ? firstFrame
+                : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
+        try {
+            sseBridge.writeSse(response.getOutputStream(), frameIterator, firstFrame);
+        } catch (IOException ex) {
+            g4w.onAbort(ctx.tenantId(), ctx.messageId());
+            throw ex;
+        } finally {
+            frames.close();
+        }
+        g4w.onFold(InvocationResponseStatus.COMPLETED_RESPONSE, ctx.tenantId(), ctx.messageId(), replayResult);
+        log.info("forwardStreaming corrId={} stream done", correlationId);
+        return null;
+    }
+
+    /**
+     * Reads the first SSE frame on a worker thread, bounded by {@link #streamFirstFrameDeadlineMillis}.
+     * On timeout the stream is closed (best-effort unblock of the underlying runtime response) and
+     * the caller surfaces {@code STREAM_DEADLINE_EXCEEDED} before committing the client response.
+     *
+     * @param iterator the frame iterator (first element consumed here)
+     * @param frames   the backing stream (closed on timeout / failure)
+     * @return the first frame, or {@code null} if the stream ended empty
+     * @throws TimeoutException      if no first frame arrives within the deadline
+     * @throws GovernanceException   if the read is interrupted or fails
+     */
+    private String readFirstFrameOrTimeout(Iterator<String> iterator, Stream<String> frames)
+            throws TimeoutException, GovernanceException {
+        Future<String> future = firstFrameExec.submit(() -> iterator.hasNext() ? iterator.next() : null);
+        try {
+            return future.get(streamFirstFrameDeadlineMillis, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException te) {
+            future.cancel(true);   // interrupt the blocked first-frame read
+            closeQuietly(frames);  // best-effort unblock the underlying runtime response
+            throw te;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            future.cancel(true);
+            closeQuietly(frames);
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "STREAM_INTERRUPTED",
+                    "Stream read interrupted");
+        } catch (ExecutionException ee) {
+            closeQuietly(frames);
+            throw new GovernanceException(HttpStatus.BAD_GATEWAY, "FORWARD_FAILED",
+                    "Runtime stream read failed", ee.getCause());
+        }
+    }
+
+    private static void closeQuietly(Stream<String> frames) {
+        try {
+            if (frames != null) {
+                frames.close();
+            }
+        } catch (RuntimeException ignored) {
+            // best-effort close to unblock / release the runtime connection
+        }
     }
 
     /**

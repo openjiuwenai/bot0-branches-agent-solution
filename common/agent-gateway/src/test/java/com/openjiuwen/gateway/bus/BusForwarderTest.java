@@ -17,6 +17,7 @@ import com.openjiuwen.gateway.governance.GovernanceContext;
 import com.openjiuwen.gateway.governance.GovernanceException;
 import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
+import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
 
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class BusForwarderTest {
     private final IdempotencyRule g4 = new IdempotencyRule();
     private final BusForwarder forwarder = new BusForwarder(rdc,
             new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
-            feed, g4, "svc-gw", 30_000L, 60_000L);
+            feed, g4, "svc-gw", 30_000L, 60_000L, null, new DefaultAgentResolver("default-agent-1"));
 
     private GovernanceContext ctx(String agentId, String messageId) {
         GovernanceContext c = new GovernanceContext();
@@ -155,5 +156,17 @@ class BusForwarderTest {
                 "{\"result\":{\"id\":\"t9\"}}");
         var resp = forwarder.forwardSync(ctx("agent-1", "m-body"));
         assertThat(resp.getBody()).isEqualTo("{\"result\":{\"id\":\"t9\"}}");
+    }
+
+    @Test
+    void syncCreateNullAgentIdUsesDefault() {
+        // FEAT-011 P0: a create with no agentId routes to the configured default agent,
+        // mirroring the DIRECT Router. The BUS path must not pass null to RDC (which NPEs
+        // in HttpRdcRouteClient.enc) — it must fall back to DefaultAgentResolver.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
+        var resp = forwarder.forwardSync(ctx(null, "m-da"));
+        assertThat(resp.getStatusCode().value()).isEqualTo(200);
+        assertThat(rdc.lastAgentId()).isEqualTo("default-agent-1");
     }
 }
