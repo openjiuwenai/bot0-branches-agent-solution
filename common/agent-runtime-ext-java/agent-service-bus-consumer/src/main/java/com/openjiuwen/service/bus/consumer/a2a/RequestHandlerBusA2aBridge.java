@@ -6,6 +6,7 @@ package com.openjiuwen.service.bus.consumer.a2a;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
 
@@ -41,6 +42,7 @@ import java.util.concurrent.TimeoutException;
 public class RequestHandlerBusA2aBridge {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final long FIRST_STREAM_EVENT_TIMEOUT_SECONDS = 30L;
+    private static final String DEFAULT_MESSAGE_ROLE = "ROLE_USER";
 
     private final RequestHandler requestHandler;
 
@@ -109,7 +111,7 @@ public class RequestHandlerBusA2aBridge {
                 && !"A2A_CALL_REQUESTED".equals(envelope.eventType())) {
             return Optional.empty();
         }
-        MessageSendParams params = convert(decode(payload).params(), MessageSendParams.class);
+        MessageSendParams params = messageSendParams(decode(payload).params());
         return Optional.ofNullable(params.message().taskId()).filter(value -> !value.isBlank());
     }
 
@@ -140,7 +142,7 @@ public class RequestHandlerBusA2aBridge {
 
     private BusDispatchResult send(AgentBusEventEnvelope envelope, Payload decoded, ServerCallContext context)
             throws A2AError {
-        MessageSendParams params = scoped(convert(decoded.params(), MessageSendParams.class), envelope.tenantId());
+        MessageSendParams params = scoped(messageSendParams(decoded.params()), envelope.tenantId());
         if (params.message().taskId() != null) {
             requestHandler.validateRequestedTask(params.message().taskId());
         }
@@ -239,7 +241,21 @@ public class RequestHandlerBusA2aBridge {
             return JsonUtil.fromJson(params.toString(), type);
         } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
             throw new IllegalArgumentException("PAYLOAD_INVALID", failure);
+        } catch (RuntimeException failure) {
+            throw new IllegalArgumentException("PAYLOAD_INVALID", failure);
         }
+    }
+
+    private static MessageSendParams messageSendParams(JsonNode params) {
+        JsonNode normalized = params.deepCopy();
+        JsonNode message = normalized.get("message");
+        if (message instanceof ObjectNode messageObject) {
+            JsonNode role = messageObject.get("role");
+            if (role == null || role.isNull() || role.isTextual() && role.asText().isBlank()) {
+                messageObject.put("role", DEFAULT_MESSAGE_ROLE);
+            }
+        }
+        return convert(normalized, MessageSendParams.class);
     }
 
     private static void requireMethod(Payload payload, String expected) {
