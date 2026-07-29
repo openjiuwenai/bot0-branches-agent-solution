@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Verifies the example protocol adapter request mapping and external context projection.
+ * Verifies the example protocol adapter request and response mapping.
  *
  * @since 0.1.0
  */
@@ -38,7 +38,7 @@ class CustomRestDemoAdapterTest {
 
         var command = adapter.toA2ARequest(context);
 
-        assertThat(command.conversationId()).isEqualTo("session-1");
+        assertThat(command.params().message().contextId()).isEqualTo("session-1");
         assertThat(command.params().tenant()).isNull();
         assertThat(command.stream()).isTrue();
         assertThat(command.params().message().parts()).first()
@@ -72,7 +72,7 @@ class CustomRestDemoAdapterTest {
 
         var command = adapter.toA2ARequest(context);
 
-        assertThat(command.conversationId()).isNull();
+        assertThat(command.params().message().contextId()).isNull();
     }
 
     @Test
@@ -88,51 +88,35 @@ class CustomRestDemoAdapterTest {
     }
 
     @Test
-    void responseDoesNotExposeInternalA2AContextId() {
+    void responsePreservesBusinessConversationId() {
         ObjectMapper objectMapper = new ObjectMapper();
         CustomRestDemoAdapter adapter = new CustomRestDemoAdapter(objectMapper);
         var context = new CustomRestProtocolAdapter.Context(Map.of(),
                 Map.of("agent_id", "main", "conversation_id", "external-conversation"), Map.of(), Map.of());
-        Task task = Task.builder().id("task").contextId("custom-rest:v1:internal-secret")
+        Task task = Task.builder().id("task").contextId("external-conversation")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).history(List.of()).build();
 
         Map<String, Object> response = map(adapter.fromA2ATask(task, context));
 
         assertThat(response).containsEntry("conversation_id", "external-conversation");
-        assertThat(response.get("custom_rsp_data")).isInstanceOfSatisfying(Task.class,
-                externalTask -> assertThat(externalTask.contextId()).isEqualTo("external-conversation"));
+        assertThat(response.get("custom_rsp_data")).isSameAs(task);
     }
 
     @Test
-    void responseExternalizesContextIdInNestedStatusMessages() {
+    void streamResponseDoesNotRebuildA2AEvent() {
         CustomRestDemoAdapter adapter = new CustomRestDemoAdapter(new ObjectMapper());
         var context = new CustomRestProtocolAdapter.Context(Map.of(),
                 Map.of("agent_id", "main", "conversation_id", "external-conversation"), Map.of(), Map.of());
-        var statusMessage = org.a2aproject.sdk.spec.Message.builder()
-                .role(org.a2aproject.sdk.spec.Message.Role.ROLE_AGENT)
-                .parts(new TextPart("done"))
-                .messageId("status-message")
-                .contextId("custom-rest:v1:internal-secret")
-                .build();
-        var status = new TaskStatus(TaskState.TASK_STATE_COMPLETED, statusMessage, null);
-        Task task = Task.builder().id("task").contextId("custom-rest:v1:internal-secret")
-                .status(status).history(List.of(statusMessage)).build();
+        var status = new TaskStatus(TaskState.TASK_STATE_COMPLETED);
         var statusEvent = new TaskStatusUpdateEvent("task", status,
-                "custom-rest:v1:internal-secret", Map.of());
+                "external-conversation", Map.of());
 
-        Object externalTask = map(adapter.fromA2ATask(task, context)).get("custom_rsp_data");
-        var streamEnvelope = map(adapter.fromA2AStreamEvent(statusEvent, context).data());
+        var response = adapter.fromA2AStreamEvent(statusEvent, context);
+        var streamEnvelope = map(response.data());
         var streamData = map(streamEnvelope.get("custom_rsp_data"));
 
-        assertThat(externalTask).isInstanceOfSatisfying(Task.class, value -> {
-            assertThat(value.status().message().contextId()).isEqualTo("external-conversation");
-            assertThat(value.history()).allSatisfy(message ->
-                    assertThat(message.contextId()).isEqualTo("external-conversation"));
-        });
-        assertThat(streamData.get("data")).isInstanceOfSatisfying(TaskStatusUpdateEvent.class, value -> {
-            assertThat(value.contextId()).isEqualTo("external-conversation");
-            assertThat(value.status().message().contextId()).isEqualTo("external-conversation");
-        });
+        assertThat(response.event()).isEqualTo("final");
+        assertThat(streamData.get("data")).isSameAs(statusEvent);
     }
 
     @SuppressWarnings("unchecked")

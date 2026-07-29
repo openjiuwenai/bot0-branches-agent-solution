@@ -12,8 +12,6 @@ import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
-import org.a2aproject.sdk.spec.TaskArtifactUpdateEvent;
-import org.a2aproject.sdk.spec.TaskStatus;
 import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.TextPart;
 
@@ -54,6 +52,7 @@ public final class DeepResearchCustomRestAdapter implements CustomRestProtocolAd
                 .role(Message.Role.ROLE_USER)
                 .parts(new TextPart(inputText))
                 .messageId(UUID.randomUUID().toString())
+                .contextId(conversationId)
                 .build();
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("body", context.body());
@@ -64,27 +63,26 @@ public final class DeepResearchCustomRestAdapter implements CustomRestProtocolAd
         Object stream = context.body().get("stream");
         boolean streaming = stream == null
                 || (stream instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(stream)));
-        return new A2ASendCommand(params, conversationId, streaming);
+        return new A2ASendCommand(params, streaming);
     }
 
     @Override
     public Object fromA2ATask(Task task, Context context) {
-        return envelope(true, "", externalize(task, context), context);
+        return envelope(true, "", task, context);
     }
 
     @Override
     public SseEvent fromA2AStreamEvent(StreamingEventKind event, Context context) {
-        StreamingEventKind externalEvent = externalize(event, context);
         String type;
-        if (externalEvent instanceof TaskStatusUpdateEvent status && status.isFinalOrInterrupted()) {
+        if (event instanceof TaskStatusUpdateEvent status && status.isFinalOrInterrupted()) {
             type = status.status().state().isInterrupted() ? "interrupt" : "final";
-        } else if (externalEvent instanceof Task task && task.status() != null && task.status().state() != null
+        } else if (event instanceof Task task && task.status() != null && task.status().state() != null
                 && (task.status().state().isFinal() || task.status().state().isInterrupted())) {
             type = task.status().state().isInterrupted() ? "interrupt" : "final";
         } else {
             type = "chunk";
         }
-        return new SseEvent(type, envelope(true, "", Map.of("type", type, "data", externalEvent), context));
+        return new SseEvent(type, envelope(true, "", Map.of("type", type, "data", event), context));
     }
 
     @Override
@@ -109,49 +107,6 @@ public final class DeepResearchCustomRestAdapter implements CustomRestProtocolAd
         result.put("execution_time", "");
         result.put("custom_rsp_data", raw);
         return result;
-    }
-
-    private static StreamingEventKind externalize(StreamingEventKind event, Context context) {
-        String externalContextId = context.pathVariables().getOrDefault("conversation_id", "");
-        if (event instanceof Task task) {
-            return externalize(task, context);
-        }
-        if (event instanceof Message message) {
-            return externalize(message, externalContextId);
-        }
-        if (event instanceof TaskStatusUpdateEvent status) {
-            return TaskStatusUpdateEvent.builder(status)
-                    .contextId(externalContextId)
-                    .status(externalize(status.status(), externalContextId))
-                    .build();
-        }
-        if (event instanceof TaskArtifactUpdateEvent artifact) {
-            return TaskArtifactUpdateEvent.builder(artifact).contextId(externalContextId).build();
-        }
-        return event;
-    }
-
-    private static Task externalize(Task task, Context context) {
-        String externalContextId = context.pathVariables().getOrDefault("conversation_id", "");
-        var builder = Task.builder(task).contextId(externalContextId);
-        if (task.status() != null) {
-            builder.status(externalize(task.status(), externalContextId));
-        }
-        if (task.history() != null) {
-            builder.history(task.history().stream()
-                    .map(message -> externalize(message, externalContextId))
-                    .toList());
-        }
-        return builder.build();
-    }
-
-    private static TaskStatus externalize(TaskStatus status, String externalContextId) {
-        Message message = status.message() == null ? null : externalize(status.message(), externalContextId);
-        return new TaskStatus(status.state(), message, status.timestamp());
-    }
-
-    private static Message externalize(Message message, String externalContextId) {
-        return Message.builder(message).contextId(externalContextId).build();
     }
 
     private static Map<String, Object> flatten(Map<String, List<String>> source) {

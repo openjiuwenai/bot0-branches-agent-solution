@@ -34,21 +34,21 @@ class EdpaAbcdeCustomRestAdapterTest {
     @Test
     void mapsConversationIdFromPathVariable() {
         A2ASendCommand command = adapter.toA2ARequest(context(Map.of("input", "你好")));
-        assertThat(command.conversationId()).isEqualTo("session-1");
+        assertThat(command.params().message().contextId()).isEqualTo("session-1");
     }
 
     @Test
     void mapsConversationIdFromBodyFallback() {
         var ctx = new CustomRestProtocolAdapter.Context(Map.of(), Map.of(),
                 Map.of(), Map.of("conversation_id", "body-conv", "input", "你好"));
-        assertThat(adapter.toA2ARequest(ctx).conversationId()).isEqualTo("body-conv");
+        assertThat(adapter.toA2ARequest(ctx).params().message().contextId()).isEqualTo("body-conv");
     }
 
     @Test
     void mapsConversionIdAliasFallback() {
         var ctx = new CustomRestProtocolAdapter.Context(Map.of(), Map.of(),
                 Map.of(), Map.of("conversion_id", "alias-conv", "input", "你好"));
-        assertThat(adapter.toA2ARequest(ctx).conversationId()).isEqualTo("alias-conv");
+        assertThat(adapter.toA2ARequest(ctx).params().message().contextId()).isEqualTo("alias-conv");
     }
 
     @Test
@@ -90,7 +90,7 @@ class EdpaAbcdeCustomRestAdapterTest {
         var ctx = new CustomRestProtocolAdapter.Context(Map.of(),
                 Map.of("agent_id", "edp", "conversation_id", "conv-1"), Map.of(), Map.of());
         Task task = Task.builder().id("task-1")
-                .contextId("custom-rest:v1:internal-secret")
+                .contextId("conv-1")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED))
                 .history(List.of()).build();
 
@@ -231,21 +231,21 @@ class EdpaAbcdeCustomRestAdapterTest {
         });
     }
 
-    // ===== ContextId isolation (no internal contextId leakage) =====
+    // ===== Business conversationId preservation =====
 
     @Test
-    void flatFormatDoesNotExposeInternalA2AContextId() {
+    void flatFormatPreservesBusinessConversationId() {
         var ctx = new CustomRestProtocolAdapter.Context(Map.of(),
                 Map.of("agent_id", "main", "conversation_id", "external-conversation"),
                 Map.of(), Map.of());
-        Task task = Task.builder().id("task").contextId("custom-rest:v1:internal-secret")
+        Task task = Task.builder().id("task").contextId("external-conversation")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).history(List.of()).build();
 
         Map<String, Object> envelope = map(adapter.fromA2ATask(task, ctx));
 
-        // The envelope's conversation_id should be external
+        // The envelope's conversation_id should preserve the business id.
         assertThat(envelope).containsEntry("conversation_id", "external-conversation");
-        // The custom_rsp_data.data.contextId should be external (not internal)
+        // The projected task data should carry the same id.
         assertThat(envelope.get("custom_rsp_data")).isInstanceOfSatisfying(Map.class, rsp -> {
             assertThat(rsp.get("data")).isInstanceOfSatisfying(Map.class, data -> {
                 assertThat(data).containsEntry("contextId", "external-conversation");

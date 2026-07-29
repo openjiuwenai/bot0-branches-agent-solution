@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests Versatile agent handler request and response adaptation.
@@ -98,6 +97,46 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
+    void streamQuerySignalsOnErrorWhenFinishYieldsTypeError() throws Exception {
+        // intent_id present but agent_id unresolvable (absent from data, no mapping)
+        // → buildThreeFieldEnvelope throws VERSATILE_INTENT_AGENT_ID_UNMAPPED →
+        // finish() returns a TYPE_ERROR terminal. streamQuery must terminate with
+        // onError and must NOT call onComplete, which would overwrite the error
+        // terminal — see issue #51.
+        VersatileProperties properties = propertiesWithServer(List.of(
+                "{\"custom_rsp_data\":{\"node_name\":\"AnswerNode\",\"data\":{\"node_type\":\"QA\","
+                        + "\"response_content\":\"酒店预订\","
+                        + "\"intent_id\":\"intent_L1_hotel\"}}}",
+                "{\"data\":{\"node_type\":\"End\"}}"
+        ));
+        properties.setResultNodeName("AnswerNode");
+        VersatileProperties.ResultExtraction rc = new VersatileProperties.ResultExtraction();
+        rc.setMatch("response_content");
+        rc.setGet("/custom_rsp_data/data/response_content");
+        properties.getResultExtractions().add(rc);
+        VersatileProperties.ResultExtraction ii = new VersatileProperties.ResultExtraction();
+        ii.setMatch("intent_id");
+        ii.setGet("/custom_rsp_data/data/intent_id");
+        properties.getResultExtractions().add(ii);
+
+        VersatileAgentHandler handler = new VersatileAgentHandler(properties);
+        RecordingObserver observer = new RecordingObserver();
+
+        handler.streamQuery(request(), observer);
+
+        assertThat(observer.isCompleted)
+                .as("onComplete must not fire after a TYPE_ERROR terminal")
+                .isFalse();
+        assertThat(observer.error)
+                .as("onError must signal the TYPE_ERROR terminal")
+                .isNotNull();
+        assertThat(observer.error).isInstanceOf(IllegalStateException.class);
+        assertThat(observer.error.getMessage()).contains("VERSATILE_INTENT_AGENT_ID_UNMAPPED");
+        // The TYPE_ERROR chunk is still delivered as data before the error terminal.
+        assertThat(observer.chunks).extracting(QueryChunk::getType).contains(QueryChunk.TYPE_ERROR);
+    }
+
+    @Test
     void queryReturnsFallbackWhenCompletedWithoutResult() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"event\":\"message\",\"data\":{\"text\":\"only passthrough\"}}",
@@ -120,26 +159,36 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
-    void throwsWhenResultNodeArrivesWithoutEndSignal() throws Exception {
+    void queryReturnsInterruptWhenResultNodeArrivesWithoutEndNode() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
                 "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"
         ));
         properties.setResultNodeName("AnswerNode");
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
 
-        assertThatThrownBy(() -> handler.query(request()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("STREAM_CLOSED_WITHOUT_TERMINAL");
+        QueryResponse response = handler.query(request());
+
+        assertThat(response.getConversationId()).isEqualTo("c-1");
+        assertThat(response.getResult()).isInstanceOf(Map.class);
+        Map<?, ?> result = (Map<?, ?>) response.getResult();
+        assertThat(result.get("role")).isEqualTo("assistant");
+        assertThat(result.get("content")).isEqualTo("Remote agent requires input");
+        assertThat(result.get("_interrupt")).isEqualTo(Map.of("message", "Remote agent requires input"));
     }
 
     @Test
-    void throwsWhenRemoteReturnsNoEvents() throws Exception {
+    void queryReturnsInterruptWhenRemoteReturnsNoEvents() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of());
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
 
-        assertThatThrownBy(() -> handler.query(request()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("STREAM_CLOSED_WITHOUT_TERMINAL");
+        QueryResponse response = handler.query(request());
+
+        assertThat(response.getConversationId()).isEqualTo("c-1");
+        assertThat(response.getResult()).isInstanceOf(Map.class);
+        Map<?, ?> result = (Map<?, ?>) response.getResult();
+        assertThat(result.get("role")).isEqualTo("assistant");
+        assertThat(result.get("content")).isEqualTo("Remote agent requires input");
+        assertThat(result.get("_interrupt")).isEqualTo(Map.of("message", "Remote agent requires input"));
     }
 
     @Test

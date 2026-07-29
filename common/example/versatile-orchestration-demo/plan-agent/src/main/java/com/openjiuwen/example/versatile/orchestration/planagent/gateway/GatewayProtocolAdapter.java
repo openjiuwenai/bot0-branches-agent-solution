@@ -69,11 +69,13 @@ public final class GatewayProtocolAdapter implements CustomRestProtocolAdapter {
         GatewayRequest request = objectMapper.convertValue(context.body(), GatewayRequest.class);
         String query = (request.input() != null && request.input().query() != null)
                 ? request.input().query() : "";
+        String conversationId = conversationId(context, request);
 
         Message message = Message.builder()
                 .role(Message.Role.ROLE_USER)
                 .parts(new TextPart(query))
                 .messageId(UUID.randomUUID().toString())
+                .contextId(conversationId)
                 .build();
 
         Map<String, Object> metadata = new LinkedHashMap<>();
@@ -87,8 +89,7 @@ public final class GatewayProtocolAdapter implements CustomRestProtocolAdapter {
         MessageSendParams params = MessageSendParams.builder().message(message).metadata(metadata).build();
 
         boolean stream = streamFlag(context.body());
-        String conversationId = conversationId(context, request);
-        return new A2ASendCommand(params, conversationId, stream);
+        return new A2ASendCommand(params, stream);
     }
 
     @Override

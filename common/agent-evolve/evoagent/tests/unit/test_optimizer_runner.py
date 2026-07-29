@@ -91,7 +91,8 @@ def _make_config(tmp_path: Path) -> EvolveConfig:
 
 def _managed_doc_run_dir(tmp_path: Path, kind: str = "agent_rule") -> Path:
     """managed-doc run artifact 目录（canonical_id / run_id 嵌套隔离，单测仅一 run）。"""
-    canonical = _make_config(tmp_path).artifact_dir / f"managed_doc:{kind}"
+    canonical_dir_name = f"managed_doc:{kind}".replace(":", "_")
+    canonical = _make_config(tmp_path).artifact_dir / canonical_dir_name
     run_dirs = [p for p in canonical.iterdir() if p.is_dir()]
     assert len(run_dirs) == 1, f"expected one run dir under {canonical}, got {run_dirs}"
     return run_dirs[0]
@@ -1258,7 +1259,7 @@ async def test_runner_managed_doc_canonical_id_used_as_operators_key_and_artifac
     assert set(operators.keys()) == {"managed_doc:agent_rule"}
     # 5) artifact 目录：canonical id 在父层、run_id 在叶层（嵌套隔离）
     run_artifact_dir = h.rf_cls.call_args.args[0]
-    assert run_artifact_dir.parent.name == "managed_doc:agent_rule"
+    assert run_artifact_dir.parent.name == "managed_doc_agent_rule"
     assert run_artifact_dir.parent.parent == _make_config(tmp_path).artifact_dir
     # 6) trainer skill_names == [canonical id]（评估器经此归因）
     assert h.trainer_cls.call_args.kwargs["skill_names"] == ["managed_doc:agent_rule"]
@@ -1305,7 +1306,7 @@ async def test_runner_managed_doc_same_kind_two_runs_isolate_artifact_dirs(
     h2 = _md_harness_with_snapshot(make_harness, snap)
     await h2.run(request, config)
 
-    canonical = config.artifact_dir / "managed_doc:agent_rule"
+    canonical = config.artifact_dir / "managed_doc_agent_rule"
     run_dirs = sorted(p.name for p in canonical.iterdir() if p.is_dir())
     assert len(run_dirs) == 2
     assert run_dirs[0] != run_dirs[1]

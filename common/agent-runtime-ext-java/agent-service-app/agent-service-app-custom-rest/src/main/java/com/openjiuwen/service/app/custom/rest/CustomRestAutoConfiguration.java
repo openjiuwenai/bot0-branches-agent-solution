@@ -68,6 +68,9 @@ public class CustomRestAutoConfiguration {
     }
 
     @Controller
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    @ConditionalOnClass({DispatcherServlet.class, RequestHandler.class})
+    @ConditionalOnProperty(prefix = "openjiuwen.service.custom-rest", name = "query-path")
     static final class CustomRestHandler {
         private static final TypeReference<Map<String, Object>> BODY_TYPE = new TypeReference<>() {
         };
@@ -96,7 +99,7 @@ public class CustomRestAutoConfiguration {
                 context = new CustomRestProtocolAdapter.Context(headers, pathVariables, query, body);
                 boolean acceptsSse = acceptsSse(headers.get(HttpHeaders.ACCEPT.toLowerCase(Locale.ROOT)));
                 CustomRestA2ABridge.Prepared prepared = bridge.prepare(context, acceptsSse);
-                if (prepared.command().stream()) {
+                if (prepared.stream()) {
                     SseEmitter emitter = sseTransport.connect(bridge.executeStream(prepared), prepared);
                     return ResponseEntity.ok()
                             .contentType(MediaType.TEXT_EVENT_STREAM)
@@ -132,7 +135,7 @@ public class CustomRestAutoConfiguration {
             try {
                 JsonNode root = objectMapper.readTree(new String(body, StandardCharsets.UTF_8));
                 if (root == null || !root.isObject()) {
-                    throw new CustomRestFailure(400, "invalid_json", "The JSON root must be an object");
+                    throw new CustomRestFailure(400, "invalid_custom_request", "The JSON root must be an object");
                 }
                 return objectMapper.convertValue(root, BODY_TYPE);
             } catch (JsonProcessingException | IllegalArgumentException exception) {

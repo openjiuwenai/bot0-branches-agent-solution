@@ -2,7 +2,7 @@
 #
 # Local end-to-end runbook for the Versatile intent deployment module.
 # Implements L2 §5.5.3 方案 B (multi-port local runtime) with the
-# mock-versatile profile, and exercises all three L2 §6.2 scenarios.
+# mock-versatile profile, and exercises all four L2 §6.2 scenarios.
 #
 # Architecture:
 #   - Each layer runs as a separate versatile-intent-boot process.
@@ -17,6 +17,8 @@
 #     §6.2.3  explicit interrupt  curl L1 "中断"        → _interrupt payload
 #   Round 2:
 #     §6.2.2  reclassification    curl downstream "重分类" → "重新分类：国内酒店"
+#   Round 3:
+#     §6.2.4  L2 ambiguous self-heal  curl L1 "意图不明" → "默认工作流兜底"
 #
 # Each round starts the processes it needs with the right mode (three-field
 # vs legacy) and stops them before the next round begins.
@@ -25,7 +27,9 @@
 #   ./scripts/local-e2e.sh            # build if needed, run all scenarios
 #   SKIP_BUILD=1 ./scripts/local-e2e.sh   # skip build (use existing jar)
 #
-# Prerequisites: Java 17 on PATH.
+# Prerequisites: Java 17 on PATH, and the prerequisite artifacts
+# (agent-service-app / agent-service-adapters-versatile) installed in the
+# local Maven repository — see README.md「前置依赖 → 首次构建」.
 
 set -euo pipefail
 
@@ -35,8 +39,20 @@ MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 L1_PORT="${L1_PORT:-8081}"
 L2_PORT="${L2_PORT:-8082}"
 DOWNSTREAM_PORT="${DOWNSTREAM_PORT:-8083}"
+DEFAULT_WF_PORT="${DEFAULT_WF_PORT:-8085}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 JAR_FILE="$MODULE_DIR/target/versatile-intent-boot-0.1.0.jar"
+
+# Local Maven repository (override via M2_REPO). Used only to give a helpful
+# early error when prerequisite artifacts are missing — not a build input.
+M2_REPO="${M2_REPO:-$HOME/.m2/repository}"
+
+# Prerequisite artifacts this example depends on. They are NOT built by this
+# script — they must be installed first (see README.md「前置依赖 → 首次构建」).
+PREREQ_JARS=(
+    "com/openjiuwen/agent-service-app/0.1.0/agent-service-app-0.1.0.jar"
+    "com/openjiuwen/agent-service-adapters-versatile/0.1.0/agent-service-adapters-versatile-0.1.0.jar"
+)
 
 PIDS=()
 LOG_DIR="$MODULE_DIR/target"
@@ -67,6 +83,35 @@ build_if_needed() {
     else
         echo "==> Using existing jar: $JAR_FILE"
     fi
+}
+
+# Verifies the prerequisite artifacts exist in the local Maven repository.
+# This script only packages this module's jar — it does NOT build the
+# prerequisites. Failing fast here avoids a confusing 73-error compile failure.
+check_dependencies() {
+    local missing=()
+    for rel in "${PREREQ_JARS[@]}"; do
+        if [ ! -f "$M2_REPO/$rel" ]; then
+            missing+=("$rel")
+        fi
+    done
+    if [ ${#missing[@]} -ne 0 ]; then
+        echo "ERROR: 缺少前置依赖，无法编译本模块：" >&2
+        for rel in "${missing[@]}"; do
+            echo "  - $M2_REPO/$rel" >&2
+        done
+        cat >&2 <<'EOF'
+本脚本仅构建 versatile-intent-boot 自身 jar，不构建前置依赖。
+请先按 README.md「前置依赖 → 首次构建」安装前置依赖，例如：
+  # 1. 构建外部 runtime 核心（提供 agent-service-app）
+  cd <agent-runtime-java> && mvn clean install -DskipTests
+  # 2. 构建本仓 extension 模块（提供 agent-service-adapters-versatile）
+  mvn -f common/agent-runtime-ext-java/pom.xml clean install -DskipTests
+详见仓库根 CONTRIBUTING.md「Development Setup」。
+EOF
+        return 1
+    fi
+    echo "==> Prerequisite artifacts present in $M2_REPO"
 }
 
 wait_for_health() {
@@ -199,14 +244,52 @@ run_round_two() {
     stop_all
 }
 
+# ─── Round 3: Scenario 4 (L2 ambiguous self-heal L1→L2→default-wf) ───
+
+run_round_three() {
+    echo
+    echo "==================== Round 3: §6.2.4 L2 意图不明自消 ===================="
+
+    # L1: three-field mode (layer1 profile) — routes intent_L1_hotel to L2
+    start_process layer1 "$L1_PORT" "layer1,dev,mock-versatile" "agent_L1"
+
+    # L2: three-field mode (layer2 profile) — returns ambiguous intent_id="1"
+    # and self-heals via a2a_delegate to agent_card_L2_default
+    start_process layer2 "$L2_PORT" "layer2,dev,mock-versatile" "agent_L2"
+
+    # default-wf: terminal node hosting agent_L2_default, returns fallback business output
+    start_process default-wf "$DEFAULT_WF_PORT" "dev,mock-versatile" "agent_L2_default" \
+        --openjiuwen.service.versatile.result-node-name=AnswerNode \
+        --openjiuwen.service.versatile.messages.required=true
+
+    wait_for_health "$L1_PORT" layer1
+    wait_for_health "$L2_PORT" layer2
+    wait_for_health "$DEFAULT_WF_PORT" default-wf
+
+    echo
+    echo "--- §6.2.4 L2 意图不明自消 (L1→L2→default-wf) ---"
+    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 意图不明}]"
+    local resp
+    resp=$(send_query "$L1_PORT" "c6-scenario4" "意图不明")
+    echo "    response: $(echo "$resp" | head -c 500)"
+    # 核心断言：最终响应包含 default-wf 的兜底业务输出，证明 L2 ambiguous 自消链路走通
+    assert_contains "scenario4-ambiguous-self-heal" "$resp" "默认工作流兜底"
+
+    echo
+    echo "==> Round 3 complete, stopping processes"
+    stop_all
+}
+
 main() {
-    echo "==> L2 §5.5.3 方案 B mock 联调 (three scenarios)"
+    echo "==> L2 §5.5.3 方案 B mock 联调 (four scenarios)"
+    check_dependencies
     build_if_needed
     run_round_one
     run_round_two
+    run_round_three
     echo
     echo "==> All scenarios passed."
-    echo "    Logs: $LOG_DIR/{layer1,layer2,downstream}.log"
+    echo "    Logs: $LOG_DIR/{layer1,layer2,downstream,default-wf}.log"
 }
 
 main "$@"

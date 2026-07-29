@@ -214,9 +214,23 @@ public class VersatileAgentHandler implements AgentHandler {
                 request.getTenantId(), request.getMessages().size());
         log.debug("Versatile streamQuery request={}", logServeRequest(request));
         try {
-            execute(request, observer);
+            List<QueryChunk> finalEvents = execute(request, observer);
             if (observer.isCancelled()) {
                 log.warn("Versatile streamQuery cancelled conversation_id={}", request.getConversationId());
+                return;
+            }
+            // finish() may have signalled a terminal error as a TYPE_ERROR chunk
+            // (result-contract violation, unmapped agent_id, stream closed without
+            // terminal, etc.). Calling onComplete() here would overwrite that error
+            // terminal with a success terminal — see issue #51. Route it to onError
+            // instead, mirroring the non-stream query() path which throws on TYPE_ERROR.
+            Optional<QueryChunk> terminalError = finalEvents.stream()
+                    .filter(c -> QueryChunk.TYPE_ERROR.equals(c.getType()))
+                    .findFirst();
+            if (terminalError.isPresent()) {
+                log.error("Versatile streamQuery ended with error terminal conversation_id={} error={}",
+                        request.getConversationId(), terminalError.get().getData());
+                observer.onError(new IllegalStateException(String.valueOf(terminalError.get().getData())));
                 return;
             }
             observer.onComplete();

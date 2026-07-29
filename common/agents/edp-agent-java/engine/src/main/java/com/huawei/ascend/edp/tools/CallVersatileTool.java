@@ -46,7 +46,8 @@ public final class CallVersatileTool {
         // 对齐 Python call_versatile.py L33-40: [call_versatile] intent=..., desc=...
         LOGGER.info("[call_versatile] building Versatile tool: {}", EdpaBusinessTools.TOOL_CALL_VERSATILE);
         return EdpaBusinessTools.localTool(EdpaBusinessTools.TOOL_CALL_VERSATILE,
-                "声明 Versatile Agent 委托意图，级联恢复和结果归一化由 VersatileInterruptRail 负责。",
+                "声明 Versatile Agent 委托意图，由 VersatileDelegateRail 构造 a2a_delegate 中断，"
+                        + "框架 A2AEnabledServeOrchestrator 接管远端调用与续传，结果归一化由 VersatileDelegateRail.afterToolCall 负责。",
                 EdpaBusinessTools.objectSchema(
                         Map.of("query_description", EdpaBusinessTools.stringProp("委托查询描述"), "query_intent",
                                 EdpaBusinessTools.stringProp("委托查询意图"), "query_response_analysis_scripts",
