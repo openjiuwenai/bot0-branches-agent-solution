@@ -14,8 +14,11 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * AgentHandler variant that classifies intent by calling an LLM directly,
@@ -30,6 +33,7 @@ public class LlmIntentAgentHandler implements AgentHandler {
     private final String ambiguousIntentId;
     private final LlmIntentClient client;
     private final LlmIntentPromptBuilder promptBuilder;
+    private final Map<String, List<Map<String, Object>>> conversationHistory = new ConcurrentHashMap<>();
 
     public LlmIntentAgentHandler(LlmIntentProperties properties, VersatileProperties versatile) {
         this(properties, versatile, new LlmIntentClient(properties),
@@ -47,9 +51,11 @@ public class LlmIntentAgentHandler implements AgentHandler {
 
     @Override
     public QueryResponse query(ServeRequest request) {
-        log.info("LlmIntent query conversation_id={} messages={}",
-                request.getConversationId(), request.getMessages().size());
-        LlmIntentResult result = classify(request);
+        String cid = conversationKey(request.getConversationId());
+        List<Map<String, Object>> turns = appendUserTurn(cid, request);
+        log.info("LlmIntent query conversation_id={} history={}",
+                request.getConversationId(), turns.size());
+        LlmIntentResult result = classify(turns);
         String userQuery = request.lastUserQuery() != null ? request.lastUserQuery() : "";
         Map<String, Object> resultMap = switch (result.action()) {
             case CLASSIFY -> LlmChunkShapes.delegateResult(
@@ -62,10 +68,12 @@ public class LlmIntentAgentHandler implements AgentHandler {
 
     @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
-        log.info("LlmIntent streamQuery conversation_id={} messages={}",
-                request.getConversationId(), request.getMessages().size());
+        String cid = conversationKey(request.getConversationId());
+        List<Map<String, Object>> turns = appendUserTurn(cid, request);
+        log.info("LlmIntent streamQuery conversation_id={} history={}",
+                request.getConversationId(), turns.size());
         try {
-            LlmIntentResult result = classify(request);
+            LlmIntentResult result = classify(turns);
             String userQuery = request.lastUserQuery() != null ? request.lastUserQuery() : "";
             QueryChunk chunk = switch (result.action()) {
                 case CLASSIFY -> LlmChunkShapes.delegateInterrupt(
@@ -82,14 +90,37 @@ public class LlmIntentAgentHandler implements AgentHandler {
         }
     }
 
-    private LlmIntentResult classify(ServeRequest request) {
-        List<Map<String, Object>> messages = promptBuilder.build(request);
+    private LlmIntentResult classify(List<Map<String, Object>> turns) {
+        List<Map<String, Object>> messages = promptBuilder.buildConversation(turns);
         String raw = client.complete(messages);
         return LlmIntentResult.parse(raw, ambiguousIntentId);
     }
 
+    /**
+     * Appends the current user query to the per-conversation history so the LLM
+     * receives prior inputs when classifying a follow-up message.
+     *
+     * @return the full ordered turn list for this conversation
+     */
+    private List<Map<String, Object>> appendUserTurn(String cid, ServeRequest request) {
+        String query = request.lastUserQuery() != null ? request.lastUserQuery() : "";
+        List<Map<String, Object>> turns = conversationHistory.computeIfAbsent(cid,
+                k -> Collections.synchronizedList(new ArrayList<>()));
+        if (!query.isBlank()) {
+            turns.add(Map.of("role", "user", "content", query));
+        }
+        return turns;
+    }
+
+    private static String conversationKey(String conversationId) {
+        return conversationId == null || conversationId.isBlank() ? "" : conversationId;
+    }
+
     @Override
     public void clearSession(String conversationId) {
-        // stateless: LLM carries context via message history
+        String cid = conversationKey(conversationId);
+        if (!cid.isEmpty()) {
+            conversationHistory.remove(cid);
+        }
     }
 }

@@ -18,7 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$MODULE_DIR../../.." && pwd)"
+REPO_ROOT="$(cd "$MODULE_DIR/../../.." && pwd)"
 AGENT_B_MODULE="$REPO_ROOT/common/example/agentcore-ext-deepagent-remote-a2a-demo/agent-b-deepagent-runtime"
 
 GATEWAY_PORT=8084
@@ -107,6 +107,8 @@ start_gateway() {
         --server.port="$port" \
         --openjiuwen.service.versatile.url-template="http://localhost:${port}/v1/proj/agents/agent_mock_gateway/conversations/{conversation_id}" \
         --openjiuwen.example.mock-a2a-gateway.routing.agent_card_L2_flight="http://localhost:${L2_FLIGHT_PORT}" \
+        --openjiuwen.example.mock-a2a-gateway.routing.agent_card_L2_flight_a="http://localhost:${L2_FLIGHT_PORT}" \
+        --openjiuwen.example.mock-a2a-gateway.routing.agent_card_L2_flight_b="http://localhost:${L2_FLIGHT_PORT}" \
         --openjiuwen.example.mock-a2a-gateway.routing.agent_card_biz_hotel_domestic="http://localhost:${AGENT_B_HOTEL_PORT}" \
         --openjiuwen.example.mock-a2a-gateway.routing.agent_card_biz_hotel_international="http://localhost:${AGENT_B_HOTEL_PORT}" \
         --openjiuwen.example.mock-a2a-gateway.routing.agent_card_biz_flight_domestic="http://localhost:${AGENT_B_FLIGHT_PORT}" \
@@ -142,7 +144,8 @@ main() {
     build_if_needed
 
     start_gateway
-    start_versatile layer1 "$L1_PORT" "layer1,dev,mock-versatile,a2a-gateway-test,llm-intent" "agent_L1"
+    start_versatile layer1 "$L1_PORT" "layer1,dev,mock-versatile,a2a-gateway-test,llm-intent" "agent_L1" \
+        --openjiuwen.service.versatile.route-cache.enabled=false
     start_versatile layer2-hotel "$L2_HOTEL_PORT" "layer2,dev,mock-versatile,a2a-gateway-test,llm-intent" "agent_L2" \
         --openjiuwen.service.versatile.default-workflow.agent-card= \
         --openjiuwen.example.intent-llm.domain=hotel
@@ -170,6 +173,8 @@ main() {
 
     echo; echo "==== 场景 C: 回跳完成酒店 ===="
     echo "    response: $(send_q "$L1_PORT" "$cid" "继续订酒店" | head -c 600)"
+    echo "    response: $(send_q "$L1_PORT" "$cid" "五星" | head -c 600)"
+    assert_log agent-b-hotel "酒店预订成功" || true
 
     echo; echo "==> Demo run complete. Inspect logs: $LOG_DIR/{layer1,layer2-hotel,layer2-flight,agent-b-hotel,agent-b-flight,gateway}.log"
 }
