@@ -36,6 +36,13 @@ def test_load_prompt_default_dir_finds_edp_prompt() -> None:
     assert "失败模式分析" in result
 
 
+def test_load_prompt_default_dir_finds_skillopt_prompt() -> None:
+    """验证默认 prompt loader 能找到仓库 examples/scenarios/skillopt/prompts。"""
+    result = load_prompt("analyst_error", "skillopt")
+
+    assert "失败模式分析" in result
+
+
 def test_load_prompt_falls_back_to_agent_core(scenarios_dir: Path) -> None:
     """验证场景目录无文件时 fallback 到 agent-core。"""
     # 创建场景目录但不放 prompt 文件

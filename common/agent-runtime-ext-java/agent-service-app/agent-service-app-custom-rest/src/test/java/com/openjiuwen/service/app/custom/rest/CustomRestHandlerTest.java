@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Flow;
 
@@ -33,9 +34,7 @@ class CustomRestHandlerTest {
     void nonSerializableBlockingProjectionUsesStableAdapterErrorResponse() throws Exception {
         CustomRestA2ABridge bridge = mock(CustomRestA2ABridge.class);
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
-        var command = mock(CustomRestProtocolAdapter.A2ASendCommand.class);
-        when(command.stream()).thenReturn(false);
-        when(prepared.command()).thenReturn(command);
+        when(prepared.stream()).thenReturn(false);
         when(bridge.prepare(any(), anyBoolean())).thenReturn(prepared);
         when(bridge.executeBlocking(prepared)).thenReturn(new SelfReference());
         when(bridge.projectError(any(), any())).thenReturn(Map.of("error", "safe"));
@@ -111,9 +110,7 @@ class CustomRestHandlerTest {
     void streamingResponseDisablesProxyCachingAndBuffering() throws Exception {
         CustomRestA2ABridge bridge = mock(CustomRestA2ABridge.class);
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
-        var command = mock(CustomRestProtocolAdapter.A2ASendCommand.class);
-        when(command.stream()).thenReturn(true);
-        when(prepared.command()).thenReturn(command);
+        when(prepared.stream()).thenReturn(true);
         when(bridge.prepare(any(), anyBoolean())).thenReturn(prepared);
         Flow.Publisher<StreamingEventKind> publisher = subscriber -> {
         };
@@ -145,18 +142,46 @@ class CustomRestHandlerTest {
         verify(bridge, never()).prepare(any(), anyBoolean());
     }
 
+    @Test
+    void rejectsMalformedJsonWithInvalidJsonCode() throws Exception {
+        assertRequestFailureCode("{not valid", "invalid_json");
+    }
+
+    @Test
+    void rejectsNonObjectJsonWithInvalidCustomRequestCode() throws Exception {
+        for (String body : List.of("[]", "42", "\"value\"", "null")) {
+            assertRequestFailureCode(body, "invalid_custom_request");
+        }
+    }
+
+    private static void assertRequestFailureCode(String body, String expectedCode) throws Exception {
+        CustomRestA2ABridge bridge = mock(CustomRestA2ABridge.class);
+        when(bridge.projectError(any(), any())).thenReturn(Map.of("error", "invalid request"));
+        var handler = new CustomRestAutoConfiguration.CustomRestHandler(bridge, new ObjectMapper());
+
+        var response = handler.handle(jsonRequest(body), Map.of("conversation_id", "conversation"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        ArgumentCaptor<CustomRestFailure> failure = ArgumentCaptor.forClass(CustomRestFailure.class);
+        verify(bridge).projectError(failure.capture(), any());
+        assertThat(failure.getValue().getCode()).isEqualTo(expectedCode);
+        verify(bridge, never()).prepare(any(), anyBoolean());
+    }
+
     private static CustomRestA2ABridge.Prepared blockingPrepared() {
         CustomRestA2ABridge.Prepared prepared = mock(CustomRestA2ABridge.Prepared.class);
-        var command = mock(CustomRestProtocolAdapter.A2ASendCommand.class);
-        when(command.stream()).thenReturn(false);
-        when(prepared.command()).thenReturn(command);
+        when(prepared.stream()).thenReturn(false);
         return prepared;
     }
 
     private static MockHttpServletRequest jsonRequest() {
+        return jsonRequest("{\"input\":\"hello\"}");
+    }
+
+    private static MockHttpServletRequest jsonRequest(String body) {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/custom/conversation");
         request.setContentType("application/json");
-        request.setContent("{\"input\":\"hello\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        request.setContent(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         request.addHeader("Accept", "application/json");
         return request;
     }

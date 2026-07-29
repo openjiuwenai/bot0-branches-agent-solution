@@ -82,8 +82,8 @@ class TestEvolveConfig:
         monkeypatch.setenv("EVO_ALLOWED_DATA_ROOTS", "/custom/data,/other/path")
         config = EvolveConfig()
         assert config.allowed_data_roots == [
-            Path("/custom/data"),
-            Path("/other/path"),
+            Path("/custom/data").resolve(),
+            Path("/other/path").resolve(),
         ]
 
     # --- CustomSSE provider 配置 ---

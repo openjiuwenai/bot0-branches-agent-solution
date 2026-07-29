@@ -58,33 +58,26 @@ final class CustomRestA2ABridge {
             throw new CustomRestFailure(503, "agent_not_ready", "The agent is not ready");
         }
 
-        String tenantId = command.params().tenant();
-        String internalContextId = CustomRestA2ATaskResolver.internalContextId(tenantId, command.conversationId());
-        Object token = acquire(internalContextId);
+        MessageSendParams preparedParams = command.params();
+        Message original = preparedParams.message();
+        String tenantId = preparedParams.tenant();
+        String conversationId = original.contextId();
+        Object token = acquire(conversationId);
         boolean preparedSuccessfully = false;
         try {
-            Message original = command.params().message();
-            String taskId = original.taskId();
-            if (taskId == null) {
-                taskId = resolver.resolveTaskId(tenantId, internalContextId).orElse(null);
+            if (original.taskId() == null) {
+                String resolvedTaskId = resolver.resolveTaskId(tenantId, conversationId).orElse(null);
+                if (resolvedTaskId != null) {
+                    Message resumedMessage = Message.builder(original).taskId(resolvedTaskId).build();
+                    preparedParams = new MessageSendParams(resumedMessage, preparedParams.configuration(),
+                            preparedParams.metadata(), tenantId);
+                }
             }
-            Message rebuiltMessage = Message.builder(original)
-                    .contextId(internalContextId)
-                    .taskId(taskId)
-                    .build();
-            MessageSendParams rebuiltParams = MessageSendParams.builder()
-                    .message(rebuiltMessage)
-                    .configuration(command.params().configuration())
-                    .metadata(command.params().metadata())
-                    .tenant(tenantId)
-                    .build();
-            ServerCallContext callContext = new ServerCallContext(
-                    UnauthenticatedUser.INSTANCE, Map.of(STREAM_STATE_KEY, command.stream()), Set.of());
             preparedSuccessfully = true;
-            return new Prepared(command, context, rebuiltParams, callContext, internalContextId, token);
+            return new Prepared(context, preparedParams, command.stream(), token);
         } finally {
             if (!preparedSuccessfully) {
-                release(internalContextId, token);
+                release(conversationId, token);
             }
         }
     }
@@ -92,7 +85,7 @@ final class CustomRestA2ABridge {
     Object executeBlocking(Prepared prepared) {
         Task task;
         try {
-            EventKind result = requestHandler.onMessageSend(prepared.params(), prepared.callContext());
+            EventKind result = requestHandler.onMessageSend(prepared.params(), callContext(prepared.stream()));
             if (!(result instanceof Task)) {
                 throw new CustomRestFailure(502, "invalid_a2a_result",
                         "The A2A runtime returned an invalid blocking result");
@@ -106,20 +99,21 @@ final class CustomRestA2ABridge {
             throw new CustomRestFailure(500, "adapter_execution_failed",
                     "The A2A runtime could not execute the request");
         } finally {
-            release(prepared.internalContextId(), prepared.token());
+            release(prepared.params().message().contextId(), prepared.token());
         }
         return projectTask(task, prepared.httpContext());
     }
 
     Flow.Publisher<StreamingEventKind> executeStream(Prepared prepared) {
         try {
-            return Objects.requireNonNull(requestHandler.onMessageSendStream(prepared.params(), prepared.callContext()),
+            return Objects.requireNonNull(requestHandler.onMessageSendStream(
+                            prepared.params(), callContext(prepared.stream())),
                     "RequestHandler returned a null publisher");
         } catch (A2AError error) {
-            release(prepared.internalContextId(), prepared.token());
+            release(prepared.params().message().contextId(), prepared.token());
             throw mapA2AError(error);
         } catch (RuntimeException error) {
-            release(prepared.internalContextId(), prepared.token());
+            release(prepared.params().message().contextId(), prepared.token());
             throw new CustomRestFailure(500, "adapter_execution_failed", "The A2A stream could not be started");
         }
     }
@@ -160,11 +154,11 @@ final class CustomRestA2ABridge {
     }
 
     boolean confirmObservable(String taskId, Prepared prepared) {
-        return resolver.isObservableFormalParent(taskId, prepared.internalContextId());
+        return resolver.isObservableFormalParent(taskId, prepared.params().message().contextId());
     }
 
     void release(Prepared prepared) {
-        release(prepared.internalContextId(), prepared.token());
+        release(prepared.params().message().contextId(), prepared.token());
     }
 
     private Object projectTask(Task task, CustomRestProtocolAdapter.Context context) {
@@ -176,17 +170,21 @@ final class CustomRestA2ABridge {
         return projected;
     }
 
-    private Object acquire(String internalContextId) {
+    private Object acquire(String conversationId) {
         Object token = new Object();
-        if (reservations.putIfAbsent(internalContextId, token) != null) {
+        if (reservations.putIfAbsent(conversationId, token) != null) {
             throw new CustomRestFailure(409, "conversation_busy",
                     "The conversation is currently processing another request");
         }
         return token;
     }
 
-    private void release(String internalContextId, Object token) {
-        reservations.remove(internalContextId, token);
+    private void release(String conversationId, Object token) {
+        reservations.remove(conversationId, token);
+    }
+
+    private static ServerCallContext callContext(boolean stream) {
+        return new ServerCallContext(UnauthenticatedUser.INSTANCE, Map.of(STREAM_STATE_KEY, stream), Set.of());
     }
 
     private static void validateCommand(CustomRestProtocolAdapter.A2ASendCommand command) {
@@ -194,7 +192,7 @@ final class CustomRestA2ABridge {
             throw new CustomRestFailure(500, "adapter_execution_failed",
                     "The custom protocol adapter returned an invalid command");
         }
-        if (command.conversationId() == null || command.conversationId().isBlank()) {
+        if (command.params().message().contextId() == null || command.params().message().contextId().isBlank()) {
             throw new CustomRestFailure(400, "invalid_custom_request", "conversationId is required");
         }
     }
@@ -223,11 +221,9 @@ final class CustomRestA2ABridge {
         }
     }
 
-    record Prepared(CustomRestProtocolAdapter.A2ASendCommand command,
-                    CustomRestProtocolAdapter.Context httpContext,
+    record Prepared(CustomRestProtocolAdapter.Context httpContext,
                     MessageSendParams params,
-                    ServerCallContext callContext,
-                    String internalContextId,
+                    boolean stream,
                     Object token) {
     }
 }
