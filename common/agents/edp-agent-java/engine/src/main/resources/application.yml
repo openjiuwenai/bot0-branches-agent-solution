@@ -19,6 +19,19 @@ openjiuwen:
       streaming: true
       default-input-modes: ["text", "text/plain"]
       default-output-modes: ["text", "text/plain"]
+      # 远端 A2A agent 声明：框架在 ApplicationReadyEvent 时自动拉取 AgentCard 并注册到
+      # A2ARemoteAgentCardRegistry；JiuwenCoreAgentExtHandler.streamQuery 执行前会调用
+      # RemoteA2aToolInstaller.install() 自动注入 RemoteA2aInterruptRail（工具名 = name）。
+      # LLM 调用该工具时触发 _interrupt_kind=a2a_delegate 中断，由 A2AEnabledServeOrchestrator
+      # + RemoteInvocationBatchCoordinator + A2ARemoteAgentClient 接管远端调用与续传。
+      remote-invocation:
+        max-concurrency: 16
+        max-queue-size: 256
+        queue-timeout-seconds: 30
+      remote-agents:
+        - name: versatile-agent
+          url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191}
+          streaming: true
       skills:
         - id: "edp_banking_workflow"
           name: "EDP Banking Workflow"
@@ -76,17 +89,13 @@ edpa:
       base-url: ${EDP_AGENT_MODEL_BASE_URL:https://api.deepseek.com/v1}
       api-key: ${EDP_AGENT_MODEL_API_KEY:sk-xxxxx}
     versatile:
-      url: ${EDP_AGENT_VERSATILE_URL:http://localhost:30001/v1/0/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}}
-      adapter-a2a-url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191/a2a}
-      timeout: ${EDP_AGENT_VERSATILE_TIMEOUT:30s}
-      url-variables:
-        workflow_id: mock_workflow
-      query-params:
-        type: controller
-        workspace_id: "10"
-      headers:
-        content-type: application/json
-        stream: "true"
+      # Versatile 远端调用已改为 A2A remote-agents（见上方 openjiuwen.service.a2a.remote-agents）。
+      # 以下 url/adapter-a2a-url/timeout/url-variables/query-params/headers 为旧版直连 REST 配置，已废弃删除。
+      # circuit-breaker 仍由 VersatileDelegateRail 使用（熔断器前置检查 + 后置记录）。
+      circuit-breaker:
+        enabled: ${EDP_AGENT_VERSATILE_CB_ENABLED:true}
+        failure-threshold: ${EDP_AGENT_VERSATILE_CB_FAILURE_THRESHOLD:5}
+        reset-timeout-ms: ${EDP_AGENT_VERSATILE_CB_RESET_TIMEOUT_MS:30000}
     mcpsse:
       master-url: ${EDP_MCP_MASTER_URL:http://106.15.62.172:8000/sse}
       standby-url: ${EDP_MCP_STANDBY_URL:http://106.15.62.172:8000/sse}

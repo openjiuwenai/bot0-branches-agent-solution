@@ -31,8 +31,7 @@ import com.huawei.ascend.edp.rail.LogRail;
 import com.huawei.ascend.edp.rail.McpInterruptRail;
 import com.huawei.ascend.edp.rail.SandboxInterruptRail;
 import com.huawei.ascend.edp.rail.ScriptsRail;
-import com.huawei.ascend.edp.rail.VersatileInterruptRail;
-import com.huawei.ascend.edp.rail.VersatileInterruptRail.VersatilePassthroughBuffer;
+import com.huawei.ascend.edp.rail.VersatileDelegateRail;
 import com.huawei.ascend.edp.tools.EdpaBusinessTools;
 
 import com.openjiuwen.core.foundation.tool.Tool;
@@ -115,7 +114,6 @@ public class EdpaAgentEnhancer {
         EnhanceContext ctx = new EnhanceContext();
         ctx.setEdpConfig(edpConfig);
         ctx.setToolDataChannel(new ToolDataChannel());
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
         ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
@@ -132,7 +130,6 @@ public class EdpaAgentEnhancer {
         ctx.setEdpConfig(edpConfig);
         ctx.setSpringBootConfig(springBootConfig);
         ctx.setToolDataChannel(new ToolDataChannel());
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
         ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
@@ -151,7 +148,6 @@ public class EdpaAgentEnhancer {
         ctx.setEdpConfig(edpConfig);
         ctx.setSpringBootConfig(springBootConfig);
         ctx.setToolDataChannel(toolDataChannel);
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
         ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
@@ -172,7 +168,6 @@ public class EdpaAgentEnhancer {
         ctx.setSpringBootConfig(springBootConfig);
         ctx.setToolDataChannel(toolDataChannel);
         ctx.setSkillsDir(skillsDir);
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
         ctx.setAgentName("EDPAgent");
         enhance(agent, ctx);
     }
@@ -236,7 +231,6 @@ public class EdpaAgentEnhancer {
         EnhanceContext ctx = new EnhanceContext();
         ctx.setEdpConfig(edpConfig);
         ctx.setToolDataChannel(new ToolDataChannel());
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
         ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
@@ -253,7 +247,6 @@ public class EdpaAgentEnhancer {
         ctx.setEdpConfig(edpConfig);
         ctx.setSpringBootConfig(springBootConfig);
         ctx.setToolDataChannel(new ToolDataChannel());
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
         ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
@@ -272,7 +265,6 @@ public class EdpaAgentEnhancer {
         ctx.setEdpConfig(edpConfig);
         ctx.setSpringBootConfig(springBootConfig);
         ctx.setToolDataChannel(toolDataChannel);
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
         ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
@@ -293,31 +285,6 @@ public class EdpaAgentEnhancer {
         ctx.setSpringBootConfig(springBootConfig);
         ctx.setToolDataChannel(toolDataChannel);
         ctx.setSkillsDir(skillsDir);
-        ctx.setPassthroughBuffer(new VersatilePassthroughBuffer());
-        ctx.setAgentName("EDPAgent");
-        return buildBusinessRails(ctx);
-    }
-
-    /**
-     * Delegate to buildBusinessRails.
-     *
-     * @see #buildBusinessRails(EnhanceContext)
-     *
-     * @param edpConfig the edpConfig value
-     * @param springBootConfig the springBootConfig value
-     * @param toolDataChannel the toolDataChannel value
-     * @param skillsDir the skillsDir value
-     * @param passthroughBuffer the passthroughBuffer value
-     * @return the result
-     */
-    public static List<AgentRail> buildBusinessRails(EdpConfig edpConfig, EdpaSpringBootConfig springBootConfig,
-            ToolDataChannel toolDataChannel, Path skillsDir, VersatilePassthroughBuffer passthroughBuffer) {
-        EnhanceContext ctx = new EnhanceContext();
-        ctx.setEdpConfig(edpConfig);
-        ctx.setSpringBootConfig(springBootConfig);
-        ctx.setToolDataChannel(toolDataChannel);
-        ctx.setSkillsDir(skillsDir);
-        ctx.setPassthroughBuffer(passthroughBuffer);
         ctx.setAgentName("EDPAgent");
         return buildBusinessRails(ctx);
     }
@@ -333,9 +300,6 @@ public class EdpaAgentEnhancer {
     public static List<AgentRail> buildBusinessRails(EnhanceContext ctx) {
         ToolDataChannel sharedChannel =
                 ctx.getToolDataChannel() != null ? ctx.getToolDataChannel() : new ToolDataChannel();
-        VersatilePassthroughBuffer sharedPassthroughBuffer = ctx.getPassthroughBuffer() != null
-                ? ctx.getPassthroughBuffer()
-                : new VersatilePassthroughBuffer();
         List<AgentRail> rails = new ArrayList<>();
 
         // 取消类 Rail 优先注册，使取消信号尽早生效。
@@ -359,7 +323,7 @@ public class EdpaAgentEnhancer {
                     ctx.getDecoratedSandboxClient() != null);
         }
 
-        // MCP / VA / ask_user Rail 负责工具调用前后的业务中断和参数增强。
+        // MCP / ask_user Rail 负责工具调用前后的业务中断和参数增强。
         // SANDBOX 模式下传递 skillDeployPath，使 McpInterruptRail 在 SANDBOX 分支使用 cwd + 相对路径。
         String skillDeployPath = (ctx.getSpringBootConfig() != null
                 && ctx.getSpringBootConfig().getSandbox() != null
@@ -369,11 +333,13 @@ public class EdpaAgentEnhancer {
         rails.add(new McpInterruptRail(ctx.getEdpConfig(), sharedChannel, ctx.getSkillsDir(),
                 ctx.getSpringBootConfig(), ctx.getAgentName(), ctx.getSysOp(), skillDeployPath,
                 ctx.getDecoratedSandboxClient(), ctx.getScripts()));
-        rails.add(
-                new VersatileInterruptRail(ctx.getEdpConfig(),
-                        ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,
-                        sharedChannel, sharedPassthroughBuffer, ctx.getSkillsDir(), ctx.getScripts(),
-                        ctx.getAgentName(), ctx.getSysOp(), skillDeployPath, ctx.getDecoratedSandboxClient()));
+        // Versatile 委派：拦截 call_versatile 工具，构造 a2a_delegate 中断，
+        // 由框架 A2AEnabledServeOrchestrator 接管远端调用与续传。
+        // 阶段2：垂直聚合原 VersatileInterruptRail 的 4 块业务逻辑（guard/归一化/熔断/脱敏/history_info）。
+        rails.add(new VersatileDelegateRail(ctx.getEdpConfig(),
+                ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,
+                sharedChannel, ctx.getSkillsDir(), ctx.getScripts(), ctx.getAgentName(),
+                ctx.getSysOp(), skillDeployPath, ctx.getDecoratedSandboxClient()));
         rails.add(new AskUserTemplateRail(ctx.getEdpConfig(), ctx.getScripts()));
 
         // Log Rail 负责观测日志。
@@ -459,11 +425,6 @@ public class EdpaAgentEnhancer {
         private Path skillsDir;
 
         /**
-         * Versatile 透传缓冲。
-         */
-        private VersatilePassthroughBuffer passthroughBuffer;
-
-        /**
          * DeepAgent 引用（供 Rail 访问 workspace）。
          */
         private DeepAgent deepAgent;
@@ -536,14 +497,6 @@ public class EdpaAgentEnhancer {
 
         public void setSkillsDir(Path skillsDir) {
             this.skillsDir = skillsDir;
-        }
-
-        public VersatilePassthroughBuffer getPassthroughBuffer() {
-            return passthroughBuffer;
-        }
-
-        public void setPassthroughBuffer(VersatilePassthroughBuffer passthroughBuffer) {
-            this.passthroughBuffer = passthroughBuffer;
         }
 
         public DeepAgent getDeepAgent() {
