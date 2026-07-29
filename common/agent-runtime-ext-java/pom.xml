@@ -27,7 +27,7 @@
     </properties>
 
     <modules>
-        <module>../agent-service-spec-ext</module>
+        <module>agent-service-spec-ext</module>
         <module>agent-service-app/agent-service-app-custom-rest</module>
         <module>agent-service-adapters/agent-service-adapters-versatile</module>
         <module>agent-service-adapters/agent-service-adapters-agentcore-ext</module>
