@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
 import java.util.stream.Stream;
 
 /**
@@ -39,11 +40,33 @@ public class SseBridge {
                 if (firstFrame == null) {
                     firstFrame = frame;
                 }
-                out.write(("event: jsonrpc\ndata: " + frame + "\n\n")
-                        .getBytes(StandardCharsets.UTF_8));
-                out.flush();
+                writeFrame(out, frame);
             }
         }
         return firstFrame;
+    }
+
+    /**
+     * Write an already-read first frame, then drain the remaining frames from the iterator.
+     * Used by the BUS streaming path (FEAT-012 IN-4), which reads the first frame with a
+     * deadline before committing the response — so the iterator has already yielded it.
+     *
+     * @param out        client output stream
+     * @param iterator   remaining runtime frames (first already consumed)
+     * @param firstFrame the first frame already read (may be {@code null} if the stream was empty)
+     * @throws IOException if writing to the client fails (e.g. disconnect)
+     */
+    public void writeSse(OutputStream out, Iterator<String> iterator, String firstFrame) throws IOException {
+        if (firstFrame != null) {
+            writeFrame(out, firstFrame);
+        }
+        while (iterator.hasNext()) {
+            writeFrame(out, iterator.next());
+        }
+    }
+
+    private static void writeFrame(OutputStream out, String frame) throws IOException {
+        out.write(("event: jsonrpc\ndata: " + frame + "\n\n").getBytes(StandardCharsets.UTF_8));
+        out.flush();
     }
 }

@@ -110,7 +110,7 @@ class A2aControllerBusDispatchTest {
         boolean called;
 
         StubBusForwarder() {
-            super(null, null, null, null, "stub-gw", 0L, 0L);
+            super(null, null, null, null, "stub-gw", 0L, 0L, null, new DefaultAgentResolver(""));
         }
 
         @Override
