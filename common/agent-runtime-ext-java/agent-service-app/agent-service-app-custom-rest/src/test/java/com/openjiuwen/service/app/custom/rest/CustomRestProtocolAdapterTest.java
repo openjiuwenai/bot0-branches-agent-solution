@@ -25,7 +25,7 @@ import java.util.Map;
 class CustomRestProtocolAdapterTest {
     @Test
     @SuppressWarnings("deprecation")
-    void legacyCommandStoresConversationIdInMessageWithoutDuplicatingState() {
+    void legacyCommandStoresConversationIdOnlyInMessage() {
         Message message = Message.builder()
                 .role(Message.Role.ROLE_USER)
                 .parts(new TextPart("hello"))
