@@ -29,17 +29,9 @@ import com.huawei.ascend.edp.config.RedisConfig;
 import com.huawei.ascend.edp.config.SysScriptsConfig;
 import com.huawei.ascend.edp.config.TodoRedisProperties;
 import com.huawei.ascend.edp.enhancer.EdpaAgentEnhancer;
-import com.huawei.ascend.edp.rail.ParseErrorTracker;
-import com.huawei.ascend.edp.rail.VersatileInterruptRail;
-import com.huawei.ascend.edp.rail.VersatileInterruptRail.VersatilePassthroughBuffer;
 import com.huawei.ascend.edp.stream.PlanrulePromptBuilder;
-import com.huawei.ascend.edp.stream.QueryChunkFormatAdapter;
 import com.huawei.ascend.edp.stream.SkillScriptsCollector;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.openjiuwen.core.session.interaction.InteractiveInput;
 import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.core.sysop.OperationMode;
@@ -56,7 +48,6 @@ import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.factory.HarnessFactory;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
-import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
@@ -75,21 +66,25 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * EDPAgent 运行时适配器（适配版，Phase 2 合并后）。
+ * EDPAgent 运行时适配器（标准化改造版）。
  *
  * <p>继承 {@link JiuwenCoreAgentExtHandler}，接入 agent-runtime-java 的 A2A 执行链路，
- * 并自动获得 RemoteA2aToolInstaller 的远程工具注入能力。</p>
+ * 并自动获得 RemoteA2aToolInstaller 的远程工具注入能力。
+ * 远端 versatile-agent 通过 application.yml 的 openjiuwen.service.a2a.remote-agents 声明，
+ * 框架自动注入 RemoteA2aInterruptRail，LLM 调用 versatile-agent 工具时触发 a2a_delegate 中断，
+ * 由 A2AEnabledServeOrchestrator + RemoteInvocationBatchCoordinator 接管远端调用与续传。</p>
  *
- * <p>Phase 2 核心变化：</p>
+ * <p>核心变化（标准化改造）：</p>
  * <ul>
  *     <li>使用 {@link EdpaSpringBootConfig}（合并了原 EdpAgentProperties）统一获取所有配置。</li>
  *     <li>model/versatile/mcpsse 配置从 EdpaSpringBootConfig 嵌套结构获取，
  *         不再使用 EdpAgentConfig.Model/Versatile 或 EnvOverrides。</li>
  *     <li>调用完整10参数版 {@link EdpaAgentEnhancer#enhance}，
  *         包含 EdpaTodoRail/EdpaEventRail/ScriptsRail/EdpaToolRegistry 等全部业务增强。</li>
- *     <li>恢复 {@link EdpConfigValidator#validateModelConfig} 和
- *         {@link EdpConfigValidator#validateVersatileUrl} 校验（Phase 1注释掉的）。</li>
- *     <li>Versatile续流采用A2A协议栈透明转发（方案A），VersatileInterruptRail 传入 VersatileConfig。</li>
+ *     <li>恢复 {@link EdpConfigValidator#validateModelConfig} 校验（Phase 1注释掉的）。
+ *         versatile.url 校验已废弃（改用 A2A remote-agents）。</li>
+ *     <li>Versatile 委派与续传改为标准 A2A 协议栈：VersatileDelegateRail 构造 a2a_delegate 中断，
+ *         A2AEnabledServeOrchestrator 接管远端调用与续传，不再使用 VersatileInterruptRail / VersatilePassthroughBuffer / 自造续流分支。</li>
  * </ul>
  *
  * <p><b>排查指引（现场联调 / 问题定界定位）：</b></p>
@@ -98,8 +93,8 @@ import java.util.Optional;
  *   grep "[EDP-LLM-CONFIG]"     → 验证 LLM model/sampling 配置覆盖
  *   grep "[EDPA-DIAG]"          → 事件发射诊断 + 续流结果
  *   grep "[EDP-SANDBOX]"        → 沙箱初始化/执行诊断
- *   grep "EdpaExtHandler streamQuery" → 请求入口（首轮 vs 续轮）
- *   grep "Versatile continuation"     → 续流结果追踪
+ *   grep "EdpaExtHandler streamQuery" → 请求入口
+ *   grep "RemoteA2aToolInstaller"     → 远端 A2A 工具自动注入
  * </pre>
  *
  * @since 2024-01-01
@@ -108,8 +103,6 @@ import java.util.Optional;
 
 public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpaExtHandler.class);
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * DeepAgent 外观对象
@@ -135,8 +128,6 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * EDPAgent Spring Boot 配置（合并版，含 model/versatile/mcpsse）
      */
     private EdpaSpringBootConfig springBootConfig;
-
-    private VersatilePassthroughBuffer versatilePassthroughBuffer;
 
     /**
      * 活动场景目录的绝对路径
@@ -182,11 +173,6 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
          * EDPAgent Spring Boot 配置
          */
         private EdpaSpringBootConfig springBootConfig;
-
-        /**
-         * Versatile passthrough 缓冲
-         */
-        private VersatilePassthroughBuffer versatilePassthroughBuffer;
 
         /**
          * 活动场景目录的绝对路径
@@ -314,24 +300,6 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
          */
         public void setSpringBootConfig(EdpaSpringBootConfig springBootConfig) {
             this.springBootConfig = springBootConfig;
-        }
-
-        /**
-         * Gets the versatile passthrough buffer.
-         *
-         * @return the result
-         */
-        public VersatilePassthroughBuffer getVersatilePassthroughBuffer() {
-            return versatilePassthroughBuffer;
-        }
-
-        /**
-         * Sets the versatile passthrough buffer.
-         *
-         * @param versatilePassthroughBuffer the versatilePassthroughBuffer value
-         */
-        public void setVersatilePassthroughBuffer(VersatilePassthroughBuffer versatilePassthroughBuffer) {
-            this.versatilePassthroughBuffer = versatilePassthroughBuffer;
         }
 
         /**
@@ -524,7 +492,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         // 第五步：配置校验 fail-fast。
         EdpConfigValidator.validateModelConfig(config.getModel());
-        EdpConfigValidator.validateVersatileUrl(config.getVersatile());
+        // versatile.url 已废弃（改用 A2A remote-agents），不再校验 VersatileUrl。
         EdpConfigValidator.validateSandboxConfig(config.getSandbox());
         if (result.getScenarioHomePath() != null) {
             EdpConfigValidator.validateScenarioConfig(result.getScenarioHomePath());
@@ -624,11 +592,10 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
     /**
      * 注册 EDPAgent 内置业务工具和业务 Rails，并构造 enhance 上下文执行增强。
      *
-     * <p>对应 performInit 的第十二步：创建 VersatilePassthroughBuffer、
-     * 配置沙箱门面与 SysOperation、组装 EnhanceContext 并调用
-     * {@link EdpaAgentEnhancer#enhance}。</p>
+     * <p>对应 performInit 的第十二步：配置沙箱门面与 SysOperation、
+     * 组装 EnhanceContext 并调用 {@link EdpaAgentEnhancer#enhance}。</p>
      *
-     * @param result 初始化结果，承载 versatilePassthroughBuffer/sandboxGatewayConfig/sysOperation/deepAgent 等
+     * @param result 初始化结果，承载 sandboxGatewayConfig/sysOperation/deepAgent 等
      * @param config EDPAgent 合并后配置
      * @param actrule Governance 的 actrule 配置，可为 null
      * @param skillsDir 场景 Skill 目录，可为 null
@@ -638,8 +605,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      */
     private static void setupEnhanceContext(InitResult result, EnhanceSetupParams params) {
         // --- 第十二步：注册 EDPAgent 内置业务工具和业务 Rails（13参数版，含沙箱）。
-        result.setVersatilePassthroughBuffer(new VersatilePassthroughBuffer());
-
+        // Versatile 委派由 VersatileDelegateRail 拦截 call_versatile 构造 a2a_delegate 中断，
+        // 框架 A2AEnabledServeOrchestrator 接管远端调用与续传。
         // --- 沙箱特性：创建SysOperation双模式门面 ---
         if (params.config.getSandbox() != null && params.config.getSandbox().isEnabled()) {
             result.setSandboxGatewayConfig(buildSandboxGatewayConfig(params.config.getSandbox()));
@@ -655,7 +622,6 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         enhanceCtx.setActrule(params.actrule);
         enhanceCtx.setToolDataChannel(new ToolDataChannel());
         enhanceCtx.setSkillsDir(params.skillsDir);
-        enhanceCtx.setPassthroughBuffer(result.getVersatilePassthroughBuffer());
         enhanceCtx.setDeepAgent(result.getDeepAgent());
         enhanceCtx.setEdpaTodolist(params.edpaTodolist);
         enhanceCtx.setScripts(params.sysScriptsConfig);
@@ -703,19 +669,23 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         this.edpConfig = result.getEdpConfig();
         this.governanceConfig = result.getGovernanceConfig();
         this.springBootConfig = result.getSpringBootConfig();
-        this.versatilePassthroughBuffer = result.getVersatilePassthroughBuffer();
         this.scenarioHomePath = result.getScenarioHomePath();
     }
 
     // ===== 适配版 SPI 覆写方法 =====
 
     /**
-     * 适配版 SPI：流式查询，分两种路径：
+     * 适配版 SPI：流式查询，委托给父类。
+     *
+     * <p>标准化改造后，Versatile 委派与续传完全由框架接管：</p>
      * <ul>
-     *     <li>Versatile 续流：conversationId 有续流标记时，从 passthroughNodes 提取输入并继续调用</li>
-     *     <li>首轮请求：无续流标记时，走标准 streamQueryWithPassthrough 路径</li>
+     *     <li>JiuwenCoreAgentExtHandler.streamQuery 执行前调用 RemoteA2aToolInstaller.install()
+     *         自动注入 RemoteA2aInterruptRail（工具名 = remote-agents[].name）</li>
+     *     <li>LLM 调用 versatile-agent 工具时触发 _interrupt_kind=a2a_delegate 中断</li>
+     *     <li>A2AEnabledServeOrchestrator + RemoteInvocationBatchCoordinator 接管远端调用</li>
+     *     <li>续传基于 taskStore.get(shadow:agentId:parentTaskId)，parentTaskId 兜底用 conversationId，
+     *         前端用相同 contextId + 递增 messageId 即可恢复中断的 a2a_delegate 调用</li>
      * </ul>
-     * 对齐 Python agent.py L894-917: 首轮 vs 续轮判断。
      *
      * @param request the request value
      * @param observer the observer value
@@ -724,35 +694,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
     @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
         String conversationId = request.getConversationId();
-        Map<String, Object> input = extractRequestInputs(request);
-
-        Map<String, Object> continuationInputs = extractVersatileContinuationInputs(input);
-        if (!continuationInputs.isEmpty()) {
-            LOGGER.info("EdpaExtHandler streamQuery: versatile continuation conversationId={}", conversationId);
-            QueryStreamObserver formatAdapter = new QueryChunkFormatAdapter(observer, conversationId);
-
-            VersatileInterruptRail rail = new VersatileInterruptRail(edpConfig != null ? edpConfig : new EdpConfig(),
-                    springBootConfig != null ? springBootConfig.getVersatile() : null, new ToolDataChannel(),
-                    versatilePassthroughBuffer);
-            Map<String, Object> result = rail.invokeWithInputs(continuationInputs, conversationId);
-
-            if (isTerminalVersatileResult(result)) {
-                String interruptId = versatilePassthroughBuffer.pollInterruptId(conversationId).orElse(null);
-                Object resumeInput = versatileToolResumeInput(conversationId, interruptId, result);
-                ServeRequest resumeRequest = buildResumeRequest(request, resumeInput, conversationId);
-                drainPassthroughNodesToObserver(conversationId, formatAdapter);
-                super.streamQuery(resumeRequest, formatAdapter);
-                return;
-            }
-
-            drainPassthroughNodesToObserver(conversationId, formatAdapter);
-            pushVersatileContinuationResult(conversationId, result, observer);
-            return;
-        }
-
-        // 对齐 Python agent.py L906: 确认是首轮请求：conv_id=..., is_resume=false
-        LOGGER.info("EdpaExtHandler streamQuery: conversationId={}, isVersatileContinuation=false", conversationId);
-        streamQueryWithPassthrough(request, observer, conversationId);
+        LOGGER.info("EdpaExtHandler streamQuery: conversationId={}", conversationId);
+        super.streamQuery(request, observer);
     }
 
     /**
@@ -765,256 +708,6 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
     @Override
     public QueryResponse query(ServeRequest request) {
         return super.query(request);
-    }
-
-    // ===== Versatile passthrough 间插方法 =====
-
-    private void drainPassthroughNodesToObserver(String conversationId, QueryStreamObserver observer) {
-        Optional<String> node = versatilePassthroughBuffer.poll(conversationId);
-        while (node.isPresent()) {
-            if (observer.isCancelled()) {
-                return;
-            }
-            String displayText = extractPassthroughDisplayText(node.get()).orElse(null);
-            if (displayText != null && !displayText.isBlank()) {
-                observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, displayText));
-            }
-            node = versatilePassthroughBuffer.poll(conversationId);
-        }
-    }
-
-    private Optional<String> extractPassthroughDisplayText(String nodeJson) {
-        Map<String, Object> eventMap = parseJsonObject(nodeJson);
-        if (eventMap == null || eventMap.isEmpty() || ParseErrorTracker.hasParseError(eventMap)) {
-            return Optional.empty();
-        }
-
-        String type = String.valueOf(eventMap.getOrDefault("type", ""));
-        if ("answer".equals(type)) {
-            LOGGER.debug("extractPassthroughDisplayText: discarded answer node");
-            return Optional.empty();
-        }
-
-        Map<String, Object> innerData = resolveInnerData(eventMap);
-        if (innerData == null || innerData.isEmpty()) {
-            return Optional.empty();
-        }
-
-        String nodeType = String.valueOf(innerData.getOrDefault("node_type", ""));
-        switch (nodeType) {
-            case "LLM" :
-            case "Custom" :
-                String text = String.valueOf(innerData.getOrDefault("text", ""));
-                return text != null && !text.isBlank() ? Optional.of(text) : Optional.empty();
-            case "Start" :
-            case "End" :
-            case "QA" :
-                LOGGER.debug("extractPassthroughDisplayText: discarded {} node", nodeType);
-                return Optional.empty();
-            default :
-                LOGGER.debug("extractPassthroughDisplayText: discarded unknown node_type={}", nodeType);
-                return Optional.empty();
-        }
-    }
-
-    private Map<String, Object> resolveInnerData(Map<String, Object> eventMap) {
-        Object dataObj = eventMap.get("data");
-        if (dataObj instanceof Map<?, ?> dataMap) {
-            return normalizeStringMap(dataMap);
-        }
-        if (dataObj instanceof String dataStr && !dataStr.isBlank()) {
-            Map<String, Object> parsed = parseJsonObject(dataStr);
-            if (parsed != null && !parsed.isEmpty()) {
-                return parsed;
-            }
-        }
-        return eventMap;
-    }
-
-    // ===== Versatile 续流辅助方法 =====
-
-    private Map<String, Object> extractRequestInputs(ServeRequest request) {
-        Map<String, Object> input = new LinkedHashMap<>();
-        String query = request.lastUserQuery();
-        if (query != null && !query.isBlank()) {
-            input.put("query", query);
-        }
-        if (request.getConversationId() != null) {
-            input.put("conversation_id", request.getConversationId());
-        }
-        if (request.getMetadata() != null) {
-            input.put("metadata", request.getMetadata());
-        }
-        if (request.getMessages() != null) {
-            input.put("messages", request.getMessages());
-        }
-        return input;
-    }
-
-    /**
-     * 从 passthroughNodes 提取 Versatile 续流输入。
-     * 数据流：Versatile 返回 passthroughNodes → 提取 query + body → 构建续流请求。
-     * 对齐 Python agent.py L1028-1046: pending_delegate 解析 + INTERRUPTION_KEY 检测。
-     *
-     * @param input 原始 input Map（包含 passthroughNodes）
-     * @return 续流请求 Map，解析失败返回 null
-     *
-     */
-
-    private Map<String, Object> extractVersatileContinuationInputs(Map<String, Object> input) {
-        Object queryObj = input.get("query");
-        if (!(queryObj instanceof String text) || text.isBlank()) {
-            LOGGER.warn("Versatile continuation input query is blank or non-string");
-            return Collections.emptyMap();
-        }
-        Map<String, Object> body = parseJsonObject(text);
-        if (body.isEmpty() || ParseErrorTracker.hasParseError(body)) {
-            LOGGER.warn("Versatile continuation input JSON parse failed or empty");
-            return Collections.emptyMap();
-        }
-        Object inputs = body.get("inputs");
-        Map<String, Object> normalized = inputs instanceof Map<?, ?> inputsMap
-                ? normalizeStringMap(inputsMap)
-                : normalizeStringMap(body);
-        return isVersatileMenuConfirmation(normalized) ? normalized : Collections.emptyMap();
-    }
-
-    private Map<String, Object> parseJsonObject(String text) {
-        try {
-            return OBJECT_MAPPER.readValue(text, new TypeReference<LinkedHashMap<String, Object>>() {
-            });
-        } catch (JsonProcessingException e) {
-            ParseErrorTracker.recordFailure("EdpaExtHandler.parseJsonObject", e.getMessage());
-            return ParseErrorTracker.degradedMap(e.getMessage());
-        }
-    }
-
-    private Map<String, Object> normalizeStringMap(Map<?, ?> map) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        map.forEach((key, value) -> result.put(String.valueOf(key), value));
-        return result;
-    }
-
-    private boolean isVersatileMenuConfirmation(Map<String, Object> inputs) {
-        return inputs != null && !inputs.isEmpty() && inputs.containsKey("menu_type")
-                && inputs.containsKey("menu_confirm");
-    }
-
-    private boolean isTerminalVersatileResult(Map<String, Object> result) {
-        return result != null && "completed".equals(String.valueOf(result.get("status")));
-    }
-
-    private Object versatileToolResumeInput(String conversationId, String interruptId, Map<String, Object> result) {
-        InteractiveInput interactiveInput = new InteractiveInput();
-        interactiveInput.update(interruptId != null && !interruptId.isBlank() ? interruptId : "call_versatile",
-                toJson(result));
-        Map<String, Object> input = new LinkedHashMap<>();
-        input.put("query", interactiveInput);
-        input.put("conversation_id", conversationId);
-        return input;
-    }
-
-    private ServeRequest buildResumeRequest(ServeRequest original, Object resumeInput, String conversationId) {
-        return original;
-    }
-
-    /**
-     * 推送 Versatile 续流结果到客户端。
-     * 根据 result.status 走不同分支：
-     * <ul>
-     *     <li>input_required → 中断态，发送 INTERRUPT chunk</li>
-     *     <li>failed → 失败态，发送 ERROR chunk</li>
-     *     <li>其他（completed）→ 正常输出 chunk</li>
-     * </ul>
-     * 对齐 Python agent.py L894: Cascade 续轮结果推送。
-     *
-     * @param conversationId the conversationId value
-     * @param result the result value
-     * @param observer the observer value
-     */
-
-    private void pushVersatileContinuationResult(String conversationId, Map<String, Object> result,
-            QueryStreamObserver observer) {
-        String status = result != null ? String.valueOf(result.get("status")) : "failed";
-        LOGGER.info("[EDPA-DIAG] Versatile continuation result: conversationId={}, status={}", conversationId, status);
-        if ("input_required".equals(status)) {
-            observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT, result));
-            observer.onComplete();
-            return;
-        }
-        if ("failed".equals(status)) {
-            LOGGER.warn("[EDPA-DIAG] Versatile continuation failed: conversationId={}", conversationId);
-            Map<String, Object> errorData = new LinkedHashMap<>();
-            errorData.put("type", "error");
-            errorData.put("error", "VERSATILE_CONTINUATION_FAILED");
-            errorData.put("content", result != null ? result.get("content") : "adapter call failed");
-            observer.onNext(new QueryChunk(QueryChunk.TYPE_ERROR, errorData));
-            observer.onError(new IllegalStateException("Versatile continuation failed"));
-            return;
-        }
-        Object content = result != null ? result.get("content") : "";
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("role", "assistant");
-        data.put("content", content == null ? "" : String.valueOf(content));
-        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, data));
-        observer.onComplete();
-    }
-
-    private void streamQueryWithPassthrough(ServeRequest request, QueryStreamObserver observer, String conversationId) {
-        QueryStreamObserver formatAdapter = new QueryChunkFormatAdapter(observer, conversationId);
-
-        QueryStreamObserver wrappedObserver = new QueryStreamObserver() {
-            @Override
-            /**
-             * On next.
-             *
-             * @param chunk the chunk value
-             */
-            public void onNext(QueryChunk chunk) {
-                drainPassthroughNodesToObserver(conversationId, formatAdapter);
-                formatAdapter.onNext(chunk);
-            }
-
-            @Override
-            /**
-             * On error.
-             *
-             * @param error the error value
-             */
-            public void onError(Throwable error) {
-                formatAdapter.onError(error);
-            }
-
-            @Override
-            /**
-             * On complete.
-             */
-            public void onComplete() {
-                drainPassthroughNodesToObserver(conversationId, formatAdapter);
-                formatAdapter.onComplete();
-            }
-
-            @Override
-            /**
-             * Checks whether cancelled.
-             *
-             * @return the result
-             */
-            public boolean isCancelled() {
-                return formatAdapter.isCancelled();
-            }
-        };
-
-        super.streamQuery(request, wrappedObserver);
-        versatilePassthroughBuffer.clear(conversationId);
-    }
-
-    private String toJson(Object value) {
-        try {
-            return OBJECT_MAPPER.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize object", e);
-        }
     }
 
     // ===== 静态辅助方法 =====

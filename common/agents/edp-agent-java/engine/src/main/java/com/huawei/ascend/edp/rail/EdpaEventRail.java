@@ -815,7 +815,7 @@ public class EdpaEventRail extends DeepAgentRail {
         // UC-C02: interrupt_source 开关控制追问内容来源
         // 对齐 Python ask_user_rail.py L172-180: 未命中脚本时放行 LLM question
         String interruptSource = scripts != null ? scripts.getInterruptSource() : "script";
-        // 优先级1: VersatileInterruptRail 从 passthrough_nodes 提取的 message（如"请确认转账信息"）
+        // 优先级1: VersatileDelegateRail 构造的 a2a_delegate 中断的 message（远端 versatile-agent 期望的 JSON）
         String versatileMessage = "";
         if (tie.getRequest() != null && tie.getRequest().getMessage() != null) {
             versatileMessage = tie.getRequest().getMessage();

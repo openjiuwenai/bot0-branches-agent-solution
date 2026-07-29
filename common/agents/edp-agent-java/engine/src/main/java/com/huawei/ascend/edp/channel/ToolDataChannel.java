@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 内层存储改为单字段 dict 结构。
  * 禁止单独维护 key 索引列表。
  *
- * <p>数据流：VersatileInterruptRail → ToolDataChannel.store(result_key) →
+ * <p>数据流：VersatileDelegateRail → ToolDataChannel.store(result_key) →
  * McpInterruptRail → ToolDataChannel.hit(input_key)。
  * 对齐 Python tool_data_channel.py: 工具间数据透传通道。</p>
  *
