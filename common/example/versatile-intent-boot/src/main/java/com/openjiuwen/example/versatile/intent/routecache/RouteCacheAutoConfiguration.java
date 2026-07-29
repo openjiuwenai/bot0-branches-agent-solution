@@ -58,6 +58,9 @@ public class RouteCacheAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(AgentHandler.class)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            prefix = "openjiuwen.example.intent-llm", name = "enabled",
+            havingValue = "false", matchIfMissing = true)
     public AgentHandler cachedVersatileAgentHandler(VersatileProperties versatileProperties,
                                                     RouteCache routeCache,
                                                     RouteCacheProperties routeCacheProperties) {
