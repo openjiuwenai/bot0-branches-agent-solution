@@ -6,9 +6,18 @@ package com.openjiuwen.example.versatile.intent.reclassify;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.openjiuwen.example.versatile.intent.routecache.RouteCache;
+import com.openjiuwen.service.app.controller.a2a.A2aPushNotificationCallbackHandler;
+import com.openjiuwen.service.app.orchestrator.A2AEnabledServeOrchestrator;
+import com.openjiuwen.service.spec.dto.QueryResponse;
+import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.spi.ServeOrchestrator;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -49,5 +58,41 @@ class ReclassifyOrchestratorPostProcessorTest {
         assertThatNullPointerException()
                 .isThrownBy(() -> new ReclassifyOrchestratorPostProcessor(properties, null))
                 .withMessageContaining("routeCacheProvider");
+    }
+
+    @Test
+    void wrappingPreservesSecondaryInterfaceAndDelegates() {
+        ReclassifyProperties properties = new ReclassifyProperties();
+        properties.setEnabled(false);
+        ReclassifyOrchestratorPostProcessor processor =
+                new ReclassifyOrchestratorPostProcessor(properties, emptyProvider());
+
+        A2AEnabledServeOrchestrator wrapped = mock(A2AEnabledServeOrchestrator.class);
+        QueryResponse stubbedResponse = mock(QueryResponse.class);
+        when(wrapped.query(any())).thenReturn(stubbedResponse);
+        when(wrapped.onAccepted(any())).thenReturn(true);
+
+        Object proxy = processor.postProcessAfterInitialization(wrapped, "a2aEnabledServeOrchestrator");
+
+        // Issue #50 regression: the wrapped bean must still expose the
+        // A2aPushNotificationCallbackHandler interface, otherwise injection
+        // points expecting that type fail with BeanNotOfRequiredTypeException.
+        assertThat(proxy).isNotSameAs(wrapped);
+
+        // ServeOrchestrator calls are routed through the reclassify decorator.
+        if (proxy instanceof ServeOrchestrator serveProxy) {
+            assertThat(serveProxy.query(mock(ServeRequest.class))).isSameAs(stubbedResponse);
+            verify(wrapped).query(any());
+        } else {
+            fail("proxy must implement ServeOrchestrator");
+        }
+
+        // Secondary-interface calls fall through to the wrapped bean unchanged.
+        if (proxy instanceof A2aPushNotificationCallbackHandler callbackProxy) {
+            assertThat(callbackProxy.onAccepted(null)).isTrue();
+            verify(wrapped).onAccepted(any());
+        } else {
+            fail("proxy must implement A2aPushNotificationCallbackHandler");
+        }
     }
 }

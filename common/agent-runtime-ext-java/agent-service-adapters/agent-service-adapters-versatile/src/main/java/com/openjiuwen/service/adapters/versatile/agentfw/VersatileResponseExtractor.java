@@ -127,9 +127,8 @@ final class VersatileResponseExtractor {
         if (isCompleted) {
             return List.of();
         }
-        return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
-                "{\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\","
-                        + "\"reason\":\"no End/exception event\"}"));
+        return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
+                Map.of("message", "Remote agent requires input")));
     }
 
     private static boolean hasText(String value) {

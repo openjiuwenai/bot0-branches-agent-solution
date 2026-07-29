@@ -32,6 +32,7 @@ import java.util.StringJoiner;
 final class VersatileHttpClient {
     private static final Logger log = LoggerFactory.getLogger(VersatileHttpClient.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String MASKED_VALUE = "***masked***";
 
     private final VersatileProperties properties;
     private final HttpClient httpClient;
@@ -47,10 +48,12 @@ final class VersatileHttpClient {
             throws IOException, InterruptedException {
         String body = OBJECT_MAPPER.writeValueAsString(request.body());
         String url = withQueryParams(request.url(), request.params());
+        boolean maskSensitive = properties.isLogMaskSensitive();
+        String logUrl = maskSensitive ? request.url() : url;
         Duration timeout = properties.getTimeout() != null ? properties.getTimeout() : Duration.ofSeconds(600);
         log.info("Posting Versatile request url={} headers={} params={} body_keys={}",
-                url, request.headers().size(), request.params().size(), request.body().keySet());
-        log.debug("Versatile outbound request={}", logRequest(request, url));
+                logUrl, request.headers().size(), request.params().size(), request.body().keySet());
+        log.debug("Versatile outbound request={}", logRequest(request, logUrl, maskSensitive));
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -63,7 +66,7 @@ final class VersatileHttpClient {
 
         HttpResponse<InputStream> response = httpClient.send(
                 builder.build(), HttpResponse.BodyHandlers.ofInputStream());
-        log.info("Received Versatile response status={} url={}", response.statusCode(), url);
+        log.info("Received Versatile response status={} url={}", response.statusCode(), logUrl);
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             String responseBody;
             try (InputStream responseBodyStream = response.body()) {
@@ -86,12 +89,23 @@ final class VersatileHttpClient {
     }
 
     static Map<String, Object> logRequest(VersatileRequestExtractor.RemoteRequest request, String url) {
+        return logRequest(request, url, false);
+    }
+
+    static Map<String, Object> logRequest(
+            VersatileRequestExtractor.RemoteRequest request, String url, boolean maskSensitive) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("url", url);
-        data.put("headers", request.headers());
-        data.put("params", request.params());
-        data.put("body", request.body());
+        data.put("headers", maskSensitive ? maskValues(request.headers()) : request.headers());
+        data.put("params", maskSensitive ? maskValues(request.params()) : request.params());
+        data.put("body", maskSensitive ? maskValues(request.body()) : request.body());
         return data;
+    }
+
+    private static Map<String, Object> maskValues(Map<?, ?> source) {
+        Map<String, Object> masked = new LinkedHashMap<>();
+        source.forEach((key, value) -> masked.put(String.valueOf(key), MASKED_VALUE));
+        return masked;
     }
 
     private String withQueryParams(String url, Map<String, String> params) {

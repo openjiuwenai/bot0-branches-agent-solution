@@ -1,4 +1,4 @@
-"""EDPAgentOptimizer — edp_agent 场景 optimizer 子类。
+"""SkillOptOptimizer — edp_agent 场景 optimizer 子类。
 
 覆写 _rollout，通过 Adapter sidecar 执行对话并收集轨迹。
 """
@@ -47,7 +47,7 @@ def _require_messages(trace_data: dict[str, Any]) -> list[dict[str, Any]]:
     return messages
 
 
-class EDPAgentOptimizer(DictSkillDocumentOptimizer):
+class SkillOptOptimizer(DictSkillDocumentOptimizer):
     """edp_agent 场景 optimizer。
 
     通过 Adapter sidecar 执行对话（invoke），收集清洗后的轨迹（get_traces），
@@ -834,3 +834,8 @@ class EDPAgentOptimizer(DictSkillDocumentOptimizer):
         )
 
         return evaluated_list, trajectories
+
+
+# Backward-compatible alias for legacy dotted paths:
+# `optimizer.EDPAgentOptimizer` (used by older scenario.yaml / external callers).
+EDPAgentOptimizer = SkillOptOptimizer

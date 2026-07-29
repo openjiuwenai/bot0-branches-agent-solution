@@ -73,7 +73,7 @@ class GatewayProtocolAdapterTest {
         var command = adapter.toA2ARequest(contextWith("agent-1", "conv-1", body));
 
         assertThat(command.stream()).isTrue();
-        assertThat(command.conversationId()).isEqualTo("conv-1");
+        assertThat(command.params().message().contextId()).isEqualTo("conv-1");
         Message message = command.params().message();
         assertThat(message.role()).isEqualTo(Message.Role.ROLE_USER);
         assertThat(message.parts().get(0))
@@ -130,7 +130,7 @@ class GatewayProtocolAdapterTest {
         var command = adapter.toA2ARequest(contextWith("agent-1", "conv-from-path", body));
 
         assertThat(command.stream()).isTrue();
-        assertThat(command.conversationId()).isEqualTo("conv-from-path");
+        assertThat(command.params().message().contextId()).isEqualTo("conv-from-path");
         assertThat(command.params().message().parts().get(0))
                 .isInstanceOfSatisfying(TextPart.class,
                         part -> assertThat(part.text()).isEqualTo("hi"));

@@ -148,6 +148,8 @@ def test_generate_llm_failure_raises_evaluation_error(monkeypatch, tmp_path: Pat
     def _boom(*a: object, **k: object) -> None:
         raise RuntimeError("LLM down")
 
-    monkeypatch.setattr(gmod, "_run_coroutine", _boom)
+    # generator 内部 _llm_with_retry 直接调用 self._model.invoke(...)
+    # 当前实现没有 _run_coroutine，因此用 invoke 注入失败来触发重试与 EvaluationError。
+    monkeypatch.setattr(g._model, "invoke", _boom, raising=False)
     with pytest.raises(EvaluationError):
         g.generate(EBInput(trajectory=_traj("请发邮件"), gu_slice=GUSlice()))
