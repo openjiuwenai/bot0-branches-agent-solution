@@ -25,6 +25,7 @@
         <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
         <wiremock.version>3.9.1</wiremock.version>
+        <agent-core-java.version>0.1.13</agent-core-java.version>
     </properties>
 
     <dependencies>
@@ -37,6 +38,11 @@
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-adapters-versatile</artifactId>
             <version>${agent-runtime-ext-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-core-java</artifactId>
+            <version>${agent-core-java.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -54,6 +60,19 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- agent-core-java pulls milvus-sdk-java -> protobuf-java:3.25.5, which downgrades
+                 the a2a SDK's protobuf-java-util:4.33.2 (needs RuntimeVersion$RuntimeDomain).
+                 Align protobuf-java with protobuf-java-util so a2a gRPC classes initialize. -->
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>4.33.2</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>
