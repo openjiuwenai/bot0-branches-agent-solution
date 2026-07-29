@@ -178,7 +178,7 @@ ul.compact li strong { color: var(--ink); }
   <div class="callout warn">三容器 sandbox 实验说明见：
   <code>common/agent-evolve/evoagent-adapter/deployment/sandbox-experiment/README.md</code>
   （含网络、skill_backend、sandbox_id 解析策略）。EvoAgent 容器运维见：
-  <code>common/agent-evolve/evoagent/deployment/operations-guide.md</code>。</div>
+  <code>common/agent-evolve/evoagent/docs/02-部署指南/evoagent部署指南.md</code>。</div>
 </section>
 
 <section id="env">
@@ -253,7 +253,7 @@ cp config/.env.example config/.env
     <li>配置 EvoAgent <code>deployment/config/.env</code>（至少 Adapter URL + LLM）。</li>
     <li>启动 <strong>EvoAgent</strong>：
       <ul class="compact">
-        <li>Docker：在 <code>evoagent/deployment</code> 按 <code>operations-guide.md</code> 执行 <code>build.sh</code> / <code>run.sh</code>；或</li>
+        <li>Docker：在 <code>evoagent/deployment</code> 按 <code>evoagent部署指南.md</code> 执行 <code>build.sh</code> / <code>run.sh</code>；或</li>
         <li>本地：安装依赖后 <code>uvicorn evo_agent.api.app:app --host 0.0.0.0 --port 8000</code>（须能加载上述 env）。</li>
       </ul>
     </li>
@@ -519,7 +519,7 @@ curl -s http://&lt;evoagent-host&gt;:8000/optimize/&lt;job_id&gt;</pre>
   <h2>11. 相关仓库文档（均可在 clone 后直接打开）</h2>
   <table>
     <tr><th>文档</th><th>路径</th></tr>
-    <tr><td>EvoAgent 部署运维</td><td><code>common/agent-evolve/evoagent/deployment/operations-guide.md</code></td></tr>
+    <tr><td>EvoAgent 部署运维</td><td><code>common/agent-evolve/evoagent/docs/02-部署指南/evoagent部署指南.md</code></td></tr>
     <tr><td>EvoAgent 环境变量模板</td><td><code>common/agent-evolve/evoagent/deployment/config/.env.example</code></td></tr>
     <tr><td>TF-GRPO 场景说明</td><td><code>common/agent-evolve/evoagent/scenarios/tf_grpo/README.md</code></td></tr>
     <tr><td>Adapter 三容器 sandbox 实验</td><td><code>common/agent-evolve/evoagent-adapter/deployment/sandbox-experiment/README.md</code></td></tr>
