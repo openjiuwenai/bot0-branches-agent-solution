@@ -173,7 +173,7 @@ cd common/agent-evolve/evoagent/deployment
 
 # 推荐：PyPI 拉 openjiuwen wheel
 HOME=/home/evolution/build \
-EVOAGENT_SOLUTION_REPO=https://gitcode.com/AE-TEAM/agent-solution.git \
+EVOAGENT_SOLUTION_REPO=https://gitcode.com/openJiuwen/agent-solution.git \
 EVOAGENT_SOLUTION_BRANCH=common \
 EVOAGENT_IMAGE_TAG=evoagent:latest \
 ./build.sh --local
@@ -366,7 +366,7 @@ curl -X POST http://localhost:8000/optimize/job_xxx/cancel
 cd common/agent-evolve/evoagent/deployment
 ./build.sh --local
 ./export-bundle.sh evoagent:latest
-# → ../evoagent-offline-YYYYMMDD.tar.gz
+# → ../evoagent-offline-YYYYMMDD.zip
 
 # Adapter
 cd common/agent-evolve/evoagent-adapter/deployment
@@ -378,9 +378,10 @@ cd common/agent-evolve/evoagent-adapter/deployment
 
 ```bash
 # EvoAgent
-tar xzf evoagent-offline-YYYYMMDD.tar.gz
+unzip evoagent-offline-YYYYMMDD.zip
 cd evoagent-offline-YYYYMMDD
-./import-bundle.sh evoagent.latest.YYYYMMDD.tar
+ls *.tar                                    # 查看镜像 tar 文件名
+./import-bundle.sh <镜像tar文件>
 cp config/.env.example config/.env && vim config/.env   # 按 §5.2 填
 ./run.sh
 
