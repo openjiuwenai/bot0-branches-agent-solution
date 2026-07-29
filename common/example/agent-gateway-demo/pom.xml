@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  agent-gateway-bus-launcher — deployment launcher for the FEAT-012 BUS path.
+  agent-gateway-demo — the FEAT-011/012 gateway example module.
+
+  Two roles in one directory:
+   * BUS launcher artifact — this Maven module builds the fat-jar that puts agent-bus-sdk on the
+     runtime classpath (so the FEAT-013 caller-role + reliability autoconfigs activate:
+     requestProducer / responseConsumer / forwardingOutbox) and runs the formal
+     com.openjiuwen.gateway.GatewayApplication in bus mode (application-bus.yml, the
+     spring.profiles.active=bus profile). No Java of its own — a pure build-packaging unit.
+   * smoke scripts — sibling feat-011-direct/ + feat-012-bus/ + validate.sh + the DIRECT
+     application-example.yml (NOT in src/, not packaged) drive a running gateway via curl.
 
   The formal agent-gateway module compiles against agent-bus-spi ONLY (agent-bus-sdk is a
   forbidden_dependencies by design — module-metadata.yaml; the BUS path uses the SPI + SDK at
-  deploy time). This launcher puts agent-bus-sdk on the runtime classpath so the FEAT-013
-  caller-role + reliability autoconfigs activate (requestProducer / responseConsumer /
-  forwardingOutbox), and runs the formal com.openjiuwen.gateway.GatewayApplication in bus mode
-  (application-bus.yml, the spring.profiles.active=bus profile). No Java of its own — it is a pure
-  build-packaging unit (a fat-jar assembling the gateway + SDK + bus config).
+  deploy time). This module is where the SDK lands at deploy time so the gateway stays
+  DIRECT-capable / broker-free on its own fat-jar.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -23,11 +29,11 @@
   </parent>
 
   <groupId>com.openjiuwen</groupId>
-  <artifactId>agent-gateway-bus-launcher</artifactId>
+  <artifactId>agent-gateway-demo</artifactId>
   <version>0.1.0</version>
   <packaging>jar</packaging>
-  <name>agent-gateway-bus-launcher</name>
-  <description>Deployment launcher: puts agent-bus-sdk on the agent-gateway runtime classpath so the FEAT-012 BUS path (caller role + reliability outbox + response consumer) activates. Runs the formal GatewayApplication in bus mode.</description>
+  <name>agent-gateway-demo</name>
+  <description>Gateway example module: the FEAT-012 BUS launcher fat-jar (agent-bus-sdk on the runtime classpath → caller role + reliability outbox + response consumer) running the formal GatewayApplication in bus mode, plus DIRECT/BUS curl smoke scripts (feat-011-direct / feat-012-bus / validate.sh).</description>
 
   <properties>
     <java.version>21</java.version>
@@ -55,7 +61,7 @@
   </dependencies>
 
   <build>
-    <finalName>agent-gateway-bus-${project.version}</finalName>
+    <finalName>agent-gateway-demo-${project.version}</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
