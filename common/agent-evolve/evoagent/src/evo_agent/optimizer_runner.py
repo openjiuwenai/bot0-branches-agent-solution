@@ -473,7 +473,10 @@ async def run_optimization(
     # 同 kind 二次优化若复用同一目录，旧 epoch_N/eval_results.json 残留污染新报告，
     # 且 baseline 失败时旧 managed_doc_before.md 残留误导（违反 F8 AC）；嵌套 run_id 隔离。
     if is_managed_doc and canonical_id is not None:
-        run_artifact_dir = config.artifact_dir / canonical_id / run_id
+        # canonical_id 形如 `managed_doc:{kind}`；其中 `:` 在 Windows 下会导致无效目录名。
+        # 这里仅用于文件落盘分目录，operators key / skill_names 等逻辑仍保留原 canonical_id。
+        safe_canonical_id = canonical_id.replace(":", "_")
+        run_artifact_dir = config.artifact_dir / safe_canonical_id / run_id
     else:
         run_artifact_dir = config.artifact_dir / run_id
 

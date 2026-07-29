@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="运行 skill 文档优化")
     parser.add_argument(
         "--scenario",
-        default="edp_agent",
+        default="skillopt",
         help="场景名称（对应 examples/scenarios/<name>/scenario.yaml）",
     )
     parser.add_argument(

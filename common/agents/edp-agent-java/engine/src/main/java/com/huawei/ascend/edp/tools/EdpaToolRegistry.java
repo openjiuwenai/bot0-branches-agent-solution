@@ -44,8 +44,11 @@ import java.util.function.Function;
  */
 
 public final class EdpaToolRegistry {
-    private static final Map<String, Function<EdpConfig, Tool>> BUILTIN_TOOLS = Map.of(EdpaBusinessTools.TOOL_CALL_MCP,
-            cfg -> CallMcpTool.build(), EdpaBusinessTools.TOOL_CALL_VERSATILE, cfg -> CallVersatileTool.build(),
+    // call_versatile 保留：携带 query_intent 等业务参数，由 VersatileDelegateRail 拦截后
+    // 转换为 a2a_delegate 中断（agentName=versatile-agent），交由框架 A2AEnabledServeOrchestrator 接管。
+    private static final Map<String, Function<EdpConfig, Tool>> BUILTIN_TOOLS = Map.of(
+            EdpaBusinessTools.TOOL_CALL_MCP, cfg -> CallMcpTool.build(),
+            EdpaBusinessTools.TOOL_CALL_VERSATILE, cfg -> CallVersatileTool.build(),
             EdpaBusinessTools.TOOL_ENHANCED_ASK_USER, cfg -> EnhancedAskUserTool.build(),
             EdpaBusinessTools.TOOL_CANCEL_TASK, cfg -> CancelTaskTool.build());
 

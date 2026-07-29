@@ -33,19 +33,19 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void emitsErrorWhenStreamEndsBeforeEndSignal() {
+    void emitsInterruptWhenStreamEndsWithoutEndNode() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor(
                 props("AnswerNode"), resolver(props("AnswerNode")));
 
         List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine("data: {\"event\":\"message\"}"));
+        chunks.addAll(extractor.consumeLine("data: {\"event\":\"end\",\"data\":{}}"));
         chunks.addAll(extractor.finish());
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ERROR);
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_INTERRUPT);
         assertThat(chunks.get(0).getData()).isEqualTo("{\"event\":\"message\"}");
-        assertThat(String.valueOf(chunks.get(1).getData()))
-                .contains("\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\"")
-                .contains("\"reason\":\"no End/exception event\"");
+        assertThat(chunks.get(1).getData()).isEqualTo("{\"event\":\"end\",\"data\":{}}");
+        assertThat(chunks.get(2).getData()).isEqualTo(Map.of("message", "Remote agent requires input"));
     }
 
     @Tag("smoke")
@@ -67,7 +67,7 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void emitsErrorWhenResultNodeArrivesWithoutEndSignal() {
+    void emitsInterruptWhenResultNodeArrivesWithoutEndNode() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor(
                 props("AnswerNode"), resolver(props("AnswerNode")));
 
@@ -77,10 +77,8 @@ class VersatileResponseExtractorTest {
         List<QueryChunk> chunks = extractor.finish();
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_ERROR);
-        assertThat(String.valueOf(chunks.get(0).getData()))
-                .contains("\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\"")
-                .contains("\"reason\":\"no End/exception event\"");
+                .containsExactly(QueryChunk.TYPE_INTERRUPT);
+        assertThat(chunks.get(0).getData()).isEqualTo(Map.of("message", "Remote agent requires input"));
     }
 
     @Test
