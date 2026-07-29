@@ -20,6 +20,7 @@
 - [服务器部署（fat jar）](#服务器部署fat-jar)
 - [本地开发（mvn spring-boot:run）](#本地开发mvn-spring-bootrun)
 - [端到端调用](#端到端调用)
+- [Custom REST 入口](#custom-rest-入口)
 - [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密)
 - [MCP 服务器接入](#mcp-服务器接入)
 - [配置字段速查](#配置字段速查)
@@ -74,7 +75,9 @@ multi-deep-research-demo/
 ├── agent-deep-research/                ← root DeepAgent（SDK + Spring Boot runtime 同模块，按包名分层）
 │   ├── src/main/java/com/openjiuwen/example/deepresearch/
 │   │   ├── DeepResearchProperties.java     配置 POJO + system prompt
-│   │   ├── DeepResearchAgentFactory.java   props + sandboxOpsSupplier → DeepAgent
+│   │   ├── DeepResearchAgentFactory.java   props + sandboxOpsSupplier (+ kvStore) → DeepAgent；走 HarnessFactory.createDeepAgent（SPI 化）
+│   │   ├── customrest/
+│   │   │   └── DeepResearchCustomRestAdapter.java   CustomRestProtocolAdapter SPI 实现（FEAT-022）；REST body ↔ A2A Task 双向映射
 │   │   ├── rail/
 │   │   │   ├── AutoPersistMemoryRail.java  extends MemoryRail；afterInvoke 落盘
 │   │   │   ├── SandboxRail.java            render_comparison_table / render_chart
@@ -137,8 +140,10 @@ multi-deep-research-demo/
 | 长期记忆读写 | MemoryRail tools | core-java 提供 `write_memory` / `read_memory` / `memory_search` / `memory_get` / `edit_memory` | LLM 显式调用或 rail 自动写 |
 | **确定性落盘** | Rail 生命周期钩子 | `AutoPersistMemoryRail.afterInvoke` | 每次 `result_type=="answer"` 自动写 `memory/answer-*.md` + `reports/answer-*.md` |
 | 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application-redis-checkpointer.yml`，支持 standalone / cluster） | 同 `conversationId` 请求走同一状态 |
+| **任务 Todolist 持久化**（FEAT-003 v3 MUST #2） | `TaskPlanningRail` + `KvTodoStorage` / `FileTodoStorage` | core-java `TaskPlanningRail` 装配 todo_* tool；solution 侧 `DeepResearchRuntimeApplication` 通过 `ObjectProvider<RuntimeRedisClient>` 桥接为 core `BaseKVStore` | `redis-checkpointer` profile 激活 + `RuntimeRedisClient` bean 就位 → `todoStorageType="kv"`（同一 runtime redis 连接池，§5.1.4）；否则 kvStore==null → `todoStorageType="file"`（workspace `.todo/` 目录） |
 | 中文字体 | 沙箱代码内置 | `SandboxRail` Python 头部 | Noto Sans CJK SC → Microsoft YaHei → DejaVu Sans 降级 |
 | Wire 层 metadata 观测 | Servlet filter | `agent-verify` 的 `A2aMetadataLoggingFilter`（`OncePerRequestFilter` + `ContentCachingRequestWrapper`） | 每次 `/a2a` POST 打一行 `[A2A wire] verify-agent received: {method, contextId, params.metadata, params.message.metadata}`，用于 FEAT-004 §Metadata 转发验收 |
+| **Custom REST 入口**（FEAT-022，opt-in） | Runtime 协议桥接 | `agent-service-app-custom-rest` 提供 `CustomRestProtocolAdapter` SPI + 自动装配；demo 侧 [`DeepResearchCustomRestAdapter`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/customrest/DeepResearchCustomRestAdapter.java) 把 REST body ↔ A2A Task 双向映射 | opt-in（`openjiuwen.service.custom-rest.query-path` 非空即启用）；复用同一 A2A Task 管线，非流返回统一 envelope，流式走 SSE。见 [Custom REST 入口](#custom-rest-入口) |
 | **SkillHub skill 注入**（可选） | Runtime 中间件 | `agent-service-adapters-agentcore-ext` 的 `SkillHubManager` + `SkillHubInstaller` | opt-in（`SKILLHUB_ENABLED=true`）；启动阶段从 SkillHub 拉 skill 注册为工具。凭据支持**明文透传**与 **AES-256-GCM 加密**两种模式，见 [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密) |
 | **SkillHub SKILL.md 读取**（FEAT-005 L3 收尾） | Harness tool | `SkillReadFileRail` → `readFile(file_path)`，路径必须落在 workspace 或运维显式声明的白名单根目录下 | LLM 按 core-java `SkillUtil.getSkillPrompt` 硬编码指令主动调用；工具名固定 camelCase `readFile`（core-java `warnMissingSkillReadFileTool` 用同一字符串按名查找）；64 KB 上限 + UTF-8 强制解码，成功日志只打 basename + 字节数 |
 | **Skill 观察日志**（FEAT-005 层 2 观察） | 纯观察 Rail | `SkillObservationRail`（priority 90，业务 rail 之后跑） | 每次请求打 `skills_available count=N names=[...]`；名称变化时补 `skills_delta`；每次 tool 决策打 `tool_call iter=N tool=X hit_skill=<bool>`；请求收尾打 `invoke_summary tool_calls=N skill_hits=M` |
@@ -307,6 +312,8 @@ Runtime 侧的 Redis 中间件（`agent-runtime-java` 提供的 `RuntimeRedisCli
 - **cluster**：`REDIS_TYPE=cluster` + `REDIS_NODES=host1:port1,host2:port2,...`（`database` 字段在集群下会被自动忽略并打出 `databaseIgnored=` 警告）
 
 两个 runtime 都激活 `redis-checkpointer` profile 即可共享同一 Redis 后端；库层代码只通过 SPI 访问 Redis，切换 standalone/cluster 不涉及任何 solution 侧代码改动。
+
+**FEAT-003 v3 Todolist**：`redis-checkpointer` profile 激活后，runtime 侧 `RuntimeRedisClient` bean 也会自动被 [DeepResearchRuntimeApplication.deepResearchHandler](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/DeepResearchRuntimeApplication.java) 拾取，通过 `KVStoreFactory.create("redis", Map.of("redis_client", <runtimeClient>))` 桥接为 core `BaseKVStore` 传给 `HarnessFactory.createDeepAgent`，`TaskPlanningRail` 的 todo_* tool 会自动落到同一 Redis 连接池（key 形如 `<sessionId>:todo`）。未启 profile 时 kvStore==null，Todolist 回退 workspace 下的 `.todo/` 文件后端；行为对旧基线向后兼容。
 
 ```bash
 # 两个 runtime 共享同一个 Redis 实例；env 一次设置，进程分别激活 profile
@@ -518,6 +525,95 @@ $reader.ReadToEnd()
 用**同一个 `contextId`** 追问 "我上次问了你什么？"，DeepAgent 应直接从 checkpointer 恢复的消息历史复述，**不走** `memory_search`（对应 system prompt 的 recall routing (a) 分支）。
 
 换新 `contextId` 后追问 "上周关于大模型定价的调研，结论是什么？"，DeepAgent 应先调 `memory_search` 命中 `AutoPersistMemoryRail` 落盘的 `answer-YYYY-MM-DD-<slug>.md`，再复述（对应 recall routing (b) 分支）。
+
+---
+
+## Custom REST 入口
+
+除了 A2A JSON-RPC 入口，deep-research 还挂了一条 **REST 风格**的调用入口（FEAT-022），实现同一 A2A Task 管线的 REST 语义封装。当接入方走的是「传统 REST + path 里的资源 ID」而不是 A2A JSON-RPC 时，用这条。
+
+### 何时用
+
+- 接入方是**其他团队的编排层 / 网关**，只讲 REST（path variable + JSON body），不接受把 `method`、`params.message.parts[0].text` 塞到 JSON-RPC 里
+- 需要在 URL 里显式携带 `conversation_id`（多轮上下文键）和 `agent_id` 等资源标识
+- 不启用时（`openjiuwen.service.custom-rest.query-path` 未配置），Spring 跳过 `CustomRestProtocolAdapter` 装配，没有额外端点
+
+底层复用 **同一条 A2A Task 管线**：`CustomRestProtocolAdapter` 只做 REST body ↔ A2A `TaskParams` 的双向映射，checkpointer / SkillHub / MemoryRail 等所有能力对 REST 透明生效。
+
+### 端点路径模板
+
+来自 `agent-deep-research/src/main/resources/application.yml`：
+
+```yaml
+openjiuwen:
+  service:
+    custom-rest:
+      query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
+```
+
+- `{project_id}` / `{agent_id}` / `{conversation_id}` 三个 path variable 会被 runtime 提到 `context.pathVariables()`
+- **`conversation_id` 直接作为 A2A `contextId`**（2026-07-28 修复：早前有一版会在 conversation_id 后追加/替换 taskId 派生词，现在改成原样透传；跨轮复述、checkpointer key 命名都以这个为准）
+- 其他两个变量目前只挂到 metadata 里，不参与路由
+
+### 请求 body
+
+```json
+{
+  "input": "对比 DeepSeek V4 Pro 和 GLM-5.2 的 API 定价……",
+  "stream": true
+}
+```
+
+- `input`：调研主题字符串（必填），会被塞到 A2A `params.message.parts[0].text`
+- `stream`：`true` 走 SSE（默认），`false` 走一次性 JSON
+
+body 里其他字段 + query string + headers + path variables 会打包进 `params.metadata`，供 rail 侧观测。
+
+### 响应 envelope
+
+所有响应（含流式每条 event）共享同一骨架，见 [`DeepResearchCustomRestAdapter#envelope`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/customrest/DeepResearchCustomRestAdapter.java#L99-L110)：
+
+```json
+{
+  "success": true,
+  "agent_id": "deep_research",
+  "conversation_id": "conv-001",
+  "output": "",
+  "error": "",
+  "execution_time": "",
+  "custom_rsp_data": { }
+}
+```
+
+- `success`：`true` = 上游 A2A Task 成功，`false` = 上游返回错误
+- `error`：**普通字符串**（失败时是 `CustomRestError#message()`，成功时空串）；不是嵌套 code/message 对象
+- `output` / `execution_time`：demo 版本预留字段，目前**恒为空串**（真正的答复/事件全部走 `custom_rsp_data`）
+- `custom_rsp_data`：
+  - 非流：直接是 A2A `Task` 对象序列化
+  - 流式：`{"type": "chunk|final|interrupt|error", "data": <A2A StreamingEventKind>}`
+
+**流式（`stream=true`，SSE）**：每条 event 都走同一 envelope，SSE 的 `event:` 字段区分类型：
+
+| event | 含义 |
+|---|---|
+| `chunk` | 未终态的 A2A stream 事件；`custom_rsp_data.data` 是原始 `StreamingEventKind` |
+| `final` | A2A 状态到达 `isFinal()`；`custom_rsp_data.data` 是终态事件 |
+| `interrupt` | A2A 状态是 `isInterrupted()`（AskUser 之类的中断） |
+| `error` | 失败终态；`success=false`，`error` 是错误消息文本 |
+
+### curl 示例
+
+```bash
+curl -N -X POST "http://127.0.0.1:18090/v1/proj-x/agents/deep_research/conversations/conv-001" \
+  -H 'Content-Type: application/json; charset=utf-8' \
+  -H 'Accept: text/event-stream' \
+  -d '{
+    "input": "对比 DeepSeek V4 Pro 和 GLM-5.2 的 API 定价，统一换算为 USD/百万 token。",
+    "stream": true
+  }'
+```
+
+同一个 `conversations/{conversation_id}` 再发一次，checkpointer 会拿到上一轮的历史（recall routing (a) 分支），跟 A2A 入口下同 `contextId` 追问的语义完全一致。
 
 ---
 
@@ -822,6 +918,7 @@ agent-mcp-docserver/
 | `openjiuwen.service.a2a.remote-agents[0].url` | `${SEARCH_AGENT_URL}` | 远端搜索 sub-agent HTTP 地址 |
 | `openjiuwen.service.a2a.remote-agents[1].name` | `verify-agent` | 远端 verify sub-agent 名（COMPARISON 模式强制调 1 次） |
 | `openjiuwen.service.a2a.remote-agents[1].url` | `${VERIFY_AGENT_URL:http://127.0.0.1:18093}` | 远端 verify sub-agent HTTP 地址 |
+| `openjiuwen.service.custom-rest.query-path` | `/v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}` | Custom REST 入口路径模板（FEAT-022，opt-in）；`{conversation_id}` 直接作为 A2A `contextId`。字段为空即禁用。见 [Custom REST 入口](#custom-rest-入口) |
 | `openjiuwen.service.external.sandbox.enabled` | `${SANDBOX_ENABLED:false}` | 是否启用沙箱工具（关掉则 `SandboxRail` / `UrlVerifyRail` 不注册） |
 | `openjiuwen.service.external.sandbox.servers[0].service-url` | `${SANDBOX_URL:http://127.0.0.1:8321}` | jiuwenbox 服务地址 |
 | `openjiuwen.service.external.sandbox.servers[0].idle-ttl-seconds` | `300` | 沙箱空闲回收秒数 |

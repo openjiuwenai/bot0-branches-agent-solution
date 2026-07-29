@@ -18,6 +18,9 @@ import com.openjiuwen.service.adapters.agentcore.external.AgentCoreSandboxClient
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+import com.openjiuwen.service.spec.spi.RuntimeRedisClient;
+import com.openjiuwen.spi.store.BaseKVStore;
+import com.openjiuwen.spi.store.KVStoreFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -30,6 +33,7 @@ import org.springframework.context.annotation.Bean;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -93,11 +97,21 @@ public class DeepResearchRuntimeApplication {
 
     /**
      * Builds the deep-research {@link AgentHandler} SPI bean wired against
-     * runtime-provided middleware, remote A2A installer, and (optional) sandbox factory.
+     * runtime-provided middleware, remote A2A installer, (optional) sandbox factory,
+     * and (optional) runtime-managed Redis client.
+     *
+     * <p>When a {@link RuntimeRedisClient} bean is present (activated by the
+     * {@code redis-checkpointer} profile via runtime-java's {@code RedisMiddlewareAutoConfiguration}),
+     * a {@link BaseKVStore} is built on top of it and passed through so the harness
+     * task-scoped Todolist writes go through Redis via the same connection pool that
+     * checkpointer / A2A TaskStore use (§5.1.4). Otherwise the Todolist falls back to
+     * its default file-backed storage.
      *
      * @param properties runtime configuration bound from {@code application.yml}
      * @param registrar optional middleware registrar provider
      * @param sandboxFactoryProvider optional sandbox client factory provider
+     * @param runtimeRedisClientProvider optional runtime-managed Redis client provider;
+     *     when present the Todolist is routed to Redis via {@code KVStoreFactory}
      * @param skillHubLocalDir SkillHub middleware's local staging dir (may be blank when the
      *     middleware is off); when non-blank it is merged into the demo's extra readable roots
      *     so the {@code readFile} rail can serve SKILL.md content
@@ -107,6 +121,7 @@ public class DeepResearchRuntimeApplication {
     AgentHandler deepResearchHandler(DeepResearchSpringProperties properties,
                                      ObjectProvider<MiddlewareAdapterRegistrar> registrar,
                                      ObjectProvider<AgentCoreSandboxClientFactory> sandboxFactoryProvider,
+                                     ObjectProvider<RuntimeRedisClient> runtimeRedisClientProvider,
                                      @Value("${openjiuwen.service.middleware.skillhub.local-dir:}")
                                      String skillHubLocalDir) {
         AgentCoreSandboxClientFactory sandboxFactory = sandboxFactoryProvider.getIfAvailable();
@@ -114,9 +129,29 @@ public class DeepResearchRuntimeApplication {
                 ? () -> resolveSandboxOps(sandboxFactory).orElse(null)
                 : null;
         mergeSkillHubLocalDirIntoReadableRoots(properties, skillHubLocalDir);
+        BaseKVStore kvStore = buildRuntimeBackedKvStore(runtimeRedisClientProvider.getIfAvailable())
+                .orElse(null);
         return new JiuwenCoreAgentExtHandler(
-                DeepResearchAgentFactory.build(properties, sandboxOpsSupplier),
+                DeepResearchAgentFactory.build(properties, sandboxOpsSupplier, kvStore),
                 registrar.getIfAvailable());
+    }
+
+    /**
+     * Bridges the runtime-managed Redis client into a core-side {@link BaseKVStore} via
+     * {@code KVStoreFactory}. The {@code "redis_client"} conf key is the contract exposed by
+     * {@code RedisKVStoreProvider}: when present, the provider skips its own reflection-based
+     * Jedis construction and adopts the supplied client wholesale. Duck typing at the
+     * {@code RedisStore} layer matches {@link RuntimeRedisClient}'s Jedis-compatible method
+     * names, so no wrapper is needed.
+     *
+     * @param runtimeRedisClient the runtime-managed client bean; {@code null} means Redis is off
+     * @return a Redis-backed {@link BaseKVStore}, or {@link Optional#empty()} when no client is available
+     */
+    private static Optional<BaseKVStore> buildRuntimeBackedKvStore(RuntimeRedisClient runtimeRedisClient) {
+        if (runtimeRedisClient == null) {
+            return Optional.empty();
+        }
+        return Optional.of(KVStoreFactory.create("redis", Map.of("redis_client", runtimeRedisClient)));
     }
 
     /**
