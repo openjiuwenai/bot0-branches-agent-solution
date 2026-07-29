@@ -1,8 +1,6 @@
 # EvoAgent 部署指南（Quick Install）
 
-本指南以**最精简方式**完成 EvoAgent + EvoAgentAdapter 双容器部署。
-
-> Quick Install 使用 `--local` 模式：从 PyPI 下载 `openjiuwen` wheel，跳过 agent-core 源码构建，命令最少、依赖最轻。
+本指南支持用户快速完成 EvoAgent + EvoAgentAdapter 双容器部署。
 
 ---
 
@@ -14,7 +12,7 @@
 | Docker | 20.10+（含 buildkit） |
 | Python | 3.12+（仅构建时用，运行在容器内） |
 | 网络 | 可访问 `gitcode.com` + pip 镜像源 |
-| 外部依赖 | LLM API（OpenAI 兼容，如阿里云 DashScope） |
+| 外部依赖 | LLM 访问配置，兼容业界主流 MaaS 提供商以及私有化MaaS平台：<br>· OpenAI（默认 `https://api.openai.com/v1`，`gpt-4o`）<br>· 阿里云 DashScope（`https://dashscope.aliyuncs.com/compatible-mode/v1`，如 `qwen3.7-max`/`qwen3.7-plus`）<br>· 智谱 GLM（如 `glm-5.2`）<br>· SiliconFlow（`https://api.siliconflow.cn/v1`，如 `Qwen/Qwen3.5-9B`）<br>· 私有化MaaS平台<br> |
 
 **架构（两容器，Adapter 必须先启动）：**
 
@@ -59,6 +57,10 @@ cp config/.env.example config/.env
 
 ### 2.2 编辑 Adapter 的 `config/.env`（必填项，其余保持默认）
 
+> **编辑时机**：在 §2.1 执行 `cp .env.example .env` 生成配置文件之后、§2.3 创建主机目录之前完成编辑。首次部署、迁移宿主机、变更业务 Agent 路径，或后续启用 Otel 轨迹采集等可选能力时，均需回到此步修改并重建容器。
+>
+> **为什么要编辑**：Adapter 容器以只读/读写方式挂载业务 Agent 在宿主机上的日志、skills、managed-doc 等目录，是 EvoAgent 读取业务轨迹、回写优化产物的桥梁。模板中的 `HOST_*` 默认路径仅是示例，随实际部署环境而异——若不按本机实际情况修改，将导致容器挂载失败、读不到业务日志，或优化后的 skills/AgentRule 无法落到业务 Agent 的真实加载路径。
+
 文件：`evoagent-adapter/deployment/config/.env`
 
 ```bash
@@ -68,6 +70,7 @@ HOST_AGENTS_ROOT=/opt/agents/runtime    # managed-doc父目录（读写挂载）
 HOST_OUTPUT_DIR=/opt/agent-adapter/data # Adapter输出目录（offsets/归档）
 HOST_CONFIG_FILE=/opt/agent-adapter/agent_adapter_config.yaml  # 配置文件持久化路径
 ```
+> 如需要使用adapter 额外的能力（如使用Otel进行轨迹收集），请参考《数据回流-轨迹采集使用指南》，打开相应的配置开关。
 
 ### 2.3 创建 Adapter 依赖的主机目录
 
@@ -86,14 +89,18 @@ mkdir -p "$(dirname /opt/agent-adapter/agent_adapter_config.yaml)"  # HOST_CONFI
 
 ### 2.4 编辑 EvoAgent 的 `config/.env`（必填项，其余保持默认）
 
+> **编辑时机**：在 §2.1 生成 `.env` 之后、§3 EvoAgent 构建启动之前完成；要求 Adapter（§2.2/§2.3）已先就绪。后续若更换 MaaS 提供商/模型、轮换 API Key、迁移 Adapter 宿主 IP，均需回到此步修改并重启 EvoAgent 容器。
+>
+> **为什么要编辑**：EvoAgent 容器启动时通过 `.env` 获取两项关键外部依赖——`EVO_ADAPTER_URL` 指向已部署的 Adapter，是读写 skills/managed-doc、回传轨迹的唯一通道；`EVO_LLM_*` / `EVO_OPTIMIZER_MODEL` 决定优化器与评估器调用哪个 LLM。模板中的占位符（`<宿主IP>`、`{{sk-xxxxxx}}`、`{{各MaaS平台访问URL}}`、`{{模型名称}}`）必须替换为本环境实际值，否则容器启动健康检查会因 Adapter 不可达或 LLM 鉴权失败而报错（见 §6）。
+
 文件：`evoagent/deployment/config/.env`
 
 ```bash
 EVO_ADAPTER_URL=http://<宿主IP>:8900    # 指向Adapter容器（勿用localhost）
 
-EVO_LLM_API_KEY=sk-xxxxxx
-EVO_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-EVO_OPTIMIZER_MODEL=qwen3.7-max
+EVO_LLM_API_KEY={{sk-xxxxxx}}
+EVO_LLM_BASE_URL={{各MaaS平台访问URL}}
+EVO_OPTIMIZER_MODEL={{模型名称}}
 ```
 
 ## 3. 构建并启动（先 Adapter 后 EvoAgent）
