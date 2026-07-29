@@ -14,6 +14,8 @@ openjiuwen:
       local-mapping:
         # L1 forwards to L2 (intent_L1_hotel → agent_card_L2_hotel)
         agent_card_L2_hotel: http://localhost:8082
+        # L2_flight forwards to downstream (flight)
+        agent_card_L2_flight: http://localhost:8086
         # layer1.yml maps intent_L1_flight to two candidates (_a/_b) for the
         # PRIORITY strategy demo; both route to L2 under mock-versatile.
         agent_card_L2_flight_a: http://localhost:8082
