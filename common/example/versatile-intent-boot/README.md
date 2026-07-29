@@ -59,9 +59,53 @@ Local HTTP 模式直接 POST 到目标 runtime 的 `/a2a/{agentId}`，适合本�
 
 ## 前置依赖
 
-- Java 17+（运行时需 17+，构建用 Maven）
-- `com.openjiuwen:agent-service-app` 0.1.0
-- `com.openjiuwen:agent-service-adapters-versatile` 0.1.0
+- Java 17+（运行时需 17+，构建用 Maven 3.9+）
+- `com.openjiuwen:agent-service-app` 0.1.0 — 来自外部 [agent-runtime-java](https://gitcode.com/openJiuwen/agent-runtime-java) 仓库
+- `com.openjiuwen:agent-service-adapters-versatile` 0.1.0 — 来自本仓 `common/agent-runtime-ext-java` 模块
+
+> ⚠️ 这两个制品**必须先 `mvn install` 到本地 Maven 仓库（`~/.m2/repository`）**，否则本模块会编译失败（报大量 `cannot find symbol`，如 `RemoteAgentCaller`、`RemoteAgentCardResolver`、`A2aPushNotificationCallback` 等）。联调脚本只负责打包本模块自身 jar，**不会**构建这些前置依赖。
+
+### 首次构建（全新环境）
+
+本模块依赖内部制品，**必须**按以下顺序构建并安装到本地仓库（`agent-runtime-java` 依赖 `agent-core-java`，故 core 必须先于 runtime 安装）。完整顺序见仓库根 [CONTRIBUTING.md](../../../../CONTRIBUTING.md)「Development Setup」。
+
+1. **构建外部 agent 执行核心**（提供 `agent-core-java`，被 runtime 依赖）：
+
+   ```bash
+   cd <agent-core-java>             # openJiuwen/agent-core-java 仓库
+   mvn clean install -DskipTests
+   ```
+
+2. **构建外部 runtime 核心**（提供 `agent-service-app`、`agent-runtime-java`）：
+
+   ```bash
+   cd <agent-runtime-java>          # openJiuwen/agent-runtime-java 仓库
+   mvn clean install -DskipTests
+   ```
+
+3. **构建本仓 extension 模块**（提供 `agent-service-adapters-versatile`）：
+
+   ```bash
+   mvn -f common/agent-core-ext-java/pom.xml clean install
+   mvn -f common/agents/pom.xml clean install
+   mvn -f common/agent-runtime-ext-java/pom.xml clean install
+   ```
+
+   > 注意：`agent-runtime-ext-java` 聚合构建时，`agent-service-adapters-agentcore-ext` 等无关子模块可能编译失败，**只要 `agent-service-adapters-versatile` 构建成功即可**，本模块所需依赖不受影响。
+
+4. 验证依赖已安装：
+
+   ```bash
+   ls ~/.m2/repository/com/openjiuwen/agent-service-app/0.1.0/agent-service-app-0.1.0.jar
+   ls ~/.m2/repository/com/openjiuwen/agent-service-adapters-versatile/0.1.0/agent-service-adapters-versatile-0.1.0.jar
+   ```
+
+   两个文件都存在即可继续后续步骤；若不存在，回到步骤 1–3 重新构建对应模块。
+
+### 后续运行
+
+- 仅修改本模块代码时，前置依赖已存在于本地仓库，可直接运行联调脚本（脚本会自动 `mvn package` 本模块）。
+- 若修改了 `agent-runtime-java`、`agent-core-java` 或本仓 extension 模块，需重新 `mvn install` 对应模块后再运行脚本。
 
 ## 本地联调脚本
 
@@ -70,10 +114,11 @@ Local HTTP 模式直接 POST 到目标 runtime 的 `/a2a/{agentId}`，适合本�
 ### 测试上手步骤
 
 1. 确认环境：Java 17+ 在 `PATH` 上（`java -version` 检查），Maven 可用。
-2. 在模块根目录执行任一脚本即可。首次运行若 `target/versatile-intent-boot-0.1.0.jar` 不存在，脚本会自动 `mvn -q package -DskipTests` 打包；已存在则直接复用。
-3. 重复运行时建议加 `SKIP_BUILD=1` 跳过打包检查，加快启动。
-4. 脚本以 `set -euo pipefail` 运行，任一断言失败即立即退出并打印失败原因与响应体；通过则结尾输出 `==> All scenarios passed.`。
-5. 可通过环境变量覆盖端口与超时：`L1_PORT` / `L2_PORT` / `DOWNSTREAM_PORT` / `GATEWAY_PORT` / `DEFAULT_WF_PORT` / `HEALTH_TIMEOUT_SECONDS`。
+2. **完成「首次构建」**：按上文「前置依赖 → 首次构建」安装 `agent-service-app` 与 `agent-service-adapters-versatile` 到本地 Maven 仓库。脚本启动时会先校验这两个制品是否存在，缺失则直接报错并给出构建指引。
+3. 在模块根目录执行任一脚本即可。脚本只负责打包本模块自身 jar：首次运行若 `target/versatile-intent-boot-0.1.0.jar` 不存在，会自动 `mvn -q package -DskipTests` 打包；已存在则直接复用。**前置依赖不在脚本构建范围内**。
+4. 重复运行时建议加 `SKIP_BUILD=1` 跳过打包检查，加快启动。
+5. 脚本以 `set -euo pipefail` 运行，任一断言失败即立即退出并打印失败原因与响应体；通过则结尾输出 `==> All scenarios passed.`。
+6. 可通过环境变量覆盖端口与超时：`L1_PORT` / `L2_PORT` / `DOWNSTREAM_PORT` / `GATEWAY_PORT` / `DEFAULT_WF_PORT` / `HEALTH_TIMEOUT_SECONDS`。
 
 ### `scripts/local-e2e.sh` — Local HTTP 模式
 
@@ -179,6 +224,8 @@ openjiuwen:
 ```
 
 ## 构建 & 测试
+
+> 首次构建前，请先按「前置依赖 → 首次构建」安装 `agent-service-app` 与 `agent-service-adapters-versatile`，否则编译会报 `cannot find symbol`。
 
 ```bash
 mvn package               # 编译 + 跑单元/集成测试
