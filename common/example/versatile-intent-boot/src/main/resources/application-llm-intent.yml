@@ -1,0 +1,14 @@
+# Profile: llm-intent
+# Activates the LLM intent-classification handler (LlmIntentAgentHandler) and
+# points it at an OpenAI-compatible endpoint. Combined with layer1/layer2 profiles.
+openjiuwen:
+  example:
+    intent-llm:
+      enabled: true
+      base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+      api-key: ${LLM_API_KEY:}
+      model: ${LLM_MODEL:gpt-4o-mini}
+      timeout: 30s
+      temperature: 0
+      max-retries: 1
+      domain: ${LLM_DOMAIN:}
