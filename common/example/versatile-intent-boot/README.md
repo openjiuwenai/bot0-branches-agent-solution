@@ -167,6 +167,8 @@ Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock
 
 新增 `llm-intent` profile（激活 `LlmIntentAgentHandler`，与 `VersatileAgentHandler` 二选一，即意图对接 SPI）与 `layer2-flight` profile（机票专属 L2，端口 8086）。断言为结构/关键字（非精确串），依赖真实 LLM 故不进 CI。
 
+> LLM 配置参考 `apiconfig.json`（智谱 GLM `glm-5.2`，OpenAI 兼容端点）。`LLM_API_KEY` 等敏感信息仅经环境变量传入，绝不提交到代码；`DEEPSEEK_*` 未设时默认与 `LLM_*` 相同。
+
 ```bash
 ./scripts/local-e2e-llm-intent.sh              # 首次运行会自动 mvn package
 SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh # 复用已有 jar
