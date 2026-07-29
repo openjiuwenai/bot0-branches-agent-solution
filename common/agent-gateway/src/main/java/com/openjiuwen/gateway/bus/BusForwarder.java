@@ -172,6 +172,7 @@ public class BusForwarder {
                 return ResponseEntity.ok().body(body);
             } else {
                 // non-terminal non-accept (e.g. STREAM_READY): keep polling
+                continue;
             }
         }
         String unknownBody = statusBody(InvocationResponseStatus.UNKNOWN, null, null);
@@ -220,14 +221,20 @@ public class BusForwarder {
         if (outcome.earlyReturnBody() != null) {
             return Optional.of(outcome.earlyReturnBody());
         }
-        return bridgeStreamToClient(ctx, response, sseBridge, g4w, correlationId, chosen, window,
-                outcome.streamReadyEvent());
+        StreamingCtx sctx = new StreamingCtx(ctx, response, sseBridge, g4w, correlationId);
+        return bridgeStreamToClient(sctx, chosen, window, outcome.streamReadyEvent());
     }
 
     /**
      * Polls the projection feed until STREAM_READY, a terminal/INPUT_REQUIRED status, timeout, or
      * the poll budget is exhausted. Folds and returns an early body for every non-STREAM_READY
      * outcome; returns the STREAM_READY event otherwise.
+     *
+     * @param ctx governance context (tenant/message for folding)
+     * @param window accept/response timeout window
+     * @param g4w G4 wiring (fold callbacks)
+     * @param correlationId correlation id to match projections
+     * @return a STREAM_READY outcome, or an early-return body outcome (already folded)
      */
     private StreamReadyOutcome pollForStreamReady(GovernanceContext ctx, WaitWindow window, G4BusWiring g4w,
                                                   String correlationId) {
@@ -260,6 +267,7 @@ public class BusForwarder {
                 return new StreamReadyOutcome(null, body);
             } else {
                 // non-terminal non-accept (e.g. other response): keep polling
+                continue;
             }
         }
         String unknownBody = statusBody(InvocationResponseStatus.UNKNOWN, null, null);
@@ -271,12 +279,18 @@ public class BusForwarder {
     /**
      * Resolves the SSE route, opens the runtime stream, and bridges frames to the client.
      *
+     * @param sctx streaming context (governance, response, SSE bridge, G4, correlation id)
+     * @param chosen chosen agent route
+     * @param window accept/response window (released after route resolve)
+     * @param streamReadyEvent the STREAM_READY projection event (carries streamRef/taskId)
      * @return empty if SSE was written; a non-empty FAILED body on any bridge failure
+     * @throws IOException if writing the SSE stream fails
      */
-    private Optional<String> bridgeStreamToClient(GovernanceContext ctx, HttpServletResponse response,
-                                                  SseBridge sseBridge, G4BusWiring g4w, String correlationId,
-                                                  AgentCardRoute chosen, WaitWindow window,
+    private Optional<String> bridgeStreamToClient(StreamingCtx sctx, AgentCardRoute chosen, WaitWindow window,
                                                   ProjectionFeed.ProjectionEvent streamReadyEvent) throws IOException {
+        GovernanceContext ctx = sctx.ctx();
+        G4BusWiring g4w = sctx.g4w();
+        String correlationId = sctx.correlationId();
         String streamRef = streamReadyEvent.streamRef();
         String taskId = streamReadyEvent.taskId() != null ? streamReadyEvent.taskId() : window.taskId();
         log.info("forwardStreaming corrId={} STREAM_READY streamRef={} taskId={}", correlationId, streamRef, taskId);
@@ -313,18 +327,25 @@ public class BusForwarder {
                 correlationId, streamFirstFrameDeadlineMillis);
         // try-with-resources closes the stream on every path (incl. timeout) to unblock the runtime.
         try (Stream<String> fr = frames) {
-            return drainStreamToClient(ctx, response, sseBridge, g4w, correlationId, taskId, fr);
+            return drainStreamToClient(sctx, taskId, fr);
         }
     }
 
     /**
      * Reads the first frame with a deadline, then commits the SSE response and drains the rest.
      *
+     * @param sctx streaming context (governance, response, SSE bridge, G4, correlation id)
+     * @param taskId task id for status bodies
+     * @param frames the runtime SSE frame stream (closed by the caller's try-with-resources)
      * @return empty if SSE was written; a non-empty FAILED body if the first-frame read fails
+     * @throws IOException if writing the SSE stream fails
      */
-    private Optional<String> drainStreamToClient(GovernanceContext ctx, HttpServletResponse response,
-                                                 SseBridge sseBridge, G4BusWiring g4w, String correlationId,
-                                                 String taskId, Stream<String> frames) throws IOException {
+    private Optional<String> drainStreamToClient(StreamingCtx sctx, String taskId, Stream<String> frames)
+            throws IOException {
+        GovernanceContext ctx = sctx.ctx();
+        HttpServletResponse response = sctx.response();
+        G4BusWiring g4w = sctx.g4w();
+        String correlationId = sctx.correlationId();
         Iterator<String> frameIterator = frames.iterator();
         String firstFrame;
         try {
@@ -349,7 +370,7 @@ public class BusForwarder {
         String replayResult = firstFrame != null ? firstFrame
                 : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
         try {
-            sseBridge.writeSse(response.getOutputStream(), frameIterator, firstFrame);
+            sctx.sseBridge().writeSse(response.getOutputStream(), frameIterator, firstFrame);
         } catch (IOException ex) {
             g4w.onAbort(ctx.tenantId(), ctx.messageId());
             throw ex;
@@ -416,5 +437,10 @@ public class BusForwarder {
 
     /** Outcome of the STREAM_READY poll: either a stream-ready event or an already-folded early body. */
     private record StreamReadyOutcome(ProjectionFeed.ProjectionEvent streamReadyEvent, String earlyReturnBody) {
+    }
+
+    /** Bundles the streaming request context carried through the bridge/drain helpers. */
+    private record StreamingCtx(GovernanceContext ctx, HttpServletResponse response, SseBridge sseBridge,
+                                G4BusWiring g4w, String correlationId) {
     }
 }

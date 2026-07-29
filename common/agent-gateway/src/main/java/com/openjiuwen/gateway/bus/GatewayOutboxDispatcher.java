@@ -114,7 +114,8 @@ public class GatewayOutboxDispatcher implements SmartLifecycle {
     public void start() {
         running = true;
         scheduler = new ScheduledThreadPoolExecutor(1, r -> {
-            Thread t = new Thread(r, "gateway-outbox-dispatcher");
+            Thread t = java.util.concurrent.Executors.defaultThreadFactory().newThread(r);
+            t.setName("gateway-outbox-dispatcher");
             t.setDaemon(true);
             t.setUncaughtExceptionHandler((thread, ex) ->
                     log.warn("outbox dispatch tick uncaught", ex));
