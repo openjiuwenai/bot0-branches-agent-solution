@@ -132,6 +132,11 @@ public class EdpaEventRail extends DeepAgentRail {
     private static final String KEY_LAST_QUERY_INTENT = "_edp_last_query_intent";
 
     /**
+     * 缓存 call_versatile 的 query_description 参数（供 afterToolCall 联合判断话术映射）。
+     */
+    private static final String KEY_LAST_QUERY_DESCRIPTION = "_edp_last_query_description";
+
+    /**
      * 标记是否需要发射 request_start（conversation_start 后）。
      */
     private static final String KEY_PENDING_REQUEST_START = "_edp_pending_request_start";
@@ -214,6 +219,13 @@ public class EdpaEventRail extends DeepAgentRail {
      */
 
     private final Map<String, Boolean> conversationClosed = new ConcurrentHashMap<>();
+
+    /**
+     * A2A 续传标记：call_versatile 的 ToolInterruptException 触发 Orchestrator A2A sync call，
+     * 框架在新 invoke 中续传 ReAct 循环。此标记用于在续传 invoke 中跳过 conversation_start/conversation_end，
+     * 避免同一用户请求内出现多对 conversation 边界。
+     */
+    private final Map<String, Boolean> a2aResuming = new ConcurrentHashMap<>();
 
     /**
      * 上一轮各 todo 的状态快照（id→status），用于检测状态转移并决定是否发射 todo_start/todo_end。
@@ -318,6 +330,16 @@ public class EdpaEventRail extends DeepAgentRail {
         // ★ 方案 B：清理非当前会话的旧 .todo 残留目录（避免文件无限堆积）
         // 在 beforeInvoke 时清理，不影响多轮会话中的文件读取（只清理别的会话目录）
         cleanupStaleTodoDirs(sid);
+
+        // A2A 续传检测：call_versatile 的 ToolInterruptException 触发 Orchestrator A2A sync call，
+        // 框架在新 invoke 中续传 ReAct 循环。跳过 conversation_start/request_start，
+        // 保持同一用户请求内的 conversation 边界不被打断。
+        if (Boolean.TRUE.equals(a2aResuming.remove(sid))) {
+            LOGGER.info("[EDPA-DIAG] beforeInvoke sid={} -> A2A resume, skip conversation_start", sid);
+            initTodoStateSilent(ctx, sid);
+            return;
+        }
+
         LOGGER.info(
                 "[EDPA-DIAG] beforeInvoke sid={}, todosAtStart={} -> emit conversation_start "
                         + "(no cross-round todolist, Rule 9)",
@@ -495,8 +517,30 @@ public class EdpaEventRail extends DeepAgentRail {
                 ? "interrupt-handled"
                 : "real-exec";
 
-        // 缓存 call_versatile/call_mcp 的 query_intent 参数（供后续 todo_modify 的 todo_start/end 使用，
-        // 对齐 Python _last_query_intent）
+        // 缓存 query_intent 和 query_description（供 afterToolCall 联合判断话术）
+        String queryIntent = cacheQueryParams(ctx, inputs, toolName);
+
+        // 解析 tool_start 话术内容
+        String toolStartContent = resolveToolStartContent(inputs, toolName, queryIntent);
+
+        LOGGER.info(
+                "[EDPA-DIAG] beforeToolCall tool={} mode={} queryIntent={} effectiveIntent={} "
+                        + "-> emit tool_start content={}",
+                toolName, mode, queryIntent, resolveEffectiveTextIntent(queryIntent,
+                        getQueryDescription(inputs)), toolStartContent);
+        toolOpen.put(sid, true);
+        emit(ctx, EdpaEventType.TOOL_START, Map.of("tool", toolName, "content", toolStartContent));
+    }
+
+    /**
+     * 缓存 call_versatile/call_mcp 的 query_intent 和 query_description 参数。
+     *
+     * @param ctx 回调上下文
+     * @param inputs 工具调用输入
+     * @param toolName 工具名称
+     * @return query_intent 值（无则返回空串）
+     */
+    private String cacheQueryParams(AgentCallbackContext ctx, ToolCallInputs inputs, String toolName) {
         String queryIntent = "";
         if (TOOL_CALL_VERSATILE.equals(toolName) || TOOL_CALL_MCP.equals(toolName)) {
             Map<String, Object> args = normalizeToolArgs(inputs.getToolArgs());
@@ -505,32 +549,48 @@ public class EdpaEventRail extends DeepAgentRail {
                 ctx.getExtra().put(KEY_LAST_QUERY_INTENT, queryIntent);
                 LOGGER.info("[EDPA-DIAG] beforeToolCall tool={} cached query_intent={}", toolName, queryIntent);
             }
+            Object qdVal = args.get("query_description");
+            if (qdVal != null && !"null".equals(String.valueOf(qdVal))) {
+                ctx.getExtra().put(KEY_LAST_QUERY_DESCRIPTION, String.valueOf(qdVal));
+            }
         }
+        return queryIntent;
+    }
 
-        // UC-A03: tool_start 话术来源对齐 Python execution_limit_rail.py L228-234
-        // 优先级: query_intent_tool_text[intent].tool_start > query_description > general_scripts.tool_start
-        Map<String, Object> argsForStart = normalizeToolArgs(inputs.getToolArgs());
-        Object qd = argsForStart.get("query_description");
-        String toolStartContent;
+    /**
+     * 获取工具参数中的 query_description 值。
+     *
+     * @param inputs 工具调用输入
+     * @return query_description 字符串值，无则返回空串
+     */
+    private String getQueryDescription(ToolCallInputs inputs) {
+        Map<String, Object> args = normalizeToolArgs(inputs.getToolArgs());
+        Object qd = args.get("query_description");
+        return qd != null ? String.valueOf(qd) : "";
+    }
 
-        // 优先1: query_intent_tool_text[intent].tool_start
-        String matched = ScriptResolver.resolveToolStartByIntent(scripts, queryIntent, toolName).orElse(null);
+    /**
+     * 解析 tool_start 话术内容。
+     * 优先级: query_intent_tool_text[effectiveIntent].tool_start > query_description > general_scripts.tool_start。
+     *
+     * @param inputs 工具调用输入
+     * @param toolName 工具名称
+     * @param queryIntent 已缓存的 query_intent
+     * @return tool_start 话术内容
+     */
+    private String resolveToolStartContent(ToolCallInputs inputs, String toolName, String queryIntent) {
+        Object qd = normalizeToolArgs(inputs.getToolArgs()).get("query_description");
+        String qdStr = qd != null ? String.valueOf(qd) : null;
+        String effectiveIntent = resolveEffectiveTextIntent(queryIntent, qdStr);
+        String matched = ScriptResolver.resolveToolStartByIntent(scripts, effectiveIntent, toolName).orElse(null);
         if (matched != null && !matched.isBlank()) {
-            toolStartContent = matched;
-        } else if (qd != null && !String.valueOf(qd).isBlank() && !"null".equals(String.valueOf(qd))) {
-            // 优先2: query_description
-            toolStartContent = String.valueOf(qd);
-        } else {
-            // 兜底: general_scripts.tool_start
-            toolStartContent = ScriptResolver.resolve(scripts, EdpaEventType.TOOL_START.wireName(),
-                    Map.of("tool_name", safe(toolName)));
+            return matched;
         }
-        LOGGER.info(
-                "[EDPA-DIAG] beforeToolCall tool={} mode={} queryIntent={} matched_script={} "
-                        + "-> emit tool_start content={}",
-                toolName, mode, queryIntent, matched, toolStartContent);
-        toolOpen.put(sid, true);
-        emit(ctx, EdpaEventType.TOOL_START, Map.of("tool", toolName, "content", toolStartContent));
+        if (qd != null && !String.valueOf(qd).isBlank() && !"null".equals(String.valueOf(qd))) {
+            return String.valueOf(qd);
+        }
+        return ScriptResolver.resolve(scripts, EdpaEventType.TOOL_START.wireName(),
+                Map.of("tool_name", safe(toolName)));
     }
 
     /**
@@ -595,9 +655,12 @@ public class EdpaEventRail extends DeepAgentRail {
         String uiNoticeEvent = uiNotice[0];
         String uiNoticeText = uiNotice[1];
 
-        // UC-A05: ui_notice > query_intent_tool_text[intent].tool_end > general_scripts.tool_end
+        // UC-A05: ui_notice > query_intent_tool_text[effectiveIntent].tool_end > general_scripts.tool_end
+        // effectiveIntent 由 query_intent + query_description 联合判断（业务变动适配）
         String qi = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_INTENT, ""));
-        String toolEndContent = resolveToolEndContent(qi, toolName, uiNoticeText);
+        String qdCached = String.valueOf(ctx.getExtra().getOrDefault(KEY_LAST_QUERY_DESCRIPTION, ""));
+        String effectiveIntent = resolveEffectiveTextIntent(qi, qdCached);
+        String toolEndContent = resolveToolEndContent(effectiveIntent, toolName, uiNoticeText);
 
         // UC-A05: ui_notice.event=="interrupt_start" 或 onToolException 已发射 interrupt_start
         // （ToolInterruptException 路径，interruptActive=true）时，不发射 tool_end
@@ -609,8 +672,9 @@ public class EdpaEventRail extends DeepAgentRail {
             payload.put("data", toolResult != null ? toolResult : "");
             payload.put("content", toolEndContent);
             LOGGER.info(
-                    "[EDPA-DIAG] afterToolCall tool={} queryIntent={} uiNoticeText={} -> emit tool_end content={}",
-                    toolName, qi, uiNoticeText != null ? "SET" : "null", toolEndContent);
+                    "[EDPA-DIAG] afterToolCall tool={} queryIntent={} effectiveIntent={} "
+                            + "uiNoticeText={} -> emit tool_end content={}",
+                    toolName, qi, effectiveIntent, uiNoticeText != null ? "SET" : "null", toolEndContent);
             emit(ctx, EdpaEventType.TOOL_END, payload);
         } else {
             LOGGER.info(
@@ -700,6 +764,30 @@ public class EdpaEventRail extends DeepAgentRail {
         // 兜底: general_scripts.tool_end
         return ScriptResolver.resolve(scripts, EdpaEventType.TOOL_END.wireName(),
                 Map.of("tool_name", safe(toolName)));
+    }
+
+    /**
+     * 根据 query_intent 和 query_description 联合判断话术匹配用的 effective intent。
+     * 业务变动：推荐理财和购买理财的首步都应显示"正在获取理财产品列表..."，
+     * 但 query_intent 仍为"理财选品购买"（Mock 路由依赖），需通过 query_description 区分。
+     *
+     * @param queryIntent 原始 query_intent 参数（如"理财选品购买"）
+     * @param queryDescription 原始 query_description 参数（如"请推荐低风险理财产品"）
+     * @return 话术映射用的 effective intent（推荐类返回"理财推荐"，购买类返回"理财选品购买"）
+     */
+    private String resolveEffectiveTextIntent(String queryIntent, String queryDescription) {
+        if (queryDescription == null || queryDescription.isBlank()) {
+            return queryIntent;
+        }
+        // 推荐类（query_description 含"推荐"）→ 用"理财推荐"话术映射
+        if (queryDescription.contains("推荐")) {
+            return "理财推荐";
+        }
+        // 实际购买类（query_description 含"购买理财产品"）→ 用"理财选品购买"话术映射
+        if (queryDescription.contains("购买理财产品")) {
+            return "理财选品购买";
+        }
+        return queryIntent;
     }
 
     private void handleAskUserResume(AgentCallbackContext ctx, String toolName, String sid) {
@@ -801,7 +889,6 @@ public class EdpaEventRail extends DeepAgentRail {
 
     private void handleToolInterrupt(AgentCallbackContext ctx, ToolInterruptException tie,
             String sid, String interruptId) {
-        interruptActive.put(sid, true);
         String toolName = "";
         String content;
         if (ctx.getInputs() instanceof ToolCallInputs inputs) {
@@ -832,17 +919,46 @@ public class EdpaEventRail extends DeepAgentRail {
             String llmQuestion = extractAskUserQuestion(ctx);
             content = llmQuestion.isBlank() ? ScriptResolver.interruptStart(scripts) : llmQuestion;
         }
-        // a2a_delegate 中断（call_versatile）不发射 interrupt_start 事件
+        // a2a_delegate 中断（call_versatile）不发射 interrupt_start 事件，也不置位 interruptActive
+        // 避免 interruptActive 泄漏导致后续 tool_end 被误跳过和孤儿 interrupt_end
+        // 但 beforeToolCall(80) 被 VersatileDelegateRail(85) 的 ToolInterruptException 跳过，
+        // tool_start 从未发射，需在此补发（含 query_intent 缓存 + toolOpen 置位 + emit TOOL_START）
         if (TOOL_CALL_VERSATILE.equals(toolName)) {
-            LOGGER.info("[EDPA-DIAG] skipping interrupt_start for a2a_delegate, tool={}", toolName);
+            handleCallVersatileInterrupt(ctx, sid, toolName);
             return;
         }
+        // 只对真正会发 interrupt_start 的工具（ask_user 等）置位 interruptActive
+        interruptActive.put(sid, true);
         LOGGER.info(
                 "[EDPA-DIAG] onToolException ToolInterruptException -> emit interrupt_start"
                         + "(tool={}, interrupt_id={}, source={})",
                 toolName, interruptId, interruptSource);
         emit(ctx, EdpaEventType.INTERRUPT_START,
                 Map.of("tool", toolName, "content", content, "interrupt_id", interruptId));
+    }
+
+    /**
+     * 处理 call_versatile 的 ToolInterruptException：补发 tool_start，标记 A2A 续传。
+     *
+     * @param ctx 回调上下文
+     * @param sid 会话 ID
+     * @param toolName 工具名称
+     */
+    private void handleCallVersatileInterrupt(AgentCallbackContext ctx, String sid, String toolName) {
+        // 标记 A2A 续传：afterInvoke 跳过 conversation_end，下次 beforeInvoke 跳过 conversation_start
+        a2aResuming.put(sid, true);
+        if (!(ctx.getInputs() instanceof ToolCallInputs inputs)) {
+            return;
+        }
+        String queryIntent = cacheQueryParams(ctx, inputs, toolName);
+        String toolStartContent = resolveToolStartContent(inputs, toolName, queryIntent);
+        String effectiveIntent = resolveEffectiveTextIntent(queryIntent, getQueryDescription(inputs));
+        toolOpen.put(sid, true);
+        LOGGER.info("[EDPA-DIAG] handleToolInterrupt call_versatile -> emit tool_start "
+                + "(query_intent={}, effectiveIntent={}, content={})", queryIntent, effectiveIntent,
+                toolStartContent);
+        emit(ctx, EdpaEventType.TOOL_START, Map.of("tool", toolName, "content", toolStartContent));
+        LOGGER.info("[EDPA-DIAG] skipping interrupt_start for a2a_delegate, tool={}", toolName);
     }
 
     private void handleGeneralToolError(AgentCallbackContext ctx, String sid, Exception exception) {
@@ -879,6 +995,19 @@ public class EdpaEventRail extends DeepAgentRail {
     @Override
     public void afterInvoke(AgentCallbackContext ctx) {
         String sid = sessionId(ctx);
+
+        // A2A 续传：call_versatile 的 ToolInterruptException 导致 invoke 结束，
+        // 但 Orchestrator 会 sync 调用远端 agent 并在新 invoke 中续传。
+        // 跳过 conversation_end/exit interrupt_start，保持同一用户请求的 conversation 边界。
+        if (Boolean.TRUE.equals(a2aResuming.getOrDefault(sid, false))) {
+            LOGGER.info("[EDPA-DIAG] afterInvoke sid={} -> A2A resume pending, skip conversation_end", sid);
+            lastTodolistFingerprint.remove(sid);
+            thinkOpen.remove(sid);
+            toolOpen.remove(sid);
+            conversationClosed.remove(sid);
+            prevTodoStatus.remove(sid);
+            return;
+        }
 
         // 出口话术：在 conversation_end 之前发射（EdpaEventRail priority=80 是唯一出口发射者）。
         // 对齐 Python agent.py 第 733-739 行：流末读 response_template → yield InterruptStartEvent。
