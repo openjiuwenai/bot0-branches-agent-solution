@@ -387,6 +387,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * todoStorageType/kvStoreConfig 配置，不再需要外部传入 RedisTodoStore。</p>
      *
      * @param config EDPAgent 合并后配置（含 scenarioHome/model/versatile/mcpsse）
+     * @param deepAgentProperties DeepAgent 标准配置属性（含 backend/model）
      * @param agentName Agent 名称（从 openjiuwen.service.a2a.agent-name 配置读取）
      * @param decoratedSandboxClient the decoratedSandboxClient value
      * @return InitResult 包含真实 agent 实例和初始化产物
@@ -413,8 +414,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         // 第八步：构造 DeepAgentConfig（使用 EdpaSpringBootConfig.ModelConfig）。
         Path skillsDir = result.getScenarioHomePath() != null ? result.getScenarioHomePath().resolve("skills") : null;
-        DeepAgentConfig deepAgentConfig = buildDeepAgentConfig(deepAgentProperties, result.getEdpConfig(), actrule, systemPrompt,
-                skillsDir);
+        DeepAgentConfig deepAgentConfig = buildDeepAgentConfig(
+                deepAgentProperties, result.getEdpConfig(), actrule, systemPrompt, skillsDir);
 
         // 第九步：通过 HarnessFactory 创建 DeepAgent。
         // 使用确定性的 agent card ID（基于 agentName），确保不同实例对同一 agent 定义
@@ -450,6 +451,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      *
      * @param result 初始化结果，承载 scenarioHomePath 与 governanceConfig
      * @param config EDPAgent 合并后配置
+     * @param deepAgentProperties DeepAgent 标准配置属性（含 backend/model）
      * @param yamlDir 框架资源目录（src/main/resources）
      */
     private static void loadGovernanceAndValidate(InitResult result, EdpaSpringBootConfig config,
@@ -812,7 +814,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
     /**
      * 构造 DeepAgentConfig（使用 EdpaSpringBootConfig.ModelConfig，Phase 2 合并版）。
      *
-     * @param config the config value
+     * @param deepAgentProperties DeepAgent 标准配置属性（含 backend/model）
      * @param edpConfig the edpConfig value
      * @param actrule the actrule value
      * @param systemPrompt the systemPrompt value
@@ -825,11 +827,44 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         EdpaSpringBootConfig.BackendConfig backend = deepAgentProperties.getBackend();
         EdpaSpringBootConfig.ModelConfig model = deepAgentProperties.getModel();
 
-        Map<String, Object> modelMap = new LinkedHashMap<>();
-        Map<String, Object> backendMap = new LinkedHashMap<>();
-
         EdpConfig.LlmSampling sampling = edpConfig != null ? edpConfig.getLlmSampling() : null;
 
+        Map<String, Object> backendMap = buildBackendMap(backend);
+        Map<String, Object> modelMap = buildModelMap(model, sampling);
+
+        if (backend == null && model == null) {
+            LOGGER.warn("[EDP-LLM-CONFIG] backend/model config is null; LLM configuration SKIPPED");
+        }
+
+        List<String> skillDirs = (skillsDir != null && Files.exists(skillsDir))
+                ? List.of(skillsDir.toString())
+                : List.of();
+
+        String skillMode = actrule != null && actrule.getSkillMode() != null ? actrule.getSkillMode() : "all";
+
+        Map<String, Object> kvStoreConfig = buildKvStoreConfig();
+        String todoStorageType = !kvStoreConfig.isEmpty() ? "kv" : "file";
+        LOGGER.info("[EDPA-DIAG] DeepAgent todoStorageType={}, kvStore={}",
+                todoStorageType, !kvStoreConfig.isEmpty() ? "redis" : "none");
+
+        return DeepAgentConfig.builder().systemPrompt(systemPrompt != null ? systemPrompt : "")
+                .maxIterations(actrule != null && actrule.getMaxSteps() != null && actrule.getMaxSteps() > 0
+                        ? actrule.getMaxSteps()
+                        : 15)
+                .enableTaskLoop(
+                        actrule != null && actrule.getEnableTaskLoop() != null ? actrule.getEnableTaskLoop() : false)
+                .enableTaskPlanning(true).skillDirectories(skillDirs).skillMode(skillMode).model(modelMap)
+                .backend(backendMap).todoStorageType(todoStorageType).kvStoreConfig(kvStoreConfig).build();
+    }
+
+    /**
+     * 构建后端配置 Map（provider/apiKey/apiBase/timeout 等）。
+     *
+     * @param backend 后端配置（可能为 null）
+     * @return 后端配置 Map，若 backend 为 null 则返回空 Map
+     */
+    private static Map<String, Object> buildBackendMap(EdpaSpringBootConfig.BackendConfig backend) {
+        Map<String, Object> backendMap = new LinkedHashMap<>();
         if (backend != null) {
             LOGGER.info(
                     "[EDP-LLM-CONFIG] applied backend config: clientProvider={}, apiBase={}, timeout={}, "
@@ -853,7 +888,19 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
                 backendMap.put("client_id", backend.getClientId());
             }
         }
+        return backendMap;
+    }
 
+    /**
+     * 构建模型配置 Map（model/thinking/temperature/top_p）。
+     *
+     * @param model 模型配置（可能为 null）
+     * @param sampling LLM 采样参数（可能为 null）
+     * @return 模型配置 Map，若 model 为 null 则返回空 Map
+     */
+    private static Map<String, Object> buildModelMap(EdpaSpringBootConfig.ModelConfig model,
+            EdpConfig.LlmSampling sampling) {
+        Map<String, Object> modelMap = new LinkedHashMap<>();
         if (model != null) {
             modelMap.put("model", model.getModel());
             modelMap.put("model_name", model.getModel());
@@ -865,33 +912,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
                 modelMap.put("top_p", sampling.getTopP());
             }
         }
-
-        // 对齐 Python agent.py L131-134: [EDP-LLM-CONFIG] model_config_obj is None; sampling override SKIPPED
-        if (backend == null && model == null) {
-            LOGGER.warn("[EDP-LLM-CONFIG] backend/model config is null; LLM configuration SKIPPED");
-        }
-
-        List<String> skillDirs = (skillsDir != null && Files.exists(skillsDir))
-                ? List.of(skillsDir.toString())
-                : List.of();
-
-        String skillMode = actrule != null && actrule.getSkillMode() != null ? actrule.getSkillMode() : "all";
-
-        // 使用 agent-core 的 KV 存储（Redis）替代自定义 RedisTodoStore。
-        // kvStoreConfig 为空时回落到默认 file 存储。
-        Map<String, Object> kvStoreConfig = buildKvStoreConfig();
-        String todoStorageType = !kvStoreConfig.isEmpty() ? "kv" : "file";
-        LOGGER.info("[EDPA-DIAG] DeepAgent todoStorageType={}, kvStore={}",
-                todoStorageType, !kvStoreConfig.isEmpty() ? "redis" : "none");
-
-        return DeepAgentConfig.builder().systemPrompt(systemPrompt != null ? systemPrompt : "")
-                .maxIterations(actrule != null && actrule.getMaxSteps() != null && actrule.getMaxSteps() > 0
-                        ? actrule.getMaxSteps()
-                        : 15)
-                .enableTaskLoop(
-                        actrule != null && actrule.getEnableTaskLoop() != null ? actrule.getEnableTaskLoop() : false)
-                .enableTaskPlanning(true).skillDirectories(skillDirs).skillMode(skillMode).model(modelMap)
-                .backend(backendMap).todoStorageType(todoStorageType).kvStoreConfig(kvStoreConfig).build();
+        return modelMap;
     }
 
     /**

@@ -36,7 +36,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "deep-agent")
 public class DeepAgentProperties {
-
     /**
      * 模型后端连接配置（服务端连接参数）。
      */

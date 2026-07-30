@@ -155,6 +155,29 @@ def normalize_balance_result(data: dict[str, Any], account_id: str) -> dict[str,
 def normalize_transfer_result(
     data: dict[str, Any], from_account: str, to_account: str, amount: Any
 ) -> dict[str, Any]:
+    # ── 防御：versatile 层失败（HTTP 超时/异常/4xx/guard 拦截）时直接返回 failed ──
+    # Java failedResult() 返回 {"source":"versatile","status":"failed","error":"..."}
+    # 字段名是 status，而非业务层的 transferStatus，不检测会被默认值 "success" 误判
+    versatile_status = str(data.get("status", "")).lower()
+    if versatile_status == "failed":
+        requested = float(to_money_decimal(amount))
+        return {
+            "status": "failed",
+            "from_account": from_account,
+            "to_account": to_account,
+            "amount": 0.0,
+            "requested_transfer_amount": requested,
+            "actual_transfer_amount": 0.0,
+            "remaining_transfer_amount": requested,
+            "transfer_satisfied": False,
+            "currency": "CNY",
+            "transaction_id": "",
+            "payer_card": "",
+            "payee_card": "",
+            "requested_transfer_amount_str": format_money_decimal(amount),
+            "transfer_amount_str": "0",
+        }
+    # ── 正常路径：从业务字段提取转账状态 ──
     status = str(data.get("transferStatus", "success")).lower()
     ok = status in {"success", "1", "true"}
     requested_transfer_amount = float(to_money_decimal(amount))

@@ -54,16 +54,6 @@ import org.springframework.context.annotation.Configuration;
 })
 class EdpConfigBindingTest {
 
-    @Configuration
-    @EnableConfigurationProperties({
-            EdpaSpringBootConfig.class,
-            DeepAgentProperties.class,
-            TodoRedisProperties.class,
-            SandboxConfig.class
-    })
-    static class TestConfig {
-    }
-
     @Autowired
     private EdpaSpringBootConfig edpaConfig;
 
@@ -75,6 +65,16 @@ class EdpConfigBindingTest {
 
     @Autowired
     private SandboxConfig sandboxConfig;
+
+    @Configuration
+    @EnableConfigurationProperties({
+            EdpaSpringBootConfig.class,
+            DeepAgentProperties.class,
+            TodoRedisProperties.class,
+            SandboxConfig.class
+    })
+    static class TestConfig {
+    }
 
     @Test
     void scenarioHome_bindsFromFlattenedPrefix() {
