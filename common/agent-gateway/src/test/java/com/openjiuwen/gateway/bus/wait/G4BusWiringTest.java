@@ -57,6 +57,15 @@ class G4BusWiringTest {
     }
 
     @Test
+    void inputRequiredComplete() {
+        // FEAT-017: the create did succeed (task accepted, waiting input) — G4 completes so a
+        // same-key retry replays INPUT_REQUIRED rather than creating a second task.
+        register();
+        wiring.onFold(InvocationResponseStatus.INPUT_REQUIRED, T, M, "ir");
+        assertThat(g4.isCompleted(T, M)).contains(true);
+    }
+
+    @Test
     void produceFailAbort() {
         register();
         wiring.onAbort(T, M);

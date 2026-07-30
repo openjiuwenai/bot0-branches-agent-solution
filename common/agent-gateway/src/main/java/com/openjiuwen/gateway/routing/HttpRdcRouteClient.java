@@ -74,7 +74,10 @@ public class HttpRdcRouteClient implements RdcRouteClient {
             for (JsonNode node : root) {
                 String handle = node.path("routeHandle").asText(null);
                 if (handle != null && !handle.isBlank()) {
-                    out.add(new AgentCardRoute(handle));
+                    // FEAT-012 BUS path needs the runtime's serviceId as the envelope targetServiceId;
+                    // DIRECT (011) never read it, so the 1-arg ctor left it null → ForwardingEnvelope NPE.
+                    String serviceId = node.path("serviceId").asText(null);
+                    out.add(new AgentCardRoute(handle, serviceId));
                 }
             }
             return out;

@@ -13,10 +13,12 @@ import com.openjiuwen.example.deepresearch.rail.SkillObservationRail;
 import com.openjiuwen.example.deepresearch.rail.SkillReadFileRail;
 import com.openjiuwen.example.deepresearch.rail.UrlVerifyRail;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
+import com.openjiuwen.harness.factory.HarnessFactory;
 import com.openjiuwen.harness.rails.MemoryRail;
 import com.openjiuwen.harness.rails.SkillUseRail;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.harness.workspace.Workspace;
+import com.openjiuwen.spi.store.BaseKVStore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,16 +48,12 @@ public final class DeepResearchAgentFactory {
      * @return the configured {@link DeepAgent}
      */
     public static DeepAgent build(DeepResearchProperties props) {
-        return build(props, null);
+        return build(props, null, null);
     }
 
     /**
      * Builds the DeepAgent, optionally wiring a {@link SandboxRail} when
      * {@code sandboxOpsSupplier} is non-null.
-     *
-     * <p>The supplier lets the runtime wrapper plug in an adapter around whatever
-     * concrete sandbox client it wires (jiuwenbox / e2b / etc.) without leaking
-     * runtime or core-java sandbox types into the library tier.
      *
      * @param props the deep-research configuration
      * @param sandboxOpsSupplier optional supplier of {@link SandboxOps}; {@code null}
@@ -64,6 +62,31 @@ public final class DeepResearchAgentFactory {
      */
     public static DeepAgent build(DeepResearchProperties props,
                                   Supplier<SandboxOps> sandboxOpsSupplier) {
+        return build(props, sandboxOpsSupplier, null);
+    }
+
+    /**
+     * Builds the DeepAgent, optionally wiring a {@link SandboxRail} when
+     * {@code sandboxOpsSupplier} is non-null, and optionally routing the harness
+     * task-scoped Todolist to a KV backend when {@code kvStore} is non-null.
+     *
+     * <p>When {@code kvStore} is supplied, {@link DeepAgentConfig#getTodoStorageType()}
+     * is forced to {@code "kv"} and the store is injected onto the {@link DeepAgent}
+     * so {@code TaskPlanningRail} picks it up as the shared KV backend for
+     * {@code KvTodoStorage} (see FEAT-003 v2 MUST #2). The wrapper module is expected
+     * to build the {@link BaseKVStore} on top of runtime's Redis client so the
+     * Todolist path reuses the runtime-managed connection pool (§5.1.4).
+     *
+     * @param props the deep-research configuration
+     * @param sandboxOpsSupplier optional supplier of {@link SandboxOps}; {@code null}
+     *     disables sandbox-backed rails
+     * @param kvStore optional shared KV backend; {@code null} keeps the default
+     *     file-backed Todolist storage
+     * @return the configured {@link DeepAgent}
+     */
+    public static DeepAgent build(DeepResearchProperties props,
+                                  Supplier<SandboxOps> sandboxOpsSupplier,
+                                  BaseKVStore kvStore) {
         props.requireConfigured();
 
         // Attach MCP servers into Runner.resourceMgr() BEFORE constructing DeepAgent —
@@ -77,12 +100,14 @@ public final class DeepResearchAgentFactory {
                 .systemPrompt(props.getSystemPrompt())
                 .maxIterations(props.getMaxIterations())
                 .enableTaskLoop(props.isEnableTaskLoop())
+                .enableTaskPlanning(true)
                 .completionTimeout((double) props.getCompletionTimeout().toSeconds())
                 .workspacePath(props.getWorkspacePath())
                 .model(props.modelConfig())
                 .backend(props.backendConfig())
                 .skillDirectories(props.getSkillDirectories())
                 .skillMode(props.getSkillMode())
+                .todoStorageType(kvStore != null ? "kv" : "file")
                 .rails(rails)
                 .build();
         Workspace workspace = Workspace.builder()
@@ -94,7 +119,10 @@ public final class DeepResearchAgentFactory {
                 .name(props.getAgentName())
                 .description(props.getAgentDescription())
                 .build();
-        DeepAgent deepAgent = new DeepAgent(card, config, workspace);
+        DeepAgent deepAgent = HarnessFactory.createDeepAgent(card, config, workspace);
+        if (kvStore != null) {
+            deepAgent.setKvStore(kvStore);
+        }
         applySysOperationId(deepAgent, props.getSysOperationId());
         return deepAgent;
     }

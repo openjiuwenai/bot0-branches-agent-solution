@@ -120,7 +120,7 @@ echo ""
 # ── 构建镜像 ─────────────────────────────────────────────────────────
 if [ "$DO_BUILD" -eq 1 ]; then
     info "构建镜像 $IMAGE ..."
-    docker build -t "$IMAGE" ..
+    docker build -t "$IMAGE" -f "$BUILD_DIR/Dockerfile" ..
     info "镜像构建完成"
 fi
 
