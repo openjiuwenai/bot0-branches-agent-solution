@@ -177,6 +177,7 @@ public final class DefaultAgentClient implements AgentClient {
                     "cannot continue input: unknown related invocation or task mapping not established yet: "
                             + request.relatedInvocationRef());
         }
+
         // feat-011 §6.9 AC-S4-4：SDK 本地预检 relatedInvocationRef 须处于 INPUT_REQUIRED 且无 client_tool；
         // 不可续接（已终态 / 正处 client_tool 待执行）→ 明确错误，不静默发续跑。
         if (relatedCall.lastState != TaskState.INPUT_REQUIRED) {
@@ -189,6 +190,7 @@ public final class DefaultAgentClient implements AgentClient {
                     "cannot continue input: related invocation is waiting for a client_tool result, "
                             + "use the SDK auto-resume path instead: " + request.relatedInvocationRef());
         }
+
         // 006 §3.4.1：建立业务可见的新 invocationRef，映射到同一 taskRef（一个 Task 可被多个 invocationRef 引用）。
         String newInvocationRef = request.invocationId();
         // 续传轮继承原轮的暴露窗口：续接的是同一个服务端 Task，授权窗口不应因换了个 invocation 而重开。
@@ -293,6 +295,7 @@ public final class DefaultAgentClient implements AgentClient {
                     "tool exposure window closed at " + state.exposureExpiresAt));
             return;
         }
+
         // 把本次 invocation 上报的 ToolView 工具名集合传入 ctx，供 ToolDispatcher 做可见性校验（007 §3.2 步骤 3）。
         java.util.Set<String> visibleNames = new java.util.HashSet<>();
         for (ToolWireSpec spec : state.clientTools) {
@@ -373,13 +376,16 @@ public final class DefaultAgentClient implements AgentClient {
         final InvocationMode mode;
         final List<ToolWireSpec> clientTools;
         final String credentialToken;
+
         /** 幂等键：进展不确定时作为恢复线索交给业务（UNKNOWN 恢复须复用同键）。 */
         final String idempotencyKey;
+
         /**
          * true 表示该 invocation 由 {@code continueInput} 新建，没有传输事件流通道，
          * 其后续事件只能由续跑响应快照驱动。
          */
         final boolean snapshotDriven;
+
         /**
          * 本次调用生效的暴露窗口截止时刻；null 表示不过期。
          *
@@ -436,6 +442,7 @@ public final class DefaultAgentClient implements AgentClient {
 
         private volatile Flow.Subscription subscription;
         private volatile TaskState lastState = TaskState.SUBMITTED;
+
         /** 进展不确定的原因；非空表示本次调用以"不确定"结算而非终态。 */
         private volatile String uncertainReason;
         private int consumedSinceRequest;
@@ -501,6 +508,7 @@ public final class DefaultAgentClient implements AgentClient {
                 if (state != null) {
                     state.taskRef = a.diagnosticTaskRef();
                 }
+
                 // 结算 accepted() future（Handle 携带诊断用 taskRef）。
                 if (!accepted.isDone()) {
                     accepted.complete(new Handle(invocationRef, conversationId, a.diagnosticTaskRef()));
@@ -627,6 +635,7 @@ public final class DefaultAgentClient implements AgentClient {
                 } else {
                     forward(new InvocationEvent.InputRequired(invocationRef, null, null));
                 }
+
                 // INPUT_REQUIRED 非终态：保持新 Call 开放，等待业务再次 continueInput 或 SDK 自动工具续跑。
                 return;
             }
@@ -640,6 +649,8 @@ public final class DefaultAgentClient implements AgentClient {
             } else if (text != null && !text.isEmpty()) {
                 // 非终态且非等待点：正文作为增量投递，状态留待后续帧推进。
                 forward(new InvocationEvent.ContentDelta(invocationRef, text));
+            } else {
+                // 其余情况（非终态且无正文）：不投递事件，由下方 finishTerminal 按状态结算。
             }
             finishTerminal(st, snap.errorCode(), snap.message());
         }
@@ -698,6 +709,7 @@ public final class DefaultAgentClient implements AgentClient {
             if (reason == null) {
                 return Optional.empty();
             }
+
             // 已有 taskRef → Task 确已创建，重发会造重复，只能查询；
             // 无 taskRef → 创建未被确认，须以同幂等键、同正文重发，由网关幂等回放取回原 Task。
             InvocationSnapshot.Recovery.Action action = (taskRef != null)

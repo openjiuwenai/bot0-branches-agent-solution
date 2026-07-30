@@ -34,7 +34,6 @@ public record InvocationSnapshot(
         String errorCode,
         String message,
         Recovery recovery) {
-
     /**
      * 无恢复线索的快照（正常路径）。
      *
@@ -85,7 +84,7 @@ public record InvocationSnapshot(
      * @param suggestedAction 建议动作
      */
     public record Recovery(String reason, String conversationId, String idempotencyKey,
-                           Action suggestedAction) {
+            Action suggestedAction) {
         /**
          * 建议调用方采取的恢复动作。
          */

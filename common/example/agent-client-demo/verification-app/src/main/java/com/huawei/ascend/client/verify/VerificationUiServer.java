@@ -122,6 +122,7 @@ public final class VerificationUiServer {
         if ("/".equals(path) || path.isEmpty()) {
             path = "/index.html";
         }
+
         // 只允许 web/ 下的相对路径，防止路径穿越
         if (path.contains("..") || !path.startsWith("/")) {
             send(ex, 400, "text/plain", "bad path");

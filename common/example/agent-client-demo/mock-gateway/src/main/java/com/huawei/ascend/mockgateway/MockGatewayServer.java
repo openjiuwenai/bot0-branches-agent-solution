@@ -152,6 +152,7 @@ public final class MockGatewayServer {
             ex.close();
             return;
         }
+
         // G1 强制鉴权（Feat-Func-011 §4.9）：每个 HTTP 请求必须携带 Authorization: Bearer <token>。
         String auth = ex.getRequestHeaders().getFirst("Authorization");
         if (auth == null || auth.isBlank()) {
@@ -227,6 +228,7 @@ public final class MockGatewayServer {
                 writeGovernanceError(ex, 400, "VALIDATION_AGENT_ID", "agentId must not be empty when present");
                 return;
             }
+
             // G4 幂等：同一 messageId 的重复创建复用既有 Task，不新建。
             if (messageId != null && messageIdToTask.containsKey(messageId)) {
                 TaskSim existing = tasks.get(messageIdToTask.get(messageId));
@@ -290,7 +292,9 @@ public final class MockGatewayServer {
             writeJson(ex, 200, rpcResult(rpcId, buildResult(existing, "task")));
         }
     }
+
     // ---------- task lifecycle ----------
+
     /**
      * 创建并初始化一个 Task 模拟。
      *
@@ -407,6 +411,7 @@ public final class MockGatewayServer {
                         // 故意重复投递一次，验证客户端去重。
                         sendFrame(os, rpcId, buildResult(task, "status-update"));
                     }
+
                     // INPUT_REQUIRED 后关闭当前 SSE 队列（Feat-Func-009 语义），等待客户端续传。
                 }
                 case COMPLETED -> {

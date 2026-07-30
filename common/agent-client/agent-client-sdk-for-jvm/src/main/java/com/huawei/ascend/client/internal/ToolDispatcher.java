@@ -105,6 +105,7 @@ final class ToolDispatcher {
                     toolCallId, "tool_not_declared",
                     "tool not in the ToolView declared for this invocation: " + call.toolName()));
         }
+
         // 007 §3.2 步骤 4：解析工具，缺失 → REJECTED(tool_not_found)。
         Optional<LocalTool.Registered> maybe = registry.find(call.toolName());
         if (maybe.isEmpty()) {
@@ -167,6 +168,7 @@ final class ToolDispatcher {
         if (timeout != null && !timeout.isZero() && !timeout.isNegative()) {
             f = f.orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS);
         }
+
         // 007 §3.2 步骤 8 + §5.3：超时 → TIMEOUT(timeout)；异常 → ERROR（渲染为 ERROR 文本，码名非闭集约束）。
         return f.handle((rec, ex) -> {
             if (ex != null) {

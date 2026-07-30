@@ -4,6 +4,7 @@
 
 package com.huawei.ascend.client.api;
 
+import java.util.Optional;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 
@@ -35,20 +36,20 @@ public interface ClassifiedError {
      * 剥掉 {@link CompletionException} / {@link ExecutionException} 包装，取出已分类异常。
      *
      * @param t 原始异常，允许为 null
-     * @return 已分类异常；无法识别时返回 null
+     * @return 已分类异常；无法识别时为空
      */
-    static ClassifiedError unwrap(Throwable t) {
+    static Optional<ClassifiedError> unwrap(Throwable t) {
         Throwable cur = t;
         while (cur != null) {
             if (cur instanceof ClassifiedError ce) {
-                return ce;
+                return Optional.of(ce);
             }
             if (!(cur instanceof CompletionException || cur instanceof ExecutionException)) {
-                return null;
+                return Optional.empty();
             }
             cur = cur.getCause();
         }
-        return null;
+        return Optional.empty();
     }
 
     /**
@@ -61,7 +62,7 @@ public interface ClassifiedError {
      * @return 稳定错误码
      */
     static String codeOf(Throwable t) {
-        ClassifiedError ce = unwrap(t);
+        ClassifiedError ce = unwrap(t).orElse(null);
         return (ce != null) ? ce.code() : ErrorCodes.NETWORK_ERROR;
     }
 
@@ -72,7 +73,7 @@ public interface ClassifiedError {
      * @return 可重试返回 true
      */
     static boolean retryableOf(Throwable t) {
-        ClassifiedError ce = unwrap(t);
+        ClassifiedError ce = unwrap(t).orElse(null);
         return (ce != null) ? ce.retryable() : ErrorCodes.isRetryable(codeOf(t));
     }
 }

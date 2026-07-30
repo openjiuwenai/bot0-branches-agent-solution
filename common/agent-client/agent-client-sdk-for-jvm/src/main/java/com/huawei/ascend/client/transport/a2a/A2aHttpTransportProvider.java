@@ -25,6 +25,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,12 +72,16 @@ public final class A2aHttpTransportProvider implements TransportProvider {
 
     /** SSE 读空闲超时：超过该时长没有任何字节到达即判为连接已失效，避免调用方永久悬挂。 */
     private static final Duration DEFAULT_SSE_IDLE_TIMEOUT = Duration.ofSeconds(120);
+
     /** 同步请求超时。 */
     private static final Duration UNARY_TIMEOUT = Duration.ofSeconds(60);
+
     /** UNKNOWN 恢复的最大重发次数（含首次恢复尝试）。耗尽后投递进展不确定，不无限重试。 */
     private static final int MAX_CREATE_RECOVERY_ATTEMPTS = 3;
+
     /** BLOCKING 模式下轮询 GetTask 的最大次数。 */
     private static final int MAX_BLOCKING_POLLS = 60;
+
     /** BLOCKING 模式下轮询间隔。 */
     private static final Duration BLOCKING_POLL_INTERVAL = Duration.ofSeconds(1);
 
@@ -261,6 +266,8 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                         } else if (f != null && f.state() != null && f.state().isTerminal()) {
                             // 快照驱动的续跑走到终态：通道再无用处，及时释放，避免 taskRef 映射堆积。
                             releaseChannel(ch);
+                        } else {
+                            // 快照驱动的续跑未到终态：保留通道，等待后续续跑推进。
                         }
                         ack.complete(snapshotFromFrame(snapshotRef, f));
                     } catch (A2aTransportException | IllegalArgumentException e) {
@@ -294,6 +301,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             if (ch.mode == InvocationMode.BLOCKING) {
                 pollUntilSettled(ch, credential, 1);
             }
+
             // ASYNC：受理即止，不轮询。
         });
     }
@@ -370,9 +378,10 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                         onCreateHttpError(ch, governanceError(resp.statusCode(), readAll(resp.body())));
                         return;
                     }
+
                     // 声明了 STREAMING 却拿到非流式响应：明确报错，不静默降级（FEAT-006 §5.1.4）。
                     // 否则读循环找不到任何 data: 行，表现为一条诡异的空流，问题被掩盖。
-                    A2aTransportException notStreaming = rejectIfNotStreaming(resp);
+                    A2aTransportException notStreaming = rejectIfNotStreaming(resp).orElse(null);
                     if (notStreaming != null) {
                         closeQuietly(resp.body());
                         failStream(ch, notStreaming);
@@ -390,17 +399,17 @@ public final class A2aHttpTransportProvider implements TransportProvider {
      * 严格要求 {@code text/event-stream} 会把本可正常工作的链路误判为故障。
      *
      * @param resp HTTP 响应
-     * @return 判为非流式时返回已分类异常；否则返回 null
+     * @return 判为非流式时返回已分类异常；否则为空
      */
-    private static A2aTransportException rejectIfNotStreaming(HttpResponse<InputStream> resp) {
+    private static Optional<A2aTransportException> rejectIfNotStreaming(HttpResponse<InputStream> resp) {
         String contentType = resp.headers().firstValue("Content-Type").orElse("");
         if (!contentType.toLowerCase(java.util.Locale.ROOT).contains("application/json")) {
-            return null;
+            return Optional.empty();
         }
-        return new A2aTransportException(
+        return Optional.of(new A2aTransportException(
                 "STREAMING was requested but the gateway answered with a non-streaming response"
                         + " (Content-Type: " + contentType + ")",
-                null, ErrorCodes.STREAMING_UNAVAILABLE, resp.statusCode(), false);
+                null, ErrorCodes.STREAMING_UNAVAILABLE, resp.statusCode(), false));
     }
 
     private void readSse(Channel ch, InputStream in) {
@@ -418,9 +427,10 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                     flushFrame(ch, data);
                 } else if (line.startsWith("data:")) {
                     data.append(line.substring(5).trim());
+                } else {
+                    // event: / id: / 注释行（":"开头）当前不参与语义。
+                    // id: 与 Last-Event-ID 的游标续传属后续版本（网关尚未下发 id 行）。
                 }
-                // event: / id: / 注释行（":"开头）当前不参与语义。
-                // id: 与 Last-Event-ID 的游标续传属后续版本（网关尚未下发 id 行）。
             }
             flushFrame(ch, data);
         } catch (IOException | IllegalStateException | NullPointerException e) {
@@ -856,6 +866,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         final String conversationId;
         final String idempotencyKey;
         final InvocationMode mode;
+
         /** 原始创建正文；UNKNOWN 恢复必须逐字节复用，否则触发网关幂等正文冲突。 */
         final String createBody;
         final String credential;
