@@ -26,6 +26,7 @@ Java 17+, Maven 3.9+. Spring Boot parent is 4.0.6.
 - `scripts/local-e2e.sh` — Local HTTP forwarding mode (`a2a-gateway.enabled=false`). Covers §6.2.1 (two-layer + downstream), §6.2.3 (interrupt), §6.2.2 (reclassify).
 - `scripts/local-e2e-a2a-gateway.sh` — A2A Gateway mode. 5 processes across 3 rounds: full chain, reclassify fallback, and direct-chain SSE passthrough; also asserts header propagation (token / B3 / X-Biz-Tag) and multi-turn route cache.
 - `scripts/local-e2e-llm-intent.sh` — LLM intent demo mode (real LLM + DeepAgent downstream). Requires API keys, runs three scenarios with multi-turn conversation and reclassification, includes mock gateway passthrough for business card routing. (真实 LLM，需 API Key，不进 CI).
+- `scripts/cli-llm-intent.py` — 纯标准库 Python CLI 客户端（参考 a2a-samples `helloworld/test_client.py`）。需进程栈已启动；`card` 获取 agent card、`scenario a|b|c|all` 重放三场景、`chat` 交互式会话（`--stream` 走 SSE）。经 `POST /v1/query` 驱动 L1，请求体与 shell 的 `send_q` 一致。
 
 Override ports/timeouts via `L1_PORT` / `L2_PORT` / `DOWNSTREAM_PORT` / `GATEWAY_PORT` / `DEFAULT_WF_PORT` / `HEALTH_TIMEOUT_SECONDS`.
 

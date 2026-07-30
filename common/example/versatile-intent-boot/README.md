@@ -178,6 +178,22 @@ Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock
 SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh # 复用已有 jar
 ```
 
+### `scripts/cli-llm-intent.py` — LLM 意图演示 CLI 客户端
+
+纯标准库 Python CLI（无需 `httpx`/`a2a-sdk`，`python3` 直接可跑），参考 a2a-samples 的 `helloworld/test_client.py` 结构：获取并展示 agent card、发送（流式/非流式）消息、重放 `local-e2e-llm-intent.sh` 的三场景、进入交互式会话。前置条件：演示进程栈已启动（gateway + L1 + L2_hotel + L2_flight + Agent B hotel/flight）；`local-e2e-llm-intent.sh` 是各 `java -jar` 启动命令的参考，但它自带场景并在退出时清理进程，故用本 CLI 驱动时需让那六个进程保持运行，再用 `card` 确认 L1 可达。
+
+```bash
+python3 scripts/cli-llm-intent.py card                                  # 展示 L1 agent card（兼作连通性自检）
+python3 scripts/cli-llm-intent.py scenario a                            # 重放场景 A
+python3 scripts/cli-llm-intent.py scenario all                          # 顺序重放 A → B → C（单 conversation_id）
+python3 scripts/cli-llm-intent.py chat                                  # 交互式会话（非流式）
+python3 scripts/cli-llm-intent.py chat --stream                         # 交互式会话（SSE 流式）
+python3 scripts/cli-llm-intent.py --base-url http://host:8081 chat      # 指向远端 L1
+# 交互中：`exit` 退出、`card` 显示 agent card、`reset` 切换新 conversation_id
+```
+
+`--conversation-id`（默认 `c-llm-demo`）、`--user-id`（默认 `u-42`）跨轮复用，与 shell 脚本的 `send_q` 请求体一致（`X-Biz-Tag: llm-demo`）。
+
 ### 选择哪个脚本
 
 | 需求 | 脚本 |
@@ -185,6 +201,7 @@ SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh # 复用已有 jar
 | 验证 Local HTTP 转发 + 中断 + 重新分类基础链路 | `local-e2e.sh` |
 | 验证 A2A Gateway 转发、header 透传、自消/重识别、多轮路由缓存、直链 SSE 透传 | `local-e2e-a2a-gateway.sh` |
 | 验证 LLM 意图驱动 + 真实 DeepAgent downstream | `local-e2e-llm-intent.sh` |
+| 用 CLI 交互式/脚本式驱动上述 LLM 演示场景 | `cli-llm-intent.py` |
 | 两者都想覆盖 | 先跑 `local-e2e.sh` 再跑 `local-e2e-a2a-gateway.sh` |
 | 全部覆盖 | 按顺序运行全部三个脚本 |
 
