@@ -4,7 +4,7 @@
 
 package com.customer.agent;
 
-import com.huawei.ascend.edp.handler.EdpaExtHandler;
+import com.openjiuwen.edp.handler.EdpaExtHandler;
 
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.foundation.tool.function.LocalFunction;
