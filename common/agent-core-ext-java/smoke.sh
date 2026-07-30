@@ -402,7 +402,6 @@ STATUS = {'PASS': f'{GREEN}PASS{RESET}', 'FAIL': f'{RED}FAIL{RESET}',
           'ERROR': f'{RED}ERROR{RESET}', 'SKIP': f'{YELLOW}SKIP{RESET}'}
 
 def extract_domain(classname):
-    """从完整类名提取领域，如 verification, replan, enforcing"""
     parts = classname.split('.')
     if len(parts) >= 2:
         return parts[-2]
@@ -411,16 +410,41 @@ def extract_domain(classname):
 def module_name(classname):
     return classname.split('.')[-1] if '.' in classname else classname
 
-# 表头
-print(f'  {"#":<4} {"领域":<16} {"模块":<42} {"耗时":<8} 结果')
-print(f'  {"-"*4:<4} {"-"*16:<16} {"-"*42:<42} {"-"*8:<8} ------')
+# 按 (领域, 模块) 聚合
+from collections import OrderedDict
+groups = OrderedDict()
+for c in data['cases']:
+    key = (extract_domain(c['class']), module_name(c['class']))
+    if key not in groups:
+        groups[key] = {'total': 0, 'pass': 0, 'fail': 0, 'error': 0, 'skip': 0, 'time': 0.0}
+    g = groups[key]
+    g['total'] += 1
+    g['time'] += float(c['time'])
+    s = c['status']
+    if s == 'PASS': g['pass'] += 1
+    elif s == 'FAIL': g['fail'] += 1
+    elif s == 'ERROR': g['error'] += 1
+    elif s == 'SKIP': g['skip'] += 1
 
-for i, c in enumerate(data['cases'], 1):
-    domain = extract_domain(c['class'])
-    mod = module_name(c['class'])
-    time_s = f"{float(c['time']):.3f}s"
-    status = STATUS.get(c['status'], c['status'])
-    print(f'  {i:<4} {domain:<16} {mod:<42} {time_s:<8} {status}')
+# 表头: 编号 | 领域 | 模块 | 用例数 | 通过 | 失败 | 跳过 | 耗时 | 结果
+HDR = f'  {"#":<3} {"领域":<16} {"模块":<40} {"用例":<5} {"通过":<5} {"失败":<5} {"跳过":<5} {"耗时":<8} 结果'
+SEP = f'  {"-"*3:<3} {"-"*16:<16} {"-"*40:<40} {"-"*5:<5} {"-"*5:<5} {"-"*5:<5} {"-"*5:<5} {"-"*8:<8} -----'
+print(HDR)
+print(SEP)
+
+for i, (key, g) in enumerate(groups.items(), 1):
+    domain, mod = key
+    fails = g['fail'] + g['error']
+    time_s = f"{g['time']:.3f}s"
+    if g['pass'] == g['total']:
+        overall = f'{GREEN}PASS{RESET}'
+    elif g['skip'] == g['total']:
+        overall = f'{YELLOW}SKIP{RESET}'
+    elif fails > 0:
+        overall = f'{RED}FAIL{RESET}'
+    else:
+        overall = f'{YELLOW}MIX{RESET}'
+    print(f'  {i:<3} {domain:<16} {mod:<40} {g["total"]:<5} {g["pass"]:<5} {fails:<5} {g["skip"]:<5} {time_s:<8} {overall}')
 
 PY
 
@@ -440,10 +464,8 @@ START_EPOCH=$(date +%s)
 MVN_EXIT_CODE=0
 
 if [[ "$SKIP_BUILD" -eq 1 ]]; then
-  echo "[smoke] 跳过构建，仅解析已有测试报告..."
   BUILD_OK=1
 else
-  echo "[smoke] 执行 mvn clean test..."
   mvn -f "$POM_FILE" clean test > /dev/null 2>&1 || MVN_EXIT_CODE=$?
 fi
 
