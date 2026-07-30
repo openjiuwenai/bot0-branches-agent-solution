@@ -48,6 +48,20 @@ class VersatileResponseExtractorTest {
         assertThat(chunks.get(2).getData()).isEqualTo(Map.of("message", "Remote agent requires input"));
     }
 
+    @Test
+    void emitsErrorWhenStreamClosesWithoutStreamEnd() {
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(
+                props("AnswerNode"), resolver(props("AnswerNode")));
+
+        List<QueryChunk> chunks = new ArrayList<>(extractor.consumeLine("data: {\"event\":\"message\"}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_ERROR);
+        assertThat(chunks.get(1).getData()).asString()
+                .contains("VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL");
+    }
+
     @Tag("smoke")
     @Test
     void extractsResultNodeAndEmitsAnswerOnEnd() {
@@ -67,7 +81,24 @@ class VersatileResponseExtractorTest {
     }
 
     @Test
-    void emitsInterruptWhenResultNodeArrivesWithoutEndNode() {
+    void emitsInterruptWhenResultNodeArrivesBeforeStreamEnd() {
+        VersatileResponseExtractor extractor = new VersatileResponseExtractor(
+                props("AnswerNode"), resolver(props("AnswerNode")));
+
+        assertThat(extractor.consumeLine("data: {\"data\":{\"node_type\":\"QA\","
+                + "\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"))
+                .isEmpty();
+        List<QueryChunk> chunks = new ArrayList<>(
+                extractor.consumeLine("data: {\"event\":\"end\",\"data\":{}}"));
+        chunks.addAll(extractor.finish());
+
+        assertThat(chunks).extracting(QueryChunk::getType)
+                .containsExactly(QueryChunk.TYPE_CHUNK, QueryChunk.TYPE_INTERRUPT);
+        assertThat(chunks.get(1).getData()).isEqualTo(Map.of("message", "Remote agent requires input"));
+    }
+
+    @Test
+    void emitsErrorWhenResultNodeArrivesWithoutStreamEnd() {
         VersatileResponseExtractor extractor = new VersatileResponseExtractor(
                 props("AnswerNode"), resolver(props("AnswerNode")));
 
@@ -77,8 +108,9 @@ class VersatileResponseExtractorTest {
         List<QueryChunk> chunks = extractor.finish();
 
         assertThat(chunks).extracting(QueryChunk::getType)
-                .containsExactly(QueryChunk.TYPE_INTERRUPT);
-        assertThat(chunks.get(0).getData()).isEqualTo(Map.of("message", "Remote agent requires input"));
+                .containsExactly(QueryChunk.TYPE_ERROR);
+        assertThat(chunks.get(0).getData()).asString()
+                .contains("VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL");
     }
 
     @Test

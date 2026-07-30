@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests Versatile agent handler request and response adaptation.
@@ -159,9 +160,10 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
-    void queryReturnsInterruptWhenResultNodeArrivesWithoutEndNode() throws Exception {
+    void queryReturnsInterruptWhenResultNodeArrivesBeforeStreamEnd() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of(
-                "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}"
+                "{\"data\":{\"node_type\":\"QA\",\"node_name\":\"AnswerNode\",\"text\":\"final\"}}",
+                "{\"event\":\"end\",\"data\":{}}"
         ));
         properties.setResultNodeName("AnswerNode");
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
@@ -177,18 +179,13 @@ class VersatileAgentHandlerTest {
     }
 
     @Test
-    void queryReturnsInterruptWhenRemoteReturnsNoEvents() throws Exception {
+    void throwsWhenRemoteReturnsNoEvents() throws Exception {
         VersatileProperties properties = propertiesWithServer(List.of());
         VersatileAgentHandler handler = new VersatileAgentHandler(properties);
 
-        QueryResponse response = handler.query(request());
-
-        assertThat(response.getConversationId()).isEqualTo("c-1");
-        assertThat(response.getResult()).isInstanceOf(Map.class);
-        Map<?, ?> result = (Map<?, ?>) response.getResult();
-        assertThat(result.get("role")).isEqualTo("assistant");
-        assertThat(result.get("content")).isEqualTo("Remote agent requires input");
-        assertThat(result.get("_interrupt")).isEqualTo(Map.of("message", "Remote agent requires input"));
+        assertThatThrownBy(() -> handler.query(request()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL");
     }
 
     @Test
