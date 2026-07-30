@@ -79,7 +79,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p><b>Env-guarded.</b> Skipped unless {@code ROCKETMQ_NAMESERVER} is set. Run against a live broker:
  * <pre>{@code
- *   ROCKETMQ_NAMESERVER=7.213.203.4:9876 ../mvnw test -Dtest=RealBrokerResponseSideIntegrationTest
+ *   ROCKETMQ_NAMESERVER=127.0.0.1:9876 ../mvnw test -Dtest=RealBrokerResponseSideIntegrationTest
  * }</pre>
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/

@@ -61,7 +61,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * <pre>{@code
  *   ROCKETMQ_NAMESERVER=<host>:9876 ../mvnw test -Dtest=RealBrokerProduceSideIntegrationTest
  * }</pre>
- * On Windows Git Bash: {@code ROCKETMQ_NAMESERVER=7.213.203.4:9876 ../mvnw test -Dtest=...}.
+ * On Windows Git Bash: {@code ROCKETMQ_NAMESERVER=127.0.0.1:9876 ../mvnw test -Dtest=...}.
  *
  * <p>Uses JUnit-native {@link EnabledIfEnvironmentVariable} (NOT Spring's
  * {@code @EnabledIfEnvironmentProperty}) because agent-bus has no {@code @SpringBootTest}

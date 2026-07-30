@@ -113,7 +113,8 @@ import javax.sql.DataSource;
  * <p><b>Env-guarded.</b> Skipped unless {@code ROCKETMQ_NAMESERVER} is set (no broker →
  * skip → suite stays green). Run against a live broker:
  * <pre>{@code
- *   ROCKETMQ_NAMESERVER=7.213.203.4:9876 ./mvnw -f agent-bus/event-bus/pom.xml test -Dtest=RealBrokerTwoHopRelayIntegrationTest
+ *   ROCKETMQ_NAMESERVER=127.0.0.1:9876 ./mvnw -f agent-bus/event-bus/pom.xml 
+ * test -Dtest=RealBrokerTwoHopRelayIntegrationTest
  * }</pre>
  *
  * <p>Authority: {@code architecture/L2-Low-Level-Design/agent-bus/
