@@ -33,8 +33,13 @@ import java.util.concurrent.TimeUnit;
  * <p>纯 JDK 内置 {@link HttpServer} 实现，暴露单一端点 {@code POST /a2a}（A2A JSON-RPC 2.0 over HTTP + SSE）：
  * <ul>
  * <li>{@code SendStreamingMessage} —— SSE 事件流（创建调用，对应 STREAMING）。</li>
- * <li>{@code SendMessage} —— 单条 JSON 响应（本地工具结果 / 用户输入续跑，Feat-Func-011 §5.9.3）。</li>
+ * <li>{@code SendMessage} —— 单条 JSON 响应（创建 BLOCKING/ASYNC 调用、以及本地工具结果 / 用户输入续跑，
+ * Feat-Func-011 §5.9.3）。</li>
+ * <li>{@code GetTask} —— 单条 JSON 响应（状态查询，参数为 {@code params.taskId}）。</li>
  * </ul>
+ *
+ * <p>北向方法白名单只含上述三者；其余方法（{@code CancelTask} / {@code SubscribeToTask}）
+ * 按治理语义返回 {@code 400 VALIDATION_METHOD}，与真实网关 v0730 的开放面一致。
  *
  * <p>治理对齐（Feat-Func-011 §4.9）：每个请求强制 Bearer 鉴权（缺失 {@code AUTH_MISSING} / 非法 {@code AUTH_INVALID}，
  * 均 401）；{@code agentId} 可选，显式给出时不得为空串（否则 400 {@code VALIDATION_AGENT_ID}）；
@@ -161,11 +166,40 @@ public final class MockGatewayServer {
             switch (method) {
                 case "SendMessage" -> handleMessage(ex, id, params, false);
                 case "SendStreamingMessage" -> handleMessage(ex, id, params, true);
-                default -> writeJson(ex, 200, rpcError(id, -32601, "method not found: " + method));
+                case "GetTask" -> handleGetTask(ex, id, params);
+                // 未在北向白名单内的方法（CancelTask / SubscribeToTask 等）按网关治理语义拒绝：
+                // HTTP 400 + VALIDATION_METHOD，而不是 JSON-RPC -32601。
+                default -> writeGovernanceError(ex, 400, "VALIDATION_METHOD",
+                        "method not allowed on northbound: " + method);
             }
         } catch (IOException | RuntimeException e) {
             writeJson(ex, 200, rpcError(id, -32603, "internal error: " + e.getMessage()));
         }
+    }
+
+    /**
+     * 状态查询（{@code GetTask}）：返回该 Task 当前的权威快照。
+     *
+     * <p>参数位置与真实网关契约一致：{@code params.taskId}（不是 A2A 别名的 {@code params.id}）。
+     * 客户端用它做 ASYNC 观察、断连后确认真实进展、以及 BLOCKING 的推进轮询。
+     *
+     * @param ex HTTP 交换
+     * @param rpcId JSON-RPC 请求标识
+     * @param params 请求参数
+     * @throws IOException 若发生 IOException
+     */
+    private void handleGetTask(HttpExchange ex, String rpcId, JsonNode params) throws IOException {
+        String taskId = params.path("taskId").asText(null);
+        if (taskId == null || taskId.isBlank()) {
+            writeGovernanceError(ex, 400, "VALIDATION_TASK_ID", "taskId is required for GetTask");
+            return;
+        }
+        TaskSim task = tasks.get(taskId);
+        if (task == null) {
+            writeJson(ex, 200, rpcError(rpcId, -32001, "unknown task " + taskId));
+            return;
+        }
+        writeJson(ex, 200, rpcResult(rpcId, buildResult(task, "task")));
     }
 
     private void handleMessage(HttpExchange ex, String rpcId, JsonNode params, boolean streaming)
@@ -270,7 +304,17 @@ public final class MockGatewayServer {
         String input = extractText(message).orElse(null);
         tasks.put(task.taskId, task);
 
-        if (!task.toolNames.isEmpty()) {
+        // 断连模拟场景优先判定：前缀是本次新增的独立字面量，不会改变任何既有场景的触发条件。
+        if (input != null && input.startsWith("DROP_THEN_COMPLETE")) {
+            // 流中断但服务端其实已把任务跑完：客户端应能靠 GetTask 把"不确定"变回"确定"。
+            task.scenario = Scenario.DROP_THEN_COMPLETE;
+            task.state = State.WORKING;
+            task.outputText = "recovered after mid-stream drop";
+        } else if (input != null && input.startsWith("DROP_STAYS_WORKING")) {
+            // 流中断且服务端仍在跑：客户端查询也无法确定，应投递"进展不确定"而非判失败或悬挂。
+            task.scenario = Scenario.DROP_STAYS_WORKING;
+            task.state = State.WORKING;
+        } else if (!task.toolNames.isEmpty()) {
             task.scenario = Scenario.CLIENT_TOOLS;
             requestToolRound(task);
         } else if (input != null && input.startsWith("NEEDS_USER_INPUT")) {
@@ -280,7 +324,13 @@ public final class MockGatewayServer {
         } else {
             task.scenario = Scenario.IMMEDIATE;
             task.state = State.COMPLETED;
-            task.outputText = "echo: " + (input != null ? input : "");
+            // 回显元信息，供验证侧确认其确实上了 wire（FEAT-011 §4.9 / FEAT-006 §3 业务上下文与凭证传递）。
+            // 仅在存在时追加，未使用该能力的调用方输出与既有链路一致。
+            String agentId = metadata.path("agentId").asText(null);
+            String traceId = metadata.path("attributes").path("traceId").asText(null);
+            task.outputText = "echo: " + (input != null ? input : "")
+                    + (agentId != null && !agentId.isBlank() ? " [agent=" + agentId + "]" : "")
+                    + (traceId != null && !traceId.isBlank() ? " [trace=" + traceId + "]" : "");
         }
         return task;
     }
@@ -330,6 +380,15 @@ public final class MockGatewayServer {
             if (isCreate) {
                 // 首帧交付 taskId
                 sendFrame(os, rpcId, buildStatus(task, State.WORKING, false));
+            }
+            if (task.scenario == Scenario.DROP_THEN_COMPLETE
+                    || task.scenario == Scenario.DROP_STAYS_WORKING) {
+                // 模拟非预期中断：已投出 taskId，但不再下发任何终态/等待态帧就关闭流。
+                // DROP_THEN_COMPLETE 在关流前把任务推到终态，使随后的 GetTask 能给出确定结果。
+                if (task.scenario == Scenario.DROP_THEN_COMPLETE) {
+                    task.state = State.COMPLETED;
+                }
+                return;
             }
             switch (task.state) {
                 case INPUT_REQUIRED -> {
@@ -635,7 +694,13 @@ public final class MockGatewayServer {
 
     private enum State {SUBMITTED, WORKING, INPUT_REQUIRED, COMPLETED, CANCELED, FAILED}
 
-    private enum Scenario {CLIENT_TOOLS, USER_INPUT, IMMEDIATE}
+    private enum Scenario {
+        CLIENT_TOOLS, USER_INPUT, IMMEDIATE,
+        /** 非终态下中断 SSE，但服务端任务随后到达 COMPLETED（可被 GetTask 查到）。 */
+        DROP_THEN_COMPLETE,
+        /** 非终态下中断 SSE，且服务端任务一直停在 WORKING（查询也无法确定）。 */
+        DROP_STAYS_WORKING
+    }
 
     private static final class Pending {
         boolean userInput;
