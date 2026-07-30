@@ -8,7 +8,7 @@
         <groupId>com.openjiuwen</groupId>
         <artifactId>agent-runtime-ext-java</artifactId>
         <version>0.1.0</version>
-        <relativePath>../agent-runtime-ext-java/pom.xml</relativePath>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>agent-service-spec-ext</artifactId>

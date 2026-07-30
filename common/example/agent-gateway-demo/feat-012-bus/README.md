@@ -6,8 +6,8 @@
 
 | 事实 | 影响 |
 |------|------|
-| `A2aController` 已按 `PathSelector` 分发 | `path-mode=bus` + `role.caller.enabled` → `BusForwarder`（direct produce） |
-| Caller 装配 | **编译**只依赖 `agent-bus-spi`；**运行** classpath 需 `agent-bus-sdk`（`requestRelay` / `responseConsumer`）；**无 JDBC outbox** |
+| `A2aController` 按 `PathSelector` 分发 | `path-mode=bus` → `GatewayBusConfiguration` 装配 `BusForwarder`/`BrokerProjectionFeed`/`GatewayOutboxDispatcher` |
+| Caller 装配 | **编译**只依赖 `agent-bus-spi`；**运行** classpath 需 `agent-bus-sdk`（本 demo 模块把 SDK 上 classpath → caller-role + reliability autoconfig：`requestProducer`/`responseConsumer`/`JdbcForwardingOutbox`）；caller outbox 泵 `GatewayOutboxDispatcher` |
 | Fake 单测仍覆盖编排 | B1 用 `validate.sh --bus-unit`（不启 MQ） |
 | 真 BUS 两跳 / 向刚 FEAT-017 | 联调用晓娜 integrate 分支；不等 !92 合入 |
 
@@ -46,7 +46,7 @@ cd .. && ./validate.sh --bus-unit --online
 | 信封组装 / correlationId / tenant | `EnvelopeBuilderTest` |
 | PayloadStore | `PayloadStoreTest` |
 | enqueue / produce 失败 | `BusControlForwarderTest` |
-| direct produce adapter | `DirectBrokerOutboxAdapterTest` |
+| caller outbox 泵 | `GatewayOutboxDispatcherTest` |
 | 同步编排 search→wait→fold | `BusForwarderTest` |
 | 流式 / STREAM_READY / resume | `BusStreamingAndResumeTest` |
 | 五态折叠 | `FiveStateFolderTest` |
