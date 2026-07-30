@@ -16,26 +16,27 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <parent>
-    <groupId>com.huawei.ascend</groupId>
-    <artifactId>spring-ai-ascend-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
-  </parent>
-
+  <groupId>com.openjiuwen</groupId>
   <artifactId>agent-client</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
   <name>agent-client</name>
   <description>Edge Access plane — Client SDK skeleton (W3+ implementation per ADR-0049). All cross-plane traffic MUST route through agent-bus.spi.ingress.IngressGateway per ADR-0089 / Rule R-I.b.</description>
 
-  <dependencies>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.tngtech.archunit</groupId>
-      <artifactId>archunit-junit5</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.13.0</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
 </project>

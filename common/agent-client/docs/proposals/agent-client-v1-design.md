@@ -69,13 +69,12 @@ SDK 获得服务端 Task 的写权限。服务端 Task 的最终状态、状态�
 ### 2.1 agent-client 仍是占位模块
 
 - agent-client 的生产包明确写明 SDK implementation lands in a later wave：
-  agent-client/src/main/java/com/huawei/ascend/client/package-info.java:2-7。
+  agent-client/src/main/java/com/openjiuwen/client/package-info.java:2-7。
 - client SPI 包也只是为了模块规则保留的 placeholder：
-  agent-client/src/main/java/com/huawei/ascend/client/spi/package-info.java:2-7。
+  agent-client/src/main/java/com/openjiuwen/client/spi/package-info.java:2-7。
 - 模块元数据描述的目标包括 HTTP client、Task Cursor、SSE/Webhook receiver，但仍标记 skeleton：
   agent-client/module-metadata.yaml:6-15。
-- 根 POM 当前版本为 0.2.0-SNAPSHOT，而 agent-client 父版本仍为 0.1.0-SNAPSHOT：
-  pom.xml:20-21 与 agent-client/pom.xml:20-22。实施前必须先修复构建基线。
+- 构建基线：agent-client skeleton 已改为独立可构建 pom（groupId=com.openjiuwen, version=0.1.0，不再继承外部 spring-ai-ascend-parent）；agent-client-demo-parent reactor 与 agent-client-sdk-for-jvm 统一在 com.openjiuwen:0.1.0 坐标下。
 - agent-client 当前没有 HTTP、A2A、agent-bus 或 JSON codec 的生产依赖：
   agent-client/pom.xml:29-40。
 
@@ -325,7 +324,7 @@ offset、runtime endpoint 或 payloadRef 的物理解析细节。
 以下代码仅表示建议形状，不代表当前仓库已经存在这些类型。
 
 ~~~java
-package com.huawei.ascend.client.api;
+package com.openjiuwen.client.api;
 
 import java.time.Duration;
 import java.util.concurrent.CompletionStage;
@@ -520,7 +519,7 @@ ClientErrorCode 的 MVP 稳定集合建议包括：
 ### 5.3 建议工具 SPI
 
 ~~~java
-package com.huawei.ascend.client.tool.spi;
+package com.openjiuwen.client.tool.spi;
 
 import java.util.concurrent.CompletionStage;
 
@@ -583,7 +582,7 @@ ToolResult 不提供 arbitrary Throwable 上送；SDK 只把白名单错误字�
 工具注册表与远端交付通道是两件事。建议提供 transport-neutral channel：
 
 ~~~java
-package com.huawei.ascend.client.tool.spi;
+package com.openjiuwen.client.tool.spi;
 
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
@@ -655,11 +654,11 @@ V1 可以先在一个 Maven artifact 内按包隔离，稳定后再拆 artifact�
 
 建议包：
 
-- com.huawei.ascend.client.api
-- com.huawei.ascend.client.tool.spi
-- com.huawei.ascend.client.state.spi
-- com.huawei.ascend.client.auth.spi
-- com.huawei.ascend.client.observation.spi
+- com.openjiuwen.client.api
+- com.openjiuwen.client.tool.spi
+- com.openjiuwen.client.state.spi
+- com.openjiuwen.client.auth.spi
+- com.openjiuwen.client.observation.spi
 
 职责：
 
@@ -680,10 +679,10 @@ V1 可以先在一个 Maven artifact 内按包隔离，稳定后再拆 artifact�
 
 建议包：
 
-- com.huawei.ascend.client.internal.core
-- com.huawei.ascend.client.internal.invocation
-- com.huawei.ascend.client.internal.tool
-- com.huawei.ascend.client.internal.state
+- com.openjiuwen.client.internal.core
+- com.openjiuwen.client.internal.invocation
+- com.openjiuwen.client.internal.tool
+- com.openjiuwen.client.internal.state
 
 职责：
 
@@ -700,10 +699,10 @@ Core 不理解 A2A JSON、SSE frame 或 broker。
 
 建议包：
 
-- com.huawei.ascend.client.transport.spi
-- com.huawei.ascend.client.transport.gateway
-- com.huawei.ascend.client.transport.a2a
-- com.huawei.ascend.client.transport.s2c
+- com.openjiuwen.client.transport.spi
+- com.openjiuwen.client.transport.gateway
+- com.openjiuwen.client.transport.a2a
+- com.openjiuwen.client.transport.s2c
 
 职责：
 
@@ -720,7 +719,7 @@ Core 不理解 A2A JSON、SSE frame 或 broker。
 建议后续 artifact / package：
 
 - agent-client-spring-boot-starter。
-- com.huawei.ascend.client.spring。
+- com.openjiuwen.client.spring。
 - examples/client-basic。
 - examples/client-local-tool。
 
