@@ -1,6 +1,6 @@
 # registry-discovery-center — Agent Registry & Discovery Center
 
-registry-discovery-center 是 Agent 解决方案的 registry/discovery 子平面，从 spring-ai-ascend/agent-bus stage 4 抽取。模块定位为可独立启动的 Spring Boot 应用，提供 agent 注册、发现、健康探活能力，基于 PostgreSQL 持久化 + Row-Level Security 实现多租户隔离。
+registry-discovery-center 是 Agent 解决方案的 registry/discovery 子平面，从 agent-bus stage 4 抽取。模块定位为可独立启动的 Spring Boot 应用，提供 agent 注册、发现、健康探活能力，基于 PostgreSQL 持久化 + Row-Level Security 实现多租户隔离。
 
 > 模块目录与 Maven artifactId 为 `registry-discovery-center`（曾用名 `agent-rdc`）。为部署兼容，Java 包名仍为 `com.openjiuwen.rdc`、入口类仍为 `AgentRdcApplication`、DB 名/账号仍为 `agent_rdc`、打包 jar 仍为 `agent-rdc-0.1.0.jar`（`finalName`）。对人展示的配置/OpenAPI 文案统一用模块现名。
 
@@ -472,13 +472,10 @@ record RouteResolution(String instanceId, String endpointUrl,
 
 | 文档 | 路径 | 说明 |
 |---|---|---|
-| Feat-015 需求范围 | `springaiascend/spring-ai-ascend/version-scope/Feat-015-agent-card-registration-and-discovery.md` | 逻辑注册/发现 MUST、最后有效快照、新鲜度语义 |
-| Feat-015 0713 测试计划 | 仓库根 `Feat-015-agent-card-registration-and-discovery0713-test-plan.md` | 手工场景 + 自动化索引 |
+| Feat-015 需求范围 | `Feat-015-agent-card-registration-and-discovery.md` | 逻辑注册/发现 MUST、最后有效快照、新鲜度语义 |
 | ADR-0160 | `docs/adr/0160-stage4-registry-spi-runtime-promotion.yaml` | 模块架构权威（7 条决策：SPI 纯度 / JDBC 隔离 / tenant 三层隔离 / runnable 定位等） |
 | L2 设计 | `architecture/L2-Low-Level-Design/agent-bus/registry-discovery-runtime-design.cn.md` | 详细设计文档（§3.2 schema / §3.3 discovery SQL） |
 | L0/L1 | `architecture/L0-Top-Level-Design/` / `architecture/L1-High-Level-Design/` | 上层架构文档 |
 | 4+1 baseline | `.opencode/skills/architecture-models-4plus1/examples/agent-bus-forwarding-baseline.yaml` | L1 4+1 baseline（status: reviewed） |
 | 模块治理 baseline | `.harness/baselines/baseline.yaml` | L2 治理 baseline（writable 边界 frozen） |
 | 项目术语 | `CONTEXT.md` | 项目术语表（AgentRegistryEntry / AgentCard / AgentCardDto 等） |
-
-`architecture/` 与 `docs/` 是 symlink，指向 spring-ai-ascend 仓库的同名目录。
