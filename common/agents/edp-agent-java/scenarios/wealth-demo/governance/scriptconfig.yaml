@@ -45,7 +45,7 @@ scriptconfig:
       tool_start: "正在推荐理财产品..."
       tool_end: "已获取推荐理财产品"
 
-  # ── 固定帧话术配置 ── fixed_script /real_stream
+  # ── 固定帧话术配置 ──
   think_chunk_scripts:
     think_chunk_mode: "fixed_script"
     think_chunk_fixed_scripts:
