@@ -13,6 +13,7 @@ import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import org.a2aproject.sdk.server.ServerCallContext;
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.spec.InvalidRequestError;
+import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskState;
@@ -79,6 +80,55 @@ class RequestHandlerBusA2aBridgeTest {
     }
 
     @Test
+    void defaultsMissingNullOrBlankRoleToUserAndPreservesExplicitRole() {
+        AtomicReference<Message.Role> receivedRole = new AtomicReference<>();
+        RequestHandler handler = requestHandlerProxy((proxy, method, args) -> {
+            if ("onMessageSend".equals(method.getName())) {
+                if (args[0] instanceof org.a2aproject.sdk.spec.MessageSendParams params) {
+                    receivedRole.set(params.message().role());
+                }
+                return task("task-1");
+            }
+            return null;
+        });
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(handler);
+
+        bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
+                {"method":"SendMessage","params":{"message":{
+                "parts":[{"text":"missing"}],"messageId":"m-missing"}}}
+                """));
+        assertThat(receivedRole).hasValue(Message.Role.ROLE_USER);
+
+        bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
+                {"method":"SendMessage","params":{"message":{"role":null,
+                "parts":[{"text":"null"}],"messageId":"m-null"}}}
+                """));
+        assertThat(receivedRole).hasValue(Message.Role.ROLE_USER);
+
+        bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
+                {"method":"SendMessage","params":{"message":{"role":" ",
+                "parts":[{"text":"blank"}],"messageId":"m-blank"}}}
+                """));
+        assertThat(receivedRole).hasValue(Message.Role.ROLE_USER);
+
+        bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
+                {"method":"SendMessage","params":{"message":{"role":"ROLE_AGENT",
+                "parts":[{"text":"agent"}],"messageId":"m-agent"}}}
+                """));
+        assertThat(receivedRole).hasValue(Message.Role.ROLE_AGENT);
+    }
+
+    @Test
+    void rejectsInvalidExplicitRole() {
+        RequestHandlerBusA2aBridge bridge = new RequestHandlerBusA2aBridge(requestHandler(new AtomicReference<>()));
+
+        assertThatThrownBy(() -> bridge.handle(event("CLIENT_INVOCATION_REQUESTED"), bytes("""
+                {"method":"SendMessage","params":{"message":{"role":"user",
+                "parts":[{"text":"invalid"}],"messageId":"m-invalid"}}}
+                """))).isInstanceOf(IllegalArgumentException.class).hasMessage("PAYLOAD_INVALID");
+    }
+
+    @Test
     void extractsContinuationTaskIdAndMapsSubscribeToRequestHandler() {
         AtomicReference<String> called = new AtomicReference<>();
         RequestHandler handler = requestHandler(called);
@@ -88,6 +138,10 @@ class RequestHandlerBusA2aBridgeTest {
                 {"method":"SendMessage","params":{"message":{"role":"ROLE_USER",
                 "parts":[{"text":"hi"}],"messageId":"m1","taskId":"task-1"}}}
                 """)).orElseThrow()).isEqualTo("task-1");
+        assertThat(bridge.requestedTaskId(event("A2A_CALL_REQUESTED"), bytes("""
+                {"method":"SendMessage","params":{"message":{
+                "parts":[{"text":"hi"}],"messageId":"m2","taskId":"task-2"}}}
+                """)).orElseThrow()).isEqualTo("task-2");
 
         bridge.handle(event("A2A_STREAM_SUBSCRIBE_REQUESTED"), bytes("""
                 {"method":"SubscribeToTask","params":{"id":"task-1"}}
