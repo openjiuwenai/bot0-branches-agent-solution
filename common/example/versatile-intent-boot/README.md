@@ -159,7 +159,7 @@ Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock
 
 ### `scripts/local-e2e-llm-intent.sh` — LLM 意图驱动演示
 
-真实 LLM 驱动的意图识别 + 真实 DeepAgent downstream。需设置环境变量 `LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL`（L1/L2 分类用，OpenAI 兼容）与 `DEEPSEEK_API_KEY`/`DEEPSEEK_BASE_URL`/`DEEPSEEK_MODEL`（两个 Agent B 业务 agent 用）。启动 6 个进程：gateway + L1 + L2_hotel + L2_flight + Agent B hotel + Agent B flight，演示三场景（单 conversation_id）：
+真实 LLM 驱动的意图识别 + 真实 DeepAgent downstream。LLM 参数从 `$MODULE_DIR/.env` 读取（见 `.env.example`，真实环境变量优先；`DEEPSEEK_*` 未设时默认与 `LLM_*` 相同）：`LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL`（L1/L2 分类用，OpenAI 兼容）与 `DEEPSEEK_API_KEY`/`DEEPSEEK_BASE_URL`/`DEEPSEEK_MODEL`（两个 Agent B 业务 agent 用）。启动 6 个进程：gateway + L1 + L2_hotel + L2_flight + Agent B hotel + Agent B flight，演示三场景（单 conversation_id）：
 
 - **场景 A**：订酒店多轮 ask-user——`订酒店` → Agent B hotel 追问预算 → `500元` → 追问星级（中途未出单）。
 - **场景 B**：跨工作流跳转买机票——L1 据会话历史识别出话题切换，直接路由到 L2_flight → Agent B flight 追问出发日期。
@@ -174,6 +174,7 @@ Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock
 > LLM 配置参考 `apiconfig.json`（智谱 GLM `glm-5.2`，OpenAI 兼容端点）。`LLM_API_KEY` 等敏感信息仅经环境变量传入，绝不提交到代码；`DEEPSEEK_*` 未设时默认与 `LLM_*` 相同。
 
 ```bash
+cp .env.example .env                            # 填入真实 LLM 密钥（.env 已 gitignore）
 ./scripts/local-e2e-llm-intent.sh              # 首次运行会自动 mvn package
 SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh # 复用已有 jar
 ```

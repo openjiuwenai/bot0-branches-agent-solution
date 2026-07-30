@@ -9,10 +9,12 @@
 #
 # Requires: Java 17, LLM_API_KEY/BASE_URL/MODEL (OpenAI-compatible; e.g. GLM
 #   glm-5.2 at https://open.bigmodel.cn/api/coding/paas/v4 per apiconfig.json).
-#   DEEPSEEK_* defaults to LLM_* if not set. API keys come ONLY from env vars —
-#   never committed to code.
+#   DEEPSEEK_* defaults to LLM_* if not set. LLM params are read from
+#   $MODULE_DIR/.env (see .env.example) or real env vars — env vars win.
+#   API keys come ONLY from env/.env — never committed to code.
 # Usage:   ./scripts/local-e2e-llm-intent.sh
 #          SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh
+#          LLM_DEMO_ENV=/path/to/.env ./scripts/local-e2e-llm-intent.sh
 
 set -euo pipefail
 
@@ -40,9 +42,31 @@ require_env() {
     local name="$1"
     if [ -z "${!name:-}" ]; then
         echo "ERROR: env $name is required (set before running)" >&2
+        echo "       either export it, or put it in $MODULE_DIR/.env (see .env.example)" >&2
         exit 1
     fi
 }
+
+# Load LLM params (and any port/SKIP_BUILD overrides) from a .env file. Real
+# environment variables win — .env only fills in vars that are not already set.
+# Search order: $LLM_DEMO_ENV, then $MODULE_DIR/.env. Mirrors cli-llm-intent.py.
+load_dotenv() {
+    local env_file="${LLM_DEMO_ENV:-$MODULE_DIR/.env}"
+    [ -f "$env_file" ] || return 0
+    echo "==> loading .env: $env_file"
+    local key val
+    while IFS='=' read -r key val || [ -n "${key:-}" ]; do
+        case "$key" in ''|\#*) continue ;; esac          # skip blank / comment lines
+        key="${key#"${key%%[![:space:]]*}"}"; key="${key%"${key##*[![:space:]]}"}"
+        val="${val#"${val%%[![:space:]]*}"}"; val="${val%"${val##*[![:space:]]}"}"
+        case "$val" in                                   # strip one surrounding quote pair
+            \"*\") val="${val#\"}"; val="${val%\"}" ;;
+            \'*\') val="${val#\'}"; val="${val%\'}" ;;
+        esac
+        [ -n "$key" ] && [ -z "${!key:-}" ] && export "$key=$val" || true
+    done < "$env_file"
+}
+load_dotenv
 require_env LLM_API_KEY
 require_env LLM_BASE_URL
 require_env LLM_MODEL
