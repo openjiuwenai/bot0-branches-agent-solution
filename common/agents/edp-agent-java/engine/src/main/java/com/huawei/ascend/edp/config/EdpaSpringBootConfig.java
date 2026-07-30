@@ -28,7 +28,7 @@ import java.util.Map;
  *
  * <p>文件作用：</p>
  * <ul>
- *     <li>承载 application.yml 中 {@code edpa.agent.*} 下的全部配置，替代 edp-agent.yaml 直读和 EdpAgentProperties。</li>
+ *     <li>承载 application.yml 中 {@code deep-agent.*} 下的全部配置，替代 edp-agent.yaml 直读和 EdpAgentProperties。</li>
  *     <li>Phase 2 合并了原 EdpAgentProperties 的 scenarioHome 字段到此类（yamlPath/configPath 已于 0707 废弃移除）。</li>
  *     <li>Spring Boot 原生支持 {@code ${ENV_VAR:default}} 占位符替换，不再需要手写环境变量覆盖逻辑。</li>
  *     <li>对外提供 ModelConfig / VersatileConfig / McpSseConfig，供 EdpaExtHandler 和 EdpaAgentEnhancer 使用。</li>
@@ -38,34 +38,29 @@ import java.util.Map;
  * <pre>
  * application.yml                  → EdpaSpringBootConfig
  * ─────────────────────────────────────────────────────
- * edpa.agent.scenario-home         → scenarioHome    (Phase 2 新增，原 EdpAgentProperties)
- * edpa.agent.model.provider        → model.provider
- * edpa.agent.model.name            → model.name
- * edpa.agent.model.base-url        → model.baseUrl
- * edpa.agent.model.api-key         → model.apiKey
- * edpa.agent.versatile.url         → versatile.url
- * edpa.agent.versatile.adapter-a2a-url → versatile.adapterA2aUrl
- * edpa.agent.versatile.timeout     → versatile.timeout
- * edpa.agent.versatile.url-variables   → versatile.urlVariables
- * edpa.agent.versatile.query-params    -> versatile.queryParams
- * edpa.agent.versatile.headers     -> versatile.headers
+ * deep-agent.scenario-home         → scenarioHome    (Phase 2 新增，原 EdpAgentProperties)
+ * deep-agent.model.provider        -> model.provider
+ * deep-agent.model.name            -> model.name
+ * deep-agent.model.base-url        -> model.baseUrl
+ * deep-agent.model.api-key         -> model.apiKey
+ * deep-agent.versatile.url         -> versatile.url
+ * deep-agent.versatile.adapter-a2a-url -> versatile.adapterA2aUrl
+ * deep-agent.versatile.timeout     -> versatile.timeout
+ * deep-agent.versatile.url-variables   -> versatile.urlVariables
+ * deep-agent.versatile.query-params    -> versatile.queryParams
+ * deep-agent.versatile.headers     -> versatile.headers
  * </pre>
  *
  * @since 2024-01-01
  *
  */
 
-@ConfigurationProperties(prefix = "edpa.agent")
+@ConfigurationProperties(prefix = "deep-agent")
 public class EdpaSpringBootConfig {
     /**
      * 场景配置路径。
      */
     private String scenarioHome = "../scenarios/wealth-demo";
-
-    /**
-     * 模型后端配置。
-     */
-    private ModelConfig model;
 
     /**
      * Versatile 服务配置。
@@ -98,24 +93,6 @@ public class EdpaSpringBootConfig {
      */
     public void setScenarioHome(String scenarioHome) {
         this.scenarioHome = scenarioHome;
-    }
-
-    /**
-     * Gets the model.
-     *
-     * @return the result
-     */
-    public ModelConfig getModel() {
-        return model;
-    }
-
-    /**
-     * Sets the model.
-     *
-     * @param model the model value
-     */
-    public void setModel(ModelConfig model) {
-        this.model = model;
     }
 
     /**
@@ -173,83 +150,120 @@ public class EdpaSpringBootConfig {
     }
 
     /**
-     * 模型后端配置。
+     * 模型参数配置（模型名称、思维链等）。
      *
      */
 
     public static class ModelConfig {
         /**
-         * 模型 provider，例如 openai-compatible。
-         */
-        private String provider;
-
-        /**
          * 模型名称，例如 deepseek-v4-pro。
          */
-        private String name;
+        private String model;
 
         /**
-         * 模型服务 baseUrl。
+         * 思维链配置。
          */
-        private String baseUrl;
+        private ThinkingConfig thinking;
 
         /**
-         * 模型服务 API Key（支持环境变量 ${EDP_AGENT_MODEL_API_KEY:} 注入）。
+         * Gets the model.
+         *
+         * @return the result
+         */
+        public String getModel() {
+            return model;
+        }
+
+        /**
+         * Sets the model.
+         *
+         * @param model the model value
+         */
+        public void setModel(String model) {
+            this.model = model;
+        }
+
+        /**
+         * Gets the thinking.
+         *
+         * @return the result
+         */
+        public ThinkingConfig getThinking() {
+            return thinking;
+        }
+
+        /**
+         * Sets the thinking.
+         *
+         * @param thinking the thinking value
+         */
+        public void setThinking(ThinkingConfig thinking) {
+            this.thinking = thinking;
+        }
+    }
+
+    /**
+     * 模型后端连接配置（服务端连接参数）。
+     *
+     */
+
+    public static class BackendConfig {
+        /**
+         * 模型提供商名称（如 openai、anthropic、deepseek 等）。
+         */
+        private String clientProvider;
+
+        /**
+         * API 密钥。
          */
         private String apiKey;
 
         /**
-         * Gets the provider.
+         * API 基础地址。
+         */
+        private String apiBase;
+
+        /**
+         * 请求超时时间（秒），必须 > 0。
+         */
+        private double timeout = 120.0;
+
+        /**
+         * 最大重试次数。
+         */
+        private int maxRetries = 5;
+
+        /**
+         * 是否验证 SSL 证书。
+         */
+        private boolean verifySsl = false;
+
+        /**
+         * 自定义 SSL 证书路径（可选）。
+         */
+        private String sslCert;
+
+        /**
+         * 客户端 ID（可选，不填会自动生成 UUID）。
+         */
+        private String clientId;
+
+        /**
+         * Gets the client provider.
          *
          * @return the result
          */
-        public String getProvider() {
-            return provider;
+        public String getClientProvider() {
+            return clientProvider;
         }
 
         /**
-         * Sets the provider.
+         * Sets the client provider.
          *
-         * @param provider the provider value
+         * @param clientProvider the clientProvider value
          */
-        public void setProvider(String provider) {
-            this.provider = provider;
-        }
-
-        /**
-         * Gets the name.
-         *
-         * @return the result
-         */
-        public String getName() {
-            return name;
-        }
-
-        /**
-         * Sets the name.
-         *
-         * @param name the name value
-         */
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        /**
-         * Gets the base url.
-         *
-         * @return the result
-         */
-        public String getBaseUrl() {
-            return baseUrl;
-        }
-
-        /**
-         * Sets the base url.
-         *
-         * @param baseUrl the baseUrl value
-         */
-        public void setBaseUrl(String baseUrl) {
-            this.baseUrl = baseUrl;
+        public void setClientProvider(String clientProvider) {
+            this.clientProvider = clientProvider;
         }
 
         /**
@@ -268,6 +282,144 @@ public class EdpaSpringBootConfig {
          */
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
+        }
+
+        /**
+         * Gets the api base.
+         *
+         * @return the result
+         */
+        public String getApiBase() {
+            return apiBase;
+        }
+
+        /**
+         * Sets the api base.
+         *
+         * @param apiBase the apiBase value
+         */
+        public void setApiBase(String apiBase) {
+            this.apiBase = apiBase;
+        }
+
+        /**
+         * Gets the timeout.
+         *
+         * @return the result
+         */
+        public double getTimeout() {
+            return timeout;
+        }
+
+        /**
+         * Sets the timeout.
+         *
+         * @param timeout the timeout value
+         */
+        public void setTimeout(double timeout) {
+            this.timeout = timeout;
+        }
+
+        /**
+         * Gets the max retries.
+         *
+         * @return the result
+         */
+        public int getMaxRetries() {
+            return maxRetries;
+        }
+
+        /**
+         * Sets the max retries.
+         *
+         * @param maxRetries the maxRetries value
+         */
+        public void setMaxRetries(int maxRetries) {
+            this.maxRetries = maxRetries;
+        }
+
+        /**
+         * Is verify ssl.
+         *
+         * @return the result
+         */
+        public boolean isVerifySsl() {
+            return verifySsl;
+        }
+
+        /**
+         * Sets the verify ssl.
+         *
+         * @param verifySsl the verifySsl value
+         */
+        public void setVerifySsl(boolean verifySsl) {
+            this.verifySsl = verifySsl;
+        }
+
+        /**
+         * Gets the ssl cert.
+         *
+         * @return the result
+         */
+        public String getSslCert() {
+            return sslCert;
+        }
+
+        /**
+         * Sets the ssl cert.
+         *
+         * @param sslCert the sslCert value
+         */
+        public void setSslCert(String sslCert) {
+            this.sslCert = sslCert;
+        }
+
+        /**
+         * Gets the client id.
+         *
+         * @return the result
+         */
+        public String getClientId() {
+            return clientId;
+        }
+
+        /**
+         * Sets the client id.
+         *
+         * @param clientId the clientId value
+         */
+        public void setClientId(String clientId) {
+            this.clientId = clientId;
+        }
+    }
+
+    /**
+     * 思维链配置。
+     *
+     */
+
+    public static class ThinkingConfig {
+        /**
+         * 思维链类型（disabled / enabled）。
+         */
+        private String type;
+
+        /**
+         * Gets the type.
+         *
+         * @return the result
+         */
+        public String getType() {
+            return type;
+        }
+
+        /**
+         * Sets the type.
+         *
+         * @param type the type value
+         */
+        public void setType(String type) {
+            this.type = type;
         }
     }
 

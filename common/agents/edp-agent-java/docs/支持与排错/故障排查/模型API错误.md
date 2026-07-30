@@ -1,4 +1,4 @@
-﻿# 模型API调用失败排错指南
+# 模型API调用失败排错指南
 
 ## 问题描述
 
@@ -317,10 +317,10 @@ EDP_AGENT_MODEL_API_KEY=sk-openai-key
 ## 相关配置/日志关键词
 
 ### 配置项
-- `edpa.agent.model.provider` - 模型提供者（固定为OpenAI）
-- `edpa.agent.model.name` - 模型名称
-- `edpa.agent.model.base-url` - API Base URL
-- `edpa.agent.model.api-key` - API Key
+- `deep-agent.backend.client_provider` - 模型提供者（固定为OpenAI）
+- `deep-agent.model.model` - 模型名称
+- `deep-agent.backend.api_base` - API Base URL
+- `deep-agent.backend.api_key` - API Key
 
 ### 日志关键词
 - `Model API` - 模型API相关日志

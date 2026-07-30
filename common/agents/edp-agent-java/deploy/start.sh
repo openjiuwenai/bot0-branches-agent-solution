@@ -14,7 +14,6 @@ DEPLOYMENT="$(config_value EDP_REDIS_DEPLOYMENT local)"
 API_KEY="$(config_value EDP_AGENT_MODEL_API_KEY '')"
 MODEL_BASE_URL="$(config_value EDP_AGENT_MODEL_BASE_URL https://api.deepseek.com/v1)"
 ADAPTER_A2A_URL="$(config_value EDP_AGENT_VERSATILE_A2A_URL http://adapter-versatile:8191/a2a)"
-DIRECT_VERSATILE_URL="$(config_value EDP_AGENT_VERSATILE_URL http://adapter-versatile:8191/a2a)"
 
 validate_image_ref "${IMAGE}"
 validate_resource_name "EDP 容器" "${EDP_CONTAINER}"
@@ -26,7 +25,6 @@ esac
 [ -n "${API_KEY}" ] || die "EDP_AGENT_MODEL_API_KEY 为空。请填写 ${ENV_FILE} 后重试。"
 validate_http_url EDP_AGENT_MODEL_BASE_URL "${MODEL_BASE_URL}"
 validate_http_url EDP_AGENT_VERSATILE_A2A_URL "${ADAPTER_A2A_URL}"
-validate_http_url EDP_AGENT_VERSATILE_URL "${DIRECT_VERSATILE_URL}"
 
 docker image inspect "${IMAGE}" >/dev/null 2>&1 \
     || die "未找到镜像 ${IMAGE}。请先执行 build-image.sh，或从镜像仓库拉取同名版本。"
@@ -94,12 +92,7 @@ APP_ENV_KEYS=(
     EDPA_REDIS_CONNECT_TIMEOUT
     EDPA_REDIS_SOCKET_TIMEOUT
     EDPA_REDIS_CHECKPOINTER_TTL
-    EDPA_REDIS_KEY_PREFIX
-    EDPA_REDIS_TODO_TTL
-    EDPA_REDIS_REFRESH_ON_READ
     EDP_AGENT_VERSATILE_A2A_URL
-    EDP_AGENT_VERSATILE_URL
-    EDP_AGENT_VERSATILE_TIMEOUT
     EDP_MCP_MASTER_URL
     EDP_MCP_STANDBY_URL
     EDP_MCP_ACCESS_TOKEN
@@ -128,7 +121,6 @@ done
 RUN_ARGS+=(
     --env SERVER_PORT=8190
     --env "EDP_AGENT_VERSATILE_A2A_URL=${ADAPTER_A2A_URL}"
-    --env "EDP_AGENT_VERSATILE_URL=${DIRECT_VERSATILE_URL}"
 )
 if [ "${DEPLOYMENT}" = "local" ]; then
     # local Redis 的 DNS 契约固定为 edp-redis:6379，不接受 .env 中的意外覆盖。

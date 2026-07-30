@@ -1,4 +1,4 @@
-﻿# MCP调用失败排错指南
+# MCP调用失败排错指南
 
 ## 问题描述
 
@@ -434,10 +434,10 @@ python -m pdb run_interact_finance_rec_skill.py '{"risk_level":"R2"}'
 ## 相关配置/日志关键词
 
 ### 配置项
-- `edpa.agent.mcpsse.master-url` - MCP主节点URL
-- `edpa.agent.mcpsse.standby-url` - MCP备节点URL
-- `edpa.agent.mcpsse.access-token` - 鉴权Token
-- `edpa.agent.mcpsse.app-name` - 应用名
+- `deep-agent.mcpsse.master-url` - MCP主节点URL
+- `deep-agent.mcpsse.standby-url` - MCP备节点URL
+- `deep-agent.mcpsse.access-token` - 鉴权Token
+- `deep-agent.mcpsse.app-name` - 应用名
 
 ### 环境变量注入到Python脚本
 - `MCP_SERVER_URL` - 选中的MCP URL（主或备）

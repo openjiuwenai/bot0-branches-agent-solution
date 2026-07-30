@@ -21,14 +21,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 沙箱配置属性类。
  *
- * <p>映射 application.yml 中 {@code edpa.agent.sandbox.*} 配置段，
+ * <p>映射 application.yml 中 {@code deep-agent.sandbox.*} 配置段，
  * 控制沙箱模式的开关、超时、降级策略等行为。</p>
  *
  * @since 2024-01-01
  *
  */
 
-@ConfigurationProperties(prefix = "edpa.agent.sandbox")
+@ConfigurationProperties(prefix = "deep-agent.sandbox")
 public class SandboxConfig {
     /**
      * 是否启用沙箱模式。
