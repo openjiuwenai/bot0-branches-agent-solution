@@ -28,6 +28,14 @@
     <maven.compiler.release>17</maven.compiler.release>
     <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
     <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
+    <!-- 修复 Tomcat 15 个 CVE -->
+    <tomcat.version>11.0.24</tomcat.version>
+    <!-- 修复 jackson-databind 5 个 CVE（Spring Boot 4.0.x 的 jackson-bom.version 控制 Jackson 3.x，不适用此处） -->
+    <jackson.version>2.21.5</jackson.version>
+    <!-- 修复 Logback 2 个 CVE -->
+    <logback.version>1.5.34</logback.version>
+    <!-- 修复 Log4j 1 个 CVE -->
+    <log4j2.version>2.25.5</log4j2.version>
   </properties>
 
   <dependencies>
@@ -46,6 +54,18 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- 显式声明 Jackson 2.x 版本，覆盖传递依赖的 2.21.2，修复 5 个 CVE -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>${jackson.version}</version>
     </dependency>
 
     <dependency>

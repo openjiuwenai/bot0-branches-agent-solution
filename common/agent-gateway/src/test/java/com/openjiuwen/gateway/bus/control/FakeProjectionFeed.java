@@ -29,6 +29,20 @@ public class FakeProjectionFeed implements ProjectionFeed {
         queue.add(new ProjectionEvent(type, taskId, streamRef, null));
     }
 
+    /**
+     * Enqueues a synthetic projection event with a decoded response/reason body.
+     *
+     * @param type bus event type
+     * @param taskId optional task id
+     * @param streamRef optional stream ref
+     * @param payloadRef optional payload ref
+     * @param body optional decoded A2A response / reason
+     */
+    public void inject(AgentBusEventType type, String taskId, String streamRef,
+                       String payloadRef, String body) {
+        queue.add(new ProjectionEvent(type, taskId, streamRef, payloadRef, body));
+    }
+
     @Override
     public Optional<ProjectionEvent> poll(String correlationId) {
         return Optional.ofNullable(queue.poll());

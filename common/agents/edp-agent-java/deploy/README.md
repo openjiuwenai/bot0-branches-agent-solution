@@ -101,7 +101,7 @@ docker volume create edp-redis-data
 
 ## 2. 前置条件
 
-- Linux 部署机已安装 Docker Engine，当前用户能执行 `docker info`；不要求 Compose。
+- Linux 部署机（建议配置16CPU、32G，可根据生产和测试环境适当调整）已安装 Docker Engine，当前用户能执行 `docker info`；不要求 Compose。
 - 从源码构建时，必须先生成唯一的 `engine/target/edp-agent-engine-*.jar`。
 - Dockerfile 当前还会复制 governance、场景和 deploy 下的 Python 依赖/config，不能只上传一个 jar 和 Dockerfile。
 - adapter 由 adapter 团队独立部署。相同 Docker 主机使用约定网络和 alias；不同主机使用可路由 URL。
