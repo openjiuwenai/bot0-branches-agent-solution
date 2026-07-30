@@ -21,6 +21,7 @@ import com.openjiuwen.gateway.governance.validate.ParamValidator;
 import com.openjiuwen.gateway.obs.AuditEvent;
 import com.openjiuwen.gateway.obs.AuditSink;
 import com.openjiuwen.gateway.obs.GovernanceAuditor;
+import com.openjiuwen.gateway.path.PathSelector;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
 import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
@@ -52,7 +53,7 @@ import java.util.Optional;
 @WebMvcTest(controllers = A2aController.class)
 @Import({AuthRule.class, TenantResolver.class, ParamValidator.class, IdempotencyRule.class,
         GovernanceAuditor.class, GovernanceErrorHandler.class, Router.class, StickyIndex.class,
-        DefaultAgentResolver.class, SseBridge.class})
+        DefaultAgentResolver.class, SseBridge.class, PathSelector.class})
 @TestPropertySource(properties = "gateway.default-agent-id=default-agent-1")
 class A2aControllerWebMvcTest {
     private static final String VALID_CREATE =
@@ -374,6 +375,19 @@ class A2aControllerWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.id").value("task-s"));
         assertThat(runtime.lastEndpoint()).isNull();
+    }
+
+    @Test
+    void streamingRequestAcceptEventStreamReturnsJsonErrorNot406() throws Exception {
+        // A streaming client sends Accept: text/event-stream. When routing fails (no candidates),
+        // the gateway must still return the stable JSON GatewayError — not a 406 from content
+        // negotiation having no text/event-stream converter for the error body.
+        rdc.setCandidates(List.of());
+        mvc.perform(post("/a2a").header("Authorization", "Bearer bound-token")
+                        .accept(MediaType.TEXT_EVENT_STREAM)
+                        .contentType(MediaType.APPLICATION_JSON).content(STREAM_CREATE))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("ROUTE_NO_CANDIDATES"));
     }
 
     // --- S3 resume (sticky) ---

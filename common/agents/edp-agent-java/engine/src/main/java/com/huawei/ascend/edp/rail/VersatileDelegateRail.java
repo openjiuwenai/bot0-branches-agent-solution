@@ -217,6 +217,8 @@ public class VersatileDelegateRail extends BaseInterruptRail {
         }
 
         // ── 正常委派：构造 a2a_delegate 中断，框架接管远端调用 ──
+        // 缓存注入：当 LLM 传入的 query_description 为空时，从 ToolDataChannel 读取 MCP 结果上下文
+        injectCachedQueryDescription(args, ctx);
         String remoteInput = extractRemoteInput(toolCall, args);
         String queryIntent = asString(args.get("query_intent"));
         LOGGER.info("[VersatileDelegateRail] delegating to versatile-agent, queryIntent='{}', remoteInputLen={}",
@@ -786,6 +788,83 @@ public class VersatileDelegateRail extends BaseInterruptRail {
     // ═══════════════════════════════════════════════════════════════════════════
     // 工具方法
     // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 从 ToolDataChannel 缓存注入 query_description（对标 0724 版本 VersatileInterruptRail.buildInputs）。
+     *
+     * <p>当 LLM 传入的 query_description 为空时，从 McpInterruptRail 写入的
+     * mcp_to_versatile_information 缓存中读取，回填到 args 中。
+     * 兜底逻辑：若缓存为空，从 mcp_products_data 构造 rich query。</p>
+     *
+     * @param args 已解析的 call_versatile 工具参数 Map（会被就地修改）
+     * @param ctx  Agent 回调上下文（用于构造 ToolDataKey）
+     */
+    private void injectCachedQueryDescription(Map<String, Object> args, AgentCallbackContext ctx) {
+        String query = String.valueOf(args.getOrDefault("query_description", ""));
+        boolean queryFromArgs = !query.isBlank();
+        if (queryFromArgs) {
+            LOGGER.debug("[VersatileDelegateRail] query_description: fromArgs=true, skip cache injection, len={}",
+                    query.length());
+            return;
+        }
+        ToolDataKey channelKey = ToolDataKeyFactory.fromContext(ctx, edpConfig, agentName);
+        String cachedQuery = readCachedQuery(channelKey);
+        if (!cachedQuery.isBlank()) {
+            args.put("query_description", cachedQuery);
+            LOGGER.info("[VersatileDelegateRail] query_description: fromArgs=false, fallbackToCache=true, finalLen={}",
+                    cachedQuery.length());
+        } else {
+            LOGGER.warn("[VersatileDelegateRail] query_description: fromArgs=false, "
+                    + "fallbackToCache=false, cache empty");
+        }
+    }
+
+    /**
+     * 三级缓存回退策略读取 query_description（对标 0724 版本 VersatileInterruptRail.readCachedQuery）。
+     *
+     * <p>优先级：
+     * <ol>
+     *   <li>从 ToolDataChannel 读取 mcp_to_versatile_information（McpInterruptRail 写入）</li>
+     *   <li>兜底从 mcp_products_data 构造 rich query</li>
+     *   <li>全部缓存为空时返回空串</li>
+     * </ol>
+     * </p>
+     *
+     * @param channelKey 工具数据通道的键，用于从 ToolDataChannel 中读取缓存数据
+     * @return 缓存命中的 query_description 字符串；全部缓存为空时返回空串
+     */
+    private String readCachedQuery(ToolDataKey channelKey) {
+        // 第一级：从 mcp_to_versatile_information 读取（McpInterruptRail.persistMcpResult 写入）
+        Object cached = toolDataChannel.getObject(channelKey, McpInterruptRail.VERSATILE_QUERY_KEY).orElse(null);
+        if (cached instanceof String text && !text.isBlank()) {
+            return text;
+        }
+        if (cached instanceof Map<?, ?> map) {
+            Object value = map.get("query_description");
+            if (value == null) {
+                value = map.get("query");
+            }
+            if (value != null && !String.valueOf(value).isBlank()) {
+                return String.valueOf(value);
+            }
+        }
+
+        // 第二级：兜底从 mcp_products_data 构造 rich query
+        Object mcpProductsData = toolDataChannel.getObject(channelKey,
+                McpInterruptRail.DEFAULT_MCP_PRODUCTS_KEY).orElse(null);
+        if (mcpProductsData instanceof Map<?, ?> productsMap && !productsMap.isEmpty()) {
+            String dataStr = String.valueOf(productsMap);
+            if (!dataStr.isBlank() && !"{}".equals(dataStr)) {
+                LOGGER.warn("[VersatileDelegateRail] fallback query from mcp_products_data, length={}",
+                        dataStr.length());
+                return dataStr;
+            }
+        }
+
+        // 第三级：全部缓存为空
+        LOGGER.warn("[VersatileDelegateRail] readCachedQuery: all caches empty, returning empty query");
+        return "";
+    }
 
     /**
      * 从 call_versatile 工具参数构造远端 versatile-agent 期望的消息文本（JSON 字符串）。

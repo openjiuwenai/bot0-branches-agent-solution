@@ -25,8 +25,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication(scanBasePackages = {
     "com.customer.agent",
-    "com.huawei.ascend.edp",
-    "com.openjiuwen.service"
+    "com.huawei.ascend.edp"
 })
 public class CustomerApplication {
     public static void main(String[] args) {

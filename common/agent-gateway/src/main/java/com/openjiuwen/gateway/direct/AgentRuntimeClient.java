@@ -41,4 +41,19 @@ public interface AgentRuntimeClient {
      * @return lazy stream of SSE data payloads
      */
     Stream<String> openStream(String endpointUrl, String jsonRpcBody);
+
+    /**
+     * Open a streaming subscription to an existing runtime Task by its stream reference
+     * (FEAT-012 IN-4 BUS streaming: after INVOCATION_STREAM_READY, the gateway connects
+     * point-to-point to the runtime's A2A SSE via SubscribeToTask + X-OpenJiuwen-Stream-Ref
+     * header). The streamRef is an opaque auth token from the STREAM_READY projection;
+     * the runtime's StreamReferenceSubscriptionAspect validates it before opening the SSE channel.
+     *
+     * @param endpointUrl resolved runtime endpoint (base of {@code POST /a2a})
+     * @param streamRef opaque stream-reference auth token from INVOCATION_STREAM_READY projection
+     * @param taskId runtime Task id (from INVOCATION_ACCEPTED projection)
+     * @param tenantId authoritative tenant
+     * @return lazy stream of SSE data payloads
+     */
+    Stream<String> openStreamByRef(String endpointUrl, String streamRef, String taskId, String tenantId);
 }
