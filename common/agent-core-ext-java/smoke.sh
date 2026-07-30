@@ -16,6 +16,11 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 POM_FILE="$ROOT/pom.xml"
 SKIP_BUILD=0
 
+# 临时文件，trap 确保退出时清理
+META_JSON="$ROOT/.smoke-meta.json"
+RESULTS_JSON="$ROOT/.smoke-results.json"
+trap 'rm -f "$META_JSON" "$RESULTS_JSON"' EXIT
+
 # ---- 参数解析 -----------------------------------------------------------
 for arg in "$@"; do
   case "$arg" in
@@ -412,7 +417,6 @@ PY
 # ============================================================
 
 # 提取 POM 元信息
-META_JSON="$ROOT/.smoke-meta.json"
 extract_text > "$META_JSON"
 
 # 执行构建
@@ -446,14 +450,10 @@ else
   BUILD_OK=0
 fi
 
-# 解析测试报告（仓库根目录下的子模块路径）
-RESULTS_JSON="$ROOT/.smoke-results.json"
+# 解析测试报告
 parse_reports "$ROOT" > "$RESULTS_JSON"
 
 # 打印报告
 print_report "$META_JSON" "$RESULTS_JSON"
-
-# 清理临时文件
-rm -f "$META_JSON" "$RESULTS_JSON"
 
 exit "$MVN_EXIT_CODE"
