@@ -381,9 +381,9 @@ else:
   fi
 
   printf '%b' "${C_BOLD}"
-  printf -- '-%.0s' $(seq 1 40)
+  printf -- '-%.0s' $(seq 1 60)
   printf '\n  用例明细\n'
-  printf -- '-%.0s' $(seq 1 40)
+  printf -- '-%.0s' $(seq 1 60)
   printf '%b\n\n' "${C_RESET}"
 
   python3 - "$results_json" "$C_GREEN" "$C_RED" "$C_YELLOW" "$C_RESET" <<'PY'
@@ -396,17 +396,32 @@ GREEN = sys.argv[2]
 RED = sys.argv[3]
 YELLOW = sys.argv[4]
 RESET = sys.argv[5]
+BOLD = '\033[1m' if GREEN else ''
 
-ICONS = {'PASS': f'{GREEN}[PASS]{RESET}', 'FAIL': f'{RED}[FAIL]{RESET}',
-         'ERROR': f'{RED}[ERROR]{RESET}', 'SKIP': f'{YELLOW}[SKIP]{RESET}'}
+STATUS = {'PASS': f'{GREEN}PASS{RESET}', 'FAIL': f'{RED}FAIL{RESET}',
+          'ERROR': f'{RED}ERROR{RESET}', 'SKIP': f'{YELLOW}SKIP{RESET}'}
 
-for c in data['cases']:
-    icon = ICONS.get(c['status'], c['status'])
-    short_class = c['class'].split('.')[-1] if '.' in c['class'] else c['class']
-    line = f"  {icon} {short_class} - {c['test']}"
-    if c['reason']:
-        line += f"  [{c['reason']}]"
-    print(line)
+def extract_domain(classname):
+    """从完整类名提取领域，如 verification, replan, enforcing"""
+    parts = classname.split('.')
+    if len(parts) >= 2:
+        return parts[-2]
+    return '-'
+
+def module_name(classname):
+    return classname.split('.')[-1] if '.' in classname else classname
+
+# 表头
+print(f'  {"#":<4} {"领域":<16} {"模块":<42} {"耗时":<8} 结果')
+print(f'  {"-"*4:<4} {"-"*16:<16} {"-"*42:<42} {"-"*8:<8} ------')
+
+for i, c in enumerate(data['cases'], 1):
+    domain = extract_domain(c['class'])
+    mod = module_name(c['class'])
+    time_s = f"{float(c['time']):.3f}s"
+    status = STATUS.get(c['status'], c['status'])
+    print(f'  {i:<4} {domain:<16} {mod:<42} {time_s:<8} {status}')
+
 PY
 
   echo ""
@@ -429,7 +444,7 @@ if [[ "$SKIP_BUILD" -eq 1 ]]; then
   BUILD_OK=1
 else
   echo "[smoke] 执行 mvn clean test..."
-  mvn -f "$POM_FILE" clean test || MVN_EXIT_CODE=$?
+  mvn -f "$POM_FILE" clean test > /dev/null 2>&1 || MVN_EXIT_CODE=$?
 fi
 
 END_EPOCH=$(date +%s)
