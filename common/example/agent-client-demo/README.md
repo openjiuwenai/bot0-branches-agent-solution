@@ -75,7 +75,7 @@ $cp=@(
 ### 方式 A：命令行自检（跑完即退出）
 
 ```powershell
-java -cp $cp com.huawei.ascend.client.verify.CloudClientVerification
+java -cp $cp com.openjiuwen.client.verify.CloudClientVerification
 Write-Host "exit=$LASTEXITCODE"   # 0 = 全部断言通过
 ```
 
@@ -84,7 +84,7 @@ Write-Host "exit=$LASTEXITCODE"   # 0 = 全部断言通过
 **不需要 Node。** Java 进程内嵌一个小 HTTP 服务，浏览器打开即可：
 
 ```powershell
-java -cp $cp com.huawei.ascend.client.verify.CloudClientVerification --ui
+java -cp $cp com.openjiuwen.client.verify.CloudClientVerification --ui
 ```
 
 终端会打印类似：
@@ -106,7 +106,7 @@ CP="../../agent-client/agent-client-sdk-for-jvm/target/agent-client-sdk-for-jvm.
 $M/core/jackson-databind/2.17.3/jackson-databind-2.17.3.jar:\
 $M/core/jackson-core/2.17.3/jackson-core-2.17.3.jar:\
 $M/core/jackson-annotations/2.17.3/jackson-annotations-2.17.3.jar"
-java -cp "$CP" com.huawei.ascend.client.verify.CloudClientVerification
+java -cp "$CP" com.openjiuwen.client.verify.CloudClientVerification
 echo "exit=$?"
 ```
 
@@ -117,10 +117,10 @@ echo "exit=$?"
 ```bash
 # 终端 1：启动网关（默认 8080，或传端口/设 PORT）
 java -cp "mock-gateway/target/mock-gateway.jar:$M/core/jackson-databind/2.17.3/jackson-databind-2.17.3.jar:$M/core/jackson-core/2.17.3/jackson-core-2.17.3.jar:$M/core/jackson-annotations/2.17.3/jackson-annotations-2.17.3.jar" \
-  com.huawei.ascend.mockgateway.MockGatewayServer 8080
+  com.openjiuwen.mockgateway.MockGatewayServer 8080
 
 # 终端 2：让自校验连到外部网关
-AGENT_GATEWAY_URL=http://127.0.0.1:8080 java -cp "$CP" com.huawei.ascend.client.verify.CloudClientVerification
+AGENT_GATEWAY_URL=http://127.0.0.1:8080 java -cp "$CP" com.openjiuwen.client.verify.CloudClientVerification
 ```
 
 ## 预期输出
@@ -143,14 +143,14 @@ ALL CHECKS PASSED
 
 ```bash
 cd common
-docker build -t ascend/agent-client-demo:0.2.0 -f example/agent-client-demo/Dockerfile .
-docker run --rm ascend/agent-client-demo:0.2.0   # 退出码 0=全部断言通过，非 0=失败
+docker build -t openjiuwen/agent-client-demo:0.1.0 -f example/agent-client-demo/Dockerfile .
+docker run --rm openjiuwen/agent-client-demo:0.1.0   # 退出码 0=全部断言通过，非 0=失败
 ```
 
 ## SDK 包结构（对齐设计四层）
 
 ```
-agent-client-sdk-for-jvm : com.huawei.ascend.client
+agent-client-sdk-for-jvm : com.openjiuwen.client
 ├── api/            公共 API：AgentClient / AgentClients / InvocationRequest / ContinueInputRequest
 │                   / InvocationCall / InvocationEvent / TaskState / InvocationSnapshot / InvocationMode
 ├── tool.spi/       本地工具 SPI：LocalTool / LocalToolDescriptor / ToolExposurePolicy / ToolView

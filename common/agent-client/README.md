@@ -39,7 +39,7 @@ agent-client/
 ├── docs/                       设计提案、设备可移植性 FAQ、getting-started 等
 ├── src/                        skeleton 占位（W3+ 实现落地处）
 ├── module-metadata.yaml        模块元数据（Rule R-C.b）
-└── pom.xml                     skeleton pom（属主 reactor，parent=spring-ai-ascend-parent）
+└── pom.xml                     skeleton pom（属主 reactor，parent=无（独立可构建 pom））
 ```
 
 ## SDK 本体（JVM 版）
@@ -54,13 +54,13 @@ agent-client/
 > 等多端 SDK 尚在建设中，跨端能力由线协议中立性保证，详见
 > [`docs/device-portability-and-v1-delivery.md`](docs/device-portability-and-v1-delivery.md)。
 
-SDK 本身的 Maven 坐标：`com.huawei.ascend.client.example:agent-client-sdk-for-jvm:0.2.0-SNAPSHOT`
+SDK 本身的 Maven 坐标：`com.openjiuwen:agent-client-sdk-for-jvm:0.1.0`
 （groupId/version 沿用 demo 工程的，待 SDK 正式发布时再迁出 example groupId）。
 
 ### SDK 包结构（对齐设计四层）
 
 ```
-com.huawei.ascend.client
+com.openjiuwen.client
 ├── api/            公共 API：AgentClient / AgentClients / InvocationRequest / ContinueInputRequest
 │                   / InvocationCall / InvocationEvent / TaskState / InvocationSnapshot / InvocationMode
 │                   / Handle / ErrorCodes / ClassifiedError / InvocationNotResumableException
@@ -121,9 +121,9 @@ com.huawei.ascend.client
 
 ```xml
 <dependency>
-  <groupId>com.huawei.ascend.client.example</groupId>
+  <groupId>com.openjiuwen</groupId>
   <artifactId>agent-client-sdk-for-jvm</artifactId>
-  <version>0.2.0-SNAPSHOT</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
@@ -131,9 +131,9 @@ SDK 会传递性地带来 Jackson 依赖。若你的工程已管控依赖版本�
 
 ```xml
 <dependency>
-  <groupId>com.huawei.ascend.client.example</groupId>
+  <groupId>com.openjiuwen</groupId>
   <artifactId>agent-client-sdk-for-jvm</artifactId>
-  <version>0.2.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <exclusions>
     <exclusion>
       <groupId>com.fasterxml.jackson.core</groupId>
@@ -165,14 +165,14 @@ mvn -q -o clean package
 最小可运行示例：连一个网关、发起一次流式调用、等到完成、打印输出。
 
 ```java
-import com.huawei.ascend.client.api.AgentClient;
-import com.huawei.ascend.client.api.AgentClients;
-import com.huawei.ascend.client.api.InvocationCall;
-import com.huawei.ascend.client.api.InvocationRequest;
-import com.huawei.ascend.client.api.InvocationSnapshot;
-import com.huawei.ascend.client.api.InvocationMode;
-import com.huawei.ascend.client.transport.a2a.A2aHttpTransportProvider;
-import com.huawei.ascend.client.transport.spi.CredentialProvider;
+import com.openjiuwen.client.api.AgentClient;
+import com.openjiuwen.client.api.AgentClients;
+import com.openjiuwen.client.api.InvocationCall;
+import com.openjiuwen.client.api.InvocationRequest;
+import com.openjiuwen.client.api.InvocationSnapshot;
+import com.openjiuwen.client.api.InvocationMode;
+import com.openjiuwen.client.transport.a2a.A2aHttpTransportProvider;
+import com.openjiuwen.client.transport.spi.CredentialProvider;
 
 public class QuickStart {
     public static void main(String[] args) throws Exception {
