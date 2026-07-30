@@ -157,7 +157,7 @@ logging:
   file:
     name: logs/run/run.log
   level:
-    com.huawei.ascend.edp: DEBUG
+    com.openjiuwen.edp: DEBUG
     com.customer.agent: DEBUG
     com.openjiuwen.service.adapters.agentcore.ext: DEBUG
     com.openjiuwen.service.app.orchestrator: DEBUG

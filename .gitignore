@@ -65,6 +65,10 @@ TestRun.rar
 /.pipeline/
 docs/superpowers/
 
+# Local temp scripts and Trae skills — not for production
+/temp/
+.trae/skills/edpa-test-locator/
+
 # Local test reports and tools — not for production
 common/agents/edp-agent-java/scenarios/wealth-demo/test/git_changes_report.md
 common/agents/edp-agent-java/scenarios/wealth-demo/test/test_report_*.md
