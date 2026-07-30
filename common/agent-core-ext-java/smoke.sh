@@ -35,13 +35,13 @@ POM_DIR="$(cd "$POM_DIR" && pwd)"
 
 # ---- ANSI 颜色 -----------------------------------------------------------
 if [[ -t 1 ]]; then
-  C_RESET='\033[0m'
-  C_BOLD='\033[1m'
-  C_GREEN='\033[32m'
-  C_RED='\033[31m'
-  C_YELLOW='\033[33m'
-  C_CYAN='\033[36m'
-  C_DIM='\033[2m'
+  C_RESET=$'\033[0m'
+  C_BOLD=$'\033[1m'
+  C_GREEN=$'\033[32m'
+  C_RED=$'\033[31m'
+  C_YELLOW=$'\033[33m'
+  C_CYAN=$'\033[36m'
+  C_DIM=$'\033[2m'
 else
   C_RESET='' C_BOLD='' C_GREEN='' C_RED='' C_YELLOW='' C_CYAN='' C_DIM=''
 fi
@@ -429,10 +429,7 @@ if [[ "$SKIP_BUILD" -eq 1 ]]; then
   BUILD_OK=1
 else
   echo "[smoke] 执行 mvn clean test..."
-  # 切换到仓库根目录，使用相对 POM 路径
-  REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
-  POM_REL_PATH="common/agent-core-ext-java/pom.xml"
-  mvn -f "$POM_REL_PATH" clean test || MVN_EXIT_CODE=$?
+  mvn -f "$POM_FILE" clean test || MVN_EXIT_CODE=$?
 fi
 
 END_EPOCH=$(date +%s)
