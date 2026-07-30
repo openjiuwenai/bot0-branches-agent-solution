@@ -1,13 +1,13 @@
 """
-理财推荐四轮对话端到端测试用例。
+理财推荐三轮对话端到端测试用例。
 
 测试场景：用户通过 A2A JSON-RPC SendStreamingMessage 发起理财推荐会话，
-模拟四轮交互：(1) "理财推荐" → (2) "第一个，10000元" → (3) "确认" → (4) "确认"。
+模拟三轮交互：(1) "理财推荐" → (2) "第一个，100元" → (3) "确认"。
 
-外部依赖（Versatile agent、LLM）需已部署并运行，本测试不生成 mock。
+外部依赖（Versatile adapter、LLM）需已部署并运行，本测试不生成 mock。
 
 运行方式：
-    cd agents/edp-agent-java/scenarios/wealth-demo/test
+    cd agent-store/edp-agent-java/scenarios/wealth-demo/test
     python test_wealth_recommend_e2e.py
 """
 import json
@@ -20,7 +20,7 @@ import requests
 EDPA_BASE_URL = "http://localhost:8190"
 A2A_ENDPOINT = f"{EDPA_BASE_URL}/a2a"
 ROUND_INTERVAL_SECONDS = 3
-REQUEST_TIMEOUT_SECONDS = 300
+REQUEST_TIMEOUT_SECONDS = 180
 
 
 def build_a2a_request(conversation_id: str, user_text: str) -> str:
@@ -63,32 +63,13 @@ def parse_sse_stream(response: requests.Response) -> list[dict]:
     return events
 
 
-def _extract_event_and_content(inner) -> tuple[str, str]:
-    """从解析后的 JSON 中提取事件类型和内容。
-
-    支持两种格式：
-    1. 旧格式（直接）: {"event": "conversation_start", "content": "..."}
-    2. 新格式（payload 嵌套）: {"type": "custom", "payload": {"event": "conversation_start", "content": "..."}}
-    """
-    if not isinstance(inner, dict):
-        return "", ""
-    event_type = inner.get("event", "")
-    content = inner.get("content", "")
-    if not event_type:
-        payload = inner.get("payload", {})
-        if isinstance(payload, dict):
-            event_type = payload.get("event", "")
-            content = payload.get("content", content)
-    return event_type, content if content is not None else ""
-
-
 def extract_event_types(events: list[dict]) -> list[str]:
     """从 SSE 事件列表中提取事件类型序列。
 
     A2A SSE 事件结构：
-        {"jsonrpc":"2.0","id":1,"result":{"artifactUpdate":{"artifact":{"parts":[{"text":"{\"type\":\"custom\",\"payload\":{\"event\":\"conversation_start\",...}}"}]}}}}
+        {"jsonrpc":"2.0","id":1,"result":{"artifactUpdate":{"artifact":{"parts":[{"text":"{\"event\":\"conversation_start\",...}"}]}}}}
 
-    事件类型编码在 parts[0].text 的 JSON 的 payload.event 字段中。
+    事件类型编码在 parts[0].text 的 JSON 的 "event" 字段中。
     """
     types = []
     for evt in events:
@@ -103,7 +84,7 @@ def extract_event_types(events: list[dict]) -> list[str]:
                 text = part["text"]
                 try:
                     inner = json.loads(text)
-                    event_type, _ = _extract_event_and_content(inner)
+                    event_type = inner.get("event", "")
                     if event_type:
                         types.append(event_type)
                 except (json.JSONDecodeError, TypeError):
@@ -181,9 +162,12 @@ def extract_events_with_content(events: list[dict]) -> list[tuple[str, str]]:
                 text = part["text"]
                 try:
                     inner = json.loads(text)
-                    event_type, content = _extract_event_and_content(inner)
+                    event_type = inner.get("event", "")
                     if not event_type:
                         continue
+                    content = inner.get("content", "")
+                    if content is None:
+                        content = ""
                     if event_type == "think_chunk":
                         # 在截断前检测 skill_tool
                         think_chunk_skill_flags[len(pairs)] = _detect_skill_from_content(content)
@@ -228,7 +212,8 @@ def extract_text_chunks(events: list[dict]) -> list[str]:
                 text = part["text"]
                 try:
                     inner = json.loads(text)
-                    event_type, content = _extract_event_and_content(inner)
+                    event_type = inner.get("event", "")
+                    content = inner.get("content", "")
                     if event_type and content:
                         raw_pairs.append((event_type, content))
                 except (json.JSONDecodeError, TypeError):
@@ -355,136 +340,12 @@ def assert_round4_events(events: list[dict], query: str):
     print(f"  [PASS] 轮次4断言通过（query=\"{query}\"）")
 
 
-def fetch_redis_todolist(conversation_id: str) -> list[dict] | None:
-    """从 Redis 获取当前会话的 todolist 快照。
-
-    返回 TodoItem 列表，Redis 不可用或无数据时返回 None。
-    """
-    try:
-        import redis as redis_lib
-        r = redis_lib.Redis(host="localhost", port=6379, db=0)
-        key = f"{conversation_id}:todo"
-        raw = r.get(key)
-        if raw:
-            return json.loads(raw)
-    except Exception:
-        pass
-    return None
-
-
-def fetch_redis_toolcount(conversation_id: str) -> dict | None:
-    """从 Redis Hash 获取工具调用次数计数（ExecutionLimitRail 持久化）。
-
-    Redis key: edpa:toolcount:{sessionId}（Hash 类型）
-    field: 工具名, value: 调用次数（整数）
-    TTL: 3600 秒，需在会话结束后 1 小时内查询。
-    """
-    try:
-        import redis as redis_lib
-        r = redis_lib.Redis(host="localhost", port=6379, db=0)
-        key = f"edpa:toolcount:{conversation_id}"
-        entries = r.hgetall(key)
-        if entries:
-            result = {}
-            for k, v in entries.items():
-                name = k.decode() if isinstance(k, bytes) else str(k)
-                result[name] = int(v)
-            return result
-    except Exception:
-        pass
-    return None
-
-
-def extract_tool_calls_detail(events: list[dict]) -> list[dict]:
-    """从 SSE 事件中提取所有工具调用详情，给出具体工具函数名。
-
-    识别所有工具调用类型：
-    - tool_start/tool_end → 外部工具调用（如 call_versatile）
-    - todolist_start/end → todo_create/todo_modify
-    - todo_start → todo_modify→IN_PROGRESS
-    - todo_end → todo_modify→COMPLETED/CANCELLED
-    - interrupt_start → ask_user
-    - final_answer_start → final_answer
-
-    返回 [{name, has_end}, ...]
-    """
-    # 提取所有 (event_type, content, payload) 三元组
-    triples = []
-    for evt in events:
-        if not isinstance(evt, dict):
-            continue
-        result = evt.get("result", {})
-        artifact_update = result.get("artifactUpdate", {})
-        artifact = artifact_update.get("artifact", {})
-        parts = artifact.get("parts", [])
-        for part in parts:
-            if not (isinstance(part, dict) and "text" in part):
-                continue
-            try:
-                inner = json.loads(part["text"])
-                if not isinstance(inner, dict):
-                    continue
-                event_type = inner.get("event", "")
-                content = inner.get("content", "")
-                payload = inner.get("payload", {})
-                if not event_type and isinstance(payload, dict):
-                    event_type = payload.get("event", "")
-                    content = payload.get("content", content)
-                if not event_type:
-                    continue
-                triples.append((event_type, content or "",
-                                payload if isinstance(payload, dict) else {}))
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-    # 识别所有工具调用类型，给出具体工具函数名
-    calls = []
-    pending_tool_start = None
-    for et, content, payload in triples:
-        if et == "tool_start":
-            # 尝试从 payload 中提取工具函数名
-            tool_name = (payload.get("tool_name", "") or payload.get("toolName", "")
-                         or payload.get("name", ""))
-            if pending_tool_start:
-                calls.append(pending_tool_start)
-            pending_tool_start = {"name": tool_name or f"tool({content[:20]})",
-                                   "has_end": False}
-        elif et == "tool_end":
-            if pending_tool_start:
-                pending_tool_start["has_end"] = True
-                calls.append(pending_tool_start)
-                pending_tool_start = None
-            else:
-                calls.append({"name": "tool(unknown)", "has_end": True})
-        elif et == "todolist_start":
-            calls.append({"name": "todo_create/todo_modify", "has_end": True})
-        elif et == "todolist_end":
-            pass  # todolist_start 已计数，end 不重复
-        elif et == "todo_start":
-            calls.append({"name": "todo_modify→IN_PROGRESS", "has_end": True})
-        elif et == "todo_end":
-            name = "todo_modify→COMPLETED"
-            if content and ("取消" in content or "CANCEL" in str(content).upper()):
-                name = "todo_modify→CANCELLED"
-            calls.append({"name": name, "has_end": True})
-        elif et == "interrupt_start":
-            calls.append({"name": "ask_user", "has_end": True})
-        elif et == "final_answer_start":
-            calls.append({"name": "final_answer", "has_end": True})
-    if pending_tool_start:
-        calls.append(pending_tool_start)
-    return calls
-
-
 def build_test_report(conversation_id: str, all_events: list[list[dict]], queries: list[str],
-                      round_durations: list[float], total_duration: float,
-                      round_redis_snapshots: list | None = None,
-                      round_tool_calls: list | None = None,
-                      round_toolcount_snapshots: list | None = None) -> str:
+                      round_durations: list[float], total_duration: float) -> str:
     """构建结构化测试报告（Markdown 格式字符串）。"""
     # 检测被测服务是否具备 Redis 能力（通过检查本次会话是否写入了 Redis）
     redis_enabled = False
-    redis_key = f"{conversation_id}:todo"
+    redis_key = f"edpa:todo:state:default:edp-agent:{conversation_id}"
     try:
         import redis as redis_lib
         r = redis_lib.Redis(host="localhost", port=6379, db=0)
@@ -631,69 +492,6 @@ def build_test_report(conversation_id: str, all_events: list[list[dict]], querie
             lines.append(f"- {chunk}")
         lines.append("")
 
-    # 各轮 Redis Todolist 快照与工具调用
-    lines.append("## 各轮 Redis Todolist 快照与工具调用")
-    lines.append("")
-    for i, query in enumerate(queries):
-        lines.append(f"### 轮次{i+1} (query=\"{query}\")")
-        lines.append("")
-        # Redis todolist 快照
-        redis_snapshot = (round_redis_snapshots[i] if round_redis_snapshots
-                          and i < len(round_redis_snapshots) else None)
-        if redis_snapshot:
-            lines.append(f"- **Redis todolist** ({len(redis_snapshot)} 项):")
-            for t in redis_snapshot:
-                status = t.get("status", "?")
-                content = t.get("content", "?")
-                deps = t.get("depends_on", [])
-                dep_str = f" deps={deps}" if deps else ""
-                lines.append(f"  - [{status}] {content}{dep_str}")
-        else:
-            lines.append("- **Redis todolist**: 无数据（Redis 不可用或会话未写入）")
-        # 工具调用情况（按工具名分组计数）
-        tool_calls = (round_tool_calls[i] if round_tool_calls
-                      and i < len(round_tool_calls) else [])
-        if tool_calls:
-            from collections import Counter
-            tool_counter = Counter(tc.get('name', 'unknown') for tc in tool_calls)
-            lines.append(f"- **工具调用** ({len(tool_calls)} 次):")
-            for name, count in tool_counter.most_common():
-                lines.append(f"  - {name}: {count} 次")
-        else:
-            lines.append("- **工具调用**: 无")
-        # Redis 工具调用计数（ExecutionLimitRail 持久化）
-        toolcount = (round_toolcount_snapshots[i] if round_toolcount_snapshots
-                     and i < len(round_toolcount_snapshots) else None)
-        if toolcount:
-            prev_count = (round_toolcount_snapshots[i - 1] if i > 0 and round_toolcount_snapshots
-                          and i - 1 < len(round_toolcount_snapshots)
-                          and round_toolcount_snapshots[i - 1] else {})
-            lines.append(f"- **Redis 工具调用计数** ({len(toolcount)} 个工具):")
-            for name, count in sorted(toolcount.items()):
-                prev_val = prev_count.get(name, 0) if prev_count else 0
-                delta = count - prev_val
-                delta_str = f"+{delta}" if delta >= 0 else str(delta)
-                lines.append(f"  - {name}: {count} ({delta_str})")
-        else:
-            lines.append("- **Redis 工具调用计数**: 无数据（TTL 过期或会话未写入）")
-        lines.append("")
-
-    # 工具累计调用次数
-    if round_tool_calls:
-        from collections import Counter
-        all_tool_counter = Counter()
-        for round_calls in round_tool_calls:
-            for tc in round_calls:
-                all_tool_counter[tc.get('name', 'unknown')] += 1
-        lines.append("## 工具累计调用次数")
-        lines.append("")
-        lines.append("| 工具名称 | 累计调用次数 |")
-        lines.append("|---|---:|")
-        for name, count in all_tool_counter.most_common():
-            lines.append(f"| {name} | {count} |")
-        lines.append(f"| **合计** | **{sum(all_tool_counter.values())}** |")
-        lines.append("")
-
     # 关键事件检查
     lines.append("## 关键事件检查")
     lines.append("")
@@ -745,7 +543,7 @@ def build_test_report(conversation_id: str, all_events: list[list[dict]], querie
     try:
         import redis as redis_lib
         r = redis_lib.Redis(host="localhost", port=6379, db=0)
-        key = f"{conversation_id}:todo"
+        key = f"edpa:todo:state:default:edp-agent:{conversation_id}"
         raw = r.get(key)
         ttl = r.ttl(key)
         if raw:
@@ -778,14 +576,9 @@ def build_test_report(conversation_id: str, all_events: list[list[dict]], querie
 
 
 def print_test_report(conversation_id: str, all_events: list[list[dict]], queries: list[str],
-                      round_durations: list[float], total_duration: float,
-                      round_redis_snapshots: list | None = None,
-                      round_tool_calls: list | None = None,
-                      round_toolcount_snapshots: list | None = None):
+                      round_durations: list[float], total_duration: float):
     """打印结构化测试报告并保存为 Markdown 文件。"""
-    report = build_test_report(conversation_id, all_events, queries, round_durations,
-                               total_duration, round_redis_snapshots, round_tool_calls,
-                               round_toolcount_snapshots)
+    report = build_test_report(conversation_id, all_events, queries, round_durations, total_duration)
     # 控制台输出
     print(report)
     # 保存为 md 文件
@@ -814,9 +607,6 @@ def test_wealth_recommend_three_rounds():
 
     all_events = []
     round_durations = []
-    round_redis_snapshots = []
-    round_tool_calls = []
-    round_toolcount_snapshots = []
     test_start = time.time()
 
     for i, (query, assert_fn) in enumerate(zip(queries, assert_fns)):
@@ -826,51 +616,12 @@ def test_wealth_recommend_three_rounds():
         all_events.append(events)
         assert_fn(events, query)
 
-        # 每轮完成后获取 Redis todolist 快照
-        todos = fetch_redis_todolist(conversation_id)
-        round_redis_snapshots.append(todos)
-        if todos:
-            print(f"  [Redis] todolist ({len(todos)} 项):")
-            for t in todos:
-                status = t.get("status", "?")
-                content = t.get("content", "?")
-                print(f"    [{status}] {content}")
-        else:
-            print(f"  [Redis] 无数据")
-
-        # 每轮完成后提取工具调用情况
-        tool_calls = extract_tool_calls_detail(events)
-        round_tool_calls.append(tool_calls)
-        if tool_calls:
-            from collections import Counter
-            tool_counter = Counter(tc.get('name', 'unknown') for tc in tool_calls)
-            print(f"  [工具调用] {len(tool_calls)} 次:")
-            for name, count in tool_counter.most_common():
-                print(f"    {name}: {count} 次")
-
-        # 每轮完成后从 Redis 获取工具调用计数（ExecutionLimitRail 持久化）
-        toolcount = fetch_redis_toolcount(conversation_id)
-        round_toolcount_snapshots.append(toolcount)
-        if toolcount:
-            prev_count = (round_toolcount_snapshots[-2] if len(round_toolcount_snapshots) >= 2
-                          and round_toolcount_snapshots[-2] else {})
-            print(f"  [Redis toolcount] {len(toolcount)} 个工具:")
-            for name, count in sorted(toolcount.items()):
-                prev_val = prev_count.get(name, 0) if prev_count else 0
-                delta = count - prev_val
-                delta_str = f"+{delta}" if delta >= 0 else str(delta)
-                print(f"    {name}: {count} ({delta_str})")
-        else:
-            print(f"  [Redis toolcount] 无数据")
-
         if i < len(queries) - 1:
             print(f"  等待 {ROUND_INTERVAL_SECONDS} 秒后发送下一轮...")
             time.sleep(ROUND_INTERVAL_SECONDS)
 
     total_duration = time.time() - test_start
-    print_test_report(conversation_id, all_events, queries, round_durations,
-                      total_duration, round_redis_snapshots, round_tool_calls,
-                      round_toolcount_snapshots)
+    print_test_report(conversation_id, all_events, queries, round_durations, total_duration)
 
 
 if __name__ == "__main__":

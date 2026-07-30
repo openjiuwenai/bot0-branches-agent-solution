@@ -62,7 +62,7 @@ edp-agent-integration-example/
 
 ```bash
 java -jar target/customer-agent-app-1.0.0.jar \
-  --edpa.agent.scenario-home=./scenarios/hz-zhidaitong
+  --deep-agent.scenario-home=./scenarios/hz-zhidaitong
 ```
 
 ## 前置条件
@@ -210,7 +210,7 @@ java -jar target/customer-agent-app-1.0.0.jar
 
 # 运行（切换 hz-zhidaitong 场景）
 java -jar target/customer-agent-app-1.0.0.jar \
-  --edpa.agent.scenario-home=./scenarios/hz-zhidaitong
+  --deep-agent.scenario-home=./scenarios/hz-zhidaitong
 ```
 
 ### 第七步：调用
@@ -279,7 +279,7 @@ deepAgent.getAgent().registerRail(new CustomerAuditRail());
 ### 配置覆盖
 
 所有配置均可通过以下方式覆盖（优先级从高到低）：
-1. 命令行参数：`--edpa.agent.model.name=xxx`
+1. 命令行参数：`--deep-agent.model.model=xxx`
 2. 环境变量：`EDP_AGENT_MODEL_NAME=xxx`
 3. 外部配置文件：`--spring.config.additional-location=file:./config.yml`
 4. application.yml 默认值
@@ -310,7 +310,7 @@ COPY target/customer-agent-app-1.0.0.jar /app/app.jar
 COPY scenarios/ /app/scenarios/
 WORKDIR /app
 EXPOSE 8190
-ENTRYPOINT ["java", "-jar", "app.jar", "--edpa.agent.scenario-home=./scenarios/wealth-demo"]
+ENTRYPOINT ["java", "-jar", "app.jar", "--deep-agent.scenario-home=./scenarios/wealth-demo"]
 ```
 
 ## 常见问题
@@ -322,10 +322,10 @@ A: 确认 plain JAR（非 fat jar）已安装到本地 Maven 仓库。fat jar（
 A: 检查 Redis 是否启动、API Key 是否设置、场景目录是否存在。
 
 **Q: 如何切换场景？**
-A: 修改 `application.yml` 的 `scenario-home`，或通过命令行参数 `--edpa.agent.scenario-home=./scenarios/hz-zhidaitong` 覆盖。
+A: 修改 `application.yml` 的 `scenario-home`，或通过命令行参数 `--deep-agent.scenario-home=./scenarios/hz-zhidaitong` 覆盖。
 
 **Q: 如何切换 LLM 模型？**
-A: 修改 `application.yml` 的 `edpa.agent.model.*` 或设置环境变量。
+A: 修改 `application.yml` 的 `deep-agent.backend.*` / `deep-agent.model.*` 或设置环境变量。
 
 **Q: 客户自定义 Tool/Rail 如何注册？**
 A: 参考 `CustomerAgentConfig.java`，注入 `AgentHandler`，强转为 `EdpaExtHandler`，通过 `getDeepAgent()` 获取 `DeepAgent` 后注册。

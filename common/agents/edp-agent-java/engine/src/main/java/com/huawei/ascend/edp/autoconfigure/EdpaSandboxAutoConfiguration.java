@@ -31,7 +31,7 @@ import org.springframework.context.annotation.Bean;
 /**
  * 沙箱 Spring Auto-Configuration -- 条件注册沙箱相关 Bean。
  *
- * <p>仅在 {@code edpa.agent.sandbox.enabled=true} 时生效。
+ * <p>仅在 {@code deep-agent.sandbox.enabled=true} 时生效。
  * 注册 SandboxInitHook 和 SandboxShutdownHook 的保底 Bean
  * （它们本身已有 @Component 注解，此处为 Spring Boot Auto-Configuration 规范保底）。</p>
  *
@@ -41,7 +41,7 @@ import org.springframework.context.annotation.Bean;
 
 @AutoConfiguration
 @EnableConfigurationProperties(SandboxConfig.class)
-@ConditionalOnProperty(prefix = "edpa.agent.sandbox", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "deep-agent.sandbox", name = "enabled", havingValue = "true")
 public class EdpaSandboxAutoConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpaSandboxAutoConfiguration.class);
 

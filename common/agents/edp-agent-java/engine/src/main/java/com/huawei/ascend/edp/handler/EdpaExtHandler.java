@@ -20,6 +20,7 @@ import com.huawei.ascend.edp.channel.ToolDataChannel;
 import com.huawei.ascend.edp.config.ActRuleConfig;
 import com.huawei.ascend.edp.config.EdpAgentConfig;
 import com.huawei.ascend.edp.config.EdpConfig;
+import com.huawei.ascend.edp.config.DeepAgentProperties;
 import com.huawei.ascend.edp.config.EdpConfigValidator;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.config.EdpaTodolist;
@@ -391,8 +392,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * @return InitResult 包含真实 agent 实例和初始化产物
      */
 
-    public static InitResult performInit(EdpaSpringBootConfig config, String agentName,
-            SandboxClient decoratedSandboxClient) {
+    public static InitResult performInit(EdpaSpringBootConfig config, DeepAgentProperties deepAgentProperties,
+            String agentName, SandboxClient decoratedSandboxClient) {
         LOGGER.info("EdpaExtHandler performInit start (Phase 2)");
         InitResult result = new InitResult();
         result.setSpringBootConfig(config);
@@ -400,7 +401,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         result.setEdpConfig(new EdpConfig());
         Path yamlDir = Path.of("src/main/resources").toAbsolutePath().normalize();
         // 第三至五步：解析 scenarioHome、加载 Governance、配置校验 fail-fast。
-        loadGovernanceAndValidate(result, config, yamlDir);
+        loadGovernanceAndValidate(result, config, deepAgentProperties, yamlDir);
 
         // 第六步：从 Governance actrule 加载 Todo 数据层。
         ActRuleConfig actrule = result.getGovernanceConfig() != null
@@ -412,7 +413,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
 
         // 第八步：构造 DeepAgentConfig（使用 EdpaSpringBootConfig.ModelConfig）。
         Path skillsDir = result.getScenarioHomePath() != null ? result.getScenarioHomePath().resolve("skills") : null;
-        DeepAgentConfig deepAgentConfig = buildDeepAgentConfig(config, result.getEdpConfig(), actrule, systemPrompt,
+        DeepAgentConfig deepAgentConfig = buildDeepAgentConfig(deepAgentProperties, result.getEdpConfig(), actrule, systemPrompt,
                 skillsDir);
 
         // 第九步：通过 HarnessFactory 创建 DeepAgent。
@@ -451,7 +452,8 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * @param config EDPAgent 合并后配置
      * @param yamlDir 框架资源目录（src/main/resources）
      */
-    private static void loadGovernanceAndValidate(InitResult result, EdpaSpringBootConfig config, Path yamlDir) {
+    private static void loadGovernanceAndValidate(InitResult result, EdpaSpringBootConfig config,
+            DeepAgentProperties deepAgentProperties, Path yamlDir) {
         // 第三步：解析 scenarioHome 路径。
         String scenarioHome = config.getScenarioHome();
         if (scenarioHome != null && !scenarioHome.isBlank()) {
@@ -491,7 +493,7 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
         }
 
         // 第五步：配置校验 fail-fast。
-        EdpConfigValidator.validateModelConfig(config.getModel());
+        EdpConfigValidator.validateModelConfig(deepAgentProperties);
         // versatile.url 已废弃（改用 A2A remote-agents），不再校验 VersatileUrl。
         EdpConfigValidator.validateSandboxConfig(config.getSandbox());
         if (result.getScenarioHomePath() != null) {
@@ -818,42 +820,55 @@ public class EdpaExtHandler extends JiuwenCoreAgentExtHandler {
      * @return the result
      */
 
-    private static DeepAgentConfig buildDeepAgentConfig(EdpaSpringBootConfig config, EdpConfig edpConfig,
+    private static DeepAgentConfig buildDeepAgentConfig(DeepAgentProperties deepAgentProperties, EdpConfig edpConfig,
             ActRuleConfig actrule, String systemPrompt, Path skillsDir) {
-        EdpaSpringBootConfig.ModelConfig model = config.getModel();
+        EdpaSpringBootConfig.BackendConfig backend = deepAgentProperties.getBackend();
+        EdpaSpringBootConfig.ModelConfig model = deepAgentProperties.getModel();
 
         Map<String, Object> modelMap = new LinkedHashMap<>();
         Map<String, Object> backendMap = new LinkedHashMap<>();
 
-        if (model != null) {
-            // 对齐 Python agent.py L138-141: [EDP-LLM-CONFIG] applied sampling override
-            EdpConfig.LlmSampling sampling = edpConfig != null ? edpConfig.getLlmSampling() : null;
-            LOGGER.info(
-                    "[EDP-LLM-CONFIG] applied model config: provider={}, name={}, baseUrl={}, "
-                            + "temperature={}, topP={}, maxRetries={}",
-                    model.getProvider(), model.getName(), model.getBaseUrl(),
-                    sampling != null ? sampling.getTemperature() : "N/A", sampling != null ? sampling.getTopP() : "N/A",
-                    sampling != null ? sampling.getMaxRetries() : "N/A");
-            modelMap.put("model", model.getName());
-            modelMap.put("model_name", model.getName());
+        EdpConfig.LlmSampling sampling = edpConfig != null ? edpConfig.getLlmSampling() : null;
 
+        if (backend != null) {
+            LOGGER.info(
+                    "[EDP-LLM-CONFIG] applied backend config: clientProvider={}, apiBase={}, timeout={}, "
+                            + "maxRetries={}, verifySsl={}",
+                    backend.getClientProvider(), backend.getApiBase(), backend.getTimeout(),
+                    backend.getMaxRetries(), backend.isVerifySsl());
+            backendMap.put("provider", backend.getClientProvider());
+            backendMap.put("client_provider", backend.getClientProvider());
+            backendMap.put("apiKey", backend.getApiKey());
+            backendMap.put("api_key", backend.getApiKey());
+            backendMap.put("baseUrl", backend.getApiBase());
+            backendMap.put("apiBase", backend.getApiBase());
+            backendMap.put("api_base", backend.getApiBase());
+            backendMap.put("timeout", backend.getTimeout());
+            backendMap.put("max_retries", backend.getMaxRetries());
+            backendMap.put("verify_ssl", backend.isVerifySsl());
+            if (backend.getSslCert() != null && !backend.getSslCert().isBlank()) {
+                backendMap.put("ssl_cert", backend.getSslCert());
+            }
+            if (backend.getClientId() != null && !backend.getClientId().isBlank()) {
+                backendMap.put("client_id", backend.getClientId());
+            }
+        }
+
+        if (model != null) {
+            modelMap.put("model", model.getModel());
+            modelMap.put("model_name", model.getModel());
+            if (model.getThinking() != null) {
+                modelMap.put("thinking", Map.of("type", model.getThinking().getType()));
+            }
             if (sampling != null) {
                 modelMap.put("temperature", sampling.getTemperature());
                 modelMap.put("top_p", sampling.getTopP());
             }
-
-            backendMap.put("provider", model.getProvider());
-            backendMap.put("client_provider", model.getProvider());
-            backendMap.put("apiKey", model.getApiKey());
-            backendMap.put("api_key", model.getApiKey());
-            backendMap.put("baseUrl", model.getBaseUrl());
-            backendMap.put("apiBase", model.getBaseUrl());
-            backendMap.put("api_base", model.getBaseUrl());
         }
 
         // 对齐 Python agent.py L131-134: [EDP-LLM-CONFIG] model_config_obj is None; sampling override SKIPPED
-        if (model == null) {
-            LOGGER.warn("[EDP-LLM-CONFIG] model config is null; LLM configuration SKIPPED");
+        if (backend == null && model == null) {
+            LOGGER.warn("[EDP-LLM-CONFIG] backend/model config is null; LLM configuration SKIPPED");
         }
 
         List<String> skillDirs = (skillsDir != null && Files.exists(skillsDir))

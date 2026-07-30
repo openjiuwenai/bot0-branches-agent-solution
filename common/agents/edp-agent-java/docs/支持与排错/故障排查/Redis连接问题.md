@@ -306,12 +306,12 @@ EDPA_REDIS_SOCKET_TIMEOUT=30000     # 读写超时30秒
 ## 相关配置/日志关键词
 
 ### 配置项
-- `edpa.agent.redis.host` - Redis主机
-- `edpa.agent.redis.port` - Redis端口
-- `edpa.agent.redis.password` - Redis密码
-- `edpa.agent.redis.mode` - Redis模式（single/sentinel/cluster）
-- `edpa.agent.redis.connect-timeout-ms` - 连接超时（毫秒）
-- `edpa.agent.redis.socket-timeout-ms` - 读写超时（毫秒）
+- `deep-agent.redis.host` - Redis主机
+- `deep-agent.redis.port` - Redis端口
+- `deep-agent.redis.password` - Redis密码
+- `deep-agent.redis.mode` - Redis模式（single/sentinel/cluster）
+- `deep-agent.redis.connect-timeout-ms` - 连接超时（毫秒）
+- `deep-agent.redis.socket-timeout-ms` - 读写超时（毫秒）
 
 ### 日志关键词（启动时搜索这些）
 - `[EDPA-DIAG] REDIS_CONFIG` - Redis配置打印

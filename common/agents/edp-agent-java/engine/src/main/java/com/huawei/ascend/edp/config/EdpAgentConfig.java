@@ -628,11 +628,6 @@ public class EdpAgentConfig {
         private String modelBaseUrl;
 
         /**
-         * Versatile URL，从 EDP_AGENT_VERSATILE_URL 环境变量覆盖。
-         */
-        private String versatileUrl;
-
-        /**
          * 获取模型 API Key 环境覆盖值。
          *
          * @return API Key
@@ -702,24 +697,6 @@ public class EdpAgentConfig {
          */
         public void setModelBaseUrl(String modelBaseUrl) {
             this.modelBaseUrl = modelBaseUrl;
-        }
-
-        /**
-         * 获取 Versatile URL 环境覆盖值。
-         *
-         * @return Versatile 服务地址
-         */
-        public String getVersatileUrl() {
-            return versatileUrl;
-        }
-
-        /**
-         * 设置 Versatile URL 环境覆盖值。
-         *
-         * @param versatileUrl Versatile 服务地址
-         */
-        public void setVersatileUrl(String versatileUrl) {
-            this.versatileUrl = versatileUrl;
         }
     }
 }

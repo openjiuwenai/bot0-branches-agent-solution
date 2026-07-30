@@ -2,7 +2,7 @@
 
 ## 1. 配置前缀与参数表
 
-Redis 配置前缀为 `edpa.agent.redis`，对应类 `TodoRedisProperties`（仅承载连接参数与 Checkpointer TTL，不再包含 Todo 子配置）。
+Redis 配置前缀为 `deep-agent.redis`，对应类 `TodoRedisProperties`（仅承载连接参数与 Checkpointer TTL，不再包含 Todo 子配置）。
 
 ### 1.1 基础连接参数
 
@@ -264,7 +264,7 @@ Todo key（`{rawSessionId}:todo`）与工具调用计数 key（`edpa:toolcount:{
 | 类 | 模块 | 职责 |
 |----|------|------|
 | `RedisConfig` | `engine` | Spring `@Configuration`，创建 `LettuceConnectionFactory`、`StringRedisTemplate`，注册 `RedisCheckpointer`（`initRedisCheckpointer`）；静态暴露 `getStringRedisTemplate()` / `getRedisProperties()`。**不再创建 `RedisTodoStore` Bean** |
-| `TodoRedisProperties` | `engine` | `@ConfigurationProperties(prefix = "edpa.agent.redis")`，承载连接参数与 `checkpointer-ttl-minutes`（不含 Todo 子配置） |
+| `TodoRedisProperties` | `engine` | `@ConfigurationProperties(prefix = "deep-agent.redis")`，承载连接参数与 `checkpointer-ttl-minutes`（不含 Todo 子配置） |
 | `EdpaExtHandler` | `engine` | `buildKvStoreConfig()` 从 `RedisConfig.getRedisProperties()` 构建 `kvStoreConfig`（`type=redis, conf={host,port,password,cluster}`），通过 `DeepAgentConfig.todoStorageType` / `kvStoreConfig` 传给 agent-core |
 | `KvTodoStorage` / `FileTodoStorage` | `core-sdk` | agent-core 的 `TodoStorage` SPI 实现：`KvTodoStorage` 走 Redis，`FileTodoStorage` 走文件 |
 | `ExecutionLimitRail` | `engine` | 工具调用计数持久化，常量 `REDIS_KEY_PREFIX="edpa"`、`TOOL_COUNT_TTL_SECONDS=3600L`，通过 `RedisConfig.getStringRedisTemplate()` 读写 `edpa:toolcount:{sessionId}` |
