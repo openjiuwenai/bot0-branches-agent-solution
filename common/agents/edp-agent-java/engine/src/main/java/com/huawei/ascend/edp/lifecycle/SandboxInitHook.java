@@ -66,7 +66,7 @@ import java.util.Optional;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 100)
-@ConditionalOnProperty(prefix = "edpa.agent.sandbox", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "deep-agent.sandbox", name = "enabled", havingValue = "true")
 public class SandboxInitHook implements AgentInitHook {
     private static final Logger LOGGER = LoggerFactory.getLogger(SandboxInitHook.class);
 

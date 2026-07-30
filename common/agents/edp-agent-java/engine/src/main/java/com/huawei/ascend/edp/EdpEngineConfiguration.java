@@ -16,6 +16,7 @@
 
 package com.huawei.ascend.edp;
 
+import com.huawei.ascend.edp.config.DeepAgentProperties;
 import com.huawei.ascend.edp.config.EdpaSpringBootConfig;
 import com.huawei.ascend.edp.handler.EdpaExtHandler;
 
@@ -50,7 +51,7 @@ import java.util.Optional;
  */
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(EdpaSpringBootConfig.class)
+@EnableConfigurationProperties({EdpaSpringBootConfig.class, DeepAgentProperties.class})
 public class EdpEngineConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpEngineConfiguration.class);
 
@@ -65,6 +66,7 @@ public class EdpEngineConfiguration {
      * 不再需要 EnvOverrides 手动覆盖（Spring Boot ${ENV_VAR:default} 自动处理）。</p>
      *
      * @param config EDPAgent 合并后配置属性（含 scenarioHome/model/versatile/mcpsse）
+     * @param deepAgentProperties DeepAgent 标准配置属性（含 backend/model）
      * @param agentName the agentName value
      * @param sandboxClientFactoryProvider the sandboxClientFactoryProvider value
      * @return 已初始化的 AgentHandler Bean
@@ -72,13 +74,14 @@ public class EdpEngineConfiguration {
 
     @Bean
     AgentHandler edpaExtHandler(EdpaSpringBootConfig config,
+            DeepAgentProperties deepAgentProperties,
             @Value("${openjiuwen.service.a2a.agent-name:EDPAgent}") String agentName,
             ObjectProvider<AgentCoreSandboxClientFactory> sandboxClientFactoryProvider) {
         // 需求2：通过 agent-runtime-java 中转获取治理装饰 SandboxClient
         SandboxClient decoratedSandboxClient = resolveDecoratedSandboxClient(sandboxClientFactoryProvider).orElse(null);
 
         // Bean 创建阶段先完成全部初始化，获取真实 agent 实例
-        EdpaExtHandler.InitResult initResult = EdpaExtHandler.performInit(config, agentName,
+        EdpaExtHandler.InitResult initResult = EdpaExtHandler.performInit(config, deepAgentProperties, agentName,
                 decoratedSandboxClient);
 
         // 用真实 agent 实例构造 Handler，消除反射 hack

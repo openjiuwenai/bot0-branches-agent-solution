@@ -39,7 +39,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE)
-@ConditionalOnProperty(prefix = "edpa.agent.sandbox", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "deep-agent.sandbox", name = "enabled", havingValue = "true")
 public class SandboxShutdownHook implements AgentShutdownHook {
     private static final Logger LOGGER = LoggerFactory.getLogger(SandboxShutdownHook.class);
 

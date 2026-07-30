@@ -56,7 +56,7 @@
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-adapters-agentcore-ext</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>0.1.0</version>
         </dependency>
 
         <!-- OpenJiuwen agent-service-spec（SPI 接口） -->
@@ -96,6 +96,13 @@
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
+        </dependency>
+
+        <!-- Protobuf（统一版本，避免 protobuf-java 3.x 与 protobuf-java-util 4.x 冲突） -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>4.33.2</version>
         </dependency>
 
         <!-- 测试 -->
