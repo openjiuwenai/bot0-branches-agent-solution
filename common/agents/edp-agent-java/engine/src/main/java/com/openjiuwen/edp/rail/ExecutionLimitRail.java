@@ -18,7 +18,6 @@ package com.openjiuwen.edp.rail;
 
 import com.openjiuwen.edp.config.ActRuleConfig;
 import com.openjiuwen.edp.config.RedisConfig;
-
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;

@@ -20,7 +20,6 @@ import com.openjiuwen.edp.config.EdpConfigValidator;
 import com.openjiuwen.edp.config.EdpaSpringBootConfig;
 import com.openjiuwen.edp.config.SandboxConfig;
 import com.openjiuwen.edp.service.SkillPackService;
-
 import com.openjiuwen.core.sysop.OperationMode;
 import com.openjiuwen.core.sysop.SysOperation;
 import com.openjiuwen.core.sysop.SysOperationCard;

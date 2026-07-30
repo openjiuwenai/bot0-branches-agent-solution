@@ -18,7 +18,6 @@ package com.openjiuwen.edp.tools;
 
 import com.openjiuwen.edp.config.ActRuleConfig;
 import com.openjiuwen.edp.config.EdpConfig;
-
 import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.foundation.tool.function.LocalFunction;

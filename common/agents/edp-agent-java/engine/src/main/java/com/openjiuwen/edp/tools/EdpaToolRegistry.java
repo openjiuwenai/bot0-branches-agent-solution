@@ -17,7 +17,6 @@
 package com.openjiuwen.edp.tools;
 
 import com.openjiuwen.edp.config.EdpConfig;
-
 import com.openjiuwen.core.foundation.tool.Tool;
 
 import java.util.Map;

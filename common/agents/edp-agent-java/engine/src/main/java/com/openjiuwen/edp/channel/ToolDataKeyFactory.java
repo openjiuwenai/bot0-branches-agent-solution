@@ -17,7 +17,6 @@
 package com.openjiuwen.edp.channel;
 
 import com.openjiuwen.edp.config.EdpConfig;
-
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;

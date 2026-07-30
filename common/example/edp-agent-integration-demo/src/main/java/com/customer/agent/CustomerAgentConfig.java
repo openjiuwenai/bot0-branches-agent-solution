@@ -5,7 +5,6 @@
 package com.customer.agent;
 
 import com.openjiuwen.edp.handler.EdpaExtHandler;
-
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;

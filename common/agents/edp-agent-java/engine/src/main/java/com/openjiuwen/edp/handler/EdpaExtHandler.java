@@ -32,7 +32,6 @@ import com.openjiuwen.edp.config.TodoRedisProperties;
 import com.openjiuwen.edp.enhancer.EdpaAgentEnhancer;
 import com.openjiuwen.edp.stream.PlanrulePromptBuilder;
 import com.openjiuwen.edp.stream.SkillScriptsCollector;
-
 import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.core.sysop.OperationMode;
