@@ -28,6 +28,7 @@ final class VersatileResponseExtractor {
     private final VersatileProperties properties;
     private final IntentAgentResolver agentResolver;
     private boolean isCompleted;
+    private boolean streamEndSeen;
     private boolean hasFailed;
     private final Map<String, String> extractedFields = new LinkedHashMap<>();
     private String error;
@@ -55,6 +56,9 @@ final class VersatileResponseExtractor {
         }
 
         Optional<JsonNode> json = readTree(data.get());
+        if (hasTextField(json.orElse(null), "event", "end")) {
+            streamEndSeen = true;
+        }
         if (matchesInterruptSignal(data.get(), json)) {
             interruptSignalSeen = true;
             extractInterruptFields(json.orElse(null));
@@ -127,8 +131,13 @@ final class VersatileResponseExtractor {
         if (isCompleted) {
             return List.of();
         }
-        return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
-                Map.of("message", "Remote agent requires input")));
+        if (streamEndSeen) {
+            return List.of(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
+                    Map.of("message", "Remote agent requires input")));
+        }
+        return List.of(new QueryChunk(QueryChunk.TYPE_ERROR,
+                "{\"code\":\"VERSATILE_STREAM_CLOSED_WITHOUT_TERMINAL\","
+                        + "\"reason\":\"stream closed before a recognized terminal signal\"}"));
     }
 
     private static boolean hasText(String value) {
