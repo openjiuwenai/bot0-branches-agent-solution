@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>EDPAgent 引擎的 AutoConfiguration 通过 scanBasePackages 自动扫描激活：
  * <ul>
  *   <li>com.openjiuwen.service.* — agent-runtime A2A/Query 入口</li>
- *   <li>com.huawei.ascend.edp.* — EDPA 引擎（handler/rails/tools/config）</li>
+ *   <li>com.openjiuwen.edp.* — EDPA 引擎（handler/rails/tools/config）</li>
  *   <li>com.customer.agent.* — 客户自定义代码</li>
  * </ul>
  *
@@ -25,7 +25,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication(scanBasePackages = {
     "com.customer.agent",
-    "com.huawei.ascend.edp"
+    "com.openjiuwen.edp"
 })
 public class CustomerApplication {
     public static void main(String[] args) {

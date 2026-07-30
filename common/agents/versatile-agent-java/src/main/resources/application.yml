@@ -17,9 +17,8 @@ openjiuwen:
     versatile:
 
       # 走意图识别（一级控制器）路径：Mock 根据 inputs.intent 在 scenarios/ 中匹配场景，
-      # 而非写死单个 workflow。FastAPI 路由为 /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}，
-      # 故 project_id=0 之后必须直接是 agents，不能再插 agent-manager 段，否则 404。
-      url-template: ${VERSATILE_URL:http://127.0.0.1:30001/v1/0/agents/versatile/conversations/{conversation_id}}
+      # 而非写死单个 workflow。FastAPI 路由为 /v1/{project_id}/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}。
+      url-template: ${VERSATILE_URL:http://127.0.0.1:30001/v1/0/agent-manager/workflows/versatile/conversations/{conversation_id}}
       timeout: ${VERSATILE_TIMEOUT:600s}
       forward-header-whitelist:
         - stream
@@ -49,6 +48,6 @@ logging:
   file:
     name: logs/run/run.log
   level:
-    com.huawei.ascend.versatile: DEBUG
+    com.openjiuwen.versatile: DEBUG
     com.openjiuwen.service.adapters.versatile: DEBUG
     com.openjiuwen.service.app: DEBUG

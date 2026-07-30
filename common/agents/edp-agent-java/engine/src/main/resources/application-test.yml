@@ -5,5 +5,5 @@ spring:
 
 logging:
   level:
-    com.huawei.ascend.edp: INFO
+    com.openjiuwen.edp: INFO
     com.openjiuwen: INFO
