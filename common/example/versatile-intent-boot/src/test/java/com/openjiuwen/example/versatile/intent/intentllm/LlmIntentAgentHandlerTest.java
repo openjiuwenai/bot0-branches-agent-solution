@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.intentllm;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +26,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests for {@link LlmIntentAgentHandler} classify/ambiguous shaping and
+ * per-conversation history accumulation.
+ *
+ * @since 0.1.0
+ */
 class LlmIntentAgentHandlerTest {
     private LlmIntentClient client;
     private LlmIntentPromptBuilder promptBuilder;
@@ -74,10 +84,21 @@ class LlmIntentAgentHandlerTest {
                         + "\"response_content\":\"国内酒店\"}");
         List<QueryChunk> emitted = new ArrayList<>();
         QueryStreamObserver obs = new QueryStreamObserver() {
-            @Override public void onNext(QueryChunk chunk) { emitted.add(chunk); }
-            @Override public void onError(Throwable t) { }
-            @Override public void onComplete() { }
-            @Override public boolean isCancelled() { return false; }
+            @Override
+            public void onNext(QueryChunk chunk) {
+                emitted.add(chunk);
+            }
+
+            @Override
+            public void onError(Throwable t) { }
+
+            @Override
+            public void onComplete() { }
+
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
         };
         handler().streamQuery(serveRequest("订酒店"), obs);
         assertThat(emitted).anyMatch(c -> QueryChunk.TYPE_INTERRUPT.equals(c.getType()));

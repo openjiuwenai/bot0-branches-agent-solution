@@ -83,7 +83,7 @@ public class LlmIntentAgentHandler implements AgentHandler {
             };
             observer.onNext(chunk);
             observer.onComplete();
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
             log.error("LlmIntent streamQuery failed conversation_id={}",
                     request.getConversationId(), e);
             observer.onError(e);
@@ -100,6 +100,8 @@ public class LlmIntentAgentHandler implements AgentHandler {
      * Appends the current user query to the per-conversation history so the LLM
      * receives prior inputs when classifying a follow-up message.
      *
+     * @param cid the conversation key (never blank)
+     * @param request the inbound serve request carrying the latest user query
      * @return the full ordered turn list for this conversation
      */
     private List<Map<String, Object>> appendUserTurn(String cid, ServeRequest request) {

@@ -9,6 +9,8 @@ import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ModelClientConfig;
 import com.openjiuwen.core.foundation.llm.schema.ModelRequestConfig;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 
@@ -39,17 +41,17 @@ class LlmIntentClient {
     }
 
     String complete(List<Map<String, Object>> messages) {
-        try {
-            AssistantMessage resp = model.invoke(messages, null, null, null, null, null, null, null, null, null);
-            Object content = resp.getContent();
-            return content != null ? content.toString() : "";
-        } catch (Exception e) {
-            throw new IllegalStateException("LLM call failed: " + e.getMessage(), e);
-        }
+        AssistantMessage resp = model.invokeAsync(messages, null, null, null, null, null, null, null, null, null)
+                .onErrorMap(e -> new IllegalStateException("LLM call failed: " + e.getMessage(), e))
+                .block();
+        Object content = resp.getContent();
+        return content != null ? content.toString() : "";
     }
 
     private static double timeoutSeconds(LlmIntentProperties properties) {
         long millis = properties.getTimeout() == null ? 30_000L : properties.getTimeout().toMillis();
-        return millis / 1000.0;
+        return BigDecimal.valueOf(millis)
+                .divide(BigDecimal.valueOf(1000L), 3, RoundingMode.HALF_UP)
+                .doubleValue();
     }
 }

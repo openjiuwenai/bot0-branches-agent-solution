@@ -4,6 +4,7 @@
 
 package com.openjiuwen.example.versatile.intent.intentllm;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -16,7 +17,15 @@ import java.util.Objects;
  */
 public record LlmIntentResult(Action action, String intentId, String agentId, String responseContent) {
 
-    public enum Action { CLASSIFY, AMBIGUOUS }
+    /**
+     * LLM 返回的意图分类动作.
+     *
+     * @since 0.1.0
+     */
+    public enum Action {
+        CLASSIFY,
+        AMBIGUOUS
+    }
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -48,11 +57,17 @@ public record LlmIntentResult(Action action, String intentId, String agentId, St
                         root.path("response_content").asText(""));
             }
             return ambiguous(ambId);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return ambiguous(ambId);
         }
     }
 
+    /**
+     * 构造一个 ambiguous 兜底结果，用于无法解析或非本领域的 LLM 输出.
+     *
+     * @param ambiguousIntentId 配置的 ambiguous 意图 id（null 时回退 "1"）
+     * @return 动作为 {@link Action#AMBIGUOUS} 的解析结果
+     */
     public static LlmIntentResult ambiguous(String ambiguousIntentId) {
         return new LlmIntentResult(Action.AMBIGUOUS,
                 Objects.requireNonNullElse(ambiguousIntentId, "1"),
