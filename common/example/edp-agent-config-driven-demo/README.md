@@ -63,17 +63,17 @@ chmod +x start.sh && ./start.sh
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | `server.port` | 服务端口 | 8190 |
-| `edpa.agent.scenario-home` | 场景目录路径 | ./scenarios/smart-customer-service |
-| `edpa.agent.model.provider` | 模型提供商 | OpenAI |
-| `edpa.agent.model.name` | 模型名称 | deepseek-v4-pro |
-| `edpa.agent.model.base-url` | 模型 API 地址 | https://api.deepseek.com/v1 |
-| `edpa.agent.model.api-key` | API Key | 环境变量 EDP_AGENT_MODEL_API_KEY |
-| `edpa.agent.redis.mode` | Redis 部署模式 | single |
-| `edpa.agent.redis.host` | Redis 主机 | localhost |
-| `edpa.agent.redis.port` | Redis 端口 | 6379 |
-| `edpa.agent.redis.todo.key-prefix` | Key 前缀（多实例隔离） | edpa |
-| `edpa.agent.redis.todo.ttl-seconds` | Todo TTL（秒） | 3600 |
-| `edpa.agent.sandbox.enabled` | 沙箱开关 | false |
+| `deep-agent.scenario-home` | 场景目录路径 | ./scenarios/smart-customer-service |
+| `deep-agent.backend.client_provider` | 模型提供商 | OpenAI |
+| `deep-agent.model.model` | 模型名称 | deepseek-v4-pro |
+| `deep-agent.backend.api_base` | 模型 API 地址 | https://api.deepseek.com/v1 |
+| `deep-agent.backend.api_key` | API Key | 环境变量 EDP_AGENT_MODEL_API_KEY |
+| `deep-agent.redis.mode` | Redis 部署模式 | single |
+| `deep-agent.redis.host` | Redis 主机 | localhost |
+| `deep-agent.redis.port` | Redis 端口 | 6379 |
+| `deep-agent.redis.todo.key-prefix` | Key 前缀（多实例隔离） | edpa |
+| `deep-agent.redis.todo.ttl-seconds` | Todo TTL（秒） | 3600 |
+| `deep-agent.sandbox.enabled` | 沙箱开关 | false |
 
 ### 2. governance/planrule.yaml — 角色规划配置
 
@@ -266,13 +266,13 @@ curl http://localhost:8190/.well-known/agent-card.json
 A: Redis 是 EDPAgent 的核心依赖，用于 Todo 持久化和会话中断恢复（Checkpoint）。不配置 Redis 时应用无法启动。本地开发可安装 Redis 或使用 Docker：`docker run -d -p 6379:6379 redis`
 
 **Q: 如何切换模型？**
-A: 修改 `application.yml` 的 `edpa.agent.model.name`，或设置环境变量 `EDP_AGENT_MODEL_NAME`。
+A: 修改 `application.yml` 的 `deep-agent.model.model`，或设置环境变量 `EDP_AGENT_MODEL_NAME`。
 
 **Q: 如何添加新技能？**
 A: 在 `skills/` 目录下创建新文件夹，添加 `SKILL.yaml` 和 `SKILL.md`，然后在 `planrule.yaml` 的 `skill_routing` 中添加路由规则。
 
 **Q: 如何接入外部业务系统？**
-A: 配置 `edpa.agent.versatile.url` 指向业务系统 API，URL 支持 `{workflow_id}` 和 `{conversation_id}` 占位符。也可配置 `adapter-a2a-url` 使用 A2A 协议接入。
+A: 配置 `deep-agent.versatile.url` 指向业务系统 API，URL 支持 `{workflow_id}` 和 `{conversation_id}` 占位符。也可配置 `adapter-a2a-url` 使用 A2A 协议接入。
 
 **Q: 场景级配置和框架级配置什么关系？**
 A: 框架级配置在 JAR 内（`governance/*.yaml`），提供通用默认值。场景级配置在外部目录，仅写差异字段，自动与框架级合并。

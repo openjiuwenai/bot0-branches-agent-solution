@@ -1,14 +1,14 @@
 """
-理财推荐四轮对话端到端测试用例。
+理财购买（100元）四轮对话端到端测试用例。
 
 测试场景：用户通过 A2A JSON-RPC SendStreamingMessage 发起理财推荐会话，
-模拟四轮交互：(1) "理财推荐" → (2) "第一个，10000元" → (3) "确认" → (4) "确认"。
+模拟四轮交互：(1) "理财推荐" → (2) "第一个" → (3) "100元" → (4) "确认"。
 
 外部依赖（Versatile agent、LLM）需已部署并运行，本测试不生成 mock。
 
 运行方式：
     cd agents/edp-agent-java/scenarios/wealth-demo/test
-    python test_wealth_recommend_e2e.py
+    python test_wealth_buy_100.py
 """
 import json
 import os
@@ -326,7 +326,7 @@ def assert_round2_events(events: list[dict], query: str):
 
 
 def assert_round3_events(events: list[dict], query: str):
-    """断言轮次3（确认）的关键事件。
+    """断言轮次3（金额确认）的关键事件。
 
     LLM 行为非确定性：可能完成购买并输出 final_answer，
     也可能继续规划或达到迭代上限。
@@ -341,7 +341,7 @@ def assert_round3_events(events: list[dict], query: str):
 
 
 def assert_round4_events(events: list[dict], query: str):
-    """断言轮次4（二次确认）的关键事件。
+    """断言轮次4（最终确认）的关键事件。
 
     LLM 行为非确定性：可能完成最终购买并输出 final_answer，
     也可能继续规划或达到迭代上限。
@@ -496,7 +496,7 @@ def build_test_report(conversation_id: str, all_events: list[list[dict]], querie
         redis_enabled = False
 
     lines = []
-    lines.append("# 端到端测试报告 — 理财推荐三轮对话")
+    lines.append("# 端到端测试报告 - 理财购买（100元）")
     lines.append("")
     lines.append(f"- **会话 ID**: `{conversation_id}`")
     lines.append(f"- **测试时间**: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -739,6 +739,27 @@ def build_test_report(conversation_id: str, all_events: list[list[dict]], querie
         lines.append(f"| {event_type} | {desc} | {count} | {mark} |")
     lines.append("")
 
+    # 事件配对一致性检查
+    pair_checks = [
+        ("todo_start", "todo_end"),
+        ("tool_start", "tool_end"),
+    ]
+    pair_results = []
+    for start_type, end_type in pair_checks:
+        start_count = all_types.count(start_type)
+        end_count = all_types.count(end_type)
+        matched = start_count == end_count
+        pair_results.append((start_type, end_type, start_count, end_count, matched))
+    lines.append("## 事件配对一致性检查")
+    lines.append("")
+    lines.append("| 事件对 | start 次数 | end 次数 | 配对状态 |")
+    lines.append("|--------|-----------|---------|----------|")
+    for start_type, end_type, sc, ec, matched in pair_results:
+        status = "✅ 匹配" if matched else "❌ 不匹配"
+        lines.append(f"| {start_type} ↔ {end_type} | {sc} | {ec} | {status} |")
+    lines.append("")
+    all_pairs_matched = all(m for _, _, _, _, m in pair_results)
+
     # Redis 持久化验证
     lines.append("## Redis 持久化验证")
     lines.append("")
@@ -766,11 +787,12 @@ def build_test_report(conversation_id: str, all_events: list[list[dict]], querie
     lines.append("")
 
     # 测试结果
-    passed = all(e for e in all_events)
+    passed = all(e for e in all_events) and all_pairs_matched
     lines.append("## 测试结果")
     lines.append("")
     lines.append(f"**结果**: {'ALL PASS' if passed else 'FAIL'}")
-    lines.append(f"- 三轮对话: {'全部通过' if passed else '存在失败'}")
+    lines.append(f"- 四轮对话: {'全部通过' if all(e for e in all_events) else '存在失败'}")
+    lines.append(f"- 事件配对一致性: {'全部匹配' if all_pairs_matched else '存在不匹配'}")
     lines.append(f"- 总事件数: {total_events}")
     lines.append(f"- 总耗时: {total_duration:.1f}s")
 
@@ -790,26 +812,26 @@ def print_test_report(conversation_id: str, all_events: list[list[dict]], querie
     print(report)
     # 保存为 md 文件
     report_dir = os.path.dirname(os.path.abspath(__file__))
-    report_file = os.path.join(report_dir, f"test_report_{conversation_id}.md")
+    report_file = os.path.join(report_dir, f"test_report_buy_100_e2e_{conversation_id}.md")
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(report)
     print(f"\n报告已保存: {report_file}")
 
 
-def test_wealth_recommend_three_rounds():
+def test_wealth_buy_100():
     """
-    端到端测试：理财推荐 → 选品（第一个，100元）→ 确认。
+    端到端测试：理财推荐 → 选品（第一个）→ 金额（100元）→ 确认。
 
-    三轮对话通过同一个 conversation_id 串联：
-      轮次1: "理财推荐"        → Agent 规划任务 + 调用 call_versatile 推荐产品
-      轮次2: "第一个，10000元"  → Agent 选品确认（ask_user 中断）
-      轮次3: "确认"            → Agent 资金筹划 + 购买理财
-      轮次4: "确认"            → Agent 完成最终购买 + 最终回答
+    四轮对话通过同一个 conversation_id 串联：
+      轮次1: "理财推荐"  → Agent 规划任务 + 调用 call_versatile 推荐产品
+      轮次2: "第一个"    → Agent 选品确认（ask_user 中断）
+      轮次3: "100元"     → Agent 确认金额 + 资金筹划
+      轮次4: "确认"      → Agent 完成最终购买 + 最终回答
 
     每轮对话完成后间隔 3 秒发送下一轮。
     """
     conversation_id = time.strftime("%Y%m%d_%H%M%S")
-    queries = ["理财推荐", "第一个，10000元", "确认", "确认"]
+    queries = ["理财推荐", "第一个", "100元", "确认"]
     assert_fns = [assert_round1_events, assert_round2_events, assert_round3_events, assert_round4_events]
 
     all_events = []
@@ -874,4 +896,4 @@ def test_wealth_recommend_three_rounds():
 
 
 if __name__ == "__main__":
-    test_wealth_recommend_three_rounds()
+    test_wealth_buy_100()
