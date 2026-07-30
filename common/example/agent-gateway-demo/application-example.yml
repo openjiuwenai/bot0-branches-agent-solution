@@ -1,6 +1,6 @@
 # Reference config for local / 联调 Gateway (NOT loaded automatically).
 # Pass explicitly from repo root, e.g.:
-#   java -jar common/agent-gateway/target/agent-gateway-0.1.0.jar \
+#   java -jar common/agent-bus/agent-gateway/target/agent-gateway-0.1.0.jar \
 #     --spring.config.additional-location=common/example/agent-gateway-demo/application-example.yml
 #
 # BUS path — either --spring.profiles.active=bus (application-bus.yml) or uncomment

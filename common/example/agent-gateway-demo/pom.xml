@@ -55,7 +55,7 @@
          flyway, postgresql, rocketmq-client, a2a-sdk transitively. -->
     <dependency>
       <groupId>com.openjiuwen</groupId>
-      <artifactId>agent-bus-sdk</artifactId>
+      <artifactId>event-bus-sdk</artifactId>
       <version>0.1.0</version>
     </dependency>
   </dependencies>
