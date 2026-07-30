@@ -5,8 +5,8 @@
 #
 # 构建上下文需为 common/ 目录（因为 SDK 在 common/agent-client/ 下，demo 在 common/example/agent-client-demo/ 下）：
 #   cd common
-#   docker build -t ascend/agent-client-demo:0.2.0 -f example/agent-client-demo/Dockerfile .
-#   docker run --rm ascend/agent-client-demo:0.2.0   # 退出码 0=全部断言通过，非 0=失败
+#   docker build -t openjiuwen/agent-client-demo:0.1.0 -f example/agent-client-demo/Dockerfile .
+#   docker run --rm openjiuwen/agent-client-demo:0.1.0   # 退出码 0=全部断言通过，非 0=失败
 #
 # 说明：verification-app 内嵌启动 mock-gateway，SDK 经真实 HTTP 打到本机回环，容器内即可自检。
 
@@ -31,4 +31,4 @@ WORKDIR /app
 COPY --from=build /app/lib /app/lib
 COPY --from=build /workspace/verification-app/target/verification-app.jar /app/verification-app.jar
 # 用退出码表达成败，可直接作为 CI / 容器健康门禁
-ENTRYPOINT ["sh", "-c", "java -cp \"/app/verification-app.jar:/app/lib/*\" com.huawei.ascend.client.verify.CloudClientVerification"]
+ENTRYPOINT ["sh", "-c", "java -cp \"/app/verification-app.jar:/app/lib/*\" com.openjiuwen.client.verify.CloudClientVerification"]
