@@ -102,9 +102,9 @@ public interface Registration extends AutoCloseable {
 
 ```xml
 <dependency>
-  <groupId>com.huawei.ascend</groupId>
+  <groupId>com.openjiuwen</groupId>
   <artifactId>agent-client</artifactId>
-  <version>0.2.0-SNAPSHOT</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
@@ -133,12 +133,12 @@ public interface Registration extends AutoCloseable {
 ```java
 package com.example.edge;
 
-import com.huawei.ascend.client.api.*;
-import com.huawei.ascend.client.event.*;
-import com.huawei.ascend.client.model.*;
-import com.huawei.ascend.client.spi.*;
-import com.huawei.ascend.client.store.*;
-import com.huawei.ascend.client.tool.*;
+import com.openjiuwen.client.api.*;
+import com.openjiuwen.client.event.*;
+import com.openjiuwen.client.model.*;
+import com.openjiuwen.client.spi.*;
+import com.openjiuwen.client.store.*;
+import com.openjiuwen.client.tool.*;
 
 import java.net.URI;
 import java.nio.file.Path;
@@ -691,10 +691,10 @@ NEW -> SUBMITTED -> STREAMING -> COMPLETED
 下面使用拟议的 `agent-client-testkit`；类名可调整，语义必须保留。
 
 ```java
-import com.huawei.ascend.client.api.AgentClient;
-import com.huawei.ascend.client.testkit.AgentClientTestKit;
-import com.huawei.ascend.client.tool.LocalTool;
-import com.huawei.ascend.client.tool.ToolResult;
+import com.openjiuwen.client.api.AgentClient;
+import com.openjiuwen.client.testkit.AgentClientTestKit;
+import com.openjiuwen.client.tool.LocalTool;
+import com.openjiuwen.client.tool.ToolResult;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -751,9 +751,9 @@ class ToolIdempotencyTest {
 SDK 与 Agent Bus 必须读取同一份版本化 fixture，至少覆盖 create/get/cancel、四种 tool outcome、deferred、未知状态和未来扩展字段。
 
 ```java
-import com.huawei.ascend.client.model.ResumeRequest;
-import com.huawei.ascend.client.testkit.ContractFixtures;
-import com.huawei.ascend.client.wire.ClientWireCodec;
+import com.openjiuwen.client.model.ResumeRequest;
+import com.openjiuwen.client.testkit.ContractFixtures;
+import com.openjiuwen.client.wire.ClientWireCodec;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

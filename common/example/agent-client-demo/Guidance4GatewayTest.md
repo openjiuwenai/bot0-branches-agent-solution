@@ -47,7 +47,7 @@ mvn -q -o clean package
 ```powershell
 cd "d:\java版EDPA重构\正秋的agent-solution仓\agent-solution_dxn\common\example\agent-client-demo"
 set AGENT_GATEWAY_URL=http://127.0.0.1:8080
-java -cp "verification-app\target\verification-app.jar;..\..\agent-client\agent-client-sdk-for-jvm\target\agent-client-sdk-for-jvm.jar;mock-gateway\target\mock-gateway.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.17.3\jackson-core-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.17.3\jackson-annotations-2.17.3.jar" com.huawei.ascend.client.verify.CloudClientVerification --ui
+java -cp "verification-app\target\verification-app.jar;..\..\agent-client\agent-client-sdk-for-jvm\target\agent-client-sdk-for-jvm.jar;mock-gateway\target\mock-gateway.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.17.3\jackson-core-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.17.3\jackson-annotations-2.17.3.jar" com.openjiuwen.client.verify.CloudClientVerification --ui
 ```
 
 看到下面的输出即启动成功，保持这个终端不要关：
