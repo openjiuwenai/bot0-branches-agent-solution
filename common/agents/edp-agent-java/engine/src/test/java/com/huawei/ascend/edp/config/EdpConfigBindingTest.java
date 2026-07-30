@@ -53,7 +53,6 @@ import org.springframework.context.annotation.Configuration;
         "deep-agent.mcpsse.app-name=test-app-name"
 })
 class EdpConfigBindingTest {
-
     @Autowired
     private EdpaSpringBootConfig edpaConfig;
 
