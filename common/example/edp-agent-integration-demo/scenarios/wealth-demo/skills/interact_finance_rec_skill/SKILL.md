@@ -93,13 +93,14 @@ call_mcp(
 ```
 call_versatile(
   query_description="",
-  query_intent="理财推荐",
+  query_intent="理财选品购买",
   query_response_analysis_scripts="python interact_finance_rec_skill/scripts/run_versatile_normalize.py",
   response_template_keys='["product_recommend_success", "product_recommend_empty"]'
 )
 ```
 
 `query_description` 传空字符串（`versatile_query` 由 Rail 自动从缓存注入），其余两个参数为固定值。
+`query_intent` 必须为 `"理财选品购买"`（下游低码平台 Mock 的意图识别关键词）。
 
 **返回结构**：`{"products": [...], "bankCardNumber": "后四位", "total": int}`
 
