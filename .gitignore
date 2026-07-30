@@ -13,6 +13,9 @@ venv/
 *.swo
 *~
 
+# Local Codex configuration
+/.codex/
+
 # OS
 .DS_Store
 Thumbs.db
