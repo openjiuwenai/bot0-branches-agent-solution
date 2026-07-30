@@ -70,13 +70,9 @@ class VersatileRequestExtractorTest {
     }
 
     @Test
-    void selectsEndpointByIntentWithoutChangingRequestRules() {
+    void buildsRemoteRequestFromJsonStringContent() {
         VersatileProperties properties = new VersatileProperties();
         properties.setUrlTemplate("https://example.test/default/{conversation_id}");
-        VersatileProperties.Endpoint endpoint = new VersatileProperties.Endpoint();
-        endpoint.setIntent("booking");
-        endpoint.setUrlTemplate("https://example.test/booking/{conversation_id}");
-        properties.getEndpoints().add(endpoint);
         VersatileProperties.Intent intent = new VersatileProperties.Intent();
         intent.setId("i1");
         intent.setName("n1");
@@ -93,7 +89,7 @@ class VersatileRequestExtractorTest {
         VersatileRequestExtractor.RemoteRequest remote =
                 new VersatileRequestExtractor(properties).extract(request);
 
-        assertThat(remote.url()).isEqualTo("https://example.test/booking/c-2");
+        assertThat(remote.url()).isEqualTo("https://example.test/default/c-2");
         @SuppressWarnings("unchecked")
         Map<String, Object> inputs = (Map<String, Object>) remote.body().get("inputs");
         assertThat(inputs).containsEntry("query", "book hotel")
@@ -102,6 +98,19 @@ class VersatileRequestExtractorTest {
                 .containsKey("messages");
         assertThat(remote.body()).containsEntry("city", "Shanghai");
         assertThat(remote.body()).doesNotContainKeys("query", "intent", "custom_data");
+    }
+
+    @Test
+    void rejectsBlankUrlTemplate() {
+        VersatileProperties properties = new VersatileProperties();
+        properties.getMessages().setRequired(false);
+
+        ServeRequest request = new ServeRequest();
+        request.setMessages(List.of());
+
+        assertThatThrownBy(() -> new VersatileRequestExtractor(properties).extract(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("openjiuwen.service.versatile.url-template must not be blank");
     }
 
     @Test

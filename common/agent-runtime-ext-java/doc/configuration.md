@@ -44,12 +44,10 @@ openjiuwen:
 
 | 配置项 | 类型 | 默认值 | 必填 | 功能 |
 |---|---|---:|---|---|
-| `url-template` | String | 无 | 条件必填 | 默认远端 URL；没有命中 `endpoints` 时必须非空。`{conversation_id}` 会替换为当前会话 ID |
+| `url-template` | String | 无 | 是 | 远端 URL 模板；`{conversation_id}` 会替换为当前会话 ID |
 | `timeout` | Duration | `600s` | 否 | 单次远端 HTTP 请求超时；显式绑定为 `null` 时运行期仍回退到 `600s` |
 | `headers-template` | Map<String,String> | `{}` | 否 | 固定出站 Header；与透传 Header 同名时覆盖透传值，名称比较不区分大小写 |
 | `forward-header-whitelist` | Set<String> | `[]` | 否 | 允许从 `ServeRequest.metadata.headers` 透传的 Header 名称，匹配不区分大小写 |
-| `endpoints[].intent` | String | 无 | 否 | 意图专属 URL 的匹配值，与请求中解析出的 `intent` 精确匹配 |
-| `endpoints[].url-template` | String | 无 | 与 `intent` 成对 | 命中意图后使用的 URL 模板，优先于顶层 `url-template` |
 | `log-mask-sensitive` | boolean | `true` | 否 | `true` 时遮蔽 ServeRequest 和出站请求中的消息、metadata、Header、Query、Body 值；当前不遮蔽远端响应行、聚合结果或非 2xx 响应 Body |
 
 出站请求固定使用 HTTP/1.1 `POST`。模块不自动补充 `Content-Type` 或 `Accept`，需要通过
@@ -110,9 +108,6 @@ openjiuwen:
         Accept: text/event-stream
       forward-header-whitelist: [x-user-id, x-language]
       result-node-name: ResultNode
-      endpoints:
-        - intent: booking
-          url-template: http://127.0.0.1:31114/v1/booking/{conversation_id}
       intents:
         - id: booking
           name: 酒店预订
@@ -172,7 +167,7 @@ openjiuwen:
 |---|---|---:|---|---|
 | `openjiuwen.service.agent-id` | String | 无 | 仅基础 Agent ID 模式 | 基础 AgentCore Handler 的资源 ID；使用实例型 `JiuwenCoreAgentExtHandler`、Versatile 或 AgentScope 自定义 Bean 时不负责创建这些 Handler |
 | `openjiuwen.service.handler` | String | `agentcore` | 否 | 基础 AgentCore 自动装配条件读取的选择值；非 `agentcore` 值只会阻止缺省 AgentCore Handler 创建，不会创建对应扩展 Handler |
-| `openjiuwen.service.version` | String | `0.1.1` | 否 | Runtime 健康信息和本地 Agent Card 的版本 |
+| `openjiuwen.service.version` | String | `0.1.0` | 否 | Runtime 健康信息和本地 Agent Card 的版本 |
 | `openjiuwen.service.query.legacy-path-enabled` | boolean | `true` | 否 | 是否保留兼容 Query 路径 `/query` |
 | `openjiuwen.service.query.webflux.enabled` | boolean | `false` | 否 | 是否启用 WebFlux Query 入口 `/v1/query/reactive`；不改变 MVC Query、A2A 或 Custom REST 入口 |
 
