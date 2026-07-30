@@ -8,7 +8,7 @@
 # Config namespace follows the as-built gateway.* convention (PathSelector reads
 # ${gateway.path-mode}); agent-bus.* is the SDK AgentBusBrokerProperties namespace.
 #
-# Prereq before boot: docker compose up -d (common/agent-bus/agent-bus-relay/src/test/java/
+# Prereq before boot: docker compose up -d (common/agent-bus/event-bus/event-bus-relay/src/test/java/
 # com/openjiuwen/bus/conf/) — Postgres (agentbus:5432) + RocketMQ (9876) + 8 topics; and the
 # relay (eventbus profile) + a runtime (agent-bus-consumer-demo) + RDC (:8092) running.
 

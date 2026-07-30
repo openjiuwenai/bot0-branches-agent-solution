@@ -12,8 +12,8 @@
     <artifactId>agent-service-bus-consumer</artifactId>
     <name>Agent runtime bus event consumer</name>
     <dependencies>
-        <dependency><groupId>com.openjiuwen</groupId><artifactId>agent-bus-spi</artifactId></dependency>
-        <dependency><groupId>com.openjiuwen</groupId><artifactId>agent-bus-sdk</artifactId></dependency>
+        <dependency><groupId>com.openjiuwen</groupId><artifactId>event-bus-spi</artifactId></dependency>
+        <dependency><groupId>com.openjiuwen</groupId><artifactId>event-bus-sdk</artifactId></dependency>
         <dependency>
             <groupId>org.a2aproject.sdk</groupId>
             <artifactId>a2a-java-sdk-server-common</artifactId>
@@ -53,8 +53,8 @@
         </dependency>
         <dependency>
             <groupId>com.openjiuwen</groupId>
-            <artifactId>agent-bus-testkit</artifactId>
-            <version>${agent-bus.version}</version>
+            <artifactId>event-bus-testkit</artifactId>
+            <version>${event-bus.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
