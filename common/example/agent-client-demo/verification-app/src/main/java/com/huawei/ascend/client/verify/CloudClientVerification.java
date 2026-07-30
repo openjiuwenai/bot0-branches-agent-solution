@@ -614,7 +614,6 @@ public final class CloudClientVerification {
             check(id, done.invocationRef().equals(e.relatedInvocationRef()),
                     "rejection points back at the offending relatedInvocationRef");
         }
-
         // 未知句柄同样应被明确拒绝，而不是静默新建任务。
         try {
             client.continueInput(ContinueInputRequest.builder()

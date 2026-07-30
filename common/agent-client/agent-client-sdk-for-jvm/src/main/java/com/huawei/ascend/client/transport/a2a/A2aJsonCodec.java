@@ -130,7 +130,6 @@ final class A2aJsonCodec {
         if (agentId != null && !agentId.isBlank()) {
             metadata.put("agentId", agentId);
         }
-
         // 业务附加属性（trace / correlation 等，FEAT-006「业务上下文与凭证传递」MUST）。
         // 收在单独的嵌套对象里，避免与 agentId / clientTools 等保留键冲突；
         // 为空则整段省略，使不用该能力的调用方报文与既有链路逐字节一致。
@@ -140,7 +139,6 @@ final class A2aJsonCodec {
                 attrs.put(e.getKey(), e.getValue());
             }
         }
-
         // 006 §3.5 ① / 007 §3.1：未声明 exposure → ToolView 为空 → 不上报 clientTools（整段省略，不写空数组）。
         if (clientTools != null && !clientTools.isEmpty()) {
             ArrayNode tools = metadata.putArray("clientTools");
@@ -276,7 +274,6 @@ final class A2aJsonCodec {
         if (node.isMissingNode() || node.isNull()) {
             return Optional.empty();
         }
-
         // _interrupt_kind 与 arguments 嵌套在 context 下（权威）；兼容回退到顶层扁平形态。
         JsonNode context = node.path("context");
         JsonNode kindNode = context.has("_interrupt_kind") ? context.path("_interrupt_kind") : node.path("kind");
@@ -374,7 +371,6 @@ final class A2aJsonCodec {
         if (s == null) {
             return Optional.empty();
         }
-
         // 权威值为 TASK_STATE_* 大写带前缀（Feat-Func-009 §6.3 / 006 §3.3）；兼容小写过渡期形态。
         return Optional.of(switch (s) {
             case "TASK_STATE_SUBMITTED", "submitted" -> TaskState.SUBMITTED;

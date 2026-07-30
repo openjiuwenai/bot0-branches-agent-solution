@@ -110,7 +110,6 @@ public final class ToolExposurePolicy {
         if (other == null) {
             return this;
         }
-
         // 过期时刻取两者中更早的：与"只能收紧不能放大"一致，任一级窗口关闭即整体关闭。
         Instant merged;
         if (this.expiresAt == null) {
