@@ -17,7 +17,7 @@
 <dependency>
   <groupId>com.openjiuwen</groupId>
   <artifactId>agent-service-adapters-agentcore-ext</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 

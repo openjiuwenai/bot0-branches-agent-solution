@@ -34,7 +34,7 @@ Custom REST 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScop
 <dependency>
   <groupId>com.openjiuwen</groupId>
   <artifactId>agent-service-app-custom-rest</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 

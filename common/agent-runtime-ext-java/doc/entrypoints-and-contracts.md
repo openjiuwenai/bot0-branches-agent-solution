@@ -220,7 +220,7 @@ AgentScope、AgentCore-ext 和 Client Tools 复用 Runtime A2A JSON-RPC 入口�
 
 ### 6.1 请求
 
-URL 由意图专属 `endpoints` 或顶层 `url-template` 选择，并替换 `{conversation_id}`。出站 Body：
+URL 使用配置的 `url-template`，并替换 `{conversation_id}`。出站 Body：
 
 ```text
 body = copy(ServeRequest.metadata.body.custom_data)

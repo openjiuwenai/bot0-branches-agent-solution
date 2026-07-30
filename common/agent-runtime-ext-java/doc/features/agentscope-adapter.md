@@ -11,7 +11,7 @@ Maven 模块：
 <dependency>
   <groupId>com.openjiuwen</groupId>
   <artifactId>agent-service-adapters-agentscope</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 

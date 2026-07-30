@@ -12,7 +12,7 @@ Maven 模块：
 <dependency>
   <groupId>com.openjiuwen</groupId>
   <artifactId>agent-service-adapters-versatile</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
@@ -71,8 +71,7 @@ remoteBody.inputs = inputs
 
 ### 3.3 URL、Header 和 Query
 
-有非空 intent 且命中 `endpoints[].intent` 时使用该 endpoint，否则使用顶层 `url-template`。
-模板中的 `{conversation_id}` 替换为当前会话 ID；模块不处理其他 URL 占位符。
+URL 使用顶层 `url-template`，其中的 `{conversation_id}` 替换为当前会话 ID；模块不处理其他 URL 占位符。
 
 Header 先从 `metadata.headers` 按白名单选择，再应用 `headers-template`。固定模板优先，名称比较不区分
 大小写。`metadata.query` 中键和值均非 null 的条目会转为字符串并 URL 编码后追加到 URL；空字符串会保留。
