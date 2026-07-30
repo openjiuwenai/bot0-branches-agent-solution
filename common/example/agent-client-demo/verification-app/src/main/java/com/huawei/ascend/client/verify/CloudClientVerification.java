@@ -59,14 +59,17 @@ public final class CloudClientVerification {
     private VerificationProgress progress = event -> {
         String nl = System.lineSeparator();
         switch (event.kind()) {
-            case RUN_START -> LOG.info("[verify] gateway=" + event.message());
-            case SCENARIO_START -> LOG.info(nl + "== " + event.message() + " ==");
-            case CHECK -> LOG.info((Boolean.TRUE.equals(event.ok()) ? "  [ok]   " : "  [FAIL] ")
-                    + event.message());
-            case RUN_END -> LOG.info(nl + event.message());
+            case RUN_START -> LOG.log(java.util.logging.Level.INFO, "[verify] gateway={0}", event.message());
+            case SCENARIO_START -> LOG.log(java.util.logging.Level.INFO, "{0}== {1} ==",
+                    new Object[] {nl, event.message()});
+            case CHECK -> LOG.log(java.util.logging.Level.INFO, "{0}{1}",
+                    new Object[] {Boolean.TRUE.equals(event.ok()) ? "  [ok]   " : "  [FAIL] ",
+                            event.message()});
+            case RUN_END -> LOG.log(java.util.logging.Level.INFO, "{0}{1}",
+                    new Object[] {nl, event.message()});
             default -> {
                 if (event.message() != null) {
-                    LOG.info("  " + event.message());
+                    LOG.log(java.util.logging.Level.INFO, "  {0}", event.message());
                 }
             }
         }
@@ -100,12 +103,9 @@ public final class CloudClientVerification {
     /**
      * 供 Web UI 调用：注入进度回调后跑完全部场景。
      *
-     * @param progress progress
-     * @return 供 Web UI 调用：注入进度回调后跑完全部场景。
-     * @throws InterruptedException 若发生 InterruptedException
-     * @throws ExecutionException 若发生 ExecutionException
-     * @throws TimeoutException 若发生 TimeoutException
-     * @throws IOException 若发生 IOException
+     * @param progress 进度回调
+     * @return 失败断言数为 0 时返回 0，否则返回 1
+     * @throws IOException 内嵌网关启动失败时抛出
      */
     public int runWithProgress(VerificationProgress progress) throws IOException {
         return runWithProgress(progress, Set.of());
@@ -211,9 +211,9 @@ public final class CloudClientVerification {
         try {
             body.run(spec.id());
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            check(spec.id(), false, "scenario interrupted");
-        } catch (ExecutionException | TimeoutException | RuntimeException e) {
+            // G.CON.10：不恢复中断标志，协作式退出；记录失败断言。
+            check(spec.id(), false, "scenario interrupted: " + e.getMessage());
+        } catch (ExecutionException | TimeoutException | IllegalStateException e) {
             // 单个场景抛异常不再中断整轮：看板需要看到其余场景的结论。
             check(spec.id(), false, "unexpected exception: " + e);
             LOG.log(java.util.logging.Level.WARNING, "scenario " + spec.id() + " failed", e);
@@ -305,12 +305,11 @@ public final class CloudClientVerification {
     }
 
     /**
-     * buildClient。
+     * 构建验证用客户端实例。
      *
-     * @param url String
-     * @return buildClient
+     * @param url 网关地址
+     * @return 客户端实例
      */
-
     private AgentClient buildClient(String url) {
         return AgentClients.builder()
                 .transport(new A2aHttpTransportProvider(url))
@@ -462,6 +461,7 @@ public final class CloudClientVerification {
     /**
      * Scenario 7: ASYNC 受理后用 getInvocation 观察进展（Q1 开放北向 GetTask 后解锁）。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
@@ -500,6 +500,7 @@ public final class CloudClientVerification {
      * <p>覆盖 FRZ-4 b3：中断不等于失败。断连后 SDK 主动查询权威状态，能确定就据此投影为终态，
      * 业务侧完全不感知这次中断，也不应看到 ProgressUncertain。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
@@ -533,6 +534,7 @@ public final class CloudClientVerification {
      * <p>覆盖 FRZ-4 b1/b2 的三条禁止：不伪造终态（不得判 FAILED）、不无限悬挂（completion 必须结算）、
      * 不静默新建任务（恢复动作应为查询而非重发）。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
@@ -572,6 +574,7 @@ public final class CloudClientVerification {
      * <p>覆盖 FEAT-006 §5.1.3「不可续接必须明确报错，不得静默新建普通任务」+「错误分类」MUST：
      * 业务需要拿到稳定 `code` 与 `retryable` 来决策，不该去解析异常文案。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
@@ -624,6 +627,7 @@ public final class CloudClientVerification {
      * <p>覆盖 FEAT-006「业务上下文与凭证传递」MUST。此前 `attributes` 是死字段：接收后从未上 wire，
      * 网关侧永远看不到 traceId。参考网关会把收到的 `metadata.attributes.traceId` 回显进输出文本。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
@@ -715,6 +719,7 @@ public final class CloudClientVerification {
      * <p>另一半语义（窗口在创建<b>之后</b>才关闭 → 回传 {@code context_expired} 结构化拒绝）依赖时钟推进，
      * 用真实网关做端到端断言会引入时序抖动，留待阶段 2 用可注入时钟的单元测试覆盖。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
      * @param tools 工具计数器
      * @throws InterruptedException 若发生 InterruptedException
@@ -768,12 +773,14 @@ public final class CloudClientVerification {
 
             @Override
             public void onError(Throwable throwable) {
-                // 断言只看已收到的事件序列与最终快照，订阅异常不额外处理。
+                // 断言只看已收到的事件序列与最终快照，订阅异常仅记录日志。
+                LOG.log(java.util.logging.Level.WARNING, "event stream error in collect", throwable);
             }
 
             @Override
             public void onComplete() {
-                // 结算由 completion() 观察。
+                // 结算由 completion() 观察，此处显式返回。
+                return;
             }
         });
     }
@@ -781,8 +788,9 @@ public final class CloudClientVerification {
     /**
      * Scenario 4: 普通多轮对话（复用同一 conversationId 再 invoke 无 taskId 创建，得到新 Task）。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
-     * @param tools tools
+     * @param tools 工具计数器
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
      * @throws TimeoutException 若发生 TimeoutException
@@ -823,14 +831,13 @@ public final class CloudClientVerification {
     }
 
     /**
-     * invokePlain。
+     * 发起一次普通 STREAMING 调用（不声明工具暴露）。
      *
-     * @param client AgentClient
-     * @param conversationId String
-     * @param input String
-     * @return invokePlain
+     * @param client AgentClient 实例
+     * @param conversationId 会话标识
+     * @param input 输入文本
+     * @return 调用句柄
      */
-
     private InvocationCall invokePlain(AgentClient client, String conversationId, String input) {
         InvocationRequest r = InvocationRequest.builder()
                 .conversationId(conversationId)
@@ -843,8 +850,9 @@ public final class CloudClientVerification {
     /**
      * Scenario 5: 默认不暴露（不声明 exposure → ToolView 为空 → 服务端不可见任何本地工具）。
      *
+     * @param id 场景标识
      * @param client AgentClient 实例
-     * @param tools tools
+     * @param tools 工具计数器
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
      * @throws TimeoutException 若发生 TimeoutException
@@ -877,7 +885,8 @@ public final class CloudClientVerification {
     /**
      * Scenario 6: 治理错误（401 AUTH_MISSING）不投影为成功 Task，而是以 Failed 终态暴露。
      *
-     * @param url url
+     * @param id 场景标识
+     * @param url 网关地址
      * @throws InterruptedException 若发生 InterruptedException
      * @throws ExecutionException 若发生 ExecutionException
      * @throws TimeoutException 若发生 TimeoutException

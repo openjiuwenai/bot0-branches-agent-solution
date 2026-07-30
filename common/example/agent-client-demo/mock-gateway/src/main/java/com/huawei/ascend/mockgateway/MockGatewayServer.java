@@ -55,6 +55,9 @@ public final class MockGatewayServer {
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(MockGatewayServer.class.getName());
 
+    /** SSE 帧的行分隔符（协议要求字面量 LF）。 */
+    private static final String LF = String.valueOf((char) 10);
+
     /**
      * 网关工作线程的 ThreadFactory：基于默认工厂包装出 daemon + 未捕获异常处理 + 自定义命名。
      */
@@ -63,7 +66,9 @@ public final class MockGatewayServer {
         t.setName("mock-gateway");
         t.setDaemon(true);
         t.setUncaughtExceptionHandler((thread, ex) -> {
-            // best-effort：网关工作线程未捕获异常不中断服务。
+            // best-effort：网关工作线程未捕获异常不中断服务，仅记录日志。
+            LOG.log(java.util.logging.Level.WARNING,
+                    "uncaught exception in mock-gateway worker " + thread.getName(), ex);
         });
         return t;
     };
@@ -76,6 +81,11 @@ public final class MockGatewayServer {
     private final int requestedPort;
     private HttpServer server;
 
+    /**
+     * 构造 Mock 网关实例。
+     *
+     * @param port 请求监听端口；传 0 由系统分配
+     */
     public MockGatewayServer(int port) {
         this.requestedPort = port;
     }
@@ -91,7 +101,8 @@ public final class MockGatewayServer {
                 : Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
         MockGatewayServer server = new MockGatewayServer(port);
         int bound = server.start();
-        LOG.info("[mock-gateway] A2A endpoint listening on http://127.0.0.1:" + bound + "/a2a");
+        LOG.log(java.util.logging.Level.INFO,
+                "[mock-gateway] A2A endpoint listening on http://127.0.0.1:{0}/a2a", bound);
         // shutdown hook 通过 ThreadFactory 创建，避免直接的 new Thread（G.CON.12）
         Thread shutdownHook = WORKER_FACTORY.newThread(server::stop);
         shutdownHook.setName("mock-gateway-shutdown");
@@ -102,8 +113,8 @@ public final class MockGatewayServer {
     /**
      * 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
      *
-     * @return 启动并返回实际绑定端口（传 0 时由系统分配，便于嵌入式验证）。
-     * @throws IOException 若发生 IOException
+     * @return 实际绑定端口
+     * @throws IOException 端口绑定失败时抛出
      */
     public int start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", requestedPort), 0);
@@ -172,7 +183,7 @@ public final class MockGatewayServer {
                 default -> writeGovernanceError(ex, 400, "VALIDATION_METHOD",
                         "method not allowed on northbound: " + method);
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | IllegalStateException e) {
             writeJson(ex, 200, rpcError(id, -32603, "internal error: " + e.getMessage()));
         }
     }
@@ -186,7 +197,7 @@ public final class MockGatewayServer {
      * @param ex HTTP 交换
      * @param rpcId JSON-RPC 请求标识
      * @param params 请求参数
-     * @throws IOException 若发生 IOException
+     * @throws IOException 写响应失败时抛出
      */
     private void handleGetTask(HttpExchange ex, String rpcId, JsonNode params) throws IOException {
         String taskId = params.path("taskId").asText(null);
@@ -265,11 +276,11 @@ public final class MockGatewayServer {
     /**
      * 幂等命中时回放既有 Task：流式则推送当前快照，否则返回单条结果。
      *
-     * @param ex 异常
+     * @param ex HTTP 交换对象
      * @param rpcId JSON-RPC 请求标识
      * @param existing 已存在的任务模拟
      * @param streaming 是否流式
-     * @throws IOException 若发生 IOException
+     * @throws IOException 写响应失败时抛出
      */
     private void replayExisting(HttpExchange ex, String rpcId, TaskSim existing, boolean streaming)
             throws IOException {
@@ -281,14 +292,13 @@ public final class MockGatewayServer {
     }
     // ---------- task lifecycle ----------
     /**
-     * createTask。
+     * 创建并初始化一个 Task 模拟。
      *
-     * @param contextId String
-     * @param message JsonNode
-     * @param metadata JsonNode
-     * @return createTask
+     * @param contextId 会话标识
+     * @param message 请求消息
+     * @param metadata 请求元数据
+     * @return 新建的任务模拟
      */
-
     private TaskSim createTask(String contextId, JsonNode message, JsonNode metadata) {
         TaskSim task = new TaskSim();
         task.taskId = "task-" + UUID.randomUUID();
@@ -413,7 +423,7 @@ public final class MockGatewayServer {
 
     private void sendFrame(OutputStream os, String rpcId, ObjectNode result) throws IOException {
         // SSE 帧格式：event: jsonrpc + data: <json>（对齐 feat-011 §4.9.3 GW-2 / 006 §3.5 ②）。
-        String payload = "event: jsonrpc\ndata: " + write(rpcResult(rpcId, result)) + "\n\n";
+        String payload = "event: jsonrpc" + LF + "data: " + write(rpcResult(rpcId, result)) + LF + LF;
         os.write(payload.getBytes(StandardCharsets.UTF_8));
         os.flush();
     }
@@ -421,13 +431,12 @@ public final class MockGatewayServer {
     // ---------- result builders ----------
 
     /**
-     * buildResult。
+     * 构造响应结果节点。
      *
-     * @param task TaskSim
-     * @param kind String
-     * @return buildResult
+     * @param task 任务模拟
+     * @param kind 结果类型
+     * @return 结果节点
      */
-
     private ObjectNode buildResult(TaskSim task, String kind) {
         ObjectNode r = mapper.createObjectNode();
         r.put("kind", kind);
@@ -487,14 +496,13 @@ public final class MockGatewayServer {
     }
 
     /**
-     * buildStatus。
+     * 构造状态更新节点。
      *
-     * @param task TaskSim
-     * @param state State
-     * @param finalFlag boolean
-     * @return buildStatus
+     * @param task 任务模拟
+     * @param state 任务状态
+     * @param finalFlag 是否终态
+     * @return 状态更新节点
      */
-
     private ObjectNode buildStatus(TaskSim task, State state, boolean finalFlag) {
         ObjectNode r = mapper.createObjectNode();
         r.put("kind", "status-update");
@@ -508,13 +516,12 @@ public final class MockGatewayServer {
     }
 
     /**
-     * buildArtifact。
+     * 构造产物更新节点。
      *
-     * @param task TaskSim
-     * @param text String
-     * @return buildArtifact
+     * @param task 任务模拟
+     * @param text 产物文本
+     * @return 产物更新节点
      */
-
     private ObjectNode buildArtifact(TaskSim task, String text) {
         ObjectNode r = mapper.createObjectNode();
         r.put("kind", "artifact-update");
@@ -525,12 +532,11 @@ public final class MockGatewayServer {
     }
 
     /**
-     * buildArgs。
+     * 按 inputSchema 的 required 字段构造 mock 参数。
      *
-     * @param inputSchema JsonNode
-     * @return buildArgs
+     * @param inputSchema 输入 schema
+     * @return mock 参数节点
      */
-
     private ObjectNode buildArgs(JsonNode inputSchema) {
         ObjectNode args = mapper.createObjectNode();
         if (inputSchema != null && inputSchema.path("required").isArray()) {
@@ -544,13 +550,12 @@ public final class MockGatewayServer {
     // ---------- JSON-RPC helpers ----------
 
     /**
-     * rpcResult。
+     * 构造 JSON-RPC 成功响应。
      *
-     * @param id String
-     * @param result ObjectNode
-     * @return rpcResult
+     * @param id 请求标识
+     * @param result 结果节点
+     * @return 响应根节点
      */
-
     private ObjectNode rpcResult(String id, ObjectNode result) {
         ObjectNode root = mapper.createObjectNode();
         root.put("jsonrpc", "2.0");
@@ -562,14 +567,13 @@ public final class MockGatewayServer {
     }
 
     /**
-     * rpcError。
+     * 构造 JSON-RPC 错误响应。
      *
-     * @param id String
-     * @param code int
-     * @param message String
-     * @return rpcError
+     * @param id 请求标识
+     * @param code 错误码
+     * @param message 错误信息
+     * @return 错误响应根节点
      */
-
     private ObjectNode rpcError(String id, int code, String message) {
         ObjectNode root = mapper.createObjectNode();
         root.put("jsonrpc", "2.0");
@@ -585,11 +589,11 @@ public final class MockGatewayServer {
     /**
      * 网关治理错误：以 HTTP 状态码 + {@code {code,message}} 响应体返回（Feat-Func-011 §4.9）。
      *
-     * @param ex 异常
+     * @param ex HTTP 交换对象
      * @param status HTTP 状态码
      * @param code 错误码
      * @param message 消息文本
-     * @throws IOException 若发生 IOException
+     * @throws IOException 写响应失败时抛出
      */
     private void writeGovernanceError(HttpExchange ex, int status, String code, String message)
             throws IOException {
@@ -609,12 +613,11 @@ public final class MockGatewayServer {
     }
 
     /**
-     * JSON 文本。
+     * 序列化为 JSON 文本。
      *
-     * @param node ObjectNode
+     * @param node 对象节点
      * @return JSON 文本
      */
-
     private String write(ObjectNode node) {
         try {
             return mapper.writeValueAsString(node);
@@ -624,12 +627,11 @@ public final class MockGatewayServer {
     }
 
     /**
-     * extractText。
+     * 从消息 parts 中提取首段文本。
      *
-     * @param message JsonNode
-     * @return extractText
+     * @param message 消息节点
+     * @return 文本内容
      */
-
     private static Optional<String> extractText(JsonNode message) {
         JsonNode parts = message.path("parts");
         if (parts.isArray()) {
@@ -643,12 +645,11 @@ public final class MockGatewayServer {
     }
 
     /**
-     * extractToolCallId。
+     * 从消息 parts 中提取工具调用标识。
      *
-     * @param message JsonNode
-     * @return extractToolCallId
+     * @param message 消息节点
+     * @return 工具调用标识
      */
-
     private static Optional<String> extractToolCallId(JsonNode message) {
         JsonNode parts = message.path("parts");
         if (parts.isArray()) {
@@ -663,12 +664,11 @@ public final class MockGatewayServer {
     }
 
     /**
-     * a2aState。
+     * 把内部状态枚举映射为 A2A wire 状态字符串。
      *
-     * @param s State
-     * @return a2aState
+     * @param s 内部状态
+     * @return A2A 状态字符串
      */
-
     private static String a2aState(State s) {
         // 权威值为 TASK_STATE_* 大写带前缀（Feat-Func-009 §6.3 / 006 §3.3）。
         return switch (s) {
@@ -682,12 +682,11 @@ public final class MockGatewayServer {
     }
 
     /**
-     * 布尔结果。
+     * 判断状态是否为终态。
      *
-     * @param s State
-     * @return 布尔结果
+     * @param s 内部状态
+     * @return 终态返回 true
      */
-
     private static boolean isTerminal(State s) {
         return s == State.COMPLETED || s == State.CANCELED || s == State.FAILED;
     }
@@ -712,12 +711,11 @@ public final class MockGatewayServer {
         /**
          * client_tool 类型 Pending。
          *
-         * @param toolCallId String
-         * @param toolName String
-         * @param arguments JsonNode
+         * @param toolCallId 工具调用标识
+         * @param toolName 工具名
+         * @param arguments 工具参数
          * @return client_tool 类型 Pending
          */
-
         static Pending clientTool(String toolCallId, String toolName, JsonNode arguments) {
             Pending p = new Pending();
             p.userInput = false;
@@ -730,10 +728,9 @@ public final class MockGatewayServer {
         /**
          * user_input 类型 Pending。
          *
-         * @param prompt String
+         * @param prompt 提示文本
          * @return user_input 类型 Pending
          */
-
         static Pending userInput(String prompt) {
             Pending p = new Pending();
             p.userInput = true;
