@@ -180,19 +180,25 @@ SKIP_BUILD=1 ./scripts/local-e2e-llm-intent.sh # 复用已有 jar
 
 ### `scripts/cli-llm-intent.py` — LLM 意图演示 CLI 客户端
 
-纯标准库 Python CLI（无需 `httpx`/`a2a-sdk`，`python3` 直接可跑），参考 a2a-samples 的 `helloworld/test_client.py` 结构：获取并展示 agent card、发送（流式/非流式）消息、重放 `local-e2e-llm-intent.sh` 的三场景、进入交互式会话。前置条件：演示进程栈已启动（gateway + L1 + L2_hotel + L2_flight + Agent B hotel/flight）；`local-e2e-llm-intent.sh` 是各 `java -jar` 启动命令的参考，但它自带场景并在退出时清理进程，故用本 CLI 驱动时需让那六个进程保持运行，再用 `card` 确认 L1 可达。
+纯标准库 Python CLI（无需 `httpx`/`a2a-sdk`，`python3` 直接可跑），参考 a2a-samples 的 `helloworld/test_client.py` 结构：获取并展示 agent card、发送（流式/非流式）消息、重放 `local-e2e-llm-intent.sh` 的三场景、进入交互式会话。`start` 子命令可一键拉起整套演示进程栈（gateway + L1 + L2_hotel + L2_flight + Agent B hotel/flight）并在退出时清理。
+
+**LLM 参数经 `.env` 传入**：复制 `.env.example` 为 `.env` 并填入 `LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL`（`DEEPSEEK_*` 未设时默认与 `LLM_*` 相同）。CLI 与 `local-e2e-llm-intent.sh` 均读取 `.env`；真实环境变量优先于 `.env`。`.env` 已被 `.gitignore` 忽略，真实密钥绝不提交。
 
 ```bash
-python3 scripts/cli-llm-intent.py card                                  # 展示 L1 agent card（兼作连通性自检）
-python3 scripts/cli-llm-intent.py scenario a                            # 重放场景 A
-python3 scripts/cli-llm-intent.py scenario all                          # 顺序重放 A → B → C（单 conversation_id）
-python3 scripts/cli-llm-intent.py chat                                  # 交互式会话（非流式）
-python3 scripts/cli-llm-intent.py chat --stream                         # 交互式会话（SSE 流式）
-python3 scripts/cli-llm-intent.py --base-url http://host:8081 chat      # 指向远端 L1
+cp .env.example .env                                       # 填入真实 LLM 密钥（.env 已 gitignore）
+python3 scripts/cli-llm-intent.py start                    # 读 .env 拉起进程栈 → 交互式会话
+python3 scripts/cli-llm-intent.py start --scenario all     # 拉起栈 → 顺序重放 A→B→C → 退出清理
+python3 scripts/cli-llm-intent.py start --no-build         # 复用已有 jar，跳过 mvn package
+python3 scripts/cli-llm-intent.py card                     # 展示 L1 agent card（兼作连通性自检，需栈已启动）
+python3 scripts/cli-llm-intent.py scenario a               # 重放场景 A
+python3 scripts/cli-llm-intent.py scenario all             # 顺序重放 A → B → C（单 conversation_id）
+python3 scripts/cli-llm-intent.py chat                     # 交互式会话（非流式）
+python3 scripts/cli-llm-intent.py chat --stream            # 交互式会话（SSE 流式）
+python3 scripts/cli-llm-intent.py --base-url http://host:8081 chat   # 指向远端 L1
 # 交互中：`exit` 退出、`card` 显示 agent card、`reset` 切换新 conversation_id
 ```
 
-`--conversation-id`（默认 `c-llm-demo`）、`--user-id`（默认 `u-42`）跨轮复用，与 shell 脚本的 `send_q` 请求体一致（`X-Biz-Tag: llm-demo`）。
+`start` 之外的子命令（`card`/`scenario`/`chat`）假定进程栈已运行（可由 `start` 或 shell 脚本启动）。`--conversation-id`（默认 `c-llm-demo`）、`--user-id`（默认 `u-42`）跨轮复用，与 shell 脚本的 `send_q` 请求体一致（`X-Biz-Tag: llm-demo`）。
 
 ### 选择哪个脚本
 
