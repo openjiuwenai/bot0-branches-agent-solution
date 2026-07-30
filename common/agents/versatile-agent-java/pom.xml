@@ -10,9 +10,9 @@
     <version>4.0.6</version>
   </parent>
 
-  <groupId>com.huawei.ascend</groupId>
+  <groupId>com.openjiuwen</groupId>
   <artifactId>adapter-versatile-agent-java</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>jar</packaging>
   <name>adapter-versatile-agent-java</name>
   <description>
@@ -88,7 +88,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
-          <mainClass>com.huawei.ascend.versatile.VersatileAgentApplication</mainClass>
+          <mainClass>com.openjiuwen.versatile.VersatileAgentApplication</mainClass>
         </configuration>
         <executions>
           <execution>

@@ -10,9 +10,9 @@
     <version>4.0.6</version>
   </parent>
 
-  <groupId>com.huawei.ascend</groupId>
+  <groupId>com.openjiuwen</groupId>
   <artifactId>edp-agent-java</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>pom</packaging>
   <name>edp-agent-java</name>
   <description>Production EDPAgent Java project — engine, scenarios, deploy, tests.</description>
