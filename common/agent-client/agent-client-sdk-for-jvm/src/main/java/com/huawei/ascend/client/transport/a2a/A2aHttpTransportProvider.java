@@ -263,11 +263,11 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                         bindTaskRef(ch, f);
                         if (sink != null) {
                             emit(sink, f);
-                        } else if (f != null && f.state() != null && f.state().isTerminal()) {
-                            // 快照驱动的续跑走到终态：通道再无用处，及时释放，避免 taskRef 映射堆积。
+                        }
+                        // 快照驱动的续跑（无 sink）走到终态：通道再无用处，及时释放，避免 taskRef 映射堆积；
+                        // 未到终态则保留通道，等待后续续跑推进。
+                        if (sink == null && f != null && f.state() != null && f.state().isTerminal()) {
                             releaseChannel(ch);
-                        } else {
-                            // 快照驱动的续跑未到终态：保留通道，等待后续续跑推进。
                         }
                         ack.complete(snapshotFromFrame(snapshotRef, f));
                     } catch (A2aTransportException | IllegalArgumentException e) {
@@ -301,7 +301,6 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             if (ch.mode == InvocationMode.BLOCKING) {
                 pollUntilSettled(ch, credential, 1);
             }
-
             // ASYNC：受理即止，不轮询。
         });
     }
@@ -378,7 +377,6 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                         onCreateHttpError(ch, governanceError(resp.statusCode(), readAll(resp.body())));
                         return;
                     }
-
                     // 声明了 STREAMING 却拿到非流式响应：明确报错，不静默降级（FEAT-006 §5.1.4）。
                     // 否则读循环找不到任何 data: 行，表现为一条诡异的空流，问题被掩盖。
                     A2aTransportException notStreaming = rejectIfNotStreaming(resp).orElse(null);
@@ -428,8 +426,9 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                 } else if (line.startsWith("data:")) {
                     data.append(line.substring(5).trim());
                 } else {
-                    // event: / id: / 注释行（":"开头）当前不参与语义。
+                    // event: / id: / 注释行（":"开头）当前不参与语义；
                     // id: 与 Last-Event-ID 的游标续传属后续版本（网关尚未下发 id 行）。
+                    continue;
                 }
             }
             flushFrame(ch, data);
