@@ -38,6 +38,7 @@ import argparse
 import atexit
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -54,6 +55,11 @@ AGENT_B_MODULE = os.path.join(
     "agent-b-deepagent-runtime")
 AGENT_B_JAR = os.path.join(AGENT_B_MODULE, "target", "deepagent-remote-a2a-agent-b-0.1.0.jar")
 LOG_DIR = os.path.join(MODULE_DIR, "target")
+# L1 进程日志（`start` 子命令把 layer1 进程日志写到这里）。/v1/query 响应体不
+# 携带路由目标，L1 仅在转发到 L2 时打一条 INFO 日志 `A2AGateway call
+# agent=<agentCard>`（gateway 模式）或 `LocalHttp call agent=<agentCard>`
+# （local-http 模式）；这里按每轮请求前后的日志增量解析出路由到的 L2 agentId。
+L1_LOG = os.path.join(LOG_DIR, "layer1.log")
 
 DEFAULT_BASE_URL = "http://localhost:8081"
 DEFAULT_CONVERSATION_ID = "c-llm-demo"
@@ -191,13 +197,60 @@ def _truncate(data, limit=600):
     return text if len(text) <= limit else text[:limit] + "..."
 
 
-def print_response(response):
+def _log_size(path):
+    """Return current byte size of `path`, or 0 if it cannot be read."""
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def _routed_agent_since(path, offset):
+    """Return the most recent L2 agentId L1 routed to after byte `offset`.
+
+    The routed L2 agentId is not present in the /v1/query response body — L1
+    only logs it when forwarding to L2: `A2AGateway call agent=<agentCard>`
+    (gateway mode) or `LocalHttp call agent=<agentCard>` (local-http mode).
+    This scans the log delta written during one request and returns the last
+    match (the final hop wins on reclassify retries), or None.
+    """
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return None
+    start = offset if size >= offset else 0
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            handle.seek(start)
+            tail = handle.read()
+    except OSError:
+        return None
+    matches = re.findall(r"\b(?:A2AGateway|LocalHttp) call agent=(\S+)", tail)
+    return matches[-1] if matches else None
+
+
+def send_message_traced(base_url, text, conversation_id, user_id, stream=False, log_path=L1_LOG):
+    """Send one user turn and recover the L2 agentId L1 routed to this turn.
+
+    Returns (response, routed_agent); routed_agent is None when the L1 log is
+    unavailable or no L2 forwarding happened (e.g. L1 answered directly).
+    """
+    offset = _log_size(log_path)
+    response = send_message(base_url, text, conversation_id, user_id, stream=stream)
+    return response, _routed_agent_since(log_path, offset)
+
+
+def print_response(response, routed_agent=None):
     """Pretty-print a non-streaming query response."""
     if isinstance(response, list):
+        if routed_agent:
+            print(f"  routed L2 agent: {routed_agent}")
         return
     conversation_id = response.get("conversation_id", "?")
     text = extract_text(response.get("result"))
     print(f"  conversation_id={conversation_id}")
+    if routed_agent:
+        print(f"  routed L2 agent: {routed_agent}")
     print(f"  assistant: {text}")
 
 
@@ -209,9 +262,11 @@ def run_scenario(base_url, which, conversation_id, user_id, stream=False):
         print(f"\n==== 场景 {code.upper()}: {' -> '.join(turns)} ====")
         for turn in turns:
             print(f"user > {turn}")
-            response = send_message(base_url, turn, conversation_id, user_id, stream=stream)
+            response, agent = send_message_traced(base_url, turn, conversation_id, user_id, stream=stream)
             if not stream:
-                print_response(response)
+                print_response(response, routed_agent=agent)
+            elif agent:
+                print(f"  routed L2 agent: {agent}")
 
 
 def chat(base_url, conversation_id, user_id, stream=False):
@@ -239,9 +294,11 @@ def chat(base_url, conversation_id, user_id, stream=False):
             print(f"  已切换 conversation_id={conversation_id}")
             continue
         try:
-            response = send_message(base_url, prompt, conversation_id, user_id, stream=stream)
+            response, agent = send_message_traced(base_url, prompt, conversation_id, user_id, stream=stream)
             if not stream:
-                print_response(response)
+                print_response(response, routed_agent=agent)
+            elif agent:
+                print(f"  routed L2 agent: {agent}")
         except Exception as exc:  # noqa: BLE001
             print(f"  发送失败: {exc}")
 
