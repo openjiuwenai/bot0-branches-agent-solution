@@ -21,20 +21,26 @@ import java.util.Set;
 public final class ErrorCodes {
     /** 缺少凭据。不可重试。 */
     public static final String AUTH_MISSING = "AUTH_MISSING";
+
     /** 凭据无效。不可重试。 */
     public static final String AUTH_INVALID = "AUTH_INVALID";
+
     /** 越权。不可重试。 */
     public static final String PERMISSION_DENIED = "PERMISSION_DENIED";
+
     /** 请求参数非法（调用方缺陷）。不可重试。 */
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
+
     /**
      * 路由失败：网关找不到目标 Agent / 路由。不可重试。
      *
      * <p>与 {@link #TASK_NOT_FOUND} 区分：前者是「不知道往哪送」，后者是「Task 不存在」。
      */
     public static final String ROUTE_NOT_FOUND = "ROUTE_NOT_FOUND";
+
     /** 服务端 Task 不存在（查询/续跑一个已回收或从未创建的 Task）。不可重试。 */
     public static final String TASK_NOT_FOUND = "TASK_NOT_FOUND";
+
     /**
      * 网关未开放该 A2A 方法。不可重试。
      *
@@ -42,22 +48,31 @@ public final class ErrorCodes {
      * {@code CancelTask} / {@code SubscribeToTask} 会返回该码（见评审文档 BLK-2/BLK-3）。
      */
     public static final String METHOD_NOT_SUPPORTED = "VALIDATION_METHOD";
+
     /** 同幂等键绑定了不同正文。<b>不可重试</b>。 */
     public static final String IDEMPOTENCY_PAYLOAD_MISMATCH = "IDEMPOTENCY_PAYLOAD_MISMATCH";
+
     /** 同幂等键同正文的前一次请求仍在途。<b>可重试（须用同键）</b>。 */
     public static final String IDEMPOTENCY_IN_FLIGHT = "IDEMPOTENCY_IN_FLIGHT";
+
     /** 被限流。可重试。 */
     public static final String RATE_LIMITED = "RATE_LIMITED";
+
     /** 服务不可用。可重试。 */
     public static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
+
     /** 网络失败（连接/读超时/连接重置）。可重试。 */
     public static final String NETWORK_ERROR = "NETWORK_ERROR";
+
     /** 服务端 Task 失败。不可重试（不是网络问题，不得包装为网络失败）。 */
     public static final String AGENT_ERROR = "AGENT_ERROR";
+
     /** 流在非终态下中断，进展不确定（FEAT-006 §5.1.4：中断不等于失败）。 */
     public static final String STREAM_INTERRUPTED = "STREAM_INTERRUPTED";
+
     /** 未支持的调用模式。不可重试。 */
     public static final String UNSUPPORTED_MODE = "UNSUPPORTED_MODE";
+
     /**
      * 声明了 {@code STREAMING} 但链路不提供流式承载。不可重试。
      *
@@ -65,6 +80,7 @@ public final class ErrorCodes {
      * 而不是把非流式响应当成一条空流悄悄结束。
      */
     public static final String STREAMING_UNAVAILABLE = "STREAMING_UNAVAILABLE";
+
     /**
      * 关联的 invocation 不可续接（已终态 / 不处于等待输入 / 正等端侧工具结果 / 映射未建立）。不可重试。
      *

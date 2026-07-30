@@ -350,7 +350,6 @@ public final class CloudClientVerification {
                 "submitOrder executed exactly once, actual=" + tools.submitOrderCount.get());
         check(id, approvalCount.get() == 1,
                 "approval requested exactly once for the ACTION tool, actual=" + approvalCount.get());
-
     }
 
     private void scenarioUnsupportedModeRejected(String id, AgentClient client, DemoTools tools)
@@ -390,7 +389,6 @@ public final class CloudClientVerification {
                 "streaming ping invocation completed, state=" + snapshot.state());
         check(id, tools.pingCount.get() == 1,
                 "ping executed exactly once, actual=" + tools.pingCount.get());
-
     }
 
     private void scenarioContinueInput(String id, AgentClient client)
@@ -408,6 +406,37 @@ public final class CloudClientVerification {
         java.util.concurrent.atomic.AtomicReference<InvocationCall> continuation =
                 new java.util.concurrent.atomic.AtomicReference<>();
         CountDownLatch continued = new CountDownLatch(1);
+        subscribeContinuePrompt(call, id, client, continuation, continued);
+
+        boolean prompted = continued.await(20, TimeUnit.SECONDS);
+        InvocationCall next = continuation.get();
+        check(id, prompted && next != null, "user-input prompt surfaced and continueInput issued");
+        if (next != null) {
+            InvocationSnapshot first = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+            check(id, first.state() == TaskState.INPUT_REQUIRED && !first.terminal(),
+                    "first invocation settles at the input point (non-terminal), state=" + first.state());
+            InvocationSnapshot snapshot = next.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
+            check(id, snapshot.state() == TaskState.COMPLETED,
+                    "continuation completed on the new invocationRef, state=" + snapshot.state());
+            check(id, !next.invocationRef().equals(call.invocationRef()),
+                    "continuation has a distinct invocationRef");
+            next.close();
+        }
+        call.close();
+    }
+
+    /**
+     * 订阅事件流，在收到用户输入提示时以 continueInput 发起续轮。
+     *
+     * @param call 原调用句柄
+     * @param id 场景标识
+     * @param client 客户端
+     * @param continuation 续轮句柄持有者
+     * @param continued 续轮发起完成同步点
+     */
+    private void subscribeContinuePrompt(InvocationCall call, String id, AgentClient client,
+                                         java.util.concurrent.atomic.AtomicReference<InvocationCall> continuation,
+                                         CountDownLatch continued) {
         call.events().subscribe(new Flow.Subscriber<>() {
             @Override
             public void onSubscribe(Flow.Subscription subscription) {
@@ -420,7 +449,7 @@ public final class CloudClientVerification {
                         && continuation.get() == null) {
                     progress.onEvent(VerificationProgress.Event.info(id, "got prompt, submitting continueInput"));
                     continuation.set(client.continueInput(ContinueInputRequest.builder()
-                            .conversationId(conversationId)
+                            .conversationId(call.conversationId())
                             .relatedInvocationRef(call.invocationRef())
                             .mode(InvocationMode.STREAMING)
                             .input("Alice")
@@ -439,23 +468,6 @@ public final class CloudClientVerification {
                 continued.countDown();
             }
         });
-
-        boolean prompted = continued.await(20, TimeUnit.SECONDS);
-        InvocationCall next = continuation.get();
-        check(id, prompted && next != null, "user-input prompt surfaced and continueInput issued");
-        if (next != null) {
-            InvocationSnapshot first = call.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-            check(id, first.state() == TaskState.INPUT_REQUIRED && !first.terminal(),
-                    "first invocation settles at the input point (non-terminal), state=" + first.state());
-            InvocationSnapshot snapshot = next.completion().toCompletableFuture().get(20, TimeUnit.SECONDS);
-            check(id, snapshot.state() == TaskState.COMPLETED,
-                    "continuation completed on the new invocationRef, state=" + snapshot.state());
-            check(id, !next.invocationRef().equals(call.invocationRef()),
-                    "continuation has a distinct invocationRef");
-            next.close();
-        }
-        call.close();
-
     }
 
     /**
@@ -491,7 +503,6 @@ public final class CloudClientVerification {
         check(id, unknown.state() == TaskState.UNKNOWN,
                 "getInvocation on an unknown ref yields UNKNOWN instead of throwing");
         call.close();
-
     }
 
     /**
@@ -525,7 +536,6 @@ public final class CloudClientVerification {
         check(id, snap.maybeRecovery().isEmpty(),
                 "a determined outcome carries no recovery hint");
         call.close();
-
     }
 
     /**
@@ -565,7 +575,6 @@ public final class CloudClientVerification {
                         .orElse(false),
                 "recovery advises querying rather than re-creating (a Task already exists)");
         call.close();
-
     }
 
     /**
@@ -605,6 +614,7 @@ public final class CloudClientVerification {
             check(id, done.invocationRef().equals(e.relatedInvocationRef()),
                     "rejection points back at the offending relatedInvocationRef");
         }
+
         // 未知句柄同样应被明确拒绝，而不是静默新建任务。
         try {
             client.continueInput(ContinueInputRequest.builder()
@@ -618,7 +628,6 @@ public final class CloudClientVerification {
                     "unknown related ref is rejected with the same stable code");
         }
         done.close();
-
     }
 
     /**
@@ -650,7 +659,6 @@ public final class CloudClientVerification {
         check(id, snap.outputText() != null && snap.outputText().contains(traceId),
                 "gateway observed the traceId carried in metadata.attributes, output=" + snap.outputText());
         call.close();
-
     }
 
     /**
@@ -748,7 +756,6 @@ public final class CloudClientVerification {
                         + (tools.readPageCount.get() - readBefore)
                         + " submitOrder+" + (tools.submitOrderCount.get() - submitBefore));
         call.close();
-
     }
 
     /**

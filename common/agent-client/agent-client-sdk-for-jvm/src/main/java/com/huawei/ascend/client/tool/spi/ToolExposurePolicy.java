@@ -25,6 +25,7 @@ import java.util.function.Predicate;
 public final class ToolExposurePolicy {
     private final String label;
     private final Predicate<String> predicate;
+
     /** 暴露窗口截止时刻；null 表示不设过期。 */
     private final Instant expiresAt;
 
@@ -109,6 +110,7 @@ public final class ToolExposurePolicy {
         if (other == null) {
             return this;
         }
+
         // 过期时刻取两者中更早的：与"只能收紧不能放大"一致，任一级窗口关闭即整体关闭。
         Instant merged;
         if (this.expiresAt == null) {
