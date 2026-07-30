@@ -1,9 +1,18 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.intentllm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Tests for {@link LlmIntentResult} parsing and ambiguous fallback.
+ *
+ * @since 0.1.0
+ */
 class LlmIntentResultTest {
     @Test
     void parsesClassify() {

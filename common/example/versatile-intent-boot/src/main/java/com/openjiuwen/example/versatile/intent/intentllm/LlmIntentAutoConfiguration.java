@@ -34,7 +34,16 @@ import org.springframework.context.annotation.Bean;
         havingValue = "true")
 @EnableConfigurationProperties(LlmIntentProperties.class)
 public class LlmIntentAutoConfiguration {
-
+    /**
+     * 注册 LLM 意图分类 AgentHandler；route-cache bean 存在时用
+     * {@link CachedVersatileAgentHandler} 包裹，使 L1 仍保留多轮路由缓存.
+     *
+     * @param properties intent-llm 配置（会先做必填校验）
+     * @param versatileProperties versatile 配置，提供 ambiguousIntentId 等
+     * @param routeCache 可选的 route-cache bean
+     * @param routeCacheProperties 可选的 route-cache 配置
+     * @return 占据 {@link AgentHandler} 槽位的 LLM 意图分类 handler
+     */
     @Bean
     @ConditionalOnMissingBean(AgentHandler.class)
     public AgentHandler llmIntentAgentHandler(LlmIntentProperties properties,

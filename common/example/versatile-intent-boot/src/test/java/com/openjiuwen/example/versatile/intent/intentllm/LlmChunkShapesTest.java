@@ -1,12 +1,22 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.intentllm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.service.spec.dto.QueryChunk;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+/**
+ * Tests for {@link LlmChunkShapes} a2a_delegate / ambiguous chunk shapes.
+ *
+ * @since 0.1.0
+ */
 class LlmChunkShapesTest {
     @SuppressWarnings("unchecked")
     @Test

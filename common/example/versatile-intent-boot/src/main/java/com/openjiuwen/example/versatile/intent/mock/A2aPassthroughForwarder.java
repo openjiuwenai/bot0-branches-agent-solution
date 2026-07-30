@@ -51,7 +51,6 @@ class A2aPassthroughForwarder {
             response.getOutputStream().write(resp.body());
             response.getOutputStream().flush();
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             throw new IOException("A2A passthrough interrupted", e);
         }
     }

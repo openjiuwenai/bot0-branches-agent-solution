@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.intentllm;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -10,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +22,11 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests for {@link LlmIntentClient} against a stubbed OpenAI-compatible endpoint.
+ *
+ * @since 0.1.0
+ */
 class LlmIntentClientTest {
     private WireMockServer wm;
     private LlmIntentProperties props;
@@ -33,7 +43,9 @@ class LlmIntentClientTest {
     }
 
     @AfterEach
-    void tearDown() { wm.stop(); }
+    void tearDown() {
+        wm.stop();
+    }
 
     @Test
     void returnsContentChoices() {

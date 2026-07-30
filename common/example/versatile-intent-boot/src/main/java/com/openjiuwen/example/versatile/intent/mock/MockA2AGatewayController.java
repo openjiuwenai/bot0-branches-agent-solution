@@ -130,6 +130,8 @@ public class MockA2AGatewayController {
      * configured overrides onto the static {@link #ROUTING} defaults, and
      * reads the passthrough card set. With empty config (the default for
      * {@code local-e2e-a2a-gateway.sh}) behavior is unchanged.
+     *
+     * @param properties mock-a2a-gateway 配置（routing 覆盖 + passthrough-cards）
      */
     @Autowired
     public MockA2AGatewayController(MockA2aGatewayProperties properties) {
@@ -153,6 +155,9 @@ public class MockA2AGatewayController {
 
     /**
      * Test-friendly constructor with explicit routing and passthrough set.
+     *
+     * @param routing agentCard → target runtime base URL map
+     * @param passthroughCards 走 A2A 原生透传的末端业务卡集合（null 视为空集）
      */
     MockA2AGatewayController(Map<String, String> routing, Set<String> passthroughCards) {
         this.routing = routing;
@@ -166,7 +171,9 @@ public class MockA2AGatewayController {
      * @param agentId the path variable agent identifier (mapped via {@link #routing})
      * @param request the servlet request, source of propagated headers
      * @param body    the raw JSON-RPC request body (may be {@code null})
+     * @param response the servlet response, written directly on the passthrough path
      * @return a {@code 200 OK} with JSON-RPC completion or error envelope
+     * @throws IOException if forwarding to the target runtime fails
      */
     @PostMapping("/a2a/{agentId}")
     public ResponseEntity<String> handle(
@@ -190,7 +197,7 @@ public class MockA2AGatewayController {
         if (passthroughCards.contains(agentId)) {
             log.info("Mock A2A Gateway PASSTHROUGH agentId={} -> {}/a2a/", agentId, targetBase);
             new A2aPassthroughForwarder().forward(targetBase, agentId, body, response);
-            return null;
+            return ResponseEntity.ok().build();
         }
 
         String targetUrl = targetBase + QUERY_PATH;

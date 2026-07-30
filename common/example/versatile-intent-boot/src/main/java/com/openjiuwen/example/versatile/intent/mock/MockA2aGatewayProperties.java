@@ -4,12 +4,12 @@
 
 package com.openjiuwen.example.versatile.intent.mock;
 
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Configuration for the mock A2A gateway's optional A2A-native passthrough.
@@ -28,7 +28,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "openjiuwen.example.mock-a2a-gateway")
 public class MockA2aGatewayProperties {
-
     /** agentCard → target base URL overrides, merged onto the static ROUTING. */
     private Map<String, String> routing = new LinkedHashMap<>();
 

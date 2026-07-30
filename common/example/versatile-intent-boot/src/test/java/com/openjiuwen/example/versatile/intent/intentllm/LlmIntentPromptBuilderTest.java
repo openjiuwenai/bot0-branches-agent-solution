@@ -1,14 +1,24 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
+ */
+
 package com.openjiuwen.example.versatile.intent.intentllm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests for {@link LlmIntentPromptBuilder}.
+ *
+ * @since 0.1.0
+ */
 class LlmIntentPromptBuilderTest {
     @Test
     void promptContainsAvailableAgentCardsAndDomainConstraint() {
