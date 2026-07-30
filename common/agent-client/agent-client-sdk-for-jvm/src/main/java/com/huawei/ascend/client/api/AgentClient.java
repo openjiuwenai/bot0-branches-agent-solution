@@ -23,8 +23,14 @@ public interface AgentClient extends AutoCloseable {
     /**
      * 发起一次调用，立即返回句柄；网络交互在后台进行。
      *
-     * <p>本迭代（730）仅交付 {@link InvocationMode#STREAMING}；传入 {@code BLOCKING}/{@code ASYNC}
-     * 会抛出 {@link UnsupportedOperationException}（{@code UNSUPPORTED_MODE}）。
+     * <p>三种调用模式共用同一句柄，差异只在传输承载与调用方的消费方式：
+     * <ul>
+     * <li>{@link InvocationMode#STREAMING} —— 订阅 {@link InvocationCall#events()} 增量消费。</li>
+     * <li>{@link InvocationMode#BLOCKING} —— 忽略事件流，直接等 {@link InvocationCall#completion()}。
+     * 由传输层走网关同步接口获取结果，<b>不</b>是把流式结果在本地聚合。</li>
+     * <li>{@link InvocationMode#ASYNC} —— 拿到 {@link InvocationCall#accepted()} 即返回，
+     * 之后用 {@link #getInvocation} 观察进展。</li>
+     * </ul>
      *
      * @param request 调用请求
      * @return 调用句柄
@@ -34,10 +40,28 @@ public interface AgentClient extends AutoCloseable {
     /**
      * 把用户补充输入续传给处于 INPUT_REQUIRED（非 client_tool）的既有调用，返回续传句柄。
      *
+     * <p>这会产生一个业务可见的<b>新</b> invocation，关联到同一个服务端 Task。
+     * 端侧工具结果续跑<b>不</b>走本方法——那是 SDK 内部自动完成的，业务不感知。
+     *
      * @param request 续传请求
      * @return 续传句柄
      */
     InvocationCall continueInput(ContinueInputRequest request);
+
+    /**
+     * 查询某次调用的状态快照投影（wire 方法 {@code GetTask}）。
+     *
+     * <p>返回的是<b>投影</b>而非本地缓存：SDK 会向网关查询权威状态。适用于：
+     * ASYNC 模式观察进展、事件流投递 {@link InvocationEvent.ProgressUncertain} 后确认真实状态、
+     * 或跨请求校正本地滞后状态。
+     *
+     * <p>本地无该 {@code invocationRef} 映射（如未建立 taskRef、或已被回收）时返回
+     * {@link InvocationSnapshot#unknown}，不抛异常。
+     *
+     * @param invocationRef 调用句柄
+     * @return 状态快照
+     */
+    java.util.concurrent.CompletionStage<InvocationSnapshot> getInvocation(String invocationRef);
 
     /**
      * 声明某个会话级别的工具暴露策略，对该会话后续的所有调用生效。
