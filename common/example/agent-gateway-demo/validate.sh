@@ -8,8 +8,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-# Demo lives under common/example/; Gateway module is sibling under common/.
-MODULE="$(cd "$ROOT/../../agent-gateway" && pwd)"
+# Demo lives under common/example/; Gateway module moved under common/agent-bus/ by 6cd6819f.
+MODULE="$(cd "$ROOT/../../agent-bus/agent-gateway" && pwd)"
 ONLINE=0
 BUS_UNIT=0
 for arg in "$@"; do
@@ -52,9 +52,9 @@ bash -n "$ROOT/feat-012-bus/smoke.sh"
 echo "  OK  smoke scripts"
 
 echo "== 3) JSON bodies =="
-python3 - <<PY
+python3 - "$ROOT" <<'PY'
 import json, pathlib, sys
-root = pathlib.Path("$ROOT")
+root = pathlib.Path(sys.argv[1])
 paths = list(root.glob("feat-*/bodies/*.json"))
 assert paths, "no JSON bodies"
 for p in paths:
