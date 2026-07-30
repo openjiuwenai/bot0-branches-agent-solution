@@ -161,11 +161,20 @@ Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock
 
 真实 LLM 驱动的意图识别 + 真实 DeepAgent downstream。LLM 参数从 `$MODULE_DIR/.env` 读取（见 `.env.example`，真实环境变量优先；`DEEPSEEK_*` 未设时默认与 `LLM_*` 相同）：`LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL`（L1/L2 分类用，OpenAI 兼容）与 `DEEPSEEK_API_KEY`/`DEEPSEEK_BASE_URL`/`DEEPSEEK_MODEL`（两个 Agent B 业务 agent 用）。启动 6 个进程：gateway + L1 + L2_hotel + L2_flight + Agent B hotel + Agent B flight，演示三场景（单 conversation_id）：
 
-- **场景 A**：订酒店多轮 ask-user——`订酒店` → Agent B hotel 追问预算 → `500元` → 追问星级（中途未出单）。
-- **场景 B**：跨工作流跳转买机票——L1 据会话历史识别出话题切换，直接路由到 L2_flight → Agent B flight 追问出发日期。
-- **场景 C**：回跳完成酒店——`继续订酒店` → L2_hotel 恢复 shadow task 续传出单（`酒店预订成功`）→ `五星` → 更新为五星级出单。
+- **场景 A**：订酒店多轮 ask-user——`订酒店` → Agent B hotel 追问"定什么地方" → `上海` → 追问"订哪天"。
+- **场景 B**：跨工作流跳转买机票——L1 据会话历史识别出话题切换，直接路由到 L2_flight → Agent B flight 追问"去哪里"。
+- **场景 C**：回跳继续订酒店——`继续订酒店` → L2_hotel 恢复 shadow task 续传，Agent B hotel 追问"住几天"。
 
-跨工作流跳转机制说明：L1 在本演示中**关闭路由缓存**（`route-cache.enabled=false`），改由 `LlmIntentAgentHandler` 按 `conversationId` 在内存中累积用户输入历史，每轮把"历史+当前消息"喂给 LLM 分类。这样 L1 能识别 `500元`（预算回答）、`继续订酒店`（回跳）等后续消息的意图，并正确把 `买机票` 路由到 L2_flight。L2 对同一会话的 pending 业务任务走 A2A shadow-task 续传（§6.2.4），实现同领域多轮与回跳恢复；新领域（flight）首次到达无 pending 任务，走分类。
+对话剧本（单 `conversation_id`，真实 LLM 文案非精确）：
+
+```
+用户：订酒店        智能体：定什么地方？
+用户：上海          智能体：订哪天？
+用户：买机票        智能体：去哪里？（切换意图）
+用户：继续订酒店    智能体：好的，住几天？
+```
+
+跨工作流跳转机制说明：L1 在本演示中**关闭路由缓存**（`route-cache.enabled=false`），改由 `LlmIntentAgentHandler` 按 `conversationId` 在内存中累积用户输入历史，每轮把"历史+当前消息"喂给 LLM 分类。这样 L1 能识别 `上海`（酒店目的地回答）、`继续订酒店`（回跳）等后续消息的意图，并正确把 `买机票` 路由到 L2_flight。L2 对同一会话的 pending 业务任务走 A2A shadow-task 续传（§6.2.4），实现同领域多轮与回跳恢复；新领域（flight）首次到达无 pending 任务，走分类。
 
 > 设计取舍：原 spec §8 设想"路由缓存命中错领域 L2 → L2 返 ambiguous → §6.2.2 重识别"实现跨工作流跳转，但运行时 shadow-task 续传会抢占 L2 重分类、使重识别无法触发，实测不可行。故改用"缓存 OFF + handler 端历史"达成同一目标（跨工作流跳转）。reclassify 特性仍保留，仅本演示不触发。
 

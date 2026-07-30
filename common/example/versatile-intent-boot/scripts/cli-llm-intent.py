@@ -72,22 +72,23 @@ PORT_DEFAULTS = {
 }
 
 HOTEL_PROMPT = (
-    '你是酒店预订 Agent。收到订酒店请求时，先调用 ask_user 询问预算，恢复后再调用 ask_user '
-    '询问星级，恢复后返回最终答案，内容包含"酒店预订成功"。不要跳过 ask_user。'
+    '你是酒店预订 Agent。收到订酒店请求时，按顺序调用 ask_user 依次询问：① 想定什么地方（目的地）；'
+    '② 订哪天（入住日期）；③ 住几天。每收到一次用户回答就继续下一个问题，三个问题都问完后返回最终答案，'
+    '内容包含"酒店预订成功"。不要跳过 ask_user。'
 )
 FLIGHT_PROMPT = (
-    '你是机票预订 Agent。收到买机票请求时，先调用 ask_user 询问出发日期，恢复后返回最终答案，'
+    '你是机票预订 Agent。收到买机票请求时，先调用 ask_user 询问去哪里（目的地），恢复后返回最终答案，'
     '内容包含"机票预订成功"。'
 )
 
 # Scenarios mirror scripts/local-e2e-llm-intent.sh (single conversation_id):
-#   A: 订酒店多轮 ask-user（Agent B hotel 追问预算/星级）
-#   B: 跳转买机票（L1 据历史识别话题切换 → L2_flight）
-#   C: 回跳完成酒店（Agent B hotel shadow-task 续传出单）
+#   A: 订酒店 → 上海（Agent B hotel ask_user：定什么地方 → 订哪天）
+#   B: 买机票（L1 据历史识别话题切换 → L2_flight，ask_user：去哪里）
+#   C: 继续订酒店（Agent B hotel shadow-task 恢复，ask_user：住几天）
 SCENARIOS = {
-    "a": ["订酒店", "500元"],
+    "a": ["订酒店", "上海"],
     "b": ["买机票"],
-    "c": ["继续订酒店", "五星"],
+    "c": ["继续订酒店"],
 }
 
 

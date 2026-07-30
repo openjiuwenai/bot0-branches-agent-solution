@@ -3,9 +3,9 @@
 # Local end-to-end runbook for the LLM-driven intent demo.
 # Real LLM classification at L1/L2 + real DeepAgent (Agent B) at downstream.
 # Scenarios (single conversation_id):
-#   A: 订酒店多轮 ask-user（Agent B hotel 追问预算/星级），中途未出单
-#   B: 跳转买机票（L1 缓存命中错领域 L2 → ambiguous → L1 重识别 → 机票工作流）
-#   C: 回跳完成酒店（Agent B hotel shadow-task 恢复）
+#   A: 订酒店 → 上海（Agent B hotel ask_user：定什么地方 → 订哪天）
+#   B: 买机票（L1 据历史识别话题切换 → L2_flight，Agent B flight ask_user：去哪里）
+#   C: 继续订酒店（Agent B hotel shadow-task 恢复，ask_user：住几天）
 #
 # Requires: Java 17, LLM_API_KEY/BASE_URL/MODEL (OpenAI-compatible; e.g. GLM
 #   glm-5.2 at https://open.bigmodel.cn/api/coding/paas/v4 per apiconfig.json).
@@ -80,8 +80,8 @@ export DEEPSEEK_BASE_URL="${DEEPSEEK_BASE_URL:-$LLM_BASE_URL}"
 export DEEPSEEK_MODEL="${DEEPSEEK_MODEL:-$LLM_MODEL}"
 export LLM_API_KEY LLM_BASE_URL LLM_MODEL
 
-HOTEL_PROMPT='你是酒店预订 Agent。收到订酒店请求时，先调用 ask_user 询问预算，恢复后再调用 ask_user 询问星级，恢复后返回最终答案，内容包含"酒店预订成功"。不要跳过 ask_user。'
-FLIGHT_PROMPT='你是机票预订 Agent。收到买机票请求时，先调用 ask_user 询问出发日期，恢复后返回最终答案，内容包含"机票预订成功"。'
+HOTEL_PROMPT='你是酒店预订 Agent。收到订酒店请求时，按顺序调用 ask_user 依次询问：① 想定什么地方（目的地）；② 订哪天（入住日期）；③ 住几天。每收到一次用户回答就继续下一个问题，三个问题都问完后返回最终答案，内容包含"酒店预订成功"。不要跳过 ask_user。'
+FLIGHT_PROMPT='你是机票预订 Agent。收到买机票请求时，先调用 ask_user 询问去哪里（目的地），恢复后返回最终答案，内容包含"机票预订成功"。'
 
 cleanup() {
     echo; echo "==> Stopping processes: ${PIDS[*]:-<none>}"
@@ -189,16 +189,15 @@ main() {
     local cid="c-llm-demo"
     echo; echo "==== 场景 A: 订酒店多轮 ask-user ===="
     echo "    response: $(send_q "$L1_PORT" "$cid" "订酒店" | head -c 600)"
-    echo "    response: $(send_q "$L1_PORT" "$cid" "500元" | head -c 600)"
+    echo "    response: $(send_q "$L1_PORT" "$cid" "上海" | head -c 600)"
 
-    echo; echo "==== 场景 B: 跳转买机票（重识别）===="
+    echo; echo "==== 场景 B: 跳转买机票（切换意图）===="
     echo "    response: $(send_q "$L1_PORT" "$cid" "买机票" | head -c 600)"
     assert_log layer1 "A2AGateway call agent=agent_card_L2_flight" || true
 
-    echo; echo "==== 场景 C: 回跳完成酒店 ===="
+    echo; echo "==== 场景 C: 回跳继续订酒店 ===="
     echo "    response: $(send_q "$L1_PORT" "$cid" "继续订酒店" | head -c 600)"
-    echo "    response: $(send_q "$L1_PORT" "$cid" "五星" | head -c 600)"
-    assert_log agent-b-hotel "酒店预订成功" || true
+    assert_log layer1 "A2AGateway call agent=agent_card_L2_hotel" || true
 
     echo; echo "==> Demo run complete. Inspect logs: $LOG_DIR/{layer1,layer2-hotel,layer2-flight,agent-b-hotel,agent-b-flight,gateway}.log"
 }
