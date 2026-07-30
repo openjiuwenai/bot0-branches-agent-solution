@@ -1,4 +1,4 @@
-﻿# Versatile调用异常排错指南
+# Versatile调用异常排错指南
 
 ## 问题描述
 
@@ -107,7 +107,7 @@ curl -X POST "http://your-a2a-adapter:8191/a2a" \
 | `EDP_AGENT_VERSATILE_TIMEOUT` | `30s` | 超时时间，支持s(秒)/m(分钟)格式，生产环境建议60s |
 
 **URL模板注意事项：**
-- `{workflow_id}`：在application.yml的`edpa.agent.versatile.url-variables.workflow_id`配置默认值，或从场景配置中获取
+- `{workflow_id}`：在application.yml的`deep-agent.versatile.url-variables.workflow_id`配置默认值，或从场景配置中获取
 - `{conversation_id}`：运行时自动替换为sessionId
 - Query参数`type=controller`和`workspace_id=10`已在配置中默认设置
 
@@ -136,7 +136,7 @@ docker logs edp-agent 2>&1 | grep -i "timeout\|timed out"
 ### 步骤5：检查workflow_id映射
 
 workflow_id来源：
-1. 默认值：`application.yml`中的`edpa.agent.versatile.url-variables.workflow_id`（默认为`mock_workflow`）
+1. 默认值：`application.yml`中的`deep-agent.versatile.url-variables.workflow_id`（默认为`mock_workflow`）
 2. 场景配置：查看对应场景的actrule.yaml或scriptconfig.yaml
 3. 工具调用参数：call_versatile时传入的参数
 
@@ -384,12 +384,12 @@ Mock管理接口：
 ## 相关配置/日志关键词
 
 ### 配置项
-- `edpa.agent.versatile.url` - Versatile REST URL模板
-- `edpa.agent.versatile.adapter-a2a-url` - A2A适配器URL
-- `edpa.agent.versatile.timeout` - 调用超时
-- `edpa.agent.versatile.url-variables` - URL变量替换
-- `edpa.agent.versatile.query-params` - 默认Query参数
-- `edpa.agent.versatile.headers` - 默认请求头
+- `deep-agent.versatile.url` - Versatile REST URL模板
+- `deep-agent.versatile.adapter-a2a-url` - A2A适配器URL
+- `deep-agent.versatile.timeout` - 调用超时
+- `deep-agent.versatile.url-variables` - URL变量替换
+- `deep-agent.versatile.query-params` - 默认Query参数
+- `deep-agent.versatile.headers` - 默认请求头
 
 ### 日志关键词
 - `VersatileInterruptRail: intercepting call_versatile` - 开始调用

@@ -37,34 +37,48 @@ public class EdpConfigValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger(EdpConfigValidator.class);
 
     /**
-     * 校验模型配置完整性。
+     * 校验模型配置完整性（backend + model 新格式）。
      *
-     * @param model description
+     * @param config description
      */
 
-    public static void validateModelConfig(EdpaSpringBootConfig.ModelConfig model) {
-        if (model == null) {
-            throw new IllegalStateException("Model config missing. Set edpa.agent.model in application.yml.");
+    public static void validateModelConfig(DeepAgentProperties config) {
+        if (config == null) {
+            throw new IllegalStateException("Config missing. Set deep-agent in application.yml.");
         }
-        if (model.getProvider() == null || model.getProvider().isBlank()) {
-            throw new IllegalStateException("Model provider missing. Set edpa.agent.model.provider.");
+        EdpaSpringBootConfig.BackendConfig backend = config.getBackend();
+        EdpaSpringBootConfig.ModelConfig model = config.getModel();
+
+        if (backend == null) {
+            throw new IllegalStateException("Backend config missing. Set deep-agent.backend in application.yml.");
         }
-        if (model.getName() == null || model.getName().isBlank()) {
-            throw new IllegalStateException("Model name missing. Set edpa.agent.model.name.");
+        if (backend.getClientProvider() == null || backend.getClientProvider().isBlank()) {
+            throw new IllegalStateException("Backend client_provider missing. Set deep-agent.backend.client_provider.");
         }
-        if (model.getBaseUrl() == null || model.getBaseUrl().isBlank()) {
-            throw new IllegalStateException("Model baseUrl missing. Set edpa.agent.model.base-url.");
+        if (backend.getApiBase() == null || backend.getApiBase().isBlank()) {
+            throw new IllegalStateException("Backend api_base missing. Set deep-agent.backend.api_base.");
+        }
+        if (backend.getTimeout() <= 0) {
+            throw new IllegalStateException("Backend timeout must be > 0. Set deep-agent.backend.timeout.");
         }
 
-        String apiKey = model.getApiKey();
-        String envApiKey = System.getenv("EDP_AGENT_MODEL_API_KEY");
+        String apiKey = backend.getApiKey();
+        String envApiKey = System.getenv("DEEPSEEK_API_KEY");
         boolean hasValidApiKey = (apiKey != null && !apiKey.isBlank()) || (envApiKey != null && !envApiKey.isBlank());
         if (!hasValidApiKey) {
-            throw new IllegalStateException("Model apiKey missing. Set EDP_AGENT_MODEL_API_KEY environment variable.");
+            throw new IllegalStateException("Backend apiKey missing. Set DEEPSEEK_API_KEY environment variable.");
         }
 
-        LOGGER.info("Model config validated: provider={}, name={}, apiKeySource={}", model.getProvider(),
-                model.getName(), (envApiKey != null && !envApiKey.isBlank()) ? "ENV_VAR" : "application.yml");
+        if (model == null) {
+            throw new IllegalStateException("Model config missing. Set deep-agent.model in application.yml.");
+        }
+        if (model.getModel() == null || model.getModel().isBlank()) {
+            throw new IllegalStateException("Model name missing. Set deep-agent.model.model.");
+        }
+
+        LOGGER.info("Model config validated: clientProvider={}, model={}, apiKeySource={}",
+                backend.getClientProvider(), model.getModel(),
+                (envApiKey != null && !envApiKey.isBlank()) ? "ENV_VAR" : "application.yml");
     }
 
     /**
