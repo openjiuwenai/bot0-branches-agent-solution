@@ -57,7 +57,17 @@ class AgentBDeepAgentApplicationTest {
 
         assertThatThrownBy(() -> rail.beforeToolCall(ctx))
                 .isInstanceOf(ToolInterruptException.class)
-                .hasMessage("ask_user");
+                .hasMessage("请问您的预算是多少？");
+    }
+
+    @Test
+    void askUserRailFallsBackToDefaultQuestionWhenQueryArgMissing() {
+        DemoAskUserRail rail = new DemoAskUserRail();
+        AgentCallbackContext ctx = askUserContextWithArguments("{}", null);
+
+        assertThatThrownBy(() -> rail.beforeToolCall(ctx))
+                .isInstanceOf(ToolInterruptException.class)
+                .hasMessage("请补充更多信息以便继续。");
     }
 
     @Test
@@ -73,10 +83,14 @@ class AgentBDeepAgentApplicationTest {
     }
 
     private AgentCallbackContext askUserContext(String resumeInput) {
+        return askUserContextWithArguments("{\"query\":\"请问您的预算是多少？\"}", resumeInput);
+    }
+
+    private AgentCallbackContext askUserContextWithArguments(String arguments, String resumeInput) {
         ToolCall toolCall = ToolCall.builder()
                 .id("agent-b-round-2")
                 .name("ask_user")
-                .arguments("{\"response\":\"question\"}")
+                .arguments(arguments)
                 .build();
         LinkedHashMap<String, Object> extra = new LinkedHashMap<>();
         if (resumeInput != null) {
