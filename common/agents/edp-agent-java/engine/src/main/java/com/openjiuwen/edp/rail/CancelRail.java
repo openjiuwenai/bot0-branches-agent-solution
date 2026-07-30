@@ -19,7 +19,6 @@ package com.openjiuwen.edp.rail;
 import com.openjiuwen.edp.config.EdpConfig;
 import com.openjiuwen.edp.config.ScriptConstants;
 import com.openjiuwen.edp.config.ToolConstants;
-
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;

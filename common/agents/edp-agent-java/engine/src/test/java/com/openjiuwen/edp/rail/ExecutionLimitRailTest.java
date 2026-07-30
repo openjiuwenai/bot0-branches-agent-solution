@@ -34,7 +34,6 @@ import static org.mockito.Mockito.when;
 import com.openjiuwen.edp.config.ActRuleConfig;
 import com.openjiuwen.edp.config.RedisConfig;
 import com.openjiuwen.edp.config.TodoRedisProperties;
-
 import com.openjiuwen.core.session.Session;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
