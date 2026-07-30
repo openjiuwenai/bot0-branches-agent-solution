@@ -1,0 +1,72 @@
+{
+  "diesel": {
+    "product_id": "diesel",
+    "name": "柴油",
+    "unit": "元/吨",
+    "price": 7800,
+    "transfer_price": 7800
+  },
+  "naphtha": {
+    "product_id": "naphtha",
+    "name": "石脑油",
+    "unit": "元/吨",
+    "price": 6500,
+    "transfer_price": 6500
+  },
+  "jet_fuel": {
+    "product_id": "jet_fuel",
+    "name": "航煤",
+    "unit": "元/吨",
+    "price": 8200,
+    "transfer_price": 8200
+  },
+  "fuel_oil": {
+    "product_id": "fuel_oil",
+    "name": "燃料油",
+    "unit": "元/吨",
+    "price": 4200,
+    "transfer_price": 4200
+  },
+  "lpg": {
+    "product_id": "lpg",
+    "name": "液化气",
+    "unit": "元/吨",
+    "price": 5500,
+    "transfer_price": 5500
+  },
+  "propylene": {
+    "product_id": "propylene",
+    "name": "丙烯",
+    "unit": "元/吨",
+    "price": 9800,
+    "transfer_price": 9800
+  },
+  "heavy_naphtha": {
+    "product_id": "heavy_naphtha",
+    "name": "重石脑油",
+    "unit": "元/吨",
+    "price": 6800,
+    "transfer_price": 6800
+  },
+  "tail_oil": {
+    "product_id": "tail_oil",
+    "name": "尾油",
+    "unit": "元/吨",
+    "price": 5200,
+    "transfer_price": 5200
+  },
+  "dry_gas": {
+    "product_id": "dry_gas",
+    "name": "干气",
+    "unit": "元/吨",
+    "price": 3800,
+    "transfer_price": 3800
+  },
+  "coke": {
+    "product_id": "coke",
+    "name": "焦炭",
+    "unit": "元/吨",
+    "price": 1800,
+    "transfer_price": 1800
+  }
+}

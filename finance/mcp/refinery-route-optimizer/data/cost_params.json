@@ -1,0 +1,21 @@
+{
+  "feedstock_base_price": 5500,
+  "diesel_hydro": {
+    "energy": 140,
+    "catalyst": 35,
+    "maintenance": 25,
+    "total": 200
+  },
+  "wax_hydro_crack": {
+    "energy": 230,
+    "catalyst": 75,
+    "maintenance": 45,
+    "total": 350
+  },
+  "dcc": {
+    "energy": 200,
+    "catalyst": 80,
+    "maintenance": 40,
+    "total": 320
+  }
+}
