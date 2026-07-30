@@ -729,7 +729,18 @@ A2A metadata 保留 `params.metadata`，但会删除调用方伪造的 `runtime.
 
 ## 7. AgentHandler 输出与字段归属
 
-### 7.1 非流式
+本章先说明 `AgentHandler` 的通用输出契约，再说明 `JiuwenCoreAgentHandler` 包装 AgentCore `ReActAgent` 和 `DeepAgent` 时的具体行为。两类 Agent 都经 `Runner.runAgent(...)` 或 `Runner.runAgentStreaming(...)` 调用；流式调用只请求 `StreamMode.OUTPUT`，Runtime 负责把 AgentCore 对象归一化为 `QueryResponse` 或 `QueryChunk`。
+
+AgentCore Handler 的非流式执行路径取决于构造时保存的对象：
+
+| Handler 中保存的对象 | `query(...)` 实际路径 |
+|---|---|
+| 具有公开 `invoke` 方法的 Agent 实例；ReActAgent 和 DeepAgent 实例均属于此类 | `Runner.runAgent(...)`，再归一化单个 Core 返回值 |
+| Agent ID 字符串，或没有公开 `invoke` 方法的对象 | `Runner.runAgentStreaming(...)`，消费完整 Core 流后聚合成一个 `QueryResponse` |
+
+按 Agent ID 注册时，即使 Runner 最终解析到 ReActAgent 或 DeepAgent，Handler 仍选择第二条路径，因为路径判断发生在 Runner 解析 Agent ID 之前。`streamQuery(...)` 不作此区分，始终调用 `Runner.runAgentStreaming(...)`。
+
+### 7.1 非流式通用契约
 
 ```java
 QueryResponse query(ServeRequest request);
@@ -737,14 +748,40 @@ QueryResponse query(ServeRequest request);
 
 Handler 必须返回非 null `QueryResponse`：
 
-| 字段 | 责任 |
-|---|---|
-| `QueryResponse.result` | Handler 产生最终业务结果 |
-| `QueryResponse.conversationId` | Handler 回填当前请求的会话标识 |
+| 字段 | 产生方 | 含义 |
+|---|---|---|
+| `QueryResponse.result` | Handler | 最终业务结果。AgentCore Handler 固定构造成 Map |
+| `result.role` | AgentCore Handler | 固定为 `assistant` |
+| `result.content` | AgentCore Handler | 从 Core 返回值中抽取的最终文本；中断时为中断提示文本，缺失时为空字符串 |
+| `result._interrupt` | AgentCore Handler | 仅中断时存在；值为归一化后的一个中断或中断批次 |
+| `QueryResponse.conversationId` | AgentCore Handler | 原样回填 `ServeRequest.conversationId`，序列化字段名为 `conversation_id` |
 
-Query 入口原样序列化这两个字段。A2A 入口只提取 Map 结果中的 `content` 作为 artifact；如果存在 `_interrupt`，则转成 INPUT_REQUIRED 状态。Custom REST 再由宿主 Adapter 将最终 A2A Task 投影成业务 Body。
+正常结果示例：
 
-### 7.2 流式
+```json
+{
+  "result": {
+    "role": "assistant",
+    "content": "最终回答"
+  },
+  "conversation_id": "conversation-1"
+}
+```
+
+AgentCore Handler 按下列顺序生成 `result.content`：
+
+1. Core 返回 Map 时，按 `output`、`content`、`response`、`result`、`data`、`payload` 的顺序递归查找第一个可转为文本的值。
+2. Map 只有一个字段且未命中上述名称时，继续递归处理该唯一字段的值；多字段 Map 没有可抽取字段时，使用整个 Map 的字符串表示。
+3. `ControllerOutput` 先处理其 `data`，`WorkflowOutput` 先处理其 `result`；其他对象使用其字符串表示。
+4. Core 返回 `result_type=interrupt` 且 `state` 中含 `__interaction__` 事件时，不执行普通文本抽取，而是生成 `result._interrupt`；单个中断保留单对象结构，多个中断生成 `{message, items}` 批次结构。
+
+非流式走“消费 Core 流”路径时，Handler 逐个归一化事件并按 `content`、`delta`、`output`、`response`、`result`、`data`、`payload` 递归抽取文本；已经累积到增量文本后，不再重复追加 `type=answer` 的最终文本。遇到 `__interaction__` 时优先返回中断；没有中断时返回累计文本，累计文本为空则使用最后一个 payload 的字符串表示。该聚合路径不把顶层 `type=error` 或 payload 的 `result_type=error` 转成非流式错误字段，而是按相同文本规则聚合；只有迭代 Core 流本身抛出异常时，异常才会向入口层传播。
+
+Core 返回 Map 中的其他字段不会直接并入 `QueryResponse.result`。例如 `result_type`、`interrupt_ids`、DeepAgent 的 `rounds` 和 `loop_state` 都是 Core 内部执行结果；只有上述文本和中断字段经过 Handler 投影到非流式响应。
+
+Query 入口原样序列化 `QueryResponse.result` 和 `conversation_id`。A2A 入口只提取 Map 结果中的 `content` 作为 artifact；如果存在 `_interrupt`，则转成 INPUT_REQUIRED 状态。Custom REST 再由宿主 Adapter 将最终 A2A Task 投影成业务 Body。
+
+### 7.2 流式通用契约
 
 ```java
 void streamQuery(ServeRequest request, QueryStreamObserver observer);
@@ -759,16 +796,153 @@ Handler 通过以下回调形成流：
 | `onError(Throwable)` | 异常结束 | 连接错误 | FAILED |
 | `isCancelled()` | 调用方是否已取消 | Handler 应停止继续产出 | Handler 应停止继续产出 |
 
-`QueryChunk` 的框架类型包括：
+AgentCore 的普通流事件使用 `OutputSchema(type, index, payload)`。AgentCore Handler 将它归一化为以下 `QueryChunk`：
 
-| type | 含义 |
-|---|---|
-| `chunk` | 普通中间/最终业务数据 |
-| `interrupt` | 需要用户输入、Client Tool 结果或远端委派处理 |
-| `remote_agent_output` | 远端 Agent 的流式业务输出，含来源投影 |
-| `error` | 流式失败终态 |
+```json
+{
+  "type": "chunk",
+  "data": {
+    "type": "llm_output",
+    "index": 0,
+    "payload": {
+      "content": "增量文本",
+      "result_type": "answer"
+    }
+  }
+}
+```
+
+外层 `QueryChunk.type` 是 Runtime 的路由类型；`data.type`、`data.index` 和 `data.payload` 来自 Core `OutputSchema`。具体映射如下：
+
+| Core/Runtime 原始值 | `QueryChunk.type` | `QueryChunk.data` | 处理规则 |
+|---|---|---|---|
+| 普通 `OutputSchema` | `chunk` | `{type,index,payload}` | 保留 Core 事件类型、序号和 payload |
+| `OutputSchema.type=__interaction__` | `interrupt` | 归一化中断 Map | 先缓存；Core 流结束后一次性输出一个中断或一个 `{message,items}` 批次 |
+| `OutputSchema.type=error` | `error` | `{type,index,payload}` | 先 `onNext` 错误 chunk，再 `onError`，不调用 `onComplete` |
+| Map | 由 Map 顶层 `type` 决定 | 原 Map | 顶层 `__interaction__`/`error` 分别映射为中断/错误，其余为普通 chunk |
+| 其他对象 | `chunk` | `{type:"chunk",data:<原值>}` | Handler 补统一 Map 外壳 |
+| Runner/归一化过程抛出异常 | `error` | `{type:"error",error:<异常消息>}` | Handler 构造错误数据，调用 `onNext` 后再调用 `onError` |
+
+`QueryChunk` 的框架类型及其产生位置如下：
+
+| type | 产生位置 | 含义 |
+|---|---|---|
+| `chunk` | 具体 Handler | 普通中间/最终业务数据 |
+| `interrupt` | 具体 Handler | 需要用户输入、Client Tool 结果或远端委派处理 |
+| `remote_agent_output` | Runtime 远端编排层 | 远端 Agent 的流式业务输出及来源信息；不是 ReActAgent/DeepAgent 的 Core 事件类型 |
+| `error` | 具体 Handler | 流式失败终态 |
 
 Handler 不应在 `type=error` 后再发送普通 chunk 或完成数据；编排层和 A2A 执行器会把它视为失败终态。
+
+错误判定只看归一化数据的顶层 `type`。例如 `data.type="answer"`、`data.payload.result_type="error"` 仍是普通 `chunk`，不会触发 `onError`；只有 `data.type="error"`（或原始 Map 顶层 `type="error"`）才是流式失败终态。
+
+### 7.3 ReActAgent 输出
+
+`ReActAgent` 直接执行模型调用、工具调用和中断恢复循环。Core 非流式返回值是 Map，不是 HTTP 响应对象。
+
+#### 7.3.1 非流式
+
+Handler 直接持有 ReActAgent 实例时，Core 返回值和 Handler 投影如下：
+
+| Core 场景 | Core 返回值 | AgentCore Handler 输出 |
+|---|---|---|
+| 正常回答 | `{output:<模型最终文本>, result_type:"answer"}` | `result={role:"assistant",content:<output>}` |
+| 工具调用中断 | `{result_type:"interrupt", state:[OutputSchema...], interrupt_ids:[...]}` | `result={role:"assistant",content:<中断消息>,_interrupt:<归一化中断>}` |
+| Core 以结果 Map 表示失败 | `{output:<错误文本>, result_type:"error"}` | `result={role:"assistant",content:<output>}`；非流式 `QueryResponse` 没有独立错误字段 |
+| Core/Runner 抛出异常 | 无正常返回值 | Handler 不构造 `QueryResponse`，异常向入口层传播 |
+
+Handler 持有 ReActAgent 的 Agent ID 时，非流式请求改走 7.1 所述的流聚合路径：`llm_reasoning` 和 `llm_output` 中可抽取的文本按事件顺序累计，已有增量正文时跳过最终 `answer` 的重复文本；中断仍生成 `_interrupt`，Core `error` 事件则按其 `output` 文本聚合。
+
+ReActAgent 中断的 `state` 元素为 `OutputSchema("__interaction__", index, InteractionOutput)`。Handler 生成的中断字段如下：
+
+| 字段 | 产生方 | 含义 |
+|---|---|---|
+| `type` | Handler 读取 Core `OutputSchema.type` | 固定为 `__interaction__` |
+| `index` | Core | 当前中断在该批交互中的序号 |
+| `payload` | Core | 原始 `InteractionOutput`，保留其 `id` 和 `value` 对象 |
+| `message` | Handler 从 `InteractionOutput.value` 抽取 | 用户可读的输入/确认提示；仅 Core 提供时存在 |
+| `context` | Handler 从 `InterruptRequest` 抽取 | 中断上下文；仅 Core 提供时存在 |
+| `toolCallId` | Handler 从 `ToolCallInterruptRequest` 抽取 | 被中断工具调用的 ID；仅工具中断时存在 |
+| `toolName` | Handler 从 `ToolCallInterruptRequest` 抽取 | 被中断工具名；仅工具中断时存在 |
+
+#### 7.3.2 流式
+
+ReActAgent 可能产生以下 `OutputSchema`；Handler 不改写其内层 payload：
+
+| `OutputSchema.type` | payload 字段 | 字段产生方与含义 |
+|---|---|---|
+| `llm_reasoning` | `content`, `result_type="answer"` | Core 从模型 reasoning 增量产生 |
+| `llm_output` | `content`, `result_type="answer"` | Core 从模型正文增量产生 |
+| `llm_output` | `tool_calls` | Core 从模型工具调用增量产生；该事件不一定包含 `result_type` |
+| `llm_usage` | `usage_metadata`, `result_type="answer"` | Core 从模型 usage 增量产生 |
+| `answer` | `output`, `result_type` | Core 的最终结果事件；`result_type` 通常为 `answer`，也可能保留 Core 生成的 `error`，但外层类型仍为 `answer` |
+| `__interaction__` | `InteractionOutput` | Core 的工具中断事件；Handler 转成 `interrupt` chunk |
+| `error` | `output`, `result_type="error"` | Core 捕获流式执行异常后产生；Handler 转成失败终态 |
+
+模型正文通常同时出现在一个或多个 `llm_output.payload.content` 增量以及最终 `answer.payload.output` 中。Handler 流式模式逐事件透传，不负责去重；是否展示增量、最终事件或两者由调用方按 `data.type` 决定。
+
+### 7.4 DeepAgent 输出
+
+`DeepAgent` 内部持有一个 `ReActAgent`，并根据 `DeepAgentConfig.isEnableTaskLoop()` 决定是否执行外层任务循环。该开关会实质改变输出结构。
+
+#### 7.4.1 未启用任务循环
+
+Handler 直接持有 DeepAgent 实例时，非流式 `DeepAgent.invoke(...)` 返回执行描述 Map：
+
+```json
+{
+  "agent_name": "deep_agent",
+  "mode": "normal",
+  "workspace": "<workspace path>",
+  "inputs": {
+    "conversation_id": "conversation-1",
+    "query": "用户输入"
+  }
+}
+```
+
+这些字段均由 DeepAgent 产生。由于该 Map 没有 `output`/`content` 等结果字段，AgentCore Handler 将整个多字段 Map 的字符串表示写入 `QueryResponse.result.content`。流式调用会产生一个 Core `answer` 事件，其 payload 为 `{output:<上述 Map>, result_type:"answer"}`，Handler 再将它作为普通 `chunk` 输出。Handler 持有 DeepAgent 的 Agent ID 时，非流式请求消费这条 Core 流，最终仍从该 `answer.payload.output` 得到整个描述 Map 的字符串表示。
+
+#### 7.4.2 启用任务循环
+
+DeepAgent 的每一轮都通过内部 ReActAgent 执行。Handler 直接持有 DeepAgent 实例时，非流式 Core 返回 Map 的主要字段如下：
+
+| 字段 | 产生方 | 含义 | Handler 是否直接返回 |
+|---|---|---|---|
+| `agent_name` | DeepAgent | Agent Card 名称 | 否 |
+| `mode` | DeepAgent | 当前 `normal`/`plan` 模式 | 否 |
+| `workspace` | DeepAgent | 当前工作区路径 | 否 |
+| `inputs` | DeepAgent | 本次归一化输入 | 否 |
+| `rounds` | DeepAgent | 按执行顺序保存的全部轮次结果 | 否 |
+| `loop_state` | DeepAgent/LoopCoordinator | 迭代次数、停止原因和评估器状态等循环状态 | 否 |
+| `final_result` | DeepAgent | 最后一轮的完整结果 | 否 |
+| `output` | DeepAgent 从最后一轮复制 | 最后一轮最终业务输出 | 是，抽取为 `result.content` |
+| `result_type` | DeepAgent 从最后一轮复制 | 最后一轮的 `answer`、`interrupt` 或 `error` | 仅用于判断中断；不作为响应字段返回 |
+| `state` | DeepAgent 从最后一轮复制 | 最后一轮中断状态 | 中断时归一化为 `result._interrupt` |
+| `usage_metadata`/`usage`/`token_usage`/`total_tokens` | DeepAgent 从最后一轮复制 | 最后一轮可用的用量信息 | 否 |
+
+每个 `rounds[]` 元素由 DeepAgent 在内部 ReActAgent 结果上补充 `status`、`round`、`is_follow_up`、`query` 和 `mode`；应用任务指令时还会有 `task_instruction_query`。这些诊断字段保留在 Core 返回值中，不进入当前 Handler 的 `QueryResponse.result`。
+
+流式任务循环设置内部采集标记，并逐轮转发内部 ReActAgent 的 `OutputSchema`。因此：
+
+- 用户会收到各轮的 `llm_reasoning`、`llm_output`、`llm_usage`、`answer`、`__interaction__` 或 `error` 事件，字段结构与 7.3.2 相同。
+- `data.index` 是内部 ReActAgent 流事件序号，不是 DeepAgent 的外层 `round`。
+- DeepAgent 最终汇总 Map（`rounds`、`loop_state`、`final_result` 等）不会额外生成一个流式 chunk；流正常耗尽后由 Handler 调用 `onComplete()`。
+- 内部 ReActAgent 中断事件仍由 Handler 缓存并归并为一个 `interrupt` chunk；内部错误事件仍转换为 `error` 并以 `onError` 结束。
+
+Handler 持有 DeepAgent 的 Agent ID 时，非流式请求同样消费上述逐轮流并聚合正文，不会获得 DeepAgent 非流式返回值中的 `rounds`、`loop_state` 或 `final_result`；中断仍优先生成 `_interrupt`，Core `error` 事件则按其 `output` 文本聚合。只有调用 `streamQuery(...)` 时，顶层 `type=error` 才转换为 `QueryChunk.type=error` 和 `onError`。
+
+### 7.5 ReActAgent 与 DeepAgent 对照
+
+| 场景 | ReActAgent | DeepAgent 未启用任务循环 | DeepAgent 启用任务循环 |
+|---|---|---|---|
+| Core 非流式主返回 | `{output,result_type}` 或中断 Map | `{agent_name,mode,workspace,inputs}` | 外层汇总 Map，并复制最后一轮 `output/result_type/state` |
+| Handler 非流式正文 | ReAct 最终 `output` | 整个描述 Map 的字符串表示 | 最后一轮 `output` |
+| Core 流式来源 | 当前 ReAct 循环 | 一个包装描述 Map 的 `answer` | 每一轮内部 ReAct 流 |
+| 正常流终态 | `answer` 后流结束 | 单个 `answer` 后流结束 | 最后一轮内部事件结束后关闭流，无额外外层汇总事件 |
+| 中断 | `__interaction__` | 无内部 ReAct 执行产生的工具中断 | 内部 ReAct 的 `__interaction__` |
+| 错误事件 | Core `error` 或 Handler 捕获异常 | DeepAgent 捕获的 `error` 或 Handler 捕获异常 | 内部/外层 `error` 或 Handler 捕获异常 |
+| 会话清理 | Handler 清理 ReActAgent 的 ContextEngine | Handler 递归取得并清理内部 ReActAgent 的 ContextEngine | 同左 |
 
 ## 8. AgentScope Adapter
 
