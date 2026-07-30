@@ -90,7 +90,7 @@ final class A2aJsonCodec {
         ObjectNode textPart = parts.addObject();
         textPart.put("kind", "text");
         textPart.put("text", cmd.input());
-        fillMetadata(params, cmd.agentId(), cmd.clientTools());
+        fillMetadata(params, cmd.agentId(), cmd.clientTools(), cmd.attributes());
         return root;
     }
 
@@ -123,11 +123,21 @@ final class A2aJsonCodec {
         return root;
     }
 
-    private void fillMetadata(ObjectNode params, String agentId, List<ToolWireSpec> clientTools) {
+    private void fillMetadata(ObjectNode params, String agentId, List<ToolWireSpec> clientTools,
+                             Map<String, String> attributes) {
         ObjectNode metadata = params.putObject("metadata");
         // agentId 可选：为空则省略，交由网关按默认 Agent 路由（不写空串）。
         if (agentId != null && !agentId.isBlank()) {
             metadata.put("agentId", agentId);
+        }
+        // 业务附加属性（trace / correlation 等，FEAT-006「业务上下文与凭证传递」MUST）。
+        // 收在单独的嵌套对象里，避免与 agentId / clientTools 等保留键冲突；
+        // 为空则整段省略，使不用该能力的调用方报文与既有链路逐字节一致。
+        if (attributes != null && !attributes.isEmpty()) {
+            ObjectNode attrs = metadata.putObject("attributes");
+            for (Map.Entry<String, String> e : attributes.entrySet()) {
+                attrs.put(e.getKey(), e.getValue());
+            }
         }
         // 006 §3.5 ① / 007 §3.1：未声明 exposure → ToolView 为空 → 不上报 clientTools（整段省略，不写空数组）。
         if (clientTools != null && !clientTools.isEmpty()) {
@@ -146,33 +156,18 @@ final class A2aJsonCodec {
     }
 
     /**
-     * get 请求。
+     * 状态查询请求。
      *
-     * @param taskRef String
+     * <p>方法名与参数位置须与网关契约严格一致：PascalCase 的 {@code GetTask} + {@code params.taskId}。
+     * 曾误用 A2A 别名 {@code tasks/get} 与 {@code params.id}，会被网关方法白名单拒为
+     * {@code 400 VALIDATION_METHOD}。
+     *
+     * @param taskRef 任务引用
      * @return get 请求
      */
-
     ObjectNode buildGet(String taskRef) {
-        ObjectNode root = newRequest("tasks/get");
-        root.putObject("params").put("id", taskRef);
-        return root;
-    }
-
-    /**
-     * cancel 请求。
-     *
-     * @param taskRef String
-     * @param reason String
-     * @return cancel 请求
-     */
-
-    ObjectNode buildCancel(String taskRef, String reason) {
-        ObjectNode root = newRequest("tasks/cancel");
-        ObjectNode params = root.putObject("params");
-        params.put("id", taskRef);
-        if (reason != null) {
-            params.put("reason", reason);
-        }
+        ObjectNode root = newRequest("GetTask");
+        root.putObject("params").put("taskId", taskRef);
         return root;
     }
 

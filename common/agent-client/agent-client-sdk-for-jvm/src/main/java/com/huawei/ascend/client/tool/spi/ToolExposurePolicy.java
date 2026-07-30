@@ -4,7 +4,11 @@
 
 package com.huawei.ascend.client.tool.spi;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -22,9 +26,59 @@ public final class ToolExposurePolicy {
     private final String label;
     private final Predicate<String> predicate;
 
+    /** 暴露窗口截止时刻；null 表示不设过期。 */
+    private final Instant expiresAt;
+
     private ToolExposurePolicy(String label, Predicate<String> predicate) {
+        this(label, predicate, null);
+    }
+
+    private ToolExposurePolicy(String label, Predicate<String> predicate, Instant expiresAt) {
         this.label = label;
         this.predicate = predicate;
+        this.expiresAt = expiresAt;
+    }
+
+    /**
+     * 派生一个带暴露窗口的策略：窗口关闭后，服务端再请求端侧工具将被结构化拒绝而<b>不执行</b>。
+     *
+     * <p>用于「本次授权只在一段时间内有效」的最小暴露场景（FEAT-007 §3 暴露策略过期时间）。
+     *
+     * @param ttl 自此刻起的有效时长
+     * @return 带过期时刻的新策略
+     */
+    public ToolExposurePolicy expiringIn(Duration ttl) {
+        Objects.requireNonNull(ttl, "ttl");
+        return new ToolExposurePolicy(label + "@ttl" + ttl, predicate, Instant.now().plus(ttl));
+    }
+
+    /**
+     * 派生一个在指定时刻过期的策略。
+     *
+     * @param instant 截止时刻
+     * @return 带过期时刻的新策略
+     */
+    public ToolExposurePolicy expiringAt(Instant instant) {
+        Objects.requireNonNull(instant, "instant");
+        return new ToolExposurePolicy(label + "@until" + instant, predicate, instant);
+    }
+
+    /**
+     * 暴露窗口截止时刻。
+     *
+     * @return 截止时刻；未设置过期时为空
+     */
+    public Optional<Instant> expiresAt() {
+        return Optional.ofNullable(expiresAt);
+    }
+
+    /**
+     * 暴露窗口是否已关闭。
+     *
+     * @return 已过期返回 true；未设置过期恒为 false
+     */
+    public boolean isExpired() {
+        return expiresAt != null && !Instant.now().isBefore(expiresAt);
     }
 
     /**
@@ -56,8 +110,17 @@ public final class ToolExposurePolicy {
         if (other == null) {
             return this;
         }
+        // 过期时刻取两者中更早的：与"只能收紧不能放大"一致，任一级窗口关闭即整体关闭。
+        Instant merged;
+        if (this.expiresAt == null) {
+            merged = other.expiresAt;
+        } else if (other.expiresAt == null) {
+            merged = this.expiresAt;
+        } else {
+            merged = this.expiresAt.isBefore(other.expiresAt) ? this.expiresAt : other.expiresAt;
+        }
         return new ToolExposurePolicy(label + "&" + other.label,
-                id -> this.predicate.test(id) && other.predicate.test(id));
+                id -> this.predicate.test(id) && other.predicate.test(id), merged);
     }
 
     /**

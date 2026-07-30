@@ -6,6 +6,8 @@ package com.huawei.ascend.client.verify;
 
 /**
  * 验证过程的进度回调（CLI 打印 / Web UI 推送共用）。
+ *
+ * @since 2026-07-27
  */
 @FunctionalInterface
 interface VerificationProgress {
@@ -35,7 +37,6 @@ interface VerificationProgress {
          * @param title String
          * @return 场景开始事件
          */
-
         static Event scenarioStart(String scenarioId, String title) {
             return new Event(Kind.SCENARIO_START, scenarioId, title, null);
         }
@@ -47,7 +48,6 @@ interface VerificationProgress {
          * @param ok boolean
          * @return 场景结束事件
          */
-
         static Event scenarioEnd(String scenarioId, boolean ok) {
             return new Event(Kind.SCENARIO_END, scenarioId, ok ? "passed" : "failed", ok);
         }
@@ -60,7 +60,6 @@ interface VerificationProgress {
          * @param message String
          * @return 准入决策
          */
-
         static Event check(String scenarioId, boolean ok, String message) {
             return new Event(Kind.CHECK, scenarioId, message, ok);
         }
@@ -71,7 +70,6 @@ interface VerificationProgress {
          * @param gatewayUrl String
          * @return 运行开始事件
          */
-
         static Event runStart(String gatewayUrl) {
             return new Event(Kind.RUN_START, null, gatewayUrl, null);
         }
@@ -83,7 +81,6 @@ interface VerificationProgress {
          * @param summary String
          * @return 运行结束事件
          */
-
         static Event runEnd(boolean ok, String summary) {
             return new Event(Kind.RUN_END, null, summary, ok);
         }

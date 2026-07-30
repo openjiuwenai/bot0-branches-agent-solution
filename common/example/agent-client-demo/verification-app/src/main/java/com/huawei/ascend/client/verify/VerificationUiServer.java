@@ -11,15 +11,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
@@ -28,7 +29,10 @@ import java.util.logging.Logger;
  * 薄可视化前端（<b>验证用，非 SDK 交付</b>）。
  *
  * <p>纯 JDK {@link HttpServer} + classpath 内 HTML/CSS/JS，无 Node、无前端构建。
- * 浏览器打开后点「开始验证」，经 SSE 实时看 4 个场景的进度与断言结果。
+ * 浏览器打开后可一键跑全部场景、也可勾选单跑，经 SSE 实时看进度与逐条断言。
+ *
+ * <p>看板与 CI 跑的是<b>同一份</b> {@link CloudClientVerification}：场景目录来自它的注册表，
+ * 断言来自它的同一批 check，因此不存在"看板显示的"与"CI 判定的"两套结论。
  *
  * <pre>
  * java -cp ... com.huawei.ascend.client.verify.CloudClientVerification --ui
@@ -52,11 +56,18 @@ public final class VerificationUiServer {
                 t.setName("verify-ui");
                 t.setDaemon(true);
                 t.setUncaughtExceptionHandler((thread, ex) -> {
-                    // best-effort：UI 工作线程未捕获异常不中断服务。
+                    // best-effort：UI 工作线程未捕获异常不中断服务，仅记录日志。
+                    LOG.log(java.util.logging.Level.WARNING,
+                            "uncaught exception in verify-ui worker " + thread.getName(), ex);
                 });
                 return t;
             });
 
+    /**
+     * 构造验证 UI 服务。
+     *
+     * @param port 监听端口
+     */
     public VerificationUiServer(int port) {
         this.port = port;
     }
@@ -94,6 +105,7 @@ public final class VerificationUiServer {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         server.setExecutor(workers);
         server.createContext("/", this::handleStatic);
+        server.createContext("/api/scenarios", this::handleScenarios);
         server.createContext("/api/run", this::handleRun);
         server.createContext("/api/events", this::handleEvents);
         server.createContext("/api/status", this::handleStatus);
@@ -134,6 +146,61 @@ public final class VerificationUiServer {
     private void handleStatus(HttpExchange ex) throws IOException {
         String json = "{\"running\":" + running.get() + "}";
         send(ex, 200, "application/json; charset=utf-8", json);
+    }
+
+    /**
+     * 场景目录：让看板在开跑前就能把全部场景列出来，并支持按 id 勾选。
+     *
+     * <p>目录直接来自 {@link CloudClientVerification} 的场景注册表，
+     * 因此新增场景不需要动前端，也不会出现"看板列的"和"CI 跑的"两份清单。
+     *
+     * @param ex HTTP 交换对象
+     * @throws IOException 写响应失败时抛出
+     */
+    private void handleScenarios(HttpExchange ex) throws IOException {
+        StringBuilder sb = new StringBuilder(1024);
+        sb.append("{\"scenarios\":[");
+        boolean first = true;
+        for (CloudClientVerification.ScenarioSpec s : CloudClientVerification.catalog()) {
+            if (!first) {
+                sb.append(',');
+            }
+            first = false;
+            sb.append("{\"id\":\"").append(esc(s.id()))
+                    .append("\",\"title\":\"").append(esc(s.title()))
+                    .append("\",\"category\":\"").append(esc(s.category()))
+                    .append("\",\"summary\":\"").append(esc(s.summary()))
+                    .append("\"}");
+        }
+        sb.append("]}");
+        send(ex, 200, "application/json; charset=utf-8", sb.toString());
+    }
+
+    /**
+     * 从 {@code ?ids=s1,s3} 解析要跑的场景；缺省或为空表示全部。
+     *
+     * @param rawQuery 原始查询串，可为 null
+     * @return 场景 id 集合；空集合表示全部
+     */
+    private static Set<String> parseIds(String rawQuery) {
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return Set.of();
+        }
+        for (String pair : rawQuery.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq <= 0 || !"ids".equals(pair.substring(0, eq))) {
+                continue;
+            }
+            String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+            Set<String> ids = new LinkedHashSet<>();
+            for (String id : value.split(",")) {
+                if (!id.isBlank()) {
+                    ids.add(id.trim());
+                }
+            }
+            return ids;
+        }
+        return Set.of();
     }
 
     private void handleEvents(HttpExchange ex) throws IOException {
@@ -178,19 +245,21 @@ public final class VerificationUiServer {
                     "{\"accepted\":false,\"message\":\"verification already running\"}");
             return;
         }
+        Set<String> ids = parseIds(ex.getRequestURI().getQuery());
         send(ex, 202, "application/json; charset=utf-8",
                 "{\"accepted\":true,\"message\":\"started\"}");
         workers.execute(() -> {
             try {
-                broadcast("info", jsonEvent("INFO", null, "verification started from UI", null));
+                String what = ids.isEmpty() ? "全部场景" : ("场景 " + String.join(", ", ids));
+                broadcast("info", jsonEvent("INFO", null, "开始运行：" + what, null));
                 new CloudClientVerification().runWithProgress(event -> {
                     broadcast("progress", toJson(event));
                     // 同步记录到日志，方便对照；用 {N} 占位符避免禁用级别时拼接字符串（G.LOG.03）。
                     String scenario = (event.scenarioId() != null) ? event.scenarioId() + " " : "";
                     LOG.log(java.util.logging.Level.INFO, "[ui] {0} {1}{2}",
                             new Object[] {event.kind(), scenario, event.message()});
-                });
-            } catch (InterruptedException | ExecutionException | TimeoutException | IOException | RuntimeException e) {
+                }, ids);
+            } catch (IOException | IllegalStateException e) {
                 broadcast("progress", jsonEvent("RUN_END", null,
                         "unexpected failure: " + e.getMessage(), false));
                 LOG.log(java.util.logging.Level.WARNING, "verification run failed", e);
@@ -219,21 +288,19 @@ public final class VerificationUiServer {
      * @param e VerificationProgress.Event
      * @return JSON 文本
      */
-
     private static String toJson(VerificationProgress.Event e) {
         return jsonEvent(e.kind().name(), e.scenarioId(), e.message(), e.ok());
     }
 
     /**
-     * jsonEvent。
+     * 构造一个 JSON 事件字符串。
      *
-     * @param kind String
-     * @param scenarioId String
-     * @param message String
-     * @param ok Boolean
-     * @return jsonEvent
+     * @param kind 事件类型
+     * @param scenarioId 场景标识，可为 null
+     * @param message 消息文本，可为 null
+     * @param ok 是否通过，可为 null
+     * @return JSON 文本
      */
-
     private static String jsonEvent(String kind, String scenarioId, String message, Boolean ok) {
         StringBuilder sb = new StringBuilder(128);
         sb.append("{\"kind\":\"").append(esc(kind)).append("\"");
@@ -251,12 +318,11 @@ public final class VerificationUiServer {
     }
 
     /**
-     * esc。
+     * JSON 字符串转义。
      *
-     * @param s String
-     * @return esc
+     * @param s 原始字符串
+     * @return 转义后的字符串
      */
-
     private static String esc(String s) {
         return s.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
@@ -264,6 +330,15 @@ public final class VerificationUiServer {
                 .replace(CR, "");
     }
 
+    /**
+     * 发送 HTTP 响应。
+     *
+     * @param ex HTTP 交换对象
+     * @param status HTTP 状态码
+     * @param contentType Content-Type
+     * @param body 响应体
+     * @throws IOException 写响应失败时抛出
+     */
     private static void send(HttpExchange ex, int status, String contentType, String body)
             throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
@@ -275,12 +350,11 @@ public final class VerificationUiServer {
     }
 
     /**
-     * contentType。
+     * 根据路径推断 Content-Type。
      *
-     * @param path String
-     * @return contentType
+     * @param path 资源路径
+     * @return Content-Type
      */
-
     private static String contentType(String path) {
         if (path.endsWith(".html")) {
             return "text/html; charset=utf-8";
@@ -308,7 +382,7 @@ public final class VerificationUiServer {
             if (closed.get()) {
                 throw new IOException("closed");
             }
-            String payload = "event: " + event + "\ndata: " + data + "\n\n";
+            String payload = "event: " + event + LF + "data: " + data + LF + LF;
             out.write(payload.getBytes(StandardCharsets.UTF_8));
             out.flush();
         }

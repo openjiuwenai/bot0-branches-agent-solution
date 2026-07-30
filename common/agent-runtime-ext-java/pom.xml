@@ -15,7 +15,7 @@
     <properties>
         <agent-runtime-ext.java.release>17</agent-runtime-ext.java.release>
         <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
-        <agent-bus.version>0.1.0</agent-bus.version>
+        <event-bus.version>0.1.0</event-bus.version>
         <a2a-sdk.version>1.0.0.Final</a2a-sdk.version>
         <agentscope.version>2.0.0</agentscope.version>
         <spring-boot.version>4.0.6</spring-boot.version>
@@ -54,13 +54,13 @@
             </dependency>
             <dependency>
                 <groupId>com.openjiuwen</groupId>
-                <artifactId>agent-bus-spi</artifactId>
-                <version>${agent-bus.version}</version>
+                <artifactId>event-bus-spi</artifactId>
+                <version>${event-bus.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.openjiuwen</groupId>
-                <artifactId>agent-bus-sdk</artifactId>
-                <version>${agent-bus.version}</version>
+                <artifactId>event-bus-sdk</artifactId>
+                <version>${event-bus.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.openjiuwen</groupId>

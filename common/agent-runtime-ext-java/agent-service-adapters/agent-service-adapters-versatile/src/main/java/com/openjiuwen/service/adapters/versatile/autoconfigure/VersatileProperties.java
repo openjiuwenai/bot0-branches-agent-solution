@@ -26,7 +26,6 @@ public class VersatileProperties {
     private Map<String, String> headersTemplate = new LinkedHashMap<>();
     private Set<String> forwardHeaderWhitelist = new LinkedHashSet<>();
     private String resultNodeName;
-    private List<Endpoint> endpoints = new ArrayList<>();
     private List<Intent> intents = new ArrayList<>();
     private Messages messages = new Messages();
     private Map<String, List<MappingCandidate>> intentAgentMapping = new LinkedHashMap<>();
@@ -76,14 +75,6 @@ public class VersatileProperties {
 
     public void setResultNodeName(String resultNodeName) {
         this.resultNodeName = resultNodeName;
-    }
-
-    public List<Endpoint> getEndpoints() {
-        return endpoints;
-    }
-
-    public void setEndpoints(List<Endpoint> endpoints) {
-        this.endpoints = endpoints != null ? new ArrayList<>(endpoints) : new ArrayList<>();
     }
 
     public List<Intent> getIntents() {
@@ -338,32 +329,6 @@ public class VersatileProperties {
 
         public void setBody(Map<String, Object> body) {
             this.body = body != null ? new LinkedHashMap<>(body) : new LinkedHashMap<>();
-        }
-    }
-
-    /**
-     * Endpoint override for intent-specific Versatile routing.
-     *
-     * @since 2026-06-30
-     */
-    public static class Endpoint {
-        private String intent;
-        private String urlTemplate;
-
-        public String getIntent() {
-            return intent;
-        }
-
-        public void setIntent(String intent) {
-            this.intent = intent;
-        }
-
-        public String getUrlTemplate() {
-            return urlTemplate;
-        }
-
-        public void setUrlTemplate(String urlTemplate) {
-            this.urlTemplate = urlTemplate;
         }
     }
 

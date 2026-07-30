@@ -50,7 +50,7 @@ public final class InProcessFakeGateway implements TransportProvider {
         Runnable start = () -> {
             submit(task, new InvocationEvent.Accepted(task.invocationRef, task.taskRef, task.contextId));
             submit(task, new InvocationEvent.StatusChanged(task.invocationRef, TaskState.WORKING, false));
-            advance(task, true);
+            advance(task, true, true, task.invocationRef);
         };
         return new LazyStartPublisher(task.publisher, start);
     }
@@ -64,27 +64,48 @@ public final class InProcessFakeGateway implements TransportProvider {
             return f;
         }
         task.index++;
-        advance(task, false);
-        return CompletableFuture.completedFuture(new InvocationSnapshot(
-                task.invocationRef, TaskState.WORKING, false, task.taskRef, null, null, null, null));
+        boolean intoStream = cmd.delivery() != ResumeDelivery.SNAPSHOT_ONLY;
+        // 与真实网关一致：SNAPSHOT_ONLY 的续跑不得把帧投进既有事件流，只能通过返回快照驱动。
+        String snapshotRef = intoStream ? task.invocationRef : cmd.invocationRef();
+        return CompletableFuture.completedFuture(advance(task, false, intoStream, snapshotRef));
     }
 
-    private void advance(FakeTask task, boolean firstRound) {
+    /**
+     * 推进假 Task 到下一状态。
+     *
+     * @param task 假任务
+     * @param firstRound 是否首轮（首轮故意重复投递一次工具调用，验证客户端去重）
+     * @param intoStream 是否把事件投进该 Task 的事件流
+     * @param snapshotRef 返回快照使用的 invocationRef
+     * @return 下一状态快照
+     */
+    private InvocationSnapshot advance(FakeTask task, boolean firstRound, boolean intoStream,
+                                       String snapshotRef) {
         if (task.index < task.toolNames.size()) {
             String name = task.toolNames.get(task.index);
             InvocationEvent.ToolCall call = new InvocationEvent.ToolCall(
                     "call-" + task.taskRef + "-" + task.index, name, argsFor(task, name), null);
-            submit(task, new InvocationEvent.StatusChanged(task.invocationRef, TaskState.INPUT_REQUIRED, false));
-            submit(task, new InvocationEvent.InputRequired(task.invocationRef, call, null));
-            if (firstRound) {
-                // 故意重复投递一次，验证客户端"最多执行一次 / 最多续传一次"。
+            task.lastState = TaskState.INPUT_REQUIRED;
+            if (intoStream) {
+                submit(task, new InvocationEvent.StatusChanged(
+                        task.invocationRef, TaskState.INPUT_REQUIRED, false));
                 submit(task, new InvocationEvent.InputRequired(task.invocationRef, call, null));
+                if (firstRound) {
+                    // 故意重复投递一次，验证客户端"最多执行一次 / 最多续传一次"。
+                    submit(task, new InvocationEvent.InputRequired(task.invocationRef, call, null));
+                }
             }
-        } else {
-            submit(task, new InvocationEvent.Completed(task.invocationRef,
-                    "completed after " + task.toolNames.size() + " client tool round(s)"));
+            return new InvocationSnapshot(snapshotRef, TaskState.INPUT_REQUIRED, false,
+                    task.taskRef, call, null, null, null);
+        }
+        String output = "completed after " + task.toolNames.size() + " client tool round(s)";
+        task.lastState = TaskState.COMPLETED;
+        if (intoStream) {
+            submit(task, new InvocationEvent.Completed(task.invocationRef, output));
             terminate(task);
         }
+        return new InvocationSnapshot(snapshotRef, TaskState.COMPLETED, true,
+                task.taskRef, null, output, null, null);
     }
 
     private Map<String, Object> argsFor(FakeTask task, String name) {
@@ -106,24 +127,12 @@ public final class InProcessFakeGateway implements TransportProvider {
     }
 
     @Override
-    public CompletionStage<InvocationSnapshot> getTask(String taskRef) {
+    public CompletionStage<InvocationSnapshot> getTask(String taskRef, String credentialToken) {
         FakeTask task = byTaskRef.get(taskRef);
         TaskState st = (task != null) ? task.lastState : TaskState.UNKNOWN;
         String ref = (task != null) ? task.invocationRef : taskRef;
         return CompletableFuture.completedFuture(
                 new InvocationSnapshot(ref, st, st.isTerminal(), taskRef, null, null, null, null));
-    }
-
-    @Override
-    public CompletionStage<InvocationSnapshot> cancel(String taskRef, String reason) {
-        FakeTask task = byTaskRef.get(taskRef);
-        if (task != null) {
-            submit(task, new InvocationEvent.StatusChanged(task.invocationRef, TaskState.CANCELED, true));
-            terminate(task);
-            return CompletableFuture.completedFuture(new InvocationSnapshot(
-                    task.invocationRef, TaskState.CANCELED, true, taskRef, null, null, null, null));
-        }
-        return CompletableFuture.completedFuture(InvocationSnapshot.unknown(taskRef));
     }
 
     @Override

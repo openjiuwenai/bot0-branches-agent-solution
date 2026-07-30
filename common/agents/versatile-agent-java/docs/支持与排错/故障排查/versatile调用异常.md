@@ -52,7 +52,6 @@ adapter-versatile-agent-java作为A2A到Versatile REST/SSE的代理适配器，�
 | 工作流配置 | resultNodeName不匹配 | `VERSATILE_RESULT_NODE`配置与实际Versatile返回节点名不一致（默认`GXZQAResponseNode`） |
 | Header问题 | Header缺失或被白名单过滤 | 白名单外的Header被过滤，默认Header未正确设置 |
 | 响应格式 | Versatile返回格式异常 | 非SSE格式、节点结构异常、字段缺失 |
-| 路由配置 | intent路由配置错误 | endpoints配置不正确，无法正确路由到对应工作流 |
 | 资源限制 | 连接池耗尽 | HttpClient连接池满，无法创建新连接 |
 
 ## 排查步骤
@@ -240,21 +239,7 @@ x-language: zh-cn
 
 **注意**：不在白名单内的Header会被过滤掉，不会传递给Versatile。如果需要透传额外Header，需要修改`forward-header-whitelist`配置。
 
-### 步骤8：检查intent路由配置（多工作流场景）
-
-如果配置了多意图endpoints路由（不同intent路由到不同工作流），检查endpoints配置是否正确：
-
-1. 确认`input-metadata-keys`包含`intent`（默认已包含）
-2. 确认A2A请求metadata中携带了正确的intent字段
-3. 确认endpoints路由映射配置正确
-4. 查看DEBUG日志确认路由到了正确的endpoint
-
-查看日志中的路由信息：
-```
-docker logs adapter-versatile 2>&1 | grep -E "intent|route|endpoint"
-```
-
-### 步骤9：检查超时设置
+### 步骤8：检查超时设置
 
 默认超时是600秒（`VERSATILE_TIMEOUT=600s`），对于大多数工作流已足够。如果工作流特别长（如涉及多个人工节点、复杂查询），可能需要更长超时。
 

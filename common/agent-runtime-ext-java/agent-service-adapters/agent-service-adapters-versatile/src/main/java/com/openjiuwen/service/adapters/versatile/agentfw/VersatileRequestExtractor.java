@@ -72,7 +72,11 @@ final class VersatileRequestExtractor {
             }
         }
 
-        String url = resolveUrlTemplate(semanticInput.intent()).replace(
+        String urlTemplate = properties.getUrlTemplate();
+        if (!hasText(urlTemplate)) {
+            throw new IllegalArgumentException("openjiuwen.service.versatile.url-template must not be blank");
+        }
+        String url = urlTemplate.replace(
                 "{conversation_id}", request.getConversationId() != null ? request.getConversationId() : "");
         return new RemoteRequest(url, headers, params, remoteBody);
     }
@@ -235,20 +239,6 @@ final class VersatileRequestExtractor {
             }
         }
         return Map.of();
-    }
-
-    private String resolveUrlTemplate(String intent) {
-        if (hasText(intent)) {
-            for (VersatileProperties.Endpoint endpoint : properties.getEndpoints()) {
-                if (endpoint != null && intent.equals(endpoint.getIntent()) && hasText(endpoint.getUrlTemplate())) {
-                    return endpoint.getUrlTemplate();
-                }
-            }
-        }
-        if (!hasText(properties.getUrlTemplate())) {
-            throw new IllegalArgumentException("openjiuwen.service.versatile.url-template must not be blank");
-        }
-        return properties.getUrlTemplate();
     }
 
     private static boolean isForwardHeader(String headerName, Set<String> whitelist) {
