@@ -52,7 +52,6 @@ public class AgentBusConsumerDemoApplication {
                     }
                     observer.onComplete();
                 } catch (InterruptedException exception) {
-                    Thread.currentThread().interrupt();
                     observer.onError(exception);
                 } catch (RuntimeException exception) {
                     observer.onError(exception);
