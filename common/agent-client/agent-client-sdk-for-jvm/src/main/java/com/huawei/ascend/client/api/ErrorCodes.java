@@ -76,6 +76,7 @@ public final class ErrorCodes {
             IDEMPOTENCY_IN_FLIGHT, RATE_LIMITED, SERVICE_UNAVAILABLE, NETWORK_ERROR);
 
     private ErrorCodes() {
+        throw new AssertionError("utility class, no instances");
     }
 
     /**

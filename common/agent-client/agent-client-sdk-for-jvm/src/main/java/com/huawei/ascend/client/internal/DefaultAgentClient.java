@@ -70,6 +70,18 @@ public final class DefaultAgentClient implements AgentClient {
     private final ConcurrentMap<String, CallImpl> calls = new ConcurrentHashMap<>();
     private final java.util.Set<String> resumeGuard = ConcurrentHashMap.newKeySet();
 
+    /**
+     * 构造默认客户端实例。
+     *
+     * @param transport 传输提供者
+     * @param registry 本地工具注册表
+     * @param store 客户端状态存储
+     * @param policyGuard 策略门禁
+     * @param approvalProvider 审批提供者
+     * @param toolExecutor 工具执行线程池
+     * @param mapper JSON 编解码器
+     * @param credentials 凭证提供者
+     */
     public DefaultAgentClient(TransportProvider transport,
                               LocalToolRegistry registry,
                               ClientStateStore store,
@@ -666,7 +678,7 @@ public final class DefaultAgentClient implements AgentClient {
             InvocationSnapshot snapshot = new InvocationSnapshot(
                     invocationRef, settled, settled.isTerminal(), taskRef, null,
                     output.length() > 0 ? output.toString() : null, errorCode, message,
-                    recoveryHint(is, taskRef));
+                    recoveryHint(is, taskRef).orElse(null));
             completion.complete(snapshot);
             downstream.close();
             if (subscription != null) {
@@ -679,20 +691,20 @@ public final class DefaultAgentClient implements AgentClient {
          *
          * @param is 内部状态，可为 null
          * @param taskRef 诊断任务引用，可为 null
-         * @return 恢复线索；进展确定时返回 null
+         * @return 恢复线索；进展确定时为空
          */
-        private InvocationSnapshot.Recovery recoveryHint(InvocationState is, String taskRef) {
+        private Optional<InvocationSnapshot.Recovery> recoveryHint(InvocationState is, String taskRef) {
             String reason = uncertainReason;
             if (reason == null) {
-                return null;
+                return Optional.empty();
             }
             // 已有 taskRef → Task 确已创建，重发会造重复，只能查询；
             // 无 taskRef → 创建未被确认，须以同幂等键、同正文重发，由网关幂等回放取回原 Task。
             InvocationSnapshot.Recovery.Action action = (taskRef != null)
                     ? InvocationSnapshot.Recovery.Action.QUERY_INVOCATION
                     : InvocationSnapshot.Recovery.Action.RETRY_CREATE_SAME_KEY;
-            return new InvocationSnapshot.Recovery(reason, conversationId,
-                    (is != null) ? is.idempotencyKey : null, action);
+            return Optional.of(new InvocationSnapshot.Recovery(reason, conversationId,
+                    (is != null) ? is.idempotencyKey : null, action));
         }
     }
 }

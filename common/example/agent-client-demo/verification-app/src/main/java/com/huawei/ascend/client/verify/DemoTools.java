@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>演示三类工具：只读观察类（readPage/ping）与有副作用的动作类（submitOrder，需审批）。
  * 每个工具维护执行计数，供自校验断言"最多执行一次"。
  *
+ * @since 2026-07-27
  */
 final class DemoTools {
     static final String READ_PAGE = "readPage";

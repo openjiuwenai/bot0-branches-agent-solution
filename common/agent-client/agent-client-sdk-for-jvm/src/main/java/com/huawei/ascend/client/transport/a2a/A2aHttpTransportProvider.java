@@ -66,6 +66,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2026-07-27
  */
 public final class A2aHttpTransportProvider implements TransportProvider {
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger(A2aHttpTransportProvider.class.getName());
+
     /** SSE 读空闲超时：超过该时长没有任何字节到达即判为连接已失效，避免调用方永久悬挂。 */
     private static final Duration DEFAULT_SSE_IDLE_TIMEOUT = Duration.ofSeconds(120);
     /** 同步请求超时。 */
@@ -87,10 +90,21 @@ public final class A2aHttpTransportProvider implements TransportProvider {
     private final ConcurrentMap<String, Channel> byInvocationRef = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Channel> byTaskRef = new ConcurrentHashMap<>();
 
+    /**
+     * 构造传输实现（使用默认 ObjectMapper 与 SSE 读空闲超时）。
+     *
+     * @param baseUrl 网关基址；自动补齐 {@code /a2a} 后缀
+     */
     public A2aHttpTransportProvider(String baseUrl) {
         this(baseUrl, new ObjectMapper(), DEFAULT_SSE_IDLE_TIMEOUT);
     }
 
+    /**
+     * 构造传输实现（使用默认 SSE 读空闲超时）。
+     *
+     * @param baseUrl 网关基址；自动补齐 {@code /a2a} 后缀
+     * @param mapper JSON 编解码器
+     */
     public A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper) {
         this(baseUrl, mapper, DEFAULT_SSE_IDLE_TIMEOUT);
     }
@@ -122,7 +136,9 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             t.setName(name);
             t.setDaemon(true);
             t.setUncaughtExceptionHandler((thread, ex) -> {
-                // best-effort：IO/看护线程未捕获异常不打断传输层主流程。
+                // best-effort：IO/看护线程未捕获异常不打断传输层主流程，仅记录日志。
+                LOG.log(java.util.logging.Level.WARNING,
+                        "uncaught exception in transport thread " + thread.getName(), ex);
             });
             return t;
         };

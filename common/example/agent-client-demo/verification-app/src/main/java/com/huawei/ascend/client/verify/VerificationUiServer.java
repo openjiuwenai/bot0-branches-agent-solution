@@ -56,11 +56,18 @@ public final class VerificationUiServer {
                 t.setName("verify-ui");
                 t.setDaemon(true);
                 t.setUncaughtExceptionHandler((thread, ex) -> {
-                    // best-effort：UI 工作线程未捕获异常不中断服务。
+                    // best-effort：UI 工作线程未捕获异常不中断服务，仅记录日志。
+                    LOG.log(java.util.logging.Level.WARNING,
+                            "uncaught exception in verify-ui worker " + thread.getName(), ex);
                 });
                 return t;
             });
 
+    /**
+     * 构造验证 UI 服务。
+     *
+     * @param port 监听端口
+     */
     public VerificationUiServer(int port) {
         this.port = port;
     }
@@ -252,7 +259,7 @@ public final class VerificationUiServer {
                     LOG.log(java.util.logging.Level.INFO, "[ui] {0} {1}{2}",
                             new Object[] {event.kind(), scenario, event.message()});
                 }, ids);
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | IllegalStateException e) {
                 broadcast("progress", jsonEvent("RUN_END", null,
                         "unexpected failure: " + e.getMessage(), false));
                 LOG.log(java.util.logging.Level.WARNING, "verification run failed", e);
@@ -281,21 +288,19 @@ public final class VerificationUiServer {
      * @param e VerificationProgress.Event
      * @return JSON 文本
      */
-
     private static String toJson(VerificationProgress.Event e) {
         return jsonEvent(e.kind().name(), e.scenarioId(), e.message(), e.ok());
     }
 
     /**
-     * jsonEvent。
+     * 构造一个 JSON 事件字符串。
      *
-     * @param kind String
-     * @param scenarioId String
-     * @param message String
-     * @param ok Boolean
-     * @return jsonEvent
+     * @param kind 事件类型
+     * @param scenarioId 场景标识，可为 null
+     * @param message 消息文本，可为 null
+     * @param ok 是否通过，可为 null
+     * @return JSON 文本
      */
-
     private static String jsonEvent(String kind, String scenarioId, String message, Boolean ok) {
         StringBuilder sb = new StringBuilder(128);
         sb.append("{\"kind\":\"").append(esc(kind)).append("\"");
@@ -313,12 +318,11 @@ public final class VerificationUiServer {
     }
 
     /**
-     * esc。
+     * JSON 字符串转义。
      *
-     * @param s String
-     * @return esc
+     * @param s 原始字符串
+     * @return 转义后的字符串
      */
-
     private static String esc(String s) {
         return s.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
@@ -326,6 +330,15 @@ public final class VerificationUiServer {
                 .replace(CR, "");
     }
 
+    /**
+     * 发送 HTTP 响应。
+     *
+     * @param ex HTTP 交换对象
+     * @param status HTTP 状态码
+     * @param contentType Content-Type
+     * @param body 响应体
+     * @throws IOException 写响应失败时抛出
+     */
     private static void send(HttpExchange ex, int status, String contentType, String body)
             throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
@@ -337,12 +350,11 @@ public final class VerificationUiServer {
     }
 
     /**
-     * contentType。
+     * 根据路径推断 Content-Type。
      *
-     * @param path String
-     * @return contentType
+     * @param path 资源路径
+     * @return Content-Type
      */
-
     private static String contentType(String path) {
         if (path.endsWith(".html")) {
             return "text/html; charset=utf-8";
@@ -370,7 +382,7 @@ public final class VerificationUiServer {
             if (closed.get()) {
                 throw new IOException("closed");
             }
-            String payload = "event: " + event + "\ndata: " + data + "\n\n";
+            String payload = "event: " + event + LF + "data: " + data + LF + LF;
             out.write(payload.getBytes(StandardCharsets.UTF_8));
             out.flush();
         }

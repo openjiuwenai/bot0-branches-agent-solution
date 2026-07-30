@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class AgentClients {
     private AgentClients() {
-        // 工具类，禁止实例化。
+        throw new AssertionError("utility class, no instances");
     }
 
     /**
@@ -171,7 +171,10 @@ public final class AgentClients {
                     t.setName("agent-client-tool-" + seq.incrementAndGet());
                     t.setDaemon(true);
                     t.setUncaughtExceptionHandler((thread, ex) -> {
-                        // best-effort：工具线程未捕获异常不打断客户端主流程。
+                        // best-effort：工具线程未捕获异常不打断客户端主流程，仅记录日志。
+                        java.util.logging.Logger.getLogger(AgentClients.class.getName())
+                                .log(java.util.logging.Level.WARNING,
+                                        "uncaught exception in tool executor thread " + thread.getName(), ex);
                     });
                     return t;
                 }
