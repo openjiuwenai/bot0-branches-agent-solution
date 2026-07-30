@@ -1,6 +1,6 @@
 # Agent Runtime Ext Java
 
-`agent-runtime-ext-java` 为 OpenJiuwen Agent Runtime Java 提供协议入口和 Agent 框架扩展。本目录当前重点文档化五项能力：Custom REST、Versatile Adapter、AgentScope Adapter、AgentCore-ext 远端 A2A 工具和 Client Tools。
+`agent-runtime-ext-java` 为 OpenJiuwen Agent Runtime Java 提供协议入口和 Agent 框架扩展。本目录当前重点文档化六项能力：Custom REST、Versatile Adapter、AgentScope Adapter、AgentCore-ext 远端 A2A 工具、Client Tools 和 Agent Bus Consumer。
 
 这些模块建立在基础 Runtime 的 `AgentHandler`、Query 和 A2A 能力之上，不是独立运行的完整应用。接入前应先准备一个能够启动基础 Runtime 的 Spring Boot 宿主应用。
 
@@ -13,8 +13,9 @@
 | 在当前 JVM 中运行 AgentScope Agent | AgentScope Adapter | `agent-service-adapters-agentscope` | 构造 `ReActAgent` 或 `HarnessAgent`，注册 `AgentScopeAgentHandler` |
 | 把远端 A2A Agent 安装为 AgentCore 模型工具 | AgentCore-ext | `agent-service-adapters-agentcore-ext` | 使用实例型 Agent，注册 `JiuwenCoreAgentExtHandler`，配置远端 Agent |
 | 由 A2A 客户端随请求声明并执行本地工具 | Client Tools | `agent-service-adapters-agentcore-ext` | 使用 ext Handler，在 `params.metadata.clientTools` 声明工具 |
+| 让 Runtime 订阅并处理 Agent Bus 请求事件 | Agent Bus Consumer | `agent-service-bus-consumer` | 引入模块，启用 consumer 和 agent-bus runtime role |
 
-Custom REST 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScope 是进程内 Agent Adapter；AgentCore-ext 和 Client Tools 是 AgentCore 执行链上的工具扩展。它们解决的问题不同，不应仅按模块名称互相替代。
+Custom REST 和 Agent Bus Consumer 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScope 是进程内 Agent Adapter；AgentCore-ext 和 Client Tools 是 AgentCore 执行链上的工具扩展。它们解决的问题不同，不应仅按模块名称互相替代。
 
 ## 2. Maven 模块
 
@@ -26,7 +27,7 @@ Custom REST 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScop
 | `agent-service-adapters/agent-service-adapters-agentscope` | AgentScope ReAct/Harness Handler、事件与恢复映射 |
 | `agent-service-adapters/agent-service-adapters-agentcore-ext` | AgentCore 扩展 Handler、远端 A2A 工具、Client Tools；同模块还包含本轮未展开的 SkillHub 实现 |
 | `../agent-service-spec-ext` | 扩展公共 SPI；当前主要服务于本轮未展开的 SkillHub |
-| `agent-service-bus-consumer` | 可选 profile 模块，本轮文档不覆盖 |
+| `agent-service-bus-consumer` | Runtime 侧 Agent Bus 事件订阅、A2A 请求桥接、Task 状态投影和响应事件发布 |
 
 业务应用通常只引入所需的功能模块，不需要依赖聚合 POM。例如：
 
@@ -34,7 +35,7 @@ Custom REST 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScop
 <dependency>
   <groupId>com.openjiuwen</groupId>
   <artifactId>agent-service-app-custom-rest</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
@@ -47,6 +48,7 @@ Custom REST 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScop
 - [接入 Custom REST](doc/guides/custom-rest-integration.md)
 - [接入 Versatile 或 AgentScope](doc/guides/external-agent-runtime-integration.md)
 - [使用 AgentCore-ext 远端工具和 Client Tools](doc/guides/agentcore-ext-tools.md)
+- [接入 Agent Bus Consumer](doc/guides/agent-bus-consumer-integration.md)
 
 ### 特性说明
 
@@ -55,6 +57,7 @@ Custom REST 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScop
 - [AgentScope Adapter](doc/features/agentscope-adapter.md)
 - [AgentCore-ext](doc/features/agentcore-ext.md)
 - [Client Tools](doc/features/client-tools.md)
+- [Agent Bus Consumer](doc/features/agent-bus-consumer.md)
 
 ### 公共参考
 
@@ -70,4 +73,9 @@ Custom REST 是入站协议扩展；Versatile 是出站 HTTP Adapter；AgentScop
   `JiuwenCoreAgentExtHandler`；同一 artifact 还包含本轮未展开的可选 SkillHub 自动配置。
 - Client Tools 只在 `JiuwenCoreAgentExtHandler` 的单次调用期间生效，不是服务端持久工具注册。
 - Custom REST 的业务请求和响应 schema 由宿主 Adapter 定义；框架只固定传输、A2A Bridge、任务续接和错误边界。
-- 完整 YAML 字段以[配置参考](doc/configuration.md)为准，完整入口和请求/返回格式以[入口与数据契约](doc/entrypoints-and-contracts.md)为准。
+- Agent Bus Consumer 复用基础 Runtime 的 A2A 控制面和业务 `AgentHandler`，不创建独立 Agent，
+  也不要求业务代码实现 Broker 订阅。
+- Agent Bus Consumer 的必要配置和边界见其[接入指南](doc/guides/agent-bus-consumer-integration.md)
+  和[特性说明](doc/features/agent-bus-consumer.md)；其他扩展模块的完整 YAML 字段以
+  [配置参考](doc/configuration.md)为准，入口和请求/返回格式以
+  [入口与数据契约](doc/entrypoints-and-contracts.md)为准。

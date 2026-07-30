@@ -23,6 +23,7 @@ public sealed interface InvocationEvent
                 InvocationEvent.StatusChanged,
                 InvocationEvent.ContentDelta,
                 InvocationEvent.InputRequired,
+                InvocationEvent.ProgressUncertain,
                 InvocationEvent.Completed,
                 InvocationEvent.Failed {
     /**
@@ -91,6 +92,25 @@ public sealed interface InvocationEvent
     }
 
     /**
+     * 流在非终态下中断，服务端进展<b>不确定</b>（<b>非</b>终态、<b>非</b>失败）。
+     *
+     * <p>对齐 FEAT-006 §5.1.4「SSE 中断不等于 Task 失败」：SDK 既不伪造终态、也不让调用方悬挂，
+     * 而是投递本事件说明"到此为止本地不再能观测进展"，并在 {@code completion()} 的快照上
+     * 附带恢复线索（{@link InvocationSnapshot#recovery()}）。
+     *
+     * <p>SDK 会先尝试用 {@code GetTask} 主动查询确认真实状态；只有查询也无法给出确定状态时才投递本事件。
+     * 调用方可据 {@link AgentClient#getInvocation} 稍后再次确认。
+     *
+     * @param invocationRef 调用句柄
+     * @param lastKnownState 中断前最后一次观测到的状态
+     * @param reason 中断原因（诊断用，非错误码）
+     */
+    record ProgressUncertain(String invocationRef, TaskState lastKnownState, String reason)
+            implements InvocationEvent {
+        // 仅规范构造器，无额外成员。
+    }
+
+    /**
      * 调用完成（终态）。
      *
      * @param invocationRef 调用句柄
@@ -101,14 +121,25 @@ public sealed interface InvocationEvent
     }
 
     /**
-     * 调用失败（终态）。{@code errorCode} 为标准化错误分类。
+     * 调用失败（终态）。{@code errorCode} 为标准化错误分类，见 {@link ErrorCodes}。
      *
      * @param invocationRef 调用句柄
      * @param errorCode 错误码
      * @param message 消息文本
+     * @param retryable 是否可退避重试
      */
-    record Failed(String invocationRef, String errorCode, String message) implements InvocationEvent {
-        // 仅规范构造器，无额外成员。
+    record Failed(String invocationRef, String errorCode, String message, boolean retryable)
+            implements InvocationEvent {
+        /**
+         * 由错误码自动推断可重试性（{@link ErrorCodes#isRetryable}）。
+         *
+         * @param invocationRef 调用句柄
+         * @param errorCode 错误码
+         * @param message 消息文本
+         */
+        public Failed(String invocationRef, String errorCode, String message) {
+            this(invocationRef, errorCode, message, ErrorCodes.isRetryable(errorCode));
+        }
     }
 
     /**
