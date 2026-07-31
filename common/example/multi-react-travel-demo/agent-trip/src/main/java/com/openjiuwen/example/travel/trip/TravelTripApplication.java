@@ -7,10 +7,9 @@ package com.openjiuwen.example.travel.trip;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
-import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.example.travel.trip.prompt.SystemPromptBuilder;
-import com.openjiuwen.example.travel.trip.rails.RemoteHotelRail;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +22,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Travel trip agent — ReActAgent with a {@link RemoteHotelRail} that defers hotel queries to the
- * remote hotel agent via the A2A interrupt chain.
+ * Travel trip agent — ReActAgent whose hotel-delegation tool is installed at runtime by
+ * {@code RemoteA2aToolInstaller} from {@code openjiuwen.service.a2a.remote-agents}
+ * (via {@link JiuwenCoreAgentExtHandler}) and defers hotel queries to the remote hotel
+ * agent via the A2A interrupt chain.
  *
  * @since 2026-07-09
  */
@@ -43,7 +44,7 @@ public class TravelTripApplication {
         if (!props.isConfigured()) {
             log.warn("LLM not configured (openjiuwen.travel.trip.llm.*); agent boots but cannot serve real queries");
         }
-        return new JiuwenCoreAgentHandler(buildTripAgent(props));
+        return new JiuwenCoreAgentExtHandler(buildTripAgent(props));
     }
 
     static ReActAgent buildTripAgent(TravelTripLlmProperties props) {
@@ -52,7 +53,7 @@ public class TravelTripApplication {
                 .description("差旅行程规划智能体（委托远端酒店智能体）")
                 .build();
         ReActAgent agent = new ReActAgent(card);
-        String systemPrompt = SystemPromptBuilder.build("hotel");
+        String systemPrompt = SystemPromptBuilder.build("travel-hotel");
         ReActAgentConfig config = ReActAgentConfig.builder()
                 .maxIterations(props.getMaxIterations())
                 .promptTemplate(List.of(Map.of("role", "system", "content", systemPrompt)))
@@ -60,7 +61,6 @@ public class TravelTripApplication {
                 .configureModelClient(props.getProvider(), props.getApiKey(), props.getApiBase(),
                         props.getModelName(), props.isSslVerify());
         agent.configure(config);
-        agent.registerRail(new RemoteHotelRail());
         return agent;
     }
 }

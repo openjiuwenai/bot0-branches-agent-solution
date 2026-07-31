@@ -79,6 +79,11 @@ openjiuwen:
       timeout: ${LLM_TIMEOUT:120s}
       completion-timeout: ${DEEP_RESEARCH_COMPLETION_TIMEOUT:600s}
       max-iterations: ${DEEP_RESEARCH_MAX_ITERATIONS:10}
+      # 搜索执行模式：serial（默认，单轮至多一次远端 A2A 调用）| parallel（COMPARISON
+      # 模式把互不依赖的 per-(vendor, dimension) search-agent 调用合到同一轮并行分发，
+      # 需运行时支持 parentContextId 并行分发）。激活 `parallel-search` profile 即切到
+      # parallel（见 application-parallel-search.yml）。
+      search-execution-mode: ${DEEP_RESEARCH_SEARCH_EXECUTION_MODE:serial}
       workspace-path: ${DEEP_RESEARCH_WORKSPACE:target/deep-research-workspace}
       workspace-language: ${DEEP_RESEARCH_LANGUAGE:zh-CN}
       # FEAT-005 层 3 收尾：允许 LLM 通过 readFile 工具读取的额外根目录。

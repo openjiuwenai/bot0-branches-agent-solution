@@ -9,6 +9,8 @@ spring:
 openjiuwen:
   service:
     agent-id: expense-review
+    llm:
+      timeout: 120
     query:
       legacy-path-enabled: true
       webflux:

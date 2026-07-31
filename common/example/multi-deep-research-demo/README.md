@@ -141,6 +141,7 @@ multi-deep-research-demo/
 | **确定性落盘** | Rail 生命周期钩子 | `AutoPersistMemoryRail.afterInvoke` | 每次 `result_type=="answer"` 自动写 `memory/answer-*.md` + `reports/answer-*.md` |
 | 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application-redis-checkpointer.yml`，支持 standalone / cluster） | 同 `conversationId` 请求走同一状态 |
 | **任务 Todolist 持久化**（FEAT-003 v3 MUST #2） | `TaskPlanningRail` + `KvTodoStorage` / `FileTodoStorage` | core-java `TaskPlanningRail` 装配 todo_* tool；solution 侧 `DeepResearchRuntimeApplication` 通过 `ObjectProvider<RuntimeRedisClient>` 桥接为 core `BaseKVStore` | `redis-checkpointer` profile 激活 + `RuntimeRedisClient` bean 就位 → `todoStorageType="kv"`（同一 runtime redis 连接池，§5.1.4）；否则 kvStore==null → `todoStorageType="file"`（workspace `.todo/` 目录） |
+| **多 vendor 并行搜索**（可选） | Spring profile + prompt 规则段组合 | `application-parallel-search.yml` 把 `openjiuwen.demo.deep-research.search-execution-mode` 切到 `parallel`；`DeepResearchProperties` 按模式组合 system-prompt（HEAD + 规则段 + TAIL） | `--spring.profiles.active=parallel-search`；COMPARISON 模式下 root 在同一轮批量发出多个互不依赖的 per-(vendor, dimension) `search-agent` 调用，由运行时经 `parentContextId` 并行分发；SINGLE 模式、render/verify 顺序与预算规则不变。详见 [Sub-agent 路由约束 §（4）](#sub-agent-路由约束root-prompt-硬规则) |
 | 中文字体 | 沙箱代码内置 | `SandboxRail` Python 头部 | Noto Sans CJK SC → Microsoft YaHei → DejaVu Sans 降级 |
 | Wire 层 metadata 观测 | Servlet filter | `agent-verify` 的 `A2aMetadataLoggingFilter`（`OncePerRequestFilter` + `ContentCachingRequestWrapper`） | 每次 `/a2a` POST 打一行 `[A2A wire] verify-agent received: {method, contextId, params.metadata, params.message.metadata}`，用于 FEAT-004 §Metadata 转发验收 |
 | **Custom REST 入口**（FEAT-022，opt-in） | Runtime 协议桥接 | `agent-service-app-custom-rest` 提供 `CustomRestProtocolAdapter` SPI + 自动装配；demo 侧 [`DeepResearchCustomRestAdapter`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/customrest/DeepResearchCustomRestAdapter.java) 把 REST body ↔ A2A Task 双向映射 | opt-in（`openjiuwen.service.custom-rest.query-path` 非空即启用）；复用同一 A2A Task 管线，非流返回统一 envelope，流式走 SSE。见 [Custom REST 入口](#custom-rest-入口) |
@@ -182,6 +183,12 @@ Root DeepAgent 面对 A2A remote tool（`search-agent`）时，`system-prompt` �
 Root 系统提示词里额外规定：如果 tool list 里存在 `verify-agent` 且当前是 COMPARISON 模式（多值对比），root **必须**在 `render_comparison_table` 返回后、写自然语言答复前**恰好调用 1 次** `verify-agent`，`remoteInput` 传草稿报告 markdown（含对比矩阵 + 引用 + 置信度），把 verdict 附在答复的"Report verification (best-effort judge)"小节。若 verify-agent 不可达 / 超时，记 `verify-agent unavailable — proceeding without external judgement` 后立即写正文 —— 这是**质量闸而非交付闸，绝不能阻塞最终答复**。SINGLE 模式（单值查询）直接跳过（没有 draft 可判）。
 
 对应源码：`DeepResearchProperties.system-prompt` 的 "Verification pass via verify-agent" 段 + `agent-verify` 的 `VerifyAgentProperties.criteria = ["对比矩阵已覆盖", "引用来源已覆盖", "置信度已覆盖"]`（happy-path 短语作 substring 匹配 anchor）。
+
+**（4）`parallel-search` profile：多 vendor 搜索并行化（可选）**：
+
+默认 profile 下 root 每轮至多发起一次远端 A2A 调用（`CRITICAL — Tool call serialisation` 段）。激活 `--spring.profiles.active=parallel-search` 后，`openjiuwen.demo.deep-research.search-execution-mode=parallel`，`DeepResearchProperties.getSystemPrompt()` 把规则段换成并行版（`TOOL_CALL_RULE_PARALLEL`）：COMPARISON 模式下把互不依赖的 per-(vendor, dimension) `search-agent` 调用**合到同一轮**批量发出（运行时经 `parentContextId` 并行分发、各子调用隔离在独立 conversation）；此时（1）的 byte-for-byte remoteInput 约束**仅对批量单元格放宽**——每个批量调用必须携带从用户原句派生的 vendor/dimension 定向 query（如 "DeepSeek V4 Pro 定价"），否则各调用会拿到相同结果。SINGLE 模式、`render_*` / `verify_urls` / `verify-agent` 的顺序与预算规则全部保持串行不变。
+
+对应源码：`DeepResearchProperties` 的 `TOOL_CALL_RULE_SERIAL` / `TOOL_CALL_RULE_PARALLEL` 常量 + `searchExecutionMode` 字段；profile 文件 `agent-deep-research/src/main/resources/application-parallel-search.yml`。
 
 **verify-agent 内部：react-rails 承担的判定循环与容错**：
 

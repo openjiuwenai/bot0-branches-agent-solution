@@ -32,10 +32,12 @@ openjiuwen:
       default-input-modes: ["text"]
       default-output-modes: ["text"]
       # --- Remote Agents ---
-      # registry key MUST equal RemoteTripRail's context.agentName ("travel-trip"); url = trip app's JSON-RPC base
+      # Each entry is installed by RemoteA2aToolInstaller as a delegate tool named after
+      # remote-agents[].name (dispatched via RemoteA2aInterruptRail with context.agentName =
+      # that same name); url = trip app's JSON-RPC base
       remote-agents:
         - name: "travel-trip"
-          url: "http://localhost:8092/a2a/"
+          url: "http://localhost:8092"
           timeout-seconds: 300
       # --- Skills ---
       skills:
