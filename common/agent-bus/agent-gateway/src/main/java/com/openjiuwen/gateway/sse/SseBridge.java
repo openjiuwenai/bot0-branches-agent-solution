@@ -65,6 +65,21 @@ public class SseBridge {
         }
     }
 
+    /**
+     * Write a single synthesized frame as an SSE event. Used by the BUS streaming path
+     * (FEAT-012 IN-4) to prepend a gateway-synthesized task-accept surface before draining
+     * the runtime SubscribeToTask data stream — the runtime stream carries only data
+     * chunks, so the client needs an explicit task frame (with {@code id}) to bind the
+     * taskRef and settle {@code accepted()}.
+     *
+     * @param out   client output stream
+     * @param frame the synthesized frame to write
+     * @throws IOException if writing to the client fails (e.g. disconnect)
+     */
+    public void writeSse(OutputStream out, String frame) throws IOException {
+        writeFrame(out, frame);
+    }
+
     private static void writeFrame(OutputStream out, String frame) throws IOException {
         out.write(("event: jsonrpc\ndata: " + frame + "\n\n").getBytes(StandardCharsets.UTF_8));
         out.flush();

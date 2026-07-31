@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -327,21 +328,30 @@ public class BusForwarder {
                 correlationId, streamFirstFrameDeadlineMillis);
         // try-with-resources closes the stream on every path (incl. timeout) to unblock the runtime.
         try (Stream<String> fr = frames) {
-            return drainStreamToClient(sctx, taskId, fr);
+            return drainStreamToClient(sctx, taskId, fr, window);
         }
     }
 
     /**
      * Reads the first frame with a deadline, then commits the SSE response and drains the rest.
      *
+     * <p>After draining the runtime data stream, polls the projection feed for the TERMINAL
+     * projection (within the response window) and writes a synthesized terminal task frame so
+     * the client SDK folds a real terminal state (COMPLETED/FAILED/REJECTED) instead of falling
+     * back to its stream-end default (which would surface WORKING — the runtime's SubscribeToTask
+     * stream carries only data chunks, never a terminal task surface; the terminal state travels
+     * as a bus INVOCATION_TERMINAL event to the gateway, not into the client SSE).
+     *
      * @param sctx streaming context (governance, response, SSE bridge, G4, correlation id)
      * @param taskId task id for status bodies
      * @param frames the runtime SSE frame stream (closed by the caller's try-with-resources)
+     * @param window accept/response window (already released for routing; responseWindowMillis
+     *               bounds the terminal-projection wait here)
      * @return empty if SSE was written; a non-empty FAILED body if the first-frame read fails
      * @throws IOException if writing the SSE stream fails
      */
-    private Optional<String> drainStreamToClient(StreamingCtx sctx, String taskId, Stream<String> frames)
-            throws IOException {
+    private Optional<String> drainStreamToClient(StreamingCtx sctx, String taskId, Stream<String> frames,
+                                                 WaitWindow window) throws IOException {
         GovernanceContext ctx = sctx.ctx();
         HttpServletResponse response = sctx.response();
         G4BusWiring g4w = sctx.g4w();
@@ -367,17 +377,112 @@ public class BusForwarder {
         // First frame obtained (or stream empty) — commit the SSE response and drain the rest.
         response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
         response.setCharacterEncoding("UTF-8");
-        String replayResult = firstFrame != null ? firstFrame
-                : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
+        // BUS 流式:runtime 的 SubscribeToTask 流只产 data chunk(artifact-update),不再发带 taskId 的
+        // task 面——taskId 已作为 bus 事件(INVOCATION_ACCEPTED)先到 gateway 投影。客户端 SDK 的
+        // accepted() 靠"首帧带 id"绑定(bindTaskRef),无 id 永不结算 → accepted() 超时(Feat-Func-006)。
+        // 故在 data 流之前先合成一帧 task 面(同 DIRECT 首帧格式,见 Feat-Func-011 §),把 taskId 交给客户端。
+        String acceptFrame = acceptTaskFrame(taskId, ctx.contextId());
+        InvocationResponseStatus terminal;
         try {
-            sctx.sseBridge().writeSse(response.getOutputStream(), frameIterator, firstFrame);
+            OutputStream out = response.getOutputStream();
+            sctx.sseBridge().writeSse(out, acceptFrame);                 // 先写合成的 task 面
+            sctx.sseBridge().writeSse(out, frameIterator, firstFrame);  // 再透传 runtime data 流
+            // data 流结束后,合成终态 task 面写进客户端 SSE:runtime 的终态(COMPLETED/FAILED/REJECTED)
+            // 经 bus INVOCATION_TERMINAL 事件给 gateway 投影,不进客户端 SSE。不补这帧,客户端 SDK 会以
+            // 流结束兜底(onComplete→lastState=working)→ 投影 WORKING 而非 COMPLETED(Feat-Func-006 §5.1.4)。
+            terminal = pollTerminal(sctx, taskId, window);
+            String terminalFrame = terminalTaskFrame(taskId, ctx.contextId(), terminal);
+            sctx.sseBridge().writeSse(out, terminalFrame);
         } catch (IOException ex) {
             g4w.onAbort(ctx.tenantId(), ctx.messageId());
             throw ex;
         }
-        g4w.onFold(InvocationResponseStatus.COMPLETED_RESPONSE, ctx.tenantId(), ctx.messageId(), replayResult);
-        log.info("forwardStreaming corrId={} stream done", correlationId);
+        // pollTerminal 永远返回非 null(超时兜底 COMPLETED_RESPONSE);用于 G4 折叠。
+        String replayResult = firstFrame != null ? firstFrame
+                : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
+        g4w.onFold(terminal, ctx.tenantId(), ctx.messageId(), replayResult);
+        log.info("forwardStreaming corrId={} stream done folded={}", correlationId, terminal);
         return Optional.empty();
+    }
+
+    /**
+     * 在 response 窗口内轮询 TERMINAL 投影。runtime data 流已结束时,终态(COMPLETED/FAILED/REJECTED)
+     * 仍需经 bus 两跳 INVOCATION_TERMINAL 事件到达 gateway;在窗口内等到即返回对应状态,超时则返回
+     * COMPLETED_RESPONSE(乐观默认:data 流已正常结束,视为完成;避免客户端因终态帧缺失而误判 WORKING)。
+     *
+     * @param sctx streaming context
+     * @param taskId task id(诊断)
+     * @param window 用于取 responseWindowMillis 上界(已 released,checkTimeout 返回 empty)
+     * @return 折叠后的终态状态(永不返回 null)
+     */
+    private InvocationResponseStatus pollTerminal(StreamingCtx sctx, String taskId, WaitWindow window) {
+        String correlationId = sctx.correlationId();
+        long deadline = System.currentTimeMillis() + responseWindowMillis;
+        int maxPolls = 100;
+        for (int i = 0; i < maxPolls; i++) {
+            if (System.currentTimeMillis() >= deadline) {
+                log.info("forwardStreaming corrId={} terminal poll timeout (no TERMINAL within {}ms), assume COMPLETED",
+                        correlationId, responseWindowMillis);
+                return InvocationResponseStatus.COMPLETED_RESPONSE;
+            }
+            var proj = projectionFeed.poll(correlationId);
+            if (proj.isEmpty()) {
+                continue;
+            }
+            var event = proj.get();
+            InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
+            if (FiveStateFolder.isTerminal(folded)) {
+                log.info("forwardStreaming corrId={} terminal projection matched folded={} taskId={}",
+                        correlationId, folded, event.taskId());
+                return folded;
+            }
+            // 非终态投影(如重复 ACCEPTED/STREAM_READY)继续轮询
+        }
+        log.info("forwardStreaming corrId={} terminal poll budget exhausted, assume COMPLETED", correlationId);
+        return InvocationResponseStatus.COMPLETED_RESPONSE;
+    }
+
+    /**
+     * 合成客户端可见的终态 task 面帧(BUS 流式专用)。客户端 SDK 据此帧的 {@code result.status.state}
+     * 折叠终态(COMPLETED→Completed 事件结算 completion;FAILED→Failed;REJECTED→StatusChanged 终态)。
+     * 格式对齐 DIRECT 末帧(Feat-Func-011 §)与 A2A Task surface。
+     *
+     * @param taskId runtime 创建的真实 Task ID
+     * @param contextId 会话上下文 ID
+     * @param status 终态状态(COMPLETED_RESPONSE / FAILED / REJECTED;null 兜底 completed)
+     * @return JSON-RPC task 面帧字符串
+     */
+    private static String terminalTaskFrame(String taskId, String contextId, InvocationResponseStatus status) {
+        String state;
+        if (status == InvocationResponseStatus.FAILED) {
+            state = "failed";
+        } else if (status == InvocationResponseStatus.REJECTED) {
+            state = "rejected";
+        } else {
+            state = "completed";
+        }
+        return "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"task\",\"id\":\""
+                + (taskId != null ? taskId : "")
+                + "\",\"contextId\":\""
+                + (contextId != null ? contextId : "")
+                + "\",\"status\":{\"state\":\"" + state + "\"}}}";
+    }
+
+    /**
+     * 合成客户端可见的"已接受"task 面帧(BUS 流式专用)。runtime 的 SubscribeToTask 流不含
+     * 带 {@code id} 的 task 面,客户端 SDK 据此帧的 {@code result.id} 绑定 taskRef 并结算
+     * {@code accepted()}。格式对齐 DIRECT 首帧(Feat-Func-011 §)与 A2A Task surface。
+     *
+     * @param taskId runtime 创建的真实 Task ID(来自 INVOCATION_ACCEPTED 投影)
+     * @param contextId 会话上下文 ID
+     * @return JSON-RPC task 面帧字符串
+     */
+    private static String acceptTaskFrame(String taskId, String contextId) {
+        return "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"task\",\"id\":\""
+                + (taskId != null ? taskId : "")
+                + "\",\"contextId\":\""
+                + (contextId != null ? contextId : "")
+                + "\",\"status\":{\"state\":\"working\"}}}";
     }
 
     /**
