@@ -4,7 +4,7 @@
 
 本 demo 展示 solution 层如何在**不侵入 core-java**、**库层无 Spring** 的约束下，用 `RemoteA2aToolInstaller` 把远端 A2A agent card 自动注册为上游 ReAct 智能体的工具，从而搭出一条多跳委托链：
 
-- **远端 sub-agent 注入**：每个上游 agent 通过 `RemoteTripRail` / `RemoteHotelRail`，把下游 agent card 注册为本地工具，调用时按 A2A JSON-RPC 委托
+- **远端 sub-agent 注入**：框架的 `RemoteA2aToolInstaller`（`agent-service-adapters-agentcore-ext`）在运行时把 `openjiuwen.service.a2a.remote-agents` 中声明的下游 agent card 自动安装为上游 ReAct 智能体的工具（工具名 = `remote-agents[].name`），调用时按 A2A JSON-RPC 委托
 - **信息不全即中断**：入口 `mainplan` 内置 `request_user_input` 工具 + `UserInputInterruptRail`，当最小信息集（目的地 + 出发日期 + 差标）不齐全时，回合以 `INPUT_REQUIRED` 收尾，等用户补全后携原 `taskId`/`contextId` 续传
 - **纯本地 mock**：叶子 `hotel` 用内存 `MockHotelInventory`（`hotels.json`），无需任何外部依赖
 
@@ -35,7 +35,7 @@
           │        ReActAgent                            │
           │   Tools / Rails                             │
           │    ├── request_user_input  (UserInputInterruptRail)  信息不全 ⇒ INPUT_REQUIRED
-          │    └── dispatch → travel-trip (RemoteTripRail, A2A 远端工具)
+          │    └── travel-trip (RemoteA2aToolInstaller 安装的 A2A 远端工具)
           └────────────────────┬────────────────────────┘
                                  │ A2A / streaming
                                  ▼
@@ -43,7 +43,7 @@
           │        travel-trip (:8092)  中游             │
           │        ReActAgent                            │
           │   Tools / Rails                             │
-          │    └── dispatch → travel-hotel (RemoteHotelRail, A2A 远端工具)
+          │    └── travel-hotel (RemoteA2aToolInstaller 安装的 A2A 远端工具)
           └────────────────────┬────────────────────────┘
                                  │ A2A / streaming
                                  ▼
@@ -75,7 +75,6 @@ multi-react-travel-demo/
 │       ├── TravelMainplanApplication.java        Spring Boot 入口
 │       ├── TravelMainplanLlmProperties.java      LLM 配置 POJO
 │       ├── prompt/MainPlanPromptBuilder.java     system prompt（意图识别 / 信息充分性 / 委托）
-│       ├── rails/RemoteTripRail.java             把 travel-trip card 注入为远端 A2A 工具
 │       ├── rails/UserInputInterruptRail.java     request_user_input ⇒ INPUT_REQUIRED 中断
 │       └── tools/RequestUserInputTool.java       信息不全时向用户追问的工具
 │   └── src/main/resources/
@@ -86,8 +85,7 @@ multi-react-travel-demo/
 │   └── src/main/java/com/openjiuwen/example/travel/trip/
 │       ├── TravelTripApplication.java
 │       ├── TravelTripLlmProperties.java
-│       ├── prompt/SystemPromptBuilder.java        以住宿为核心的行程方案
-│       └── rails/RemoteHotelRail.java             把 travel-hotel card 注入为远端 A2A 工具
+│       └── prompt/SystemPromptBuilder.java        以住宿为核心的行程方案
 │   └── src/main/resources/
 │       ├── application.yml                        端口 8092 + remote-agents[travel-hotel]
 │       └── prompts/trip-planning-agent-system-prompt.md
@@ -115,8 +113,8 @@ multi-react-travel-demo/
 |---|---|---|---|
 | 意图识别 + 实体提取 | ReActAgent + system prompt | `agent-mainplan` | 用户首轮自然语言 |
 | 信息不全追问（HITL 中断） | 工具 + Rail | `RequestUserInputTool` + `UserInputInterruptRail` | 最小信息集（目的地 / 出发日期 / 差标）任一缺失 ⇒ 回合 `INPUT_REQUIRED` |
-| 行程方案编排 | ReActAgent + 远端 A2A 工具 | `agent-mainplan` `RemoteTripRail` → `agent-trip` | 信息齐全时委托下游 |
-| 酒店候选查询 | ReActAgent + 本地工具 | `agent-trip` `RemoteHotelRail` → `agent-hotel` `HotelSearchTool` | 行程规划需要住宿时委托叶子 |
+| 行程方案编排 | ReActAgent + 远端 A2A 工具 | `agent-mainplan` `RemoteA2aToolInstaller` 注入的 `travel-trip` 工具 → `agent-trip` | 信息齐全时委托下游 |
+| 酒店候选查询 | ReActAgent + 本地工具 | `agent-trip` `RemoteA2aToolInstaller` 注入的 `travel-hotel` 工具 → `agent-hotel` `HotelSearchTool` | 行程规划需要住宿时委托叶子 |
 | 酒店明细 | 本地工具 | `agent-hotel` `HotelDetailTool` | 选定候选后取明细 |
 | 多轮续传 | A2A `contextId` + `taskId` | 框架 A2A orchestrator | `INPUT_REQUIRED` 后用相同 `contextId`（并携 `taskId`）续传 |
 | 房源数据 | 内存 mock | `MockHotelInventory` + `hotels.json` | 启动时加载，无外部依赖 |

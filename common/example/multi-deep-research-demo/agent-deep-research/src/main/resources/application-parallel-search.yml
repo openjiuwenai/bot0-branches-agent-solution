@@ -1,0 +1,25 @@
+# Profile: parallel-search
+# Activate with: SPRING_PROFILES_ACTIVE=parallel-search
+#                 (or --spring.profiles.active=parallel-search)
+#
+# Layered on top of the agent-deep-research application.yml. Flips the DeepAgent system
+# prompt's tool-call rule from SERIAL (at most one remote A2A call per turn) to PARALLEL
+# multi-vendor search:
+#   - COMPARISON mode: the root agent batches ALL independent per-(vendor, dimension)
+#     search-agent calls into ONE turn; the runtime dispatches them concurrently,
+#     correlating them via parentContextId with each child call isolated in its own
+#     conversation. For these batched cells the byte-for-byte remoteInput constraint is
+#     relaxed — each call carries a vendor/dimension-scoped query derived from the user
+#     text (otherwise every parallel call would fetch the identical result).
+#   - SINGLE mode, verify-agent / render_* / verify_urls ordering and both hard budget
+#     rules stay serial and unchanged.
+#
+# Only the prompt's tool-call rule section changes (DeepResearchProperties composes
+# SYSTEM_PROMPT_HEAD + rule + SYSTEM_PROMPT_TAIL from search-execution-mode). This
+# profile requires agent-runtime parallel-dispatch support for multiple remote A2A
+# tool calls emitted in one turn.
+
+openjiuwen:
+  demo:
+    deep-research:
+      search-execution-mode: parallel
