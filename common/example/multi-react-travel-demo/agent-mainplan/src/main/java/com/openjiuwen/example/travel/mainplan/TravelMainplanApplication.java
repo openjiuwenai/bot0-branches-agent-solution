@@ -10,10 +10,9 @@ import com.openjiuwen.core.runner.base.TagMatchStrategy;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
 import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
-import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.example.travel.mainplan.prompt.MainPlanPromptBuilder;
-import com.openjiuwen.example.travel.mainplan.rails.RemoteTripRail;
 import com.openjiuwen.example.travel.mainplan.rails.UserInputInterruptRail;
 import com.openjiuwen.example.travel.mainplan.tools.RequestUserInputTool;
 
@@ -31,7 +30,9 @@ import java.util.Map;
  * Travel mainplan agent — ReActAgent that loads the real main-plan system prompt and wires:
  * <ul>
  *   <li>{@link RequestUserInputTool} + {@link UserInputInterruptRail} — the user-input追问 chain</li>
- *   <li>{@link RemoteTripRail} — A2A delegation to the remote trip agent</li>
+ *   <li>A2A delegation to the remote trip agent — installed at runtime by
+ *       {@code RemoteA2aToolInstaller} from {@code openjiuwen.service.a2a.remote-agents}
+ *       (via {@link JiuwenCoreAgentExtHandler})</li>
  * </ul>
  *
  * @since 2026-07-09
@@ -51,7 +52,7 @@ public class TravelMainplanApplication {
         if (!props.isConfigured()) {
             log.warn("LLM not configured, agent boots but cannot serve real queries");
         }
-        return new JiuwenCoreAgentHandler(buildMainplanAgent(props));
+        return new JiuwenCoreAgentExtHandler(buildMainplanAgent(props));
     }
 
     static ReActAgent buildMainplanAgent(TravelMainplanLlmProperties props) {
@@ -73,7 +74,6 @@ public class TravelMainplanApplication {
 
         registerTool(agent, new RequestUserInputTool());
 
-        agent.registerRail(new RemoteTripRail());
         agent.registerRail(new UserInputInterruptRail());
         return agent;
     }

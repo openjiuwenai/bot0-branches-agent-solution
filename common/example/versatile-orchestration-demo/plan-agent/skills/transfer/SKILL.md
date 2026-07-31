@@ -45,3 +45,17 @@ Do NOT emit both calls in Turn 1. Each turn contains exactly one `versatile-adap
 
 When all tasks are done, summarise every result for the user in Chinese (balances and transfer
 confirmations).
+
+## Parallel variant (`parallel-transfer` profile)
+
+The serial rule above is the **default**. The `parallel-transfer` Spring profile swaps the
+plan-agent system prompt (loaded at runtime from `prompts/plan-agent-system-prompt-parallel.md`
+via `plan-agent.prompt-resource`; this SKILL.md is documentation only and is **not** loaded by
+the agent — see `PlanAgentConfiguration` javadoc). Under that profile balance queries still run
+first and serially, but independent transfers to different recipients are batched into a single
+turn and dispatched concurrently (each sharing a `parentContextId`, isolated in its own
+conversation). Requires agent-runtime parallel-dispatch support. Activate on the plan-agent with:
+
+```bash
+export SPRING_PROFILES_ACTIVE=parallel-transfer
+```
