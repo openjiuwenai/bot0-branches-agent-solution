@@ -53,6 +53,11 @@
                 <artifactId>agent-service-adapters-agentcore</artifactId>
                 <version>0.1.0</version>
             </dependency>
+            <dependency>
+                <groupId>com.openjiuwen</groupId>
+                <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+                <version>0.1.0</version>
+            </dependency>
 
             <!-- Pin protobuf to 4.x: agent-service-app -> a2a-sdk ships protoc-generated
                  classes (e.g. AgentCard) whose <clinit> reference internal types that only

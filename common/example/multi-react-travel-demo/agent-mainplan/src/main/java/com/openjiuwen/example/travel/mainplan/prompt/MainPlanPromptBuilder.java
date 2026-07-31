@@ -15,8 +15,9 @@ import java.time.format.DateTimeFormatter;
  * substitutes the runtime placeholders ({@code {current_datetime}}, {@code {default_city}},
  * {@code {traveler_name}}, {@code {dispatch_tool_name}}).
  *
- * <p>The dispatch tool name is hard-wired to {@code "trip"}, which matches the
- * {@link com.openjiuwen.example.travel.mainplan.rails.RemoteTripRail} tool id.
+ * <p>The dispatch tool name is hard-wired to {@code "travel-trip"}, which must match
+ * {@code openjiuwen.service.a2a.remote-agents[].name} — the tool id under which
+ * {@code RemoteA2aToolInstaller} exposes the remote trip agent.
  *
  * @since 2026-07-09
  */
@@ -28,8 +29,8 @@ public final class MainPlanPromptBuilder {
     private static final String VAR_TRAVELER_NAME = "{traveler_name}";
     private static final String VAR_DISPATCH_TOOL_NAME = "{dispatch_tool_name}";
 
-    /** Our rail's tool name is {@code trip} (see RemoteTripRail.TOOL_NAME). */
-    private static final String DISPATCH_TOOL_NAME = "trip";
+    /** Installed tool name = remote-agents[].name ("travel-trip", see application.yml). */
+    private static final String DISPATCH_TOOL_NAME = "travel-trip";
 
     private MainPlanPromptBuilder() {
     }
