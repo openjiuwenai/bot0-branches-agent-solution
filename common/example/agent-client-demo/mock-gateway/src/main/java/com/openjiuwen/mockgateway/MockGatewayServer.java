@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
  * <li>{@code SendStreamingMessage} —— SSE 事件流（创建调用，对应 STREAMING）。</li>
  * <li>{@code SendMessage} —— 单条 JSON 响应（创建 BLOCKING/ASYNC 调用、以及本地工具结果 / 用户输入续跑，
  * Feat-Func-011 §5.9.3）。</li>
- * <li>{@code GetTask} —— 单条 JSON 响应（状态查询，参数为 {@code params.taskId}）。</li>
+ * <li>{@code GetTask} —— 单条 JSON 响应（状态查询，参数为 {@code params.id}）。</li>
  * </ul>
  *
  * <p>北向方法白名单只含上述三者；其余方法（{@code CancelTask} / {@code SubscribeToTask}）
@@ -191,7 +191,7 @@ public final class MockGatewayServer {
     /**
      * 状态查询（{@code GetTask}）：返回该 Task 当前的权威快照。
      *
-     * <p>参数位置与真实网关契约一致：{@code params.taskId}（不是 A2A 别名的 {@code params.id}）。
+     * <p>参数位置与 agent-runtime-java 契约一致：{@code params.id}（标准 A2A {@code TaskQueryParams.id}）。
      * 客户端用它做 ASYNC 观察、断连后确认真实进展、以及 BLOCKING 的推进轮询。
      *
      * @param ex HTTP 交换
@@ -200,9 +200,9 @@ public final class MockGatewayServer {
      * @throws IOException 写响应失败时抛出
      */
     private void handleGetTask(HttpExchange ex, String rpcId, JsonNode params) throws IOException {
-        String taskId = params.path("taskId").asText(null);
+        String taskId = params.path("id").asText(null);
         if (taskId == null || taskId.isBlank()) {
-            writeGovernanceError(ex, 400, "VALIDATION_TASK_ID", "taskId is required for GetTask");
+            writeGovernanceError(ex, 400, "VALIDATION_TASK_ID", "id is required for GetTask");
             return;
         }
         TaskSim task = tasks.get(taskId);
@@ -435,39 +435,59 @@ public final class MockGatewayServer {
     /**
      * 构造响应结果节点。
      *
+     * <p>对齐 agent-runtime-java 标准 A2A 形态（documents/zh/2.开发指南/对话接口输入与输出.md）：
+     * <ul>
+     *   <li>{@code kind="task"} → {@code result.task}（完整 Task 对象，{@code id}/{@code contextId}/
+     *       {@code status}/{@code artifacts}/{@code history}）</li>
+     *   <li>{@code kind="status-update"} → {@code result.statusUpdate}（{@code taskId}/
+     *       {@code contextId}/{@code status}/{@code final}）</li>
+     * </ul>
+     *
      * @param task 任务模拟
      * @param kind 结果类型
      * @return 结果节点
      */
     private ObjectNode buildResult(TaskSim task, String kind) {
         ObjectNode r = mapper.createObjectNode();
-        r.put("kind", kind);
-        if ("task".equals(kind)) {
-            r.put("id", task.taskId);
-        } else {
-            r.put("taskId", task.taskId);
-        }
-        if (task.contextId != null) {
-            r.put("contextId", task.contextId);
-        }
-        ObjectNode status = r.putObject("status");
+        // 构建 status 子对象（COMPLETED 携带输出文本；INPUT_REQUIRED 携带 _interrupt）。
+        ObjectNode status = mapper.createObjectNode();
         status.put("state", a2aState(task.state));
-        // message 层：COMPLETED 携带输出文本；INPUT_REQUIRED 携带 _interrupt（对齐 009 §6.3 / 006 §3.5 ② / 007 §3.5 ②）。
         ObjectNode message = status.putObject("message");
         message.put("role", "agent");
         if (task.state == State.COMPLETED && task.outputText != null) {
-            message.putArray("parts").addObject().put("kind", "text").put("text", task.outputText);
+            // 标准 A2A TextPart = {text}，不写 kind 字段。
+            message.putArray("parts").addObject().put("text", task.outputText);
         }
         ObjectNode msgMeta = message.putObject("metadata");
         if (task.state == State.INPUT_REQUIRED && task.pending != null) {
             buildInterrupt(msgMeta, task.pending);
         }
-        if ("status-update".equals(kind)) {
-            r.put("final", isTerminal(task.state));
-        }
-        ObjectNode meta = r.putObject("metadata");
-        if (task.errorCode != null) {
-            meta.put("errorCode", task.errorCode);
+
+        if ("task".equals(kind)) {
+            // 非流式：result.task = { id, contextId, status, artifacts, history }
+            ObjectNode taskNode = r.putObject("task");
+            taskNode.put("id", task.taskId);
+            if (task.contextId != null) {
+                taskNode.put("contextId", task.contextId);
+            }
+            taskNode.set("status", status);
+            taskNode.putArray("artifacts");
+            taskNode.putArray("history");
+            if (task.errorCode != null) {
+                taskNode.putObject("metadata").put("errorCode", task.errorCode);
+            }
+        } else {
+            // 流式：result.statusUpdate = { taskId, contextId, status, final }
+            ObjectNode statusUpdate = r.putObject("statusUpdate");
+            statusUpdate.put("taskId", task.taskId);
+            if (task.contextId != null) {
+                statusUpdate.put("contextId", task.contextId);
+            }
+            statusUpdate.set("status", status);
+            statusUpdate.put("final", isTerminal(task.state));
+            if (task.errorCode != null) {
+                statusUpdate.putObject("metadata").put("errorCode", task.errorCode);
+            }
         }
         return r;
     }
@@ -498,7 +518,9 @@ public final class MockGatewayServer {
     }
 
     /**
-     * 构造状态更新节点。
+     * 构造状态更新节点（首帧 WORKING 投递用）。
+     *
+     * <p>对齐标准 A2A：{@code result.statusUpdate = { taskId, contextId, status, final }}。
      *
      * @param task 任务模拟
      * @param state 任务状态
@@ -507,18 +529,20 @@ public final class MockGatewayServer {
      */
     private ObjectNode buildStatus(TaskSim task, State state, boolean finalFlag) {
         ObjectNode r = mapper.createObjectNode();
-        r.put("kind", "status-update");
-        r.put("taskId", task.taskId);
+        ObjectNode statusUpdate = r.putObject("statusUpdate");
+        statusUpdate.put("taskId", task.taskId);
         if (task.contextId != null) {
-            r.put("contextId", task.contextId);
+            statusUpdate.put("contextId", task.contextId);
         }
-        r.putObject("status").put("state", a2aState(state));
-        r.put("final", finalFlag);
+        statusUpdate.putObject("status").put("state", a2aState(state));
+        statusUpdate.put("final", finalFlag);
         return r;
     }
 
     /**
      * 构造产物更新节点。
+     *
+     * <p>对齐标准 A2A：{@code result.artifactUpdate = { taskId, contextId, artifact:{ artifactId, parts:[{text}] }}}。
      *
      * @param task 任务模拟
      * @param text 产物文本
@@ -526,10 +550,15 @@ public final class MockGatewayServer {
      */
     private ObjectNode buildArtifact(TaskSim task, String text) {
         ObjectNode r = mapper.createObjectNode();
-        r.put("kind", "artifact-update");
-        r.put("taskId", task.taskId);
-        ObjectNode artifact = r.putObject("artifact");
-        artifact.putArray("parts").addObject().put("kind", "text").put("text", text);
+        ObjectNode artifactUpdate = r.putObject("artifactUpdate");
+        artifactUpdate.put("taskId", task.taskId);
+        if (task.contextId != null) {
+            artifactUpdate.put("contextId", task.contextId);
+        }
+        ObjectNode artifact = artifactUpdate.putObject("artifact");
+        artifact.put("artifactId", "artifact-" + task.taskId);
+        // 标准 A2A TextPart = {text}，不写 kind 字段。
+        artifact.putArray("parts").addObject().put("text", text);
         return r;
     }
 
@@ -631,6 +660,8 @@ public final class MockGatewayServer {
     /**
      * 从消息 parts 中提取首段文本。
      *
+     * <p>标准 A2A Part 按字段名联合区分：TextPart = {text}。兼容旧形态 {kind:"text", text:"..."}。
+     *
      * @param message 消息节点
      * @return 文本内容
      */
@@ -638,7 +669,7 @@ public final class MockGatewayServer {
         JsonNode parts = message.path("parts");
         if (parts.isArray()) {
             for (JsonNode p : parts) {
-                if ("text".equals(p.path("kind").asText(""))) {
+                if (p.has("text")) {
                     return Optional.of(p.path("text").asText(""));
                 }
             }

@@ -28,7 +28,7 @@
 `verification-app` 内嵌启动 `mock-gateway`，再由 SDK 经真实 HTTP + SSE 发起调用，覆盖：
 
 1. **STREAMING + client 工具多轮**：远端经 `_interrupt` 逐个请求工具 → SDK 自动就地执行并续传 → 完成。
-2. **BLOCKING + client 工具**：非流式（`message/send`）路径同样能驱动多轮。
+2. **BLOCKING + client 工具**：非流式（`SendMessage`）路径同样能驱动多轮。
 3. **用户输入续传**（`continueInput`）。
 4. **取消**（`cancel`，本版本非 MUST，但 wire 已打通）。
 
@@ -170,10 +170,10 @@ agent-client-sdk-for-jvm : com.openjiuwen.client
 |----------|--------|---------------|
 | `conversationId` | 业务应用 | `message.contextId` |
 | `invocationId` / `invocationRef` | 客户端 | `message.messageId`（后续操作句柄） |
-| `taskId` / `taskRef` | runtime | Task/事件的 `id` / `taskId`（SDK 内部映射，不外泄） |
+| `taskId` / `taskRef` | runtime | 非流式 `result.task.id`；流式 `result.statusUpdate.taskId`（SDK 内部映射，不外泄） |
 | ToolView | 客户端 | `params.metadata.clientTools[{name,description,inputSchema}]`（`name = toolId`） |
-| 工具调用意图 | runtime | `metadata._interrupt`（`kind=client_tool`/`user_input`） |
-| 工具结果续传 | 客户端 | 对既有 `taskId` 的 `message/send|stream`，结果渲染为 `TextPart` |
+| 工具调用意图 | runtime | `status.message.metadata._interrupt`（`_interrupt_kind=client_tool`/`user_input`） |
+| 工具结果续传 | 客户端 | 对既有 `taskId` 的 `SendMessage`，结果渲染为 `TextPart`（`{text}`）；多工具定向时附 `parts[].metadata.toolCallId` |
 
 ## 已知边界
 
