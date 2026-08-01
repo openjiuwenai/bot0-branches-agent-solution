@@ -389,7 +389,8 @@ public class BusForwarder {
             sctx.sseBridge().writeSse(out, acceptFrame);                 // 先写合成的 task 面(A2A v1.0 {"task":{...}})
             sctx.sseBridge().writeSse(out, frameIterator, firstFrame);  // 再透传 runtime data 流
             // data 流结束后,从 TERMINAL 投影取 runtime 产出的完整 A2A Task(a2aResponse),直接透传给客户端。
-            // 不合成、不改写——TERMINAL 投影的 body 就是 runtime 产出的 {"task":{"id":"...","status":{"state":"..."},"artifacts":[...]}}，
+            // 不合成、不改写——TERMINAL 投影的 body 就是 runtime 产出的 
+            // {"task":{"id":"...","status":{"state":"..."},"artifacts":[...]}}，
             // gateway 只包 JSON-RPC envelope(同 runtime 直出格式),符合 §8 "wire 契约与直连 runtime 等价"。
             terminalEvent = pollTerminalEvent(sctx, taskId, window);
             String terminalFrame = terminalTaskFrame(terminalEvent);
