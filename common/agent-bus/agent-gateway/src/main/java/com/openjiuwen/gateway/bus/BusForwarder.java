@@ -4,6 +4,7 @@
 
 package com.openjiuwen.gateway.bus;
 
+import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.InvocationResponseStatus;
 import com.openjiuwen.gateway.bus.control.BusControlForwarder;
@@ -382,40 +383,41 @@ public class BusForwarder {
         // accepted() 靠"首帧带 id"绑定(bindTaskRef),无 id 永不结算 → accepted() 超时(Feat-Func-006)。
         // 故在 data 流之前先合成一帧 task 面(同 DIRECT 首帧格式,见 Feat-Func-011 §),把 taskId 交给客户端。
         String acceptFrame = acceptTaskFrame(taskId, ctx.contextId());
-        InvocationResponseStatus terminal;
+        ProjectionFeed.ProjectionEvent terminalEvent;
         try {
             OutputStream out = response.getOutputStream();
-            sctx.sseBridge().writeSse(out, acceptFrame);                 // 先写合成的 task 面
+            sctx.sseBridge().writeSse(out, acceptFrame);                 // 先写合成的 task 面(A2A v1.0 {"task":{...}})
             sctx.sseBridge().writeSse(out, frameIterator, firstFrame);  // 再透传 runtime data 流
-            // data 流结束后,合成终态 task 面写进客户端 SSE:runtime 的终态(COMPLETED/FAILED/REJECTED)
-            // 经 bus INVOCATION_TERMINAL 事件给 gateway 投影,不进客户端 SSE。不补这帧,客户端 SDK 会以
-            // 流结束兜底(onComplete→lastState=working)→ 投影 WORKING 而非 COMPLETED(Feat-Func-006 §5.1.4)。
-            terminal = pollTerminal(sctx, taskId, window);
-            String terminalFrame = terminalTaskFrame(taskId, ctx.contextId(), terminal);
+            // data 流结束后,从 TERMINAL 投影取 runtime 产出的完整 A2A Task(a2aResponse),直接透传给客户端。
+            // 不合成、不改写——TERMINAL 投影的 body 就是 runtime 产出的 
+            // {"task":{"id":"...","status":{"state":"..."},"artifacts":[...]}}，
+            // gateway 只包 JSON-RPC envelope(同 runtime 直出格式),符合 §8 "wire 契约与直连 runtime 等价"。
+            terminalEvent = pollTerminalEvent(sctx, taskId, window);
+            String terminalFrame = terminalTaskFrame(terminalEvent);
             sctx.sseBridge().writeSse(out, terminalFrame);
         } catch (IOException ex) {
             g4w.onAbort(ctx.tenantId(), ctx.messageId());
             throw ex;
         }
-        // pollTerminal 永远返回非 null(超时兜底 COMPLETED_RESPONSE);用于 G4 折叠。
-        String replayResult = firstFrame != null ? firstFrame
-                : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}";
-        g4w.onFold(terminal, ctx.tenantId(), ctx.messageId(), replayResult);
-        log.info("forwardStreaming corrId={} stream done folded={}", correlationId, terminal);
+        InvocationResponseStatus folded = FiveStateFolder.fold(terminalEvent.eventType());
+        String replayResult = terminalEvent.body() != null ? terminalEvent.body()
+                : (firstFrame != null ? firstFrame : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}");
+        g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), replayResult);
+        log.info("forwardStreaming corrId={} stream done folded={}", correlationId, folded);
         return Optional.empty();
     }
 
     /**
      * 在 response 窗口内轮询 TERMINAL 投影。runtime data 流已结束时,终态(COMPLETED/FAILED/REJECTED)
-     * 仍需经 bus 两跳 INVOCATION_TERMINAL 事件到达 gateway;在窗口内等到即返回对应状态,超时则返回
-     * COMPLETED_RESPONSE(乐观默认:data 流已正常结束,视为完成;避免客户端因终态帧缺失而误判 WORKING)。
+     * 仍需经 bus 两跳 INVOCATION_TERMINAL 事件到达 gateway;在窗口内等到即返回该投影事件(携带 runtime
+     * 产出的完整 A2A Task),超时则返回一个合成的 COMPLETED 投影(body=null)。
      *
      * @param sctx streaming context
      * @param taskId task id(诊断)
      * @param window 用于取 responseWindowMillis 上界(已 released,checkTimeout 返回 empty)
-     * @return 折叠后的终态状态(永不返回 null)
+     * @return 终态投影事件(永不返回 null)
      */
-    private InvocationResponseStatus pollTerminal(StreamingCtx sctx, String taskId, WaitWindow window) {
+    private ProjectionFeed.ProjectionEvent pollTerminalEvent(StreamingCtx sctx, String taskId, WaitWindow window) {
         String correlationId = sctx.correlationId();
         long deadline = System.currentTimeMillis() + responseWindowMillis;
         int maxPolls = 100;
@@ -423,7 +425,8 @@ public class BusForwarder {
             if (System.currentTimeMillis() >= deadline) {
                 log.info("forwardStreaming corrId={} terminal poll timeout (no TERMINAL within {}ms), assume COMPLETED",
                         correlationId, responseWindowMillis);
-                return InvocationResponseStatus.COMPLETED_RESPONSE;
+                return new ProjectionFeed.ProjectionEvent(
+                        AgentBusEventType.INVOCATION_TERMINAL, taskId, null, null, null);
             }
             var proj = projectionFeed.poll(correlationId);
             if (proj.isEmpty()) {
@@ -434,55 +437,52 @@ public class BusForwarder {
             if (FiveStateFolder.isTerminal(folded)) {
                 log.info("forwardStreaming corrId={} terminal projection matched folded={} taskId={}",
                         correlationId, folded, event.taskId());
-                return folded;
+                return event;
             }
             // 非终态投影(如重复 ACCEPTED/STREAM_READY)继续轮询
         }
         log.info("forwardStreaming corrId={} terminal poll budget exhausted, assume COMPLETED", correlationId);
-        return InvocationResponseStatus.COMPLETED_RESPONSE;
+        return new ProjectionFeed.ProjectionEvent(
+                AgentBusEventType.INVOCATION_TERMINAL, taskId, null, null, null);
     }
 
     /**
-     * 合成客户端可见的终态 task 面帧(BUS 流式专用)。客户端 SDK 据此帧的 {@code result.status.state}
-     * 折叠终态(COMPLETED→Completed 事件结算 completion;FAILED→Failed;REJECTED→StatusChanged 终态)。
-     * 格式对齐 DIRECT 末帧(Feat-Func-011 §)与 A2A Task surface。
+     * 从 runtime 产出的完整 A2A Task(TERMINAL 投影的 a2aResponse / body)直接透传,包 JSON-RPC envelope。
+     * 不改写 Task 内容(§8 "不得改写 result.task")——只做 bus 投影→A2A wire 格式的适配包装。
+     * 若 body 为 null(超时兜底),合成一个最小终态帧(A2A v1.0 {"task":{...}} 格式)。
      *
-     * @param taskId runtime 创建的真实 Task ID
-     * @param contextId 会话上下文 ID
-     * @param status 终态状态(COMPLETED_RESPONSE / FAILED / REJECTED;null 兜底 completed)
-     * @return JSON-RPC task 面帧字符串
+     * @param terminalEvent TERMINAL 投影事件(可能携带 runtime 的 a2aResponse)
+     * @return JSON-RPC envelope 字符串
      */
-    private static String terminalTaskFrame(String taskId, String contextId, InvocationResponseStatus status) {
-        String state;
-        if (status == InvocationResponseStatus.FAILED) {
-            state = "failed";
-        } else if (status == InvocationResponseStatus.REJECTED) {
-            state = "rejected";
-        } else {
-            state = "completed";
+    private static String terminalTaskFrame(ProjectionFeed.ProjectionEvent terminalEvent) {
+        if (terminalEvent.body() != null && !terminalEvent.body().isBlank()) {
+            // runtime 产出的完整 A2A Task(已是 {"task":{"id":"...","status":{"state":"..."},"artifacts":[...]}} 格式),
+            // 直接放进 JSON-RPC envelope 的 result,不改写。
+            return "{\"jsonrpc\":\"2.0\",\"result\":" + terminalEvent.body() + "}";
         }
-        return "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"task\",\"id\":\""
-                + (taskId != null ? taskId : "")
-                + "\",\"contextId\":\""
-                + (contextId != null ? contextId : "")
+        // 超时兜底:body 为 null,合成最小终态(A2A v1.0 {"task":{...}} 格式)
+        String state = FiveStateFolder.fold(terminalEvent.eventType()) == InvocationResponseStatus.FAILED
+                ? "failed" : "completed";
+        return "{\"jsonrpc\":\"2.0\",\"result\":{\"task\":{\"id\":\""
+                + (terminalEvent.taskId() != null ? terminalEvent.taskId() : "")
                 + "\",\"status\":{\"state\":\"" + state + "\"}}}";
     }
 
     /**
      * 合成客户端可见的"已接受"task 面帧(BUS 流式专用)。runtime 的 SubscribeToTask 流不含
-     * 带 {@code id} 的 task 面,客户端 SDK 据此帧的 {@code result.id} 绑定 taskRef 并结算
-     * {@code accepted()}。格式对齐 DIRECT 首帧(Feat-Func-011 §)与 A2A Task surface。
+     * 带 {@code id} 的 task 面,客户端 SDK 据此帧的 {@code result.task.id} 绑定 taskRef 并结算
+     * {@code accepted()}。格式对齐 A2A v1.0 spec({"task":{...}} 包装,同 runtime 直出格式)。
      *
      * @param taskId runtime 创建的真实 Task ID(来自 INVOCATION_ACCEPTED 投影)
      * @param contextId 会话上下文 ID
      * @return JSON-RPC task 面帧字符串
      */
     private static String acceptTaskFrame(String taskId, String contextId) {
-        return "{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"task\",\"id\":\""
+        return "{\"jsonrpc\":\"2.0\",\"result\":{\"task\":{\"id\":\""
                 + (taskId != null ? taskId : "")
                 + "\",\"contextId\":\""
                 + (contextId != null ? contextId : "")
-                + "\",\"status\":{\"state\":\"working\"}}}";
+                + "\",\"status\":{\"state\":\"working\"}}}}";
     }
 
     /**
