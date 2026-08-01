@@ -18,6 +18,9 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Gateway-side projection feed backed by the agent-bus SDK {@code responseConsumer}
@@ -26,12 +29,12 @@ import java.util.Optional;
  * maps the descriptor to {@link ProjectionEvent}, and commits
  * (FEAT-012 §4.5 I-04 inbound + §4.6 fold).
  *
- * <p>Single-request model (mirrors the relay's {@code GatewayRuntimeService.acceptWindow}):
- * each {@link #poll} pulls one message from the shared consumer; a non-matching message is
- * committed-and-skipped. Concurrent multi-request projection routing is a follow-up (L2 §0.6:
- * 730 is single-process in-memory). The SDK {@code poll} blocks up to
- * {@code poll-wait-millis} so the {@code BusForwarder} wait loop does not busy-spin
- * (FEAT-013 §5.2).
+ * <p>Concurrent multi-request model: each {@link #poll} first drains this correlationId's
+ * staging queue, then pulls one message from the shared consumer. A non-matching message is
+ * committed (broker advances) and staged under its own correlationId for the owning request
+ * to drain — concurrent requests cannot consume-and-drop each other's projections. The SDK
+ * {@code poll} blocks up to {@code poll-wait-millis} so the {@code BusForwarder} wait loop
+ * does not busy-spin (FEAT-013 §5.2).
  *
  * <p>Subscribes to the INVOCATION_* family ONLY — A2A_CALL_* (FEAT-014) folding is the caller
  * runtime's job (FEAT-005), not the gateway's.
@@ -57,6 +60,17 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
     private volatile boolean running = false;
 
     /**
+     * Per-correlationId staging queues for concurrent multi-request projection routing.
+     * A polled message whose correlationId does not match the polling request is committed
+     * (so the broker advances) and staged here under its own correlationId; the owning
+     * request's next {@link #poll} drains its queue first before hitting the broker again.
+     * This prevents concurrent requests from consuming-and-dropping each other's projections
+     * (the prior single-request model committed-and-skipped non-matching messages, which
+     * permanently lost them to the owning request).
+     */
+    private final ConcurrentHashMap<String, Queue<ProjectionEvent>> stagingByCorrId = new ConcurrentHashMap<>();
+
+    /**
      * Creates a feed over the given response consumer.
      *
      * @param consumer SDK response-consumer port (suffix {@code resp_out})
@@ -80,6 +94,21 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
 
     @Override
     public Optional<ProjectionEvent> poll(String correlationId) {
+        // 1) Drain this correlationId's staging queue first (concurrent routing: a prior poll by
+        //    another request may have committed + staged a projection belonging to this corrId).
+        Queue<ProjectionEvent> staged = stagingByCorrId.get(correlationId);
+        if (staged != null) {
+            ProjectionEvent head = staged.poll();
+            if (head != null) {
+                log.info("POLL staged-hit corrId={} eventType={} taskId={} bodyPresent={}",
+                        correlationId, head.eventType(), head.taskId(), head.body() != null);
+                if (staged.isEmpty()) {
+                    stagingByCorrId.remove(correlationId, staged);
+                }
+                return Optional.of(head);
+            }
+        }
+        // 2) Pull the next uncommitted message from the shared broker consumer.
         Optional<BrokerInboundMessage> polled = consumer.poll(System.currentTimeMillis());
         if (polled.isEmpty()) {
             return Optional.empty();
@@ -95,16 +124,20 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
                 consumer.commit(m);
                 return Optional.empty();
             }
+            ProjectionEvent evt = map(m);
+            consumer.commit(m); // ack-after-consume: commit regardless of match (broker advances)
             if (!correlationId.equals(m.correlationId())) {
-                // non-matching: consume + skip (single-request model; concurrent routing is a follow-up)
-                log.info("skip non-matching corrId (wanted {} got {})", correlationId, m.correlationId());
-                consumer.commit(m);
+                // non-matching: commit + stage under the message's own corrId (do NOT drop — the
+                // owning request must be able to drain it from its staging queue).
+                stagingByCorrId
+                        .computeIfAbsent(m.correlationId(), k -> new ConcurrentLinkedQueue<>())
+                        .add(evt);
+                log.info("stage non-matching corrId={} (wanted {}) eventType={} stagedForOwner",
+                        m.correlationId(), correlationId, evt.eventType());
                 return Optional.empty();
             }
-            ProjectionEvent evt = map(m);
             log.info("MATCH corrId={} eventType={} taskId={} streamRef={} bodyPresent={}",
                     m.correlationId(), evt.eventType(), evt.taskId(), evt.streamRef(), evt.body() != null);
-            consumer.commit(m);
             return Optional.of(evt);
         } catch (IllegalArgumentException decodeFailure) {
             // a malformed projection must not wedge the wait loop; commit + drop so the broker advances
