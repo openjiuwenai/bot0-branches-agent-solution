@@ -14,7 +14,7 @@
 
     <properties>
         <agent-runtime-ext.java.release>17</agent-runtime-ext.java.release>
-        <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+        <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
         <event-bus.version>0.1.0</event-bus.version>
         <a2a-sdk.version>1.0.0.Final</a2a-sdk.version>
         <agentscope.version>2.0.0</agentscope.version>
@@ -100,7 +100,7 @@
             <dependency>
                 <groupId>com.openjiuwen</groupId>
                 <artifactId>agent-core-java</artifactId>
-                <version>0.1.13</version>
+                <version>0.1.14</version>
             </dependency>
             <dependency>
                 <groupId>io.agentscope</groupId>
