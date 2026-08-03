@@ -4,7 +4,7 @@ server:
 openjiuwen:
   service:
     versatile:
-      url-template: http://versatile-host:3001/v1/{project_id}/agents/agent_L1/conversations/{conversation_id}
+      url-template: ${VERSATILE_URL_TEMPLATE:}
       timeout: 30s
       headers-template:
         content-type: application/json
@@ -61,8 +61,8 @@ openjiuwen:
 
     a2a-gateway:
       enabled: true
-      base-url: https://gateway.example.com
-      token: ${A2A_GATEWAY_TOKEN:dev-token}
+      base-url: ${A2A_GATEWAY_BASE_URL:}
+      token: ${A2A_GATEWAY_TOKEN:}
       version-node: ${A2A_GATEWAY_VERSION_NODE:v1}
       json-rpc-path: /a2a/{agentCard}
 

@@ -5,7 +5,7 @@ openjiuwen:
   example:
     intent-llm:
       enabled: true
-      base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+      base-url: ${LLM_BASE_URL:}
       api-key: ${LLM_API_KEY:}
       model: ${LLM_MODEL:gpt-4o-mini}
       timeout: 60s

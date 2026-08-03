@@ -149,7 +149,7 @@ public class CustomerAgentConfig {
             Object nameObj = inputs.get("name");
             String name = nameObj != null ? nameObj.toString() : "Guest";
             String message = "Hello, " + name + "! Welcome to our service.";
-            LOGGER.info("[LAYER2] greeting tool called: name={}", name);
+            LOGGER.info("[LAYER2] greeting tool called");
             return Map.of("greeting", message);
         });
     }
@@ -194,7 +194,7 @@ public class CustomerAgentConfig {
         @Override
         public void beforeModelCall(AgentCallbackContext ctx) {
             String sessionId = ctx.getSession() != null ? ctx.getSession().getSessionId() : "unknown";
-            LOGGER.info("[CUSTOMER-AUDIT] beforeModelCall: session={}", sessionId);
+            LOGGER.info("[CUSTOMER-AUDIT] beforeModelCall");
         }
 
         /**
@@ -206,7 +206,7 @@ public class CustomerAgentConfig {
         @Override
         public void afterModelCall(AgentCallbackContext ctx) {
             String sessionId = ctx.getSession() != null ? ctx.getSession().getSessionId() : "unknown";
-            LOGGER.info("[CUSTOMER-AUDIT] afterModelCall: session={}", sessionId);
+            LOGGER.info("[CUSTOMER-AUDIT] afterModelCall");
         }
     }
 }
