@@ -27,8 +27,7 @@ import java.util.function.LongSupplier;
  * <ul>
  *   <li>{@link #clearSession(String)} — called by the runtime's
  *       {@code resetConversation} flow — removes the cache entry.</li>
- *   <li>{@link RouteCache#invalidate(String)} is also called by
- *       {@code ReclassifyServeOrchestrator} when reclassify is detected.</li>
+ *   <li>TTL expiry evicts stale entries automatically.</li>
  * </ul>
  *
  * @since 2026-07-25
