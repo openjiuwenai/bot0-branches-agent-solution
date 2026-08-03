@@ -212,7 +212,7 @@ def _routed_agent_since(path, offset):
     only logs it when forwarding to L2: `A2AGateway call agent=<agentCard>`
     (gateway mode) or `LocalHttp call agent=<agentCard>` (local-http mode).
     This scans the log delta written during one request and returns the last
-    match (the final hop wins on reclassify retries), or None.
+    match (the final hop wins), or None.
     """
     try:
         size = os.path.getsize(path)
