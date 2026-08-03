@@ -3,4 +3,3 @@ com.openjiuwen.example.versatile.intent.routecache.RouteCacheAutoConfiguration
 com.openjiuwen.example.versatile.intent.intentllm.LlmIntentAutoConfiguration
 com.openjiuwen.example.versatile.intent.VersatileIntentAutoConfiguration
 com.openjiuwen.example.versatile.intent.a2a.A2AGatewayAutoConfiguration
-com.openjiuwen.example.versatile.intent.reclassify.ReclassifyAutoConfiguration
