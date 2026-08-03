@@ -26,7 +26,7 @@
   <properties>
     <java.version>17</java.version>
     <maven.compiler.release>17</maven.compiler.release>
-    <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+    <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
     <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
     <!-- 修复 Tomcat 15 个 CVE -->
     <tomcat.version>11.0.24</tomcat.version>
