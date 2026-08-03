@@ -13,6 +13,7 @@ import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.harness.rails.interrupt.AskUserRail;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -38,11 +39,15 @@ public final class SearchAgentFactory {
     private static final String ASK_USER_TOOL_ID = "search_agent_ask_user";
     private static final String ASK_USER_TOOL_NAME = "ask_user";
     private static final String ASK_USER_TOOL_DESCRIPTION = """
-            Ask the caller a single clarifying question when the incoming query is ambiguous
+            Ask the caller clarifying questions when the incoming query is ambiguous
             (e.g., "DeepSeek 官网报价" — which model? V2? R1? coder?). MUST be called BEFORE
             web_search whenever the vendor/model/version is not uniquely determined. Emits
             an interrupt via AskUserRail; the caller's next-turn text is delivered back as
-            the tool result.""";
+            the tool result.
+
+            Input contract: {"questions": [{"header": "<=12 chars", "question": "<full text>",
+            "options": [{"label": "<1-5 words>", "description": "<detail>"}, ...]}]}.
+            1-4 questions per call; each question must carry 2-4 options.""";
 
     private SearchAgentFactory() {
     }
@@ -111,19 +116,66 @@ public final class SearchAgentFactory {
                 .id(ASK_USER_TOOL_ID)
                 .name(ASK_USER_TOOL_NAME)
                 .description(ASK_USER_TOOL_DESCRIPTION)
-                .inputParams(Map.of(
-                        "type", "object",
-                        "properties", Map.of(
-                                "question", Map.of(
-                                        "type", "string",
-                                        "description", "The clarifying question to ask the caller.")),
-                        "required", List.of("question")))
+                .inputParams(buildAskUserSchema())
                 .build();
-        Tool askUserTool = new LocalFunction(askUserCard, inputs -> {
-            Object question = inputs != null ? inputs.get("question") : null;
-            return question != null ? String.valueOf(question) : "";
-        });
+        // AskUserRail short-circuits: interrupt on first call, reject on resume — this body never runs.
+        Tool askUserTool = new LocalFunction(askUserCard, inputs -> "");
         Runner.resourceMgr().addTool(askUserTool, agent.getCard().getId());
         agent.getAbilityManager().add(askUserCard);
+    }
+
+    /**
+     * Builds the JSON schema for the {@code ask_user} tool, aligned with
+     * AskUserRail.extractQuestions which reads the {@code questions} array
+     * from tool arguments.
+     *
+     * @return JSON schema map defining the {@code questions} parameter structure
+     */
+    private static Map<String, Object> buildAskUserSchema() {
+        Map<String, Object> optionProps = new LinkedHashMap<>();
+        optionProps.put("label", Map.of("type", "string",
+                "description", "The display text for this option (1-5 words)."));
+        optionProps.put("description", Map.of("type", "string",
+                "description", "Explanation of what this option means or what will happen if chosen."));
+
+        Map<String, Object> optionItem = new LinkedHashMap<>();
+        optionItem.put("type", "object");
+        optionItem.put("properties", optionProps);
+        optionItem.put("required", List.of("label", "description"));
+
+        Map<String, Object> options = new LinkedHashMap<>();
+        options.put("type", "array");
+        options.put("minItems", 2);
+        options.put("maxItems", 4);
+        options.put("description", "Available choices for this question (2-4 options).");
+        options.put("items", optionItem);
+
+        Map<String, Object> questionProps = new LinkedHashMap<>();
+        questionProps.put("header", Map.of("type", "string",
+                "description", "A short label or tag for the question (max 12 chars)."));
+        questionProps.put("question", Map.of("type", "string",
+                "description", "The complete question to ask the caller."));
+        questionProps.put("options", options);
+
+        Map<String, Object> questionItem = new LinkedHashMap<>();
+        questionItem.put("type", "object");
+        questionItem.put("properties", questionProps);
+        questionItem.put("required", List.of("header", "question", "options"));
+
+        Map<String, Object> questions = new LinkedHashMap<>();
+        questions.put("type", "array");
+        questions.put("minItems", 1);
+        questions.put("maxItems", 4);
+        questions.put("description", "Questions to ask the caller (1-4 questions).");
+        questions.put("items", questionItem);
+
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("questions", questions);
+
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("properties", properties);
+        schema.put("required", List.of("questions"));
+        return schema;
     }
 }

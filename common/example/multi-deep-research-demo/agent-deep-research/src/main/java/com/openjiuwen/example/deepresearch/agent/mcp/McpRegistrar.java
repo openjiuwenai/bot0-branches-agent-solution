@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.deepresearch;
+package com.openjiuwen.example.deepresearch.agent.mcp;
 
 import com.openjiuwen.core.common.exception.BaseError;
 import com.openjiuwen.core.common.logging.LoggerProtocol;

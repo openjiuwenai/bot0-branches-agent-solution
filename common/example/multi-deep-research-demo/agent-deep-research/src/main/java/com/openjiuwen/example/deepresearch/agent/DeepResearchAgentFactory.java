@@ -2,16 +2,17 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.deepresearch;
+package com.openjiuwen.example.deepresearch.agent;
 
 import com.openjiuwen.core.singleagent.agents.ReActAgentConfig;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
-import com.openjiuwen.example.deepresearch.rail.AutoPersistMemoryRail;
-import com.openjiuwen.example.deepresearch.rail.SandboxOps;
-import com.openjiuwen.example.deepresearch.rail.SandboxRail;
-import com.openjiuwen.example.deepresearch.rail.SkillObservationRail;
-import com.openjiuwen.example.deepresearch.rail.SkillReadFileRail;
-import com.openjiuwen.example.deepresearch.rail.UrlVerifyRail;
+import com.openjiuwen.example.deepresearch.agent.mcp.McpRegistrar;
+import com.openjiuwen.example.deepresearch.agent.port.SandboxOps;
+import com.openjiuwen.example.deepresearch.agent.rail.AutoPersistMemoryRail;
+import com.openjiuwen.example.deepresearch.agent.rail.SandboxRail;
+import com.openjiuwen.example.deepresearch.agent.rail.SkillObservationRail;
+import com.openjiuwen.example.deepresearch.agent.rail.SkillReadFileRail;
+import com.openjiuwen.example.deepresearch.agent.rail.UrlVerifyRail;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.factory.HarnessFactory;
 import com.openjiuwen.harness.rails.MemoryRail;
