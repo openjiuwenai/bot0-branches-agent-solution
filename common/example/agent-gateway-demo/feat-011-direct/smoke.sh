@@ -6,14 +6,16 @@
 #   国庆 RDC + 下游 Runtime → live 联调栈, OR ./stubs/downstream_stub.py
 #
 # Usage:
-#   GATEWAY_URL=http://127.0.0.1:8080 ./smoke.sh
-#   GATEWAY_URL=http://127.0.0.1:8080 ./smoke.sh --governance-only
-#   GATEWAY_URL=http://127.0.0.1:8080 ./smoke.sh --skip-forward   # alias of governance-only
+#   GATEWAY_URL=<gateway-url> GATEWAY_TOKEN=<token> ./smoke.sh
+#   GATEWAY_URL=<gateway-url> GATEWAY_TOKEN=<token> ./smoke.sh --governance-only
+#   GATEWAY_URL=<gateway-url> GATEWAY_TOKEN=<token> ./smoke.sh --skip-forward
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-GW="${GATEWAY_URL:-http://127.0.0.1:8080}"
-TOKEN="${GATEWAY_TOKEN:-mock-token}"
+: "${GATEWAY_URL:?GATEWAY_URL is required}"
+: "${GATEWAY_TOKEN:?GATEWAY_TOKEN is required}"
+GW="$GATEWAY_URL"
+TOKEN="$GATEWAY_TOKEN"
 GOV_ONLY=0
 for arg in "$@"; do
   case "$arg" in
@@ -68,7 +70,7 @@ assert_body() {
 
 assert_no_topology() {
   local name="$1" body_file="$2"
-  if grep -Eiq 'routeHandle|endpointUrl|http://127\.0\.0\.1:809[0-9]' "$body_file"; then
+  if grep -Eiq 'routeHandle|endpointUrl|127\.0\.0\.1:809[0-9]' "$body_file"; then
     echo "  FAIL  $name (topology leak)"; fail=$((fail + 1))
   else
     echo "  PASS  $name (no topology leak)"; pass=$((pass + 1))

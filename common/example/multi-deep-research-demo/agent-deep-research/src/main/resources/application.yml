@@ -31,14 +31,14 @@ openjiuwen:
           output-modes: ["text", "text/plain"]
       remote-agents:
         - name: search-agent
-          url: ${SEARCH_AGENT_URL:http://127.0.0.1:18091}
+          url: ${SEARCH_AGENT_URL:}
           streaming: true
         - name: verify-agent
-          url: ${VERIFY_AGENT_URL:http://127.0.0.1:18093}
+          url: ${VERIFY_AGENT_URL:}
           streaming: true
         # read-agent — uncomment when the respective runtime is up:
         # - name: read-agent
-        #   url: ${READ_AGENT_URL:http://127.0.0.1:18092}
+        #   url: ${READ_AGENT_URL:}
     external:
       sandbox:
         enabled: ${SANDBOX_ENABLED:false}
@@ -54,7 +54,7 @@ openjiuwen:
           enabled: true
         servers:
           - server-id: default
-            service-url: ${SANDBOX_URL:http://127.0.0.1:8321}
+            service-url: ${SANDBOX_URL:}
             sandbox-type: jiuwenbox
             launcher-type: pre_deploy
             on-stop: delete
@@ -63,17 +63,16 @@ openjiuwen:
     middleware:
       skillhub:
         enabled: ${SKILLHUB_ENABLED:false}
-        endpoint: ${SKILLHUB_ENDPOINT:https://swarmskills.openjiuwen.com}
+        endpoint: ${SKILLHUB_ENDPOINT:}
         auth-type: ${SKILLHUB_AUTH_TYPE:bearer}
         # SKILLHUB_ENCRYPTED_TOKEN: base64 密文（AES-GCM 模式，见 credential.mode 下方）
-        # SKILLHUB_TOKEN: 明文 token（Passthrough 兜底，向后兼容原有部署）
-        encrypted-token: ${SKILLHUB_ENCRYPTED_TOKEN:${SKILLHUB_TOKEN:}}
+        encrypted-token: ${SKILLHUB_ENCRYPTED_TOKEN:}
         local-dir: ${SKILLHUB_LOCAL_DIR:./target/skillhub-skills}
   demo:
     deep-research:
       provider: ${LLM_PROVIDER:OpenAI}
       api-key: ${LLM_API_KEY:}
-      api-base: ${LLM_API_BASE:https://api.deepseek.com}
+      api-base: ${LLM_API_BASE:}
       model-name: ${LLM_MODEL:deepseek-chat}
       ssl-verify: ${LLM_SSL_VERIFY:true}
       temperature: ${LLM_TEMPERATURE:0.2}
@@ -107,7 +106,7 @@ openjiuwen:
       # tools published by an MCP server should flow through DeepAgent.
       # syncMcpServersFromResourceMgr() → AbilityManager.mcpServers →
       # get exposed to the LLM in the tool list. Leave MCP_DOCSERVER_URL
-      # blank to disable (default). Set to e.g. http://127.0.0.1:18095/mcp
+      # blank to disable (default). Set it to the documented MCP endpoint
       # to attach the deep-research-doc-lib MCP server.
       mcp-servers:
         - name: ${MCP_DOCSERVER_NAME:deep-research-doc-lib}
