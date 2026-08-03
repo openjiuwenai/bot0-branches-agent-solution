@@ -15,7 +15,7 @@
     <packaging>jar</packaging>
 
     <name>agent-deep-research</name>
-    <description>Deep research agent — SDK (com.openjiuwen.example.deepresearch.*) + Spring Boot runtime (com.openjiuwen.example.deepresearch.runtime.*)</description>
+    <description>Deep research agent — library (com.openjiuwen.example.deepresearch.agent.*) + Spring Boot runtime (com.openjiuwen.example.deepresearch.runtime.*)</description>
 
     <dependencies>
         <dependency>

@@ -32,8 +32,10 @@ openjiuwen:
       remote-agents:
         - name: search-agent
           url: ${SEARCH_AGENT_URL:http://127.0.0.1:18091}
+          streaming: true
         - name: verify-agent
           url: ${VERIFY_AGENT_URL:http://127.0.0.1:18093}
+          streaming: true
         # read-agent — uncomment when the respective runtime is up:
         # - name: read-agent
         #   url: ${READ_AGENT_URL:http://127.0.0.1:18092}
@@ -137,3 +139,35 @@ logging:
   level:
     tool: WARN
     llm: WARN
+
+---
+# Optional profile: switch checkpointer from in_memory (default) to Redis.
+#
+# Usage on server (fat jar):
+#   REDIS_HOST=<host> REDIS_PORT=<port> REDIS_PASSWORD=<plaintext-or-blank> \
+#     java -jar agent-deep-research-*.jar \
+#       --spring.profiles.active=redis-checkpointer
+#
+# Notes:
+# - Default CredentialDecryptor is passthrough, so REDIS_PASSWORD can be plaintext for testing.
+# - agent-search ships a mirror profile with the same env vars, so both runtimes share one Redis instance.
+spring:
+  config:
+    activate:
+      on-profile: redis-checkpointer
+
+openjiuwen:
+  service:
+    middleware:
+      checkpointer:
+        type: redis
+        redis-ref: default
+        ttl-seconds: ${CHECKPOINTER_TTL_SECONDS:86400}
+      redis:
+        default:
+          type: ${REDIS_TYPE:standalone}
+          host: ${REDIS_HOST:127.0.0.1}
+          port: ${REDIS_PORT:6379}
+          database: ${REDIS_DB:0}
+          timeout-ms: ${REDIS_TIMEOUT_MS:3000}
+          encrypted-password: ${REDIS_PASSWORD:}
