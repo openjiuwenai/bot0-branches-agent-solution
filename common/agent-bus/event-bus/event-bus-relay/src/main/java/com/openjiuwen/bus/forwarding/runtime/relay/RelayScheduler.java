@@ -97,13 +97,13 @@ public class RelayScheduler implements SmartLifecycle {
     @Override
     public synchronized void stop() {
         running = false;
-        if (forwardFuture != null) {
-            forwardFuture.cancel(false);
-            forwardFuture = null;
-        }
-        if (responseFuture != null) {
-            responseFuture.cancel(false);
-            responseFuture = null;
+        ScheduledFuture<?>[] snapshot = {forwardFuture, responseFuture};
+        forwardFuture = null;
+        responseFuture = null;
+        for (ScheduledFuture<?> future : snapshot) {
+            if (future != null) {
+                future.cancel(false);
+            }
         }
     }
 
