@@ -1,6 +1,6 @@
 # Agent Runtime Ext Java
 
-`agent-runtime-ext-java` 为 OpenJiuwen Agent Runtime Java 提供协议入口和 Agent 框架扩展。本目录当前重点文档化六项能力：Custom REST、Versatile Adapter、AgentScope Adapter、AgentCore-ext 远端 A2A 工具、Client Tools 和 Agent Bus Consumer。
+`agent-runtime-ext-java` 为 OpenJiuwen Agent Runtime Java 提供协议入口和 Agent 框架扩展。本目录当前重点文档化六项能力：Custom REST、Versatile Adapter、AgentScope Adapter、AgentCore-ext 远端 A2A 工具、Client Tools 和 Agent Bus Consumer。除这六项外，`agent-service-adapters-agentcore-ext` 同一 artifact 还附带一项可选能力：SkillHub 中间件——Agent 启动阶段从外部 Skill Hub 下载、校验并注册 skill，默认不启用，详见 [skillhub-runtime-demo](../example/skillhub-runtime-demo/README.md)。
 
 这些模块建立在基础 Runtime 的 `AgentHandler`、Query 和 A2A 能力之上，不是独立运行的完整应用。接入前应先准备一个能够启动基础 Runtime 的 Spring Boot 宿主应用。
 
@@ -25,8 +25,8 @@ Custom REST 和 Agent Bus Consumer 是入站协议扩展；Versatile 是出站 H
 | `agent-service-app/agent-service-app-custom-rest` | 自定义 REST Controller、协议 SPI、A2A Bridge 和 SSE 传输 |
 | `agent-service-adapters/agent-service-adapters-versatile` | Versatile 请求构造、HTTP/SSE 调用和结果映射 |
 | `agent-service-adapters/agent-service-adapters-agentscope` | AgentScope ReAct/Harness Handler、事件与恢复映射 |
-| `agent-service-adapters/agent-service-adapters-agentcore-ext` | AgentCore 扩展 Handler、远端 A2A 工具、Client Tools；同模块还包含本轮未展开的 SkillHub 实现 |
-| `../agent-service-spec-ext` | 扩展公共 SPI；当前主要服务于本轮未展开的 SkillHub |
+| `agent-service-adapters/agent-service-adapters-agentcore-ext` | AgentCore 扩展 Handler、远端 A2A 工具、Client Tools；同模块还包含已实现的 SkillHub 中间件（可选能力，需显式启用） |
+| `../agent-service-spec-ext`                                  | 扩展公共 SPI；当前主要服务于 SkillHub（`SkillHubProvider`、`SkillHubConfig`、`SkillHubException` 等） |
 | `agent-service-bus-consumer` | Runtime 侧 Agent Bus 事件订阅、A2A 请求桥接、Task 状态投影和响应事件发布 |
 
 业务应用通常只引入所需的功能模块，不需要依赖聚合 POM。例如：
@@ -70,7 +70,7 @@ Custom REST 和 Agent Bus Consumer 是入站协议扩展；Versatile 是出站 H
 - Versatile 自动配置只绑定属性，不创建 `VersatileAgentHandler`。
 - AgentScope 没有自动配置和专属 YAML，宿主必须创建 Agent 和 Handler。
 - 本轮覆盖的 `AgentCoreExtAutoConfiguration` 只提供远端工具安装器，不创建
-  `JiuwenCoreAgentExtHandler`；同一 artifact 还包含本轮未展开的可选 SkillHub 自动配置。
+  `JiuwenCoreAgentExtHandler`；同一 artifact 还包含已实现的可选 SkillHub 中间件自动配置，默认不启用，仅在 `openjiuwen.service.middleware.skillhub.enabled=true` 且容器中存在 `SkillHubProvider` 时激活。
 - Client Tools 只在 `JiuwenCoreAgentExtHandler` 的单次调用期间生效，不是服务端持久工具注册。
 - Custom REST 的业务请求和响应 schema 由宿主 Adapter 定义；框架只固定传输、A2A Bridge、任务续接和错误边界。
 - Agent Bus Consumer 复用基础 Runtime 的 A2A 控制面和业务 `AgentHandler`，不创建独立 Agent，
