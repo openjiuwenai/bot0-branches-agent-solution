@@ -41,11 +41,18 @@ public class ExpenseReviewMainConfiguration {
     AgentHandler expenseReviewMainHandler(
             @Value("${expense-review-main.model-provider:openai}") String modelProvider,
             @Value("${expense-review-main.api-key:}") String apiKey,
-            @Value("${expense-review-main.api-base:http://localhost:4000/v1}") String apiBase,
+            @Value("${expense-review-main.api-base:}") String apiBase,
             @Value("${expense-review-main.model-name:gpt-4o-mini}") String modelName,
             @Value("${expense-review-main.ssl-verify:true}") boolean sslVerify) {
+        requireText(apiBase, "expense-review-main.api-base");
         return new JiuwenCoreAgentExtHandler(
                 buildReActAgent(modelProvider, apiKey, apiBase, modelName, sslVerify));
+    }
+
+    private static void requireText(String value, String property) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(property + " is required");
+        }
     }
 
     static ReActAgent buildReActAgent(String modelProvider, String apiKey, String apiBase,

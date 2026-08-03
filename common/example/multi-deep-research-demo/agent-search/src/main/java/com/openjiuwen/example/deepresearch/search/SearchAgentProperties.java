@@ -22,7 +22,7 @@ public class SearchAgentProperties {
 
     private String provider = "OpenAI";
     private String apiKey = "";
-    private String apiBase = "https://api.deepseek.com";
+    private String apiBase = "";
     private String modelName = "deepseek-chat";
     private boolean isSslVerify = true;
     private Double temperature = 0.2;

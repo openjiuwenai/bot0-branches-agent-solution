@@ -23,14 +23,14 @@ openjiuwen:
       default-output-modes: ["text"]
       remote-agents:
         - name: versatile-adapter
-          url: ${VERSATILE_ADAPTER_CARD_URL:http://127.0.0.1:18094}
+          url: ${VERSATILE_ADAPTER_CARD_URL:}
     custom-rest:
       query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
 
 plan-agent:
   model-provider: ${LLM_PROVIDER:openai}
   api-key: ${LLM_API_KEY:}
-  api-base: ${LLM_API_BASE:http://localhost:4000/v1}
+  api-base: ${LLM_API_BASE:}
   model-name: ${LLM_MODEL:gpt-4o-mini}
   ssl-verify: ${LLM_SSL_VERIFY:true}
   # System prompt resource. Default = SERIAL decomposition (exactly one versatile-adapter

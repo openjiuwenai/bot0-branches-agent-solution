@@ -44,11 +44,12 @@ public class ClientToolDeepAgentApplication {
     @Bean
     AgentHandler deepAgentHandler(
             @Value("${openjiuwen.demo.llm.api-key:}") String apiKey,
-            @Value("${openjiuwen.demo.llm.api-base:https://api.deepseek.com}") String apiBase,
+            @Value("${openjiuwen.demo.llm.api-base:}") String apiBase,
             @Value("${openjiuwen.demo.llm.provider:OpenAI}") String provider,
             @Value("${openjiuwen.demo.llm.model-name:deepseek-chat}") String modelName,
             @Value("${openjiuwen.demo.llm.workspace-path:target/client-tool-workspace}") String workspacePath) {
         requireText(apiKey, "openjiuwen.demo.llm.api-key");
+        requireText(apiBase, "openjiuwen.demo.llm.api-base");
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("model", modelName);
         model.put("temperature", 0.0);

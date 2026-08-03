@@ -18,10 +18,10 @@ server:
 gateway:
   path-mode: bus
   rdc:
-    base-url: ${GATEWAY_RDC_BASE_URL:http://127.0.0.1:8092}
+    base-url: ${GATEWAY_RDC_BASE_URL:}
   default-agent-id: ${GATEWAY_DEFAULT_AGENT_ID:travel-hotel}
   test-credential:
-    token: ${GATEWAY_TEST_TOKEN:mock-token}
+    token: ${GATEWAY_TEST_TOKEN:}
     principalId: ${GATEWAY_TEST_PRINCIPAL:test-principal}
     tenantId: ${GATEWAY_TEST_TENANT:tenant-1}
   bus:
@@ -36,7 +36,7 @@ gateway:
     stream-first-frame-deadline-ms: ${GATEWAY_BUS_STREAM_FIRST_FRAME_DEADLINE_MS:10000}
 
 agent-bus:
-  nameserver: ${AGENT_BUS_NAMESERVER:localhost:9876}
+  nameserver: ${AGENT_BUS_NAMESERVER:}
   namespace: ${AGENT_BUS_NAMESPACE:ascend-prod}
   producer-group: ${AGENT_BUS_PRODUCER_GROUP:gateway-producer}
   tenant: ${AGENT_BUS_TENANT:tenant-a}
@@ -51,9 +51,9 @@ agent-bus:
 
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agentbus}
+    url: ${SPRING_DATASOURCE_URL:}
     username: ${SPRING_DATASOURCE_USERNAME:agentbus}
-    password: ${SPRING_DATASOURCE_PASSWORD:agentbus}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
