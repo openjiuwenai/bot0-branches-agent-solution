@@ -7,6 +7,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.external;
 import com.openjiuwen.core.singleagent.BaseAgent;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+
 import org.a2aproject.sdk.spec.AgentCard;
 import org.a2aproject.sdk.spec.AgentSkill;
 import org.slf4j.Logger;
