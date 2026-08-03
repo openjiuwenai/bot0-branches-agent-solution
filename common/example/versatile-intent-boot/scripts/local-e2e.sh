@@ -2,7 +2,7 @@
 #
 # Local end-to-end runbook for the Versatile intent deployment module.
 # Implements L2 §5.5.3 方案 B (multi-port local runtime) with the
-# mock-versatile profile, and exercises all four L2 §6.2 scenarios.
+# mock-versatile profile, and exercises three of the L2 §6.2 scenarios.
 #
 # Architecture:
 #   - Each layer runs as a separate versatile-intent-boot process.
