@@ -4,14 +4,15 @@
 
 package com.openjiuwen.example.agentcoreext.deepa;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies Agent A runtime classpath isolation.

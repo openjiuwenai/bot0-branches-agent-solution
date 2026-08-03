@@ -4,10 +4,11 @@
 
 package com.openjiuwen.example.agentcoreext.deepb;
 
-import com.openjiuwen.service.spec.spi.AgentHandler;
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import com.openjiuwen.service.spec.spi.AgentHandler;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Verifies Agent B runtime classpath isolation.
