@@ -2,9 +2,9 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.deepresearch.runtime;
+package com.openjiuwen.example.deepresearch.runtime.config;
 
-import com.openjiuwen.example.deepresearch.DeepResearchProperties;
+import com.openjiuwen.example.deepresearch.agent.DeepResearchProperties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

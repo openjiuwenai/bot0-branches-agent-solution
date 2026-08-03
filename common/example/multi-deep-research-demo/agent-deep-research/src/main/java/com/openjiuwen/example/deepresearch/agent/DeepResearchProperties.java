@@ -2,7 +2,9 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.deepresearch;
+package com.openjiuwen.example.deepresearch.agent;
+
+import com.openjiuwen.example.deepresearch.agent.mcp.McpServerSetting;
 
 import java.time.Duration;
 import java.util.ArrayList;
