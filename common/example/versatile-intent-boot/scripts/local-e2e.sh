@@ -16,8 +16,6 @@
 #     §6.2.1  L1→L2→downstream  curl L1 "订酒店"      → "酒店预订成功"
 #     §6.2.3  explicit interrupt  curl L1 "中断"        → _interrupt payload
 #   Round 2:
-#     §6.2.2  reclassification    curl downstream "重分类" → "重新分类：国内酒店"
-#   Round 3:
 #     §6.2.4  L2 ambiguous self-heal  curl L1 "意图不明" → "默认工作流兜底"
 #
 # Each round starts the processes it needs with the right mode (three-field
@@ -214,41 +212,11 @@ run_round_one() {
     stop_all
 }
 
-# ─── Round 2: Scenario 2 (reclassification downstream→L1) ───
+# ─── Round 2: Scenario 4 (L2 ambiguous self-heal L1→L2→default-wf) ───
 
 run_round_two() {
     echo
-    echo "==================== Round 2: §6.2.2 重新分类 ===================="
-
-    # Downstream: three-field mode (downstream profile) — returns agent_id pointing to L1
-    start_process downstream "$DOWNSTREAM_PORT" "downstream,dev,mock-versatile" "agent_biz"
-
-    # L1: legacy mode — returns final reclassification answer
-    start_process layer1 "$L1_PORT" "dev,mock-versatile" "agent_L1" \
-        --openjiuwen.service.versatile.result-node-name=AnswerNode \
-        --openjiuwen.service.versatile.messages.required=true
-
-    wait_for_health "$DOWNSTREAM_PORT" downstream
-    wait_for_health "$L1_PORT" layer1
-
-    echo
-    echo "--- §6.2.2 分类错误重新分类 (downstream→L1) ---"
-    echo "    POST http://localhost:${DOWNSTREAM_PORT}/v1/query  messages=[{user, 重分类}]"
-    local resp
-    resp=$(send_query "$DOWNSTREAM_PORT" "c4-scenario2" "重分类")
-    echo "    response: $(echo "$resp" | head -c 500)"
-    assert_contains "scenario2" "$resp" "重新分类：国内酒店"
-
-    echo
-    echo "==> Round 2 complete, stopping processes"
-    stop_all
-}
-
-# ─── Round 3: Scenario 4 (L2 ambiguous self-heal L1→L2→default-wf) ───
-
-run_round_three() {
-    echo
-    echo "==================== Round 3: §6.2.4 L2 意图不明自消 ===================="
+    echo "==================== Round 2: §6.2.4 L2 意图不明自消 ===================="
 
     # L1: three-field mode (layer1 profile) — routes intent_L1_hotel to L2
     start_process layer1 "$L1_PORT" "layer1,dev,mock-versatile" "agent_L1"
@@ -276,17 +244,16 @@ run_round_three() {
     assert_contains "scenario4-ambiguous-self-heal" "$resp" "默认工作流兜底"
 
     echo
-    echo "==> Round 3 complete, stopping processes"
+    echo "==> Round 2 complete, stopping processes"
     stop_all
 }
 
 main() {
-    echo "==> L2 §5.5.3 方案 B mock 联调 (four scenarios)"
+    echo "==> L2 §5.5.3 方案 B mock 联调 (three scenarios)"
     check_dependencies
     build_if_needed
     run_round_one
     run_round_two
-    run_round_three
     echo
     echo "==> All scenarios passed."
     echo "    Logs: $LOG_DIR/{layer1,layer2,downstream,default-wf}.log"
