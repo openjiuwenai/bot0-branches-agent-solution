@@ -22,8 +22,9 @@
 
     <properties>
         <java.version>17</java.version>
-        <edp-agent-engine.version>0.1.0-SNAPSHOT</edp-agent-engine.version>
-        <agent-core-java.version>0.1.13</agent-core-java.version>
+        <edp-agent-engine.version>0.1.0</edp-agent-engine.version>
+        <agent-core-java.version>0.1.14</agent-core-java.version>
+        <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
     </properties>
 
     <dependencies>
@@ -32,13 +33,13 @@
         <!-- 前置条件：edp-agent-engine 及 OpenJiuwen 三件套已在本地仓库  -->
         <!-- ============================================================ -->
         <dependency>
-            <groupId>com.huawei.ascend</groupId>
+            <groupId>com.openjiuwen</groupId>
             <artifactId>edp-agent-engine</artifactId>
             <version>${edp-agent-engine.version}</version>
         </dependency>
 
         <!-- OpenJiuwen agent-core-java（提供 AgentRail/DeepAgentRail/Session 等 SPI） -->
-        <!-- 必须使用 JDK17 构建的 0.1.13，切勿改用旧的裸 0.1.12（部分仓库为缺包的旧构建），会导致编译失败 -->
+        <!-- 必须使用 JDK17 构建的 0.1.14，切勿改用旧的裸 0.1.12（部分仓库为缺包的旧构建），会导致编译失败 -->
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
@@ -49,7 +50,7 @@
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-app</artifactId>
-            <version>0.1.0</version>
+            <version>${agent-runtime-java.version}</version>
         </dependency>
 
         <!-- OpenJiuwen agent-service-adapters-agentcore-ext（扩展适配器） -->
@@ -63,7 +64,7 @@
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-service-spec</artifactId>
-            <version>0.1.0</version>
+            <version>${agent-runtime-java.version}</version>
         </dependency>
 
         <!-- Custom REST SPI — 提供 CustomRestProtocolAdapter 接口，用于 ABCDE 网关协议适配 -->
@@ -75,9 +76,9 @@
 
         <!-- Versatile 适配器 — 提供 call_versatile 工具，用于调用外部 Versatile 工作流（理财产品推荐等） -->
         <dependency>
-            <groupId>com.huawei.ascend</groupId>
+            <groupId>com.openjiuwen</groupId>
             <artifactId>adapter-versatile-agent-java</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>0.1.0</version>
         </dependency>
 
         <!-- Spring Boot Web -->

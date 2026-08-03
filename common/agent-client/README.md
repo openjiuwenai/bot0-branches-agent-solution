@@ -521,13 +521,13 @@ CredentialProvider dynamic = conversationId -> {
 | 鉴权 | 每个请求必须有 `Authorization: Bearer <非空>`，否则 401 `{"code":"AUTH_MISSING"}` |
 | 方法 | `SendStreamingMessage`（SSE）、`SendMessage`（单条 JSON）、`GetTask`（单条 JSON） |
 | 方法白名单 | 建议只放行上述三者；其余（`CancelTask` / `SubscribeToTask`）返回 `400 {"code":"VALIDATION_METHOD"}` |
-| 状态查询 | `GetTask`，参数是 `params.taskId`（**不是** A2A 别名 `params.id`） |
+| 状态查询 | `GetTask`，参数是 `params.id`（标准 A2A `TaskQueryParams.id`） |
 | 创建调用 | `params.message.taskId` 为空；按 `message.messageId` 幂等去重；读 `params.metadata.clientTools` 获取客户端工具清单 |
 | `agentId` | 可选（缺省路由到默认 Agent）；显式给出时不得为空串（否则 400 `VALIDATION_AGENT_ID`）；SDK 会把空白串归一化为 null |
-| 请求工具 | `INPUT_REQUIRED` 状态，工具调用意图放在 `result.status.message.metadata._interrupt`（`_interrupt_kind=client_tool`，含 `toolCallId`/`toolName`/`arguments`） |
-| 续传 | 客户端对既有 `taskId` 再发**同步** `SendMessage`，正文为一个 text part。**v0730 不在 wire 上回传 `toolCallId`**：同一时刻只有单个 pending，由 runtime 自动关联 |
+| 请求工具 | `INPUT_REQUIRED` 状态，工具调用意图放在 `result.task.status.message.metadata._interrupt`（非流式）或 `result.statusUpdate.status.message.metadata._interrupt`（流式），含 `_interrupt_kind=client_tool`、`toolCallId`/`toolName`/`arguments` |
+| 续传 | 客户端对既有 `taskId` 再发**同步** `SendMessage`，正文为一个 text part。单一 pending 场景不上 wire 回传 `toolCallId`，由 runtime 自动关联；**多并行工具**场景须在 `parts[].metadata.toolCallId` 定向，否则返回 `REMOTE_TOOL_INPUT_TARGET_REQUIRED` |
 | 中断即关流 | 投递 `INPUT_REQUIRED` 后关闭当前 SSE 流，等客户端续传后再开下一段。这是**约定行为**，客户端不会当异常 |
-| 完成 | `TASK_STATE_COMPLETED`，输出文本放在 artifact 或 `status.message.parts` |
+| 完成 | `TASK_STATE_COMPLETED`，输出文本放在 `result.artifactUpdate.artifact.parts[].text` 或 `result.statusUpdate.status.message.parts[].text` |
 
 详细的对接调试手册见 [`../example/agent-client-demo/Guidance4GatewayTest.md`](../example/agent-client-demo/Guidance4GatewayTest.md)。
 
@@ -537,10 +537,10 @@ CredentialProvider dynamic = conversationId -> {
 |----------|--------|---------------|
 | `conversationId` | 业务应用 | `message.contextId` |
 | `invocationId` / `invocationRef` | 客户端 | `message.messageId` |
-| `taskId` / `taskRef` | runtime | Task/事件的 `id` / `taskId` |
+| `taskId` / `taskRef` | runtime | 非流式 `result.task.id`；流式 `result.statusUpdate.taskId` |
 | ToolView | 客户端 | `params.metadata.clientTools[{name,description,inputSchema}]`（`name = toolId`） |
-| 工具调用意图 | runtime | `metadata._interrupt`（`kind=client_tool`/`user_input`） |
-| 工具结果续传 | 客户端 | 对既有 `taskId` 的 `message/send`，结果渲染为 `TextPart` |
+| 工具调用意图 | runtime | `status.message.metadata._interrupt`（`_interrupt_kind=client_tool`/`user_input`） |
+| 工具结果续传 | 客户端 | 对既有 `taskId` 的 `SendMessage`，结果渲染为 `TextPart`（`{text}`）；多工具定向时附 `parts[].metadata.toolCallId` |
 | 业务附加属性 | 客户端 | `params.metadata.attributes`（字符串键值对，为空时整段省略） |
 
 ---

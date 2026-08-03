@@ -16,35 +16,31 @@ import java.util.Map;
  * <p>Library tier: depends only on {@code agent-core-java}, no Spring annotations. The
  * runtime wrapper subclasses this to attach {@code @ConfigurationProperties}.
  *
+ * <p>The default system prompt is composed from {@code SYSTEM_PROMPT_HEAD} + a tool-call
+ * rule + {@code SYSTEM_PROMPT_TAIL}. The rule section is selected by
+ * {@code search-execution-mode}: {@code serial} (default; at most one remote A2A call
+ * per turn) or {@code parallel} (COMPARISON mode batches independent per-vendor
+ * search-agent calls into one turn, requiring runtime parallel dispatch). The runtime's
+ * {@code parallel-search} profile activates the parallel variant; an explicit
+ * {@code system-prompt} value always overrides the composition.
+ *
  * @since 2026-07-06
  */
 public class DeepResearchProperties {
-    private String agentId = "deep-research-agent";
-    private String agentName = "DeepResearchAgent";
-    private String agentDescription = "Deep research agent comparing domestic LLM API offerings";
-    private String sysOperationId = "deep-research";
+    /**
+     * Serial search execution mode: at most one remote A2A tool call per assistant turn
+     * (default; matches the pre-parallel-dispatch runtime).
+     */
+    public static final String SEARCH_MODE_SERIAL = "serial";
 
-    private String provider = "OpenAI";
-    private String apiKey = "";
-    private String apiBase = "https://api.deepseek.com";
-    private String modelName = "deepseek-chat";
-    private boolean isSslVerify = true;
-    private Double temperature = 0.2;
-    private Double topP = 0.8;
-    private Duration timeout = Duration.ofSeconds(120);
+    /**
+     * Parallel search execution mode: COMPARISON mode batches independent per-(vendor,
+     * dimension) search-agent calls into one turn. Requires runtime parallel dispatch
+     * (multiple remote A2A calls per turn correlated via {@code parentContextId}).
+     */
+    public static final String SEARCH_MODE_PARALLEL = "parallel";
 
-    private Duration completionTimeout = Duration.ofSeconds(600);
-    private int maxIterations = 5;
-    private boolean isEnableTaskLoop = true;
-    private String workspacePath = "target/deep-research-workspace";
-    private String workspaceLanguage = "zh-CN";
-
-    private List<String> skillDirectories = new ArrayList<>();
-    private String skillMode = "all";
-    private List<String> extraReadableRoots = new ArrayList<>();
-    private List<McpServerSetting> mcpServers = new ArrayList<>();
-
-    private String systemPrompt = """
+    private static final String SYSTEM_PROMPT_HEAD = """
             You are a Deep Research Agent specialised in comparing domestic LLM API offerings.
             Research domain: 国内主流大模型 API 对比 (as of 2026 Q2).
             Dimensions: pricing / context_length / rate_limit / function_calling / specialty.
@@ -75,6 +71,13 @@ public class DeepResearchProperties {
               RIGHT call: search-agent({"remoteInput": "你好,帮我查一下DeepSeek官方定价，请给出官网链接"})
             Do NOT wrap the query in extra JSON, do NOT add other fields, do NOT translate.
 
+            """;
+
+    /**
+     * Tool-call rule composed into the system prompt when
+     * {@link #getSearchExecutionMode()} is {@link #SEARCH_MODE_SERIAL} (default).
+     */
+    private static final String TOOL_CALL_RULE_SERIAL = """
             CRITICAL — Tool call serialisation:
               Issue AT MOST ONE tool call per assistant turn. Wait for the tool result to come back
               before issuing the next tool call. Do NOT emit multiple tool_call entries in the same
@@ -82,6 +85,42 @@ public class DeepResearchProperties {
               be silently dropped. If you need data from multiple sources, call the tool sequentially
               across multiple turns, not in parallel within one turn.
 
+            """;
+
+    /**
+     * Tool-call rule composed into the system prompt when
+     * {@link #getSearchExecutionMode()} is {@link #SEARCH_MODE_PARALLEL} (the
+     * {@code parallel-search} profile). Only the multi-vendor search batch is
+     * parallelised; every other tool stays serial with the ordering rules in
+     * {@link #SYSTEM_PROMPT_TAIL}.
+     */
+    private static final String TOOL_CALL_RULE_PARALLEL = """
+            CRITICAL — Parallel search (parallel-search profile):
+              The runtime now processes MULTIPLE remote A2A tool calls emitted in the SAME
+              assistant turn: it dispatches them concurrently, correlating them via
+              parentContextId while isolating each child call in its own conversation.
+              In COMPARISON mode the per-(vendor, dimension) search-agent cells are
+              INDEPENDENT of each other — batch them into ONE turn instead of serialising.
+              Rules:
+                - COMPARISON mode only: emit ALL independent search-agent calls in the same
+                  response (e.g. 3 vendors × pricing → three search-agent calls in ONE turn).
+                  For these batched cells ONLY, the byte-for-byte remoteInput rule above is
+                  RELAXED: each batched call MUST carry a vendor/dimension-scoped query
+                  derived from the user text (e.g. "DeepSeek V4 Pro 定价"), because parallel
+                  cells need distinct queries — identical remoteInput would make every call
+                  fetch the same result.
+                - SINGLE mode: unchanged — exactly ONE search-agent call, byte-for-byte
+                  verbatim forwarding.
+                - Non-search tools stay SERIAL, one call per turn, and keep every ordering
+                  rule below: render_* before verify_urls, verify-agent exactly once after
+                  render_comparison_table, and both hard budget rules.
+                - Never batch duplicate cells: each (vendor, dimension) is searched AT MOST
+                  ONCE. Do NOT mix a parallel search batch with any non-search tool call in
+                  the same response.
+
+            """;
+
+    private static final String SYSTEM_PROMPT_TAIL = """
             Available sub-agents (when injected):
               - search-agent: runs one web search and returns a JSON object
                   {"results": [{"url","title","snippet","source_kind","score"}, ...]}
@@ -258,6 +297,47 @@ public class DeepResearchProperties {
                 not been called yet, ship the report with only the table. The final answer
                 MUST be delivered — never end a run mid-tool-call.
             """;
+
+    private String agentId = "deep-research-agent";
+    private String agentName = "DeepResearchAgent";
+    private String agentDescription = "Deep research agent comparing domestic LLM API offerings";
+    private String sysOperationId = "deep-research";
+
+    private String provider = "OpenAI";
+    private String apiKey = "";
+    private String apiBase = "https://api.deepseek.com";
+    private String modelName = "deepseek-chat";
+    private boolean isSslVerify = true;
+    private Double temperature = 0.2;
+    private Double topP = 0.8;
+    private Duration timeout = Duration.ofSeconds(120);
+
+    private Duration completionTimeout = Duration.ofSeconds(600);
+    private int maxIterations = 5;
+    private boolean isEnableTaskLoop = true;
+    private String workspacePath = "target/deep-research-workspace";
+    private String workspaceLanguage = "zh-CN";
+
+    private List<String> skillDirectories = new ArrayList<>();
+    private String skillMode = "all";
+    private List<String> extraReadableRoots = new ArrayList<>();
+    private List<McpServerSetting> mcpServers = new ArrayList<>();
+
+    /**
+     * Search execution mode selecting which tool-call rule section is composed into
+     * the default system prompt: {@value #SEARCH_MODE_SERIAL} (default) or
+     * {@value #SEARCH_MODE_PARALLEL}. Bound from
+     * {@code openjiuwen.demo.deep-research.search-execution-mode}; the
+     * {@code parallel-search} profile flips it to {@code parallel}.
+     */
+    private String searchExecutionMode = SEARCH_MODE_SERIAL;
+
+    /**
+     * Explicit system-prompt override. When set to a non-blank value (e.g. via yaml
+     * {@code system-prompt}), it replaces the composed default entirely, ignoring
+     * {@link #searchExecutionMode}. Blank / unset → compose HEAD + rule + TAIL.
+     */
+    private String systemPrompt;
 
     /**
      * Builds the model-tier config map consumed by core-java's LLM client (model name + sampling).
@@ -698,20 +778,52 @@ public class DeepResearchProperties {
     }
 
     /**
-     * Gets the DeepAgent system prompt.
+     * Gets the DeepAgent system prompt. An explicit value set via
+     * {@link #setSystemPrompt(String)} (e.g. yaml {@code system-prompt}) wins;
+     * otherwise the prompt is composed as {@code SYSTEM_PROMPT_HEAD} + the tool-call
+     * rule selected by {@link #getSearchExecutionMode()} + {@code SYSTEM_PROMPT_TAIL}.
+     * The composed serial prompt is byte-identical to the prompt shipped before the
+     * split, so the default behaviour is unchanged.
      *
      * @return the DeepAgent system prompt
      */
     public String getSystemPrompt() {
-        return systemPrompt;
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            return systemPrompt;
+        }
+        String rule = SEARCH_MODE_PARALLEL.equalsIgnoreCase(searchExecutionMode)
+                ? TOOL_CALL_RULE_PARALLEL
+                : TOOL_CALL_RULE_SERIAL;
+        return SYSTEM_PROMPT_HEAD + rule + SYSTEM_PROMPT_TAIL;
     }
 
     /**
-     * Sets the DeepAgent system prompt.
+     * Sets an explicit DeepAgent system prompt, replacing the composed default
+     * entirely (and ignoring {@code search-execution-mode}).
      *
-     * @param systemPrompt the DeepAgent system prompt
+     * @param systemPrompt the DeepAgent system prompt override
      */
     public void setSystemPrompt(String systemPrompt) {
         this.systemPrompt = systemPrompt;
+    }
+
+    /**
+     * Gets the search execution mode ({@value #SEARCH_MODE_SERIAL} or
+     * {@value #SEARCH_MODE_PARALLEL}).
+     *
+     * @return the search execution mode
+     */
+    public String getSearchExecutionMode() {
+        return searchExecutionMode;
+    }
+
+    /**
+     * Sets the search execution mode. Any value other than
+     * {@value #SEARCH_MODE_PARALLEL} (case-insensitive) falls back to the serial rule.
+     *
+     * @param searchExecutionMode the search execution mode
+     */
+    public void setSearchExecutionMode(String searchExecutionMode) {
+        this.searchExecutionMode = searchExecutionMode;
     }
 }

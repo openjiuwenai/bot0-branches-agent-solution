@@ -1,0 +1,52 @@
+server:
+  port: 8086
+
+openjiuwen:
+  service:
+    versatile:
+      url-template: http://versatile-host:3001/v1/{project_id}/agents/agent_L2_flight/conversations/{conversation_id}
+      timeout: 30s
+      headers-template:
+        content-type: application/json
+        stream: "true"
+      result-node-name: AnswerNode
+
+      intents:
+        - id: intent_L2_flight_domestic
+          name: 国内机票
+
+      messages:
+        source: serve_request_messages
+        required: true
+
+      intent-agent-mapping:
+        intent_L2_flight_domestic:
+          - agent-card: agent_card_biz_flight_domestic
+      intent-agent-mapping-strategy: first
+
+      result-extractions:
+        - match: response_content
+          get: /custom_rsp_data/data/response_content
+        - match: intent_id
+          get: /custom_rsp_data/data/intent_id
+        - match: agent_id
+          get: /custom_rsp_data/data/agent_id
+
+      ambiguous-intent-id: "1"
+      default-workflow:
+        agent-card:
+
+      route-cache:
+        enabled: false
+
+    a2a-gateway:
+      enabled: true
+      base-url: https://gateway.example.com
+      token: ${A2A_GATEWAY_TOKEN:dev-token}
+      version-node: ${A2A_GATEWAY_VERSION_NODE:v1}
+      json-rpc-path: /a2a/{agentCard}
+
+  example:
+    direct-chain:
+      enabled: false
+      a2a-forward-agent-cards: []

@@ -88,7 +88,7 @@ final class A2aJsonCodec {
         }
         ArrayNode parts = message.putArray("parts");
         ObjectNode textPart = parts.addObject();
-        textPart.put("kind", "text");
+        // 标准 A2A Part 按字段名联合区分（TextPart = {text}），不写 kind 字段（对齐 agent-runtime-java）。
         textPart.put("text", cmd.input());
         fillMetadata(params, cmd.agentId(), cmd.clientTools(), cmd.attributes());
         return root;
@@ -107,7 +107,7 @@ final class A2aJsonCodec {
         ObjectNode params = root.putObject("params");
         ObjectNode message = params.putObject("message");
         message.put("role", "ROLE_USER");
-        // 每次续跑用新的 messageId；taskId 关联既有 Task。toolCallId 不上 wire，由 runtime 按单一 pending 自动关联。
+        // 每次续跑用新的 messageId；taskId 关联既有 Task。toolCallId 在多并行工具场景下写入 part.metadata（见下）。
         message.put("messageId", cmd.messageId());
         message.put("taskId", cmd.taskRef());
         // 续跑稳定带 contextId（=原 conversationId，Feat-Func-006 §3.5 ③④ / feat-011 §4.9 AC-5 / §6.9 GW-S4-4）。
@@ -116,8 +116,15 @@ final class A2aJsonCodec {
         }
         ArrayNode parts = message.putArray("parts");
         ObjectNode textPart = parts.addObject();
-        textPart.put("kind", "text");
+        // 标准 A2A Part 按字段名联合区分（TextPart = {text}），不写 kind 字段（对齐 agent-runtime-java）。
         textPart.put("text", cmd.observationText());
+        // 多并行工具定向恢复：业务层填充 toolCallId 时写入 part.metadata.toolCallId（agent-runtime-java
+        // 要求多工具场景必须为每个 part 指定 toolCallId，否则返回 REMOTE_TOOL_INPUT_TARGET_REQUIRED）。
+        // 单一 pending 场景 toolCallId 为 null，保持现状由 runtime 自动关联。
+        if (cmd.toolCallId() != null && !cmd.toolCallId().isBlank()) {
+            ObjectNode partMeta = textPart.putObject("metadata");
+            partMeta.put("toolCallId", cmd.toolCallId());
+        }
         // 续跑不重复声明 clientTools（仅创建时声明），metadata 保持空对象以对齐 A2A 结构。
         params.putObject("metadata");
         return root;
@@ -158,16 +165,17 @@ final class A2aJsonCodec {
     /**
      * 状态查询请求。
      *
-     * <p>方法名与参数位置须与网关契约严格一致：PascalCase 的 {@code GetTask} + {@code params.taskId}。
-     * 曾误用 A2A 别名 {@code tasks/get} 与 {@code params.id}，会被网关方法白名单拒为
-     * {@code 400 VALIDATION_METHOD}。
+     * <p>方法名与参数位置须与网关契约严格一致：PascalCase 的 {@code GetTask} + {@code params.id}
+     * （标准 A2A {@code TaskQueryParams.id}）。agent-runtime-java 的
+     * {@code A2aJsonRpcParamsParser.parseTaskQueryParams} 显式校验 {@code params.id} 非空，
+     * 缺失会返回 {@code INVALID_PARAMS}。
      *
      * @param taskRef 任务引用
      * @return get 请求
      */
     ObjectNode buildGet(String taskRef) {
         ObjectNode root = newRequest("GetTask");
-        root.putObject("params").put("taskId", taskRef);
+        root.putObject("params").put("id", taskRef);
         return root;
     }
 
@@ -235,21 +243,61 @@ final class A2aJsonCodec {
         if (result == null || result.isNull()) {
             return Optional.empty();
         }
-        String kind = result.path("kind").asText("");
-        String taskId = firstText(result, "id", "taskId").orElse(null);
-        String contextId = result.path("contextId").asText(null);
+        // agent-runtime-java 的 result 用成员名区分事件类型（对齐 documents/zh/2.开发指南/对话接口输入与输出.md）：
+        //   流式：result.statusUpdate / result.artifactUpdate
+        //   非流式：result.task（完整 Task 对象，status 位于 task.status）
+        //   即时消息：result.message
+        // 兼容回退：旧 mock 形态用 result.kind 字段（status-update / artifact-update）。
+        String legacyKind = result.path("kind").asText("");
 
-        if ("artifact-update".equals(kind)) {
-            String text = collectArtifactText(result.path("artifact")).orElse(null);
+        if (result.has("artifactUpdate") || "artifact-update".equals(legacyKind)) {
+            JsonNode art = result.has("artifactUpdate")
+                    ? result.path("artifactUpdate").path("artifact")
+                    : result.path("artifact");
+            String text = collectArtifactText(art).orElse(null);
+            String taskId = result.has("artifactUpdate")
+                    ? result.path("artifactUpdate").path("taskId").asText(null)
+                    : firstText(result, "id", "taskId").orElse(null);
+            String contextId = result.has("artifactUpdate")
+                    ? result.path("artifactUpdate").path("contextId").asText(null)
+                    : result.path("contextId").asText(null);
             return Optional.of(new Frame(taskId, contextId, null, null, text, null, null));
         }
 
-        JsonNode status = result.path("status");
+        // status 节点定位：流式在 result.statusUpdate.status；非流式在 result.task.status；
+        // 旧 mock 兼容在 result.status。
+        JsonNode statusUpdate = result.path("statusUpdate");
+        JsonNode taskNode = result.path("task");
+        boolean isStatusUpdate = !statusUpdate.isMissingNode() && !statusUpdate.isNull();
+        boolean isTask = !taskNode.isMissingNode() && !taskNode.isNull();
+
+        JsonNode status;
+        String taskId;
+        String contextId;
+        if (isStatusUpdate) {
+            status = statusUpdate.path("status");
+            taskId = statusUpdate.path("taskId").asText(null);
+            contextId = statusUpdate.path("contextId").asText(null);
+        } else if (isTask) {
+            status = taskNode.path("status");
+            taskId = taskNode.path("id").asText(null);
+            contextId = taskNode.path("contextId").asText(null);
+        } else {
+            // 旧 mock 兼容：result 直接含 status / id / taskId / contextId。
+            status = result.path("status");
+            taskId = firstText(result, "id", "taskId").orElse(null);
+            contextId = result.path("contextId").asText(null);
+        }
+
         String stateStr = status.path("state").asText(null);
         TaskState state = mapState(stateStr).orElse(null);
         String text = collectMessageText(status.path("message")).orElse(null);
         Interrupt interrupt = parseInterrupt(result, status).orElse(null);
         String errorCode = result.path("metadata").path("errorCode").asText(null);
+        if (errorCode == null && isTask) {
+            // 非流式 task 形态的错误码可能在 task.metadata。
+            errorCode = taskNode.path("metadata").path("errorCode").asText(null);
+        }
         return Optional.of(new Frame(taskId, contextId, state, interrupt, text, errorCode, text));
     }
 
@@ -335,7 +383,9 @@ final class A2aJsonCodec {
         }
         StringBuilder sb = new StringBuilder();
         for (JsonNode p : parts) {
-            if ("text".equals(p.path("kind").asText(""))) {
+            // 标准 A2A Part 按字段名联合区分：TextPart = {text}，DataPart = {data}，FilePart = {file}。
+            // 兼容旧 mock 形态：{kind:"text", text:"..."}。
+            if (p.has("text")) {
                 sb.append(p.path("text").asText(""));
             }
         }

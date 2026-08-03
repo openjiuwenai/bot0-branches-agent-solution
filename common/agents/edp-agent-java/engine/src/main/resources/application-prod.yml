@@ -5,5 +5,5 @@ spring:
 
 logging:
   level:
-    com.huawei.ascend.edp: WARN
+    com.openjiuwen.edp: WARN
     com.openjiuwen: WARN

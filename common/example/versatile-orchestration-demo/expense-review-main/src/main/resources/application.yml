@@ -11,10 +11,12 @@ openjiuwen:
   service:
     handler: agentcore-ext
     agent-id: expense-review-main
+    llm:
+      timeout: 120
     query:
       legacy-path-enabled: true
       webflux:
-        enabled: false
+        enabled: true
     a2a:
       agent-description: "报销审核主控 ReActAgent — 通过 LLM 决策调用 Expense Review Workflow Agent"
       streaming: true

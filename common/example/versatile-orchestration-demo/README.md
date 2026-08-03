@@ -316,6 +316,34 @@ data: {"jsonrpc":"2.0","id":null,"result":{"artifactUpdate":{"taskId":"...","art
 
 若 `plan-agent`（或下游某一跳）返回 `input-required`，`gateway` 记下 `(conversation_id, taskId)` 并**吞掉该状态帧**（调用方看不到 `taskId`）。之后任何携带**相同 `conversation_id`** 的请求，网关都会把缓存的 `taskId` 回灌进转发报文，使 `plan-agent` 视其为续传；任一终态返回时清除缓存的 `taskId`。
 
+### 并行转账 profile（parallel-transfer）
+
+默认 profile 下 `plan-agent` 严格串行（每轮恰好一次 `versatile-adapter`）。`parallel-transfer` profile 把系统提示换为并行拆解版，适用于「一条复合指令里含多笔**互不依赖**的转账」的场景。前提：agent-runtime 已支持同一轮内多个工具调用的并行分发（经 `parentContextId` 关联、各子调用隔离在独立 conversation）。
+
+**执行规则：**
+
+- **Phase 1（串行）**：若指令含查余额，余额查询优先、每轮一次、串行等待结果；余额查询绝不与转账同轮。
+- **Phase 2（并行）**：所有余额查询返回后，把所有**互不依赖**的转账在**同一轮**全部发出（同一 response 内多个 `versatile-adapter` 调用），由运行时并行分发。若指令不含查余额，直接进入 Phase 2。
+- **数据依赖回退串行**：若某笔转账的金额依赖尚未可知的值（如「转余额的一半」），该笔须等依赖值返回后再发，不与已知明细的转账混批。
+
+**激活方式（在 plan-agent 上）：**
+
+```bash
+export SPRING_PROFILES_ACTIVE=parallel-transfer
+java -jar plan-agent/target/versatile-orch-demo-plan-agent-0.2.0-SNAPSHOT.jar
+```
+
+profile 内部只做两件事：把 `plan-agent.prompt-resource` 指向 `prompts/plan-agent-system-prompt-parallel.md`，并把 `plan-agent.max-tokens` 提到 `1024`（并行轮一次发出多个工具调用，需更大输出预算）。默认串行行为不受影响。
+
+**报文示例（直连 plan-agent，A2A）：**「先查询尾号为4241的银行卡余额，再转账5元给李四、10元给王五」
+
+- 第 1 轮（Phase 1）：`versatile-adapter` ×1 → `{"query":"查询尾号为4241的银行卡余额","intent":"查询账户余额"}`，等待余额返回。
+- 第 2 轮（Phase 2）：`versatile-adapter` ×2（同一 response 并行）：
+  - `{"query":"从尾号为4241的银行卡转账5元给李四","intent":"快速转账"}`
+  - `{"query":"从尾号为4241的银行卡转账10元给王五","intent":"快速转账"}`
+
+> **建议同时给 adapter 开 `multi-workflow` profile**：让查余额、转账分别路由到各自独立的 workflow 端点，使各并行转账的 conversation 彼此隔离、互不踩状态（envexplorer 按 `conversation_id` 有状态）。`parallel-transfer` 只改 plan-agent 的拆解策略，不改变 adapter 行为。
+
 ---
 
 ## 端到端调用 · 场景二：费用报销审核
@@ -396,6 +424,8 @@ curl -N -X POST http://127.0.0.1:18097/a2a \
 | `openjiuwen.service.handler` | `agentcore-ext` | 走 `JiuwenCoreAgentExtHandler`，激活远端 A2A 工具注入 |
 | `openjiuwen.service.a2a.remote-agents[].name` / `url` | `versatile-adapter` / `${VERSATILE_ADAPTER_CARD_URL:http://127.0.0.1:18094}` | 把 adapter card 注入为远端工具 |
 | `plan-agent.model-name` 等 | `${LLM_*}` | LLM 配置 |
+| `plan-agent.prompt-resource` | `classpath:prompts/plan-agent-system-prompt.md` | 系统提示资源。默认=串行拆解；`parallel-transfer` profile 换为 `…-parallel.md`（余额先串行、独立转账同轮并行） |
+| `plan-agent.max-tokens` | `512` | 模型输出 token 上限；`parallel-transfer` profile 提到 `1024`（一轮多发工具调用） |
 
 ### expense-review(-main)
 

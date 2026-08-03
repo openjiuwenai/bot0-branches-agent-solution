@@ -10,9 +10,9 @@
     <version>4.0.6</version>
   </parent>
 
-  <groupId>com.huawei.ascend</groupId>
+  <groupId>com.openjiuwen</groupId>
   <artifactId>edp-agent-java</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>pom</packaging>
   <name>edp-agent-java</name>
   <description>Production EDPAgent Java project — engine, scenarios, deploy, tests.</description>
@@ -20,15 +20,15 @@
   <properties>
     <java.version>17</java.version>
     <maven.compiler.release>17</maven.compiler.release>
-    <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+    <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
     <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
     <!--
       必须使用为 JDK 17 发布的 agent-core-java（class 文件 major version 61，含
       harness.deep_agent、core.singleagent.interrupt 及新版 BaseInterruptRail API）。
-      0.1.13 为 JDK17 正式构建。切勿改用旧的裸 0.1.12（部分仓库为缺包的旧构建），
+      0.1.14 为 JDK17 正式构建。切勿改用旧的裸 0.1.12（部分仓库为缺包的旧构建），
       会导致 agentcore-ext 编译失败。
     -->
-    <agent-core-java.version>0.1.13</agent-core-java.version>
+    <agent-core-java.version>0.1.14</agent-core-java.version>
     <!--
       指向本地 agent-core-java-730 工程构建生成的 jar。${project.basedir}
       会解析为 engine 模块的 basedir，从而拼出绝对路径（Maven 要求 systemPath

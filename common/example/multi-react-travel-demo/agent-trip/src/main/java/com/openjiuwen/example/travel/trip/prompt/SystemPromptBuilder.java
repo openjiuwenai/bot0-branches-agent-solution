@@ -35,7 +35,8 @@ public final class SystemPromptBuilder {
     /**
      * 加载 markdown 模板并替换动态变量。
      *
-     * @param hotelToolName 远端酒店工具名，与 yaml {@code remote-agents[].name} 一致（本模块为 {@code hotel}）
+     * @param hotelToolName 远端酒店工具名，即安装后的工具 id，与 yaml
+     *                      {@code remote-agents[].name} 一致（本模块为 {@code travel-hotel}）
      * @return 渲染后的系统提示词
      */
     public static String build(String hotelToolName) {
