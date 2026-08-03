@@ -33,6 +33,11 @@ plan-agent:
   api-base: ${LLM_API_BASE:http://localhost:4000/v1}
   model-name: ${LLM_MODEL:gpt-4o-mini}
   ssl-verify: ${LLM_SSL_VERIFY:true}
+  # System prompt resource. Default = SERIAL decomposition (exactly one versatile-adapter
+  # call per turn). Activate the `parallel-transfer` profile to swap in the parallel prompt
+  # (balance queries serial first, then independent transfers batched into one turn).
+  prompt-resource: ${PLAN_AGENT_PROMPT_RESOURCE:classpath:prompts/plan-agent-system-prompt.md}
+  max-tokens: ${PLAN_AGENT_MAX_TOKENS:512}
 
 logging:
   level:

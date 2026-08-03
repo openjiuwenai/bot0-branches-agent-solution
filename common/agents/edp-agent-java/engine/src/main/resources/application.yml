@@ -171,7 +171,7 @@ logging:
     name: logs/run/run.log
   level:
     # EDP 核心包日志级别
-    com.huawei.ascend.edp: DEBUG
+    com.openjiuwen.edp: DEBUG
     # agentcore 扩展层日志级别
     com.openjiuwen.service.adapters.agentcore.ext: DEBUG
     # 应用编排层日志级别

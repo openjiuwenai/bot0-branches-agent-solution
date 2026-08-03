@@ -69,14 +69,14 @@ SDK 获得服务端 Task 的写权限。服务端 Task 的最终状态、状态�
 ### 2.1 agent-client 仍是占位模块
 
 - agent-client 的生产包明确写明 SDK implementation lands in a later wave：
-  agent-client/src/main/java/com/openjiuwen/client/package-info.java:2-7。
+  原 agent-client/src/main/java/com/openjiuwen/client/package-info.java（已随 src/ 目录移除，W3+ 实现时重建）。
 - client SPI 包也只是为了模块规则保留的 placeholder：
-  agent-client/src/main/java/com/openjiuwen/client/spi/package-info.java:2-7。
+  原 agent-client/src/main/java/com/openjiuwen/client/spi/package-info.java（已随 src/ 目录移除，W3+ 实现时重建）。
 - 模块元数据描述的目标包括 HTTP client、Task Cursor、SSE/Webhook receiver，但仍标记 skeleton：
   agent-client/module-metadata.yaml:6-15。
 - 构建基线：agent-client skeleton 已改为独立可构建 pom（groupId=com.openjiuwen, version=0.1.0，不再继承外部 spring-ai-ascend-parent）；agent-client-demo-parent reactor 与 agent-client-sdk-for-jvm 统一在 com.openjiuwen:0.1.0 坐标下。
 - agent-client 当前没有 HTTP、A2A、agent-bus 或 JSON codec 的生产依赖：
-  agent-client/pom.xml:29-40。
+  agent-client/pom.xml（skeleton pom，仅声明 compiler 配置，无任何业务依赖）。
 
 ### 2.2 架构已经规定 client 的职责和负面边界
 
@@ -93,7 +93,7 @@ docs/architecture/l0/04-modules/module-responsibility-cards.md:140-160。
 
 对应证据为：
 docs/architecture/l0/04-modules/module-responsibility-cards.md:149-154，
-以及 agent-client/src/test/java/com/huawei/ascend/client/architecture/EdgeToComputeDirectLinkArchTest.java:11-25。
+以及原 agent-client/src/test/java/.../architecture/EdgeToComputeDirectLinkArchTest.java（E143，已随 src/ 目录移除，约束改由人工 review 与 gate 规则执行）。
 
 ### 2.3 允许的 Ingress SPI 尚未形成运行链
 
@@ -1201,8 +1201,9 @@ L1 的三套状态机（`logical.md` 4.1–4.3）都是**纯客户端本地投�
 ### A.4 依赖方向为何是硬约束
 
 `logical.md` §5 的依赖隔离不是风格建议，是编译期红线：agent-client 的公共 API/core
-**禁止 import** agent-runtime / agent-core / agent-middleware 生产代码，仓库已有 ArchUnit
-（`EdgeToComputeDirectLinkArchTest`）与 gate 规则自动执行。根因：client 是 edge plane、
+**禁止 import** agent-runtime / agent-core / agent-middleware 生产代码。仓库原由 ArchUnit
+（`EdgeToComputeDirectLinkArchTest`，E143）与 gate 规则自动执行，该测试已随 src/ 目录移除，
+现由人工 review 与 gate 规则执行。根因：client 是 edge plane、
 可独立分发到客户现场，一旦与服务端 Java 类型耦合，服务端一改就要重新分发所有 SDK。
 client 与服务端之间只能通过**线协议**（A2A JSON）通信，不能通过共享 Java 类型。这也是
 公共 API 只允许 JDK 类型与 agent-client 自有值对象（§3.2）的架构层原因。
