@@ -35,7 +35,7 @@ openjiuwen:
       # that same name); url = hotel app's JSON-RPC base
       remote-agents:
         - name: "travel-hotel"
-          url: "http://localhost:8093"
+          url: ${TRAVEL_HOTEL_A2A_URL:}
           timeout-seconds: 300
       # --- Skills ---
       skills:
