@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.deepresearch.rail;
+package com.openjiuwen.example.deepresearch.agent.port;
 
 /**
  * Result of {@link SandboxOps#executeCode}. Library-tier value object — decouples

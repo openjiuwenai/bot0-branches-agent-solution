@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.openjiuwen.example.deepresearch.runtime;
+package com.openjiuwen.example.deepresearch.runtime.diagnostics;
 
 import com.openjiuwen.core.sysop.result.ExecuteCmdData;
 import com.openjiuwen.core.sysop.result.ExecuteCmdResult;
