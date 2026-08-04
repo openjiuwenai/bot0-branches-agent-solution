@@ -3,12 +3,47 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ── YAML 配置值 ${VAR} / ${VAR:default} 环境变量插值 ────────────────
+# yaml 经 yaml.safe_load 读入后是字面量，${AGENT_URL:} 不会被自动解析。
+# 这里在 load_config 中对 yaml 原始 dict 递归展开占位，使配置全走 .env：
+#   ${VAR}        → os.environ[VAR]，未设置则空串（兼容既有 extra_headers 语义）
+#   ${VAR:}       → 未设置时空串
+#   ${VAR:default}→ 未设置时取 default
+# 环境变量已设置时一律取环境变量值（env > yaml 默认 > 字段默认）。
+_ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::([^}]*))?\}")
+
+
+def _expand_env_ref(match: "re.Match[str]") -> str:
+    var_name = match.group(1)
+    default = match.group(2)  # None ⇒ `${VAR}` 无默认值；"" ⇒ `${VAR:}` 显式空默认
+    env_value = os.environ.get(var_name)
+    # 环境变量已设置且非空 → 取环境变量值；空串视为未设置，走默认值。
+    # 这样部署侧（start.sh/compose）传入空值时不会击穿 int/float 字段的强制转换。
+    if env_value:
+        return env_value
+    return default if default is not None else ""
+
+
+def _expand_env_refs(value: Any) -> Any:
+    """递归展开配置值中的 ${VAR} / ${VAR:default} 占位为环境变量值。
+
+    仅字符串参与插值；dict / list 递归处理其值，其它类型原样返回。
+    """
+    if isinstance(value, str):
+        return _ENV_REF_PATTERN.sub(_expand_env_ref, value)
+    if isinstance(value, dict):
+        return {k: _expand_env_refs(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_expand_env_refs(item) for item in value]
+    return value
 
 # ── Managed-doc 配置（spec managed-doc-agent-rule §8） ────────────────
 # managed-docs 端点支持的可优化文档（如 AgentRule.md）。apply=restart 时
@@ -285,12 +320,19 @@ def load_config(yaml_path: Path | None = None) -> AdapterConfig:
         with open(yaml_path, encoding="utf-8") as f:
             yaml_values = yaml.safe_load(f) or {}
 
+    # 展开 ${VAR} / ${VAR:default} 占位为环境变量值（配置全走 .env 的机制）。
+    # 必须在 env_overridden_keys 过滤之前进行：env 已设置的字段随后会被排除，
+    # 由 pydantic-settings 直接读 env；env 未设置的字段取此处展开后的（默认）值。
+    yaml_values = _expand_env_refs(yaml_values)
+
     # Only pass YAML values for fields NOT already set by env vars,
     # so env vars always take precedence over YAML.
     env_overridden_keys: set[str] = set()
     for field_name in AdapterConfig.model_fields:
         env_key = f"ADAPTER_{field_name.upper()}"
-        if env_key in os.environ:
+        # 仅当 env 已设置且非空时才视为覆盖；空串走 yaml 默认（resolver 会用默认值），
+        # 避免 start.sh/compose 传入空值时 int/float 字段因空串强制转换而报错。
+        if os.environ.get(env_key):
             env_overridden_keys.add(field_name)
 
     yaml_only_values = {k: v for k, v in yaml_values.items() if k not in env_overridden_keys}

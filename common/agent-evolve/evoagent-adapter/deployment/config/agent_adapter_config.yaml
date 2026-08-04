@@ -1,19 +1,26 @@
 # Agent Adapter Configuration
-# All values shown are defaults. Override with environment variables (ADAPTER_* prefix).
+# All values use ${ENV_VAR:default} interpolation: env var set ⇒ use env value;
+# unset ⇒ use the default shown after the colon. Defaults mirror the original
+# values; override every item by copying .env.example → .env and editing.
+#
+# Resolution order for each field: environment variable (from .env) > default
+# in this YAML > pydantic field default. Top-level fields additionally honor
+# the ADAPTER_* prefix via pydantic-settings (env wins over YAML default too).
 #
 # Path resolution rules for log_dir, output_dir, offset_file:
 # - Absolute paths (e.g., "/var/log" on Unix or "C:\\logs" on Windows) are used as-is
 # - Relative paths are resolved relative to the adapter root directory (where pyproject.toml is located)
-# - Environment variable values are NOT resolved, they are used as-is
+# - Per-agent path fields (agents[].log_dir/skills_dir) default to /data/{logs,skills}/{name}
+#   container paths for docker; override only for non-docker runs.
 
 # ── Log source (fallback for single-agent mode when no agents list) ──
 # 顶层 log_dir 在 docker 部署中由 ADAPTER_LOG_DIR 环境变量覆盖（默认 /data/logs）
-log_dir: "logs"                          # Log directory path (absolute or relative to adapter root)
-log_pattern: "process*.log"             # Active log file glob pattern
+log_dir: ${ADAPTER_LOG_DIR:logs}              # Log directory path (absolute or relative to adapter root)
+log_pattern: ${ADAPTER_LOG_PATTERN:process*.log}  # Active log file glob pattern
 
 # ── Read strategy ──
-poll_interval: 60                         # Poll interval in seconds
-start_from: "tail"                       # First-start read position: tail | head
+poll_interval: ${ADAPTER_POLL_INTERVAL:60}   # Poll interval in seconds
+start_from: ${ADAPTER_START_FROM:tail}       # First-start read position: tail | head
 
 # ── Extraction rules ──
 match_tags:                              # Tags to extract from log lines
@@ -30,26 +37,26 @@ match_tags:                              # Tags to extract from log lines
   - "TAG_VERSATILE_END"
 
 # ── Pairing strategy ──
-pair_timeout: 300                        # START→END pair timeout in seconds
+pair_timeout: ${ADAPTER_PAIR_TIMEOUT:300}   # START→END pair timeout in seconds
 
 # ── Output (fallback for single-agent mode when no agents list) ──
-output_dir: "data/output"                     # Output directory path (absolute or relative to adapter root)
-offset_file: "data/offsets.json"  # Offset state file path (absolute or relative to adapter root)
+output_dir: ${ADAPTER_OUTPUT_DIR:data/output}      # Output directory path (absolute or relative to adapter root)
+offset_file: ${ADAPTER_OFFSET_FILE:data/offsets.json}  # Offset state file path (absolute or relative to adapter root)
 
 # ── Skill storage (bind-mount from business agent containers) ──
 # Layout: {skills_root}/{agent_name}/{skill_name}/SKILL.md
 # See docs/skills-storage-design.md
-skills_root: "data/skills"
+skills_root: ${ADAPTER_SKILLS_ROOT:data/skills}
 
 # ── Output file cleanup ──
-output_retention_days: 30                # delete files older than this many days
-output_max_files: 2000                   # delete oldest when file count exceeds this
-output_max_file_size: "20MB"             # head-truncate when single file exceeds this
-output_trim_target_ratio: 0.7            # after truncation, file size ≈ threshold × ratio
+output_retention_days: ${ADAPTER_OUTPUT_RETENTION_DAYS:30}  # delete files older than this many days
+output_max_files: ${ADAPTER_OUTPUT_MAX_FILES:2000}           # delete oldest when file count exceeds this
+output_max_file_size: ${ADAPTER_OUTPUT_MAX_FILE_SIZE:20MB}   # head-truncate when single file exceeds this
+output_trim_target_ratio: ${ADAPTER_OUTPUT_TRIM_TARGET_RATIO:0.7}  # after truncation, file size ≈ threshold × ratio
 
 # ── HTTP service ──
-host: "0.0.0.0"                          # HTTP listen address
-port: 8900                               # HTTP listen port
+host: ${ADAPTER_HOST:0.0.0.0}                # HTTP listen address
+port: ${ADAPTER_PORT:8900}                   # HTTP listen port
 
 # ── Multi-Agent configuration ──
 # When agents list is present, each agent gets its own Pipeline with independent
@@ -67,21 +74,16 @@ port: 8900                               # HTTP listen port
 #   agent_url    → None (log-only, no call proxy)
 #   timeout      → 300
 #
-# ── 多业务 Agent 部署（策略 A：公共父目录 + per-agent 子目录）──
-# 宿主机侧把所有业务 Agent 的日志、skills、managed-doc 分别归到
-# HOST_LOG_ROOT、HOST_SKILLS_ROOT、HOST_AGENTS_ROOT，并挂载到容器
-# /data/logs、/data/skills、/data/agents。
-# 每个 agent 条目用【绝对路径】指向各自子目录：
-#   log_dir    → /data/logs/{name}     （对应宿主 HOST_LOG_ROOT/{name}）
-#   skills_dir → /data/skills/{name}   （对应宿主 HOST_SKILLS_ROOT/{name}）
-# 绝对路径原样使用，不会被解析到 adapter 根下；省略 log_dir/skills_dir 则回退
-# 到顶层（顶层由 ADAPTER_LOG_DIR / ADAPTER_SKILLS_ROOT 覆盖，多 Agent 下不推荐省略）。
-# 新增/删除 Agent 只需在此列表增删条目，并在宿主侧建好对应子目录；agent_url 等
-# 字段后续也可走 CRUD API（PUT /api/v1/config/agents/{name}）热更新写回本文件。
+# Per-agent 字段环境变量按 agent name 前缀命名（name 大写 + _ 前缀）：
+#   edp_agent  → EDP_AGENT_*
+#   other_agent → OTHER_AGENT_*
+# 增删 agent 只需：在 .env 增对应 EDP_/OTHER_/… 变量块、在此列表增删条目、
+# 并在宿主侧建好对应子目录。agent_url 等字段也可走 CRUD API
+# （PUT /api/v1/config/agents/{name}）热更新写回本文件（写回为具体值，不影响其它条目的占位）。
 agents:
   - name: "edp_agent"
-    log_dir: "/data/logs/edp_agent"           # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
-    skills_dir: "/data/skills/edp_agent"      # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
+    log_dir: ${EDP_AGENT_LOG_DIR:/data/logs/edp_agent}      # 绝对路径 → 宿主 HOST_LOG_ROOT/edp_agent
+    skills_dir: ${EDP_AGENT_SKILLS_DIR:/data/skills/edp_agent}  # 绝对路径 → 宿主 HOST_SKILLS_ROOT/edp_agent
     # ── Skill backend（可选；默认 local 走宿主 bind-mount；切 jiuwenbox 走沙箱文件 API）──
     # skill_backend: jiuwenbox          # local(默认,宿主共享挂载) | jiuwenbox(沙箱文件 API,需配 jiuwenbox_url)
     # jiuwenbox_url: http://host.docker.internal:8321   # jiuwenbox 管理 API base URL; skill_backend=jiuwenbox 时必填; 相同 URL 的 agent 共享 HTTP client
@@ -92,13 +94,13 @@ agents:
     # log_pattern: "process*.log"            # Optional: defaults to top-level log_pattern
     # output_dir: "data/output/edp_agent"     # Optional: defaults to data/output/{name}
     # offset_file: "data/offsets/edp_agent.json"  # Optional: defaults to data/offsets/{name}.json
-    agent_url: ${AGENT_URL:}     # 格式：http://<agent_ip>:<agent_port>，其中<agent_ip>不可用 localhost/127.0.0.1（指向容器自身）。
+    agent_url: ${EDP_AGENT_URL:}     # 格式：http://<agent_ip>:<agent_port>，其中<agent_ip>不可用 localhost/127.0.0.1（指向容器自身）。
                                               # 业务 Agent 若把端口发布到宿主机，可写
                                               # http://host.docker.internal:8090
                                               # （需启动脚本/compose 已注入 --add-host host.docker.internal:host-gateway）
-    project_id: "proj_001"                    # URL path segment: /v1/{project_id}/agents/{agent_id}/...
-    agent_id: "edp_agent"                     # URL path segment: /v1/{project_id}/agents/{agent_id}/...
-    timeout: 300                              # Call timeout in seconds
+    project_id: ${EDP_AGENT_PROJECT_ID:proj_001}  # URL path segment: /v1/{project_id}/agents/{agent_id}/...
+    agent_id: ${EDP_AGENT_ID:edp_agent}           # URL path segment: /v1/{project_id}/agents/{agent_id}/...
+    timeout: ${EDP_AGENT_TIMEOUT:300}             # Call timeout in seconds
     # ── Managed-doc（可选，需优化 AgentRule.md 等"焙进单例、改文件不热加载"的文档）──
     # 详见离线包 README 的 AgentRule managed-doc 章节。apply=restart 时由部署侧提供 restart_cmd + health 探测；
     # adapter async 执行 restart_cmd + health-watch，重启窗口内不阻塞事件循环。
@@ -139,12 +141,12 @@ agents:
     #   workspace_id: "191"
 
   - name: "other_agent"
-    log_dir: "/data/logs/other_agent"
-    skills_dir: "/data/skills/other_agent"
-    agent_url: ${AGENT_URL2:}
-    project_id: "proj_002"
-    agent_id: "other_agent"
-    timeout: 300
+    log_dir: ${OTHER_AGENT_LOG_DIR:/data/logs/other_agent}
+    skills_dir: ${OTHER_AGENT_SKILLS_DIR:/data/skills/other_agent}
+    agent_url: ${OTHER_AGENT_URL:}
+    project_id: ${OTHER_AGENT_PROJECT_ID:proj_002}
+    agent_id: ${OTHER_AGENT_ID:other_agent}
+    timeout: ${OTHER_AGENT_TIMEOUT:300}
 
 # ── Managed-doc defaults（可选，仅当任一 agent 配了 managed_docs 且 apply=restart 时生效）──
 # profile 决定 burst（canary 训练，快速失败）vs single（人工单次）两套默认基线；
