@@ -66,12 +66,18 @@ public enum AgentBusEventType {
     /** One-shot A2A response within the blocking window. */
     INVOCATION_RESPONSE,
     /**
-     * Task entered a wait-for-input state; carries {@code taskId} + a recoverable
-     * context reference (FEAT-017). Projects the input-needed state as a bus response
-     * event so the gateway perceives it promptly — not only via a later GetTask.
+     * Task entered a wait-for-input state; carries {@code taskId} + an embedded Task
+     * snapshot (recovery context as an embedded Task, not a discrete ref; FEAT-017).
+     * Projects the input-needed state as a bus response event so the gateway perceives
+     * it promptly — not only via a later GetTask.
      */
     INVOCATION_INPUT_REQUIRED,
-    /** Task's A2A SSE stream is ready to subscribe (carries stream reference). */
+    /**
+     * Task's A2A SSE stream is ready to subscribe (carries stream reference). The
+     * streamRef expiry is server-side (not carried in the payload); a consumer that finds
+     * the ref invalid / expired re-issues {@code CLIENT_STREAM_SUBSCRIBE_REQUESTED} — it
+     * does NOT rebuild the Task.
+     */
     INVOCATION_STREAM_READY,
     /** Task terminal state (completed/failed/cancelled); carries no token stream. */
     INVOCATION_TERMINAL,
@@ -92,13 +98,18 @@ public enum AgentBusEventType {
     /** One-shot A2A response within the waiting window. */
     A2A_CALL_RESPONSE,
     /**
-     * Remote Task entered a wait-for-input state; carries remote {@code taskId} + a
-     * recoverable context reference (FEAT-017). Coexists with the FEAT-005 shadow-task
-     * resume mechanism: the event is the prompt notification, the shadow task holds the
-     * recoverable resume context.
+     * Remote Task entered a wait-for-input state; carries remote {@code taskId} + an
+     * embedded Task snapshot (recovery context as an embedded Task, not a discrete ref;
+     * FEAT-017). Coexists with the FEAT-005 shadow-task resume mechanism: the event is
+     * the prompt notification, the shadow task holds the recoverable resume context.
      */
     A2A_CALL_INPUT_REQUIRED,
-    /** Remote Task's A2A SSE stream is ready to subscribe (carries stream reference). */
+    /**
+     * Remote Task's A2A SSE stream is ready to subscribe (carries stream reference). The
+     * streamRef expiry is server-side (not carried in the payload); a consumer that finds
+     * the ref invalid / expired re-issues {@code A2A_STREAM_SUBSCRIBE_REQUESTED} — it
+     * does NOT rebuild the Task.
+     */
     A2A_STREAM_READY,
     /** Remote Task terminal state (completed/failed/cancelled); carries no token stream. */
     A2A_CALL_TERMINAL
