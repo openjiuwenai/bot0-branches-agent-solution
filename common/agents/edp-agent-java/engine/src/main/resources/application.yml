@@ -78,7 +78,7 @@ deep-agent:
     # 模型提供商名称（如 openai、anthropic、deepseek 等）
     client_provider: ${EDP_AGENT_MODEL_PROVIDER:openai}
     # API 密钥
-    api_key: ${DEEPSEEK_API_KEY}
+    api_key: ${EDP_AGENT_MODEL_API_KEY}
     # API 基础地址
     api_base: ${EDP_AGENT_MODEL_BASE_URL}
     # 请求超时时间（秒），必须 > 0
