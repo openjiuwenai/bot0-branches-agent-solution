@@ -181,6 +181,8 @@ LLM 配置前缀 `openjiuwen.service.llm`（本 demo 自有配置，不属于 Sk
 | `model-name` | `LLM_MODEL` | `deepseek-chat` | 模型名 |
 | `provider` | `LLM_PROVIDER` | `OpenAI` | LLM provider |
 
+> **注意**：`api-base` 只填基础 URL（如 `https://api.deepseek.com`），**不要**带 `/v1/chat/completions` 后缀——框架（`OpenAiCompatibleModelClient`）会自动拼接 `/chat/completions`，带了会导致路径重复报错 `No static resource .../chat/completions/chat/completions`。
+
 ## 日志脱敏
 
 测试 profile `application-skillhub-remote.yml` 把 agent-core 的 `tool` 和 `llm` 日志降到 WARN，避免 skill 内容（`readFile` 结果、完整 messages JSON）泄漏到日志；SkillHub Provider / Manager 自身的 INFO 诊断（`credential=provided/absent`、download、verify、retry、register）保持可见。运行期可通过 `--spring.profiles.active=skillhub-remote` 激活。
