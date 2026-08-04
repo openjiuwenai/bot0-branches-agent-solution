@@ -256,13 +256,12 @@ class MultiagentInterruptRail(BaseInterruptRail):
 
     @staticmethod
     def _normalize_tool_args(tool_args, tool_name) -> dict:
+        if not isinstance(tool_args, (dict, str)):
+            return {}
         if isinstance(tool_args, dict):
             return tool_args
-        if isinstance(tool_args, str):
-            try:
-                parsed = json.loads(tool_args)
-                if isinstance(parsed, dict):
-                    return parsed
-            except Exception:
-                return {}
-        return {}
+        try:
+            parsed = json.loads(tool_args)
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
