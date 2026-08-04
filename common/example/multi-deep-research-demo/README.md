@@ -31,33 +31,53 @@
 ## 拓扑与架构
 
 ```
-                          user query (A2A JSON-RPC)
-                                        │
-                                        ▼
-                    ┌──────────────────────────────────────┐
-                    │      deep-research-agent (root)      │
-                    │      DeepAgent (task loop)           │
-                    │                                      │
-                    │   Rails                              │
-                    │    ├── AutoPersistMemoryRail         │  afterInvoke → memory/ + reports/
-                    │    ├── SandboxRail                   │  render_comparison_table / render_chart
-                    │    └── UrlVerifyRail                 │  verify_urls
-                    │                                      │
-                    │   Tools（运行时注入）                 │
-                    │    ├── search-agent  (A2A remote)    │  RemoteA2aToolInstaller
-                    │    └── verify-agent  (A2A remote)    │  RemoteA2aToolInstaller
-                    └──────┬──────────────┬─────────┬──────┘
-                           │              │         │
-             A2A / streaming     A2A / SSE     Python execute
-                           │              │         │
-                           ▼              ▼         ▼
-        ┌────────────────────┐  ┌──────────────┐  ┌──────────────────────┐
-        │ search-agent       │  │ verify-agent │  │ jiuwenbox sandbox    │
-        │ ReActAgent         │  │ ReActAgent   │  │ (HTTP, pandas /      │
-        │   • web_search     │  │ (LLM judge,  │  │  matplotlib /        │
-        │   • Tavily / Stub  │  │  no tools)   │  │  urllib)             │
-        └────────────────────┘  └──────────────┘  └──────────────────────┘
+   user query (A2A JSON-RPC)             POST /custom/{agentId}  [opt-in FEAT-022]
+             │                                        │
+             │                                        ▼
+             │                       ┌────────────────────────────────┐
+             │                       │ CustomRestProtocolAdapter      │
+             │                       │  (DeepResearchCustomRestAdapter)│
+             │                       └───────────────┬────────────────┘
+             │                                       │  request → A2A message
+             ▼                                       ▼
+      ┌──────────────────────────────────────────────────────────────┐
+      │                deep-research-agent (root DeepAgent)          │
+      │                                                              │
+      │  Middleware layer（Spring 装配 → SPI 注入 runtime）           │
+      │   ├── RemoteA2aToolInstaller      注册 search/verify remote  │
+      │   ├── SkillHubInstaller  [opt-in] profile=skillhub-remote    │
+      │   └── MiddlewareAdapterRegistrar  Custom REST / 凭据解密 SPI  │
+      │                                                              │
+      │  Rails                                                       │
+      │   ├── AutoPersistMemoryRail       afterInvoke → memory/ + reports/ │
+      │   ├── SandboxRail                 render_comparison_table / render_chart │
+      │   ├── UrlVerifyRail               verify_urls                │
+      │   ├── SkillReadFileRail [opt-in]  readFile（SKILL.md 读取）  │
+      │   └── SkillObservationRail [opt-in] 打 skills_available / hit_skill │
+      │                                                              │
+      │  Tools（运行时注入）                                          │
+      │   ├── search-agent  (A2A remote)                             │
+      │   ├── verify-agent  (A2A remote)                             │
+      │   ├── MCP servers   (streamable_http / sse / stdio)          │
+      │   └── SkillHub tools [opt-in]  远端 skill endpoint 注入      │
+      └──┬─────────────┬──────────────┬────────────┬────────────┬────┘
+         │             │              │            │            │
+   A2A/streaming   A2A/SSE      Python execute   Redis KV    SkillHub API
+         │             │              │           [opt-in]    [opt-in]
+         ▼             ▼              ▼            ▼            ▼
+  ┌──────────┐  ┌───────────┐  ┌────────────┐  ┌────────┐  ┌────────────┐
+  │ search-  │  │ verify-   │  │ jiuwenbox  │  │ Redis  │  │ SkillHub   │
+  │ agent    │  │ agent     │  │ sandbox    │  │(stand- │  │ endpoint   │
+  │ ReAct    │  │ ReAct     │  │ (HTTP,     │  │alone / │  │(FEAT-005)  │
+  │ + web    │  │(LLM judge)│  │ pandas /   │  │cluster)│  │            │
+  │ search   │  │           │  │ matplotlib)│  │checkpt │  │            │
+  └──────────┘  └───────────┘  └────────────┘  │+ Todo  │  └────────────┘
+                                               │KV [FEAT│
+                                               │-003]   │
+                                               └────────┘
 ```
+
+图例：`[opt-in]` 表示需通过 Spring profile / 环境变量 / yaml 显式打开。缺省最小拓扑 = A2A 入口 + 3 rails（Memory/Sandbox/UrlVerify）+ 2 remote agents + jiuwenbox。
 
 两层约束：
 
@@ -74,27 +94,34 @@ multi-deep-research-demo/
 │
 ├── agent-deep-research/                ← root DeepAgent（SDK + Spring Boot runtime 同模块，按包名分层）
 │   ├── src/main/java/com/openjiuwen/example/deepresearch/
-│   │   ├── DeepResearchProperties.java     配置 POJO + system prompt
-│   │   ├── DeepResearchAgentFactory.java   props + sandboxOpsSupplier (+ kvStore) → DeepAgent；走 HarnessFactory.createDeepAgent（SPI 化）
-│   │   ├── customrest/
-│   │   │   └── DeepResearchCustomRestAdapter.java   CustomRestProtocolAdapter SPI 实现（FEAT-022）；REST body ↔ A2A Task 双向映射
-│   │   ├── rail/
-│   │   │   ├── AutoPersistMemoryRail.java  extends MemoryRail；afterInvoke 落盘
-│   │   │   ├── SandboxRail.java            render_comparison_table / render_chart
-│   │   │   ├── UrlVerifyRail.java          verify_urls
-│   │   │   ├── SkillReadFileRail.java      readFile 工具；SkillHub SKILL.md 读取入口（FEAT-005）
-│   │   │   ├── SkillObservationRail.java   观察 rail；打 skills_available / tool_call hit_skill / invoke_summary
-│   │   │   ├── SandboxOps.java             库层窄接口：executeCode / downloadFile
-│   │   │   └── ExecResult.java             record: (ok, exitCode, stdout, stderr, message)
-│   │   └── runtime/                        ← Spring Boot 层
-│   │       ├── DeepResearchRuntimeApplication.java  Spring 装配；SandboxClient → SandboxOps 适配；SKILLHUB_ENABLED→profile 自动激活
-│   │       ├── DeepResearchSpringProperties.java    继承库层 Properties 加 @ConfigurationProperties
-│   │       └── credential/                          FEAT-005 凭据解密
-│   │           ├── DemoAesGcmCredentialDecryptor.java  @ConditionalOnProperty(credential.mode=aes-gcm)
-│   │           └── EncryptTokenCli.java                加密 CLI（`main` 方法，非 Spring bean）
+│   │   ├── agent/                              ← 库层（纯 POJO，不依赖 Spring）
+│   │   │   ├── DeepResearchProperties.java     配置 POJO + system prompt
+│   │   │   ├── DeepResearchAgentFactory.java   props + sandboxOpsSupplier (+ kvStore) → DeepAgent；走 HarnessFactory.createDeepAgent（SPI 化）
+│   │   │   ├── mcp/
+│   │   │   │   ├── McpRegistrar.java           启动期 probe + 注册 MCP server 到 Runner.resourceMgr()
+│   │   │   │   └── McpServerSetting.java       yaml 绑定 POJO（传输无关：streamable_http / sse / stdio）
+│   │   │   ├── port/                           ← hexagonal ports：库层定义的窄接口，runtime 层实现
+│   │   │   │   ├── SandboxOps.java             库层窄接口：executeCode / downloadFile
+│   │   │   │   └── ExecResult.java             record: (ok, exitCode, stdout, stderr, message)
+│   │   │   └── rail/
+│   │   │       ├── AutoPersistMemoryRail.java  extends MemoryRail；afterInvoke 落盘
+│   │   │       ├── SandboxRail.java            render_comparison_table / render_chart
+│   │   │       ├── UrlVerifyRail.java          verify_urls
+│   │   │       ├── SkillReadFileRail.java      readFile 工具；SkillHub SKILL.md 读取入口（FEAT-005）
+│   │   │       └── SkillObservationRail.java   观察 rail；打 skills_available / tool_call hit_skill / invoke_summary
+│   │   └── runtime/                            ← Spring Boot 层
+│   │       ├── DeepResearchRuntimeApplication.java     Spring 装配；SandboxClient → SandboxOps 适配；SKILLHUB_ENABLED→profile 自动激活
+│   │       ├── config/
+│   │       │   └── DeepResearchSpringProperties.java   继承库层 Properties 加 @ConfigurationProperties
+│   │       ├── credential/                              FEAT-005 凭据解密
+│   │       │   ├── DemoAesGcmCredentialDecryptor.java  @ConditionalOnProperty(credential.mode=aes-gcm)
+│   │       │   └── EncryptTokenCli.java                加密 CLI（`main` 方法，非 Spring bean）
+│   │       ├── customrest/
+│   │       │   └── DeepResearchCustomRestAdapter.java  CustomRestProtocolAdapter SPI 实现（FEAT-022）；REST body ↔ A2A Task 双向映射
+│   │       └── diagnostics/
+│   │           └── SandboxSmokeTest.java               启动阶段沙箱连通性自检（`sandbox.smoke-test=true` 时激活）
 │   └── src/main/resources/
-│       ├── application.yml                        主配置
-│       └── application-redis-checkpointer.yml     可选 profile：把 checkpointer 切到 Redis
+│       └── application.yml                      主配置（内含 `skillhub-remote` / `redis-checkpointer` 两个可选 profile 段）
 │
 ├── agent-search/                       ← search sub-agent（ReActAgent）（SDK + Spring Boot runtime 同模块，按包名分层）
 │   ├── src/main/java/com/openjiuwen/example/deepresearch/search/
@@ -139,12 +166,12 @@ multi-deep-research-demo/
 | URL 可达性验证 | Harness tool | `UrlVerifyRail` → Python urllib，在沙箱执行 | LLM 调 `verify_urls` |
 | 长期记忆读写 | MemoryRail tools | core-java 提供 `write_memory` / `read_memory` / `memory_search` / `memory_get` / `edit_memory` | LLM 显式调用或 rail 自动写 |
 | **确定性落盘** | Rail 生命周期钩子 | `AutoPersistMemoryRail.afterInvoke` | 每次 `result_type=="answer"` 自动写 `memory/answer-*.md` + `reports/answer-*.md` |
-| 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application-redis-checkpointer.yml`，支持 standalone / cluster） | 同 `conversationId` 请求走同一状态 |
+| 多轮上下文 | Checkpointer | in-memory（默认）或 Redis（`application.yml` 内 `redis-checkpointer` profile 段，支持 standalone / cluster） | 同 `conversationId` 请求走同一状态 |
 | **任务 Todolist 持久化**（FEAT-003 v3 MUST #2） | `TaskPlanningRail` + `KvTodoStorage` / `FileTodoStorage` | core-java `TaskPlanningRail` 装配 todo_* tool；solution 侧 `DeepResearchRuntimeApplication` 通过 `ObjectProvider<RuntimeRedisClient>` 桥接为 core `BaseKVStore` | `redis-checkpointer` profile 激活 + `RuntimeRedisClient` bean 就位 → `todoStorageType="kv"`（同一 runtime redis 连接池，§5.1.4）；否则 kvStore==null → `todoStorageType="file"`（workspace `.todo/` 目录） |
 | **多 vendor 并行搜索**（可选） | Spring profile + prompt 规则段组合 | `application-parallel-search.yml` 把 `openjiuwen.demo.deep-research.search-execution-mode` 切到 `parallel`；`DeepResearchProperties` 按模式组合 system-prompt（HEAD + 规则段 + TAIL） | `--spring.profiles.active=parallel-search`；COMPARISON 模式下 root 在同一轮批量发出多个互不依赖的 per-(vendor, dimension) `search-agent` 调用，由运行时经 `parentContextId` 并行分发；SINGLE 模式、render/verify 顺序与预算规则不变。详见 [Sub-agent 路由约束 §（4）](#sub-agent-路由约束root-prompt-硬规则) |
 | 中文字体 | 沙箱代码内置 | `SandboxRail` Python 头部 | Noto Sans CJK SC → Microsoft YaHei → DejaVu Sans 降级 |
 | Wire 层 metadata 观测 | Servlet filter | `agent-verify` 的 `A2aMetadataLoggingFilter`（`OncePerRequestFilter` + `ContentCachingRequestWrapper`） | 每次 `/a2a` POST 打一行 `[A2A wire] verify-agent received: {method, contextId, params.metadata, params.message.metadata}`，用于 FEAT-004 §Metadata 转发验收 |
-| **Custom REST 入口**（FEAT-022，opt-in） | Runtime 协议桥接 | `agent-service-app-custom-rest` 提供 `CustomRestProtocolAdapter` SPI + 自动装配；demo 侧 [`DeepResearchCustomRestAdapter`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/customrest/DeepResearchCustomRestAdapter.java) 把 REST body ↔ A2A Task 双向映射 | opt-in（`openjiuwen.service.custom-rest.query-path` 非空即启用）；复用同一 A2A Task 管线，非流返回统一 envelope，流式走 SSE。见 [Custom REST 入口](#custom-rest-入口) |
+| **Custom REST 入口**（FEAT-022，opt-in） | Runtime 协议桥接 | `agent-service-app-custom-rest` 提供 `CustomRestProtocolAdapter` SPI + 自动装配；demo 侧 [`DeepResearchCustomRestAdapter`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/customrest/DeepResearchCustomRestAdapter.java) 把 REST body ↔ A2A Task 双向映射 | opt-in（`openjiuwen.service.custom-rest.query-path` 非空即启用）；复用同一 A2A Task 管线，非流返回统一 envelope，流式走 SSE。见 [Custom REST 入口](#custom-rest-入口) |
 | **SkillHub skill 注入**（可选） | Runtime 中间件 | `agent-service-adapters-agentcore-ext` 的 `SkillHubManager` + `SkillHubInstaller` | opt-in（`SKILLHUB_ENABLED=true`）；启动阶段从 SkillHub 拉 skill 注册为工具。凭据支持**明文透传**与 **AES-256-GCM 加密**两种模式，见 [SkillHub 中间件与凭据加密](#skillhub-中间件与凭据加密) |
 | **SkillHub SKILL.md 读取**（FEAT-005 L3 收尾） | Harness tool | `SkillReadFileRail` → `readFile(file_path)`，路径必须落在 workspace 或运维显式声明的白名单根目录下 | LLM 按 core-java `SkillUtil.getSkillPrompt` 硬编码指令主动调用；工具名固定 camelCase `readFile`（core-java `warnMissingSkillReadFileTool` 用同一字符串按名查找）；64 KB 上限 + UTF-8 强制解码，成功日志只打 basename + 字节数 |
 | **Skill 观察日志**（FEAT-005 层 2 观察） | 纯观察 Rail | `SkillObservationRail`（priority 90，业务 rail 之后跑） | 每次请求打 `skills_available count=N names=[...]`；名称变化时补 `skills_delta`；每次 tool 决策打 `tool_call iter=N tool=X hit_skill=<bool>`；请求收尾打 `invoke_summary tool_calls=N skill_hits=M` |
@@ -166,7 +193,7 @@ Root DeepAgent 面对 A2A remote tool（`search-agent`）时，`system-prompt` �
 - 删掉礼貌用语 / 招呼语（"你好,"、"请"）
 - 自己解决歧义（比如把 "DeepSeek 定价" 补成 "DeepSeek V3 定价"）—— 应原样透传，交给 sub-agent 触发 `ask_user`
 
-对应源码：`agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/DeepResearchProperties.java` 的 `system-prompt` "HARD CONSTRAINT on remoteInput" 段。
+对应源码：`agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/agent/DeepResearchProperties.java` 的 `system-prompt` "HARD CONSTRAINT on remoteInput" 段。
 
 **（2）`search-agent` 在明确歧义模式下必须先 `ask_user`，不许先 `web_search`**：
 
@@ -346,7 +373,7 @@ java --add-opens java.base/java.time=ALL-UNNAMED \
   --spring.profiles.active=redis-checkpointer
 ```
 
-> 注：`agent-verify` 目前不携带 `application-redis-checkpointer.yml` profile —— verify-agent 本身是无状态 LLM judge，一次调用即完成判定，不依赖 checkpointer 状态。上面一行 `--spring.profiles.active=redis-checkpointer` 对 verify-runtime 是空操作，可省略。写在这里只是为了三个 runtime 命令并列易读。
+> 注：`agent-verify` 目前不携带 `redis-checkpointer` profile 段 —— verify-agent 本身是无状态 LLM judge，一次调用即完成判定，不依赖 checkpointer 状态。上面一行 `--spring.profiles.active=redis-checkpointer` 对 verify-runtime 是空操作，可省略。写在这里只是为了三个 runtime 命令并列易读。
 
 Redis Cluster 部署时把 `REDIS_TYPE` 切成 `cluster`，并用 Spring Boot 的 indexed 语法追加 `nodes[N]` 参数（每个节点一条 `host:port`）：
 
@@ -578,7 +605,7 @@ body 里其他字段 + query string + headers + path variables 会打包进 `par
 
 ### 响应 envelope
 
-所有响应（含流式每条 event）共享同一骨架，见 [`DeepResearchCustomRestAdapter#envelope`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/customrest/DeepResearchCustomRestAdapter.java#L99-L110)：
+所有响应（含流式每条 event）共享同一骨架，见 [`DeepResearchCustomRestAdapter#envelope`](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/runtime/customrest/DeepResearchCustomRestAdapter.java#L99-L110)：
 
 ```json
 {
@@ -724,7 +751,7 @@ SkillHub register completed ... registered=N     (完整链路 OK，N = 注册�
 
 SkillHub 把 skill 定义作为 SKILL.md 落到本地磁盘（`SKILLHUB_LOCAL_DIR` 指向的目录），core-java 的 `ReActAgent.updateSkillPromptBuilderSection` 会在 system-prompt 里**硬编码**一句 "use the readFile tool to read the corresponding SKILL.md file"，并在 `SkillUtil.getSkillPrompt` / `warnMissingSkillReadFileTool` 里按**精确 camelCase 字符串** `readFile` 查工具。工具缺失时 LLM 能看到 skill 名字（`SkillObservationRail` 会打 `skills_available`）却读不到 body，循环空转到 `maxIterations` 结束。
 
-[SkillReadFileRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/rail/SkillReadFileRail.java) 是这一环的收尾：
+[SkillReadFileRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/agent/rail/SkillReadFileRail.java) 是这一环的收尾：
 
 - **工具名**：固定为 `readFile`（camelCase，非 `read_file`），跟随 core-java 硬编码
 - **允许读取的根目录**：`DeepResearchAgentFactory.computeAllowedReadRoots(props)` 合并两块 —— `workspace-path`（必含）+ `extra-readable-roots`（运维显式声明）；`DeepResearchRuntimeApplication.mergeSkillHubLocalDirIntoReadableRoots` 会**自动**把 `openjiuwen.service.middleware.skillhub.local-dir` 追加进白名单，避免运维改了 SkillHub 缓存目录却忘了同步 readFile 白名单
@@ -742,7 +769,7 @@ SkillHub 把 skill 定义作为 SKILL.md 落到本地磁盘（`SKILLHUB_LOCAL_DI
 
 ### Skill 观察日志（`SkillObservationRail`）
 
-[SkillObservationRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/rail/SkillObservationRail.java) 是 FEAT-005 层 2 的观察 rail —— **不改** `SkillManager`、**不拦** tool 调用、**不注册**工具，纯往应用 logger 打事件。挂在任何 agent 上都安全；关掉只需把它的 logger 级别压到 WARN。
+[SkillObservationRail](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/agent/rail/SkillObservationRail.java) 是 FEAT-005 层 2 的观察 rail —— **不改** `SkillManager`、**不拦** tool 调用、**不注册**工具，纯往应用 logger 打事件。挂在任何 agent 上都安全；关掉只需把它的 logger 级别压到 WARN。
 
 | 时机 | 事件 | 内容 |
 |---|---|---|
@@ -813,8 +840,8 @@ opt-in 能力：deep-research root DeepAgent 启动阶段可以 probe 一组 MCP
 
 ### 组件分工
 
-- [McpRegistrar](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/McpRegistrar.java)：`DeepResearchAgentFactory.build()` 在构造 `DeepAgent` 之前调 `probeAndRegister(props.getMcpServers())`。每个 server 先用 `HttpURLConnection` 发一次 MCP `initialize`，通过才 `Runner.resourceMgr().addMcpServer()`；probe 失败**只日志、不抛**，绝不阻塞 agent 启动。
-- [McpServerSetting](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/McpServerSetting.java)：yaml 绑定 POJO，传输无关（`streamable_http` / `sse` / `stdio` 都可）。
+- [McpRegistrar](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/agent/mcp/McpRegistrar.java)：`DeepResearchAgentFactory.build()` 在构造 `DeepAgent` 之前调 `probeAndRegister(props.getMcpServers())`。每个 server 先用 `HttpURLConnection` 发一次 MCP `initialize`，通过才 `Runner.resourceMgr().addMcpServer()`；probe 失败**只日志、不抛**，绝不阻塞 agent 启动。
+- [McpServerSetting](agent-deep-research/src/main/java/com/openjiuwen/example/deepresearch/agent/mcp/McpServerSetting.java)：yaml 绑定 POJO，传输无关（`streamable_http` / `sse` / `stdio` 都可）。
 - `DeepAgent.ensureInitialized()` → `syncMcpServersFromResourceMgr()`：DeepAgent 首次执行时把已注册的 MCP servers 同步到内部 `AbilityManager`，工具才对 LLM 可见。**注册必须早于 DeepAgent 构造**，否则 sync 抓不到。
 
 ### 快速上手（配合本仓测桩 docserver）
@@ -954,7 +981,7 @@ agent-mcp-docserver/
 | `openjiuwen.demo.deep-research.credential.aes-key-hex` | `${SKILLHUB_AES_KEY_HEX:}` | 32 字节 AES-256 密钥的 hex 编码（64 字符）；`credential.mode=aes-gcm` 时必需 |
 | `logging.level.tool` / `logging.level.llm`（`skillhub-remote` profile） | `WARN` | multi-doc YAML 段 —— 只在 `skillhub-remote` profile 激活时生效，屏蔽 core-java `AbilityManager.logToolResult` / `BaseModelClient` 两处 INFO 级 raw log 的 SKILL.md 泄露；见 [SKILL.md 日志脱敏](#skillmd-日志脱敏skillhub-remote-profile) |
 
-`application-redis-checkpointer.yml` 里的 Redis 字段（`openjiuwen.service.middleware.redis.default.*`、`openjiuwen.service.middleware.checkpointer.ttl-seconds`）通过 `--spring.profiles.active=redis-checkpointer` 激活。`agent-search` 有一份镜像 profile，env 变量同名，两个 runtime 共享同一个 Redis 实例（同 host/port/db/password）。`agent-verify` 目前不带 redis profile（无状态 judge，不需要 checkpointer）。
+`application.yml` 内 `redis-checkpointer` profile 段里的 Redis 字段（`openjiuwen.service.middleware.redis.default.*`、`openjiuwen.service.middleware.checkpointer.ttl-seconds`）通过 `--spring.profiles.active=redis-checkpointer` 激活。`agent-search` 有一份镜像 profile，env 变量同名，两个 runtime 共享同一个 Redis 实例（同 host/port/db/password）。`agent-verify` 目前不带 redis profile（无状态 judge，不需要 checkpointer）。
 
 `agent-verify/src/main/resources/application.yml` 关键字段：
 

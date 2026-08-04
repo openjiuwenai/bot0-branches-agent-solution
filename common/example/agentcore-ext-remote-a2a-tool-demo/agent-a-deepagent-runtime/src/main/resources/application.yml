@@ -31,14 +31,14 @@ openjiuwen:
           output-modes: ["text", "text/plain"]
       remote-agents:
         - name: versatile-agent
-          url: ${REMOTE_A2A_CARD_URL:http://127.0.0.1:18091}
+          url: ${REMOTE_A2A_CARD_URL:}
           streaming: ${REMOTE_A2A_STREAMING:true}
   demo:
     deep-agent:
       llm:
         provider: ${DEEPSEEK_PROVIDER:OpenAI}
-        api-key: ${DEEPSEEK_API_KEY:}
-        api-base: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+        api-key: ${DEEPSEEK_API_KEY}
+        api-base: ${DEEPSEEK_BASE_URL:}
         model-name: ${DEEPSEEK_MODEL:deepseek-chat}
         ssl-verify: ${DEEPSEEK_SSL_VERIFY:true}
         temperature: ${DEEPSEEK_TEMPERATURE:0.2}

@@ -6,6 +6,7 @@ package com.openjiuwen.service.adapters.versatile.agentfw;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

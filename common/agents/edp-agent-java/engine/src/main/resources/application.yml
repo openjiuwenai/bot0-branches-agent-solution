@@ -30,7 +30,7 @@ openjiuwen:
         queue-timeout-seconds: 30
       remote-agents:
         - name: versatile-agent
-          url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191}
+          url: ${EDP_AGENT_VERSATILE_A2A_URL}
           streaming: true
       skills:
         - id: "edp_banking_workflow"
@@ -55,7 +55,7 @@ openjiuwen:
           enabled: true                                # 启用审计日志（EXTERNAL_CALL_AUDIT 标记）
         servers:
           - server-id: default                         # 服务器标识，factory.create() 无参版本默认查找 "default"
-            service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}  # 沙箱服务地址，必须与 deep-agent.sandbox.service-url 一致
+            service-url: ${EDPA_SANDBOX_SERVICE_URL}  # 沙箱服务地址，必须与 deep-agent.sandbox.service-url 一致
             sandbox-type: jiuwenbox                    # 沙箱类型
             launcher-type: pre_deploy                  # 启动器类型
             on-stop: delete                            # 停止时行为
@@ -78,9 +78,9 @@ deep-agent:
     # 模型提供商名称（如 openai、anthropic、deepseek 等）
     client_provider: ${EDP_AGENT_MODEL_PROVIDER:openai}
     # API 密钥
-    api_key: ${DEEPSEEK_API_KEY:sk-xxxx}
+    api_key: ${EDP_AGENT_MODEL_API_KEY}
     # API 基础地址
-    api_base: ${EDP_AGENT_MODEL_BASE_URL:https://api.deepseek.com}
+    api_base: ${EDP_AGENT_MODEL_BASE_URL}
     # 请求超时时间（秒），必须 > 0
     timeout: 120.0
     # 最大重试次数
@@ -132,11 +132,11 @@ deep-agent:
   # MCP SSE 连接配置（工具服务主备灰度）
   mcpsse:
     # MCP SSE 主 URL（灰度：wap_grayFlag 以 JD 开头时使用）
-    master-url: ${EDP_MCP_MASTER_URL:http://106.15.62.172:8000/sse}
+    master-url: ${EDP_MCP_MASTER_URL}
     # MCP SSE 备 URL（灰度：wap_grayFlag 非 JD 开头时使用）
-    standby-url: ${EDP_MCP_STANDBY_URL:http://localhost:30002/sse}
+    standby-url: ${EDP_MCP_STANDBY_URL}
     # MCP SSE 鉴权 Token
-    access-token: ${EDP_MCP_ACCESS_TOKEN:test_token}
+    access-token: ${EDP_MCP_ACCESS_TOKEN}
     # MCP SSE 应用名称
     app-name: ${EDP_MCP_APP_NAME:test_app}
   # 沙箱配置（控制命令执行的隔离环境、超时与降级策略）
@@ -144,7 +144,7 @@ deep-agent:
     # 是否启用沙箱模式
     enabled: ${EDPA_SANDBOX_ENABLED:false}
     # jiuwenswarm 服务地址
-    service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}
+    service-url: ${EDPA_SANDBOX_SERVICE_URL}
     # 沙箱 ID 前缀
     sandbox-id-prefix: ${EDPA_SANDBOX_ID_PREFIX:edp}
     # 执行命令超时（秒），与治理装饰层 timeout-ms 取较短者生效

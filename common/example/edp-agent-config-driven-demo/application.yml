@@ -19,9 +19,9 @@ deep-agent:
     # 模型提供商名称（如 openai、anthropic、deepseek 等）
     client_provider: ${EDP_AGENT_MODEL_PROVIDER:openai}
     # API 密钥
-    api_key: ${DEEPSEEK_API_KEY:sk-xxx}
+    api_key: ${DEEPSEEK_API_KEY}
     # API 基础地址
-    api_base: ${EDP_AGENT_MODEL_BASE_URL:https://api.deepseek.com}
+    api_base: ${EDP_AGENT_MODEL_BASE_URL:}
     # 请求超时时间（秒），必须 > 0
     timeout: 120.0
     # 最大重试次数
@@ -63,7 +63,7 @@ deep-agent:
 
   ## --- MCP SSE 配置（可选，用于 MCP 脚本工具调用） ---
   mcpsse:
-    master-url: ${EDP_MCP_MASTER_URL:http://localhost:8090}
+    master-url: ${EDP_MCP_MASTER_URL:}
     standby-url: ${EDP_MCP_STANDBY_URL:}
     access-token: ${EDP_MCP_ACCESS_TOKEN:}
     app-name: ${EDP_MCP_APP_NAME:test_app}
@@ -73,7 +73,7 @@ deep-agent:
   ## enabled=true 时 MCP 脚本在沙箱中安全执行
   sandbox:
     enabled: ${EDPA_SANDBOX_ENABLED:false}
-    service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}
+    service-url: ${EDPA_SANDBOX_SERVICE_URL:}
     sandbox-id-prefix: ${EDPA_SANDBOX_ID_PREFIX:edp}
     exec-timeout-seconds: ${EDPA_SANDBOX_EXEC_TIMEOUT:60}
     skill-deploy-path: ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
@@ -107,7 +107,7 @@ openjiuwen:
         queue-timeout-seconds: 30
       remote-agents:
         - name: versatile-agent
-          url: ${EDP_AGENT_VERSATILE_A2A_URL:http://localhost:8191}
+          url: ${EDP_AGENT_VERSATILE_A2A_URL:}
           streaming: true
       skills:
         - id: "smart_customer_service"
@@ -132,7 +132,7 @@ openjiuwen:
           enabled: true                                    # 启用审计日志（EXTERNAL_CALL_AUDIT 标记）
         servers:
           - server-id: default                             # 服务器标识，factory.create() 无参版本默认查找 "default"
-            service-url: ${EDPA_SANDBOX_SERVICE_URL:http://127.0.0.1:8321}  # 沙箱服务地址，必须与 deep-agent.sandbox.service-url 一致
+            service-url: ${EDPA_SANDBOX_SERVICE_URL:}  # 沙箱服务地址，必须与 deep-agent.sandbox.service-url 一致
             sandbox-type: jiuwenbox                        # 沙箱类型
             launcher-type: pre_deploy                      # 启动器类型
             on-stop: delete                                # 停止时行为

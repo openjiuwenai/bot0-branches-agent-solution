@@ -52,7 +52,7 @@ Local HTTP 模式直接 POST 到目标 runtime 的 `/a2a/{agentId}`，适合本�
 | `layer1` | L1 配置：intents（酒店/机票/其他）+ intent-agent-mapping → L2，端口 8081 |
 | `layer2` | L2 配置：intents（国内/国际酒店、国内机票）+ mapping → downstream，端口 8082 |
 | `layer2-flight` | L2 机票配置：intents（国内机票）+ mapping → downstream，端口 8086 |
-| `downstream` | 下游业务配置：无 intents / mapping（终端节点，可触发重新分类），端口 8083 |
+| `downstream` | 下游业务配置：无 intents / mapping（终端节点），端口 8083 |
 | `dev` | 把 `versatile.url-template` 指向本地 mock 端点 |
 | `mock-versatile` | 激活 `MockVersatileController` + 共享的 `card-resolver.local-mapping` |
 | `mock-a2a-gateway` | 激活 `MockA2AGatewayController`（转发代理，端口 8084） |
@@ -128,18 +128,16 @@ Local HTTP 模式直接 POST 到目标 runtime 的 `/a2a/{agentId}`，适合本�
 
 ### `scripts/local-e2e.sh` — Local HTTP 模式
 
-跑通 L2 §6.2 的四个场景（Local HTTP 转发，`a2a-gateway.enabled=false`）：
+跑通 L2 §6.2 的三个场景（Local HTTP 转发，`a2a-gateway.enabled=false`）：
 
 - §6.2.1 两层识别 + 下游业务：`curl L1 "订酒店"` → `"酒店预订成功"`
 - §6.2.3 显式中断：`curl L1 "中断"` → `_interrupt` payload（并断言包含 resume token `tok-123`）
-- §6.2.2 重新分类：`curl downstream "重分类"` → `"重新分类：国内酒店"`
 - §6.2.4 意图不明自消：`curl L1 "意图不明"` → L2 检测到 ambiguous intent（`intent_id=1`）后通过 `a2a_delegate` 自消到 default-wf，最终响应包含 `"默认工作流兜底"`
 
-分三轮启动，每轮结束后停止全部进程再启动下一轮：
+分两轮启动，每轮结束后停止全部进程再启动下一轮：
 
 - **Round 1**：L1/L2 三字段模式（`layer1`/`layer2` profile）+ downstream 终端模式（无 `result-extractions`，直接返回最终答案）。跑场景 1（L1→L2→downstream）与场景 3（interrupt）。
-- **Round 2**：downstream 三字段模式（`downstream` profile，返回指向 L1 的 `agent_id`）+ L1 终端模式。跑场景 2（downstream→L1 重新分类）。
-- **Round 3**：L1/L2 三字段模式 + default-wf 终端节点（hosting `agent_L2_default`，返回兜底业务输出）。跑场景 4（L1→L2→default-wf 意图不明自消）。依赖 `application-mock-versatile.yml` 中 `agent_card_L2_default → http://localhost:8085` 的 local-mapping。
+- **Round 2**：L1/L2 三字段模式 + default-wf 终端节点（hosting `agent_L2_default`，返回兜底业务输出）。跑场景 4（L1→L2→default-wf 意图不明自消）。依赖 `application-mock-versatile.yml` 中 `agent_card_L2_default → http://localhost:8085` 的 local-mapping。
 
 ```bash
 ./scripts/local-e2e.sh              # 首次运行会自动 mvn package
@@ -148,13 +146,13 @@ SKIP_BUILD=1 ./scripts/local-e2e.sh # 复用已有 jar
 
 ### `scripts/local-e2e-a2a-gateway.sh` — A2A Gateway 模式
 
-跑通 A2A Gateway 转发模式下的完整链路与多场景验证。启动 5 个进程：mock gateway（8084）+ L1（8081）+ L2（8082）+ downstream（8083）+ default-wf（8085），L1/L2 激活 `a2a-gateway-test` profile 走网关转发。分三轮：
+跑通 A2A Gateway 转发模式下的完整链路与多场景验证。启动 5 个进程：mock gateway（8084）+ L1（8081）+ L2（8082）+ downstream（8083）+ default-wf（8085），L1/L2 激活 `a2a-gateway-test` profile 走网关转发。分两轮：
 
 ```
 Round 1: gateway + L1 + L2 + downstream + default-wf
          Client → L1 → gateway → L2 → gateway → downstream / default-wf
-Round 2: 重启 L2（移除 default-workflow 配置）后跑 §6.2.2
-Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock 宿主 → 直链 SSE 透传
+         跑 §6.2.1 + §6.2.4 自消 + 多轮路由缓存
+Round 2: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock 宿主 → 直链 SSE 透传
 ```
 
 ### `scripts/local-e2e-llm-intent.sh` — LLM 意图驱动演示
@@ -176,7 +174,7 @@ Round 3: 重启 L1 + L2（开启 direct-chain），downstream 作 versatile mock
 
 跨工作流跳转机制说明：L1 在本演示中**关闭路由缓存**（`route-cache.enabled=false`），改由 `LlmIntentAgentHandler` 按 `conversationId` 在内存中累积用户输入历史，每轮把"历史+当前消息"喂给 LLM 分类。这样 L1 能识别 `上海`（酒店目的地回答）、`继续订酒店`（回跳）等后续消息的意图，并正确把 `买机票` 路由到 L2_flight。L2 对同一会话的 pending 业务任务走 A2A shadow-task 续传（§6.2.4），实现同领域多轮与回跳恢复；新领域（flight）首次到达无 pending 任务，走分类。
 
-> 设计取舍：原 spec §8 设想"路由缓存命中错领域 L2 → L2 返 ambiguous → §6.2.2 重识别"实现跨工作流跳转，但运行时 shadow-task 续传会抢占 L2 重分类、使重识别无法触发，实测不可行。故改用"缓存 OFF + handler 端历史"达成同一目标（跨工作流跳转）。reclassify 特性仍保留，仅本演示不触发。
+> 设计取舍：原 spec §8 设想"路由缓存命中错领域 L2 → L2 返 ambiguous → L1 重识别"实现跨工作流跳转，但运行时 shadow-task 续传会抢占 L2 重分类、使重识别无法触发，实测不可行。故改用"缓存 OFF + handler 端历史"达成同一目标（跨工作流跳转）。（reclassify 特性已移除。）
 
 新增 `llm-intent` profile（激活 `LlmIntentAgentHandler`，与 `VersatileAgentHandler` 二选一，即意图对接 SPI）与 `layer2-flight` profile（机票专属 L2，端口 8086）。mock gateway 对末端业务卡（`agent_card_biz_*`）走 A2A 原生透传（`openjiuwen.example.mock-a2a-gateway.passthrough-cards`），把 JSON-RPC 原样转发到 Agent B 的 `/a2a/`，保留 `INPUT_REQUIRED` 与 shadow-task 恢复。断言为结构/关键字（非精确串），依赖真实 LLM 故不进 CI。
 
@@ -214,8 +212,8 @@ python3 scripts/cli-llm-intent.py --base-url http://host:8081 chat   # 指向远
 
 | 需求 | 脚本 |
 |------|------|
-| 验证 Local HTTP 转发 + 中断 + 重新分类基础链路 | `local-e2e.sh` |
-| 验证 A2A Gateway 转发、header 透传、自消/重识别、多轮路由缓存、直链 SSE 透传 | `local-e2e-a2a-gateway.sh` |
+| 验证 Local HTTP 转发 + 中断 + 意图不明自消基础链路 | `local-e2e.sh` |
+| 验证 A2A Gateway 转发、header 透传、自消、多轮路由缓存、直链 SSE 透传 | `local-e2e-a2a-gateway.sh` |
 | 验证 LLM 意图驱动 + 真实 DeepAgent downstream | `local-e2e-llm-intent.sh` |
 | 用 CLI 交互式/脚本式驱动上述 LLM 演示场景 | `cli-llm-intent.py` |
 | 两者都想覆盖 | 先跑 `local-e2e.sh` 再跑 `local-e2e-a2a-gateway.sh` |
@@ -227,11 +225,7 @@ python3 scripts/cli-llm-intent.py --base-url http://host:8081 chat   # 指向远
 - **§6.2.4 意图不明自消**：`curl L1 "意图不明"` → L2 检测到 ambiguous intent（`intent_id=1`）后通过 `a2a_delegate` 自消到 default-wf，最终响应包含 `"默认工作流兜底"`，并断言 gateway 日志记录 `agent_card_L2_default` hop。
 - **多轮路由缓存**：同一 `conversationId=c4-multi-turn` 连发两轮（`"订酒店"` / `"再订一晚"`），两轮响应都包含 `"酒店预订成功"`，并断言 L1 Versatile 仅被调用一次（第二轮命中缓存）、L2 调用两次、gateway 两轮各触发一次 L1→L2 与 L2→downstream hop。
 
-**Round 2** 覆盖：
-
-- **§6.2.2 意图不明回退 L1 重识别**：重启 L2 覆盖 `default-workflow.agent-card` 为空后，`curl L1 "意图不明"` → L2 返回 ambiguous envelope，L1 `ReclassifyServeOrchestrator` 检测后第二次调用 Versatile 直接路由到 downstream，最终响应包含 `"酒店预订成功"`，并断言 L1 至少调用 Versatile 两次、gateway 记录 `agent_card_biz_hotel_domestic` hop。
-
-**Round 3** 覆盖 versatile **直链 SSE 透传**：
+**Round 2** 覆盖 versatile **直链 SSE 透传**：
 
 - 重启 L1/L2（`direct-chain.enabled=true`，`DirectChainVersatileAgentHandler` 截胡 `a2a_delegate` 走 gateway 隧道）；downstream 仅作 versatile mock server 宿主（`dev,mock-versatile`，不开 direct-chain）。gateway 隧道对**末端业务卡**（如 `agent_card_biz_hotel_domestic`）直接转发到 downstream 的 versatile 端点 `/v1/proj/agents/agent_biz/conversations/{cid}`（mock 内硬编码 `versatileAgentId=agent_biz`），并把 serve 协议 body 翻译成 versatile `{inputs:{query,messages}}`——业务原始 versatile SSE **不经任何业务终端 handler** 直接透传给 client；对**中间跳卡**（如 `agent_card_L2_hotel`）仍是哑隧道，原样转发到 `/v1/query`。
 - `curl L1 stream=true "订酒店"` → 客户端直接收到业务原始 versatile SSE 事件，响应体断言包含 `custom_rsp_data` 与 `"酒店预订成功"`，且**不含** a2a JSON-RPC 折叠痕迹（无 `TASK_STATE_COMPLETED`）。
@@ -253,8 +247,8 @@ SKIP_BUILD=1 ./scripts/local-e2e-a2a-gateway.sh # 复用已有 jar
 
 | 需求 | 脚本 |
 |------|------|
-| 验证 Local HTTP 转发 + 中断 + 重新分类基础链路 | `local-e2e.sh` |
-| 验证 A2A Gateway 转发、header 透传、自消/重识别、多轮路由缓存、直链 SSE 透传 | `local-e2e-a2a-gateway.sh` |
+| 验证 Local HTTP 转发 + 中断 + 意图不明自消基础链路 | `local-e2e.sh` |
+| 验证 A2A Gateway 转发、header 透传、自消、多轮路由缓存、直链 SSE 透传 | `local-e2e-a2a-gateway.sh` |
 | 两者都想覆盖 | 先跑 `local-e2e.sh` 再跑 `local-e2e-a2a-gateway.sh` |
 
 ## 配置
@@ -356,7 +350,6 @@ openjiuwen:
 缓存会在以下情况下失效：
 - TTL 到期（读取时惰性淘汰）。
 - 调用 `clearSession(conversationId)`（经 `A2AEnabledServeOrchestrator.resetConversation` 传递触发）。
-- `ReclassifyServeOrchestrator` 检测到重新分类信号。
 
 ### 注意事项
 

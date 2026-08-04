@@ -13,22 +13,22 @@ openjiuwen:
     card-resolver:
       local-mapping:
         # L1 forwards to L2 (intent_L1_hotel → agent_card_L2_hotel)
-        agent_card_L2_hotel: http://localhost:8082
+        agent_card_L2_hotel: ${MOCK_LAYER2_URL:}
         # L2_flight forwards to downstream (flight)
-        agent_card_L2_flight: http://localhost:8086
+        agent_card_L2_flight: ${MOCK_LAYER2_FLIGHT_URL:}
         # layer1.yml maps intent_L1_flight to two candidates (_a/_b) for the
         # PRIORITY strategy demo; both route to L2 under mock-versatile.
-        agent_card_L2_flight_a: http://localhost:8082
-        agent_card_L2_flight_b: http://localhost:8082
-        agent_card_L2_fallback: http://localhost:8082
+        agent_card_L2_flight_a: ${MOCK_LAYER2_URL:}
+        agent_card_L2_flight_b: ${MOCK_LAYER2_URL:}
+        agent_card_L2_fallback: ${MOCK_LAYER2_URL:}
         # L2 forwards to downstream
-        agent_card_biz_hotel_domestic: http://localhost:8083
-        agent_card_biz_hotel_international: http://localhost:8083
-        agent_card_biz_flight_domestic: http://localhost:8083
+        agent_card_biz_hotel_domestic: ${MOCK_DOWNSTREAM_URL:}
+        agent_card_biz_hotel_international: ${MOCK_DOWNSTREAM_URL:}
+        agent_card_biz_flight_domestic: ${MOCK_DOWNSTREAM_URL:}
         # L2 self-heals an ambiguous intent (intent_id="1") by delegating to
         # the default-wf process (hosting agent_L2_default), which returns a
         # fallback business answer. Without this mapping the a2a_delegate
         # fails and the /v1/query response comes back empty.
-        agent_card_L2_default: http://localhost:8085
+        agent_card_L2_default: ${MOCK_DEFAULT_WORKFLOW_URL:}
         # Reclassification: downstream forwards back to L1
-        agent_L1: http://localhost:8081
+        agent_L1: ${MOCK_LAYER1_URL:}

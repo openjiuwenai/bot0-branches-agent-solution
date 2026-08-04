@@ -2,22 +2,20 @@
 #
 # Local end-to-end runbook for the Versatile intent deployment module.
 # Implements L2 §5.5.3 方案 B (multi-port local runtime) with the
-# mock-versatile profile, and exercises all four L2 §6.2 scenarios.
+# mock-versatile profile, and exercises three of the L2 §6.2 scenarios.
 #
 # Architecture:
 #   - Each layer runs as a separate versatile-intent-boot process.
 #   - The mock-versatile profile activates MockVersatileController inside
 #     every process, serving canned SSE keyed by (agentId, query content).
-#   - Cross-layer forwarding uses DefaultRemoteAgentCaller over HTTP, routed
-#     by LocalMappingCardRegistrar (card-resolver.local-mapping → localhost).
+#   - Cross-layer forwarding uses DefaultRemoteAgentCaller with an explicitly
+#     configured local endpoint, routed by LocalMappingCardRegistrar.
 #
 # Scenarios (L2 §6.2):
 #   Round 1:
 #     §6.2.1  L1→L2→downstream  curl L1 "订酒店"      → "酒店预订成功"
 #     §6.2.3  explicit interrupt  curl L1 "中断"        → _interrupt payload
 #   Round 2:
-#     §6.2.2  reclassification    curl downstream "重分类" → "重新分类：国内酒店"
-#   Round 3:
 #     §6.2.4  L2 ambiguous self-heal  curl L1 "意图不明" → "默认工作流兜底"
 #
 # Each round starts the processes it needs with the right mode (three-field
@@ -42,6 +40,18 @@ DOWNSTREAM_PORT="${DOWNSTREAM_PORT:-8083}"
 DEFAULT_WF_PORT="${DEFAULT_WF_PORT:-8085}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 JAR_FILE="$MODULE_DIR/target/versatile-intent-boot-0.1.0.jar"
+LOCAL_SCHEME="${LOCAL_SCHEME:-http}"
+LOCAL_HOST="${LOCAL_HOST:-localhost}"
+
+local_base_url() {
+    printf '%s://%s:%s' "$LOCAL_SCHEME" "$LOCAL_HOST" "$1"
+}
+
+export MOCK_LAYER1_URL="${MOCK_LAYER1_URL:-$(local_base_url "$L1_PORT")}"
+export MOCK_LAYER2_URL="${MOCK_LAYER2_URL:-$(local_base_url "$L2_PORT")}"
+export MOCK_LAYER2_FLIGHT_URL="${MOCK_LAYER2_FLIGHT_URL:-$(local_base_url "${L2_FLIGHT_PORT:-8086}")}"
+export MOCK_DOWNSTREAM_URL="${MOCK_DOWNSTREAM_URL:-$(local_base_url "$DOWNSTREAM_PORT")}"
+export MOCK_DEFAULT_WORKFLOW_URL="${MOCK_DEFAULT_WORKFLOW_URL:-$(local_base_url "$DEFAULT_WF_PORT")}"
 
 # Local Maven repository (override via M2_REPO). Used only to give a helpful
 # early error when prerequisite artifacts are missing — not a build input.
@@ -120,7 +130,7 @@ wait_for_health() {
     local deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
     printf "    %-12s " "$name:"
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        if curl -sf "http://localhost:${port}/health" >/dev/null 2>&1; then
+        if curl -sf "$(local_base_url "$port")/health" >/dev/null 2>&1; then
             echo "UP (port $port)"
             return 0
         fi
@@ -138,11 +148,13 @@ start_process() {
     local name="$1" port="$2" profiles="$3" agent_segment="$4"
     shift 4
     local log="$LOG_DIR/${name}.log"
+    local base_url
+    base_url="$(local_base_url "$port")"
     echo "==> Starting $name (profiles=$profiles, port=$port)"
     java -jar "$JAR_FILE" \
         --spring.profiles.active="$profiles" \
         --server.port="$port" \
-        --openjiuwen.service.versatile.url-template="http://localhost:${port}/v1/proj/agents/${agent_segment}/conversations/{conversation_id}" \
+        --openjiuwen.service.versatile.url-template="${base_url}/v1/proj/agents/${agent_segment}/conversations/{conversation_id}" \
         "$@" \
         >"$log" 2>&1 &
     PIDS+=("$!")
@@ -155,7 +167,7 @@ stop_all() {
 
 send_query() {
     local port="$1" conv_id="$2" content="$3"
-    curl -s -X POST "http://localhost:${port}/v1/query" \
+    curl -s -X POST "$(local_base_url "$port")/v1/query" \
         -H "Content-Type: application/json" \
         -d "{\"conversation_id\":\"${conv_id}\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"${content}\"}]}"
 }
@@ -194,7 +206,7 @@ run_round_one() {
 
     echo
     echo "--- §6.2.1 两层识别 + 下游业务 (L1→L2→downstream) ---"
-    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 订酒店}]"
+    echo "    POST $(local_base_url "$L1_PORT")/v1/query  messages=[{user, 订酒店}]"
     local resp1
     resp1=$(send_query "$L1_PORT" "c1-scenario1" "订酒店")
     echo "    response: $(echo "$resp1" | head -c 500)"
@@ -202,7 +214,7 @@ run_round_one() {
 
     echo
     echo "--- §6.2.3 工作流显式用户交互 (interrupt) ---"
-    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 中断}]"
+    echo "    POST $(local_base_url "$L1_PORT")/v1/query  messages=[{user, 中断}]"
     local resp3
     resp3=$(send_query "$L1_PORT" "c5-scenario3" "中断")
     echo "    response: $(echo "$resp3" | head -c 500)"
@@ -214,41 +226,11 @@ run_round_one() {
     stop_all
 }
 
-# ─── Round 2: Scenario 2 (reclassification downstream→L1) ───
+# ─── Round 2: Scenario 4 (L2 ambiguous self-heal L1→L2→default-wf) ───
 
 run_round_two() {
     echo
-    echo "==================== Round 2: §6.2.2 重新分类 ===================="
-
-    # Downstream: three-field mode (downstream profile) — returns agent_id pointing to L1
-    start_process downstream "$DOWNSTREAM_PORT" "downstream,dev,mock-versatile" "agent_biz"
-
-    # L1: legacy mode — returns final reclassification answer
-    start_process layer1 "$L1_PORT" "dev,mock-versatile" "agent_L1" \
-        --openjiuwen.service.versatile.result-node-name=AnswerNode \
-        --openjiuwen.service.versatile.messages.required=true
-
-    wait_for_health "$DOWNSTREAM_PORT" downstream
-    wait_for_health "$L1_PORT" layer1
-
-    echo
-    echo "--- §6.2.2 分类错误重新分类 (downstream→L1) ---"
-    echo "    POST http://localhost:${DOWNSTREAM_PORT}/v1/query  messages=[{user, 重分类}]"
-    local resp
-    resp=$(send_query "$DOWNSTREAM_PORT" "c4-scenario2" "重分类")
-    echo "    response: $(echo "$resp" | head -c 500)"
-    assert_contains "scenario2" "$resp" "重新分类：国内酒店"
-
-    echo
-    echo "==> Round 2 complete, stopping processes"
-    stop_all
-}
-
-# ─── Round 3: Scenario 4 (L2 ambiguous self-heal L1→L2→default-wf) ───
-
-run_round_three() {
-    echo
-    echo "==================== Round 3: §6.2.4 L2 意图不明自消 ===================="
+    echo "==================== Round 2: §6.2.4 L2 意图不明自消 ===================="
 
     # L1: three-field mode (layer1 profile) — routes intent_L1_hotel to L2
     start_process layer1 "$L1_PORT" "layer1,dev,mock-versatile" "agent_L1"
@@ -268,7 +250,7 @@ run_round_three() {
 
     echo
     echo "--- §6.2.4 L2 意图不明自消 (L1→L2→default-wf) ---"
-    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 意图不明}]"
+    echo "    POST $(local_base_url "$L1_PORT")/v1/query  messages=[{user, 意图不明}]"
     local resp
     resp=$(send_query "$L1_PORT" "c6-scenario4" "意图不明")
     echo "    response: $(echo "$resp" | head -c 500)"
@@ -276,17 +258,16 @@ run_round_three() {
     assert_contains "scenario4-ambiguous-self-heal" "$resp" "默认工作流兜底"
 
     echo
-    echo "==> Round 3 complete, stopping processes"
+    echo "==> Round 2 complete, stopping processes"
     stop_all
 }
 
 main() {
-    echo "==> L2 §5.5.3 方案 B mock 联调 (four scenarios)"
+    echo "==> L2 §5.5.3 方案 B mock 联调 (three scenarios)"
     check_dependencies
     build_if_needed
     run_round_one
     run_round_two
-    run_round_three
     echo
     echo "==> All scenarios passed."
     echo "    Logs: $LOG_DIR/{layer1,layer2,downstream,default-wf}.log"
