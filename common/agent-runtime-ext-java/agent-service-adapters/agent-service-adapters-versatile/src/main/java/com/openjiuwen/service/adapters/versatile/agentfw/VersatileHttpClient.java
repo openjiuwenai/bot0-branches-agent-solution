@@ -77,7 +77,7 @@ final class VersatileHttpClient {
         log.debug("Versatile outbound request={}", logRequest(request, logUrl, maskSensitive));
 
         if (insecureSslSocketFactory != null && isHttps(url)) {
-            postInsecureHttps(request, consumer, body, url, logUrl, timeout);
+            postInsecureHttps(request, consumer, body, url, timeout);
             return;
         }
 
@@ -107,8 +107,12 @@ final class VersatileHttpClient {
     }
 
     private void postInsecureHttps(VersatileRequestExtractor.RemoteRequest request, LineConsumer consumer,
-            String body, String url, String logUrl, Duration timeout) throws IOException, InterruptedException {
-        HttpsURLConnection connection = (HttpsURLConnection) URI.create(url).toURL().openConnection();
+            String body, String url, Duration timeout) throws IOException, InterruptedException {
+        String logUrl = properties.isLogMaskSensitive() ? request.url() : url;
+        var urlConnection = URI.create(url).toURL().openConnection();
+        if (!(urlConnection instanceof HttpsURLConnection connection)) {
+            throw new IOException("Expected an HTTPS connection for URL: " + logUrl);
+        }
         connection.setSSLSocketFactory(insecureSslSocketFactory);
         connection.setHostnameVerifier(TRUST_ALL_HOSTNAMES);
         connection.setRequestMethod("POST");
@@ -130,13 +134,9 @@ final class VersatileHttpClient {
             log.info("Received Versatile response status={} url={}", statusCode, logUrl);
             if (statusCode < HttpURLConnection.HTTP_OK || statusCode >= HttpURLConnection.HTTP_MULT_CHOICE) {
                 String responseBody;
-                InputStream errorStream = connection.getErrorStream();
-                if (errorStream == null) {
-                    responseBody = "";
-                } else {
-                    try (errorStream) {
-                        responseBody = new String(errorStream.readAllBytes(), StandardCharsets.UTF_8);
-                    }
+                try (InputStream errorStream = connection.getErrorStream()) {
+                    responseBody = errorStream == null ? ""
+                            : new String(errorStream.readAllBytes(), StandardCharsets.UTF_8);
                 }
                 log.warn("Versatile HTTP error status={} body={}", statusCode, responseBody);
                 throw new IOException("Versatile HTTP " + statusCode + ": " + responseBody);
