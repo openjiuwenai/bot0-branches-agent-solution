@@ -46,6 +46,7 @@ openjiuwen:
 |---|---|---:|---|---|
 | `url-template` | String | 无 | 是 | 远端 URL 模板；`{conversation_id}` 会替换为当前会话 ID |
 | `timeout` | Duration | `600s` | 否 | 单次远端 HTTP 请求超时；显式绑定为 `null` 时运行期仍回退到 `600s` |
+| `insecure-skip-verify` | boolean | `false` | 否 | `false` 使用 JVM 默认的 HTTPS 证书链和主机名校验；`true` 同时跳过这两项校验；生产环境建议保持 `false` |
 | `headers-template` | Map<String,String> | `{}` | 否 | 固定出站 Header；与透传 Header 同名时覆盖透传值，名称比较不区分大小写 |
 | `forward-header-whitelist` | Set<String> | `[]` | 否 | 允许从 `ServeRequest.metadata.headers` 透传的 Header 名称，匹配不区分大小写 |
 | `log-mask-sensitive` | boolean | `true` | 否 | `true` 时遮蔽 ServeRequest 和出站请求中的消息、metadata、Header、Query、Body 值；当前不遮蔽远端响应行、聚合结果或非 2xx 响应 Body |
@@ -103,6 +104,7 @@ openjiuwen:
     versatile:
       url-template: http://127.0.0.1:31113/v1/agents/main/conversations/{conversation_id}
       timeout: 60s
+      insecure-skip-verify: false
       headers-template:
         Content-Type: application/json
         Accept: text/event-stream

@@ -23,6 +23,7 @@ class VersatilePropertiesTest {
     void bindsIntentsMessagesMappingInterruptAndResultExtractions() {
         var source = new MapConfigurationPropertySource(Map.ofEntries(
                 entry("openjiuwen.service.versatile.url-template", "http://h/{conversation_id}"),
+                entry("openjiuwen.service.versatile.insecure-skip-verify", "true"),
                 entry("openjiuwen.service.versatile.intents[0].id", "intent_L1_hotel"),
                 entry("openjiuwen.service.versatile.intents[0].name", "酒店"),
                 entry("openjiuwen.service.versatile.messages.required", "true"),
@@ -41,6 +42,7 @@ class VersatilePropertiesTest {
                 .bind("openjiuwen.service.versatile", VersatileProperties.class).get();
 
         assertThat(props.getUrlTemplate()).isEqualTo("http://h/{conversation_id}");
+        assertThat(props.isInsecureSkipVerify()).isTrue();
         assertThat(props.getIntents()).hasSize(1);
         assertThat(props.getIntents().get(0).getId()).isEqualTo("intent_L1_hotel");
         assertThat(props.getIntents().get(0).getName()).isEqualTo("酒店");
@@ -63,6 +65,7 @@ class VersatilePropertiesTest {
     void ambiguousIntentIdDefaultsToOne() {
         VersatileProperties props = new VersatileProperties();
         assertThat(props.getAmbiguousIntentId()).isEqualTo("1");
+        assertThat(props.isInsecureSkipVerify()).isFalse();
     }
 
     @Test

@@ -71,7 +71,7 @@ openjiuwen:
   demo:
     deep-research:
       provider: ${LLM_PROVIDER:OpenAI}
-      api-key: ${LLM_API_KEY:}
+      api-key: ${LLM_API_KEY}
       api-base: ${LLM_API_BASE:}
       model-name: ${LLM_MODEL:deepseek-chat}
       ssl-verify: ${LLM_SSL_VERIFY:true}

@@ -3,7 +3,7 @@ spring:
     name: travel-mainplan
 
 server:
-  port: 8091
+  port: ${TRAVEL_MAINPLAN_PORT}
 
 # Persist all logs (incl. [A2A-GetTask] request/response) to a file for debugging.
 logging:
@@ -17,10 +17,10 @@ openjiuwen:
       traveler-name: ${LLM_TRAVELER_NAME:张三}
       llm:
         provider: ${LLM_PROVIDER:OpenAI}
-        api-key: ${LLM_API_KEY:}
+        api-key:
         api-base: ${LLM_API_BASE:}
         model-name: ${LLM_MODEL:}
-        ssl-verify: ${LLM_SSL_VERIFY:true}
+        ssl-verify: ${LLM_SSL_VERIFY}
         max-iterations: ${LLM_MAX_ITERATIONS:10}
   service:
     a2a:
