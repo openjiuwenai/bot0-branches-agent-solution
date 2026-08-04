@@ -1,5 +1,5 @@
 server:
-  port: 18095
+  port: ${MCP_DOCSERVER_PORT}
   servlet:
     context-path: /
 spring:

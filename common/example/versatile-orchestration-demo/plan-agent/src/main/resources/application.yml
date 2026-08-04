@@ -29,7 +29,7 @@ openjiuwen:
 
 plan-agent:
   model-provider: ${LLM_PROVIDER:openai}
-  api-key: ${LLM_API_KEY}
+  api-key:
   api-base: ${LLM_API_BASE:}
   model-name: ${LLM_MODEL:gpt-4o-mini}
   ssl-verify: ${LLM_SSL_VERIFY:true}
