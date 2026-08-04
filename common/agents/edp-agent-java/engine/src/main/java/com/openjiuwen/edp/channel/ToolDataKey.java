@@ -92,11 +92,7 @@ public class ToolDataKey {
      */
     @Override
     public int hashCode() {
-        int result = tenantId.hashCode();
-        result = 31 * result + agentId.hashCode();
-        result = 31 * result + contextId.hashCode();
-        result = 31 * result + taskId.hashCode();
-        return result;
+        return Objects.hash(tenantId, agentId, contextId, taskId);
     }
 
     /**
