@@ -1,139 +1,4 @@
-# openJiuwen agent-solution
-
-[中文版](README.zh.md) | [English Version](README.md)
-
-## 简介
-
-**openJiuwen agent-solution** 是 openJiuwen 面向 Agent 应用集成场景以及行业通用场景的扩展方案仓库。
-
-当前版本包含三个相互独立的扩展工程：运行时 adapter、纯 AgentCore SDK 扩展，以及具体 Agent 实现。本仓不重复实现 HTTP 接入、A2A 协议、远端 card 发现与通信、会话编排等运行时能力；这些能力由 `agent-runtime-java` 提供，Agent 执行内核由 `agent-core-java` 提供。
-
-## 快速开始
-
-### 环境要求
-
-- **Java 版本**：JDK 17+
-- **构建工具**：Maven 3.9+
-- **运行时依赖**：`com.openjiuwen:agent-runtime-java:0.1.0`
-- **执行内核依赖**：`com.openjiuwen:agent-core-java:0.1.13`
-
-### 构建扩展模块
-
-```powershell
-mvn -f common\agent-core-ext-java\pom.xml clean install
-mvn -f common\agents\pom.xml clean install
-mvn -f common\agent-runtime-ext-java\pom.xml clean install
-```
-
-### 构建示例工程
-
-```powershell
-mvn -f common\example\versatile-a2a-adapter-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml clean install
-mvn -f common\example\multi-deep-research-demo\pom.xml clean install
-```
-
-## 架构设计
-
-`common` 下的三个扩展工程相互平行并分别构建，彼此之间不存在 Maven parent 或 reactor 聚合关系。
-
-| 模块 | 说明 |
-|------|------|
-| `common/agent-runtime-ext-java` | 运行时扩展 Maven 父工程，当前包含 AgentCore 增强 adapter 与 Versatile adapter。 |
-| `common/agent-core-ext-java` | `agent-core-java` 的纯 SDK 扩展工程，当前聚合不含 Spring 的 `react-rails` 特性 jar。 |
-| `common/agents` | 具体 Agent 实现工程，当前聚合自包含的 PEV Agent。 |
-| `agent-service-adapters-agentcore-ext` | 复用 runtime 远端 A2A card 注册结果，在 AgentCore handler 执行前注入远端 agent 工具，并通过 `a2a_delegate` interrupt 完成远端委托。 |
-| `agent-service-adapters-versatile` | 实现 runtime `AgentHandler` SPI，将查询请求适配到远端 HTTP/SSE 工作流服务。 |
-| `common/example` | 配套示例工程，用于演示扩展 adapter、A2A 暴露、远端委托和 runtime 接线方式。 |
-
-更细的设计说明见：
-
-- [agent-service-adapters-agentcore-ext-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-agentcore-ext-design.md)
-- [agent-service-adapters-versatile-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-versatile-design.md)
-
-## 功能特性
-
-- **AgentCore 远端 A2A 工具注入**：基于 runtime 已发现的远端 agent card，将远端 agent 安装为 AgentCore 可见工具。
-- **中断机制**：把远端工具调用转换成可由 runtime 接管的委托中断，并支持 resume 后将远端结果注回 AgentCore。
-- **Versatile HTTP/SSE 适配**：将 runtime 查询请求转换为远端工作流服务调用，并消费 SSE 或行流式响应。
-- **ReAct 认知 Rails**：通过显式 Java 注册提供验证、重规划和故障降级，不包含框架自动接线。
-- **PEV Agent**：基于 `agent-core-java` 的 Plan-Execute-Verify-Diagnose-Dispatch 自包含实现。
-
-## 项目结构
-
-```text
-agent-solution
-|-- common
-|   |-- agent-core-ext-java
-|   |   `-- react-rails
-|   |-- agent-runtime-ext-java
-|   |   `-- agent-service-adapters
-|   |       |-- agent-service-adapters-agentcore-ext
-|   |       `-- agent-service-adapters-versatile
-|   |-- agents
-|   |   `-- pev
-|   `-- example
-|       |-- agentcore-ext-deepagent-remote-a2a-demo
-|       |-- agentcore-ext-remote-a2a-tool-demo
-|       |-- multi-deep-research-demo
-|       `-- versatile-a2a-adapter-demo
-|-- LICENSE
-`-- README.md
-```
-
-## 示例目录
-
-```text
-common/example
-|-- agent-gateway-demo
-|-- agentcore-ext-deepagent-remote-a2a-demo
-|-- agentcore-ext-remote-a2a-tool-demo
-|-- multi-deep-research-demo
-`-- versatile-a2a-adapter-demo
-```
-
-## Maven 坐标
-
-```xml
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-agentcore-ext</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-versatile</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>react-rails</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>pev</artifactId>
-    <version>0.1.0</version>
-</dependency>
-```
-
-## 参与贡献
-
-欢迎通过 Issue、Pull Request 或设计讨论参与 openJiuwen agent-solution 的演进。提交贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-## 开源许可证
-
-本项目依据 [Apache License 2.0](LICENSE) 授权。
-
----
-
-关于本仓库的版本演进与各版本特性，以下是已发布版本的 Release Note。
-
-## OpenJiuwen 智能体解决方案 v0.1.0 Release Note
+# OpenJiuwen 智能体解决方案 v0.1.0 Release Note
 
 发布日期：2026 年 7 月 30 日
 
@@ -147,17 +12,17 @@ common/example
 
 ---
 
-### 新特性
+## 新特性
 
-#### 一、平台能力
+### 一、平台能力
 
 扩展以 runtime 的 `AgentHandler` SPI、`A2ARemoteAgentCardRegistry` 与 Spring Boot 自动装配为接入点；HTTP 接入、A2A 协议、远端 card 发现与通信、会话编排等运行时能力由 agent-runtime-java 提供。执行内核由 agent-core-java 提供。客户端调用与本地工具治理由 agent-client 提供。
 
-##### 1. Versatile 意图工作流适配
+#### 1. Versatile 意图工作流适配
 
 支持 Versatile 和 Versatile 意图工作流适配，支持按 intent 选择 endpoints URL 模板实现基于意图的路由分发，并增强 SSE 响应最小结果节点抽取。SSE 响应解析支持 `result-node-name` 最小结果节点抽取，当匹配 `node_name` 且 `node_type` 为 `"End"` 时提取最终结果。
 
-##### 2. 自定义 REST API 服务入口
+#### 2. 自定义 REST API 服务入口
 
 runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，使调用方以业务 REST/SSE 形态访问同一个 hosted Agent：
 
@@ -167,7 +32,7 @@ runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，�
 - **A2A 语义归一**：每次提交归一为标准 Agent 服务调用，Task、错误和租户语义归一到标准化 Agent 服务入口。
 - **单入口单路径**：当前版本一个 runtime 实例只 host 一个 Agent，只允许一个 REST path pattern。
 
-##### 3. 异构智能体框架兼容扩展
+#### 3. 异构智能体框架兼容扩展
 
 在 `agentcore-ext` 与 `Versatile` adapter 基础上，扩展异构框架兼容范围，支持扩展兼容 AgentScope 框架智能体：
 
@@ -175,7 +40,7 @@ runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，�
 - 支持包装宿主已构建的本地 `HarnessAgent`，通过公开 API 调用和状态读取，对上保持与 ReAct 相同的 runtime 协议。
 - 已验证 message stop、人工确认和单个 external pending tool 三类暂停恢复。
 
-##### 4. Skill Hub 订阅 Skill
+#### 4. Skill Hub 订阅 Skill
 
 新增支持 Skill Hub 订阅 Skill，默认支持 OpenJiuwen Skill Hub，可通过 SPI 扩展支持自建 Skill Hub：
 
@@ -186,7 +51,7 @@ runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，�
 - optional skill 获取失败时可跳过并继续启动，输出脱敏诊断。
 - 凭据与敏感信息不写入日志、错误响应或遥测数据。
 
-##### 5. 标准化智能体客户端调用
+#### 5. 标准化智能体客户端调用
 
 面向业务应用提供标准 client facade，在创建调用时声明调用模式并回显调用关联与任务状态投影：
 
@@ -197,7 +62,7 @@ runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，�
 - **幂等与重试**：创建类调用和继续等待输入类调用均具备独立幂等语义，重试不造成重复副作用。
 - **错误分类**：区分网络错误、路由错误、服务端错误、业务失败、取消、拒绝、接受未知和流式能力不可用。
 
-##### 6. 客户端本地工具注册与调用
+#### 6. 客户端本地工具注册与调用
 
 新增本地工具的标准化 SPI 与注册管理，支持被远端智能体驱动调用：
 
@@ -209,7 +74,7 @@ runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，�
 - **远端驱动调用**：服务端只能通过受治理消息请求 ToolView 中可见的客户端工具，不能直接访问客户端本地资源。
 - **结果提交**：工具执行结果经 Gateway 主动提交给 runtime，作为客户端内部恢复请求。
 
-##### 7. 运行时端侧工具响应
+#### 7. 运行时端侧工具响应
 
 新增支持带有端侧工具的请求处理，runtime 在 Agent 执行需要客户端本地工具时挂起当前 Task，通过响应投影工具请求，并在 client 提交工具 outcome 后校验恢复关系继续原 Task：
 
@@ -219,7 +84,7 @@ runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，�
 - **continuation 恢复**：client 按标准 continuation invocation 提交工具结果，runtime 校验关联后恢复原 Task。
 - **客户端异常透传**：工具未声明、权限不足、参数非法、执行失败或超时等 outcome 作为工具结果输入恢复执行链路。
 
-##### 8. ReActAgent 认知能力补全（react-rails）
+#### 8. ReActAgent 认知能力补全（react-rails）
 
 新增 `react-rails` 模块，为 agent-core-java 的 ReActAgent 补三条认知 rail，解决原生 ReActAgent 只有 reason+act 循环（无 verify、无 replan 意识、工具失败不降级）的 capability gap：
 
@@ -230,84 +95,84 @@ runtime 在标准 Agent 服务语义之上提供自定义 REST edge adapter，�
 
 纯 Java SDK，不依赖 Spring 或 runtime-ext；由应用显式注册 rail 与工具。
 
-#### 二、Agent 引擎
+### 二、Agent 引擎
 
 EDPAgent Java v0.1.0 是 EDPAgent（企业级通用动态规划智能体）的首个 Java 正式版本。继 Python 版本成功发布后，本版本面向金融等垂直行业的 Java 技术栈需求，在 OpenJiuwen DeepAgent 之上交付企业级 Agent 引擎与配套治理能力，实现了企业级 Agent 所需的核心能力，满足金融行业对安全性、可控性、可观测性的严格要求。
 
-##### 1. ReAct 机制升级为 DeepAgent 机制
+#### 1. ReAct 机制升级为 DeepAgent 机制
 
 基于 DeepAgent 推理循环范式，实现"规划—执行—观察—反思"的闭环智能体架构，替代传统单轮 ReAct 模式，支持任务状态管理、动态路径调整、依赖关系自动解析和规划前置硬拦截。
 
-##### 2. 拦截与管控机制
+#### 2. 拦截与管控机制
 
 通过多个拦截器构成处理链，按优先级顺序执行，形成全方位的行为治理与安全管控体系，覆盖任务取消、状态维护、执行限制、工具调用、中断处理、日志记录、事件推送、话术渲染等全流程。
 
-##### 3. ask_user（追问用户信息）工具
+#### 3. ask_user（追问用户信息）工具
 
 人机协同关键机制，在关键决策点让用户参与确认，避免 Agent 自行猜测导致业务风险，支持中断持久化、丰富参数配置、强制场景约束和中断后自动恢复执行。
 
-##### 4. call_mcp（通用脚本调用）工具
+#### 4. call_mcp（通用脚本调用）工具
 
 通过 MCP SSE 服务调用脚本，提供安全隔离的 Python 脚本执行沙箱环境，支持主备自动切换、Token 鉴权、数据直通自动写入和调用次数限制。
 
-##### 5. Versatile 工作流调用
+#### 5. Versatile 工作流调用
 
 将复杂业务流程委托给外部工作流服务执行，实现 Agent 与业务系统的职责分离，支持 REST/A2A 双调用模式、中断续传、结果归一化和数据直通读取。
 
-##### 6. cancel_task（终止当前任务）工具
+#### 6. cancel_task（终止当前任务）工具
 
 提供任务取消能力，支持用户在任何时候终止当前正在执行的业务流程。
 
-##### 7. 工具之间数据通道直通
+#### 7. 工具之间数据通道直通
 
 通过会话级键值存储机制，实现工具间结构化数据的直接传递，无需依赖 LLM 转述，避免数据丢失、格式错误或幻觉注入，支持多级作用域隔离和并发安全。
 
-##### 8. 任务规划
+#### 8. 任务规划
 
 基于 Todo 状态机的完整任务规划与生命周期管理能力，支撑复杂业务流程的多步骤执行，支持任务模板、状态更新、动态路径规则和跨轮次持久化。
 
-##### 9. 规则业务管控
+#### 9. 规则业务管控
 
 多层治理机制约束 Agent 行为边界，确保 Agent 在授权范围内安全、可控地执行业务，满足金融行业合规要求，支持框架默认配置和场景配置两种模式，分层分级对业务范围控制、工具白名单、调用次数限制、子任务数量限制、执行步数限制和合规进行把关。
 
-##### 10. 思维链
+#### 10. 思维链
 
 实现 Agent 思考过程的可视化展示，通过精细化的帧控制和阶段话术配置，为用户提供流畅、自然的思考过程反馈，提升交互体验，支持真实流式和固定话术双展示模式。
 
-##### 11. 话术管理
+#### 11. 话术管理
 
 统一话术配置、变量替换和场景级覆盖机制，通过分层话术体系确保 Agent 输出的话术一致、可控、合规，支持通用话术、场景话术、Skill 话术三级配置和合规出口约束。
 
-##### 12. 隔离执行环境
+#### 12. 隔离执行环境
 
 通过多层隔离机制保障 Agent 执行环境的安全性与稳定性，满足企业级部署要求。
 
-#### 三、EvoAgent 自进化引擎
+### 三、EvoAgent 自进化引擎
 
 EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环能力，基于 Agent 真实运行轨迹完成质量判定，并通过优化引擎持续改进 Prompt 与 Skill，实现 Agent 自主演进。
 
-##### 1. 数据回流
+#### 1. 数据回流
 
 采集 Agent 运行轨迹，完成清洗与结构化归一，为评估与优化提供高质量输入：
 
 - **轨迹采集**：从 Agent 运行日志 / Agent 上报 OpenTelemetry 格式数据中回流结构化轨迹；支持 log 模式与 standard（OTel）模式，两种模式产出记录格式同构。
 - **轨迹清洗**：将异构轨迹归一为标准对话格式，剔除评估暂不需要的元数据。
 
-##### 2. 轨迹评估
+#### 2. 轨迹评估
 
 提供指标评估器与 LLM 评估器，对轨迹质量进行判定与评分，定位 Skill / Prompt 优化点：
 
 - **指标评估器**：支持 F1、精确率、关键词匹配、语义相似度等指标评估。
 - **LLM 评估器**：对任务完成度、轨迹质量、安全性进行多维评分，并支持 Skill 归因与可执行优化建议输出。
 
-##### 3. 优化引擎
+#### 3. 优化引擎
 
 基于评估结果执行 Prompt 优化与 Skill 优化，将优化结果回写到目标 Agent：
 
 - **Skill 优化器**：通过反思 → 聚合 → 选择 → 应用优化 Skill 文档，支持 SkillOpt/TF-GRPO 算法。
 - **Prompt 优化器**：支持基于评估反馈自动迭代优化提示词，并通过业务 Agent 热更新测试验证。
 
-##### 4. 自进化 Agent
+#### 4. 自进化 Agent
 
 通过智能体原生能力实现业务 Agent 自进化全流程：
 
@@ -315,9 +180,9 @@ EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环
 
 ---
 
-### 测试与质量
+## 测试与质量
 
-#### 一、平台能力
+### 一、平台能力
 
 扩展模块与示例工程覆盖单元测试与集成测试。测试覆盖范围包括：
 
@@ -330,7 +195,7 @@ EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环
 - **端侧工具响应**：带 ToolView 调用、流式/非流式工具请求挂起、continuation 恢复、等待期间查询与取消。
 - **react-rails 认知 rail**：三条 rail 控制流硬断（mutation-RED）、真 ReActAgent + 真 LLM e2e 数据通道、forceFinish gate offset 真消费。
 
-#### 二、Agent 引擎
+### 二、Agent 引擎
 
 - **单元测试覆盖**：覆盖核心模块单元测试。
 - **端到端测试**：
@@ -340,7 +205,7 @@ EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环
     3. DFx 维度包括性能、可靠性、可维护性、安全性、韧性、稳定性、可扩展性、可观测性。
   - **场景测试**：测试范围为 XX 个理财场景用例，构建 Mock 环境进行环境搭建，通过发送 curl 命令给后台智能体，获取 SSE 信息评估用例执行结果，完成多产品购买、取消购买后重新推荐、流程中各环节取消、转账异常、边界值、理财推荐。
 
-#### 三、EvoAgent 自进化引擎
+### 三、EvoAgent 自进化引擎
 
 覆盖单元测试、集成测试与端到端测试。测试覆盖范围包括：
 
@@ -351,20 +216,20 @@ EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环
 
 ---
 
-### 缺陷修复
+## 缺陷修复
 
 本版本为首发版本，不涉及历史缺陷修复。
 
 ---
 
-### 文档
+## 文档
 
-#### 一、平台能力
+### 一、平台能力
 
 - `common/README.md`：目录说明与正式 / 非正式版本的编译打包流程。
 - 各 example README：打包、启动、请求脚本。
 
-#### 二、Agent 引擎
+### 二、Agent 引擎
 
 - `docs/快速入门/`：涵盖核心特性、产品介绍、开发与运维快速入门。
 - `docs/开发指南/`：包含 Redis 集成、内置工具、外部集成、开发方式、开发环境准备、技能开发与配置指南。
@@ -372,7 +237,7 @@ EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环
 - `docs/参考指南/`：工具 API 与环境变量参考。
 - `docs/支持与排错/`：故障排查、常见问题、技术支持与版本变更。
 
-#### 三、EvoAgent 自进化引擎
+### 三、EvoAgent 自进化引擎
 
 - `docs/README.md`：项目总览与文档导航。
 - `docs/02-部署指南/evoagent部署指南.md`：环境安装与双容器部署。
@@ -381,19 +246,19 @@ EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环
 
 ---
 
-### 已知限制
+## 已知限制
 
-#### 一、平台能力
+### 一、平台能力
 
 - 客户端本地工具默认不暴露，需业务应用显式声明 ToolExposurePolicy。
 - 当前版本一个 runtime 实例只承诺服务一个 Agent，多 Agent 部署应使用多个 runtime 实例或上层路由。
 - runtime 不直接访问客户端本地工具、DOM、插件、文件、本地端口或业务 UI。
 
-#### 二、Agent 引擎
+### 二、Agent 引擎
 
 不涉及
 
-#### 三、EvoAgent 自进化引擎
+### 三、EvoAgent 自进化引擎
 
 - EvoAgent 与 EvoAgentAdapter 需同时可用；轨迹采集、Skill / managed-doc 读写依赖 Adapter。
 - 评估 / 优化任务默认保存在服务进程内存中，服务重启后旧 `job_id` 无法继续查询。
@@ -403,7 +268,7 @@ EvoAgent v0.1.0 提供「数据回流 → 轨迹评估 → 优化引擎」闭环
 
 ---
 
-### 构建与验证
+## 构建与验证
 
 扩展依赖 `agent-runtime-java` 0.1.1 与 `agent-core-java` 0.1.14。
 
@@ -416,7 +281,7 @@ mvn -f common/example/multi-deep-research-demo/pom.xml clean install
 mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am clean install
 ```
 
-##### Maven 坐标
+#### Maven 坐标
 
 ```xml
 <dependency>
@@ -435,7 +300,7 @@ mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am clean install
 
 ---
 
-### 致谢
+## 致谢
 
 感谢所有为 OpenJiuwen 智能体解决方案 v0.1.0 提交需求、Issue、Pull Request、设计评审、代码开发与测试验证的贡献者！
 

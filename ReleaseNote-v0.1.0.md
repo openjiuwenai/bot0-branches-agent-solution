@@ -1,140 +1,4 @@
-# openJiuwen agent-solution
-
-[Chinese Version](README.zh.md) | [English Version](README.md)
-
-## Introduction
-
-**openJiuwen agent-solution** is an openJiuwen extension solution repository for Agent application integration and general industry scenarios.
-
-The current version contains three independent extension projects: runtime adapters, pure AgentCore SDK extensions, and concrete Agent implementations. This repository does not reimplement runtime capabilities such as HTTP ingress, A2A protocol support, remote card discovery and communication, or session orchestration. Those capabilities are provided by `agent-runtime-java`; the Agent execution core is provided by `agent-core-java`.
-
-## Quick Start
-
-### Requirements
-
-- **Java**: JDK 17+
-- **Build tool**: Maven 3.9+
-- **Runtime dependency**: `com.openjiuwen:agent-runtime-java:0.1.0`
-- **Execution core dependency**: `com.openjiuwen:agent-core-java:0.1.13`
-
-### Build Extension Modules
-
-```powershell
-mvn -f common\agent-core-ext-java\pom.xml clean install
-mvn -f common\agents\pom.xml clean install
-mvn -f common\agent-runtime-ext-java\pom.xml clean install
-```
-
-### Build Example Projects
-
-```powershell
-mvn -f common\example\versatile-a2a-adapter-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml clean install
-mvn -f common\example\multi-deep-research-demo\pom.xml clean install
-```
-
-## Architecture
-
-The projects under `common` are peers and are built separately. They have no Maven parent or reactor aggregation relationship with one another.
-
-| Module | Description |
-|--------|-------------|
-| `common/agent-runtime-ext-java` | Maven parent project for runtime extensions. It currently contains the AgentCore extension adapter and the Versatile adapter. |
-| `common/agent-core-ext-java` | Pure SDK extensions for `agent-core-java`; currently aggregates the Spring-free `react-rails` feature jar. |
-| `common/agents` | Concrete Agent implementations; currently aggregates the self-contained PEV Agent. |
-| `agent-service-adapters-agentcore-ext` | Reuses remote A2A card registration results discovered by the runtime, injects remote agents as tools before the AgentCore handler executes, and delegates remote calls through `a2a_delegate` interrupts. |
-| `agent-service-adapters-versatile` | Implements the runtime `AgentHandler` SPI and adapts query requests to remote HTTP/SSE workflow services. |
-| `common/example` | Example projects for runtime extension adapters, A2A exposure, remote delegation, and runtime wiring. |
-
-Design details:
-
-- [agent-service-adapters-agentcore-ext-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-agentcore-ext-design.md)
-- [agent-service-adapters-versatile-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-versatile-design.md)
-
-## Features
-
-- **AgentCore remote A2A tool injection**: installs remote agents discovered from runtime remote agent cards as AgentCore-visible tools.
-- **Interrupt mechanism**: converts remote tool calls into delegate interrupts that can be handled by the runtime, and injects remote results back into AgentCore after resume.
-- **Versatile HTTP/SSE adaptation**: converts runtime query requests into remote workflow service calls and consumes SSE or line-stream responses.
-- **ReAct cognitive rails**: explicit Java rails for verification, replanning, and failure degradation without automatic framework wiring.
-- **PEV Agent**: a self-contained Plan-Execute-Verify-Diagnose-Dispatch implementation built on `agent-core-java`.
-
-## Project Structure
-
-```text
-agent-solution
-|-- common
-|   |-- agent-core-ext-java
-|   |   `-- react-rails
-|   |-- agent-runtime-ext-java
-|   |   `-- agent-service-adapters
-|   |       |-- agent-service-adapters-agentcore-ext
-|   |       `-- agent-service-adapters-versatile
-|   |-- agents
-|   |   `-- pev
-|   `-- example
-|       |-- agentcore-ext-deepagent-remote-a2a-demo
-|       |-- agentcore-ext-remote-a2a-tool-demo
-|       |-- multi-deep-research-demo
-|       `-- versatile-a2a-adapter-demo
-|-- LICENSE
-|-- README.en.md
-`-- README.md
-```
-
-## Examples
-
-```text
-common/example
-|-- agent-gateway-demo
-|-- agentcore-ext-deepagent-remote-a2a-demo
-|-- agentcore-ext-remote-a2a-tool-demo
-|-- multi-deep-research-demo
-`-- versatile-a2a-adapter-demo
-```
-
-## Maven Coordinates
-
-```xml
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-agentcore-ext</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-versatile</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>react-rails</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>pev</artifactId>
-    <version>0.1.0</version>
-</dependency>
-```
-
-## Contributing
-
-We welcome issues, pull requests, design discussions, documentation improvements, code contributions, and usage feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
-
-## License
-
-This project is licensed under the [Apache License 2.0](LICENSE).
-
----
-
-For version evolution and features of this repository, the release notes of published versions are listed below.
-
-## OpenJiuwen Agent Solution v0.1.0 Release Note
+# OpenJiuwen Agent Solution v0.1.0 Release Note
 
 Release Date: July 30, 2026
 
@@ -148,17 +12,17 @@ Welcome to OpenJiuwen Agent Solution v0.1.0! This release covers three major com
 
 ---
 
-### New Features
+## New Features
 
-#### I. Platform Capabilities
+### I. Platform Capabilities
 
 The extension uses the runtime's `AgentHandler` SPI, `A2ARemoteAgentCardRegistry`, and Spring Boot auto-configuration as integration entry points. HTTP integration, A2A protocol, remote card discovery and communication, and session orchestration are provided by agent-runtime-java. The execution core is provided by agent-core-java. Client invocation and local tool governance are provided by agent-client.
 
-##### 1. Versatile Intent Workflow Adaptation
+#### 1. Versatile Intent Workflow Adaptation
 
 Supports Versatile and Versatile intent workflow adaptation, enabling intent-based routing distribution by selecting endpoints URL templates based on intent, and enhancing SSE response minimal result node extraction. SSE response parsing supports `result-node-name` minimal result node extraction, extracting the final result when `node_name` matches and `node_type` is `"End"`.
 
-##### 2. Custom REST API Service Entry Point
+#### 2. Custom REST API Service Entry Point
 
 The runtime provides a custom REST edge adapter on top of standard Agent service semantics, enabling callers to access the same hosted Agent in a business REST/SSE format:
 
@@ -168,7 +32,7 @@ The runtime provides a custom REST edge adapter on top of standard Agent service
 - **A2A Semantic Normalization**: Each submission is normalized to a standard Agent service call, with Task, error, and tenant semantics normalized to the standardized Agent service entry point.
 - **Single Entry Point, Single Path**: In the current version, a single runtime instance hosts only one Agent and allows only one REST path pattern.
 
-##### 3. Heterogeneous Agent Framework Compatibility Extension
+#### 3. Heterogeneous Agent Framework Compatibility Extension
 
 Building on the `agentcore-ext` and `Versatile` adapter, extends the heterogeneous framework compatibility scope to support the AgentScope framework:
 
@@ -176,7 +40,7 @@ Building on the `agentcore-ext` and `Versatile` adapter, extends the heterogeneo
 - Supports wrapping a locally built `HarnessAgent` from the host, maintaining the same runtime protocol as ReAct through public API calls and state reads.
 - Verified three types of pause/resume: message stop, manual confirmation, and single external pending tool.
 
-##### 4. Skill Hub Subscription
+#### 4. Skill Hub Subscription
 
 Adds support for subscribing to Skills via Skill Hub, with default support for OpenJiuwen Skill Hub and extensibility to custom Skill Hubs via SPI:
 
@@ -187,7 +51,7 @@ Adds support for subscribing to Skills via Skill Hub, with default support for O
 - Optional skill acquisition failures can be skipped to continue startup, with desensitized diagnostics output.
 - Credentials and sensitive information are not written to logs, error responses, or telemetry data.
 
-##### 5. Standardized Agent Client Invocation
+#### 5. Standardized Agent Client Invocation
 
 Provides a standard client facade for business applications, declaring invocation mode at creation time and returning invocation correlation and task status projection:
 
@@ -198,7 +62,7 @@ Provides a standard client facade for business applications, declaring invocatio
 - **Idempotency and Retry**: Both creation-type invocations and continue-waiting-for-input-type invocations have independent idempotency semantics; retries do not cause duplicate side effects.
 - **Error Classification**: Distinguishes network errors, routing errors, server errors, business failures, cancellations, rejections, accepted-unknown, and streaming capability unavailable.
 
-##### 6. Client Local Tool Registration and Invocation
+#### 6. Client Local Tool Registration and Invocation
 
 Adds standardized SPI and registration management for local tools, supporting invocation driven by remote agents:
 
@@ -210,7 +74,7 @@ Adds standardized SPI and registration management for local tools, supporting in
 - **Remote-Driven Invocation**: The server can only request client tools visible in the ToolView through governed messages and cannot directly access client local resources.
 - **Result Submission**: Tool execution results are proactively submitted to the runtime via Gateway as internal client recovery requests.
 
-##### 7. Runtime Client-Side Tool Response
+#### 7. Runtime Client-Side Tool Response
 
 Adds support for request handling with client-side tools. The runtime suspends the current Task when Agent execution requires a client local tool, projects the tool request through the response, and verifies the recovery relationship to continue the original Task after the client submits the tool outcome:
 
@@ -220,7 +84,7 @@ Adds support for request handling with client-side tools. The runtime suspends t
 - **Continuation Recovery**: The client submits tool results via a standard continuation invocation; the runtime verifies the correlation and resumes the original Task.
 - **Client Exception Pass-Through**: Outcomes such as undeclared tools, insufficient permissions, invalid parameters, execution failures, or timeouts are fed as tool results into the recovery execution chain.
 
-##### 8. ReActAgent Cognitive Capability Enhancement (react-rails)
+#### 8. ReActAgent Cognitive Capability Enhancement (react-rails)
 
 Adds the `react-rails` module, supplementing the agent-core-java ReActAgent with three cognitive rails to address the capability gap of the native ReActAgent, which only has a reason+act loop (no verify, no replan awareness, no graceful degradation on tool failure):
 
@@ -231,84 +95,84 @@ Adds the `react-rails` module, supplementing the agent-core-java ReActAgent with
 
 Pure Java SDK, no dependency on Spring or runtime-ext; rails and tools are explicitly registered by the application.
 
-#### II. Agent Engine
+### II. Agent Engine
 
 EDPAgent Java v0.1.0 is the first official Java release of EDPAgent (Enterprise-grade Dynamic Planning Agent). Following the successful release of the Python version, this release addresses the Java technology stack requirements of vertical industries such as finance, delivering an enterprise-grade Agent engine with comprehensive governance capabilities built on top of OpenJiuwen DeepAgent, implementing the core capabilities required for enterprise-grade Agents and meeting the stringent requirements of the financial industry for security, controllability, and observability.
 
-##### 1. ReAct Mechanism Upgraded to DeepAgent Mechanism
+#### 1. ReAct Mechanism Upgraded to DeepAgent Mechanism
 
 Based on the DeepAgent reasoning loop paradigm, implements a closed-loop agent architecture of "plan — execute — observe — reflect", replacing the traditional single-turn ReAct pattern, supporting task state management, dynamic path adjustment, automatic dependency resolution, and planning pre-check hard interception.
 
-##### 2. Interception and Control Mechanism
+#### 2. Interception and Control Mechanism
 
 Forms a processing chain through multiple interceptors executed in priority order, creating a comprehensive behavioral governance and security control system covering task cancellation, state maintenance, execution limits, tool invocation, interrupt handling, logging, event push, and utterance rendering throughout the entire process.
 
-##### 3. ask_user (User Information Follow-up) Tool
+#### 3. ask_user (User Information Follow-up) Tool
 
 A key human-machine collaboration mechanism that involves users in confirmation at critical decision points, preventing business risks caused by Agent speculation. Supports interrupt persistence, rich parameter configuration, mandatory scenario constraints, and automatic execution recovery after interruption.
 
-##### 4. call_mcp (Generic Script Invocation) Tool
+#### 4. call_mcp (Generic Script Invocation) Tool
 
 Invokes scripts via MCP SSE service, providing a security-isolated Python script execution sandbox environment, supporting active-standby auto-switch, Token authentication, automatic data pass-through writing, and invocation count limits.
 
-##### 5. Versatile Workflow Invocation
+#### 5. Versatile Workflow Invocation
 
 Delegates complex business processes to external workflow services for execution, achieving separation of responsibilities between Agent and business systems. Supports REST/A2A dual invocation modes, interrupt-resume, result normalization, and data pass-through reading.
 
-##### 6. cancel_task (Cancel Current Task) Tool
+#### 6. cancel_task (Cancel Current Task) Tool
 
 Provides task cancellation capability, supporting users to terminate the currently executing business process at any time.
 
-##### 7. Inter-Tool Data Channel Pass-Through
+#### 7. Inter-Tool Data Channel Pass-Through
 
 Implements direct structured data passing between tools through a session-level key-value storage mechanism, without relying on LLM retransmission, avoiding data loss, format errors, or hallucination injection. Supports multi-level scope isolation and concurrency safety.
 
-##### 8. Task Planning
+#### 8. Task Planning
 
 Provides complete task planning and lifecycle management based on the Todo state machine, supporting multi-step execution of complex business processes, task templates, state updates, dynamic path rules, and cross-turn persistence.
 
-##### 9. Rule-Based Business Governance
+#### 9. Rule-Based Business Governance
 
 Multi-layer governance mechanism constraining Agent behavioral boundaries, ensuring Agents execute business safely and controllably within authorized scope, meeting financial industry compliance requirements. Supports both framework default configuration and scenario configuration modes, providing hierarchical control over business scope, tool whitelists, invocation count limits, subtask quantity limits, execution step limits, and compliance.
 
-##### 10. Chain of Thought
+#### 10. Chain of Thought
 
 Implements visualization of the Agent's thinking process, providing users with smooth and natural thinking process feedback through fine-grained frame control and stage utterance configuration, enhancing interaction experience. Supports both real streaming and fixed utterance display modes.
 
-##### 11. Utterance Management
+#### 11. Utterance Management
 
 Unified utterance configuration, variable substitution, and scenario-level override mechanism, ensuring Agent output utterances are consistent, controllable, and compliant through a layered utterance system. Supports three-level configuration of general utterances, scenario utterances, and Skill utterances, with compliance exit constraints.
 
-##### 12. Isolated Execution Environment
+#### 12. Isolated Execution Environment
 
 Ensures the security and stability of the Agent execution environment through multi-layer isolation mechanisms, meeting enterprise-grade deployment requirements.
 
-#### III. EvoAgent Self-Evolution Engine
+### III. EvoAgent Self-Evolution Engine
 
 EvoAgent v0.1.0 provides a closed-loop capability of "Data Replay → Trajectory Evaluation → Optimization Engine", performing quality assessment based on Agent real-world execution trajectories, and continuously improving Prompts and Skills through the optimization engine to enable Agent self-driven evolution.
 
-##### 1. Data Replay
+#### 1. Data Replay
 
 Collects Agent execution trajectories, performs cleaning and structural normalization, providing high-quality input for evaluation and optimization:
 
 - **Trajectory Collection**: Replays structured trajectories from Agent execution logs / Agent-reported OpenTelemetry-format data; supports both log mode and standard (OTel) mode, with isomorphic record formats produced by both modes.
 - **Trajectory Cleaning**: Normalizes heterogeneous trajectories into standard conversation format, removing metadata not needed for evaluation.
 
-##### 2. Trajectory Evaluation
+#### 2. Trajectory Evaluation
 
 Provides metric evaluators and LLM evaluators to assess and score trajectory quality, identifying Skill / Prompt optimization points:
 
 - **Metric Evaluator**: Supports F1, precision, keyword matching, semantic similarity, and other metric evaluations.
 - **LLM Evaluator**: Performs multi-dimensional scoring of task completion, trajectory quality, and security, with support for Skill attribution and actionable optimization recommendation output.
 
-##### 3. Optimization Engine
+#### 3. Optimization Engine
 
 Executes Prompt optimization and Skill optimization based on evaluation results, writing optimization results back to the target Agent:
 
 - **Skill Optimizer**: Optimizes Skill documentation through reflection → aggregation → selection → application; supports SkillOpt/TF-GRPO algorithms.
 - **Prompt Optimizer**: Supports automatic iterative prompt optimization based on evaluation feedback, with verification through business Agent hot-update testing.
 
-##### 4. Self-Evolution Agent
+#### 4. Self-Evolution Agent
 
 Implements the full business Agent self-evolution process through native agent capabilities:
 
@@ -316,9 +180,9 @@ Implements the full business Agent self-evolution process through native agent c
 
 ---
 
-### Testing and Quality
+## Testing and Quality
 
-#### I. Platform Capabilities
+### I. Platform Capabilities
 
 Extension modules and example projects are covered by unit tests and integration tests. Test coverage includes:
 
@@ -331,7 +195,7 @@ Extension modules and example projects are covered by unit tests and integration
 - **Client-Side Tool Response**: ToolView-attached invocation, streaming/non-streaming tool request suspension, continuation recovery, query and cancellation during waiting.
 - **react-rails Cognitive Rails**: Three-rail control flow hard interruption (mutation-RED), real ReActAgent + real LLM e2e data channel, forceFinish gate offset real consumption.
 
-#### II. Agent Engine
+### II. Agent Engine
 
 - **Unit Test Coverage**: Covers core module unit tests.
 - **End-to-End Testing**:
@@ -341,7 +205,7 @@ Extension modules and example projects are covered by unit tests and integration
     3. DFx dimensions including performance, reliability, maintainability, security, resilience, stability, scalability, and observability.
   - **Scenario Testing**: Test scope covers XX wealth management scenario test cases, building a Mock environment for setup, sending curl commands to the backend agent, evaluating test case execution results via SSE information, completing multi-product purchase, re-recommendation after purchase cancellation, cancellation at various stages in the process, transfer exceptions, boundary values, and wealth management recommendations.
 
-#### III. EvoAgent Self-Evolution Engine
+### III. EvoAgent Self-Evolution Engine
 
 Covers unit tests, integration tests, and end-to-end tests. Test coverage includes:
 
@@ -352,20 +216,20 @@ Covers unit tests, integration tests, and end-to-end tests. Test coverage includ
 
 ---
 
-### Bug Fixes
+## Bug Fixes
 
 This is an initial release version and does not involve historical bug fixes.
 
 ---
 
-### Documentation
+## Documentation
 
-#### I. Platform Capabilities
+### I. Platform Capabilities
 
 - `common/README.md`: Directory description and compilation/packaging process for formal / informal versions.
 - Example READMEs: Packaging, startup, and request scripts.
 
-#### II. Agent Engine
+### II. Agent Engine
 
 - `docs/Quick Start/`: Covers core features, product introduction, development and operations quick start.
 - `docs/Development Guide/`: Includes Redis integration, built-in tools, external integration, development approach, development environment preparation, skill development, and configuration guides.
@@ -373,7 +237,7 @@ This is an initial release version and does not involve historical bug fixes.
 - `docs/Reference Guide/`: Tool API and environment variable reference.
 - `docs/Support and Troubleshooting/`: Troubleshooting, FAQ, technical support, and version changelog.
 
-#### III. EvoAgent Self-Evolution Engine
+### III. EvoAgent Self-Evolution Engine
 
 - `docs/README.md`: Project overview and documentation navigation.
 - `docs/02-Deployment-Guide/evoagent-deployment-guide.md`: Environment installation and dual-container deployment.
@@ -382,19 +246,19 @@ This is an initial release version and does not involve historical bug fixes.
 
 ---
 
-### Known Limitations
+## Known Limitations
 
-#### I. Platform Capabilities
+### I. Platform Capabilities
 
 - Client local tools are not exposed by default; business applications must explicitly declare ToolExposurePolicy.
 - The current version supports only one Agent per runtime instance; multi-Agent deployments should use multiple runtime instances or upper-layer routing.
 - The runtime does not directly access client local tools, DOM, plugins, files, local ports, or business UI.
 
-#### II. Agent Engine
+### II. Agent Engine
 
 Not applicable
 
-#### III. EvoAgent Self-Evolution Engine
+### III. EvoAgent Self-Evolution Engine
 
 - EvoAgent and EvoAgentAdapter must both be available; trajectory collection and Skill / managed-doc read/write depend on the Adapter.
 - Evaluation / optimization tasks are stored in service process memory by default; old `job_id` cannot be queried after service restart.
@@ -404,7 +268,7 @@ Not applicable
 
 ---
 
-### Build and Verification
+## Build and Verification
 
 Extension depends on `agent-runtime-java` 0.1.1 and `agent-core-java` 0.1.14.
 
@@ -417,7 +281,7 @@ mvn -f common/example/multi-deep-research-demo/pom.xml clean install
 mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am clean install
 ```
 
-##### Maven Coordinates
+#### Maven Coordinates
 
 ```xml
 <dependency>
@@ -436,7 +300,7 @@ Dependency requirements: `com.openjiuwen:agent-runtime-java:0.1.1`, `com.openjiu
 
 ---
 
-### Acknowledgments
+## Acknowledgments
 
 Thank you to all contributors who submitted requirements, Issues, Pull Requests, design reviews, code development, and test verification for OpenJiuwen Agent Solution v0.1.0!
 
