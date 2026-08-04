@@ -80,7 +80,7 @@ deep-agent:
     # API 密钥
     api_key: ${DEEPSEEK_API_KEY:sk-xxxx}
     # API 基础地址
-    api_base: ${EDP_AGENT_MODEL_BASE_URL:}
+    api_base: ${EDP_AGENT_MODEL_BASE_URL}
     # 请求超时时间（秒），必须 > 0
     timeout: 120.0
     # 最大重试次数
@@ -132,7 +132,7 @@ deep-agent:
   # MCP SSE 连接配置（工具服务主备灰度）
   mcpsse:
     # MCP SSE 主 URL（灰度：wap_grayFlag 以 JD 开头时使用）
-    master-url: ${EDP_MCP_MASTER_URL:}
+    master-url: ${EDP_MCP_MASTER_URL}
     # MCP SSE 备 URL（灰度：wap_grayFlag 非 JD 开头时使用）
     standby-url: ${EDP_MCP_STANDBY_URL:http://localhost:30002/sse}
     # MCP SSE 鉴权 Token
