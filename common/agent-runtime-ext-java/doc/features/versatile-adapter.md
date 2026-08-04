@@ -84,6 +84,10 @@ Accept、认证或 Cookie，必须通过配置提供。
 2xx 响应按 UTF-8 行读取；非 2xx 会完整读取响应 Body 并抛出 IOException。query 和 streamQuery
 最终都把 I/O、线程中断或解析运行时异常包装为 `IllegalStateException("Versatile invocation failed")`。
 
+`insecure-skip-verify=false` 时，HTTPS 使用 JVM 默认的证书链和主机名校验；设置为 `true` 时，
+同时跳过证书链和主机名校验。HTTP URL 不受该参数影响。`true` 会失去服务端身份认证，生产环境
+建议保持 `false`。
+
 ## 5. 响应状态机
 
 每个非空响应行按以下顺序处理：
@@ -173,7 +177,8 @@ blocking Handler 聚合为 `{role: assistant, content: result text}`。若没有
 ## 10. 限制
 
 - 自动装配不创建 Handler。
-- HTTP Client 没有连接池、代理、TLS 或认证的专属配置抽象。
+- HTTP Client 没有连接池、代理、mTLS 或认证的专属配置抽象；TLS 仅提供默认严格校验和
+  `insecure-skip-verify` 跳过校验模式。
 - 远端响应按行解析，只支持单行 JSON data；多行 SSE data 不会自动拼接。
 - `result-node-name` 使用原始行中的精确 JSON 片段判断，远端字段格式变化可能导致不抽取。
 - 原生中断同样使用原始行中的精确 `event` JSON 片段判断；字段两侧增加空白也可能导致不匹配。

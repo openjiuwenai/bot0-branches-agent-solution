@@ -102,13 +102,13 @@ assert_body "G1-01 code" "AUTH_MISSING" "$tmpdir/b"
 assert_no_topology "G1-01 topology" "$tmpdir/b"
 
 post "g1-02" "$tmpdir/c" "$tmpdir/b" \
-  -H 'Authorization: Token xxx' -H 'Content-Type: application/json' \
+  -H "Authorization: Token $TOKEN" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":"1","method":"SendMessage","params":{"message":{"messageId":"m","parts":[{"text":"x"}]}}}'
 assert_http "G1-02 non-Bearer" "401" "$tmpdir/c"
 assert_body "G1-02 code" "AUTH_INVALID" "$tmpdir/b"
 
 post "g1-03" "$tmpdir/c" "$tmpdir/b" \
-  -H 'Authorization: Bearer bad-token-xyz' -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}x" -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":"1","method":"SendMessage","params":{"message":{"messageId":"m","parts":[{"text":"x"}]}}}'
 assert_http "G1-03 bad Bearer" "401" "$tmpdir/c"
 assert_body "G1-03 code" "AUTH_INVALID" "$tmpdir/b"

@@ -23,6 +23,7 @@ import java.util.Set;
 public class VersatileProperties {
     private String urlTemplate;
     private Duration timeout = Duration.ofSeconds(600);
+    private boolean insecureSkipVerify;
     private Map<String, String> headersTemplate = new LinkedHashMap<>();
     private Set<String> forwardHeaderWhitelist = new LinkedHashSet<>();
     private String resultNodeName;
@@ -50,6 +51,14 @@ public class VersatileProperties {
 
     public void setTimeout(Duration timeout) {
         this.timeout = timeout;
+    }
+
+    public boolean isInsecureSkipVerify() {
+        return insecureSkipVerify;
+    }
+
+    public void setInsecureSkipVerify(boolean insecureSkipVerify) {
+        this.insecureSkipVerify = insecureSkipVerify;
     }
 
     public Map<String, String> getHeadersTemplate() {

@@ -55,8 +55,8 @@ output_max_file_size: ${ADAPTER_OUTPUT_MAX_FILE_SIZE:20MB}   # head-truncate whe
 output_trim_target_ratio: ${ADAPTER_OUTPUT_TRIM_TARGET_RATIO:0.7}  # after truncation, file size ≈ threshold × ratio
 
 # ── HTTP service ──
-host: ${ADAPTER_HOST:0.0.0.0}                # HTTP listen address
-port: ${ADAPTER_PORT:8900}                   # HTTP listen port
+host: ${ADAPTER_HOST:}                # HTTP listen address
+port: ${ADAPTER_PORT:}                   # HTTP listen port
 
 # ── Multi-Agent configuration ──
 # When agents list is present, each agent gets its own Pipeline with independent
