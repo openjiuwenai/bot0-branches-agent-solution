@@ -86,7 +86,7 @@ deep-agent:
     # 最大重试次数
     max_retries: 5
     # 是否验证 SSL 证书
-    verify_ssl: true
+    verify_ssl: false
     # 自定义 SSL 证书路径（可选）
     # ssl_cert: /path/to/cert.pem
     # 客户端 ID（可选，不填会自动生成 UUID）
