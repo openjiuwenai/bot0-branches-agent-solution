@@ -170,10 +170,15 @@ VERSATILE_URL=http://versatile-mock:30001/v1/0/agent-manager/workflows/wealth-in
 | `RESTART_POLICY` | `unless-stopped` | Docker 重启策略 |
 | `VERSATILE_URL` | 无 | 必填，HTTP/HTTPS，保留占位符 |
 | `VERSATILE_TIMEOUT` | `600s` | 上游请求超时 |
+| `VERSATILE_INSECURE_SKIP_VERIFY` | `false` | `false` 使用 JVM 默认的 HTTPS 证书链和主机名校验；`true` 同时跳过这两项校验 |
 | `VERSATILE_RESULT_NODE` | `ABCDEResponseNode` | 真实工作流的结果节点名 |
 | `VERSATILE_AGENT_TENANT_ID` | `edp-tenant` | A2A 默认租户 |
 
 容器内部端口固定为 8191。即使宿主端口改成 18191，同机 EDP 仍应访问 `http://adapter-versatile:8191/a2a`，不能改成 18191。
+
+`VERSATILE_INSECURE_SKIP_VERIFY=false` 时，adapter 到 Versatile 的 HTTPS 请求使用 JVM 默认校验。
+设置为 `true` 后，会接受自签名、证书链不可信或主机名不匹配的证书。该模式不提供服务端身份认证，
+生产环境建议保持 `false`。
 
 ### 4. 构建镜像
 
