@@ -92,7 +92,7 @@ agents:
     # log_pattern: "process*.log"            # Optional: defaults to top-level log_pattern
     # output_dir: "data/output/edp_agent"     # Optional: defaults to data/output/{name}
     # offset_file: "data/offsets/edp_agent.json"  # Optional: defaults to data/offsets/{name}.json
-    agent_url: "http://192.168.1.10:8090"     # 不可用 localhost/127.0.0.1（指向容器自身）。
+    agent_url: ${AGENT_URL:}     # 格式：http://<agent_ip>:<agent_port>，其中<agent_ip>不可用 localhost/127.0.0.1（指向容器自身）。
                                               # 业务 Agent 若把端口发布到宿主机，可写
                                               # http://host.docker.internal:8090
                                               # （需启动脚本/compose 已注入 --add-host host.docker.internal:host-gateway）
@@ -141,7 +141,7 @@ agents:
   - name: "other_agent"
     log_dir: "/data/logs/other_agent"
     skills_dir: "/data/skills/other_agent"
-    agent_url: "http://192.168.1.11:8090"
+    agent_url: ${AGENT_URL2:}
     project_id: "proj_002"
     agent_id: "other_agent"
     timeout: 300
