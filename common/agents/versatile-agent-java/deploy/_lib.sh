@@ -91,6 +91,7 @@ load_runtime_config() {
 
     VERSATILE_URL="$(get_env_value "${ENV_FILE}" VERSATILE_URL "")"
     VERSATILE_TIMEOUT="$(get_env_value "${ENV_FILE}" VERSATILE_TIMEOUT "600s")"
+    VERSATILE_INSECURE_SKIP_VERIFY="$(get_env_value "${ENV_FILE}" VERSATILE_INSECURE_SKIP_VERIFY "false")"
     VERSATILE_RESULT_NODE="$(get_env_value "${ENV_FILE}" VERSATILE_RESULT_NODE "GXZQAResponseNode")"
     VERSATILE_AGENT_TENANT_ID="$(get_env_value "${ENV_FILE}" VERSATILE_AGENT_TENANT_ID "edp-tenant")"
 
@@ -101,6 +102,8 @@ load_runtime_config() {
         die "容器内 localhost/127.0.0.1 指向 adapter 自己，不能作为 Versatile 地址；请使用可路由 DNS/IP 或 host.docker.internal。"
     fi
     [[ "${VERSATILE_TIMEOUT}" =~ ^[0-9]+(ms|s|m|h|d)$ ]] || die "VERSATILE_TIMEOUT 格式非法，例如应写 600s、10m 或 30000ms。"
+    [[ "${VERSATILE_INSECURE_SKIP_VERIFY}" =~ ^(true|false)$ ]] \
+        || die "VERSATILE_INSECURE_SKIP_VERIFY 只能写 true 或 false。"
     [ -n "${VERSATILE_RESULT_NODE}" ] || die "VERSATILE_RESULT_NODE 不能为空。"
 }
 
