@@ -5,6 +5,8 @@
 
 package com.openjiuwen.edp.channel;
 
+import java.util.Objects;
+
 /**
  * ToolDataChannel 四元组隔离键。
  *
@@ -63,31 +65,32 @@ public class ToolDataKey {
         return taskId;
     }
 
-    @Override
     /**
-     * Checks equality with another object.
+     * 判断当前对象是否与指定对象相等。
      *
-     * @param o the o value
-     * @return the result
+     * @param o 待比较的对象
+     * @return 相等返回 true，否则返回 false
      */
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof ToolDataKey)) {
+        if (!(o instanceof ToolDataKey that)) {
             return false;
         }
-        ToolDataKey that = (ToolDataKey) o;
-        return tenantId.equals(that.tenantId) && agentId.equals(that.agentId) && contextId.equals(that.contextId)
-                && taskId.equals(that.taskId);
+        return Objects.equals(this.tenantId, that.tenantId)
+                && Objects.equals(this.agentId, that.agentId)
+                && Objects.equals(this.contextId, that.contextId)
+                && Objects.equals(this.taskId, that.taskId);
     }
 
-    @Override
     /**
-     * Returns the hash code.
+     * 返回当前对象的哈希值。
      *
-     * @return the result
+     * @return 哈希值
      */
+    @Override
     public int hashCode() {
         int result = tenantId.hashCode();
         result = 31 * result + agentId.hashCode();
@@ -96,12 +99,12 @@ public class ToolDataKey {
         return result;
     }
 
-    @Override
     /**
-     * Returns a string representation of the key.
+     * 返回当前对象的字符串表示。
      *
-     * @return the result
+     * @return 字符串表示
      */
+    @Override
     public String toString() {
         return "ToolDataKey{tenant=" + tenantId + ",agent=" + agentId + ",context=" + contextId + ",task=" + taskId
                 + "}";
