@@ -18,7 +18,7 @@ openjiuwen:
         api-key: ${LLM_API_KEY:}
         api-base: ${LLM_API_BASE:}
         model-name: ${LLM_MODEL:}
-        ssl-verify: ${LLM_SSL_VERIFY:true}
+        ssl-verify: ${LLM_SSL_VERIFY}
         max-iterations: ${LLM_MAX_ITERATIONS:5}
   service:
     a2a:

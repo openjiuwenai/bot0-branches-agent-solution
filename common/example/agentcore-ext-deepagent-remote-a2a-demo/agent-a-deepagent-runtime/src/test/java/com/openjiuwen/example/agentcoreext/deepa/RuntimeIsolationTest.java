@@ -51,7 +51,7 @@ class RuntimeIsolationTest {
         assertThat(backend)
                 .containsEntry("provider", "OpenAI")
                 .containsEntry("api_key", "test-key")
-                .containsEntry("api_base", "https://api.deepseek.com");
+                .containsEntry("api_base", "test-api-base");
         assertThat(model).containsEntry("model", "deepseek-chat");
         assertThat(properties.getSystemPrompt())
                 .contains("agent-b")
@@ -82,6 +82,7 @@ class RuntimeIsolationTest {
     private static DeepAgentLlmProperties configuredProperties() {
         DeepAgentLlmProperties properties = new DeepAgentLlmProperties();
         properties.setApiKey("test-key");
+        properties.setApiBase("test-api-base");
         properties.setTimeout(Duration.ofSeconds(10));
         return properties;
     }

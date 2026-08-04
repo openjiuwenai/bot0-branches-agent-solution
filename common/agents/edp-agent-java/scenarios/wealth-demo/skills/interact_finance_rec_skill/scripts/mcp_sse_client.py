@@ -16,7 +16,7 @@ MCP SSE 协议流程（使用 MCP SDK）：
   - Java 侧 McpInterruptRail 通过环境变量注入 MCP_SERVER_URL（优先级最高）
   - wap_grayFlag 以 "JD" 开头 → MCP_MASTER_URL
   - 其他 → MCP_STANDBY_URL
-  - 环境变量为空时回退到硬编码默认值
+  - 未配置 URL 时跳过 MCP 调用
 """
 from __future__ import annotations
 
@@ -38,17 +38,6 @@ except ImportError:
 
 MCP_TOOL_NAME = "get-finance-productslist"
 MCP_TIMEOUT = 25
-
-# 硬编码默认值：Java 侧环境变量为空时的最终回退
-# 生产环境 URL（注释保留供参考）：
-# DEFAULT_MCP_MASTER_URL = "http://122.46.184.84:30080/icbc/mcp/f-waps/finance/financeProductList/a/sse"
-# DEFAULT_MCP_STANDBY_URL = "http://122.46.185.84:30080/icbc/mcp/f-waps/finance/financeProductList/b/sse"
-# DEFAULT_MCP_ACCESS_TOKEN = "e3332b76-19c8-4399-89f"
-# DEFAULT_MCP_APP_NAME = "f-mlp"
-DEFAULT_MCP_MASTER_URL = "http://106.15.62.172:8000/sse"
-DEFAULT_MCP_STANDBY_URL = "http://106.15.62.172:8000/sse"
-DEFAULT_MCP_ACCESS_TOKEN = "test_token"
-DEFAULT_MCP_APP_NAME = "test_app"
 
 SUCCESS_CODES = ("200", 200, "000", "0", "0000", "Success", "success", "SUCCESS")
 
@@ -88,7 +77,7 @@ class MCPSSERequester:
 
         start_time = time.time()
         log_info(
-            f"mcp_sse_client: 开始 MCP SSE 请求, url={self._server_url}, tool={MCP_TOOL_NAME}"
+            f"mcp_sse_client: 开始 MCP SSE 请求, tool={MCP_TOOL_NAME}"
         )
 
         try:
@@ -166,29 +155,28 @@ class MCPSSERequester:
         - wap_gray_flag 以 "JD" 开头 → MCP_MASTER_URL
         - 其他 → MCP_STANDBY_URL
 
-        优先级：os.environ（Java侧注入） > 硬编码默认值
+        优先级：MCP_SERVER_URL > 按灰度规则选择 MCP_MASTER_URL/MCP_STANDBY_URL
 
         Args:
             skill_input: SKILL_INPUT JSON（保留兼容，不再用于连接配置提取）
             mcp_required_params: MCP 必输参数（包含 wap_grayFlag 等）
 
         Returns:
-            MCPSSERequester 实例，或 None（SDK 不可用或 URL 为空时）
+            MCPSSERequester 实例，或 None（URL 为空时）
         """
         log_info(f"from_skill_input: skill_input={skill_input}")
 
         # Java 侧 McpInterruptRail 通过环境变量注入 MCP_SERVER_URL（灰度路由后的最终URL）
         server_url = os.environ.get("MCP_SERVER_URL", "")
         if server_url:
-            log_info(f"from_skill_input: 使用 Java 侧注入的 MCP_SERVER_URL={server_url}")
+            log_info("from_skill_input: 使用 Java 侧注入的 MCP_SERVER_URL")
         else:
-            # Java 侧注入为空时，回退到灰度路由 + 硬编码默认值
+            # Java 侧注入为空时，根据灰度标记选择环境变量配置的主/备 URL
             wap_gray_flag = (mcp_required_params or {}).get("wap_grayFlag", "")
             log_info(f"from_skill_input: wap_grayFlag={wap_gray_flag}")
 
-            jd_url = os.environ.get("MCP_MASTER_URL", DEFAULT_MCP_MASTER_URL)
-            xsq_url = os.environ.get("MCP_STANDBY_URL", DEFAULT_MCP_STANDBY_URL)
-            log_info(f"from_skill_input: wap_grayFlag={wap_gray_flag}, jd_url={jd_url}, xsq_url={xsq_url}")
+            jd_url = os.environ.get("MCP_MASTER_URL", "")
+            xsq_url = os.environ.get("MCP_STANDBY_URL", "")
 
             if wap_gray_flag and str(wap_gray_flag).startswith("JD"):
                 server_url = jd_url
@@ -197,8 +185,8 @@ class MCPSSERequester:
                 server_url = xsq_url
                 log_info(f"mcp_sse_client: wap_grayFlag={wap_gray_flag} 非 JD 开头，选择 XSQ URL")
 
-        access_token = os.environ.get("MCP_ACCESS_TOKEN", DEFAULT_MCP_ACCESS_TOKEN)
-        app_name = os.environ.get("MCP_APP_NAME", DEFAULT_MCP_APP_NAME)
+        access_token = os.environ.get("MCP_ACCESS_TOKEN", "")
+        app_name = os.environ.get("MCP_APP_NAME", "")
 
         if not server_url:
             log_error("mcp_sse_client: MCP URL 为空，无法创建请求器")
