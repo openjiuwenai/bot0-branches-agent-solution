@@ -48,7 +48,7 @@ output_max_file_size: "20MB"             # head-truncate when single file exceed
 output_trim_target_ratio: 0.7            # after truncation, file size ≈ threshold × ratio
 
 # ── HTTP service ──
-host: "0.0.0.0"                          # HTTP listen address
+host: "127.0.0.1"                       # HTTP listen address
 port: 8900                               # HTTP listen port
 
 # ── Multi-Agent configuration ──
