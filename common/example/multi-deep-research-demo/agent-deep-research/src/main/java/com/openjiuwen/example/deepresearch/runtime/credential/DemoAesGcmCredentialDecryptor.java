@@ -14,10 +14,12 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
 import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -85,16 +87,15 @@ public class DemoAesGcmCredentialDecryptor implements CredentialDecryptor {
         if (blob.length <= IV_BYTES) {
             throw new IllegalStateException("ciphertext too short to contain a 12-byte IV");
         }
-        byte[] iv = new byte[IV_BYTES];
-        byte[] payload = new byte[blob.length - IV_BYTES];
-        System.arraycopy(blob, 0, iv, 0, IV_BYTES);
-        System.arraycopy(blob, IV_BYTES, payload, 0, payload.length);
+        // 密文布局：IV[12] || ciphertext-with-tag，按 IV_BYTES 切分两端
+        byte[] iv = Arrays.copyOfRange(blob, 0, IV_BYTES);
+        byte[] payload = Arrays.copyOfRange(blob, IV_BYTES, blob.length);
 
         try {
+            SecretKey aesKey = new SecretKeySpec(key, "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(TAG_BITS, iv);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.DECRYPT_MODE,
-                    new SecretKeySpec(key, "AES"),
-                    new GCMParameterSpec(TAG_BITS, iv));
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, gcmSpec);
             byte[] plaintext = cipher.doFinal(payload);
             return new String(plaintext, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException ex) {

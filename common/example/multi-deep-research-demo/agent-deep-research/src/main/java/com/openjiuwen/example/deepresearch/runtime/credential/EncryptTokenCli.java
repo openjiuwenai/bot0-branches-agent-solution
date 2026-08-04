@@ -11,6 +11,7 @@ import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -18,6 +19,7 @@ import java.util.Base64;
 import java.util.HexFormat;
 
 import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -89,14 +91,17 @@ public final class EncryptTokenCli {
         new SecureRandom().nextBytes(iv);
 
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE,
-                new SecretKeySpec(key, "AES"),
-                new GCMParameterSpec(TAG_BITS, iv));
-        byte[] ct = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+        SecretKey aesKey = new SecretKeySpec(key, "AES");
+        GCMParameterSpec gcmSpec = new GCMParameterSpec(TAG_BITS, iv);
+        cipher.init(Cipher.ENCRYPT_MODE, aesKey, gcmSpec);
 
-        byte[] out = new byte[iv.length + ct.length];
-        System.arraycopy(iv, 0, out, 0, iv.length);
-        System.arraycopy(ct, 0, out, iv.length, ct.length);
+        byte[] plainBytes = plaintext.getBytes(StandardCharsets.UTF_8);
+        byte[] cipherBytes = cipher.doFinal(plainBytes);
+
+        ByteBuffer buffer = ByteBuffer.allocate(iv.length + cipherBytes.length);
+        buffer.put(iv);
+        buffer.put(cipherBytes);
+        byte[] out = buffer.array();
 
         writeOutput(Base64.getEncoder().encodeToString(out));
     }
