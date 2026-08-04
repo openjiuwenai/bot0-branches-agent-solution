@@ -5,7 +5,9 @@
 package com.openjiuwen.bus.forwarding.runtime.transport.broker;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
+import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
@@ -52,6 +54,10 @@ public record BrokerMessageHeaders(
         String routeHandle,
         String capability,
         long deadlineMillisEpoch,
+        // P-06 (2b): bounded small inline body — an OPAQUE projection data carrier; the bus does NOT
+        // define its payload schema (projection format is a FEAT-017 peer contract, not a bus SPI
+        // contract). Bounded by ForwardingEnvelope.MAX_INLINE_PAYLOAD_BYTES (UTF-8 bytes); larger
+        // payloads ride payloadRef. Nullable (control-only / JDBC-back-compat).
         String inlinePayload,
         // FEAT-013/014 originalCaller (P-06, L2 feat-014 §4): the original gateway/caller serviceId,
         // preserved end-to-end across the relay hop so the runtime can route the response back to the
@@ -80,6 +86,17 @@ public record BrokerMessageHeaders(
         requireNullOrNonBlank(routeHandle, "routeHandle");
         requireNullOrNonBlank(capability, "capability");
         requireNullOrNonBlank(inlinePayload, "inlinePayload");
+        // P-06 (2b) size guard: inlinePayload is a BOUNDED small body — its UTF-8 byte length must not
+        // exceed ForwardingEnvelope.MAX_INLINE_PAYLOAD_BYTES (belt-and-suspenders with the envelope's
+        // logic-layer check; both guard the same cap at different layers). Larger payloads ride payloadRef.
+        if (inlinePayload != null
+                && inlinePayload.getBytes(StandardCharsets.UTF_8).length
+                        > ForwardingEnvelope.MAX_INLINE_PAYLOAD_BYTES) {
+            throw new IllegalArgumentException(
+                    "inlinePayload exceeds max inline size "
+                            + ForwardingEnvelope.MAX_INLINE_PAYLOAD_BYTES
+                            + " bytes (UTF-8); use payloadRef for larger payloads");
+        }
         requireNullOrNonBlank(originalCaller, "originalCaller");
     }
 

@@ -4,6 +4,7 @@
 
 package com.openjiuwen.bus.forwarding.spi;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
@@ -53,14 +54,48 @@ public record ForwardingEnvelope(
         long deadlineMillisEpoch,
         PayloadPolicy payloadPolicy,
         String payloadRef,
-        // P-06 (2b): bounded small inline body for small JSON-RPC payloads. Large / multimodal payloads
-        // still take the payloadRef data reference path (2a, caller-owned store). Never a control token.
+        // P-06 (2b): bounded small inline body for small JSON-RPC payloads — an OPAQUE projection data
+        // carrier; the bus does NOT define its payload schema (projection format is a FEAT-017 peer
+        // contract, not a bus SPI contract). Bounded by MAX_INLINE_PAYLOAD_BYTES (UTF-8 bytes); payloads
+        // exceeding it must take the payloadRef data reference path (2a, caller-owned store — the
+        // payloadRef data service is not yet implemented). Large / multimodal payloads take payloadRef.
+        // Never a control-descriptor token — the control plane rides the first-class fields above.
         String inlinePayload,
         // P-06 (L2 feat-014 §4): originalCaller — the original gateway/caller serviceId, preserved
         // end-to-end so the runtime can route the response back across the relay hop (the forward relay
         // overwrites sourceServiceId to itself). A routing/control field, NOT A2A data. Nullable.
         String originalCaller
 ) {
+    /**
+     * Maximum UTF-8 byte length of an {@code inlinePayload} body (P-06 §2b bounded-inline guardrail).
+     * Payloads exceeding this size MUST take the {@code payloadRef} data reference path (2a). Default
+     * {@code 64 * 1024} (64 KiB), overridable via system property
+     * {@code agent-bus.max-inline-payload-bytes} (read once at class initialization; a malformed or
+     * non-positive value falls back to the default — the cap must never silently vanish).
+     *
+     * <p>Initialized via a method call (not a literal) so the system-property override is effective and
+     * the value is not inlined into call-site bytecode as a compile-time constant. Referenced by both
+     * {@link ForwardingEnvelope#validatePayload} (logic layer) and {@link
+     * com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerMessageHeaders} (wire layer) — a
+     * belt-and-suspenders pair guarding the same cap at two layers.
+     */
+    public static final int MAX_INLINE_PAYLOAD_BYTES = resolveMaxInlinePayloadBytes();
+
+    private static int resolveMaxInlinePayloadBytes() {
+        String override = System.getProperty("agent-bus.max-inline-payload-bytes");
+        if (override != null && !override.isBlank()) {
+            try {
+                int parsed = Integer.parseInt(override.trim());
+                if (parsed > 0) {
+                    return parsed;
+                }
+            } catch (NumberFormatException ignored) {
+                // fall back to the default on malformed input — the cap must never silently vanish
+            }
+        }
+        return 64 * 1024;
+    }
+
     public ForwardingEnvelope {
         Objects.requireNonNull(messageId, "messageId is required");
         Objects.requireNonNull(eventType, "eventType is required");
@@ -127,6 +162,15 @@ public record ForwardingEnvelope(
         // inlinePayload: null (absent / large-payload-takes-ref) or non-blank — blank is a wiring error.
         if (inlinePayload != null && inlinePayload.isBlank()) {
             throw new IllegalArgumentException("inlinePayload must be null or non-blank");
+        }
+        // P-06 (2b) size guard: inlinePayload is a BOUNDED small body — its UTF-8 byte length must not
+        // exceed MAX_INLINE_PAYLOAD_BYTES; larger payloads must ride payloadRef (2a). Belt-and-suspenders
+        // with BrokerMessageHeaders' wire-layer check (both guard the same cap at different layers).
+        if (inlinePayload != null
+                && inlinePayload.getBytes(StandardCharsets.UTF_8).length > MAX_INLINE_PAYLOAD_BYTES) {
+            throw new IllegalArgumentException(
+                    "inlinePayload exceeds max inline size " + MAX_INLINE_PAYLOAD_BYTES
+                            + " bytes (UTF-8); use payloadRef for larger payloads");
         }
         // originalCaller: null (absent / single-hop) or non-blank — blank is a wiring error.
         if (originalCaller != null && originalCaller.isBlank()) {
@@ -209,7 +253,11 @@ public record ForwardingEnvelope(
     public enum PayloadPolicy {
         /** Pure control message; payloadRef optional (typically absent). */
         CONTROL_ONLY,
-        /** Carries external data / a large payload; payloadRef mandatory. */
+        /**
+         * Carries external data / a large payload; payloadRef mandatory. When a small body rides
+         * {@code inlinePayload} (2b) instead, it is bounded by {@code MAX_INLINE_PAYLOAD_BYTES}; payloads
+         * exceeding it must take {@code payloadRef} (the payloadRef data service is not yet implemented).
+         */
         DATA_BEARING
     }
 }
