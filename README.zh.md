@@ -141,7 +141,7 @@ common/example
 
 欢迎体验 OpenJiuwen 智能体解决方案 v0.1.0！本次发布涵盖**平台能力**、**Agent 引擎**与**EvoAgent 自进化引擎**三大板块：
 
-- **平台能力**（openJiuwen agent-solution）提供异构智能体框架兼容、标准化客户端调用、本地工具注册与驱动，以及自定义 REST API 服务入口等核心能力；
+- **平台能力**（openJiuwen agent-solution）面向业务应用提供标准化智能体客户端 SDK，支持同步、流式、异步三种调用模式完成智能体对话交互，并支持将本地程序逻辑封装为工具供智能体服务反向调用驱动执行，实现人机协同闭环；同时支持将 AgentScope、Versatile 等异构框架智能体封装为标准智能体服务，接入 SkillHub 订阅 Skill，通过自定义 RESTful API 入口对接客户既有系统，支持 Versatile 意图工作流路由分发，并为 ReActAgent 补全评估验证、重计划控制、故障降级等认知 Rail 能力；
 - **Agent 引擎**（EDPAgent Java）面向金融等垂直行业的 Java 技术栈需求，在 OpenJiuwen DeepAgent 之上交付企业级 Agent 引擎与配套治理能力，满足安全性、可控性、可观测性的严格要求；
 - **EvoAgent 自进化引擎**提供「数据回流 → 轨迹评估 → 优化引擎」闭环能力，基于 Agent 真实运行轨迹完成质量判定，并通过优化引擎持续改进 Prompt 与 Skill，实现 Agent 自主演进。
 
