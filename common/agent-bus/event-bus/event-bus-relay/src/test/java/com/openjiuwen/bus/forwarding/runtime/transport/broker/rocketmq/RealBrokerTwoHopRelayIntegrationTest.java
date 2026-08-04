@@ -198,7 +198,11 @@ class RealBrokerTwoHopRelayIntegrationTest {
         tempRuntime = new TempRuntime(nameserver, runId);
         tempRuntime.start();
         // CONSUME_FROM_LAST_OFFSET: consumers only see messages produced AFTER queue
-        // assignment; let rebalance settle (forward + response + gateway + runtime) before any test.
+        // assignment. run-unique consumer groups → every run is a fresh group → cold-start
+        // rebalance every run (~30s warmup, see memory agent-bus-e2e-rocketmq-quirks). The 3s
+        // sleep is a head-start only; per-test drive-loops (driveForwardRelayUntilRelayed /
+        // awaitFirstRelayed, 30s budget) + acceptWindow's 45s loop tolerate the remaining
+        // warmup — no fixed sleep guarantees readiness, so the loops retry until delivery.
         Thread.sleep(3_000L);
     }
 
@@ -315,7 +319,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
         // kept the shared forwardRelayConsumer from polling gatewayProducer's hop1 in the
         // test window; sendHop1 — which the consumer polls — drives the relay path.)
         sendHop1(directProducer, "gw-happy-" + UUID.randomUUID(), corrId, TENANT, RUNTIME);
-        driveForwardRelayUntilRelayed(10_000L); // relay hop1 → deliver
+        driveForwardRelayUntilRelayed(30_000L); // relay hop1 → deliver
 
         // Drive the response relay synchronously with acceptWindow (no daemon): the
         // TempRuntime (daemon) consumes deliver → resp_in; this loop relays resp_in →
@@ -349,7 +353,9 @@ class RealBrokerTwoHopRelayIntegrationTest {
         sendHop1(directProducer, messageId, corrId, TENANT, RUNTIME); // redeliver the SAME messageId
 
         // limit=1 per tick: the 1st tick relays the 1st hop1; the 2nd tick dedups the 2nd.
-        EventBusRelayWorker.RelayTickResult r1 = forwardRelayWorker.runOnce(TENANT, System.currentTimeMillis(), 1);
+        // ISSUE-008 冷启动容错：forwardRelayConsumer 可能冷启动未就绪，首 tick poll 不到；
+        // 重试 runOnce 直到 relayed>0（30s 预算覆盖 ~30s warmup），再断 relayed==1。
+        EventBusRelayWorker.RelayTickResult r1 = awaitFirstRelayed(30_000L);
         assertThat(r1.relayed()).as("first hop1 relayed").isEqualTo(1);
         assertThat(r1.dedupSuppressed()).isZero();
 
@@ -381,7 +387,7 @@ class RealBrokerTwoHopRelayIntegrationTest {
         // 1) MATCHING tenant hop1 → relayed (proves subscription + bySql match).
         String matchId = "m-ct-match-" + UUID.randomUUID();
         sendHop1(directProducer, matchId, "c-ct-match", TENANT, RUNTIME);
-        assertThat(driveForwardRelayUntilRelayed(10_000L))
+        assertThat(driveForwardRelayUntilRelayed(30_000L))
                 .as("matching-tenant hop1 relayed (consumer subscribed + bySql matches)").isTrue();
 
         // 2) CROSS-TENANT hop1 (tenant-b) → filtered broker-side → relay polls 0.
@@ -451,6 +457,28 @@ class RealBrokerTwoHopRelayIntegrationTest {
             }
         }
         return false;
+    }
+
+    /**
+     * Drive the forward relay tick (limit=1) until it relays, returning the relaying tick's result.
+     *
+     * <p>ISSUE-008 冷启动容错：run-unique consumer group 每次全新 → 冷启动 rebalance；首 tick
+     * 可能 poll 不到。重试 runOnce 直到 relayed>0（覆盖 ~30s warmup，见内存 agent-bus-e2e-rocketmq-quirks）。
+     *
+     * @param timeoutMs the maximum time to wait for the relay to produce a hop2
+     * @return the first relaying tick's result (relayed > 0)
+     * @throws AssertionError if no relay within the deadline (cold-start exceeded budget)
+     */
+    private static EventBusRelayWorker.RelayTickResult awaitFirstRelayed(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            EventBusRelayWorker.RelayTickResult r = forwardRelayWorker.runOnce(TENANT, System.currentTimeMillis(), 1);
+            if (r.relayed() > 0) {
+                return r;
+            }
+        }
+        throw new AssertionError("forward relay did not relay within " + timeoutMs
+                + "ms (consumer cold-start exceeded budget; see agent-bus-e2e-rocketmq-quirks)");
     }
 
     /**
