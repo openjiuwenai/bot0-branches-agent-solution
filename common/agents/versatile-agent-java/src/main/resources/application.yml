@@ -20,6 +20,8 @@ openjiuwen:
       # 而非写死单个 workflow。FastAPI 路由为 /v1/{project_id}/agent-manager/workflows/{workflow_id}/conversations/{conversation_id}。
       url-template: ${VERSATILE_URL:http://127.0.0.1:30001/v1/0/agent-manager/workflows/versatile/conversations/{conversation_id}}
       timeout: ${VERSATILE_TIMEOUT:600s}
+      # false 使用 JVM 默认的证书链和主机名校验；true 同时跳过这两项校验。
+      insecure-skip-verify: ${VERSATILE_INSECURE_SKIP_VERIFY:false}
       forward-header-whitelist:
         - stream
         - x-invoke-mode
