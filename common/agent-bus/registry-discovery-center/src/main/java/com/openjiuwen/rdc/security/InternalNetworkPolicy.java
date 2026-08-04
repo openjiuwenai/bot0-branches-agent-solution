@@ -253,18 +253,16 @@ public final class InternalNetworkPolicy {
             if (networkBytes.length != addressBytes.length) {
                 return false;
             }
-            int fullBytes = prefixLength / 8;
-            int remainingBits = prefixLength % 8;
-            for (int i = 0; i < fullBytes; i++) {
-                if (networkBytes[i] != addressBytes[i]) {
+            int remaining = prefixLength;
+            for (int i = 0; i < networkBytes.length && remaining > 0; i++) {
+                int bits = Math.min(remaining, 8);
+                int mask = (0xFF << (8 - bits)) & 0xFF;
+                if ((networkBytes[i] & mask) != (addressBytes[i] & mask)) {
                     return false;
                 }
+                remaining -= 8;
             }
-            if (remainingBits == 0) {
-                return true;
-            }
-            int mask = (-1) << (8 - remainingBits);
-            return (networkBytes[fullBytes] & mask) == (addressBytes[fullBytes] & mask);
+            return true;
         }
     }
 }

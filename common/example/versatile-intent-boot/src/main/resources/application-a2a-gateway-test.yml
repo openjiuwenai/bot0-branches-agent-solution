@@ -9,8 +9,8 @@ openjiuwen:
   service:
     a2a-gateway:
       enabled: true
-      base-url: http://localhost:8084
-      token: dev-token
+      base-url: ${A2A_GATEWAY_BASE_URL}
+      token: ${A2A_GATEWAY_TOKEN}
       version-node: v1
       streaming: false
       json-rpc-path: /a2a/{agentCard}

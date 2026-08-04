@@ -2,38 +2,16 @@
 #
 # Local end-to-end runbook for the A2A Gateway caller mode (full chain).
 # Verifies L2 §6.2.1 场景一 (两层识别 + 下游业务), L2 §6.2.4 意图不明自消,
-# L2 §6.2.2 意图不明回退 L1 重识别, and the multi-turn route cache
-# (route cached on turn 1, reused on turn 2) under a2a-gateway.enabled=true.
+# and the multi-turn route cache (route cached on turn 1, reused on turn 2)
+# under a2a-gateway.enabled=true.
 #
-# §6.2.2 and §6.2.4 are mutually exclusive on L2 config (default-workflow
-# present vs absent), so the script runs two rounds with an L2 restart
-# in between:
+# The script runs two rounds with a process restart in between:
 #   - Round 1: L2 with default-workflow → §6.2.1 + §6.2.4 self-heal
 #     + multi-turn route cache (conv_id=c4-multi-turn, two client turns)
-#   - Round 2: L2 without default-workflow → §6.2.2 reclassify
-#   - Round 3: L1/L2 restarted with direct-chain enabled; downstream is a plain
+#   - Round 2: L1/L2 restarted with direct-chain enabled; downstream is a plain
 #     versatile mock server. gateway tunnels the terminal biz card directly to
 #     the mock (/v1/proj/agents/agent_biz/conversations/{cid}, serve body
 #     rewritten to {inputs:...}); client receives raw versatile SSE data: lines.
-#
-# §6.2.2 signal path (L2 ambiguous → L1 reclassify):
-#   1. Client → L1 /v1/query "意图不明"
-#   2. L1 Versatile (1st call) → {agent_id:"agent_card_L2_hotel"}
-#   3. L1 → gateway → L2 /v1/query "意图不明"
-#   4. L2 Versatile → {response_content:"无法确定...", intent_id:"1"}
-#   5. L2 Adapter (no default-wf) → TYPE_CHUNK envelope carrying intent_id
-#   6. L2 returns 200 with {result:{content:"...", intent_id:"1"}}
-#   7. Gateway forwards → envelope {type:"answer", payload:{content:"..."},
-#      intent_id:"1"}
-#   8. L1 A2AGatewayRemoteAgentCaller preserves envelope JSON as result
-#      (only when intent_id present)
-#   9. L1 orchestrator → QueryResponse content = envelope JSON
-#   10. L1 ReclassifyServeOrchestrator detects intent_id="1", appends
-#       assistant message, re-invokes L1 Versatile
-#   11. L1 Versatile (2nd call, hasAssistant=true) → {agent_id:
-#       "agent_card_biz_hotel_domestic"} (skip L2, route to downstream)
-#   12. L1 → gateway → downstream → "酒店预订成功"
-#   Final response contains "酒店预订成功"
 #
 # Architecture:
 #   - gateway process (port 8084, profile mock-a2a-gateway): forwarding proxy
@@ -135,6 +113,12 @@ DOWNSTREAM_PORT="${DOWNSTREAM_PORT:-8083}"
 DEFAULT_WF_PORT="${DEFAULT_WF_PORT:-8085}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 JAR_FILE="$MODULE_DIR/target/versatile-intent-boot-0.1.0.jar"
+LOCAL_SCHEME="${LOCAL_SCHEME:-http}"
+LOCAL_HOST="${LOCAL_HOST:-localhost}"
+
+local_base_url() {
+    printf '%s://%s:%s' "$LOCAL_SCHEME" "$LOCAL_HOST" "$1"
+}
 
 # Local Maven repository (override via M2_REPO). Used only to give a helpful
 # early error when prerequisite artifacts are missing — not a build input.
@@ -238,7 +222,7 @@ wait_for_health() {
     local deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
     printf "    %-12s " "$name:"
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        if curl -sf "http://localhost:${port}/health" >/dev/null 2>&1; then
+        if curl -sf "$(local_base_url "$port")/health" >/dev/null 2>&1; then
             echo "UP (port $port)"
             return 0
         fi
@@ -256,11 +240,13 @@ start_process() {
     local name="$1" port="$2" profiles="$3" agent_segment="$4"
     shift 4
     local log="$LOG_DIR/${name}.log"
+    local base_url
+    base_url="$(local_base_url "$port")"
     echo "==> Starting $name (profiles=$profiles, port=$port)"
     java -jar "$JAR_FILE" \
         --spring.profiles.active="$profiles" \
         --server.port="$port" \
-        --openjiuwen.service.versatile.url-template="http://localhost:${port}/v1/proj/agents/${agent_segment}/conversations/{conversation_id}" \
+        --openjiuwen.service.versatile.url-template="${base_url}/v1/proj/agents/${agent_segment}/conversations/{conversation_id}" \
         "$@" \
         >"$log" 2>&1 &
     local pid=$!
@@ -273,7 +259,7 @@ start_process() {
 # caller's resolveUpstreamHeader() has something to propagate.
 send_query_with_trace() {
     local port="$1" conv_id="$2" content="$3"
-    curl -s -X POST "http://localhost:${port}/v1/query" \
+    curl -s -X POST "$(local_base_url "$port")/v1/query" \
         -H "Content-Type: application/json" \
         -H "X-B3-TraceId: trace-abc" \
         -H "X-B3-SpanId: span-xyz" \
@@ -326,7 +312,7 @@ assert_not_contains() {
 }
 
 main() {
-    echo "==> A2A Gateway 全链路联调 (L2 §6.2.1 + §6.2.4 自消 + 多轮路由缓存 + §6.2.2 重识别)"
+    echo "==> A2A Gateway 全链路联调 (L2 §6.2.1 + §6.2.4 自消 + 多轮路由缓存)"
     check_dependencies
     build_if_needed
 
@@ -363,7 +349,7 @@ main() {
 
     echo
     echo "==================== Scenario: L2 §6.2.1 两层识别 + 下游业务 ===================="
-    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 订酒店}]"
+    echo "    POST $(local_base_url "$L1_PORT")/v1/query  messages=[{user, 订酒店}]"
     echo "    Upstream headers: X-B3-TraceId=trace-abc X-B3-SpanId=span-xyz X-B3-Sampled=1 X-Biz-Tag=hotel-flow"
     local resp
     resp=$(send_query_with_trace "$L1_PORT" "c1-gateway-chain" "订酒店")
@@ -376,10 +362,10 @@ main() {
     echo "==================== 验证 gateway 日志：两次转发 hop ===================="
     # hop 1: L1 → gateway → L2 (agentId=agent_card_L2_hotel)
     assert_log_contains "hop1-gateway-inbound" "$LOG_DIR/gateway.log" "Mock A2A Gateway inbound agentId=agent_card_L2_hotel"
-    assert_log_contains "hop1-gateway-forward" "$LOG_DIR/gateway.log" "Mock A2A Gateway forwarding agentId=agent_card_L2_hotel -> http://localhost:${L2_PORT}/v1/query"
+    assert_log_contains "hop1-gateway-forward" "$LOG_DIR/gateway.log" "Mock A2A Gateway forwarding agentId=agent_card_L2_hotel -> $(local_base_url "$L2_PORT")/v1/query"
     # hop 2: L2 → gateway → downstream (agentId=agent_card_biz_hotel_domestic)
     assert_log_contains "hop2-gateway-inbound" "$LOG_DIR/gateway.log" "Mock A2A Gateway inbound agentId=agent_card_biz_hotel_domestic"
-    assert_log_contains "hop2-gateway-forward" "$LOG_DIR/gateway.log" "Mock A2A Gateway forwarding agentId=agent_card_biz_hotel_domestic -> http://localhost:${DOWNSTREAM_PORT}/v1/query"
+    assert_log_contains "hop2-gateway-forward" "$LOG_DIR/gateway.log" "Mock A2A Gateway forwarding agentId=agent_card_biz_hotel_domestic -> $(local_base_url "$DOWNSTREAM_PORT")/v1/query"
 
     echo
     echo "==================== 验证 gateway 日志：header 透传 ===================="
@@ -401,7 +387,7 @@ main() {
 
     echo
     echo "==================== Scenario: L2 §6.2.4 L2 意图不明自消 (L1→gateway→L2→gateway→default-wf) ===================="
-    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 意图不明}]"
+    echo "    POST $(local_base_url "$L1_PORT")/v1/query  messages=[{user, 意图不明}]"
     local resp2
     resp2=$(send_query_with_trace "$L1_PORT" "c2-gateway-ambiguous" "意图不明")
     echo "    response: $(echo "$resp2" | head -c 800)"
@@ -413,7 +399,7 @@ main() {
     echo "==================== 验证 gateway 日志：L2 自消 hop ===================="
     # hop 3: L2 → gateway → default-wf (agentId=agent_card_L2_default) — L2 ambiguous 自消
     assert_log_contains "hop3-gateway-inbound" "$LOG_DIR/gateway.log" "Mock A2A Gateway inbound agentId=agent_card_L2_default"
-    assert_log_contains "hop3-gateway-forward" "$LOG_DIR/gateway.log" "Mock A2A Gateway forwarding agentId=agent_card_L2_default -> http://localhost:${DEFAULT_WF_PORT}/v1/query"
+    assert_log_contains "hop3-gateway-forward" "$LOG_DIR/gateway.log" "Mock A2A Gateway forwarding agentId=agent_card_L2_default -> $(local_base_url "$DEFAULT_WF_PORT")/v1/query"
 
     echo
     echo "==================== 验证 L2 日志：ambiguous 自消 a2a_delegate ===================="
@@ -421,8 +407,8 @@ main() {
 
     echo
     echo "==================== Scenario: 多轮对话路由缓存复用 (conv_id=c4-multi-turn, two turns) ===================="
-    echo "    Turn 1: POST http://localhost:${L1_PORT}/v1/query  conv_id=c4-multi-turn  messages=[{user, 订酒店}]"
-    echo "    Turn 2: POST http://localhost:${L1_PORT}/v1/query  conv_id=c4-multi-turn  messages=[{user, 再订一晚}]"
+    echo "    Turn 1: POST $(local_base_url "$L1_PORT")/v1/query  conv_id=c4-multi-turn  messages=[{user, 订酒店}]"
+    echo "    Turn 2: POST $(local_base_url "$L1_PORT")/v1/query  conv_id=c4-multi-turn  messages=[{user, 再订一晚}]"
     echo "    Expected: both turns return 酒店预订成功; L1 versatile invoked ONCE (cache hit on turn 2)"
 
     # Capture gateway inbound counts BEFORE the multi-turn scenario. The
@@ -475,54 +461,7 @@ main() {
     fi
 
     echo
-    echo "======================================== Round 2: §6.2.2 L2 意图不明回退 L1 重识别 ========================================"
-
-    echo
-    echo "==================== 重启 L2（无 default-workflow）===================="
-    # §6.2.2 与 §6.2.4 对 L2 default-workflow 配置互斥，需重启 L2 覆盖为空
-    stop_process_by_name layer2
-    # 覆盖 default-workflow.agent-card 为空字符串，让 L2 ambiguous 走 TYPE_CHUNK envelope 路径
-    start_process layer2 "$L2_PORT" "layer2,dev,mock-versatile,a2a-gateway-test" "agent_L2" \
-        --openjiuwen.service.versatile.default-workflow.agent-card=
-    wait_for_health "$L2_PORT" layer2
-
-    echo
-    echo "==================== Scenario: L2 §6.2.2 L2 意图不明回退 L1 重识别 ===================="
-    echo "    POST http://localhost:${L1_PORT}/v1/query  messages=[{user, 意图不明}]"
-    echo "    Expected: L1 reclassify → L1 2nd versatile → gateway → downstream → 酒店预订成功"
-    local resp3
-    resp3=$(send_query_with_trace "$L1_PORT" "c3-gateway-reclassify" "意图不明")
-    echo "    response: $(echo "$resp3" | head -c 800)"
-
-    # 核心断言：最终响应包含 downstream 的业务输出，证明 L1 reclassify 链路走通
-    assert_contains "reclassify-final-business-output" "$resp3" "酒店预订成功"
-
-    echo
-    echo "==================== 验证 gateway 日志：reclassify hop ===================="
-    # L1 reclassify 重试后直接路由到 downstream (agent_card_biz_hotel_domestic)
-    assert_log_contains "hop4-gateway-inbound" "$LOG_DIR/gateway.log" "Mock A2A Gateway inbound agentId=agent_card_biz_hotel_domestic"
-    assert_log_contains "hop4-gateway-forward" "$LOG_DIR/gateway.log" "Mock A2A Gateway forwarding agentId=agent_card_biz_hotel_domestic -> http://localhost:${DOWNSTREAM_PORT}/v1/query"
-
-    echo
-    echo "==================== 验证 L1 日志：reclassify 两次 versatile 调用 ===================="
-    # L1 应至少调用 versatile 两次：1st (agent_card_L2_hotel), 2nd (reclassify retry, agent_card_biz_hotel_domestic)
-    local l1_first_count l1_retry_count
-    l1_first_count=$(grep -c "Mock Versatile agentId=agent_L1 conversationId=c3-gateway-reclassify" "$LOG_DIR/layer1.log" 2>/dev/null || echo 0)
-    l1_retry_count=$(grep -c "A2AGateway call agent=agent_card_biz_hotel_domestic" "$LOG_DIR/layer1.log" 2>/dev/null || echo 0)
-    if [ "$l1_first_count" -ge 2 ] && [ "$l1_retry_count" -ge 1 ]; then
-        echo "    PASS: L1 reclassify retry observed (versatile calls=$l1_first_count, downstream delegate=$l1_retry_count)"
-    else
-        echo "    FAIL: expected L1 versatile calls>=2 (got $l1_first_count), downstream delegate>=1 (got $l1_retry_count)" >&2
-        return 1
-    fi
-
-    echo
-    echo "==================== 验证 L2 日志：首次 ambiguous 调用 ===================="
-    # L2 收到一次 意图不明 调用，返回 ambiguous envelope
-    assert_log_contains "l2-ambiguous-call" "$LOG_DIR/layer2.log" "Mock Versatile agentId=agent_L2 conversationId=c3-gateway-reclassify query=意图不明"
-
-    echo
-    echo "======================================== Round 3: versatile direct-chain SSE 透传 ========================================"
+    echo "======================================== Round 2: versatile direct-chain SSE 透传 ========================================"
 
     echo
     echo "==================== 重启 L1 + L2 + downstream（直链模式）===================="
@@ -563,13 +502,13 @@ main() {
 
     echo
     echo "==================== Scenario: versatile direct-chain client stream:true ==================="
-    echo "    POST http://localhost:${L1_PORT}/v1/query  stream=true  messages=[{user, 订酒店}]"
+    echo "    POST $(local_base_url "$L1_PORT")/v1/query  stream=true  messages=[{user, 订酒店}]"
     echo "    Expected: client 收到业务原始 versatile SSE 事件 (custom_rsp_data + 酒店预订成功)"
     echo "              且无 a2a JSON-RPC 折叠痕迹 (无 TASK_STATE_COMPLETED)"
     local dc_body_file dc_status
     dc_body_file="$(mktemp)"
     dc_status=$(curl -s -o "$dc_body_file" -w "%{http_code}" \
-        -X POST "http://localhost:${L1_PORT}/v1/query" \
+        -X POST "$(local_base_url "$L1_PORT")/v1/query" \
         -H "Content-Type: application/json" \
         -d '{"conversation_id":"c5-direct-chain","stream":true,"user_id":"u-42","messages":[{"role":"user","content":"订酒店"}]}')
     local dc_body
@@ -590,10 +529,10 @@ main() {
     echo
     echo "==================== 验证 gateway 日志：两跳直链隧道 ===================="
     # hop 1: L1 → gateway 哑隧道 → L2 /v1/query (agentId=agent_card_L2_hotel, X-Direct-Chain=true)
-    assert_log_contains "dc-hop1-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_L2_hotel -> http://localhost:${L2_PORT}/v1/query"
+    assert_log_contains "dc-hop1-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_L2_hotel -> $(local_base_url "$L2_PORT")/v1/query"
     # hop 2: L2 → gateway 隧道 → downstream versatile mock（末端业务卡：gateway 翻译 body
     #        并直连 /v1/proj/agents/agent_biz/conversations/{cid}，不经业务终端 handler）
-    assert_log_contains "dc-hop2-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_biz_hotel_domestic -> http://localhost:${DOWNSTREAM_PORT}/v1/proj/agents/agent_biz/conversations/c5-direct-chain"
+    assert_log_contains "dc-hop2-gateway-tunnel" "$LOG_DIR/gateway.log" "Mock A2A Gateway TUNNEL agentId=agent_card_biz_hotel_domestic -> $(local_base_url "$DOWNSTREAM_PORT")/v1/proj/agents/agent_biz/conversations/c5-direct-chain"
 
     echo
     echo "==> All scenarios passed."

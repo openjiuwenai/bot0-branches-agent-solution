@@ -68,7 +68,7 @@ class AgentScopeAgentIntegrationTest {
     @ParameterizedTest
     @EnumSource(AgentKind.class)
     void mapsNormalAgentScopeResult(AgentKind kind) throws Exception {
-        ScriptedModel model = new ScriptedModel(textResponse("done"));
+        ScriptedModel model = new ScriptedModel(buildAssistantReply("done"));
 
         try (TestRuntime runtime = runtime(kind, model, new Toolkit())) {
             QueryResponse response = runtime.handler().query(request("hello"));
@@ -84,7 +84,7 @@ class AgentScopeAgentIntegrationTest {
         Toolkit toolkit = toolkitWith(tool);
         ScriptedModel model = new ScriptedModel(
             toolUseResponse("call-1", "transfer", Map.of("recipient", "Li Ming", "amount", 5)),
-            textResponse("approved"));
+            buildAssistantReply("approved"));
 
         try (TestRuntime runtime = runtime(kind, model, toolkit)) {
             RecordingObserver observer = new RecordingObserver();
@@ -113,7 +113,7 @@ class AgentScopeAgentIntegrationTest {
         CountingAskingTool tool = new CountingAskingTool("transfer");
         ScriptedModel model = new ScriptedModel(
             toolUseResponse("call-1", "transfer", Map.of("amount", 5)),
-            textResponse("rejected"));
+            buildAssistantReply("rejected"));
 
         try (TestRuntime runtime = runtime(kind, model, toolkitWith(tool))) {
             Map<String, Object> first = result(runtime.handler().query(request("transfer")));
@@ -140,7 +140,7 @@ class AgentScopeAgentIntegrationTest {
             .build());
         ScriptedModel model = new ScriptedModel(
             toolUseResponse("call-1", "external_search", Map.of("query", "agent runtime")),
-            textResponse("external complete"));
+            buildAssistantReply("external complete"));
 
         try (TestRuntime runtime = runtime(kind, model, toolkit)) {
             Map<String, Object> first = result(runtime.handler().query(request("search")));
@@ -174,7 +174,8 @@ class AgentScopeAgentIntegrationTest {
     @EnumSource(AgentKind.class)
     void resumesMiddlewareStopWithEmptyAgentScopeInput(AgentKind kind) throws Exception {
         PauseOnceMiddleware middleware = new PauseOnceMiddleware();
-        ScriptedModel model = new ScriptedModel(textResponse("pause marker"), textResponse("continued"));
+        ScriptedModel model = new ScriptedModel(
+            buildAssistantReply("pause marker"), buildAssistantReply("continued"));
 
         try (TestRuntime runtime = runtime(kind, model, new Toolkit(), middleware)) {
             RecordingObserver observer = new RecordingObserver();
@@ -294,9 +295,9 @@ class AgentScopeAgentIntegrationTest {
         });
     }
 
-    private static ChatResponse textResponse(String text) {
+    private static ChatResponse buildAssistantReply(String messageContent) {
         return ChatResponse.builder()
-            .content(List.<ContentBlock>of(TextBlock.builder().text(text).build()))
+            .content(List.of(TextBlock.builder().text(messageContent).build()))
             .build();
     }
 

@@ -4,10 +4,14 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.interrupt.ToolInterruptException;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -16,9 +20,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests remote A2A interrupt rail tool-call delegation.

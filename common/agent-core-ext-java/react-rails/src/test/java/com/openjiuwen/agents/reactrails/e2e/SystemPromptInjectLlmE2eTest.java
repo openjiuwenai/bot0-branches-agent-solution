@@ -73,13 +73,9 @@ class SystemPromptInjectLlmE2eTest {
         int angleCount = countSubstring(output, "角度") + countSubstring(output, "维度") + output.split("\\d\\.").length;
     }
 
-    private static int countSubstring(String s, String sub) {
-        int count = 0;
-        int idx = 0;
-        while ((idx = s.indexOf(sub, idx)) != -1) {
-            count++;
-            idx += sub.length();
-        }
-        return count;
+    private static int countSubstring(String text, String marker) {
+        String textWithoutMarker = text.replace(marker, "");
+        int removedCharacters = text.length() - textWithoutMarker.length();
+        return removedCharacters / marker.length();
     }
 }

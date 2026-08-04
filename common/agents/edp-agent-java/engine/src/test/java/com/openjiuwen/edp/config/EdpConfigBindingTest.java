@@ -50,7 +50,14 @@ import org.springframework.context.annotation.Configuration;
         "deep-agent.sandbox.sandbox-id-prefix=test-prefix",
         "deep-agent.backend.client-provider=test-provider",
         "deep-agent.versatile.circuit-breaker.failure-threshold=99",
-        "deep-agent.mcpsse.app-name=test-app-name"
+        "deep-agent.mcpsse.app-name=test-app-name",
+        "EDP_AGENT_VERSATILE_A2A_URL=test-agent-url",
+        "EDPA_SANDBOX_SERVICE_URL=test-sandbox-url",
+        "EDP_AGENT_MODEL_API_KEY=",
+        "EDP_AGENT_MODEL_BASE_URL=test-model-base",
+        "EDP_MCP_MASTER_URL=test-master-url",
+        "EDP_MCP_STANDBY_URL=test-standby-url",
+        "EDP_MCP_ACCESS_TOKEN="
 })
 class EdpConfigBindingTest {
     @Autowired

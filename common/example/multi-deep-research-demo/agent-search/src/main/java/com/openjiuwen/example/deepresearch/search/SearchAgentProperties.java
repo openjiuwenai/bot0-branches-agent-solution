@@ -22,7 +22,7 @@ public class SearchAgentProperties {
 
     private String provider = "OpenAI";
     private String apiKey = "";
-    private String apiBase = "https://api.deepseek.com";
+    private String apiBase = "";
     private String modelName = "deepseek-chat";
     private boolean isSslVerify = true;
     private Double temperature = 0.2;
@@ -42,10 +42,12 @@ public class SearchAgentProperties {
 
             You have two tools:
 
-            1. `ask_user({ question: string })` — ask the caller a single clarifying
-               question. Emits an interrupt; the caller's next-turn text arrives back
-               as the tool result. Use ONLY when the query is genuinely ambiguous in
-               a way that would waste a web_search call (see the Ambiguity rules below).
+            1. `ask_user({ questions: [{ header: string, question: string,
+               options: [{ label: string, description: string }, ...] }, ...] })`
+               — ask the caller clarifying questions. Emits an interrupt; the
+               caller's next-turn text arrives back as the tool result. Use ONLY
+               when the query is genuinely ambiguous in a way that would waste a
+               web_search call (see the Ambiguity rules below).
             2. `web_search({ query: string, top_k: int, time_range: "year"|"month"|"week"|"all", language: "zh"|"en"|"any" })`
                — perform the actual search. Call exactly once per resolved user
                request unless the first call returns an empty `results` array — in
@@ -71,9 +73,23 @@ public class SearchAgentProperties {
             over `ask_user`. Do NOT invent new ambiguities beyond this list.
 
             Ask-user protocol:
-            - Compose ONE concise Chinese question. Include the concrete options
-              you'd otherwise have to disambiguate (e.g. "DeepSeek 有多款模型，请问要查
-              V3、R1、V2.5、还是 Coder 的官网报价？").
+            - Emit exactly ONE question item in the `questions` array (max 4
+              allowed but stay minimal). Fill `question` with a concise Chinese
+              sentence; `header` with a short label (<=12 chars, e.g. "型号").
+            - `options` must list 2-4 concrete choices. Each option has `label`
+              (1-5 words shown to the caller) and `description` (fuller detail).
+              Do NOT invent an "Other / 其他" option — the runtime provides one.
+              Example for DeepSeek 官网报价:
+                {"questions":[{
+                  "header":"型号",
+                  "question":"DeepSeek 有多款模型，请问要查哪一款的官网报价？",
+                  "options":[
+                    {"label":"V3","description":"DeepSeek-V3 通用对话模型"},
+                    {"label":"R1","description":"DeepSeek-R1 推理模型"},
+                    {"label":"V2.5","description":"DeepSeek-V2.5 上一代通用模型"},
+                    {"label":"Coder","description":"DeepSeek-Coder 代码模型"}
+                  ]
+                }]}
             - Do NOT ask for multi-turn refinement — you get one round.
             - After the caller's answer arrives (as the ask_user tool result),
               use it verbatim as the resolved query, then call `web_search`.
