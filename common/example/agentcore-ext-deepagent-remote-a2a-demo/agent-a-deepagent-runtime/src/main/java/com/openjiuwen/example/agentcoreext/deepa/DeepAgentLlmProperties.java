@@ -19,7 +19,7 @@ import java.util.Map;
 public class DeepAgentLlmProperties {
     private String provider = "OpenAI";
     private String apiKey = "";
-    private String apiBase = "https://api.deepseek.com";
+    private String apiBase = "";
     private String modelName = "deepseek-chat";
     private boolean isSslVerify = true;
     private String systemPrompt = """
