@@ -448,16 +448,15 @@ class VersatileInterruptRail(BaseInterruptRail):
 
     @staticmethod
     def _normalize_tool_args(tool_args, tool_name: Optional[str]) -> dict:
+        if not isinstance(tool_args, (dict, str)):
+            return {}
         if isinstance(tool_args, dict):
             return tool_args
-        if isinstance(tool_args, str):
-            try:
-                parsed = json.loads(tool_args)
-                if isinstance(parsed, dict):
-                    return parsed
-            except Exception:
-                return {}
-        return {}
+        try:
+            parsed = json.loads(tool_args)
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     def _apply_pre_delegate_guard(self, ctx, tool_args: dict):
         # 在真正写入 pending_delegate 之前先检查 skill 声明的前置规则。
