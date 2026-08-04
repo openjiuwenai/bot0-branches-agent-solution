@@ -16,11 +16,16 @@ services:
     # （需 Docker 20.10+，host-gateway 关键字在该版本引入。）
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # 全量 .env 注入容器：per-agent 变量（EDP_AGENT_*/OTHER_AGENT_*）等由此流入，
+    # agent_adapter_config.yaml 的 ${VAR:default} 占位在 load_config 期解析。
+    # environment 块中同名变量优先级更高；HOST_* 等宿主路径容器内不读，注入无害。
+    env_file:
+      - config/.env
     environment:
       ADAPTER_POLL_INTERVAL: ${ADAPTER_POLL_INTERVAL}
       ADAPTER_START_FROM: ${ADAPTER_START_FROM}
-      ADAPTER_HOST: "0.0.0.0"
-      ADAPTER_PORT: 8900
+      ADAPTER_HOST: ${ADAPTER_HOST:-0.0.0.0}
+      ADAPTER_PORT: ${ADAPTER_PORT:-8900}
       ADAPTER_OUTPUT_RETENTION_DAYS: ${ADAPTER_OUTPUT_RETENTION_DAYS}
       ADAPTER_OUTPUT_MAX_FILES: ${ADAPTER_OUTPUT_MAX_FILES}
       ADAPTER_OUTPUT_MAX_FILE_SIZE: ${ADAPTER_OUTPUT_MAX_FILE_SIZE}

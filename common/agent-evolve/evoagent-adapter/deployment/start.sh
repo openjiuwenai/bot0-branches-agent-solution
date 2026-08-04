@@ -211,8 +211,9 @@ docker run -d \
     "${SECRET_ENV_OPTS[@]}" \
     "${NETWORK_OPTS[@]}" \
     -p "${PORT}:8900" \
-    -e ADAPTER_HOST="0.0.0.0" \
-    -e ADAPTER_PORT=8900 \
+    --env-file "$ENV_FILE" \
+    -e ADAPTER_HOST="${ADAPTER_HOST:-0.0.0.0}" \
+    -e ADAPTER_PORT="${ADAPTER_PORT:-8900}" \
     -e ADAPTER_LOG_DIR=/data/logs \
     -e ADAPTER_SKILLS_ROOT=/data/skills \
     -e ADAPTER_POLL_INTERVAL="$ADAPTER_POLL_INTERVAL" \

@@ -146,6 +146,77 @@ class TestAdapterConfigEnvOverride:
         ]
 
 
+class TestEnvRefInterpolation:
+    """${VAR} / ${VAR:default} placeholders in YAML resolve against os.environ.
+
+    This is the mechanism that makes ``agent_url: ${EDP_AGENT_URL:}`` work:
+    yaml.safe_load stores the literal placeholder; load_config expands it.
+    """
+
+    def test_default_used_when_var_unset(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("EDP_AGENT_TIMEOUT", raising=False)
+        yaml_path = tmp_path / "c.yaml"
+        yaml_path.write_text("poll_interval: ${ADAPTER_POLL_INTERVAL:42}", encoding="utf-8")
+        monkeypatch.delenv("ADAPTER_POLL_INTERVAL", raising=False)
+        config = load_config(yaml_path)
+        assert config.poll_interval == 42
+
+    def test_env_value_used_when_var_set(self, tmp_path, monkeypatch):
+        yaml_path = tmp_path / "c.yaml"
+        yaml_path.write_text("poll_interval: ${ADAPTER_POLL_INTERVAL:42}", encoding="utf-8")
+        monkeypatch.setenv("ADAPTER_POLL_INTERVAL", "7")
+        config = load_config(yaml_path)
+        assert config.poll_interval == 7
+
+    def test_empty_env_falls_back_to_default(self, tmp_path, monkeypatch):
+        """空串环境变量视为未设置 → 走默认（避免 int/float 空串强制转换报错）."""
+        yaml_path = tmp_path / "c.yaml"
+        yaml_path.write_text("poll_interval: ${ADAPTER_POLL_INTERVAL:42}", encoding="utf-8")
+        monkeypatch.setenv("ADAPTER_POLL_INTERVAL", "")
+        config = load_config(yaml_path)
+        assert config.poll_interval == 42
+
+    def test_empty_default_braces(self, tmp_path, monkeypatch):
+        """${VAR:} 未设置 → 空串（兼容既有 agent_url 写法）."""
+        from agent_adapter.config import _expand_env_refs
+
+        monkeypatch.delenv("AGENT_URL", raising=False)
+        assert _expand_env_refs("${AGENT_URL:}") == ""
+        assert _expand_env_refs("${AGENT_URL}") == ""
+
+    def test_nested_agent_fields_resolved(self, tmp_path, monkeypatch):
+        """per-agent 占位在 agents 列表内递归展开."""
+        yaml_path = tmp_path / "c.yaml"
+        yaml_path.write_text(
+            textwrap.dedent("""\
+                agents:
+                  - name: edp_agent
+                    agent_url: ${EDP_AGENT_URL:}
+                    project_id: ${EDP_AGENT_PROJECT_ID:proj_001}
+                    timeout: ${EDP_AGENT_TIMEOUT:300}
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.delenv("EDP_AGENT_URL", raising=False)
+        monkeypatch.setenv("EDP_AGENT_PROJECT_ID", "proj_override")
+        monkeypatch.delenv("EDP_AGENT_TIMEOUT", raising=False)
+        config = load_config(yaml_path)
+        agent = config.agents[0]
+        assert agent.agent_url == ""      # empty default → log-only
+        assert agent.project_id == "proj_override"
+        assert agent.timeout == 300       # int coercion from default "300"
+
+    def test_env_still_overrides_expanded_yaml_default(self, tmp_path, monkeypatch):
+        """ADAPTER_* env 优先级高于 yaml 中的 ${ADAPTER_*:default} 占位."""
+        yaml_path = tmp_path / "c.yaml"
+        yaml_path.write_text("poll_interval: ${ADAPTER_POLL_INTERVAL:42}", encoding="utf-8")
+        # Both the placeholder default and env point to ADAPTER_POLL_INTERVAL;
+        # env must win (env_overridden_keys excludes the field → reads env).
+        monkeypatch.setenv("ADAPTER_POLL_INTERVAL", "99")
+        config = load_config(yaml_path)
+        assert config.poll_interval == 99
+
+
 class TestRelativePathResolution:
     """Relative paths are always resolved relative to adapter root directory."""
 
