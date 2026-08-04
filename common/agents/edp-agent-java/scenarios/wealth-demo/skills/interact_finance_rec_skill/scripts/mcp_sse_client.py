@@ -16,17 +16,15 @@ MCP SSE 协议流程（使用 MCP SDK）：
   - Java 侧 McpInterruptRail 通过环境变量注入 MCP_SERVER_URL（优先级最高）
   - wap_grayFlag 以 "JD" 开头 → MCP_MASTER_URL
   - 其他 → MCP_STANDBY_URL
-  - 未配置 URL 时拒绝创建请求器
+  - 未配置 URL 时跳过 MCP 调用
 """
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import json
 import os
 import time
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
 
 from log_utils import log_info, log_error, log_warning
 
@@ -44,26 +42,6 @@ MCP_TIMEOUT = 25
 SUCCESS_CODES = ("200", 200, "000", "0", "0000", "Success", "success", "SUCCESS")
 
 
-def _validate_server_url(server_url: str) -> str:
-    """Validate an MCP endpoint and require HTTPS outside the local machine."""
-    normalized = server_url.strip().rstrip("/")
-    parsed = urlparse(normalized)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("MCP_SERVER_URL must be an absolute HTTP(S) URL")
-
-    hostname = parsed.hostname.lower()
-    is_loopback = hostname == "localhost"
-    if not is_loopback:
-        try:
-            is_loopback = ipaddress.ip_address(hostname).is_loopback
-        except ValueError:
-            is_loopback = False
-
-    if parsed.scheme != "https" and not is_loopback:
-        raise ValueError("MCP_SERVER_URL must use HTTPS for non-loopback endpoints")
-    return normalized
-
-
 class MCPSSERequester:
     """MCP SSE 协议调用器（使用 MCP SDK）。
 
@@ -79,7 +57,7 @@ class MCPSSERequester:
         app_name: str,
         timeout: int = MCP_TIMEOUT,
     ):
-        self._server_url = _validate_server_url(server_url)
+        self._server_url = server_url.rstrip("/")
         self._access_token = access_token
         self._app_name = app_name
         self._timeout = timeout
@@ -168,7 +146,7 @@ class MCPSSERequester:
         return products
 
     @classmethod
-    def from_skill_input(cls, skill_input: Dict[str, Any], mcp_required_params: Dict[str, Any] = None) -> "MCPSSERequester":
+    def from_skill_input(cls, skill_input: Dict[str, Any], mcp_required_params: Dict[str, Any] = None) -> Optional["MCPSSERequester"]:
         """从 SKILL_INPUT 构造 MCPSSERequester。
 
         优先尝试真实 MCP 服务，按灰度路由规则选择 MCP 服务 URL。
@@ -184,10 +162,7 @@ class MCPSSERequester:
             mcp_required_params: MCP 必输参数（包含 wap_grayFlag 等）
 
         Returns:
-            MCPSSERequester 实例
-
-        Raises:
-            ValueError: URL 未配置、格式无效，或非回环地址未使用 HTTPS
+            MCPSSERequester 实例，或 None（URL 为空时）
         """
         log_info(f"from_skill_input: skill_input={skill_input}")
 
@@ -214,10 +189,8 @@ class MCPSSERequester:
         app_name = os.environ.get("MCP_APP_NAME", "")
 
         if not server_url:
-            raise ValueError(
-                "MCP URL is not configured; set MCP_SERVER_URL or the selected "
-                "MCP_MASTER_URL/MCP_STANDBY_URL"
-            )
+            log_error("mcp_sse_client: MCP URL 为空，无法创建请求器")
+            return None
 
         return cls(
             server_url=server_url,

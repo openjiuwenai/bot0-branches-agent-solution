@@ -53,7 +53,7 @@ import org.springframework.context.annotation.Configuration;
         "deep-agent.mcpsse.app-name=test-app-name",
         "EDP_AGENT_VERSATILE_A2A_URL=test-agent-url",
         "EDPA_SANDBOX_SERVICE_URL=test-sandbox-url",
-        "DEEPSEEK_API_KEY=",
+        "EDP_AGENT_MODEL_API_KEY=",
         "EDP_AGENT_MODEL_BASE_URL=test-model-base",
         "EDP_MCP_MASTER_URL=test-master-url",
         "EDP_MCP_STANDBY_URL=test-standby-url",
