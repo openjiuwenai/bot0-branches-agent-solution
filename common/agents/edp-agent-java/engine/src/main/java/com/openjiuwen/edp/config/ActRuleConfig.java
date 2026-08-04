@@ -280,11 +280,6 @@ public class ActRuleConfig {
             return description;
         }
 
-        /**
-         * Sets the description.
-         *
-         * @param description the description value
-         */
         public void setDescription(String description) {
             this.description = description;
         }
