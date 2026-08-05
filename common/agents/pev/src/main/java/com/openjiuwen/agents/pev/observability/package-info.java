@@ -5,7 +5,7 @@
 /**
  * PEV observability — kernel-native trace of one {@code PEVAgent.invoke} run.
  *
- * <p><b>Design (DSPY/GEPA species B — chosen over direct react-rails port)</b>: PEV's承重 truth is a
+ * <p><b>Design (DSPY/GEPA species B — chosen over direct agent-core-ext-react-rails port)</b>: PEV's承重 truth is a
  * self-contained synchronous state-machine loop whose every bearing value is an invoke-local variable.
  * The trace is a deterministic projection (terminal byproduct) of that loop, NOT a parallel埋点 of
  * rail-around-enforcer transfers. Each {@link com.openjiuwen.agents.pev.observability.PevTrace.Phase}
@@ -13,7 +13,7 @@
  *
  * <p><b>Honest boundaries (deliberate, documented)</b>:
  * <ul>
- *   <li><b>Per-instance scope, not process-wide static</b>: the sink is a PEVAgent field. react-rails
+ *   <li><b>Per-instance scope, not process-wide static</b>: the sink is a PEVAgent field. agent-core-ext-react-rails
  *       needs a static holder (rails are framework-constructed without an agent handle); PEV owns the
  *       loop and holds the sink directly. This avoids concurrent-instance contamination + the
  *       silent-install footgun a process-wide static would import. <b>Future EDPA / multi-agent host

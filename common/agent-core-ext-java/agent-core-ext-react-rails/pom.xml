@@ -6,14 +6,14 @@
 
     <parent>
         <groupId>com.openjiuwen</groupId>
-        <artifactId>agent-runtime-ext-java</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <artifactId>agent-core-ext-java</artifactId>
+        <version>0.1.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>edpa-alpha</artifactId>
-    <name>edpa-alpha — Explore Decision Plan Action Agent (fuses PEV kernel + ReAct Rails)</name>
-    <description>EDPA-alpha adds an explicit Explore phase on top of PEV's sealed dispatch kernel and agent-core-ext-react-rails' steerable rails. Uses ReActAgent as the steerable host (consumeForceFinish + injectPendingSteering), embeds a byte-identical port of PevKernel.toReplanAction as EdpaKernel.toReplanAction (peer, not dependency), and adds Explorer SPI + ExploreRail for active information gathering before planning. Observability inherits agent-core-ext-react-rails RailTelemetry (no separate OTel layer).</description>
+    <artifactId>agent-core-ext-react-rails</artifactId>
+    <name>agent-core-ext-react-rails — Beta cognitive rails for ReActAgent (external-judge verifier + replan + root-cause)</name>
+    <description>Beta cognitive rails grafted onto agent-core-java's ReActAgent. Three rails (CriteriaVerificationRail / ReplanRail / RootCauseRail) using afterModelCall forceFinish gate + external-judge CriteriaVerifier. Fills ReActAgent's verify+GEPA-lite gap. Sibling to pev module.</description>
 
     <properties>
         <formatter.plugin.version>2.24.1</formatter.plugin.version>
@@ -25,20 +25,6 @@
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
-            <version>0.1.14</version>
-        </dependency>
-        <dependency>
-            <!-- Requires agent-core-ext-react-rails 0.1.0 built with MR !66 changes (ReplanTool.isReachable).
-                 Fresh clone: `mvn install -pl common/agent-core-ext-java/agent-core-ext-react-rails` first.
-                 After !66 release (version bump), this resolves automatically. -->
-            <groupId>com.openjiuwen</groupId>
-            <artifactId>agent-core-ext-react-rails</artifactId>
-            <version>0.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
-            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -50,6 +36,11 @@
             <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -59,7 +50,7 @@
                 <artifactId>formatter-maven-plugin</artifactId>
                 <version>${formatter.plugin.version}</version>
                 <configuration>
-                    <configFile>${project.basedir}/../../agent-runtime-ext-java/.devtools/eclipse-java-formatter.xml</configFile>
+                    <configFile>${project.parent.basedir}/.devtools/eclipse-java-formatter.xml</configFile>
                     <lineEnding>LF</lineEnding>
                     <encoding>UTF-8</encoding>
                     <directories>
@@ -84,7 +75,7 @@
                 <artifactId>maven-checkstyle-plugin</artifactId>
                 <version>${checkstyle.plugin.version}</version>
                 <configuration>
-                    <configLocation>${project.basedir}/../../agent-runtime-ext-java/.devtools/checkstyle.xml</configLocation>
+                    <configLocation>${project.parent.basedir}/.devtools/checkstyle.xml</configLocation>
                     <sourceDirectories>
                         <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
                         <sourceDirectory>${project.basedir}/src/test/java</sourceDirectory>

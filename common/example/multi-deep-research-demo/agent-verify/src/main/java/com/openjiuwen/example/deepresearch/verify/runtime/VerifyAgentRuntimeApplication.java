@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Bean;
  * Wrapper Spring Boot app that:
  * <ul>
  *   <li>Builds the {@link ReActAgent} via the library-tier factory. The factory
- *       manually attaches react-rails' {@code CriteriaReplanBridgeRail} +
+ *       manually attaches agent-core-ext-react-rails' {@code CriteriaReplanBridgeRail} +
  *       {@code RootCauseRail} — no BeanPostProcessor magic (the auto-config was
  *       removed in the {@code refactor: separate extension sdk boundaries} commit
  *       of PR#21).</li>

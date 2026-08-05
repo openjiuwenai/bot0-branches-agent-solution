@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 /**
  * Virtual tool the LLM calls to trigger active exploration.
  *
- * <p>Mirrors {@code ReplanTool}'s registration contract (see react-rails): the card is
+ * <p>Mirrors {@code ReplanTool}'s registration contract (see agent-core-ext-react-rails): the card is
  * surfaced to the LLM via {@code AbilityManager.add(card)} (auto-registered by
  * {@code AgentCallbackManager.registerRail} when the owning rail returns it from
  * {@code getTools()}), and the executable is registered into
