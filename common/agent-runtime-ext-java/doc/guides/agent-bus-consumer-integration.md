@@ -72,7 +72,7 @@ agent-bus:
 | 配置项 | 作用 |
 |---|---|
 | `openjiuwen.service.service-id` | Runtime 的稳定逻辑服务 ID，用来匹配目标为本 Runtime 的请求事件 |
-| `openjiuwen.service.bus.consumer.enabled` | 启用 Runtime 的总线事件消费和响应投影 |
+| `openjiuwen.service.bus.consumer.enabled` | 启用 Runtime 的 Agent Bus 公共装配；本指南只启用 runtime role 做请求消费和响应投影 |
 | `agent-bus.role.runtime.enabled` | 让 Agent Bus SDK 装配 Runtime 角色的请求 consumer 和响应 producer |
 | `agent-bus.nameserver` | Broker 名称服务地址 |
 | `agent-bus.tenant` | 本 Runtime 订阅和发布事件时使用的租户范围 |

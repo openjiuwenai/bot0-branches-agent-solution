@@ -5,12 +5,19 @@
 package com.openjiuwen.service.bus.consumer.autoconfigure;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
+import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxClaimPort;
+import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
+import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerOutboxDispatcher;
+import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerResponseLifecycle;
+import com.openjiuwen.service.bus.consumer.caller.AgentBusRemoteAgentCaller;
+import com.openjiuwen.service.bus.consumer.caller.RuntimeRdcClient;
+import com.openjiuwen.service.bus.consumer.caller.UnavailableAgentBusRemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairScheduler;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairer;
 import com.openjiuwen.service.bus.consumer.relay.BusResponseRelay;
@@ -26,13 +33,16 @@ import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceSubscriptionAspect;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.TaskStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -42,6 +52,12 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.core.env.Environment;
 
 import java.time.Clock;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Auto-configures the FEAT-017 bus consumer and its A2A bridge.
@@ -49,6 +65,11 @@ import java.time.Clock;
  * @since 2026-07-22
  */
 @AutoConfiguration
+@AutoConfigureAfter(name = {
+        "com.openjiuwen.bus.forwarding.common.AgentBusReliabilityAutoConfiguration",
+        "com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusRuntimeRoleAutoConfiguration",
+        "com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq.AgentBusCallerRoleAutoConfiguration"
+})
 @AutoConfigureBefore(name = "com.openjiuwen.service.app.autoconfigure.A2AAutoConfiguration")
 @EnableConfigurationProperties({BusConsumerProperties.class, AgentBusBrokerProperties.class})
 @EnableAspectJAutoProxy
@@ -56,6 +77,8 @@ import java.time.Clock;
 public class BusConsumerAutoConfiguration {
     private static final String SERVICE_ID_PROPERTY = "openjiuwen.service.service-id";
     private static final long STREAM_REF_TTL_SECONDS = 60L * 60L;
+    private static final int CALLER_IO_THREADS = 4;
+    private static final int CALLER_OUTBOX_BATCH_SIZE = 10;
 
     @Bean
     BusEnvelopeValidator busEnvelopeValidator(Environment environment, AgentBusBrokerProperties bus) {
@@ -84,6 +107,58 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(name = {"requestProducer", "responseConsumer"})
+    RuntimeRdcClient runtimeRdcClient(BusConsumerProperties properties) {
+        return new RuntimeRdcClient(properties.getRegistryBaseUrl());
+    }
+
+    @Bean(destroyMethod = "shutdownNow")
+    ExecutorService agentBusCallerExecutor() {
+        return Executors.newFixedThreadPool(CALLER_IO_THREADS, daemonThreadFactory("bus-caller-io"));
+    }
+
+    @Bean
+    RemoteAgentCaller agentBusRemoteAgentCaller(ObjectProvider<RuntimeRdcClient> registry,
+            ObjectProvider<ForwardingOutboxPort> outbox,
+            @Qualifier("agentBusCallerExecutor") ExecutorService agentBusCallerExecutor,
+            AgentBusBrokerProperties bus, Environment environment) {
+        RuntimeRdcClient registryClient = registry.getIfAvailable();
+        ForwardingOutboxPort outboxPort = outbox.getIfAvailable();
+        if (registryClient == null || outboxPort == null) {
+            return new UnavailableAgentBusRemoteAgentCaller();
+        }
+        return new AgentBusRemoteAgentCaller(registryClient, outboxPort, agentBusCallerExecutor,
+                tenantId(bus), serviceId(environment), bus.responseTimeoutMs());
+    }
+
+    @Bean
+    @ConditionalOnBean(value = {ForwardingOutboxPort.class, ForwardingOutboxClaimPort.class},
+            name = "requestProducer")
+    AgentBusCallerOutboxDispatcher agentBusCallerOutboxDispatcher(ForwardingOutboxClaimPort claims,
+            ForwardingOutboxPort outbox, @Qualifier("requestProducer") BrokerForwardingProducerPort producer,
+            AgentBusBrokerProperties bus, BusConsumerProperties properties, Environment environment) {
+        long interval = properties.getTuning().getPollInterval().toMillis();
+        ScheduledExecutorService scheduler = BusExecutors.singleThreadScheduler("bus-caller-outbox");
+        return new AgentBusCallerOutboxDispatcher(claims, outbox, producer, scheduler, tenantId(bus),
+                serviceId(environment), bus.leaseDurationMs(), interval, CALLER_OUTBOX_BATCH_SIZE);
+    }
+
+    @Bean
+    @ConditionalOnBean(value = {ForwardingOutboxPort.class, ForwardingOutboxClaimPort.class},
+            name = {"requestProducer", "responseConsumer"})
+    AgentBusCallerResponseLifecycle agentBusCallerResponseLifecycle(
+            @Qualifier("responseConsumer") BrokerForwardingConsumerPort consumer,
+            RemoteAgentCaller agentBusRemoteAgentCaller, AgentBusBrokerProperties bus, Environment environment) {
+        if (!(agentBusRemoteAgentCaller instanceof AgentBusRemoteAgentCaller caller)) {
+            throw new IllegalStateException("Agent Bus caller infrastructure is incomplete");
+        }
+        ExecutorService executor = Executors.newSingleThreadExecutor(daemonThreadFactory("bus-caller-response"));
+        String serviceId = serviceId(environment);
+        return new AgentBusCallerResponseLifecycle(consumer, caller, executor,
+                callerConsumerServiceId(serviceId), tenantId(bus), serviceId);
+    }
+
+    @Bean
     BusConcurrencyGuard busConcurrencyGuard(BusConsumerProperties p) {
         BusConsumerProperties.Tuning tuning = p.getTuning();
         return new BusConcurrencyGuard(tuning.getPayloadMaxInFlight(), tuning.getBridgeMaxInFlight(),
@@ -107,8 +182,8 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    RequestHandlerBusA2aBridge busA2aRequestBridge(RequestHandler requestHandler) {
-        return new RequestHandlerBusA2aBridge(requestHandler);
+    RequestHandlerBusA2aBridge busA2aRequestBridge(ObjectProvider<RequestHandler> requestHandler) {
+        return new RequestHandlerBusA2aBridge(requestHandler::getIfAvailable);
     }
 
     @Bean(destroyMethod = "close")
@@ -188,24 +263,38 @@ public class BusConsumerAutoConfiguration {
         return () -> {
             serviceId(environment);
             tenantId(bus);
-            if (beans.getBeanProvider(RuntimeBusEventConsumer.class).getIfAvailable() == null) {
-                throw new IllegalStateException("RuntimeBusEventConsumer bean is required");
+            Map<String, RemoteAgentCaller> callers = beans.getBeansOfType(RemoteAgentCaller.class);
+            if (callers.size() != 1 || !callers.containsKey("agentBusRemoteAgentCaller")) {
+                throw new IllegalStateException("Agent Bus must be the only RemoteAgentCaller when bus is enabled");
             }
-            if (beans.getBeanProvider(AgentBusBrokerDeliveryPort.class).getIfAvailable() == null) {
-                throw new IllegalStateException("runtimeRequestConsumer/delivery adapter is required");
-            }
-            TaskStore configuredTaskStore = beans.getBeanProvider(TaskStore.class).getIfAvailable();
-            if (configuredTaskStore == null) {
-                throw new IllegalStateException("A2A TaskStore bean is required");
-            }
-            if (beans.getBeanProvider(AgentBusResponsePublisher.class).getIfAvailable() == null) {
-                throw new IllegalStateException("runtimeResponseProducer/response publisher is required");
+            if (hasRuntimeRole(beans)) {
+                requireBean(beans, RequestHandler.class, "A2A RequestHandler is required for the runtime role");
+                requireBean(beans, TaskStore.class, "A2A TaskStore is required for the runtime role");
+                requireBean(beans, AgentBusResponsePublisher.class,
+                        "runtimeResponseProducer is required for the runtime role");
+                requireBean(beans, RuntimeBusEventConsumer.class,
+                        "RuntimeBusEventConsumer could not be assembled for the runtime role");
             }
         };
     }
 
+    private static boolean hasRuntimeRole(ConfigurableListableBeanFactory beans) {
+        return beans.containsBean("runtimeRequestConsumer")
+                || beans.getBeanProvider(AgentBusBrokerDeliveryPort.class).getIfAvailable() != null;
+    }
+
+    private static <T> void requireBean(ConfigurableListableBeanFactory beans, Class<T> type, String message) {
+        if (beans.getBeanProvider(type).getIfAvailable() == null) {
+            throw new IllegalStateException(message);
+        }
+    }
+
     static String consumerServiceId(Environment environment) {
         return "runtime-" + serviceId(environment);
+    }
+
+    static String callerConsumerServiceId(String serviceId) {
+        return "runtime-caller-" + require(serviceId, "serviceId");
     }
 
     private static String tenantId(AgentBusBrokerProperties bus) {
@@ -221,5 +310,14 @@ public class BusConsumerAutoConfiguration {
             throw new IllegalStateException(name + " is required when broker is configured");
         }
         return value;
+    }
+
+    private static ThreadFactory daemonThreadFactory(String prefix) {
+        AtomicInteger index = new AtomicInteger();
+        return runnable -> {
+            Thread thread = new Thread(runnable, prefix + "-" + index.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 }

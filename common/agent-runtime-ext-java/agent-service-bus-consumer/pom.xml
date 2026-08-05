@@ -12,6 +12,7 @@
     <artifactId>agent-service-bus-consumer</artifactId>
     <name>Agent runtime bus event consumer</name>
     <dependencies>
+        <dependency><groupId>com.openjiuwen</groupId><artifactId>agent-service-app</artifactId></dependency>
         <dependency><groupId>com.openjiuwen</groupId><artifactId>event-bus-spi</artifactId></dependency>
         <dependency><groupId>com.openjiuwen</groupId><artifactId>event-bus-sdk</artifactId></dependency>
         <dependency>

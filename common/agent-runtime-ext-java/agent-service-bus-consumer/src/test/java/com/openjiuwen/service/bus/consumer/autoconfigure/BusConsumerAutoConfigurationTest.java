@@ -10,10 +10,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
+import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
+import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.ProjectingTaskStore;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
+import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerOutboxDispatcher;
+import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerResponseLifecycle;
+import com.openjiuwen.service.bus.consumer.caller.AgentBusRemoteAgentCaller;
+import com.openjiuwen.service.bus.consumer.caller.RuntimeRdcClient;
+import com.openjiuwen.service.bus.consumer.caller.UnavailableAgentBusRemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.model.Admission;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusBrokerDeliveryPort;
 import com.openjiuwen.service.bus.consumer.runtime.AgentBusResponsePublisher;
@@ -22,6 +29,8 @@ import com.openjiuwen.service.bus.consumer.store.InMemoryBusTaskAdmissionStore;
 import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceSubscriptionAspect;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.InMemoryTaskStore;
@@ -37,7 +46,9 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Proxy;
+import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * Tests BusConsumerAutoConfiguration behavior.
@@ -70,6 +81,9 @@ class BusConsumerAutoConfigurationTest {
             assertThat(context).hasSingleBean(InMemoryBusResponseProjectionStore.class);
             assertThat(context).hasSingleBean(StreamReferenceService.class);
             assertThat(context).hasSingleBean(StreamReferenceSubscriptionAspect.class);
+            assertThat(context).doesNotHaveBean(RuntimeRdcClient.class);
+            assertThat(context.getBean(RemoteAgentCaller.class))
+                    .isInstanceOf(UnavailableAgentBusRemoteAgentCaller.class);
             assertThat(context.getBean(AgentBusBrokerProperties.class).tenant()).isEqualTo("tenant-a");
         });
     }
@@ -94,13 +108,57 @@ class BusConsumerAutoConfigurationTest {
 
     @Test
     void bindsOptionalTuningDurations() {
-        contextRunner.withPropertyValues("openjiuwen.service.bus.consumer.tuning.poll-interval=2s",
+        contextRunner.withPropertyValues("openjiuwen.service.bus.consumer.registry-base-url=http://rdc.example:8092",
+                "openjiuwen.service.bus.consumer.tuning.poll-interval=2s",
                 "openjiuwen.service.bus.consumer.tuning.response-relay-backoff=250ms",
                 "openjiuwen.service.bus.consumer.tuning.repair-interval=30s").run(context -> {
-                    BusConsumerProperties.Tuning tuning = context.getBean(BusConsumerProperties.class).getTuning();
+                    BusConsumerProperties properties = context.getBean(BusConsumerProperties.class);
+                    BusConsumerProperties.Tuning tuning = properties.getTuning();
+                    assertThat(properties.getRegistryBaseUrl()).isEqualTo(URI.create("http://rdc.example:8092"));
                     assertThat(tuning.getPollInterval()).isEqualTo(Duration.ofSeconds(2));
                     assertThat(tuning.getResponseRelayBackoff()).isEqualTo(Duration.ofMillis(250));
                     assertThat(tuning.getRepairInterval()).isEqualTo(Duration.ofSeconds(30));
+                });
+    }
+
+    @Test
+    void createsRegistryClientForCallerBrokerPortsButKeepsCallerFailClosedWithoutOutbox() {
+        var requestBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "req");
+        var responseBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_out");
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
+                .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
+                        "openjiuwen.service.bus.consumer.registry-base-url=http://rdc.example:8092",
+                        "agent-bus.tenant=tenant-a",
+                        "openjiuwen.service.service-id=runtime-a")
+                .withBean("requestProducer", BrokerForwardingProducerPort.class, () -> requestBroker)
+                .withBean("responseConsumer", BrokerForwardingConsumerPort.class,
+                        () -> responseBroker.consumerFor("runtime-runtime-a"))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(RuntimeRdcClient.class);
+                    assertThat(context.getBean(RemoteAgentCaller.class))
+                            .isInstanceOf(UnavailableAgentBusRemoteAgentCaller.class);
+                });
+    }
+
+    @Test
+    void assemblesRealCallerWhenAgentBusOutboxAndCallerPortsExist() {
+        var requestBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "req");
+        var responseBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_out");
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
+                .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
+                        "openjiuwen.service.bus.consumer.registry-base-url=http://rdc.example:8092",
+                        "agent-bus.tenant=tenant-a",
+                        "openjiuwen.service.service-id=runtime-a")
+                .withBean("requestProducer", BrokerForwardingProducerPort.class, () -> requestBroker)
+                .withBean("responseConsumer", BrokerForwardingConsumerPort.class,
+                        () -> responseBroker.consumerFor("runtime-caller-runtime-a"))
+                .withBean(InMemoryForwardingOutbox.class, InMemoryForwardingOutbox::new)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(RemoteAgentCaller.class)).isInstanceOf(AgentBusRemoteAgentCaller.class);
+                    assertThat(context).hasSingleBean(AgentBusCallerOutboxDispatcher.class);
+                    assertThat(context).hasSingleBean(AgentBusCallerResponseLifecycle.class);
                 });
     }
 
@@ -167,18 +225,56 @@ class BusConsumerAutoConfigurationTest {
     void disabledDoesNotRequireRuntimeBusDependencies() {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
                 .withPropertyValues("openjiuwen.service.bus.consumer.enabled=false")
-                .run(context -> assertThat(context).doesNotHaveBean(RuntimeBusEventConsumer.class));
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(RuntimeBusEventConsumer.class);
+                    assertThat(context).doesNotHaveBean(RemoteAgentCaller.class);
+                });
     }
 
     @Test
-    void enabledFailsFastWhenRequiredRuntimeBeansAreMissing() {
+    void enabledWithoutRoleBeansStartsAndOutboundCallsFailClosed() {
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
                 .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
                         "agent-bus.tenant=tenant-a",
                         "openjiuwen.service.service-id=runtime-a")
                 .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(RuntimeBusEventConsumer.class);
+                    RemoteAgentCaller caller = context.getBean(RemoteAgentCaller.class);
+                    RemoteCall call = new RemoteCall("agent-b", "hello", "context-1", null, Map.of());
+                    assertThatThrownBy(() -> caller.callOutcome(call, null, null).join())
+                            .hasRootCauseMessage("Agent Bus caller role is unavailable; "
+                                    + "Runtime-to-Runtime HTTP fallback is disabled");
+                });
+    }
+
+    @Test
+    void enabledRuntimeRoleFailsFastWhenRuntimeDependenciesAreMissing() {
+        var broker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "deliver");
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
+                .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
+                        "agent-bus.tenant=tenant-a",
+                        "openjiuwen.service.service-id=runtime-a")
+                .withBean("runtimeRequestConsumer", BrokerForwardingConsumerPort.class,
+                        () -> broker.consumerFor("runtime-runtime-a"))
+                .run(context -> {
                     assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("RequestHandler");
+                    assertThat(context.getStartupFailure()).hasMessageContaining("RequestHandler");
+                });
+    }
+
+    @Test
+    void enabledRejectsASecondRemoteAgentCaller() {
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
+                .withPropertyValues("openjiuwen.service.bus.consumer.enabled=true",
+                        "agent-bus.tenant=tenant-a",
+                        "openjiuwen.service.service-id=runtime-a")
+                .withBean("httpRemoteAgentCaller", RemoteAgentCaller.class,
+                        UnavailableAgentBusRemoteAgentCaller::new)
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining("Agent Bus must be the only RemoteAgentCaller");
                 });
     }
 

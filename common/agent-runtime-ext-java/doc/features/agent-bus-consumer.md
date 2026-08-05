@@ -2,12 +2,16 @@
 
 ## 1. 定位
 
-Agent Bus Consumer 使 Agent Runtime 能够订阅并消费发给自身的 Agent Bus 请求事件，同时复用标准
-A2A 服务入口的业务语义。Maven 模块为 `agent-service-bus-consumer`。
+Agent Bus Consumer 使 Agent Runtime 能够订阅并消费发给自身的 Agent Bus 请求事件，也能把
+Runtime 间远程调用发送到 Agent Bus，同时复用标准 A2A 服务入口的业务语义。Maven 模块为
+`agent-service-bus-consumer`。
 
 Agent Bus SDK 的 runtime role 负责 Broker 连接并提供请求 consumer 和响应 producer；本模块负责
 事件校验、A2A 请求桥接、Task 受理、状态投影和响应发布。业务 `AgentHandler` 不感知 Broker、Topic
 或订阅过程。
+
+Agent Bus SDK 的 caller role 提供请求 producer 和响应 consumer，reliability 层提供 JDBC outbox；
+本模块实现 `RemoteAgentCaller`、RDC 路由、caller outbox dispatcher、pending call 和响应回灌。
 
 ## 2. 支持的请求
 
@@ -37,6 +41,20 @@ Agent Bus SDK runtimeRequestConsumer
   -> BusTaskProjectionCoordinator
   -> BusResponseRelay
   -> Agent Bus SDK runtimeResponseProducer
+```
+
+Runtime 间出站调用链路为：
+
+```text
+RemoteInvocationBatchCoordinator
+  -> AgentBusRemoteAgentCaller
+  -> RuntimeRdcClient
+  -> ForwardingOutboxPort
+  -> AgentBusCallerOutboxDispatcher
+  -> Agent Bus SDK requestProducer
+  -> responseConsumer
+  -> AgentBusCallerResponseLifecycle
+  -> RemoteCallOutcomeMapper
 ```
 
 处理成功后才向 Agent Bus SDK commit；确定性无效请求会 reject；临时处理失败返回 retry。模块使用
@@ -96,13 +114,17 @@ Gateway 随后通过 Runtime 的标准 A2A `SubscribeToTask` HTTP/SSE 入口接�
 
 ## 8. 自动装配
 
-设置 `openjiuwen.service.bus.consumer.enabled=true` 后，模块在基础 A2A 自动装配之前注册 TaskStore
-投影包装器，并要求以下运行条件：
+`openjiuwen.service.bus.consumer.enabled=true` 是本模块的全局开关。启用后要求非空、稳定的
+`openjiuwen.service.service-id` 和非空 `agent-bus.tenant`，但不要求 runtime role 与 caller role
+同时存在。
 
-- `openjiuwen.service.service-id` 是非空、稳定的 Runtime 逻辑服务 ID。
-- `agent-bus.tenant` 是非空租户范围。
-- Agent Bus SDK runtime role 提供 `runtimeRequestConsumer` 和 `runtimeResponseProducer`。
-- 基础 Runtime 提供 A2A `RequestHandler` 和 `TaskStore`。
+- Agent Bus SDK runtime role 存在时，必须同时提供 `runtimeRequestConsumer` 和
+  `runtimeResponseProducer`，基础 Runtime 必须提供 A2A `RequestHandler` 和 `TaskStore`。
+- Agent Bus SDK caller role 提供 `requestProducer` 和 `responseConsumer`，reliability 层提供
+  `ForwardingOutboxPort` 与 `ForwardingOutboxClaimPort` 后，模块才装配真实 Bus Caller、内部注册
+  发现客户端、请求 dispatcher 和响应生命周期。
+- Bus 全局开关开启后，Runtime 间调用不允许退回 HTTP Caller；caller role 未装配时，
+  真正发起远程调用才返回明确的 `caller role unavailable`，不影响 runtime role 独立启动。
 
 自动装配使用 `runtime-<service-id>` 作为稳定的 consumer service ID。它标识消费进度和消费端身份，
 不替代事件 envelope 的目标 service ID 或 Task ID。
@@ -114,6 +136,9 @@ Gateway 随后通过 Runtime 的标准 A2A `SubscribeToTask` HTTP/SSE 入口接�
 - 上游 A2A 不支持调用方注入预留 Task ID，RESERVED 崩溃恢复尚不能完全闭环。
 - 流引用和投影修复状态均属于当前 Runtime 进程。
 - 可观测性和生产级持久化属于后续 DFX 能力。
+- Runtime Caller 的 `A2A_STREAM_READY` 已可识别，但尚未接入公共 `SubscribeToTask` 客户端，
+  因此流式中间 chunk 的点对点 SSE 回灌仍待完成。
+- Caller pending call 目前保存在内存中，只保证单实例、单进程生命周期。
 
 ## 10. 相关文档
 

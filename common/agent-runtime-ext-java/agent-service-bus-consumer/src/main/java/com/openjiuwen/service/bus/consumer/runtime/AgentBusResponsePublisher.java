@@ -18,6 +18,7 @@ import java.util.Base64;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.StringJoiner;
 
 /**
@@ -26,6 +27,8 @@ import java.util.StringJoiner;
  * @since 2026-07-22
  */
 public final class AgentBusResponsePublisher {
+    private static final Set<String> OBJECT_FIELDS = Set.of("revision", "task", "response");
+
     private final BrokerForwardingProducerPort producer;
     private final String localServiceId;
 
@@ -76,7 +79,7 @@ public final class AgentBusResponsePublisher {
         }
     }
 
-    private static String encodeProjection(BusResponseProjection projection) {
+    static String encodeProjection(BusResponseProjection projection) {
         StringJoiner descriptor = new StringJoiner(";");
         if (projection.taskId() != null) {
             descriptor.add("taskId=" + projection.taskId());
@@ -92,12 +95,13 @@ public final class AgentBusResponsePublisher {
             descriptor.add("reason=" + code);
         }
         appendA2aResponse(descriptor, projection.data());
-        for (Map.Entry<String, Object> entry : projection.data().entrySet()) {
+        projection.data().entrySet().stream().filter(entry -> !OBJECT_FIELDS.contains(entry.getKey()))
+                .sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             if (entry.getValue() instanceof String || entry.getValue() instanceof Number
                     || entry.getValue() instanceof Boolean) {
                 descriptor.add(entry.getKey() + "=" + entry.getValue());
             }
-        }
+        });
         return descriptor.toString();
     }
 
