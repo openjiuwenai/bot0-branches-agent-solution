@@ -11,12 +11,15 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
+import com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteCallEventConsumer;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcomeMapper;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
+import org.a2aproject.sdk.client.ClientEvent;
 import org.a2aproject.sdk.spec.TaskState;
 
 import java.util.List;
@@ -25,9 +28,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -37,20 +40,23 @@ import java.util.function.Consumer;
  */
 public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     private static final String CAPABILITY = "a2a-call";
+    private static final int MAX_STREAM_REFERENCE_REFRESHES = 1;
 
     private final RuntimeRdcClient registry;
     private final ForwardingOutboxPort outbox;
     private final RemoteCallOutcomeMapper outcomeMapper;
+    private final RemoteCallEventConsumer eventConsumer;
     private final AgentBusRequestEncoder requestEncoder = new AgentBusRequestEncoder();
     private final AgentBusProjectionDecoder projectionDecoder = new AgentBusProjectionDecoder();
     private final Map<String, PendingRemoteCall> pending = new ConcurrentHashMap<>();
     private final Executor executor;
+    private final StreamSubscriber streamSubscriber;
     private final String tenantId;
     private final String sourceServiceId;
     private final long responseTimeoutMillis;
 
     /**
-     * Creates an Agent Bus caller.
+     * Creates an Agent Bus caller with the standard A2A subscription client.
      *
      * @param registry registry discovery client
      * @param outbox Agent Bus request outbox
@@ -61,13 +67,39 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
      */
     public AgentBusRemoteAgentCaller(RuntimeRdcClient registry, ForwardingOutboxPort outbox, Executor executor,
             String tenantId, String sourceServiceId, long responseTimeoutMillis) {
+        this(registry, outbox, executor, tenantId, sourceServiceId, responseTimeoutMillis,
+                new A2ATaskSubscriptionClient());
+    }
+
+    /**
+     * Creates an Agent Bus caller that reuses the Runtime A2A Task subscription client.
+     *
+     * @param registry registry discovery client
+     * @param outbox Agent Bus request outbox
+     * @param executor blocking discovery/enqueue executor
+     * @param tenantId trusted tenant scope
+     * @param sourceServiceId local Runtime service identifier
+     * @param responseTimeoutMillis overall response timeout
+     * @param subscriptionClient standard A2A Task subscription client
+     */
+    public AgentBusRemoteAgentCaller(RuntimeRdcClient registry, ForwardingOutboxPort outbox, Executor executor,
+            String tenantId, String sourceServiceId, long responseTimeoutMillis,
+            A2ATaskSubscriptionClient subscriptionClient) {
+        this(registry, outbox, executor, tenantId, sourceServiceId, responseTimeoutMillis,
+                Objects.requireNonNull(subscriptionClient, "subscriptionClient is required")::subscribe);
+    }
+
+    AgentBusRemoteAgentCaller(RuntimeRdcClient registry, ForwardingOutboxPort outbox, Executor executor,
+            String tenantId, String sourceServiceId, long responseTimeoutMillis, StreamSubscriber streamSubscriber) {
         this.registry = Objects.requireNonNull(registry, "registry is required");
         this.outbox = Objects.requireNonNull(outbox, "outbox is required");
         this.executor = Objects.requireNonNull(executor, "executor is required");
         this.tenantId = require(tenantId, "tenantId");
         this.sourceServiceId = require(sourceServiceId, "sourceServiceId");
         this.responseTimeoutMillis = positive(responseTimeoutMillis, "responseTimeoutMillis");
+        this.streamSubscriber = Objects.requireNonNull(streamSubscriber, "streamSubscriber is required");
         this.outcomeMapper = new RemoteCallOutcomeMapper();
+        this.eventConsumer = new RemoteCallEventConsumer();
     }
 
     @Override
@@ -122,25 +154,29 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             Consumer<String> taskIdObserver, CompletableFuture<RemoteCallOutcome> result) {
         try {
             RuntimeRdcClient.RouteCandidate route = firstRoute(call.agentName());
+            RuntimeRdcClient.ResolvedRoute resolved = call.isCallerStreaming()
+                    ? registry.resolve(tenantId, route.routeHandle()) : null;
             if (result.isDone()) {
                 return;
             }
             String correlationId = UUID.randomUUID().toString();
             String idempotencyKey = UUID.randomUUID().toString();
             long now = System.currentTimeMillis();
-            PendingRemoteCall pendingCall = new PendingRemoteCall(result, taskIdObserver, streamObserver);
+            long deadline = now + responseTimeoutMillis;
+            PendingRemoteCall pendingCall = new PendingRemoteCall(result, taskIdObserver, streamObserver,
+                    call.isCallerStreaming(), route, resolved == null ? null : resolved.endpointUrl(),
+                    correlationId, idempotencyKey, deadline);
             pending.put(correlationId, pendingCall);
-            result.whenComplete((outcome, failure) -> pending.remove(correlationId, pendingCall));
-            ForwardingEnvelope envelope = envelope(call, route, correlationId, idempotencyKey, now);
+            result.whenComplete((outcome, failure) -> {
+                pending.remove(correlationId, pendingCall);
+                pendingCall.closeStream();
+            });
+            ForwardingEnvelope envelope = creationEnvelope(call, route, correlationId, idempotencyKey, now, deadline);
             if (result.isDone()) {
                 pending.remove(correlationId, pendingCall);
                 return;
             }
-            ForwardingReceipt receipt = outbox.enqueue(envelope, sourceServiceId, route.serviceId(), now);
-            if (!receipt.accepted()) {
-                result.completeExceptionally(new IllegalStateException(
-                        "Agent Bus rejected remote call enqueue: " + receipt.failureCode()));
-            }
+            enqueue(envelope, route.serviceId(), now, result);
         } catch (RuntimeException failure) {
             result.completeExceptionally(failure);
         }
@@ -155,15 +191,37 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         return candidates.get(0);
     }
 
-    private ForwardingEnvelope envelope(RemoteCall call, RuntimeRdcClient.RouteCandidate route,
-            String correlationId, String idempotencyKey, long now) {
+    private ForwardingEnvelope creationEnvelope(RemoteCall call, RuntimeRdcClient.RouteCandidate route,
+            String correlationId, String idempotencyKey, long now, long deadline) {
         String requestId = "bus-" + UUID.randomUUID();
         String payload = requestEncoder.encode(call, requestId, tenantId);
-        return new ForwardingEnvelope(new ForwardingMessageId(requestId), AgentBusEventType.A2A_CALL_REQUESTED,
-                tenantId, traceId(call.metadata(), correlationId), correlationId, idempotencyKey,
-                new ForwardingRouteHandle(route.routeHandle(), tenantId), CAPABILITY, sourceServiceId,
-                route.serviceId(), now + responseTimeoutMillis, ForwardingEnvelope.PayloadPolicy.DATA_BEARING,
+        return envelope(AgentBusEventType.A2A_CALL_REQUESTED, route, correlationId, idempotencyKey,
+                traceId(call.metadata(), correlationId), requestId, payload, deadline);
+    }
+
+    private ForwardingEnvelope subscriptionEnvelope(PendingRemoteCall call) {
+        String requestId = "bus-stream-" + UUID.randomUUID();
+        String payload = requestEncoder.encodeSubscription(call.taskId, requestId, tenantId);
+        return envelope(AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED, call.route, call.correlationId,
+                call.idempotencyKey, call.correlationId, requestId, payload, call.deadline);
+    }
+
+    private ForwardingEnvelope envelope(AgentBusEventType eventType, RuntimeRdcClient.RouteCandidate route,
+            String correlationId, String idempotencyKey, String traceId, String requestId, String payload,
+            long deadline) {
+        return new ForwardingEnvelope(new ForwardingMessageId(requestId), eventType, tenantId, traceId,
+                correlationId, idempotencyKey, new ForwardingRouteHandle(route.routeHandle(), tenantId), CAPABILITY,
+                sourceServiceId, route.serviceId(), deadline, ForwardingEnvelope.PayloadPolicy.DATA_BEARING,
                 null, payload, sourceServiceId);
+    }
+
+    private void enqueue(ForwardingEnvelope envelope, String targetServiceId, long now,
+            CompletableFuture<RemoteCallOutcome> result) {
+        ForwardingReceipt receipt = outbox.enqueue(envelope, sourceServiceId, targetServiceId, now);
+        if (!receipt.accepted()) {
+            result.completeExceptionally(new IllegalStateException(
+                    "Agent Bus rejected remote call enqueue: " + receipt.failureCode()));
+        }
     }
 
     private void apply(AgentBusEventType eventType, PendingRemoteCall call,
@@ -173,14 +231,70 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         }
         call.captureTaskId(projection.value("taskId"));
         switch (eventType) {
-            case A2A_CALL_ACCEPTED, A2A_STREAM_READY -> {
+            case A2A_CALL_ACCEPTED -> {
                 return;
             }
+            case A2A_STREAM_READY -> openStream(call, requiredProjection(projection, "streamRef"));
             case A2A_CALL_REJECTED -> completeState(call, projection, TaskState.TASK_STATE_REJECTED);
             case A2A_CALL_FAILED -> completeState(call, projection, TaskState.TASK_STATE_FAILED);
             case A2A_CALL_RESPONSE, A2A_CALL_INPUT_REQUIRED, A2A_CALL_TERMINAL ->
                     completeA2a(call, projection, eventType);
             default -> throw new IllegalArgumentException("Unexpected Agent Bus response type: " + eventType);
+        }
+    }
+
+    private void openStream(PendingRemoteCall call, String streamReference) {
+        int generation = call.beginStream(streamReference);
+        if (generation < 0) {
+            return;
+        }
+        try {
+            A2ATaskSubscriptionClient.TaskSubscriptionRequest request =
+                    new A2ATaskSubscriptionClient.TaskSubscriptionRequest(call.endpointUrl, call.taskId,
+                            streamReference);
+            AutoCloseable subscription = streamSubscriber.subscribe(request,
+                    event -> acceptStreamEvent(call, event),
+                    () -> streamFailed(call, generation,
+                            new IllegalStateException("SubscribeToTask stream closed before a terminal event")),
+                    failure -> streamFailed(call, generation, failure));
+            call.installStream(generation, subscription);
+        } catch (RuntimeException failure) {
+            streamFailed(call, generation, failure);
+        }
+    }
+
+    private void acceptStreamEvent(PendingRemoteCall call, ClientEvent event) {
+        eventConsumer.accept(event, call.result, call.streamObserver, call.taskIdObserver, false);
+    }
+
+    private void streamFailed(PendingRemoteCall call, int generation, Throwable failure) {
+        if (!call.beginStreamReferenceRefresh(generation)) {
+            if (!call.result.isDone()) {
+                call.result.completeExceptionally(failure == null
+                        ? new IllegalStateException("SubscribeToTask failed") : failure);
+            }
+            return;
+        }
+        try {
+            executor.execute(() -> refreshStreamReference(call));
+        } catch (RuntimeException rejected) {
+            call.result.completeExceptionally(rejected);
+        }
+    }
+
+    private void refreshStreamReference(PendingRemoteCall call) {
+        if (call.result.isDone()) {
+            return;
+        }
+        try {
+            long now = System.currentTimeMillis();
+            if (now >= call.deadline) {
+                call.result.completeExceptionally(new IllegalStateException("Remote call deadline exceeded"));
+                return;
+            }
+            enqueue(subscriptionEnvelope(call), call.route.serviceId(), now, call.result);
+        } catch (RuntimeException failure) {
+            call.result.completeExceptionally(failure);
         }
     }
 
@@ -206,6 +320,14 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         String taskId = projection.value("taskId");
         String reason = firstNonBlank(projection.value("reason"), projection.value("errorCode"));
         outcomeMapper.mapTask(taskId, state, reason, null, false).ifPresent(call.result::complete);
+    }
+
+    private static String requiredProjection(AgentBusProjectionDecoder.DecodedProjection projection, String name) {
+        String value = projection.value(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " is required in A2A stream projection");
+        }
+        return value;
     }
 
     private static TaskState state(String value) {
@@ -246,27 +368,104 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         return value;
     }
 
+    @FunctionalInterface
+    interface StreamSubscriber {
+        AutoCloseable subscribe(
+                A2ATaskSubscriptionClient.TaskSubscriptionRequest request,
+                Consumer<ClientEvent> eventConsumer, Runnable completionHandler, Consumer<Throwable> errorHandler);
+    }
+
     private static final class PendingRemoteCall {
         private final CompletableFuture<RemoteCallOutcome> result;
         private final Consumer<String> taskIdObserver;
-        @SuppressWarnings("unused")
         private final QueryStreamObserver streamObserver;
-        private volatile String taskId;
+        private final boolean streaming;
+        private final RuntimeRdcClient.RouteCandidate route;
+        private final String endpointUrl;
+        private final String correlationId;
+        private final String idempotencyKey;
+        private final long deadline;
+        private String taskId;
+        private String streamReference;
+        private int streamGeneration;
+        private int streamReferenceRefreshes;
+        private AutoCloseable subscription;
 
         private PendingRemoteCall(CompletableFuture<RemoteCallOutcome> result,
-                Consumer<String> taskIdObserver, QueryStreamObserver streamObserver) {
+                Consumer<String> taskIdObserver, QueryStreamObserver streamObserver, boolean streaming,
+                RuntimeRdcClient.RouteCandidate route, String endpointUrl, String correlationId,
+                String idempotencyKey, long deadline) {
             this.result = result;
             this.taskIdObserver = taskIdObserver;
             this.streamObserver = streamObserver;
+            this.streaming = streaming;
+            this.route = route;
+            this.endpointUrl = endpointUrl;
+            this.correlationId = correlationId;
+            this.idempotencyKey = idempotencyKey;
+            this.deadline = deadline;
         }
 
-        private void captureTaskId(String value) {
+        private synchronized void captureTaskId(String value) {
             if (value == null || value.isBlank() || value.equals(taskId)) {
                 return;
             }
             taskId = value;
             if (taskIdObserver != null) {
                 taskIdObserver.accept(value);
+            }
+        }
+
+        private synchronized int beginStream(String value) {
+            if (!streaming || result.isDone() || taskId == null || endpointUrl == null
+                    || (value.equals(streamReference) && subscription != null)) {
+                return -1;
+            }
+            closeSubscription();
+            streamReference = value;
+            return ++streamGeneration;
+        }
+
+        private synchronized void installStream(int generation,
+                AutoCloseable value) {
+            if (generation != streamGeneration || result.isDone()) {
+                close(value);
+                return;
+            }
+            subscription = value;
+        }
+
+        private synchronized boolean beginStreamReferenceRefresh(int generation) {
+            if (generation != streamGeneration || result.isDone()) {
+                return false;
+            }
+            streamGeneration++;
+            closeSubscription();
+            streamReference = null;
+            if (streamReferenceRefreshes >= MAX_STREAM_REFERENCE_REFRESHES) {
+                return false;
+            }
+            streamReferenceRefreshes++;
+            return true;
+        }
+
+        private synchronized void closeStream() {
+            streamGeneration++;
+            closeSubscription();
+        }
+
+        private void closeSubscription() {
+            if (subscription != null) {
+                close(subscription);
+                subscription = null;
+            }
+        }
+
+        private static void close(AutoCloseable value) {
+            try {
+                value.close();
+            } catch (Exception ignored) {
+                // The local call is already closed; transport cleanup is best effort.
             }
         }
     }

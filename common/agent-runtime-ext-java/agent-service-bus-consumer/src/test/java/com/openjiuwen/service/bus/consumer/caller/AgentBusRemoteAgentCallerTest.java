@@ -11,14 +11,22 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
+import com.openjiuwen.service.spec.dto.QueryChunk;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
+import org.a2aproject.sdk.client.ClientEvent;
+import org.a2aproject.sdk.client.TaskEvent;
+import org.a2aproject.sdk.client.TaskUpdateEvent;
+import org.a2aproject.sdk.spec.Artifact;
 import org.a2aproject.sdk.spec.Task;
+import org.a2aproject.sdk.spec.TaskArtifactUpdateEvent;
 import org.a2aproject.sdk.spec.TaskState;
 import org.a2aproject.sdk.spec.TaskStatus;
+import org.a2aproject.sdk.spec.TextPart;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,9 +36,12 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /**
  * Tests the non-streaming Runtime-to-Runtime Agent Bus caller path.
@@ -47,6 +58,8 @@ class AgentBusRemoteAgentCallerTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/registry/instances/tenant-a/agent-b", exchange -> respond(exchange, 200,
                 "[{\"serviceId\":\"runtime-b\",\"routeHandle\":\"route-b\"}]"));
+        server.createContext("/api/registry/route-handle/resolve", exchange -> respond(exchange, 200,
+                "{\"endpointUrl\":\"http://runtime-b:8080\",\"instanceId\":\"runtime-b-1\"}"));
         server.start();
         RuntimeRdcClient registry = new RuntimeRdcClient(
                 URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
@@ -95,6 +108,145 @@ class AgentBusRemoteAgentCallerTest {
         assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
         assertThat(future.join().remoteTaskId()).isEqualTo("task-b");
         assertThat(caller.pendingCount()).isZero();
+    }
+
+    @Test
+    void opensSseAfterStreamReadyAndForwardsChunks() throws Exception {
+        AtomicReference<com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient
+                .TaskSubscriptionRequest> subscriptionRequest = new AtomicReference<>();
+        AtomicReference<Consumer<ClientEvent>> streamEvents = new AtomicReference<>();
+        AtomicBoolean subscriptionClosed = new AtomicBoolean();
+        RuntimeRdcClient registry = new RuntimeRdcClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
+        caller = new AgentBusRemoteAgentCaller(registry, outbox, Runnable::run,
+                "tenant-a", "runtime-a", 30_000L, (request, events, completion, error) -> {
+                    subscriptionRequest.set(request);
+                    streamEvents.set(events);
+                    return () -> subscriptionClosed.set(true);
+                });
+        List<QueryChunk> chunks = new ArrayList<>();
+        QueryStreamObserver observer = observer(chunks);
+
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
+                Map.of(), Map.of(), true), observer, null);
+        ForwardingOutboxRecord request = claimSingle();
+        assertThat(request.inlinePayload()).contains("\"method\":\"SendStreamingMessage\"");
+        caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
+                "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
+        caller.accept(response(request, AgentBusEventType.A2A_STREAM_READY,
+                "taskId=task-stream;streamRef=ref-1;projectionKind=STREAM_READY;revision=0"));
+
+        assertThat(subscriptionRequest.get().endpointUrl()).isEqualTo("http://runtime-b:8080");
+        assertThat(subscriptionRequest.get().taskId()).isEqualTo("task-stream");
+        assertThat(subscriptionRequest.get().streamReference()).isEqualTo("ref-1");
+        streamEvents.get().accept(artifactEvent("task-stream", "partial"));
+        streamEvents.get().accept(new TaskEvent(task("task-stream", TaskState.TASK_STATE_COMPLETED)));
+
+        assertThat(chunks).singleElement().extracting(QueryChunk::getData).isEqualTo("partial");
+        assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
+        assertThat(subscriptionClosed).isTrue();
+        assertThat(caller.pendingCount()).isZero();
+    }
+
+    @Test
+    void refreshesStreamReferenceOnceAfterSubscriptionFailure() throws Exception {
+        List<Consumer<ClientEvent>> streamEvents = new ArrayList<>();
+        List<Consumer<Throwable>> streamErrors = new ArrayList<>();
+        RuntimeRdcClient registry = new RuntimeRdcClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
+        caller = new AgentBusRemoteAgentCaller(registry, outbox, Runnable::run,
+                "tenant-a", "runtime-a", 30_000L, (request, events, completion, error) -> {
+                    streamEvents.add(events);
+                    streamErrors.add(error);
+                    return () -> { };
+                });
+
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
+                Map.of(), Map.of(), true), observer(new ArrayList<>()), null);
+        ForwardingOutboxRecord create = claimSingle();
+        caller.accept(response(create, AgentBusEventType.A2A_CALL_ACCEPTED,
+                "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
+        caller.accept(response(create, AgentBusEventType.A2A_STREAM_READY,
+                "taskId=task-stream;streamRef=expired;projectionKind=STREAM_READY;revision=0"));
+        streamErrors.get(0).accept(new IllegalStateException("expired stream reference"));
+
+        assertThat(outbox.entryCount()).isEqualTo(2);
+        ForwardingOutboxRecord refresh = outbox.claimDue("tenant-a", System.currentTimeMillis(), 10,
+                "runtime-a", System.currentTimeMillis() + 30_000L).stream()
+                .filter(record -> record.eventType() == AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED)
+                .findFirst().orElseThrow();
+        assertThat(refresh.inlinePayload()).contains("\"method\":\"SubscribeToTask\"")
+                .contains("\"id\":\"task-stream\"");
+        assertThat(refresh.correlationId()).isEqualTo(create.correlationId());
+
+        caller.accept(response(refresh, AgentBusEventType.A2A_STREAM_READY,
+                "taskId=task-stream;streamRef=fresh;projectionKind=STREAM_READY;revision=0"));
+        assertThat(streamEvents).hasSize(2);
+        streamEvents.get(1).accept(new TaskEvent(task("task-stream", TaskState.TASK_STATE_COMPLETED)));
+        assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void cancellingFutureClosesLocalSseSubscription() throws Exception {
+        AtomicBoolean subscriptionClosed = new AtomicBoolean();
+        RuntimeRdcClient registry = new RuntimeRdcClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
+        caller = new AgentBusRemoteAgentCaller(registry, outbox, Runnable::run,
+                "tenant-a", "runtime-a", 30_000L, (request, events, completion, error) ->
+                        () -> subscriptionClosed.set(true));
+
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
+                Map.of(), Map.of(), true), observer(new ArrayList<>()), null);
+        ForwardingOutboxRecord request = claimSingle();
+        caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
+                "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
+        caller.accept(response(request, AgentBusEventType.A2A_STREAM_READY,
+                "taskId=task-stream;streamRef=ref-1;projectionKind=STREAM_READY;revision=0"));
+
+        assertThat(future.cancel(true)).isTrue();
+        assertThat(subscriptionClosed).isTrue();
+        assertThat(caller.pendingCount()).isZero();
+    }
+
+    private ForwardingOutboxRecord claimSingle() {
+        List<ForwardingOutboxRecord> records = outbox.claimDue("tenant-a", System.currentTimeMillis(), 1,
+                "runtime-a", System.currentTimeMillis() + 30_000L);
+        assertThat(records).hasSize(1);
+        return records.get(0);
+    }
+
+    private static TaskUpdateEvent artifactEvent(String taskId, String text) {
+        Task working = task(taskId, TaskState.TASK_STATE_WORKING);
+        Artifact artifact = Artifact.builder().artifactId("artifact-1").parts(new TextPart(text)).build();
+        TaskArtifactUpdateEvent update = TaskArtifactUpdateEvent.builder().taskId(taskId).contextId("context-a")
+                .artifact(artifact).append(true).lastChunk(false).build();
+        return new TaskUpdateEvent(working, update);
+    }
+
+    private static Task task(String taskId, TaskState state) {
+        return Task.builder().id(taskId).contextId("context-a").status(new TaskStatus(state)).build();
+    }
+
+    private static QueryStreamObserver observer(List<QueryChunk> chunks) {
+        return new QueryStreamObserver() {
+            @Override
+            public void onNext(QueryChunk chunk) {
+                chunks.add(chunk);
+            }
+
+            @Override
+            public void onComplete() {
+            }
+
+            @Override
+            public void onError(Throwable error) {
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return false;
+            }
+        };
     }
 
     private static BrokerInboundMessage response(ForwardingOutboxRecord request, AgentBusEventType type,

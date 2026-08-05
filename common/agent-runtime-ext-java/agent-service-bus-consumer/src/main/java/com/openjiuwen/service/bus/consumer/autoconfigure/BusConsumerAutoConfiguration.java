@@ -9,6 +9,8 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxClaimPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
+import com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
@@ -33,7 +35,6 @@ import com.openjiuwen.service.bus.consumer.stream.StreamReadyProjector;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceService;
 import com.openjiuwen.service.bus.consumer.stream.StreamReferenceSubscriptionAspect;
 import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.TaskStore;
@@ -121,14 +122,16 @@ public class BusConsumerAutoConfiguration {
     RemoteAgentCaller agentBusRemoteAgentCaller(ObjectProvider<RuntimeRdcClient> registry,
             ObjectProvider<ForwardingOutboxPort> outbox,
             @Qualifier("agentBusCallerExecutor") ExecutorService agentBusCallerExecutor,
-            AgentBusBrokerProperties bus, Environment environment) {
+            AgentBusBrokerProperties bus, Environment environment,
+            ObjectProvider<A2ATaskSubscriptionClient> subscriptionClient) {
         RuntimeRdcClient registryClient = registry.getIfAvailable();
         ForwardingOutboxPort outboxPort = outbox.getIfAvailable();
         if (registryClient == null || outboxPort == null) {
             return new UnavailableAgentBusRemoteAgentCaller();
         }
         return new AgentBusRemoteAgentCaller(registryClient, outboxPort, agentBusCallerExecutor,
-                tenantId(bus), serviceId(environment), bus.responseTimeoutMs());
+                tenantId(bus), serviceId(environment), bus.responseTimeoutMs(),
+                subscriptionClient.getIfAvailable(A2ATaskSubscriptionClient::new));
     }
 
     @Bean

@@ -46,10 +46,26 @@ final class AgentBusRequestEncoder {
         request.put("id", requestId);
         request.put("method", call.isCallerStreaming() ? "SendStreamingMessage" : "SendMessage");
         request.put("params", params);
+        return serialize(request, "Remote call cannot be encoded as A2A JSON-RPC");
+    }
+
+    String encodeSubscription(String taskId, String requestId, String tenantId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("id", require(taskId, "taskId"));
+        params.put("tenant", require(tenantId, "tenantId"));
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("jsonrpc", "2.0");
+        request.put("id", require(requestId, "requestId"));
+        request.put("method", "SubscribeToTask");
+        request.put("params", params);
+        return serialize(request, "Task subscription cannot be encoded as A2A JSON-RPC");
+    }
+
+    private String serialize(Map<String, Object> request, String message) {
         try {
             return mapper.writeValueAsString(request);
         } catch (JsonProcessingException failure) {
-            throw new IllegalArgumentException("Remote call cannot be encoded as A2A JSON-RPC", failure);
+            throw new IllegalArgumentException(message, failure);
         }
     }
 
