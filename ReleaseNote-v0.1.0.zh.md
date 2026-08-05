@@ -1,142 +1,15 @@
-# openJiuwen agent-solution
-
-[中文版](README.zh.md) | [English Version](README.md)
-
-## 简介
-
-**openJiuwen agent-solution** 是 openJiuwen 面向 Agent 应用集成场景以及行业通用场景的扩展方案仓库。
-
-当前版本包含三个相互独立的扩展工程：运行时 adapter、纯 AgentCore SDK 扩展，以及具体 Agent 实现。本仓不重复实现 HTTP 接入、A2A 协议、远端 card 发现与通信、会话编排等运行时能力；这些能力由 `agent-runtime-java` 提供，Agent 执行内核由 `agent-core-java` 提供。
-
-## 快速开始
-
-### 环境要求
-
-- **Java 版本**：JDK 17+
-- **构建工具**：Maven 3.9+
-- **运行时依赖**：`com.openjiuwen:agent-runtime-java:0.1.0`
-- **执行内核依赖**：`com.openjiuwen:agent-core-java:0.1.13`
-
-### 构建扩展模块
-
-```powershell
-mvn -f common\agent-core-ext-java\pom.xml clean install
-mvn -f common\agents\pom.xml clean install
-mvn -f common\agent-runtime-ext-java\pom.xml clean install
-```
-
-### 构建示例工程
-
-```powershell
-mvn -f common\example\versatile-a2a-adapter-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml clean install
-mvn -f common\example\multi-deep-research-demo\pom.xml clean install
-```
-
-## 架构设计
-
-`common` 下的三个扩展工程相互平行并分别构建，彼此之间不存在 Maven parent 或 reactor 聚合关系。
-
-| 模块 | 说明 |
-|------|------|
-| `common/agent-runtime-ext-java` | 运行时扩展 Maven 父工程，当前包含 AgentCore 增强 adapter 与 Versatile adapter。 |
-| `common/agent-core-ext-java` | `agent-core-java` 的纯 SDK 扩展工程，当前聚合不含 Spring 的 `react-rails` 特性 jar。 |
-| `common/agents` | 具体 Agent 实现工程，当前聚合自包含的 PEV Agent。 |
-| `agent-service-adapters-agentcore-ext` | 复用 runtime 远端 A2A card 注册结果，在 AgentCore handler 执行前注入远端 agent 工具，并通过 `a2a_delegate` interrupt 完成远端委托。 |
-| `agent-service-adapters-versatile` | 实现 runtime `AgentHandler` SPI，将查询请求适配到远端 HTTP/SSE 工作流服务。 |
-| `common/example` | 配套示例工程，用于演示扩展 adapter、A2A 暴露、远端委托和 runtime 接线方式。 |
-
-更细的设计说明见：
-
-- [agent-service-adapters-agentcore-ext-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-agentcore-ext-design.md)
-- [agent-service-adapters-versatile-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-versatile-design.md)
-
-## 功能特性
-
-- **AgentCore 远端 A2A 工具注入**：基于 runtime 已发现的远端 agent card，将远端 agent 安装为 AgentCore 可见工具。
-- **中断机制**：把远端工具调用转换成可由 runtime 接管的委托中断，并支持 resume 后将远端结果注回 AgentCore。
-- **Versatile HTTP/SSE 适配**：将 runtime 查询请求转换为远端工作流服务调用，并消费 SSE 或行流式响应。
-- **ReAct 认知 Rails**：通过显式 Java 注册提供验证、重规划和故障降级，不包含框架自动接线。
-- **PEV Agent**：基于 `agent-core-java` 的 Plan-Execute-Verify-Diagnose-Dispatch 自包含实现。
-
-## 项目结构
-
-```text
-agent-solution
-|-- common
-|   |-- agent-core-ext-java
-|   |   `-- react-rails
-|   |-- agent-runtime-ext-java
-|   |   `-- agent-service-adapters
-|   |       |-- agent-service-adapters-agentcore-ext
-|   |       `-- agent-service-adapters-versatile
-|   |-- agents
-|   |   `-- pev
-|   `-- example
-|       |-- agentcore-ext-deepagent-remote-a2a-demo
-|       |-- agentcore-ext-remote-a2a-tool-demo
-|       |-- multi-deep-research-demo
-|       `-- versatile-a2a-adapter-demo
-|-- LICENSE
-`-- README.md
-```
-
-## 示例目录
-
-```text
-common/example
-|-- agent-gateway-demo
-|-- agentcore-ext-deepagent-remote-a2a-demo
-|-- agentcore-ext-remote-a2a-tool-demo
-|-- multi-deep-research-demo
-`-- versatile-a2a-adapter-demo
-```
-
-## Maven 坐标
-
-```xml
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-agentcore-ext</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-versatile</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>react-rails</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>pev</artifactId>
-    <version>0.1.0</version>
-</dependency>
-```
-
-## 参与贡献
-
-欢迎通过 Issue、Pull Request 或设计讨论参与 openJiuwen agent-solution 的演进。提交贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-## 开源许可证
-
-本项目依据 [Apache License 2.0](LICENSE) 授权。
-
----
-
 # v0.1.0 Release Note
 
 发布日期：2026 年 7 月 30 日
 
+---
+
+欢迎体验 OpenJiuwen 智能体解决方案 v0.1.0！本次发布涵盖**能力扩展**与**通用智能体**两大板块：
+
 - **能力扩展**（openJiuwen agent-solution）覆盖运行时扩展、核心框架扩展与自进化引擎三部分：运行时扩展支持 Versatile 意图工作流路由、自定义 RESTful API 服务入口、AgentScope 等异构框架智能体兼容接入以及 SkillHub 订阅；核心框架扩展为 ReActAgent 补全评估验证、重计划控制、故障降级等认知 Rail 能力；自进化引擎提供「数据回流 → 轨迹评估 → 优化引擎」闭环，基于 Agent 真实运行轨迹完成质量判定并持续改进 Prompt 与 Skill，实现 Agent 自主演进；
 - **通用智能体**（EDPAgent Java）面向金融等垂直行业的 Java 技术栈需求，在 OpenJiuwen DeepAgent 之上交付企业级通用智能体与配套治理能力，涵盖 DeepAgent 推理机制、拦截管控、人机协同工具、工作流调用、数据直通、任务规划、规则管控、思维链可视化、话术管理与隔离执行环境，满足安全性、可控性、可观测性的严格要求；
+
+---
 
 ## 新特性
 
@@ -191,3 +64,60 @@ EDPAgent Java v0.1.0 是 EDPAgent（企业级通用动态规划智能体）的�
 **12. 隔离执行环境：**通过多层隔离机制保障 Agent 执行环境的安全性与稳定性，满足企业级部署要求。
 
 ---
+
+## 相关文档
+
+### 一、能力扩展
+
+- `common/README.md`：目录说明与正式 / 非正式版本的编译打包流程。
+- 各 example README：打包、启动、请求脚本。
+- `docs/README.md`：自进化引擎项目总览与文档导航。
+- `docs/02-部署指南/evoagent部署指南.md`：自进化引擎环境安装与双容器部署。
+- `docs/03-API文档/api-evoagent.md`：自进化引擎 API 接口说明。
+- `docs/04-特性使用指南/`：数据回流、轨迹评估、优化引擎与自进化 Agent 使用指南。
+
+### 二、通用智能体
+
+- `docs/快速入门/`：涵盖核心特性、产品介绍、开发与运维快速入门。
+- `docs/开发指南/`：包含 Redis 集成、内置工具、外部集成、开发方式、开发环境准备、技能开发与配置指南。
+- `docs/运维指南/`：提供 Docker 部署、健康检查与日志、日常运维及环境配置指南。
+- `docs/参考指南/`：工具 API 与环境变量参考。
+- `docs/支持与排错/`：故障排查、常见问题、技术支持与版本变更。
+
+---
+
+## 构建与验证
+
+扩展依赖 `agent-runtime-java` 0.1.1 与 `agent-core-java` 0.1.14。
+
+```bash
+mvn -f common/agent-runtime-ext-java/pom.xml clean install
+mvn -f common/example/versatile-a2a-adapter-demo/pom.xml clean install
+mvn -f common/example/agentcore-ext-remote-a2a-tool-demo/pom.xml clean install
+mvn -f common/example/agentcore-ext-deepagent-remote-a2a-demo/pom.xml clean install
+mvn -f common/example/multi-deep-research-demo/pom.xml clean install
+mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am clean install
+```
+
+#### Maven 坐标
+
+```xml
+<dependency>
+    <groupId>com.openjiuwen</groupId>
+    <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+    <version>0.1.0</version>
+</dependency>
+<dependency>
+    <groupId>com.openjiuwen</groupId>
+    <artifactId>agent-service-adapters-versatile</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+依赖要求：`com.openjiuwen:agent-runtime-java:0.1.1`、`com.openjiuwen:agent-core-java:0.1.14`。
+
+---
+
+## 致谢
+
+感谢所有为 OpenJiuwen 智能体解决方案 v0.1.0 提交需求、Issue、Pull Request、设计评审、代码开发与测试验证的贡献者！

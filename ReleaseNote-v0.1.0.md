@@ -1,143 +1,15 @@
-# openJiuwen agent-solution
-
-[Chinese Version](README.zh.md) | [English Version](README.md)
-
-## Introduction
-
-**openJiuwen agent-solution** is an openJiuwen extension solution repository for Agent application integration and general industry scenarios.
-
-The current version contains three independent extension projects: runtime adapters, pure AgentCore SDK extensions, and concrete Agent implementations. This repository does not reimplement runtime capabilities such as HTTP ingress, A2A protocol support, remote card discovery and communication, or session orchestration. Those capabilities are provided by `agent-runtime-java`; the Agent execution core is provided by `agent-core-java`.
-
-## Quick Start
-
-### Requirements
-
-- **Java**: JDK 17+
-- **Build tool**: Maven 3.9+
-- **Runtime dependency**: `com.openjiuwen:agent-runtime-java:0.1.0`
-- **Execution core dependency**: `com.openjiuwen:agent-core-java:0.1.13`
-
-### Build Extension Modules
-
-```powershell
-mvn -f common\agent-core-ext-java\pom.xml clean install
-mvn -f common\agents\pom.xml clean install
-mvn -f common\agent-runtime-ext-java\pom.xml clean install
-```
-
-### Build Example Projects
-
-```powershell
-mvn -f common\example\versatile-a2a-adapter-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml clean install
-mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml clean install
-mvn -f common\example\multi-deep-research-demo\pom.xml clean install
-```
-
-## Architecture
-
-The projects under `common` are peers and are built separately. They have no Maven parent or reactor aggregation relationship with one another.
-
-| Module | Description |
-|--------|-------------|
-| `common/agent-runtime-ext-java` | Maven parent project for runtime extensions. It currently contains the AgentCore extension adapter and the Versatile adapter. |
-| `common/agent-core-ext-java` | Pure SDK extensions for `agent-core-java`; currently aggregates the Spring-free `react-rails` feature jar. |
-| `common/agents` | Concrete Agent implementations; currently aggregates the self-contained PEV Agent. |
-| `agent-service-adapters-agentcore-ext` | Reuses remote A2A card registration results discovered by the runtime, injects remote agents as tools before the AgentCore handler executes, and delegates remote calls through `a2a_delegate` interrupts. |
-| `agent-service-adapters-versatile` | Implements the runtime `AgentHandler` SPI and adapts query requests to remote HTTP/SSE workflow services. |
-| `common/example` | Example projects for runtime extension adapters, A2A exposure, remote delegation, and runtime wiring. |
-
-Design details:
-
-- [agent-service-adapters-agentcore-ext-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-agentcore-ext-design.md)
-- [agent-service-adapters-versatile-design.md](common/agent-runtime-ext-java/doc/agent-service-adapters-versatile-design.md)
-
-## Features
-
-- **AgentCore remote A2A tool injection**: installs remote agents discovered from runtime remote agent cards as AgentCore-visible tools.
-- **Interrupt mechanism**: converts remote tool calls into delegate interrupts that can be handled by the runtime, and injects remote results back into AgentCore after resume.
-- **Versatile HTTP/SSE adaptation**: converts runtime query requests into remote workflow service calls and consumes SSE or line-stream responses.
-- **ReAct cognitive rails**: explicit Java rails for verification, replanning, and failure degradation without automatic framework wiring.
-- **PEV Agent**: a self-contained Plan-Execute-Verify-Diagnose-Dispatch implementation built on `agent-core-java`.
-
-## Project Structure
-
-```text
-agent-solution
-|-- common
-|   |-- agent-core-ext-java
-|   |   `-- react-rails
-|   |-- agent-runtime-ext-java
-|   |   `-- agent-service-adapters
-|   |       |-- agent-service-adapters-agentcore-ext
-|   |       `-- agent-service-adapters-versatile
-|   |-- agents
-|   |   `-- pev
-|   `-- example
-|       |-- agentcore-ext-deepagent-remote-a2a-demo
-|       |-- agentcore-ext-remote-a2a-tool-demo
-|       |-- multi-deep-research-demo
-|       `-- versatile-a2a-adapter-demo
-|-- LICENSE
-|-- README.en.md
-`-- README.md
-```
-
-## Examples
-
-```text
-common/example
-|-- agent-gateway-demo
-|-- agentcore-ext-deepagent-remote-a2a-demo
-|-- agentcore-ext-remote-a2a-tool-demo
-|-- multi-deep-research-demo
-`-- versatile-a2a-adapter-demo
-```
-
-## Maven Coordinates
-
-```xml
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-agentcore-ext</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>agent-service-adapters-versatile</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>react-rails</artifactId>
-    <version>0.1.0</version>
-</dependency>
-
-<dependency>
-    <groupId>com.openjiuwen</groupId>
-    <artifactId>pev</artifactId>
-    <version>0.1.0</version>
-</dependency>
-```
-
-## Contributing
-
-We welcome issues, pull requests, design discussions, documentation improvements, code contributions, and usage feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
-
-## License
-
-This project is licensed under the [Apache License 2.0](LICENSE).
-
----
-
 # v0.1.0 Release Note
 
 Release Date: July 30, 2026
 
+---
+
+Welcome to OpenJiuwen Agent Solution v0.1.0! This release covers two major components: **Capability Extensions** and **General Agent**:
+
 - **Capability Extensions** (openJiuwen agent-solution) covers three parts: runtime extensions, core framework extensions, and self-evolution engine. Runtime extensions support Versatile intent workflow routing, custom RESTful API service entry points, heterogeneous framework agent compatibility such as AgentScope, and SkillHub subscription; core framework extensions supplement ReActAgent with cognitive rails for evaluation and verification, replan control, and failure degradation; self-evolution engine provides a closed-loop of "Data Replay → Trajectory Evaluation → Optimization Engine", performing quality assessment based on Agent real-world execution trajectories and continuously improving Prompts and Skills to enable Agent self-driven evolution;
 - **General Agent** (EDPAgent Java) addresses the Java technology stack requirements of vertical industries such as finance, delivering an enterprise-grade general agent with comprehensive governance capabilities built on top of OpenJiuwen DeepAgent, covering DeepAgent reasoning mechanism, interception and control, human-machine collaboration tools, workflow invocation, data pass-through, task planning, rule governance, chain of thought visualization, utterance management, and isolated execution environment, meeting stringent requirements for security, controllability, and observability;
+
+---
 
 ## New Features
 
@@ -192,3 +64,60 @@ EDPAgent Java v0.1.0 is the first official Java release of EDPAgent (Enterprise-
 **12. Isolated Execution Environment:** Ensures the security and stability of the Agent execution environment through multi-layer isolation mechanisms, meeting enterprise-grade deployment requirements.
 
 ---
+
+## Documentation
+
+### I. Capability Extensions
+
+- `common/README.md`: Directory description and compilation/packaging process for formal / informal versions.
+- Example READMEs: Packaging, startup, and request scripts.
+- `docs/README.md`: Self-evolution engine project overview and documentation navigation.
+- `docs/02-Deployment-Guide/evoagent-deployment-guide.md`: Self-evolution engine environment installation and dual-container deployment.
+- `docs/03-API-Docs/api-evoagent.md`: Self-evolution engine API interface documentation.
+- `docs/04-Feature-Usage-Guide/`: Data replay, trajectory evaluation, optimization engine, and self-evolution Agent usage guides.
+
+### II. General Agent
+
+- `docs/Quick Start/`: Covers core features, product introduction, development and operations quick start.
+- `docs/Development Guide/`: Includes Redis integration, built-in tools, external integration, development approach, development environment preparation, skill development, and configuration guides.
+- `docs/Operations Guide/`: Provides Docker deployment, health check and logging, daily operations, and environment configuration guides.
+- `docs/Reference Guide/`: Tool API and environment variable reference.
+- `docs/Support and Troubleshooting/`: Troubleshooting, FAQ, technical support, and version changelog.
+
+---
+
+## Build and Verification
+
+Extension depends on `agent-runtime-java` 0.1.1 and `agent-core-java` 0.1.14.
+
+```bash
+mvn -f common/agent-runtime-ext-java/pom.xml clean install
+mvn -f common/example/versatile-a2a-adapter-demo/pom.xml clean install
+mvn -f common/example/agentcore-ext-remote-a2a-tool-demo/pom.xml clean install
+mvn -f common/example/agentcore-ext-deepagent-remote-a2a-demo/pom.xml clean install
+mvn -f common/example/multi-deep-research-demo/pom.xml clean install
+mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am clean install
+```
+
+#### Maven Coordinates
+
+```xml
+<dependency>
+    <groupId>com.openjiuwen</groupId>
+    <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+    <version>0.1.0</version>
+</dependency>
+<dependency>
+    <groupId>com.openjiuwen</groupId>
+    <artifactId>agent-service-adapters-versatile</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+Dependency requirements: `com.openjiuwen:agent-runtime-java:0.1.1`, `com.openjiuwen:agent-core-java:0.1.14`.
+
+---
+
+## Acknowledgments
+
+Thank you to all contributors who submitted requirements, Issues, Pull Requests, design reviews, code development, and test verification for OpenJiuwen Agent Solution v0.1.0!
