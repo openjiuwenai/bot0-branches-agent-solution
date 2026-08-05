@@ -81,7 +81,7 @@
 
 两层约束：
 
-- **库层**（`agent-deep-research`、`agent-search`、`agent-verify`）：仅依赖 `agent-core-java`（`agent-verify` 额外依赖 `react-rails`）。无 Spring、无 `agent-service-*`。切换 runtime 时库代码不变。
+- **库层**（`agent-deep-research`、`agent-search`、`agent-verify`）：仅依赖 `agent-core-java`（`agent-verify` 额外依赖 `agent-core-ext-react-rails`）。无 Spring、无 `agent-service-*`。切换 runtime 时库代码不变。
 - **wrapper 层**（`*-runtime`）：Spring Boot 装配，负责 `@ConfigurationProperties`、SPI 暴露、`SandboxClient → SandboxOps` 适配、A2A 远端注册。
 
 ---
@@ -142,7 +142,7 @@ multi-deep-research-demo/
 └── agent-verify/                       ← verify sub-agent（ReActAgent LLM judge，无工具）（SDK + runtime 同模块，按包名分层）
     ├── src/main/java/com/openjiuwen/example/deepresearch/verify/
     │   ├── VerifyAgentProperties.java          配置 + criteria = ["对比矩阵已覆盖", "引用来源已覆盖", "置信度已覆盖"]
-    │   ├── VerifyAgentFactory.java             props → ReActAgent + react-rails 手动装配
+    │   ├── VerifyAgentFactory.java             props → ReActAgent + agent-core-ext-react-rails 手动装配
     │   ├── RailStateObserver.java              观测 CriteriaReplanBridgeRail 分支决策
     │   └── runtime/                            ← Spring Boot 层
     │       ├── VerifyAgentRuntimeApplication.java
@@ -161,7 +161,7 @@ multi-deep-research-demo/
 |---|---|---|---|
 | 主题拆解 + 任务循环 | DeepAgent task loop | core-java（`DeepAgent`）+ solution 侧 `system-prompt` | `enableTaskLoop=true`、`maxIterations` |
 | Web 搜索（子 agent） | ReActAgent + tool | `agent-search` | root 通过 A2A 调 `search-agent`；`RemoteA2aToolInstaller` 每轮把远端 card 注入为工具 |
-| 报告覆盖判定（子 agent） | ReActAgent LLM judge（无工具） | `agent-verify` | root 通过 A2A 调 `verify-agent`；COMPARISON 模式下 **强制调用 1 次**（草稿渲染完 → 写正文前），SINGLE 模式跳过。react-rails 内部走 `CriteriaReplanBridgeRail` + `RootCauseRail` 保底 |
+| 报告覆盖判定（子 agent） | ReActAgent LLM judge（无工具） | `agent-verify` | root 通过 A2A 调 `verify-agent`；COMPARISON 模式下 **强制调用 1 次**（草稿渲染完 → 写正文前），SINGLE 模式跳过。agent-core-ext-react-rails 内部走 `CriteriaReplanBridgeRail` + `RootCauseRail` 保底 |
 | 对比表 + 图表可视化 | Harness tool | `SandboxRail` → Python + pandas/matplotlib，在 jiuwenbox 沙箱执行 | LLM 调 `render_comparison_table` / `render_chart` |
 | URL 可达性验证 | Harness tool | `UrlVerifyRail` → Python urllib，在沙箱执行 | LLM 调 `verify_urls` |
 | 长期记忆读写 | MemoryRail tools | core-java 提供 `write_memory` / `read_memory` / `memory_search` / `memory_get` / `edit_memory` | LLM 显式调用或 rail 自动写 |
@@ -217,9 +217,9 @@ Root 系统提示词里额外规定：如果 tool list 里存在 `verify-agent` 
 
 对应源码：`DeepResearchProperties` 的 `TOOL_CALL_RULE_SERIAL` / `TOOL_CALL_RULE_PARALLEL` 常量 + `searchExecutionMode` 字段；profile 文件 `agent-deep-research/src/main/resources/application-parallel-search.yml`。
 
-**verify-agent 内部：react-rails 承担的判定循环与容错**：
+**verify-agent 内部：agent-core-ext-react-rails 承担的判定循环与容错**：
 
-verify-agent 是一个纯 LLM judge，本身没有工具，其"判定 → 兜底 → 观测"三件事完全由 `agent-runtime-ext-java` 的 **react-rails** 组件承担。`VerifyAgentFactory.build()` 手动挂 3 条 rail + 1 个观测钩子（避免 BeanPostProcessor 隐式装配，保持 SDK 层无 Spring）：
+verify-agent 是一个纯 LLM judge，本身没有工具，其"判定 → 兜底 → 观测"三件事完全由 `agent-core-ext-java` 的 **agent-core-ext-react-rails** 组件承担。`VerifyAgentFactory.build()` 手动挂 3 条 rail + 1 个观测钩子（避免 BeanPostProcessor 隐式装配，保持 SDK 层无 Spring）：
 
 | Rail | 类别 | 职责 |
 |---|---|---|
@@ -228,9 +228,9 @@ verify-agent 是一个纯 LLM judge，本身没有工具，其"判定 → 兜底
 | `RootCauseRail` | 兜底容错 | 底层 model client 抛异常（网络 / gateway 5xx）时**直接降级**，不做 `maxIterations` 空转，配合 root 的 "verify-agent unavailable" 兜底路径 |
 | `ReactRailsObservability.install(agent)` | 观测 | 挂 rail 事件监听，把每轮 decision（PASS/FAIL/DEGRADED、steering hint 内容、violation 明细）打到 slf4j，用于事后回放 |
 
-组合效果：verify-agent 不需要在 SDK 层自己写循环 / 重试 / 熔断代码，全靠 rail 装配。判定策略要变（多加 criteria / 关闭 replan / 换 verifier 实现）只改 [VerifyAgentFactory.java](common/example/multi-deep-research-demo/agent-verify/src/main/java/com/openjiuwen/example/deepresearch/verify/VerifyAgentFactory.java) 装配层，`ReActAgent` 本体不动 —— 这也是 react-rails "把认知增强能力独立成可组合 rail" 的核心价值。
+组合效果：verify-agent 不需要在 SDK 层自己写循环 / 重试 / 熔断代码，全靠 rail 装配。判定策略要变（多加 criteria / 关闭 replan / 换 verifier 实现）只改 [VerifyAgentFactory.java](common/example/multi-deep-research-demo/agent-verify/src/main/java/com/openjiuwen/example/deepresearch/verify/VerifyAgentFactory.java) 装配层，`ReActAgent` 本体不动 —— 这也是 agent-core-ext-react-rails "把认知增强能力独立成可组合 rail" 的核心价值。
 
-对应源码：[VerifyAgentFactory.build()](common/example/multi-deep-research-demo/agent-verify/src/main/java/com/openjiuwen/example/deepresearch/verify/VerifyAgentFactory.java#L49-L94) 的 rail 装配段；rail 实现在 `agent-runtime-ext-java` 的 `com.openjiuwen.agents.reactrails.*` 包。
+对应源码：[VerifyAgentFactory.build()](common/example/multi-deep-research-demo/agent-verify/src/main/java/com/openjiuwen/example/deepresearch/verify/VerifyAgentFactory.java#L49-L94) 的 rail 装配段；rail 实现在 `agent-core-ext-java` 的 `com.openjiuwen.agents.reactrails.*` 包。
 
 **（4）`web_search` 工具的注册路径**：`SearchAgentFactory` 用 `Runner.resourceMgr().addTool(webSearchTool, agent.getCard().getId())` 把工具注册到 agent-scoped 资源管理器（而不是全局），随后向 `agent.getAbilityManager().add(toolCard)` 补挂 card。这样多个 agent 各自持有自己的工具实例，jsonrpc getTask 也能正确回显 tool card。
 
@@ -991,7 +991,7 @@ agent-mcp-docserver/
 | `openjiuwen.service.handler` | `agentcore` | 走 `JiuwenCoreAgentHandler`（无需 A2A 远端注入） |
 | `openjiuwen.service.a2a.skills[0].id` | `verify_report` | agent card 声明的技能 |
 | `openjiuwen.demo.verify-agent.max-iterations` | `${VERIFY_AGENT_MAX_ITERATIONS:2}` | ReAct 循环上限（judge 通常 1-2 轮即出结论） |
-| `openjiuwen.demo.verify-agent.max-replan` | `${VERIFY_AGENT_MAX_REPLAN:1}` | react-rails `CriteriaReplanBridgeRail` 允许的 steer 次数；1 = 允许 1 次判定失败后 push steering hint 再试 1 轮 |
+| `openjiuwen.demo.verify-agent.max-replan` | `${VERIFY_AGENT_MAX_REPLAN:1}` | agent-core-ext-react-rails `CriteriaReplanBridgeRail` 允许的 steer 次数；1 = 允许 1 次判定失败后 push steering hint 再试 1 轮 |
 | `openjiuwen.demo.verify-agent.criteria` | `["对比矩阵已覆盖", "引用来源已覆盖", "置信度已覆盖"]` | happy-path 短语：`RuleBasedCriteriaVerifier` 用 substring 匹配决定 PASS/FAIL |
 | `openjiuwen.demo.verify-agent.system-prompt` | 内置 | 严格输出格式（`判定通过`/`判定不通过` + `<anchor>已覆盖`/`<anchor>缺失`），配合 criteria 做规则匹配 |
 

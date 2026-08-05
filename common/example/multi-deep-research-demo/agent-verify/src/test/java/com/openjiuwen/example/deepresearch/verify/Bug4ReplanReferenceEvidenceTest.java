@@ -92,7 +92,7 @@ class Bug4ReplanReferenceEvidenceTest {
 
         // Then: AbilityManager does NOT contain __replan__ — attaching the rail does not
         // auto-provision the tool the rail's hint references. Consumer must remember to
-        // call ReplanTool.registerOnto(agent) separately (see react-rails/README.md:32),
+        // call ReplanTool.registerOnto(agent) separately (see agent-core-ext-react-rails/README.md:32),
         // and if they forget, no warning fires anywhere.
         List<ToolInfo> visible = bare.getAbilityManager().listToolInfo();
         assertThat(visible).as("attaching CriteriaReplanBridgeRail must not silently add __replan__ visibility "

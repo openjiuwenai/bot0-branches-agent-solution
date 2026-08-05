@@ -41,7 +41,7 @@ The projects under `common` are peers and are built separately. They have no Mav
 | Module | Description |
 |--------|-------------|
 | `common/agent-runtime-ext-java` | Maven parent project for runtime extensions. It currently contains the AgentCore extension adapter and the Versatile adapter. |
-| `common/agent-core-ext-java` | Pure SDK extensions for `agent-core-java`; currently aggregates the Spring-free `react-rails` feature jar. |
+| `common/agent-core-ext-java` | Pure SDK extensions for `agent-core-java`; currently aggregates the Spring-free `agent-core-ext-react-rails` feature jar. |
 | `common/agents` | Concrete Agent implementations; currently aggregates the self-contained PEV Agent. |
 | `agent-service-adapters-agentcore-ext` | Reuses remote A2A card registration results discovered by the runtime, injects remote agents as tools before the AgentCore handler executes, and delegates remote calls through `a2a_delegate` interrupts. |
 | `agent-service-adapters-versatile` | Implements the runtime `AgentHandler` SPI and adapts query requests to remote HTTP/SSE workflow services. |
@@ -66,7 +66,7 @@ Design details:
 agent-solution
 |-- common
 |   |-- agent-core-ext-java
-|   |   `-- react-rails
+|   |   `-- agent-core-ext-react-rails
 |   |-- agent-runtime-ext-java
 |   |   `-- agent-service-adapters
 |   |       |-- agent-service-adapters-agentcore-ext
@@ -111,7 +111,7 @@ common/example
 
 <dependency>
     <groupId>com.openjiuwen</groupId>
-    <artifactId>react-rails</artifactId>
+    <artifactId>agent-core-ext-react-rails</artifactId>
     <version>0.1.0</version>
 </dependency>
 
@@ -153,7 +153,7 @@ This component covers three parts: runtime extensions, core framework extensions
 
 **4. Runtime Extension-Skill Hub Subscription:** Downloads skill packages declared by the Agent at startup through a replaceable Skill Hub SPI, using required / optional semantics, with SHA-256 or standard integrity verification; required skill failures block ready, optional skill failures allow degraded startup, and credentials are desensitized and not exposed.
 
-**5. Core Framework Extension-ReActAgent Cognitive Capability Enhancement (react-rails):** Adds the `react-rails` module, supplementing ReActAgent with three cognitive rails: `CriteriaVerificationRail` (verifies final answer against success criteria), `ReplanRail` (limits replan count to prevent divergence), `RootCauseRail` (device failure degradation termination), all short-circuiting the loop via `forceFinish` gate in `afterModelCall`. Pure Java SDK, no dependency on Spring or runtime-ext.
+**5. Core Framework Extension-ReActAgent Cognitive Capability Enhancement (agent-core-ext-react-rails):** Adds the `agent-core-ext-react-rails` module, supplementing ReActAgent with three cognitive rails: `CriteriaVerificationRail` (verifies final answer against success criteria), `ReplanRail` (limits replan count to prevent divergence), `RootCauseRail` (device failure degradation termination), all short-circuiting the loop via `forceFinish` gate in `afterModelCall`. Pure Java SDK, no dependency on Spring or runtime-ext.
 
 **6. Self-Evolution Engine-Data Replay:** Replays structured trajectories from Agent execution logs or OpenTelemetry data, supporting both log and standard (OTel) modes, normalized into standard conversation format through cleaning for evaluation use.
 

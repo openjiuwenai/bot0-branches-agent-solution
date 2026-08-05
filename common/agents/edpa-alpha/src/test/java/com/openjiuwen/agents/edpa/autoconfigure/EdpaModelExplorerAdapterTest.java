@@ -168,7 +168,7 @@ class EdpaModelExplorerAdapterTest {
         }
     }
 
-    /** Abstract stub client — mirrors react-rails StubModelClient signatures. */
+    /** Abstract stub client — mirrors agent-core-ext-react-rails StubModelClient signatures. */
     private abstract static class StubModelClient extends BaseModelClient {
         StubModelClient(ModelRequestConfig r, ModelClientConfig c) {
             super(r, c);

@@ -43,7 +43,7 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>提示状态按模型实例和调用线程隔离。</li>
  *   <li>LLM 输出是否真的"发散探索"无法可靠断言，仅做软观察</li>
- *   <li>Run with: {@code mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails
+ *   <li>Run with: {@code mvn -f common/agent-core-ext-java/pom.xml -pl :agent-core-ext-react-rails
  *       -Dtest=PreCompletionChecklistRailE2eTest test}</li>
  * </ul>
  */
