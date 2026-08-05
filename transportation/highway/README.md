@@ -2,6 +2,12 @@
 
 本目录用于存放 **交通行业 Agent 解决方案** 中 **公路子行业** 的专属资产。
 
+## 已有解决方案
+
+| 方案 | 说明 |
+|------|------|
+| [traffic-flow-forecast-control](traffic-flow-forecast-control/) | 流量预测 + 智能管控 Agent 解决方案（复用 workshop 共享资产） |
+
 ## 目录定位
 
 `highway` 聚焦公路运输场景下的行业专属内容——当某些方法论、Skill、MCP 或 Agent 工具仅适用于公路子行业、不宜作为跨子行业共享资产时，存放于本目录。
