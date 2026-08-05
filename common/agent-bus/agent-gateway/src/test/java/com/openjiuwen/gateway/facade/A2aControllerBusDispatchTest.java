@@ -27,6 +27,7 @@ import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
 import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.routing.StickyIndex;
+import com.openjiuwen.gateway.routing.StickyIndex;
 import com.openjiuwen.gateway.sse.SseBridge;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -110,7 +111,7 @@ class A2aControllerBusDispatchTest {
         boolean called;
 
         StubBusForwarder() {
-            super(null, null, null, null, "stub-gw", 0L, 0L, null, new DefaultAgentResolver(""));
+            super(null, null, null, null, "stub-gw", 0L, 0L, null, new DefaultAgentResolver(""), new StickyIndex());
         }
 
         @Override

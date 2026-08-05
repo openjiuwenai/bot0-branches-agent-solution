@@ -111,12 +111,13 @@ public class GatewayBusConfiguration {
                                      ProjectionFeed projectionFeed, IdempotencyRule g4,
             com.openjiuwen.gateway.direct.AgentRuntimeClient agentRuntimeClient,
             com.openjiuwen.gateway.routing.DefaultAgentResolver defaultAgentResolver,
+            com.openjiuwen.gateway.routing.StickyIndex stickyIndex,
             @Value("${agent-bus.gateway-service-id:gateway}") String sourceServiceId,
             @Value("${gateway.bus.accept-window-ms:30000}") long acceptWindowMillis,
             @Value("${gateway.bus.response-window-ms:60000}") long responseWindowMillis,
             @Value("${gateway.bus.stream-first-frame-deadline-ms:10000}") long streamFirstFrameDeadlineMillis) {
         BusForwarder forwarder = new BusForwarder(rdc, control, projectionFeed, g4, sourceServiceId,
-                acceptWindowMillis, responseWindowMillis, agentRuntimeClient, defaultAgentResolver);
+                acceptWindowMillis, responseWindowMillis, agentRuntimeClient, defaultAgentResolver, stickyIndex);
         forwarder.setStreamFirstFrameDeadlineMillis(streamFirstFrameDeadlineMillis);
         return forwarder;
     }
