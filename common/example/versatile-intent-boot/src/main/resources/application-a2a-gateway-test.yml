@@ -1,0 +1,16 @@
+# Profile: a2a-gateway-test
+# 在 versatile-intent-boot 进程上激活 A2AGateway caller，将 gateway 指向本地的
+# mock gateway 进程（端口 8084）。必须在 mock-versatile profile 之后激活，
+# 因为 mock-versatile 会把 a2a-gateway.enabled 设为 false。
+#
+# streaming=false 让 caller 走 sync message/send 路径，与 mock gateway 返回
+# 的单个 JSON-RPC 响应对齐。
+openjiuwen:
+  service:
+    a2a-gateway:
+      enabled: true
+      base-url: ${A2A_GATEWAY_BASE_URL}
+      token: ${A2A_GATEWAY_TOKEN}
+      version-node: v1
+      streaming: false
+      json-rpc-path: /a2a/{agentCard}

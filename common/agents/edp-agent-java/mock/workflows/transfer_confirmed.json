@@ -1,0 +1,23 @@
+{
+  "id": "transfer_confirmed",
+  "description": "转账确认续轮（menu_type=TRANSFER_MENU + menu_confirm=true 时返回 transfer_07 最终结果）",
+  "priority": 100,
+  "match": {
+    "type": "context",
+    "rules": [
+      { "field": "menu_type", "equals": "TRANSFER_MENU" },
+      { "field": "menu_confirm", "truthy": true }
+    ]
+  },
+  "output": {
+    "omit_end": true,
+    "frames": [
+      { "kind": "raw_json", "hook": "transfer_qa_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "transfer_qa_summary_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "transfer_gxz_qa_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "transfer_gxz_summary_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "transfer_query_end_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "transfer_event_end_frame", "delay_ms": 0 }
+    ]
+  }
+}

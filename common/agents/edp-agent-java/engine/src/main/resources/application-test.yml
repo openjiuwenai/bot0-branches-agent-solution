@@ -1,0 +1,9 @@
+# Test profile: automated testing
+spring:
+  application:
+    name: edp-agent-engine-test
+
+logging:
+  level:
+    com.openjiuwen.edp: INFO
+    com.openjiuwen: INFO

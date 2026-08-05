@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: skillhub-runtime-demo
+
+openjiuwen:
+  service:
+    middleware:
+      skillhub:
+        enabled: true
+        endpoint: ${SKILLHUB_ENDPOINT:}
+        auth-type: ${SKILLHUB_AUTH_TYPE:bearer}
+        encrypted-token: ${SKILLHUB_ENCRYPTED_TOKEN:}
+        local-dir: ${SKILLHUB_LOCAL_DIR:./target/skillhub-skills}
+    llm:
+      provider: ${LLM_PROVIDER:OpenAI}
+      api-key:
+      api-base: ${LLM_API_BASE:}
+      model-name: ${LLM_MODEL:deepseek-chat}
+      auto-discover: false
+      temperature: 0.2
+      max-iterations: 6

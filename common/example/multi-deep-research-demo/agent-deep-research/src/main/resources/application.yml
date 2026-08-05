@@ -1,0 +1,172 @@
+server:
+  port: ${DEEP_RESEARCH_PORT:18090}
+
+spring:
+  application:
+    name: DeepResearchAgent
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    custom-rest:
+      query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
+    a2a:
+      agent-name: "DeepResearchAgent"
+      agent-description: "Deep research agent comparing domestic LLM API offerings (2026 Q2)"
+      provider-organization: "OpenJiuwen"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      skills:
+        - id: "deep_research"
+          name: "Deep Research"
+          description: "Produce a comparison matrix + citations + confidence for domestic LLM API offerings"
+          tags: ["research", "comparison", "llm"]
+          examples: ["对比火山方舟、阿里百炼、智谱、Kimi、DeepSeek 五家旗舰模型的输入输出定价、上下文窗口、QPS、Function Calling 支持"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+      remote-agents:
+        - name: search-agent
+          url: ${SEARCH_AGENT_URL:}
+          streaming: true
+        - name: verify-agent
+          url: ${VERIFY_AGENT_URL:}
+          streaming: true
+        # read-agent — uncomment when the respective runtime is up:
+        # - name: read-agent
+        #   url: ${READ_AGENT_URL:}
+    external:
+      sandbox:
+        enabled: ${SANDBOX_ENABLED:false}
+        timeout-ms: ${SANDBOX_TIMEOUT_MS:30000}
+        retry:
+          max: 1
+          backoff-ms: 200
+        circuit-breaker:
+          enabled: true
+          failure-threshold: 3
+          reset-timeout-ms: 30000
+        audit:
+          enabled: true
+        servers:
+          - server-id: default
+            service-url: ${SANDBOX_URL:}
+            sandbox-type: jiuwenbox
+            launcher-type: pre_deploy
+            on-stop: delete
+            root-path: .
+            idle-ttl-seconds: 300
+    middleware:
+      skillhub:
+        enabled: ${SKILLHUB_ENABLED:false}
+        endpoint: ${SKILLHUB_ENDPOINT:}
+        auth-type: ${SKILLHUB_AUTH_TYPE:bearer}
+        # SKILLHUB_ENCRYPTED_TOKEN: base64 密文（AES-GCM 模式，见 credential.mode 下方）
+        encrypted-token: ${SKILLHUB_ENCRYPTED_TOKEN:}
+        local-dir: ${SKILLHUB_LOCAL_DIR:./target/skillhub-skills}
+  demo:
+    deep-research:
+      provider: ${LLM_PROVIDER:OpenAI}
+      api-key: ${LLM_API_KEY}
+      api-base: ${LLM_API_BASE:}
+      model-name: ${LLM_MODEL:deepseek-chat}
+      ssl-verify: ${LLM_SSL_VERIFY:true}
+      temperature: ${LLM_TEMPERATURE:0.2}
+      top-p: ${LLM_TOP_P:0.8}
+      timeout: ${LLM_TIMEOUT:120s}
+      completion-timeout: ${DEEP_RESEARCH_COMPLETION_TIMEOUT:600s}
+      max-iterations: ${DEEP_RESEARCH_MAX_ITERATIONS:10}
+      # 搜索执行模式：serial（默认，单轮至多一次远端 A2A 调用）| parallel（COMPARISON
+      # 模式把互不依赖的 per-(vendor, dimension) search-agent 调用合到同一轮并行分发，
+      # 需运行时支持 parentContextId 并行分发）。激活 `parallel-search` profile 即切到
+      # parallel（见 application-parallel-search.yml）。
+      search-execution-mode: ${DEEP_RESEARCH_SEARCH_EXECUTION_MODE:serial}
+      workspace-path: ${DEEP_RESEARCH_WORKSPACE:target/deep-research-workspace}
+      workspace-language: ${DEEP_RESEARCH_LANGUAGE:zh-CN}
+      # FEAT-005 层 3 收尾：允许 LLM 通过 readFile 工具读取的额外根目录。
+      # 缺省仅信任 workspace-path。SkillHub 的 local-dir 由
+      # DeepResearchRuntimeApplication 自动 merge 进白名单（跟随
+      # openjiuwen.service.middleware.skillhub.local-dir），此处只列**额外**
+      # 需要开放给 LLM 读取的根目录。默认留空即可。
+      # extra-readable-roots:
+      #   - /some/extra/readable/root
+      # FEAT-005 credential decryptor（对 SkillHub encryptedToken 生效）。
+      # mode 留空 → runtime 默认 PassthroughCredentialDecryptor（明文透传）；
+      # mode=aes-gcm → 激活 DemoAesGcmCredentialDecryptor（AES-256-GCM），
+      # 需同时提供 aes-key-hex（32 字节 hex）。
+      credential:
+        mode: ${SKILLHUB_CREDENTIAL_MODE:}
+        aes-key-hex: ${SKILLHUB_AES_KEY_HEX:}
+      # MCP servers to probe + attach to Runner.resourceMgr() at startup.
+      # Used to verify core-java gitcode issue #44 Part B end-to-end:
+      # tools published by an MCP server should flow through DeepAgent.
+      # syncMcpServersFromResourceMgr() → AbilityManager.mcpServers →
+      # get exposed to the LLM in the tool list. Leave MCP_DOCSERVER_URL
+      # blank to disable (default). Set it to the documented MCP endpoint
+      # to attach the deep-research-doc-lib MCP server.
+      mcp-servers:
+        - name: ${MCP_DOCSERVER_NAME:deep-research-doc-lib}
+          url: ${MCP_DOCSERVER_URL:}
+          client-type: ${MCP_DOCSERVER_CLIENT_TYPE:streamable_http}
+          connect-timeout-seconds: ${MCP_DOCSERVER_CONNECT_TIMEOUT:3}
+          call-timeout-seconds: ${MCP_DOCSERVER_CALL_TIMEOUT:5}
+
+logging:
+  level:
+    com.openjiuwen.example.deepresearch: DEBUG
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG
+
+---
+# FEAT-005 log-leak guard (mirrors agent-solution issue #30's approved pattern).
+# When the SkillHub middleware is on, SKILL.md content flows through the readFile
+# tool and reaches agent-core's `[tool]` (AbilityManager.logToolResult) and `[llm]`
+# (BaseModelClient message-history dump) loggers at INFO. Suppressing those two
+# categories under the skillhub-remote profile blocks the leak without silencing
+# the demo's own DEBUG logs. Profile is auto-activated in
+# DeepResearchRuntimeApplication whenever skillhub.enabled=true.
+spring:
+  config:
+    activate:
+      on-profile: skillhub-remote
+
+logging:
+  level:
+    tool: WARN
+    llm: WARN
+
+---
+# Optional profile: switch checkpointer from in_memory (default) to Redis.
+#
+# Usage on server (fat jar):
+#   REDIS_HOST=<host> REDIS_PORT=<port> REDIS_PASSWORD=<plaintext-or-blank> \
+#     java -jar agent-deep-research-*.jar \
+#       --spring.profiles.active=redis-checkpointer
+#
+# Notes:
+# - Default CredentialDecryptor is passthrough, so REDIS_PASSWORD can be plaintext for testing.
+# - agent-search ships a mirror profile with the same env vars, so both runtimes share one Redis instance.
+spring:
+  config:
+    activate:
+      on-profile: redis-checkpointer
+
+openjiuwen:
+  service:
+    middleware:
+      checkpointer:
+        type: redis
+        redis-ref: default
+        ttl-seconds: ${CHECKPOINTER_TTL_SECONDS:86400}
+      redis:
+        default:
+          type: ${REDIS_TYPE:standalone}
+          host: ${REDIS_HOST:127.0.0.1}
+          port: ${REDIS_PORT:6379}
+          database: ${REDIS_DB:0}
+          timeout-ms: ${REDIS_TIMEOUT_MS:3000}
+          encrypted-password: ${REDIS_PASSWORD:}

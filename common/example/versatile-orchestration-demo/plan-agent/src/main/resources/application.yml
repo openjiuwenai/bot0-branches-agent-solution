@@ -1,0 +1,45 @@
+server:
+  port: ${PLAN_AGENT_PORT:18093}
+
+spring:
+  application:
+    # Drives the A2A card "name". a2a.agent-name below is INERT (A2AProperties has no
+    # agentName field); the real driver is spring.application.name.
+    name: plan-agent
+
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    agent-id: plan-agent
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: true
+    a2a:
+      agent-name: plan-agent
+      agent-description: "One-sentence bank-transfer planning agent (ReAct). Decomposes a request and calls versatile-adapter per task."
+      streaming: true
+      default-input-modes: ["text"]
+      default-output-modes: ["text"]
+      remote-agents:
+        - name: versatile-adapter
+          url: ${VERSATILE_ADAPTER_CARD_URL:}
+    custom-rest:
+      query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
+
+plan-agent:
+  model-provider: ${LLM_PROVIDER:openai}
+  api-key:
+  api-base: ${LLM_API_BASE:}
+  model-name: ${LLM_MODEL:gpt-4o-mini}
+  ssl-verify: ${LLM_SSL_VERIFY:true}
+  # System prompt resource. Default = SERIAL decomposition (exactly one versatile-adapter
+  # call per turn). Activate the `parallel-transfer` profile to swap in the parallel prompt
+  # (balance queries serial first, then independent transfers batched into one turn).
+  prompt-resource: ${PLAN_AGENT_PROMPT_RESOURCE:classpath:prompts/plan-agent-system-prompt.md}
+  max-tokens: ${PLAN_AGENT_MAX_TOKENS:512}
+
+logging:
+  level:
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG

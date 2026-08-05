@@ -4,6 +4,9 @@
 
 package com.openjiuwen.example.agentcoreext.deepb;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.interrupt.ToolInterruptException;
 import com.openjiuwen.core.singleagent.interrupt.ToolInterruptionState;
@@ -11,14 +14,12 @@ import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.interrupt.AskUserTool;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies Agent B uses DeepAgent-native interrupt components.
@@ -57,7 +58,17 @@ class AgentBDeepAgentApplicationTest {
 
         assertThatThrownBy(() -> rail.beforeToolCall(ctx))
                 .isInstanceOf(ToolInterruptException.class)
-                .hasMessage("ask_user");
+                .hasMessage("请问您的预算是多少？");
+    }
+
+    @Test
+    void askUserRailFallsBackToDefaultQuestionWhenQueryArgMissing() {
+        DemoAskUserRail rail = new DemoAskUserRail();
+        AgentCallbackContext ctx = askUserContextWithArguments("{}", null);
+
+        assertThatThrownBy(() -> rail.beforeToolCall(ctx))
+                .isInstanceOf(ToolInterruptException.class)
+                .hasMessage("请补充更多信息以便继续。");
     }
 
     @Test
@@ -73,10 +84,14 @@ class AgentBDeepAgentApplicationTest {
     }
 
     private AgentCallbackContext askUserContext(String resumeInput) {
+        return askUserContextWithArguments("{\"query\":\"请问您的预算是多少？\"}", resumeInput);
+    }
+
+    private AgentCallbackContext askUserContextWithArguments(String arguments, String resumeInput) {
         ToolCall toolCall = ToolCall.builder()
                 .id("agent-b-round-2")
                 .name("ask_user")
-                .arguments("{\"response\":\"question\"}")
+                .arguments(arguments)
                 .build();
         LinkedHashMap<String, Object> extra = new LinkedHashMap<>();
         if (resumeInput != null) {

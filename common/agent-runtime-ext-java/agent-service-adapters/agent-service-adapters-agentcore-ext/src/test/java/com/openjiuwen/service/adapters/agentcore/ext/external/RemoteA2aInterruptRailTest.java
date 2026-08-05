@@ -4,18 +4,22 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.external;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.interrupt.ToolInterruptException;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 /**
  * Tests remote A2A interrupt rail tool-call delegation.
@@ -47,7 +51,7 @@ class RemoteA2aInterruptRailTest {
                     assertThat(exception.getRequest().getContext())
                             .containsEntry("agentName", "agent-b")
                             .containsEntry("_interrupt_kind", "a2a_delegate")
-                            .containsEntry("_stream_mode", "sse");
+                            .doesNotContainKey("_stream_mode");
                 });
 
         assertThat(rail.getTools()).singleElement().satisfies(card -> {
@@ -167,6 +171,45 @@ class RemoteA2aInterruptRailTest {
                     assertThat(exception.getRequest().getMessage())
                             .isEqualTo("{\"query\":\"find balance\",\"intent\":\"查询账户余额\"}");
                 });
+    }
+
+    @Test
+    void oneRailInstanceKeepsConcurrentToolCallInterruptsIsolated() throws Exception {
+        RemoteA2aInterruptRail rail = new RemoteA2aInterruptRail(
+                List.of(spec("agent-a"), spec("agent-b"), spec("agent-c")));
+
+        List<CompletableFuture<ToolInterruptException>> calls = IntStream.range(0, 3)
+                .mapToObj(index -> CompletableFuture.supplyAsync(() -> captureInterrupt(rail, index)))
+                .toList();
+        CompletableFuture.allOf(calls.toArray(CompletableFuture[]::new)).get(5, TimeUnit.SECONDS);
+
+        List<ToolInterruptException> interrupts = calls.stream().map(CompletableFuture::join).toList();
+        for (int index = 0; index < interrupts.size(); index++) {
+            String suffix = String.valueOf((char) ('a' + index));
+            ToolInterruptException interrupt = interrupts.get(index);
+            assertThat(interrupt.getRequest().getMessage()).isEqualTo("message-" + suffix);
+            assertThat(interrupt.getRequest().getContext()).containsEntry("agentName", "agent-" + suffix);
+        }
+    }
+
+    private static ToolInterruptException captureInterrupt(RemoteA2aInterruptRail rail, int index) {
+        String suffix = String.valueOf((char) ('a' + index));
+        ToolCall toolCall = ToolCall.builder()
+                .id("call-" + suffix)
+                .name("agent-" + suffix)
+                .arguments("{\"remoteInput\":\"message-" + suffix + "\"}")
+                .build();
+        ToolCallInputs inputs = ToolCallInputs.builder().toolCall(toolCall).toolName(toolCall.getName()).build();
+        AgentCallbackContext context = AgentCallbackContext.builder()
+                .inputs(inputs)
+                .extra(new java.util.HashMap<>())
+                .build();
+        try {
+            rail.beforeToolCall(context);
+            throw new AssertionError("Expected remote interrupt");
+        } catch (ToolInterruptException exception) {
+            return exception;
+        }
     }
 
     private static RemoteA2aToolInstaller.RemoteA2aToolSpec spec(String name) {

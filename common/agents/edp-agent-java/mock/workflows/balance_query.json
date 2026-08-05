@@ -1,0 +1,25 @@
+{
+  "id": "balance_query",
+  "description": "查询账户余额（对齐 AgentEnvExplorer balance-query-amount bamount_03，首轮直达）",
+  "priority": 20,
+  "match": {
+    "type": "query",
+    "rules": [
+      {
+        "kind": "keywords",
+        "any": ["查余额", "余额查询", "查询余额", "balance", "余额"],
+        "case_insensitive": true
+      }
+    ]
+  },
+  "output": {
+    "omit_end": true,
+    "balance_delay": true,
+    "frames": [
+      { "kind": "raw_json", "hook": "balance_qa_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "balance_qa_summary_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "balance_query_end_frame", "delay_ms": 50 },
+      { "kind": "raw_json", "hook": "balance_event_end_frame", "delay_ms": 0 }
+    ]
+  }
+}

@@ -1,0 +1,163 @@
+# ============================================================
+# 客户应用配置 — 覆盖 edp-agent-engine 内置默认值
+# ============================================================
+
+server:
+  port: ${SERVER_PORT:8190}
+
+spring:
+  application:
+    name: customer-agent-app
+
+deep-agent:
+  # 模型配置（backend 定义服务端连接，model 定义模型参数）
+  # 与 DeepAgent Starter 标准一致，放在 deep-agent 顶层
+  backend:
+    # 模型提供商名称（如 openai、anthropic、deepseek 等）
+    client_provider: ${EDP_AGENT_MODEL_PROVIDER:openai}
+    # API 密钥
+    api_key: ${DEEPSEEK_API_KEY}
+    # API 基础地址
+    api_base: ${EDP_AGENT_MODEL_BASE_URL:}
+    # 请求超时时间（秒），必须 > 0
+    timeout: 120.0
+    # 最大重试次数
+    max_retries: 5
+    # 是否验证 SSL 证书
+    verify_ssl: false
+
+  model:
+    # 模型名称
+    model: ${EDP_AGENT_MODEL_NAME:deepseek-v4-pro}
+    thinking:
+      type: disabled
+
+  # 场景目录（wealth-demo: 理财购买场景, hz-zhidaitong: 智贷通场景）
+  scenario-home: ${EDP_AGENT_SCENARIO_HOME:./scenarios/wealth-demo}
+
+  # Redis 配置（用于 Todo 持久化和会话中断恢复）
+  redis:
+    mode: ${EDPA_REDIS_MODE:single}
+    host: ${EDPA_REDIS_HOST:localhost}
+    port: ${EDPA_REDIS_PORT:6379}
+    password: ${EDPA_REDIS_PASSWORD:}
+    database: ${EDPA_REDIS_DB:0}
+    connect-timeout-ms: ${EDPA_REDIS_CONNECT_TIMEOUT:5000}
+    socket-timeout-ms: ${EDPA_REDIS_SOCKET_TIMEOUT:10000}
+    checkpointer-ttl-minutes: ${EDPA_REDIS_CHECKPOINTER_TTL:60}
+
+  # Versatile 配置（可选，用于委托外部业务系统）
+  # Versatile 远端调用已改为 A2A remote-agents（见下方 openjiuwen.service.a2a.remote-agents）。
+  # circuit-breaker 仍由 VersatileDelegateRail 使用（熔断器前置检查 + 后置记录）。
+  versatile:
+    circuit-breaker:
+      enabled: ${EDP_AGENT_VERSATILE_CB_ENABLED:true}
+      failure-threshold: ${EDP_AGENT_VERSATILE_CB_FAILURE_THRESHOLD:5}
+      reset-timeout-ms: ${EDP_AGENT_VERSATILE_CB_RESET_TIMEOUT_MS:30000}
+
+  # MCP SSE 配置（可选，用于 MCP 脚本工具调用）
+  mcpsse:
+    master-url: ${EDP_MCP_MASTER_URL:}
+    standby-url: ${EDP_MCP_STANDBY_URL:}
+    access-token: ${EDP_MCP_ACCESS_TOKEN:}
+    app-name: ${EDP_MCP_APP_NAME:test_app}
+
+  # 沙箱配置（可选，用于 MCP 脚本安全执行）
+  # enabled=false 时 MCP 脚本在本地直接执行
+  # enabled=true 时 MCP 脚本在沙箱中安全执行
+  sandbox:
+    enabled: ${EDPA_SANDBOX_ENABLED:false}
+    service-url: ${EDPA_SANDBOX_SERVICE_URL:}
+    sandbox-id-prefix: ${EDPA_SANDBOX_ID_PREFIX:edp}
+    exec-timeout-seconds: ${EDPA_SANDBOX_EXEC_TIMEOUT:60}
+    skill-deploy-path: ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+    auto-create-on-startup: ${EDPA_SANDBOX_AUTO_CREATE:true}
+    on-stop: ${EDPA_SANDBOX_ON_STOP:delete}
+    fallback-on-failure: ${EDPA_SANDBOX_FALLBACK_ON_FAILURE:true}
+    excluded-commands: ${EDPA_SANDBOX_EXCLUDED_COMMANDS:whoami,hostname}
+    container-scope: ${EDPA_SANDBOX_CONTAINER_SCOPE:SESSION}
+
+# A2A Agent Card
+openjiuwen:
+  service:
+    handler: agentcore-ext
+    a2a:
+      agent-name: "WealthAdvisor"
+      agent-description: "理财顾问 Agent — 基于 EDPAgent 引擎 + Layer2 深度定制"
+      provider-organization: "Customer"
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain"]
+      # 远端 A2A agent 声明：框架在 ApplicationReadyEvent 时自动拉取 AgentCard 并注册到
+      # A2ARemoteAgentCardRegistry；JiuwenCoreAgentExtHandler.streamQuery 执行前会调用
+      # RemoteA2aToolInstaller.install() 自动注入 RemoteA2aInterruptRail（工具名 = name）。
+      # LLM 调用该工具时触发 _interrupt_kind=a2a_delegate 中断，由 A2AEnabledServeOrchestrator
+      # + RemoteInvocationBatchCoordinator + A2ARemoteAgentClient 接管远端调用与续传。
+      remote-invocation:
+        max-concurrency: 16
+        max-queue-size: 256
+        queue-timeout-seconds: 30
+      remote-agents:
+        - name: versatile-agent
+          url: ${EDP_AGENT_VERSATILE_A2A_URL:}
+          streaming: true
+      skills:
+        - id: "product_recommend"
+          name: "Product Recommend"
+          description: "理财产品推荐"
+          tags: ["wealth", "recommend"]
+          examples: ["推荐理财产品", "有什么好的理财"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+        - id: "fund_planning"
+          name: "Fund Planning"
+          description: "资金筹划与购买"
+          tags: ["wealth", "planning"]
+          examples: ["帮我规划资金", "购买理财产品"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain"]
+    # Custom REST 协议适配配置（GHZHY 网关）
+    # 配置 query-path 后激活适配器，注释掉或删除此行即可关闭
+    custom-rest:
+      query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}
+
+    external:
+      sandbox:
+        enabled: ${EDPA_SANDBOX_GOVERNED_ENABLED:false}   # 治理装饰层开关，true 触发 AgentCoreSandboxClientFactory Bean 创建
+        timeout-ms: 60000                                  # 装饰层全局超时（毫秒），与 deep-agent.sandbox.exec-timeout-seconds 取较短者生效
+        retry:
+          max: 2                                           # 失败重试次数（0=不重试）
+          backoff-ms: 1000                                 # 重试退避间隔（毫秒）
+        circuit-breaker:
+          enabled: true                                    # 启用熔断器
+          failure-threshold: 5                             # 连续失败达到此阈值后熔断器打开
+          reset-timeout-ms: 30000                          # 熔断打开后经过此时间进入半开状态（毫秒）
+        audit:
+          enabled: true                                    # 启用审计日志（EXTERNAL_CALL_AUDIT 标记）
+        servers:
+          - server-id: default                             # 服务器标识，factory.create() 无参版本默认查找 "default"
+            service-url: ${EDPA_SANDBOX_SERVICE_URL:}  # 沙箱服务地址，必须与 deep-agent.sandbox.service-url 一致
+            sandbox-type: jiuwenbox                        # 沙箱类型
+            launcher-type: pre_deploy                      # 启动器类型
+            on-stop: delete                                # 停止时行为
+            root-path: .                                   # 沙箱根路径
+            idle-ttl-seconds: 300                          # 空闲存活秒数
+            extra-params:                                  # DecoratingSandboxClient 的 filesystem_policy 注入
+              policy:
+                filesystem_policy:
+                  read_write:
+                    - ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+                  directories:
+                    - path: ${EDPA_SANDBOX_SKILL_DEPLOY_PATH:/app/skills}
+                      permissions: "0755"
+              policy_mode: append
+
+# 日志级别
+logging:
+  file:
+    name: logs/run/run.log
+  level:
+    com.openjiuwen.edp: DEBUG
+    com.customer.agent: DEBUG
+    com.openjiuwen.service.adapters.agentcore.ext: DEBUG
+    com.openjiuwen.service.app.orchestrator: DEBUG
