@@ -7,6 +7,7 @@ package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerClientProperties;
+import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 
@@ -69,6 +70,8 @@ class AgentBusCallerRoleAutoConfigurationTest {
                     // caller role ports present
                     assertThat(context).hasSingleBean(BrokerForwardingProducerPort.class);
                     assertThat(context).hasSingleBean(BrokerForwardingConsumerPort.class);
+                    // P-14: high-level Runtime submit port wraps the request producer (no DataSource)
+                    assertThat(context).hasSingleBean(AgentBusRequestSubmitter.class);
                     // broker base still present
                     assertThat(context).hasSingleBean(BrokerClientProperties.class);
                     assertThat(context).hasSingleBean(DefaultMQProducer.class);
@@ -88,6 +91,8 @@ class AgentBusCallerRoleAutoConfigurationTest {
                     // caller role ports absent (autoconfig disabled by @ConditionalOnProperty)
                     assertThat(context).doesNotHaveBean(BrokerForwardingProducerPort.class);
                     assertThat(context).doesNotHaveBean(BrokerForwardingConsumerPort.class);
+                    // P-14: the high-level submit port is gated by the same caller-role flag
+                    assertThat(context).doesNotHaveBean(AgentBusRequestSubmitter.class);
                     // broker base still present
                     assertThat(context).hasSingleBean(BrokerClientProperties.class);
                     assertThat(context).hasSingleBean(DefaultMQProducer.class);
