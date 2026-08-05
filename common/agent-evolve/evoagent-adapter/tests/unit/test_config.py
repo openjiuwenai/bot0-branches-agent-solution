@@ -216,6 +216,74 @@ class TestEnvRefInterpolation:
         config = load_config(yaml_path)
         assert config.poll_interval == 99
 
+    def test_nested_managed_docs_and_defaults_resolved(self, tmp_path, monkeypatch):
+        """managed_docs (list[dict]) 与 managed_doc_defaults (嵌套对象) 的占位递归展开。
+
+        覆盖：int 字段强制转换、Literal 字段、嵌套 dict/list 递归、默认值。
+        """
+        yaml_path = tmp_path / "c.yaml"
+        yaml_path.write_text(
+            textwrap.dedent("""\
+                managed_doc_defaults:
+                  profile: ${ADAPTER_MDD_PROFILE:burst}
+                  task_ttl_seconds: ${ADAPTER_MDD_TASK_TTL_SECONDS:600}
+                agents:
+                  - name: edp_agent
+                    managed_docs:
+                      - kind: ${EDP_AGENT_MDOC0_KIND:agent_rule}
+                        path: ${EDP_AGENT_MDOC0_PATH:/data/agents/edp_agent/AgentRule.md}
+                        max_content_bytes: ${EDP_AGENT_MDOC0_MAX_CONTENT_BYTES:262144}
+                        apply: ${EDP_AGENT_MDOC0_APPLY:file_only}
+            """),
+            encoding="utf-8",
+        )
+        # 默认值路径（env 全不设）
+        for v in ("ADAPTER_MDD_PROFILE", "ADAPTER_MDD_TASK_TTL_SECONDS",
+                  "EDP_AGENT_MDOC0_KIND", "EDP_AGENT_MDOC0_PATH",
+                  "EDP_AGENT_MDOC0_MAX_CONTENT_BYTES", "EDP_AGENT_MDOC0_APPLY"):
+            monkeypatch.delenv(v, raising=False)
+        config = load_config(yaml_path)
+        assert config.managed_doc_defaults.profile == "burst"
+        assert config.managed_doc_defaults.task_ttl_seconds == 600
+        md = config.agents[0].managed_docs[0]
+        assert md.kind == "agent_rule"
+        assert md.path == "/data/agents/edp_agent/AgentRule.md"
+        assert md.max_content_bytes == 262144  # int coercion from "262144"
+        assert md.apply == "file_only"
+
+        # env 覆盖（含 int 与 Literal；managed_doc_defaults 子字段非直接 env 字段，
+        # 必须靠 yaml 里保留 ${...} 占位才能被 resolver 展开）
+        monkeypatch.setenv("ADAPTER_MDD_PROFILE", "single")
+        monkeypatch.setenv("ADAPTER_MDD_TASK_TTL_SECONDS", "120")
+        monkeypatch.setenv("EDP_AGENT_MDOC0_MAX_CONTENT_BYTES", "1024")
+        monkeypatch.setenv("EDP_AGENT_MDOC0_APPLY", "restart")
+        monkeypatch.setenv(
+            "EDP_AGENT_MDOC0_RESTART_CMD", "docker restart edp_agent"
+        )
+        yaml_path.write_text(
+            textwrap.dedent("""\
+                managed_doc_defaults:
+                  profile: ${ADAPTER_MDD_PROFILE:burst}
+                  task_ttl_seconds: ${ADAPTER_MDD_TASK_TTL_SECONDS:600}
+                agents:
+                  - name: edp_agent
+                    managed_docs:
+                      - kind: ${EDP_AGENT_MDOC0_KIND:agent_rule}
+                        path: ${EDP_AGENT_MDOC0_PATH:/data/agents/edp_agent/AgentRule.md}
+                        max_content_bytes: ${EDP_AGENT_MDOC0_MAX_CONTENT_BYTES:262144}
+                        apply: ${EDP_AGENT_MDOC0_APPLY:file_only}
+                        restart_cmd: ${EDP_AGENT_MDOC0_RESTART_CMD:}
+            """),
+            encoding="utf-8",
+        )
+        config = load_config(yaml_path)
+        assert config.managed_doc_defaults.profile == "single"
+        assert config.managed_doc_defaults.task_ttl_seconds == 120
+        md = config.agents[0].managed_docs[0]
+        assert md.max_content_bytes == 1024
+        assert md.apply == "restart"
+        assert md.restart_cmd == "docker restart edp_agent"
+
 
 class TestRelativePathResolution:
     """Relative paths are always resolved relative to adapter root directory."""
