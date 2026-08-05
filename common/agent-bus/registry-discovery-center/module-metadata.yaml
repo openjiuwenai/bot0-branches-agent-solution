@@ -1,0 +1,38 @@
+# Module metadata for registry-discovery-center.
+#
+# Derived from spring-ai-ascend/agent-bus module-metadata.yaml, trimmed to
+# the registry/discovery feature set retained by registry-discovery-center. Forwarding /
+# ingress / s2c / federation / engine substrates are intentionally absent.
+
+module: registry-discovery-center
+kind: domain             # platform | domain | starter | bom | sample
+version: 0.1.0
+semver_compatibility: experimental
+description: "Agent Registry & Discovery Center — registry SPI (AgentDiscoveryService dual-method contract + resolveRouteHandle + AgentCardDto + RouteResolution + TenantContext + TenantIsolationViolationException + AgentCard) + Spring Boot runtime (MvpRegistryController, PgMvpDiscoveryServiceImpl, MvpHealthProbeScheduler, JdbcAgentRegistryRepository, Flyway V2 migration, ThreadLocalTenantContext). Tenant isolation by explicit parameter + WHERE + RLS, no Servlet filter."
+architecture_doc: src/main/java/com/openjiuwen/rdc/package-info.java
+spi_packages:
+  - com.openjiuwen.rdc.spi.registry   # AgentDiscoveryService dual-method contract (Method A rich DTO + Method B minimal DTO) + resolveRouteHandle + AgentCardDto + RouteResolution + TenantContext + TenantIsolationViolationException + AgentCard per ADR-0160 (Stage 4 Registry SPI Runtime Promotion) — pure Java, no Spring/JDBC/Jackson/Consul (AgentBusRegistrySpiPurityTest)
+# Real persistence licensed: Spring JDBC adapter + Flyway migration +
+# Postgres driver. Confined to package
+# com.openjiuwen.rdc.registry.runtime.persistence.jdbc by ArchUnit
+# (AgentBusRegistryJdbcPurityTest).
+#
+# spring-boot-starter-web at compile scope — registry-discovery-center ships its own
+# @SpringBootApplication (AgentBusApplication); the registry controller,
+# probe scheduler, and observability facade are first-class runtime
+# components. Confined to com.openjiuwen.rdc.registry.runtime.{api,discovery,health}
+# by AgentBusRegistryJdbcPurityTest.
+allowed_dependencies:
+  - org.springframework.boot:spring-boot-starter-jdbc
+  - org.springframework.boot:spring-boot-starter-web
+  - io.micrometer:micrometer-core
+  - org.flywaydb:flyway-core
+  - org.flywaydb:flyway-database-postgresql
+  - org.postgresql:postgresql
+forbidden_dependencies:
+  - agent-runtime
+  - agent-core
+  - agent-middleware
+  - agent-client
+  - agent-evolve
+deployment_plane: bus_state   # Registry & Discovery Center plane

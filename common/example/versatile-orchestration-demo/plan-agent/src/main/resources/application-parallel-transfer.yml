@@ -1,0 +1,30 @@
+# Profile: parallel-transfer
+# Activate with: SPRING_PROFILES_ACTIVE=parallel-transfer
+#                 (or --spring.profiles.active=parallel-transfer)
+#
+# Layered on top of the plan-agent application.yml. Swaps the plan-agent system prompt
+# from the default SERIAL decomposition (exactly one versatile-adapter call per turn) to
+# the PARALLEL decomposition:
+#   Phase 1 — if the request contains any balance query, balance queries run FIRST,
+#             strictly one per turn (serial), waiting for each result. A balance query is
+#             never batched with a transfer.
+#   Phase 2 — once every balance query has returned, ALL independent transfers (different
+#             recipients / amounts, no data dependency on each other) are batched into a
+#             SINGLE turn so the runtime dispatches them concurrently — each sharing a
+#             parentContextId but isolated in its own conversation. If the request has no
+#             balance query, Phase 1 is skipped and transfers are batched from turn one.
+#   Data dependency stays serial — a transfer whose amount depends on an unknown value
+#             (e.g. "转余额的一半") waits for that value before it is emitted.
+#
+# This profile only changes the plan-agent's decomposition strategy (the prompt resource).
+# It requires agent-runtime parallel-dispatch support for multiple versatile-adapter tool
+# calls emitted in one turn. Recommend combining with the adapter's `multi-workflow`
+# profile so balance queries and transfers route to independently-stateful workflow
+# endpoints, keeping each parallel transfer conversation isolated (envexplorer is stateful
+# per conversation_id).
+
+plan-agent:
+  prompt-resource: classpath:prompts/plan-agent-system-prompt-parallel.md
+  # Parallel turns emit several versatile-adapter tool calls at once; raise the output
+  # token budget so multi-transfer responses are not truncated mid tool-call.
+  max-tokens: 1024

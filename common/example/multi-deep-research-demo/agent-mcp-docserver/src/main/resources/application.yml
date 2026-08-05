@@ -1,0 +1,22 @@
+server:
+  port: ${MCP_DOCSERVER_PORT}
+  servlet:
+    context-path: /
+spring:
+  application:
+    name: agent-mcp-docserver
+  main:
+    banner-mode: off
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+mcp-doc-server:
+  server-name: deep-research-doc-lib
+  server-version: 0.1.0
+  fixtures-classpath: fixtures/
+  json-rpc-path: /mcp
+logging:
+  level:
+    com.openjiuwen.example.deepresearch.mcp: INFO

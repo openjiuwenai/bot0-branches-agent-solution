@@ -1,1 +1,2 @@
 com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.AgentCoreExtAutoConfiguration
+com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubMiddlewareAutoConfiguration

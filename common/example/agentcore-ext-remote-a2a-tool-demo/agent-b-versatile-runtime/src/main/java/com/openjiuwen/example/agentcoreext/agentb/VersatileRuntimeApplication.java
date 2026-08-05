@@ -7,6 +7,7 @@ package com.openjiuwen.example.agentcoreext.agentb;
 import com.openjiuwen.service.adapters.versatile.agentfw.VersatileAgentHandler;
 import com.openjiuwen.service.adapters.versatile.autoconfigure.VersatileProperties;
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;

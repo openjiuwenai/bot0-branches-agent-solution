@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.openjiuwen.example</groupId>
+    <artifactId>agentcore-ext-client-tool-deepagent-demo</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <name>agentcore-ext-client-tool-deepagent-demo</name>
+    <description>Runtime and DeepAgent example for request-scoped client tools</description>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.6</version>
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.release>17</maven.compiler.release>
+        <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
+        <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
+        <agent-core-java.version>0.1.14</agent-core-java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-app</artifactId>
+            <version>${agent-runtime-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-service-adapters-agentcore-ext</artifactId>
+            <version>${agent-runtime-ext-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.openjiuwen</groupId>
+            <artifactId>agent-core-java</artifactId>
+            <version>${agent-core-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.openjiuwen.example.clienttool.ClientToolDeepAgentApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

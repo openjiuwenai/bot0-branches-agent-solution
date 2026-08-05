@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  agent-gateway-demo — the FEAT-011/012 gateway example module.
+
+  Two roles in one directory:
+   * BUS launcher artifact — this Maven module builds the fat-jar that puts agent-bus-sdk on the
+     runtime classpath (so the FEAT-013 caller-role + reliability autoconfigs activate:
+     requestProducer / responseConsumer / forwardingOutbox) and runs the formal
+     com.openjiuwen.gateway.GatewayApplication in bus mode (application-bus.yml, the
+     spring.profiles.active=bus profile). No Java of its own — a pure build-packaging unit.
+   * smoke scripts — sibling feat-011-direct/ + feat-012-bus/ + validate.sh + the DIRECT
+     application-example.yml (NOT in src/, not packaged) drive a running gateway via curl.
+
+  The formal agent-gateway module compiles against agent-bus-spi ONLY (agent-bus-sdk is a
+  forbidden_dependencies by design — module-metadata.yaml; the BUS path uses the SPI + SDK at
+  deploy time). This module is where the SDK lands at deploy time so the gateway stays
+  DIRECT-capable / broker-free on its own fat-jar.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.openjiuwen</groupId>
+  <artifactId>agent-gateway-demo</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>agent-gateway-demo</name>
+  <description>Gateway example module: the FEAT-012 BUS launcher fat-jar (agent-bus-sdk on the runtime classpath → caller role + reliability outbox + response consumer) running the formal GatewayApplication in bus mode, plus DIRECT/BUS curl smoke scripts (feat-011-direct / feat-012-bus / validate.sh).</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <start-class>com.openjiuwen.gateway.GatewayApplication</start-class>
+  </properties>
+
+  <dependencies>
+    <!-- The formal gateway (plain lib jar — its fat-jar's BOOT-INF hides classes). Brings
+         spring-boot-starter-web + jackson + agent-bus-spi transitively. -->
+    <dependency>
+      <groupId>com.openjiuwen</groupId>
+      <artifactId>agent-gateway</artifactId>
+      <version>0.1.0</version>
+      <classifier>lib</classifier>
+    </dependency>
+    <!-- The bus runtime: RocketMQ producer/consumer + JDBC outbox/inbox + Flyway migrations +
+         the caller-role / runtime-role / reliability autoconfigs. Brings spring-boot-starter-jdbc,
+         flyway, postgresql, rocketmq-client, a2a-sdk transitively. -->
+    <dependency>
+      <groupId>com.openjiuwen</groupId>
+      <artifactId>event-bus-sdk</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>agent-gateway-demo-${project.version}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>${start-class}</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
