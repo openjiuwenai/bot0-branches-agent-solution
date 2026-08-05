@@ -21,6 +21,7 @@ import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.RdcRouteClient;
 import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.routing.RouteResolutionException;
+import com.openjiuwen.gateway.routing.StickyIndex;
 import com.openjiuwen.gateway.sse.SseBridge;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -62,6 +63,7 @@ public class BusForwarder {
     private final long responseWindowMillis;
     private final AgentRuntimeClient agentRuntimeClient;
     private final DefaultAgentResolver defaultAgentResolver;
+    private final StickyIndex stickyIndex;
     private long streamFirstFrameDeadlineMillis = 10_000L;
 
     /** Dedicated daemon threads for bounded first-frame reads (never blocks a caller thread). */
@@ -91,11 +93,15 @@ public class BusForwarder {
      * @param responseWindowMillis response-phase timeout window after accept
      * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY (null on sync-only wiring)
      * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
+     * @param stickyIndex taskId -> routeHandle index; written on the first taskId-bearing projection
+     *                    so a BUS-created task resumes to its owning runtime (P-13, mirrors DIRECT
+     *                    Router.routeCreate which writes sticky from the response taskId)
      */
     public BusForwarder(RdcRouteClient rdc, BusControlForwarder control, ProjectionFeed projectionFeed,
                         IdempotencyRule g4, String sourceServiceId,
                         long acceptWindowMillis, long responseWindowMillis,
-                        AgentRuntimeClient agentRuntimeClient, DefaultAgentResolver defaultAgentResolver) {
+                        AgentRuntimeClient agentRuntimeClient, DefaultAgentResolver defaultAgentResolver,
+                        StickyIndex stickyIndex) {
         this.rdc = rdc;
         this.control = control;
         this.projectionFeed = projectionFeed;
@@ -105,6 +111,7 @@ public class BusForwarder {
         this.responseWindowMillis = responseWindowMillis;
         this.agentRuntimeClient = agentRuntimeClient;
         this.defaultAgentResolver = defaultAgentResolver;
+        this.stickyIndex = stickyIndex;
     }
 
     /**
@@ -160,6 +167,13 @@ public class BusForwarder {
                 continue;
             }
             var event = proj.get();
+            // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
+            // DIRECT Router.routeCreate, which writes sticky from the response taskId). The BUS
+            // "response" arrives as projections; any taskId-bearing projection (ACCEPTED /
+            // INPUT_REQUIRED / RESPONSE / TERMINAL) binds the owner so a later resume re-routes to it.
+            if (event.taskId() != null && !event.taskId().isBlank()) {
+                stickyIndex.put(event.taskId(), chosen.routeHandle());
+            }
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
                 window.onProjection(folded, event.taskId(), System.currentTimeMillis());
@@ -219,7 +233,7 @@ public class BusForwarder {
         WaitWindow window = new WaitWindow(now, acceptWindowMillis, responseWindowMillis);
         G4BusWiring g4w = new G4BusWiring(g4);
 
-        StreamReadyOutcome outcome = pollForStreamReady(ctx, window, g4w, correlationId);
+        StreamReadyOutcome outcome = pollForStreamReady(ctx, window, g4w, correlationId, chosen);
         if (outcome.earlyReturnBody() != null) {
             return Optional.of(outcome.earlyReturnBody());
         }
@@ -236,10 +250,12 @@ public class BusForwarder {
      * @param window accept/response timeout window
      * @param g4w G4 wiring (fold callbacks)
      * @param correlationId correlation id to match projections
+     * @param chosen chosen agent route (P-13: bound to taskId in StickyIndex on the first
+     *              taskId-bearing projection, mirroring DIRECT Router.routeStream)
      * @return a STREAM_READY outcome, or an early-return body outcome (already folded)
      */
     private StreamReadyOutcome pollForStreamReady(GovernanceContext ctx, WaitWindow window, G4BusWiring g4w,
-                                                  String correlationId) {
+                                                  String correlationId, AgentCardRoute chosen) {
         int maxPolls = 100;
         for (int i = 0; i < maxPolls; i++) {
             var timedOut = window.checkTimeout(System.currentTimeMillis());
@@ -255,6 +271,11 @@ public class BusForwarder {
                 continue;
             }
             var event = proj.get();
+            // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
+            // DIRECT Router.routeStream, which writes sticky on the first taskId frame).
+            if (event.taskId() != null && !event.taskId().isBlank()) {
+                stickyIndex.put(event.taskId(), chosen.routeHandle());
+            }
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
                 window.onProjection(folded, event.taskId(), System.currentTimeMillis());
