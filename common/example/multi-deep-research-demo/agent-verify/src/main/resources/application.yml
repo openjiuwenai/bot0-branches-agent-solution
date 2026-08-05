@@ -27,7 +27,7 @@ openjiuwen:
     verify-agent:
       provider: ${LLM_PROVIDER:OpenAI}
       api-key: ${LLM_API_KEY}
-      api-base: ${LLM_API_BASE:https://api.deepseek.com}
+      api-base: ${LLM_API_BASE}
       model-name: ${LLM_MODEL:deepseek-chat}
       ssl-verify: ${LLM_SSL_VERIFY:true}
       temperature: ${LLM_TEMPERATURE:0.0}
