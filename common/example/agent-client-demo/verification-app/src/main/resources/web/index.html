@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>agent-client 验证看板</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-main">
+      <h1>agent-client 验证看板</h1>
+      <span id="gatewayInfo" class="gateway-info muted">网关：未开始</span>
+    </div>
+    <div class="topbar-actions">
+      <span id="statusBadge" class="badge idle">待命</span>
+      <button id="runSelectedBtn" type="button" class="ghost">运行选中</button>
+      <button id="runAllBtn" type="button" class="primary">运行全部</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel scenarios">
+      <div class="panel-head">
+        <h2>场景</h2>
+        <div class="panel-head-actions">
+          <button id="selectAllBtn" type="button" class="ghost small">全选</button>
+          <button id="selectNoneBtn" type="button" class="ghost small">清空</button>
+        </div>
+      </div>
+      <div id="scenarioList" class="scenario-list"></div>
+    </section>
+
+    <section class="panel detail">
+      <div class="panel-head">
+        <h2 id="detailTitle">断言明细</h2>
+        <span id="detailFilter" class="muted"></span>
+      </div>
+      <div id="summaryBar" class="summary-bar">
+        <p class="muted">尚未运行。点右上角「运行全部」，或勾选若干场景后「运行选中」。</p>
+      </div>
+      <ul id="assertionList" class="assertion-list"></ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="footerStatus" class="muted">就绪。CLI 模式：去掉 <code>--ui</code> 即可无界面跑同一批断言，退出码 0/1。</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

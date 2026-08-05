@@ -1,0 +1,8 @@
+name: product_select_skill
+description: "用户从推荐结果中选择产品时，确认购买产品和金额。"
+scripts:
+  product_select_success: "已为您确认选择的产品和金额。"
+  product_select_confirm: "请确认是否购买{amount}元{productName}理财产品"
+  product_select_missing_product: "您可以告诉我想要购买第几支产品"
+  product_select_missing_amount: "请问您购买的金额是多少"
+  product_select_invalid: "抱歉没有理解您的意思，请重新输入"

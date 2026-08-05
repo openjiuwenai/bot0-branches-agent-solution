@@ -1,0 +1,33 @@
+【版本包内容】：EDPAgent 1.0.0
+    1、agent-store：
+        - 代码仓：openJiuwen/agent-store
+        - 分支：EDP-agent
+        - commit ID 3229ff60d648bd39c99f1738860c50db1c626da4
+
+【版本编号】：
+    一、新增特性：
+        agent-store:
+ 	        （1）添加 EDP Agent 工具间数据直通机制：工具间数据直通通道，支持工具产出数据直接注入下游工具入参，免去 LLM 中转编解码，降低 token 消耗与信息损耗
+ 	        （2）AgentRule与Skill解耦优化：AgentRule 规则引擎与 Skill 场景配置解耦，规则定义独立于场景声明，支持规则跨场景复用与按需组合，提升可维护性
+ 	        （3）主Agent并行并行拉起多子Agent机制：主 Agent 通过 call_multiagent 工具按实体维度拆分任务，并行调度多个子 Agent 执行，结果汇总回传，显著提升多实体场景吞吐
+ 	        （4）单一子Agent并行拉起多工作流机制：子 Agent 通过 call_multiversatile 工具并行拉起多个 VersatileAdapter 工作流，单次调用完成多流程编排，缩短端到端响应时延
+
+    二、特性变更：
+        无
+
+    三、特性删除：
+        无
+
+    四、三方依赖变更：
+        无
+    
+    五、是否兼容旧版本：
+        不涉及
+
+【Bugfix】
+    已修改合入：
+        [现场问题] versatile_interrupt_rail 和 ScriptsConfig:理财卡为空时，话术错误问题；基于现场测试效果，优化时延掩盖话术。
+        [内部优化] redis超时机制添加
+
+    评审不修改：
+        无

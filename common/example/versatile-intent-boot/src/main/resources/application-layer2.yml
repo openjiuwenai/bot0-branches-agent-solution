@@ -1,0 +1,66 @@
+server:
+  port: ${L2_PORT}
+
+openjiuwen:
+  service:
+    versatile:
+      url-template: ${VERSATILE_URL_TEMPLATE:}
+      timeout: 30s
+      headers-template:
+        content-type: application/json
+        stream: "true"
+      result-node-name: AnswerNode
+
+      intents:
+        - id: intent_L2_hotel_domestic
+          name: 国内酒店
+        - id: intent_L2_hotel_international
+          name: 国际酒店
+        - id: intent_L2_flight_domestic
+          name: 国内机票
+
+      messages:
+        source: serve_request_messages
+        required: true
+
+      intent-agent-mapping:
+        intent_L2_hotel_domestic:
+          - agent-card: agent_card_biz_hotel_domestic
+        intent_L2_hotel_international:
+          - agent-card: agent_card_biz_hotel_international
+        intent_L2_flight_domestic:
+          - agent-card: agent_card_biz_flight_domestic
+      intent-agent-mapping-strategy: first
+
+      result-extractions:
+        - match: response_content
+          get: /custom_rsp_data/data/response_content
+        - match: intent_id
+          get: /custom_rsp_data/data/intent_id
+        - match: agent_id
+          get: /custom_rsp_data/data/agent_id
+
+      interrupt:
+        signal-match: need_user_input
+        prompt-get: /data/question
+        input-requirement-get: /data/input_schema
+        resume-token-get: /data/resume_token
+
+      ambiguous-intent-id: "1"
+      default-workflow:
+        agent-card: agent_card_L2_default
+
+      route-cache:
+        enabled: false
+
+    a2a-gateway:
+      enabled: true
+      base-url: ${A2A_GATEWAY_BASE_URL:}
+      token: ${A2A_GATEWAY_TOKEN:}
+      version-node: ${A2A_GATEWAY_VERSION_NODE:v1}
+      json-rpc-path: /a2a/{agentCard}
+
+  example:
+    direct-chain:
+      enabled: false
+      a2a-forward-agent-cards: []

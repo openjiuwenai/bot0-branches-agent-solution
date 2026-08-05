@@ -21,16 +21,15 @@
 
     <modules>
         <module>agent-deep-research</module>
-        <module>agent-deep-research-runtime</module>
         <module>agent-search</module>
-        <module>agent-search-runtime</module>
+        <module>agent-verify</module>
     </modules>
 
     <properties>
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
-        <agent-runtime-java.version>0.1.0</agent-runtime-java.version>
+        <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
-        <agent-core-java.version>0.1.13</agent-core-java.version>
+        <agent-core-java.version>0.1.14</agent-core-java.version>
     </properties>
 </project>

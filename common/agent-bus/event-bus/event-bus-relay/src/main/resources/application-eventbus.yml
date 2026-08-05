@@ -1,0 +1,26 @@
+# eventbus profile 专属——仅 relay 进程加载(--spring.profiles.active=eventbus)。
+# gateway(profile=gateway)不加载此文件,故不会意外激活 relay autoconfig。
+# relay 是 durable 进程:Postgres(Flyway 建表 + outbox/inbox)+ role.relay.enabled。
+# 公共 broker 配置(nameserver/namespace/service-id 等)从 agent-bus-sdk 的 application.yml 加载。
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/agentbus}
+    username: ${SPRING_DATASOURCE_USERNAME:agentbus}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: flyway_schema_history
+
+agent-bus:
+  role:
+    relay:
+      enabled: true

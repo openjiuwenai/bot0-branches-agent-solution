@@ -13,6 +13,9 @@ venv/
 *.swo
 *~
 
+# Local Codex configuration
+/.codex/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -30,6 +33,14 @@ target/
 *.key
 *.pem
 
+# /test/ 仅忽略仓库根目录下的本地脚本/数据（评测/跑批/人工标注/run 产物）。
+# 收窄说明：原 `test/`（无前导斜杠）会误伤所有 Maven `src/test/`，导致 Java 单元测试
+# 被静默忽略；改为 `/test/` 仅匹配仓库根，与既有惯例（registry/agent-bus 的 src/test 入库）一致。
+/test/
+
+# evoagent 运行产物（GU/golden_data/intermediate 等 workspace 产物）
+common/agent-evolve/evoagent/workspace/
+
 # Logs
 *.log
 logs/
@@ -37,3 +48,33 @@ logs/
 # Cache
 .cache/
 *.cache
+
+# EDPA runtime artifacts (todo store, checkstyle report)
+.todo/
+checkstyle-result.xml
+
+# MR description working copies (not production code)
+MR_*.md
+
+# EDPA-alpha — local exploration, not in MR
+common/agents/edpa-alpha/
+
+# TestRun artifacts — local/manual only, do not commit or merge
+TestRun/
+TestRun.rar
+/.pipeline/
+docs/superpowers/
+
+# Local temp scripts and Trae skills — not for production
+/temp/
+.trae/skills/edpa-test-locator/
+
+# Local test reports and tools — not for production
+common/agents/edp-agent-java/scenarios/wealth-demo/test/git_changes_report.md
+common/agents/edp-agent-java/scenarios/wealth-demo/test/test_report_*.md
+common/agents/edp-agent-java/scenarios/wealth-demo/test/test_output_*.json
+redis_hgetall.py
+redis_hgetall2.py
+redis_query.ps1
+redis_query.py
+tool-counter-redis-plan.md
