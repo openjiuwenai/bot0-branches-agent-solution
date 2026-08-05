@@ -13,7 +13,7 @@ import com.openjiuwen.core.common.logging.LoggerProtocol;
  * verified/steer/phase-override/compress = info, verify/replan-count = debug,
  * degrade = warning, device-failure fired = error.
  *
- * <p>Uses the agent-core-java host logger so react-rails adds zero new logging dependencies
+ * <p>Uses the agent-core-java host logger so agent-core-ext-react-rails adds zero new logging dependencies
  * (no slf4j/log4j/jul binding to ship) and inherits the host's trace-id correlation.
  *
  * @since 2026-07

@@ -32,7 +32,7 @@ public class ObservingRail extends AgentRail {
     /** Result-map key each rail sets to its own name for deterministic attribution. */
     public static final String SOURCE_RAIL_KEY = "source_rail";
 
-    /** Result-map key used by react-rails to mark a verified terminal. */
+    /** Result-map key used by agent-core-ext-react-rails to mark a verified terminal. */
     private static final String VERIFIED_KEY = "criteria_verified";
 
     /**
