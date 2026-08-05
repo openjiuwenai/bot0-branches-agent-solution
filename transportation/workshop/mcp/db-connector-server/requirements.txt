@@ -1,0 +1,14 @@
+# db-connector MCP 服务依赖
+# 安装：pip install -r requirements.txt
+
+# MCP SDK
+mcp>=1.0
+
+# db-connector 工具依赖（需先 pip install -e ../../tools/db-connector）
+SQLAlchemy>=2.0
+PyMySQL>=1.1
+psycopg[binary]>=3.1
+pydantic>=2.5
+pydantic-settings>=2.1
+PyYAML>=6.0
+hvac>=2.0

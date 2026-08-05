@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openjiuwen-traffic-forecast-qa"
+version = "0.1.0"
+description = "流量预测智能问数 Skill — 自然语言提问 + db-connector 数据查询 + 时序预测"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "openjiuwen" }]
+dependencies = [
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "PyYAML>=6.0",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "statsmodels>=0.14",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.23"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

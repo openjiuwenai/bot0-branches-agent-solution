@@ -1,0 +1,32 @@
+# 数据口径与字段映射配置
+# 客户已有表通过 db-connector.import_schema() 导入后，在此做字段映射。
+# 避免硬编码表名/列名，适配不同客户的表结构。
+
+traffic-forecast-qa:
+  # 流量数据表映射
+  flow-table:
+    name: traffic_flow            # 表名（须在 db-connector allowed-tables 中）
+    columns:
+      station-id: station_id       # 站点/路段编码列
+      road-code: road_code         # 道路编码列（可选）
+      timestamp: ts                # 统计时刻列
+      granularity: granularity     # 粒度列（HOUR/DAY）
+      direction: direction         # 方向列（可选）
+      flow: flow                   # 流量值列
+
+  # 预测配置
+  forecast:
+    granularity: HOUR              # 首版固定 1 小时粒度
+    default-history-window-days: 30  # 默认历史窗口 30 天
+    methods:                       # 首版启用的预测方法
+      - moving_average
+      - year_over_year
+      - holt_winters
+
+  # 多轮澄清配置
+  clarify:
+    enabled: true                  # 首版必须支持多轮追问
+    max-rounds: 3                  # 最多追问 3 轮
+    required-params:               # 必须明确的参数（缺失则追问）
+      - target          # 目标对象（站点/路段）
+      - forecast-window # 预测窗口

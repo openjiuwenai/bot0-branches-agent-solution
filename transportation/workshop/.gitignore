@@ -1,0 +1,15 @@
+# 运行时产物
+.pids/
+.logs/
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# 本地配置（含凭证，禁止提交）
+config/config.local.yaml
+
+# 表结构快照
+schema-snapshot.json

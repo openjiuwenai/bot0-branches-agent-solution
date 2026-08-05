@@ -1,0 +1,14 @@
+# traffic-forecast-qa 依赖
+# 安装：pip install -r requirements.txt
+
+# 核心
+pydantic>=2.5
+pydantic-settings>=2.1
+PyYAML>=6.0
+pandas>=2.0
+numpy>=1.24
+statsmodels>=0.14
+
+# 测试
+pytest>=7.0
+pytest-asyncio>=0.23
