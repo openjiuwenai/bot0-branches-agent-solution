@@ -203,7 +203,7 @@ public class ProactiveConvergenceRail extends AgentRail {
     /**
      * Build the Chinese-language steering prompt pushed into the trajectory on stall entry.
      *
-     * <p>issue-#16 adaptation (mirrors react-rails PreCompletionChecklistRail COVERAGE Site 3):
+     * <p>issue-#16 adaptation (mirrors agent-core-ext-react-rails PreCompletionChecklistRail COVERAGE Site 3):
      * the {@code __replan__} reference is single-sourced via {@link ReplanTool#TOOL_NAME} and gated
      * on {@link ReplanTool#isReachable} — when the agent has NOT registered ReplanTool (e.g. a
      * toolless consumer that skips EdpaAutoConfiguration), the hint falls back to a tool-agnostic

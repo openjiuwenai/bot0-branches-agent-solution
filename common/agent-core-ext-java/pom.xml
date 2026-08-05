@@ -12,7 +12,7 @@
     <description>Modules that extend agent-core-java's base capabilities (rails, verifiers, tools).</description>
 
     <modules>
-        <module>react-rails</module>
+        <module>agent-core-ext-react-rails</module>
     </modules>
 
     <properties>
