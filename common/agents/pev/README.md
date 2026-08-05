@@ -323,7 +323,7 @@ src/main/java/com/openjiuwen/agents/pev/
 src/test/java/.../pev/e2e/   real LLM e2e 参考（LlmClient/LlmPlanner/ToolBackedExecutor/LlmVerifier/ClaimTools）
 ```
 
-**依赖**：`agent-core-java` 0.1.13（`BaseAgent` / `AgentRail` / `AgentCallbackContext`）；Java 17。PEV 不依赖 Spring、runtime-ext 或 react-rails。
+**依赖**：`agent-core-java` 0.1.13（`BaseAgent` / `AgentRail` / `AgentCallbackContext`）；Java 17。PEV 不依赖 Spring、runtime-ext 或 agent-core-ext-react-rails。
 
 **构建**：
 ```bash

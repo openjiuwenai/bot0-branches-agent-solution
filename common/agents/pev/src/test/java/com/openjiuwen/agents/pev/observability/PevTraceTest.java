@@ -148,7 +148,7 @@ class PevTraceTest {
     // ==================== sink 异常隔离（FutureTask bridge）====================
 
     /**
-     * 抛异常的 sink 不能杀 invoke 控制流 —— FutureTask 隔离（照搬 react-rails RailTelemetry.invokeIsolated）。
+     * 抛异常的 sink 不能杀 invoke 控制流 —— FutureTask 隔离（照搬 agent-core-ext-react-rails RailTelemetry.invokeIsolated）。
      */
     @Test
     void throwingSinkDoesNotKillInvoke() {

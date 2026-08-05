@@ -264,12 +264,14 @@ public class SystemPromptInjectingModel extends ToolCallingEnforcingModel {
         String path = PROMPT_RESOURCE_DIR + resourceName;
         try (InputStream in = SystemPromptInjectingModel.class.getClassLoader().getResourceAsStream(path)) {
             if (in == null) {
-                throw new IllegalStateException("react-rails: system-prompt resource not found on classpath: "
-                        + path + " (expected at src/main/resources/" + path + ")");
+                throw new IllegalStateException(
+                        "agent-core-ext-react-rails: system-prompt resource not found on classpath: " + path
+                                + " (expected at src/main/resources/" + path + ")");
             }
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new IllegalStateException("react-rails: failed to load system-prompt resource: " + path, e);
+            throw new IllegalStateException(
+                    "agent-core-ext-react-rails: failed to load system-prompt resource: " + path, e);
         }
     }
 

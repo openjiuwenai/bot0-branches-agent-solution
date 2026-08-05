@@ -78,7 +78,7 @@ public sealed interface RailEvent {
      * <p><b>Not equivalent to "hint enqueued"</b>: {@code SteeringQueue} is an interface; a host
      * implementation other than the default {@code LoopQueues} (e.g. one with dedup / capacity /
      * conditional filtering) could drop inside {@code pushSteering} even when
-     * {@code queueBound=true}. That is a host-implementation contract beyond react-rails'
+     * {@code queueBound=true}. That is a host-implementation contract beyond agent-core-ext-react-rails'
      * observation. Under the default {@code LoopQueues} (unbounded {@code ArrayDeque.add}),
      * {@code queueBound=true} is equivalent to enqueued.
      *

@@ -7,7 +7,7 @@ package com.openjiuwen.agents.reactrails.observability;
 import com.openjiuwen.core.singleagent.agents.ReActAgent;
 
 /**
- * One-call auto-wire for react-rails observability. Installs the default host-logger listener
+ * One-call auto-wire for agent-core-ext-react-rails observability. Installs the default host-logger listener
  * and registers the passive {@link ObservingRail} so every {@code requestForceFinish} transfer
  * is auto-surfaced — zero per-rail manual fire.
  *

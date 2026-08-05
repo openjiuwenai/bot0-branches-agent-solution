@@ -204,7 +204,7 @@ public class CriteriaReplanBridgeRail extends AgentRail {
             }
         }
         // Note (issue #16, Phase1 B): this gradient hint is dead code today — hasGradient is always
-        // false because no react-rails verifier produces isPartial metadata yet. When a future
+        // false because no agent-core-ext-react-rails verifier produces isPartial metadata yet. When a future
         // GradientVerifier activates this branch, gate the __replan__ line on
         // ReplanTool.isReachable(ctx) (thread ctx through buildCorrectionHint/buildGradientHint)
         // and fall back to a tool-agnostic hint, mirroring PreCompletionChecklistRail's COVERAGE

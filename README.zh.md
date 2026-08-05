@@ -41,7 +41,7 @@ mvn -f common\example\multi-deep-research-demo\pom.xml clean install
 | 模块 | 说明 |
 |------|------|
 | `common/agent-runtime-ext-java` | 运行时扩展 Maven 父工程，当前包含 AgentCore 增强 adapter 与 Versatile adapter。 |
-| `common/agent-core-ext-java` | `agent-core-java` 的纯 SDK 扩展工程，当前聚合不含 Spring 的 `react-rails` 特性 jar。 |
+| `common/agent-core-ext-java` | `agent-core-java` 的纯 SDK 扩展工程，当前聚合不含 Spring 的 `agent-core-ext-react-rails` 特性 jar。 |
 | `common/agents` | 具体 Agent 实现工程，当前聚合自包含的 PEV Agent。 |
 | `agent-service-adapters-agentcore-ext` | 复用 runtime 远端 A2A card 注册结果，在 AgentCore handler 执行前注入远端 agent 工具，并通过 `a2a_delegate` interrupt 完成远端委托。 |
 | `agent-service-adapters-versatile` | 实现 runtime `AgentHandler` SPI，将查询请求适配到远端 HTTP/SSE 工作流服务。 |
@@ -66,7 +66,7 @@ mvn -f common\example\multi-deep-research-demo\pom.xml clean install
 agent-solution
 |-- common
 |   |-- agent-core-ext-java
-|   |   `-- react-rails
+|   |   `-- agent-core-ext-react-rails
 |   |-- agent-runtime-ext-java
 |   |   `-- agent-service-adapters
 |   |       |-- agent-service-adapters-agentcore-ext
@@ -110,7 +110,7 @@ common/example
 
 <dependency>
     <groupId>com.openjiuwen</groupId>
-    <artifactId>react-rails</artifactId>
+    <artifactId>agent-core-ext-react-rails</artifactId>
     <version>0.1.0</version>
 </dependency>
 
@@ -152,7 +152,7 @@ common/example
 
 **4. 运行时扩展-Skill Hub 订阅 Skill：**通过可替换的 Skill Hub SPI 在启动阶段按 required / optional 语义下载 Agent 声明的 skill 包，支持 SHA-256 或常规完整性校验；required skill 失败阻断 ready，optional skill 失败可降级启动，凭据脱敏不外泄。
 
-**5. 核心框架扩展-ReActAgent 认知能力补全（react-rails）：**新增 `react-rails` 模块，为 ReActAgent 补三条认知 rail：`CriteriaVerificationRail`（按成功标准验证最终答案）、`ReplanRail`（限制重规划次数防发散）、`RootCauseRail`（设备故障降级终止），均通过 `forceFinish` gate 在 `afterModelCall` 短路循环。纯 Java SDK，不依赖 Spring 或 runtime-ext。
+**5. 核心框架扩展-ReActAgent 认知能力补全（agent-core-ext-react-rails）：**新增 `agent-core-ext-react-rails` 模块，为 ReActAgent 补三条认知 rail：`CriteriaVerificationRail`（按成功标准验证最终答案）、`ReplanRail`（限制重规划次数防发散）、`RootCauseRail`（设备故障降级终止），均通过 `forceFinish` gate 在 `afterModelCall` 短路循环。纯 Java SDK，不依赖 Spring 或 runtime-ext。
 
 **6. 自进化引擎-数据回流：**从 Agent 运行日志或 OpenTelemetry 数据中回流结构化轨迹，支持 log 与 standard（OTel）两种模式，经清洗归一为标准对话格式供评估使用。
 

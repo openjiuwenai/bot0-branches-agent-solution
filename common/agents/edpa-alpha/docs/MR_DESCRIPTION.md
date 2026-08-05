@@ -2,7 +2,7 @@
 
 ## 概述
 
-EDPA-alpha 在 agent-core-java 的 DeepAgent 引擎之上，增加**认知闭环**（Plan→Execute→Verify→Diagnose→Dispatch→Replan/Degrade），复用 react-rails 认知 rail + 自有 sealed dispatch kernel，为开环 ReAct 循环补上外部验证、根因诊断和自适应重规划能力。
+EDPA-alpha 在 agent-core-java 的 DeepAgent 引擎之上，增加**认知闭环**（Plan→Execute→Verify→Diagnose→Dispatch→Replan/Degrade），复用 agent-core-ext-react-rails 认知 rail + 自有 sealed dispatch kernel，为开环 ReAct 循环补上外部验证、根因诊断和自适应重规划能力。
 
 ## 设计思路
 
@@ -22,7 +22,7 @@ EDPA-alpha 补这三层：
 ```
 agent-core-java 0.1.13（DeepAgent + ReActAgent + AgentRail + AgentCallbackContext）
        ↑
-react-rails（公共认知 rail + 状态隔离）
+agent-core-ext-react-rails（公共认知 rail + 状态隔离）
   ├── ReplanRail / CriteriaReplanBridgeRail / RootCauseRail（generic rail）
   ├── RailInvocationState（per-invocation 状态隔离）
   └── CriteriaVerifier / RuleBasedCriteriaVerifier（接口 + keyword 实现）
@@ -32,7 +32,7 @@ EDPA-alpha（与 pev 平级，common/agents/ 下，互不依赖）
   ├── verification: GroundTruthVerifier（DeterministicChecker SPI 确定性优先 → keyword fallback）
   ├── verification: ProactiveConvergenceRail（主动收敛检测，flatline → replan）
   ├── tool: ClaimDeterministicTools（calcDeductible 85% 共担 + authorizePayment 险种阈值）
-  ├── observability: EDPA rails fire react-rails RailTelemetry SteeringEvents（EXPLORE_FINDINGS / CONVERGENCE_STALL，继承 react-rails bus）
+  ├── observability: EDPA rails fire agent-core-ext-react-rails RailTelemetry SteeringEvents（EXPLORE_FINDINGS / CONVERGENCE_STALL，继承 agent-core-ext-react-rails bus）
   ├── explore: ExploreRail / ExploreTool（tool-driven 探索，LLM 主动调 explore 工具）
   ├── mcp: StdioMcpClient（薄 JSON-RPC 客户端，绕过 SDK MCP client bug）
   ├── subagent: SubAgentDispatcher（orchestrator + specialist 共享 MCP 工具池）
@@ -69,7 +69,7 @@ verify→replan 路径用 sealed dispatch（纯函数，零 LLM）：
 
 - **MCP 薄客户端**（StdioMcpClient）：JSON-RPC over stdio 绕过 SDK 0.1.12 MCP client 三个 bug（StdioClient hang / StreamableHTTP drop session / SSE 0 tools）。真 SEC EDGAR e2e 7/7 PASS。
 - **SubAgent 派发**（SubAgentDispatcher）：orchestrator + specialist 共享全局 MCP 工具池，子 agent 复用 host adapter 取真数据。
-- **可观测性**：EDPA rails fire react-rails RailTelemetry SteeringEvents（ExploreRail "EXPLORE_FINDINGS" / ProactiveConvergenceRail "CONVERGENCE_STALL"），继承 react-rails bus，不自带 OTel 层（MR !77 移除了旧的 DataFlowObserverRail/OTel —— react-rails 结论甲实证 ext 层 OTel-as-source 错层）。
+- **可观测性**：EDPA rails fire agent-core-ext-react-rails RailTelemetry SteeringEvents（ExploreRail "EXPLORE_FINDINGS" / ProactiveConvergenceRail "CONVERGENCE_STALL"），继承 agent-core-ext-react-rails bus，不自带 OTel 层（MR !77 移除了旧的 DataFlowObserverRail/OTel —— agent-core-ext-react-rails 结论甲实证 ext 层 OTel-as-source 错层）。
 
 ## 测试验证
 
@@ -105,7 +105,7 @@ MCP e2e 亮点：deepseek-v4-flash + thinking on 调了 9 个不同 MCP 工具�
 
 ```
 edpa-alpha → agent-core-java 0.1.13（DeepAgent / ReActAgent / AgentRail / AgentCallbackContext）
-edpa-alpha → react-rails（ReplanRail / CriteriaReplanBridgeRail / RootCauseRail / RailInvocationState / CriteriaVerifier / RailTelemetry / RailEvent）
+edpa-alpha → agent-core-ext-react-rails（ReplanRail / CriteriaReplanBridgeRail / RootCauseRail / RailInvocationState / CriteriaVerifier / RailTelemetry / RailEvent）
 ```
 
 **不依赖 pev**（自有 kernel：RootCause / ReplanAction / EdpaKernel.toReplanAction）。EDPA-alpha 和 PEV 完全平级，互不依赖。

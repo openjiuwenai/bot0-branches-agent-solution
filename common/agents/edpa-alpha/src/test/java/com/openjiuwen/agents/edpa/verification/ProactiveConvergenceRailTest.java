@@ -30,7 +30,7 @@ import java.util.List;
  * ProactiveConvergenceRail bearing tests — IFF mutation-RED anchors.
  *
  * <p>State isolation (RailInvocationState): tests use the SAME ctx across afterModelCall
- * rounds (state accumulates in ctx.extra), mirroring react-rails ReplanRailTest. Each round
+ * rounds (state accumulates in ctx.extra), mirroring agent-core-ext-react-rails ReplanRailTest. Each round
  * calls addToolRound(ctx, ...) which mutates the ctx's inputs (accumulates ToolMessages).
  *
  * @since 2026-07
