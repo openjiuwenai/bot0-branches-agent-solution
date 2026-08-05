@@ -24,9 +24,9 @@ Agent 适配；运行时相关扩展见 [`../agent-runtime-ext-java`](../agent-r
 | 模块 | 类型 | 作用 |
 | --- | --- | --- |
 | `agent-core-ext-java` | Maven 聚合父工程 | 统一组织 AgentCore 扩展子模块及其公共构建配置 |
-| [`react-rails`](react-rails/README.md) | Java SDK | 为 AgentCore 的 ReAct Agent 补充认知控制、收敛和可观测能力 |
+| [`agent-core-ext-react-rails`](agent-core-ext-react-rails/README.md) | Java SDK | 为 AgentCore 的 ReAct Agent 补充认知控制、收敛和可观测能力 |
 
-`react-rails` 当前覆盖以下功能方向：
+`agent-core-ext-react-rails` 当前覆盖以下功能方向：
 
 - **结果验证与收敛**：根据成功条件检查 Agent 输出，在未满足条件时触发纠正、重规划或降级。
 - **重规划与上下文治理**：识别重规划意图、限制重复尝试，并压缩失败过程产生的上下文。
@@ -36,7 +36,7 @@ Agent 适配；运行时相关扩展见 [`../agent-runtime-ext-java`](../agent-r
 - **可观测性**：对验证、重规划、上下文压缩、异常和终止等关键状态变化提供结构化事件。
 
 这些扩展按需组合，不要求业务应用一次性启用全部功能。具体接入顺序、输入输出和限制以
-[`react-rails` 模块文档](react-rails/README.md)为准。
+[`agent-core-ext-react-rails` 模块文档](agent-core-ext-react-rails/README.md)为准。
 
 ## 前置条件
 

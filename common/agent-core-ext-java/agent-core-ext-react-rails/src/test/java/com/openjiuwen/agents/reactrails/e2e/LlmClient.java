@@ -12,7 +12,7 @@ import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 
 /**
- * 最小化 OpenAI 兼容聊天客户端 for react-rails real-LLM e2e。
+ * 最小化 OpenAI 兼容聊天客户端 for agent-core-ext-react-rails real-LLM e2e。
  *
  * <p>仅用于真 LLM e2e 测试（自含 HTTP 实现，无外部依赖）。
  * 请求体构造与响应解析均为最小实现，不支持流式（本测试场景无需流式响应）。
@@ -49,7 +49,7 @@ final class LlmClient {
             throw new IllegalStateException("OPENJIUWEN env not set");
         }
         // Thinking control — env LLM_THINKING selects the param shape per provider/model
-        // (mirrors pev/e2e/LlmClient so react-rails e2e can run the same cross-model matrix).
+        // (mirrors pev/e2e/LlmClient so agent-core-ext-react-rails e2e can run the same cross-model matrix).
         //   glm-off (default): "thinking":{"type":"disabled"} — structured e2e tasks disable GLM thinking
         //   thinking-on / thinking-off: "thinking":{"type":"enabled"/"disabled"} (GLM / DeepSeek)
         //   qwen-on / qwen-off: "enable_thinking":true/false (Qwen3 via OpenRouter)

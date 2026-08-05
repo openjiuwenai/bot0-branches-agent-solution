@@ -1,4 +1,4 @@
-# react-rails — ReActAgent 认知能力补全（external-judge + replan + self-heal）
+# agent-core-ext-react-rails — ReActAgent 认知能力补全（external-judge + replan + self-heal）
 
 > 给 agent-core-java 的 ReActAgent 补三条认知 rail：criteria 验证、replan 计数、设备故障降级。
 > ReActAgent 原生只有 reason+act 循环（无 verify）；本模块用 `afterModelCall forceFinish` gate
@@ -11,7 +11,7 @@
 ```xml
 <dependency>
     <groupId>com.openjiuwen</groupId>
-    <artifactId>react-rails</artifactId>
+    <artifactId>agent-core-ext-react-rails</artifactId>
     <version>0.1.0</version>
 </dependency>
 ```
@@ -118,11 +118,11 @@ src/main/java/com/openjiuwen/agents/reactrails/
 `agent-core-java` 0.1.13（ReActAgent / AgentRail / AgentCallbackContext / Tool / ToolCard / AbilityManager）；Java 17。模块不依赖 Spring、runtime-ext 或具体 Agent 实现。
 
 ```bash
-mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am test
+mvn -f common/agent-core-ext-java/pom.xml -pl :agent-core-ext-react-rails -am test
 ```
 
 ## 设计背景
 
 50 物种 CORRECTED GEPA 探索确认：gitcode ReActAgent 缺 external-judge verifier + GEPA-lite + degraded terminal。本模块补 external-judge + degraded terminal（GEPA-lite defer——ReActAgent 无 BetaPlan 落点）。
 
-与 `common/agents/pev` 的关系：两者是独立产物且没有依赖关系。PEV 自带 verify-loop dispatch；react-rails 通过显式注册扩展 ReActAgent。
+与 `common/agents/pev` 的关系：两者是独立产物且没有依赖关系。PEV 自带 verify-loop dispatch；agent-core-ext-react-rails 通过显式注册扩展 ReActAgent。
