@@ -4,12 +4,17 @@
 
 package com.openjiuwen.example.busconsumer;
 
+import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
+import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +52,34 @@ class RuntimeBusDemoAgentHandlerTest {
         assertThat(response.getResult()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
                 .containsKey("_interrupt");
         assertThat(response.getResult().toString()).contains("Approve target runtime operation?");
+    }
+
+    @Test
+    void calleeStreamsMultipleChunksBeforeCompletion() {
+        List<String> chunks = new ArrayList<>();
+        AtomicBoolean completed = new AtomicBoolean();
+
+        RuntimeBusDemoAgentHandler.callee(3, 0L).streamQuery(request("hello"), new QueryStreamObserver() {
+            @Override
+            public void onNext(QueryChunk chunk) {
+                chunks.add(chunk.getData().toString());
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                throw new AssertionError(error);
+            }
+
+            @Override
+            public void onComplete() {
+                completed.set(true);
+            }
+        });
+
+        assertThat(chunks).hasSize(3);
+        assertThat(chunks.get(0)).contains("target stream chunk 1/3: hello");
+        assertThat(chunks.get(2)).contains("target stream chunk 3/3: hello");
+        assertThat(completed).isTrue();
     }
 
     private static ServeRequest request(String text) {

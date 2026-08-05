@@ -5,11 +5,13 @@
 package com.openjiuwen.service.bus.consumer.caller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
+import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
+import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
+import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
-import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
@@ -39,6 +41,7 @@ import java.util.Base64;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -50,7 +53,8 @@ import java.util.function.Consumer;
  */
 class AgentBusRemoteAgentCallerTest {
     private HttpServer server;
-    private InMemoryForwardingOutbox outbox;
+    private List<ForwardingEnvelope> submitted;
+    private AgentBusRequestSubmitter requestSubmitter;
     private AgentBusRemoteAgentCaller caller;
 
     @BeforeEach
@@ -63,8 +67,13 @@ class AgentBusRemoteAgentCallerTest {
         server.start();
         RuntimeRdcClient registry = new RuntimeRdcClient(
                 URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
-        outbox = new InMemoryForwardingOutbox();
-        caller = new AgentBusRemoteAgentCaller(registry, outbox, Runnable::run,
+        submitted = new ArrayList<>();
+        requestSubmitter = envelope -> {
+            submitted.add(envelope);
+            return ForwardingReceipt.accepted(envelope.messageId(), envelope.tenantId(),
+                    System.currentTimeMillis());
+        };
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
                 "tenant-a", "runtime-a", 30_000L);
     }
 
@@ -79,9 +88,7 @@ class AgentBusRemoteAgentCallerTest {
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
                 null, remoteTaskId::set);
 
-        List<ForwardingOutboxRecord> records = outbox.claimDue("tenant-a", System.currentTimeMillis(), 1,
-                "runtime-a", System.currentTimeMillis() + 30_000L);
-        assertThat(records).singleElement().satisfies(record -> {
+        assertThat(submitted).singleElement().satisfies(record -> {
             assertThat(record.eventType()).isEqualTo(AgentBusEventType.A2A_CALL_REQUESTED);
             assertThat(record.targetServiceId()).isEqualTo("runtime-b");
             assertThat(record.routeHandle().value()).isEqualTo("route-b");
@@ -91,7 +98,7 @@ class AgentBusRemoteAgentCallerTest {
                     .contains("\"contextId\":\"context-a\"");
         });
 
-        ForwardingOutboxRecord request = records.get(0);
+        ForwardingEnvelope request = submitted.get(0);
         assertThat(caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
                 "taskId=task-b;projectionKind=ACCEPTED;revision=0"))).isTrue();
         assertThat(remoteTaskId.get()).isEqualTo("task-b");
@@ -108,6 +115,36 @@ class AgentBusRemoteAgentCallerTest {
         assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
         assertThat(future.join().remoteTaskId()).isEqualTo("task-b");
         assertThat(caller.pendingCount()).isZero();
+        assertThat(caller.accept(response(request, AgentBusEventType.A2A_CALL_TERMINAL,
+                "taskId=task-b;projectionKind=TERMINAL;revision=1;status=completed"))).isFalse();
+    }
+
+    @Test
+    void mapsRejectedProjectionToRemoteRejectedOutcome() throws Exception {
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
+                null, null);
+        ForwardingEnvelope request = submittedSingle();
+
+        assertThat(caller.accept(response(request, AgentBusEventType.A2A_CALL_REJECTED,
+                "taskId=task-b;projectionKind=REJECTED;revision=0;reason=denied"))).isTrue();
+
+        assertThat(future.join().resultCategory()).isEqualTo("REMOTE_REJECTED");
+        assertThat(future.join().remoteTaskId()).isEqualTo("task-b");
+        assertThat(caller.pendingCount()).isZero();
+    }
+
+    @Test
+    void removesPendingCallAfterResponseTimeout() throws Exception {
+        RuntimeRdcClient registry = new RuntimeRdcClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
+                "tenant-a", "runtime-a", 20L);
+
+        var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
+                null, null);
+
+        assertThatThrownBy(future::join).hasCauseInstanceOf(TimeoutException.class);
+        assertThat(caller.pendingCount()).isZero();
     }
 
     @Test
@@ -118,7 +155,7 @@ class AgentBusRemoteAgentCallerTest {
         AtomicBoolean subscriptionClosed = new AtomicBoolean();
         RuntimeRdcClient registry = new RuntimeRdcClient(
                 URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
-        caller = new AgentBusRemoteAgentCaller(registry, outbox, Runnable::run,
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
                 "tenant-a", "runtime-a", 30_000L, (request, events, completion, error) -> {
                     subscriptionRequest.set(request);
                     streamEvents.set(events);
@@ -129,7 +166,7 @@ class AgentBusRemoteAgentCallerTest {
 
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
                 Map.of(), Map.of(), true), observer, null);
-        ForwardingOutboxRecord request = claimSingle();
+        ForwardingEnvelope request = submittedSingle();
         assertThat(request.inlinePayload()).contains("\"method\":\"SendStreamingMessage\"");
         caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
                 "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
@@ -154,7 +191,7 @@ class AgentBusRemoteAgentCallerTest {
         List<Consumer<Throwable>> streamErrors = new ArrayList<>();
         RuntimeRdcClient registry = new RuntimeRdcClient(
                 URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
-        caller = new AgentBusRemoteAgentCaller(registry, outbox, Runnable::run,
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
                 "tenant-a", "runtime-a", 30_000L, (request, events, completion, error) -> {
                     streamEvents.add(events);
                     streamErrors.add(error);
@@ -163,16 +200,15 @@ class AgentBusRemoteAgentCallerTest {
 
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
                 Map.of(), Map.of(), true), observer(new ArrayList<>()), null);
-        ForwardingOutboxRecord create = claimSingle();
+        ForwardingEnvelope create = submittedSingle();
         caller.accept(response(create, AgentBusEventType.A2A_CALL_ACCEPTED,
                 "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
         caller.accept(response(create, AgentBusEventType.A2A_STREAM_READY,
                 "taskId=task-stream;streamRef=expired;projectionKind=STREAM_READY;revision=0"));
         streamErrors.get(0).accept(new IllegalStateException("expired stream reference"));
 
-        assertThat(outbox.entryCount()).isEqualTo(2);
-        ForwardingOutboxRecord refresh = outbox.claimDue("tenant-a", System.currentTimeMillis(), 10,
-                "runtime-a", System.currentTimeMillis() + 30_000L).stream()
+        assertThat(submitted).hasSize(2);
+        ForwardingEnvelope refresh = submitted.stream()
                 .filter(record -> record.eventType() == AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED)
                 .findFirst().orElseThrow();
         assertThat(refresh.inlinePayload()).contains("\"method\":\"SubscribeToTask\"")
@@ -191,13 +227,13 @@ class AgentBusRemoteAgentCallerTest {
         AtomicBoolean subscriptionClosed = new AtomicBoolean();
         RuntimeRdcClient registry = new RuntimeRdcClient(
                 URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
-        caller = new AgentBusRemoteAgentCaller(registry, outbox, Runnable::run,
+        caller = new AgentBusRemoteAgentCaller(registry, requestSubmitter, Runnable::run,
                 "tenant-a", "runtime-a", 30_000L, (request, events, completion, error) ->
                         () -> subscriptionClosed.set(true));
 
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
                 Map.of(), Map.of(), true), observer(new ArrayList<>()), null);
-        ForwardingOutboxRecord request = claimSingle();
+        ForwardingEnvelope request = submittedSingle();
         caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
                 "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
         caller.accept(response(request, AgentBusEventType.A2A_STREAM_READY,
@@ -208,11 +244,9 @@ class AgentBusRemoteAgentCallerTest {
         assertThat(caller.pendingCount()).isZero();
     }
 
-    private ForwardingOutboxRecord claimSingle() {
-        List<ForwardingOutboxRecord> records = outbox.claimDue("tenant-a", System.currentTimeMillis(), 1,
-                "runtime-a", System.currentTimeMillis() + 30_000L);
-        assertThat(records).hasSize(1);
-        return records.get(0);
+    private ForwardingEnvelope submittedSingle() {
+        assertThat(submitted).hasSize(1);
+        return submitted.get(0);
     }
 
     private static TaskUpdateEvent artifactEvent(String taskId, String text) {
@@ -249,7 +283,7 @@ class AgentBusRemoteAgentCallerTest {
         };
     }
 
-    private static BrokerInboundMessage response(ForwardingOutboxRecord request, AgentBusEventType type,
+    private static BrokerInboundMessage response(ForwardingEnvelope request, AgentBusEventType type,
             String inlinePayload) {
         return new BrokerInboundMessage("tenant-a", "response-" + type, "runtime-b", "runtime-a",
                 "runtime-caller-runtime-a", null, request.correlationId(), type, request.traceId(),

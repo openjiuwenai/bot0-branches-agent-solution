@@ -38,11 +38,6 @@
             <version>${agent-runtime-ext-java.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.openjiuwen</groupId>
-            <artifactId>event-bus-sdk</artifactId>
-            <version>${agent-runtime-ext-java.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>

@@ -8,15 +8,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultAgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.InMemoryBroker;
-import com.openjiuwen.bus.forwarding.test.InMemoryForwardingOutbox;
+import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.ProjectingTaskStore;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
-import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerOutboxDispatcher;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerResponseLifecycle;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusRemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.caller.RuntimeRdcClient;
@@ -122,7 +122,7 @@ class BusConsumerAutoConfigurationTest {
     }
 
     @Test
-    void createsRegistryClientForCallerBrokerPortsButKeepsCallerFailClosedWithoutOutbox() {
+    void keepsCallerFailClosedWithoutHighLevelRequestSubmitter() {
         var requestBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "req");
         var responseBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_out");
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
@@ -135,14 +135,14 @@ class BusConsumerAutoConfigurationTest {
                         () -> responseBroker.consumerFor("runtime-runtime-a"))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).hasSingleBean(RuntimeRdcClient.class);
+                    assertThat(context).doesNotHaveBean(RuntimeRdcClient.class);
                     assertThat(context.getBean(RemoteAgentCaller.class))
                             .isInstanceOf(UnavailableAgentBusRemoteAgentCaller.class);
                 });
     }
 
     @Test
-    void assemblesRealCallerWhenAgentBusOutboxAndCallerPortsExist() {
+    void assemblesRealCallerFromHighLevelSubmitterAndResponseConsumer() {
         var requestBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "req");
         var responseBroker = new InMemoryBroker(new DefaultBrokerTopicResolver(), "resp_out");
         new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(BusConsumerAutoConfiguration.class))
@@ -151,13 +151,13 @@ class BusConsumerAutoConfigurationTest {
                         "agent-bus.tenant=tenant-a",
                         "openjiuwen.service.service-id=runtime-a")
                 .withBean("requestProducer", BrokerForwardingProducerPort.class, () -> requestBroker)
+                .withBean(AgentBusRequestSubmitter.class,
+                        () -> new DefaultAgentBusRequestSubmitter(requestBroker))
                 .withBean("responseConsumer", BrokerForwardingConsumerPort.class,
                         () -> responseBroker.consumerFor("runtime-caller-runtime-a"))
-                .withBean(InMemoryForwardingOutbox.class, InMemoryForwardingOutbox::new)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(RemoteAgentCaller.class)).isInstanceOf(AgentBusRemoteAgentCaller.class);
-                    assertThat(context).hasSingleBean(AgentBusCallerOutboxDispatcher.class);
                     assertThat(context).hasSingleBean(AgentBusCallerResponseLifecycle.class);
                 });
     }

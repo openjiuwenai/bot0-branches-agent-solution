@@ -5,8 +5,7 @@
 package com.openjiuwen.service.bus.consumer.autoconfigure;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxClaimPort;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
+import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 import com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient;
@@ -15,7 +14,6 @@ import com.openjiuwen.service.bus.consumer.BusTaskProjectionCoordinator;
 import com.openjiuwen.service.bus.consumer.RuntimeBusEventConsumer;
 import com.openjiuwen.service.bus.consumer.a2a.RequestHandlerBusA2aBridge;
 import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
-import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerOutboxDispatcher;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerResponseLifecycle;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusRemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.caller.RuntimeRdcClient;
@@ -56,7 +54,6 @@ import java.time.Clock;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -79,8 +76,6 @@ public class BusConsumerAutoConfiguration {
     private static final String SERVICE_ID_PROPERTY = "openjiuwen.service.service-id";
     private static final long STREAM_REF_TTL_SECONDS = 60L * 60L;
     private static final int CALLER_IO_THREADS = 4;
-    private static final int CALLER_OUTBOX_BATCH_SIZE = 10;
-
     @Bean
     BusEnvelopeValidator busEnvelopeValidator(Environment environment, AgentBusBrokerProperties bus) {
         return new BusEnvelopeValidator(Clock.systemUTC(), tenantId(bus), serviceId(environment));
@@ -108,7 +103,7 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(name = {"requestProducer", "responseConsumer"})
+    @ConditionalOnBean(value = AgentBusRequestSubmitter.class, name = "responseConsumer")
     RuntimeRdcClient runtimeRdcClient(BusConsumerProperties properties) {
         return new RuntimeRdcClient(properties.getRegistryBaseUrl());
     }
@@ -120,35 +115,22 @@ public class BusConsumerAutoConfiguration {
 
     @Bean
     RemoteAgentCaller agentBusRemoteAgentCaller(ObjectProvider<RuntimeRdcClient> registry,
-            ObjectProvider<ForwardingOutboxPort> outbox,
+            ObjectProvider<AgentBusRequestSubmitter> requestSubmitter,
             @Qualifier("agentBusCallerExecutor") ExecutorService agentBusCallerExecutor,
             AgentBusBrokerProperties bus, Environment environment,
             ObjectProvider<A2ATaskSubscriptionClient> subscriptionClient) {
         RuntimeRdcClient registryClient = registry.getIfAvailable();
-        ForwardingOutboxPort outboxPort = outbox.getIfAvailable();
-        if (registryClient == null || outboxPort == null) {
+        AgentBusRequestSubmitter submitter = requestSubmitter.getIfAvailable();
+        if (registryClient == null || submitter == null) {
             return new UnavailableAgentBusRemoteAgentCaller();
         }
-        return new AgentBusRemoteAgentCaller(registryClient, outboxPort, agentBusCallerExecutor,
+        return new AgentBusRemoteAgentCaller(registryClient, submitter, agentBusCallerExecutor,
                 tenantId(bus), serviceId(environment), bus.responseTimeoutMs(),
                 subscriptionClient.getIfAvailable(A2ATaskSubscriptionClient::new));
     }
 
     @Bean
-    @ConditionalOnBean(value = {ForwardingOutboxPort.class, ForwardingOutboxClaimPort.class},
-            name = "requestProducer")
-    AgentBusCallerOutboxDispatcher agentBusCallerOutboxDispatcher(ForwardingOutboxClaimPort claims,
-            ForwardingOutboxPort outbox, @Qualifier("requestProducer") BrokerForwardingProducerPort producer,
-            AgentBusBrokerProperties bus, BusConsumerProperties properties, Environment environment) {
-        long interval = properties.getTuning().getPollInterval().toMillis();
-        ScheduledExecutorService scheduler = BusExecutors.singleThreadScheduler("bus-caller-outbox");
-        return new AgentBusCallerOutboxDispatcher(claims, outbox, producer, scheduler, tenantId(bus),
-                serviceId(environment), bus.leaseDurationMs(), interval, CALLER_OUTBOX_BATCH_SIZE);
-    }
-
-    @Bean
-    @ConditionalOnBean(value = {ForwardingOutboxPort.class, ForwardingOutboxClaimPort.class},
-            name = {"requestProducer", "responseConsumer"})
+    @ConditionalOnBean(value = AgentBusRequestSubmitter.class, name = "responseConsumer")
     AgentBusCallerResponseLifecycle agentBusCallerResponseLifecycle(
             @Qualifier("responseConsumer") BrokerForwardingConsumerPort consumer,
             RemoteAgentCaller agentBusRemoteAgentCaller, AgentBusBrokerProperties bus, Environment environment) {

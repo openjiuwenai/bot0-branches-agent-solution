@@ -22,19 +22,29 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
     static final String TARGET_AGENT_ID = "target-agent";
     static final String TOOL_CALL_ID = "call-target-runtime";
     static final String INPUT_REQUIRED_TRIGGER = "request target approval";
+    static final int TARGET_STREAM_CHUNKS = 6;
+    static final long TARGET_STREAM_DELAY_MILLIS = 300L;
 
     private final boolean caller;
+    private final int streamChunks;
+    private final long streamDelayMillis;
 
-    private RuntimeBusDemoAgentHandler(boolean caller) {
+    private RuntimeBusDemoAgentHandler(boolean caller, int streamChunks, long streamDelayMillis) {
         this.caller = caller;
+        this.streamChunks = streamChunks;
+        this.streamDelayMillis = streamDelayMillis;
     }
 
     static RuntimeBusDemoAgentHandler caller() {
-        return new RuntimeBusDemoAgentHandler(true);
+        return new RuntimeBusDemoAgentHandler(true, 1, 0L);
     }
 
     static RuntimeBusDemoAgentHandler callee() {
-        return new RuntimeBusDemoAgentHandler(false);
+        return callee(TARGET_STREAM_CHUNKS, TARGET_STREAM_DELAY_MILLIS);
+    }
+
+    static RuntimeBusDemoAgentHandler callee(int streamChunks, long streamDelayMillis) {
+        return new RuntimeBusDemoAgentHandler(false, streamChunks, streamDelayMillis);
     }
 
     @Override
@@ -59,8 +69,38 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
             observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT, interrupt(request)));
             return;
         }
+        if (!caller) {
+            streamTargetResponse(request, observer);
+            return;
+        }
         observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK, query(request).getResult()));
         observer.onComplete();
+    }
+
+    private void streamTargetResponse(ServeRequest request, QueryStreamObserver observer) {
+        for (int index = 1; index <= streamChunks; index++) {
+            if (observer.isCancelled()) {
+                return;
+            }
+            observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK,
+                    response(request, "target stream chunk " + index + "/" + streamChunks + ": "
+                            + request.lastUserQuery()).getResult()));
+            if (index < streamChunks && !pause(observer)) {
+                return;
+            }
+        }
+        observer.onComplete();
+    }
+
+    private boolean pause(QueryStreamObserver observer) {
+        try {
+            Thread.sleep(streamDelayMillis);
+            return true;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            observer.onError(interrupted);
+            return false;
+        }
     }
 
     private static QueryResponse response(ServeRequest request, String content) {

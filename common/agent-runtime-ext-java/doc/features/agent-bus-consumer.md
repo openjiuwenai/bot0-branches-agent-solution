@@ -10,8 +10,9 @@ Agent Bus SDK 的 runtime role 负责 Broker 连接并提供请求 consumer 和�
 事件校验、A2A 请求桥接、Task 受理、状态投影和响应发布。业务 `AgentHandler` 不感知 Broker、Topic
 或订阅过程。
 
-Agent Bus SDK 的 caller role 提供请求 producer 和响应 consumer，reliability 层提供 JDBC outbox；
-本模块实现 `RemoteAgentCaller`、RDC 路由、caller outbox dispatcher、pending call 和响应回灌。
+Agent Bus SDK 的 caller role 提供高层请求提交端口 `AgentBusRequestSubmitter` 和响应 consumer；
+本模块实现 `RemoteAgentCaller`、RDC 路由、进程内 pending call 和响应回灌。Runtime 不接触
+Broker producer、JDBC outbox 或 PostgreSQL。
 
 ## 2. 支持的请求
 
@@ -49,9 +50,8 @@ Runtime 间出站调用链路为：
 RemoteInvocationBatchCoordinator
   -> AgentBusRemoteAgentCaller
   -> RuntimeRdcClient
-  -> ForwardingOutboxPort
-  -> AgentBusCallerOutboxDispatcher
-  -> Agent Bus SDK requestProducer
+  -> AgentBusRequestSubmitter
+  -> Agent Bus SDK 内部 requestProducer
   -> responseConsumer
   -> AgentBusCallerResponseLifecycle
   -> RemoteCallOutcomeMapper
@@ -120,11 +120,15 @@ Gateway 随后通过 Runtime 的标准 A2A `SubscribeToTask` HTTP/SSE 入口接�
 
 - Agent Bus SDK runtime role 存在时，必须同时提供 `runtimeRequestConsumer` 和
   `runtimeResponseProducer`，基础 Runtime 必须提供 A2A `RequestHandler` 和 `TaskStore`。
-- Agent Bus SDK caller role 提供 `requestProducer` 和 `responseConsumer`，reliability 层提供
-  `ForwardingOutboxPort` 与 `ForwardingOutboxClaimPort` 后，模块才装配真实 Bus Caller、内部注册
-  发现客户端、请求 dispatcher 和响应生命周期。
+- Agent Bus SDK caller role 提供 `AgentBusRequestSubmitter` 和 `responseConsumer` 后，模块装配
+  真实 Bus Caller、内部注册发现客户端和响应生命周期。Caller 通过高层提交端口把请求交给 SDK，
+  不依赖 Agent Bus reliability 层。
 - Bus 全局开关开启后，Runtime 间调用不允许退回 HTTP Caller；caller role 未装配时，
   真正发起远程调用才返回明确的 `caller role unavailable`，不影响 runtime role 独立启动。
+
+Runtime 侧应配置 `agent-bus.reliability.enabled=false`。`agent-service-bus-consumer` 对
+`event-bus-sdk` 传递的 JDBC、Flyway 和 PostgreSQL 依赖做了排除，因此只使用内存业务状态的
+Runtime 无需部署或配置数据库。
 
 自动装配使用 `runtime-<service-id>` 作为稳定的 consumer service ID。它标识消费进度和消费端身份，
 不替代事件 envelope 的目标 service ID 或 Task ID。

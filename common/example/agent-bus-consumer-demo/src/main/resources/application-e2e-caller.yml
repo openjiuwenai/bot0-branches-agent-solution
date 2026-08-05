@@ -4,14 +4,12 @@ server:
 spring:
   application:
     name: runtime-bus-caller-demo
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/agentbus_source}
-    username: ${SPRING_DATASOURCE_USERNAME:agentbus_source}
-    password: ${SPRING_DATASOURCE_PASSWORD:agentbus_source}
-    driver-class-name: org.postgresql.Driver
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
   flyway:
-    enabled: true
-    locations: classpath:db/migration
+    enabled: false
 
 demo:
   runtime-mode: caller
@@ -31,5 +29,5 @@ agent-bus:
     runtime:
       enabled: true
   reliability:
-    enabled: true
+    enabled: false
   producer-group: ${AGENT_BUS_CALLER_PRODUCER_GROUP:runtime-source-caller}

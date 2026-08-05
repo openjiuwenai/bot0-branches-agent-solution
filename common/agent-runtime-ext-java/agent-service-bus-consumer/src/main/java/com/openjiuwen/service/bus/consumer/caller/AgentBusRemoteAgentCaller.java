@@ -5,9 +5,9 @@
 package com.openjiuwen.service.bus.consumer.caller;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
+import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingMessageId;
-import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxPort;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.ForwardingRouteHandle;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
@@ -43,7 +43,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     private static final int MAX_STREAM_REFERENCE_REFRESHES = 1;
 
     private final RuntimeRdcClient registry;
-    private final ForwardingOutboxPort outbox;
+    private final AgentBusRequestSubmitter requestSubmitter;
     private final RemoteCallOutcomeMapper outcomeMapper;
     private final RemoteCallEventConsumer eventConsumer;
     private final AgentBusRequestEncoder requestEncoder = new AgentBusRequestEncoder();
@@ -59,15 +59,16 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
      * Creates an Agent Bus caller with the standard A2A subscription client.
      *
      * @param registry registry discovery client
-     * @param outbox Agent Bus request outbox
-     * @param executor blocking discovery/enqueue executor
+     * @param requestSubmitter Agent Bus high-level request submitter
+     * @param executor blocking discovery/submission executor
      * @param tenantId trusted tenant scope
      * @param sourceServiceId local Runtime service identifier
      * @param responseTimeoutMillis overall response timeout
      */
-    public AgentBusRemoteAgentCaller(RuntimeRdcClient registry, ForwardingOutboxPort outbox, Executor executor,
+    public AgentBusRemoteAgentCaller(RuntimeRdcClient registry, AgentBusRequestSubmitter requestSubmitter,
+            Executor executor,
             String tenantId, String sourceServiceId, long responseTimeoutMillis) {
-        this(registry, outbox, executor, tenantId, sourceServiceId, responseTimeoutMillis,
+        this(registry, requestSubmitter, executor, tenantId, sourceServiceId, responseTimeoutMillis,
                 new A2ATaskSubscriptionClient());
     }
 
@@ -75,24 +76,25 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
      * Creates an Agent Bus caller that reuses the Runtime A2A Task subscription client.
      *
      * @param registry registry discovery client
-     * @param outbox Agent Bus request outbox
-     * @param executor blocking discovery/enqueue executor
+     * @param requestSubmitter Agent Bus high-level request submitter
+     * @param executor blocking discovery/submission executor
      * @param tenantId trusted tenant scope
      * @param sourceServiceId local Runtime service identifier
      * @param responseTimeoutMillis overall response timeout
      * @param subscriptionClient standard A2A Task subscription client
      */
-    public AgentBusRemoteAgentCaller(RuntimeRdcClient registry, ForwardingOutboxPort outbox, Executor executor,
-            String tenantId, String sourceServiceId, long responseTimeoutMillis,
+    public AgentBusRemoteAgentCaller(RuntimeRdcClient registry, AgentBusRequestSubmitter requestSubmitter,
+            Executor executor, String tenantId, String sourceServiceId, long responseTimeoutMillis,
             A2ATaskSubscriptionClient subscriptionClient) {
-        this(registry, outbox, executor, tenantId, sourceServiceId, responseTimeoutMillis,
+        this(registry, requestSubmitter, executor, tenantId, sourceServiceId, responseTimeoutMillis,
                 Objects.requireNonNull(subscriptionClient, "subscriptionClient is required")::subscribe);
     }
 
-    AgentBusRemoteAgentCaller(RuntimeRdcClient registry, ForwardingOutboxPort outbox, Executor executor,
-            String tenantId, String sourceServiceId, long responseTimeoutMillis, StreamSubscriber streamSubscriber) {
+    AgentBusRemoteAgentCaller(RuntimeRdcClient registry, AgentBusRequestSubmitter requestSubmitter,
+            Executor executor, String tenantId, String sourceServiceId, long responseTimeoutMillis,
+            StreamSubscriber streamSubscriber) {
         this.registry = Objects.requireNonNull(registry, "registry is required");
-        this.outbox = Objects.requireNonNull(outbox, "outbox is required");
+        this.requestSubmitter = Objects.requireNonNull(requestSubmitter, "requestSubmitter is required");
         this.executor = Objects.requireNonNull(executor, "executor is required");
         this.tenantId = require(tenantId, "tenantId");
         this.sourceServiceId = require(sourceServiceId, "sourceServiceId");
@@ -176,7 +178,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
                 pending.remove(correlationId, pendingCall);
                 return;
             }
-            enqueue(envelope, route.serviceId(), now, result);
+            submit(envelope, result);
         } catch (RuntimeException failure) {
             result.completeExceptionally(failure);
         }
@@ -215,12 +217,11 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
                 null, payload, sourceServiceId);
     }
 
-    private void enqueue(ForwardingEnvelope envelope, String targetServiceId, long now,
-            CompletableFuture<RemoteCallOutcome> result) {
-        ForwardingReceipt receipt = outbox.enqueue(envelope, sourceServiceId, targetServiceId, now);
+    private void submit(ForwardingEnvelope envelope, CompletableFuture<RemoteCallOutcome> result) {
+        ForwardingReceipt receipt = requestSubmitter.submit(envelope);
         if (!receipt.accepted()) {
             result.completeExceptionally(new IllegalStateException(
-                    "Agent Bus rejected remote call enqueue: " + receipt.failureCode()));
+                    "Agent Bus rejected remote call submission: " + receipt.failureCode()));
         }
     }
 
@@ -292,7 +293,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
                 call.result.completeExceptionally(new IllegalStateException("Remote call deadline exceeded"));
                 return;
             }
-            enqueue(subscriptionEnvelope(call), call.route.serviceId(), now, call.result);
+            submit(subscriptionEnvelope(call), call.result);
         } catch (RuntimeException failure) {
             call.result.completeExceptionally(failure);
         }
