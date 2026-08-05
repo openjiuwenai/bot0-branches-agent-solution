@@ -6,6 +6,7 @@ package com.openjiuwen.example.versatile.a2a;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,10 +37,22 @@ public final class VersatileA2AClientMain {
     }
 
     public static void main(String[] args) throws Exception {
-        String endpointUrl = System.getenv().getOrDefault("A2A_ENDPOINT_URL", "http://127.0.0.1:18080/a2a/");
+        String endpointUrl = requireHttpsEndpoint();
         sendRequest(endpointUrl, requestJson("request-1.json"));
         sendRequest(endpointUrl, requestJson("request-2.json"));
         sendRequest(endpointUrl, requestJson("request-3.json"));
+    }
+
+    private static String requireHttpsEndpoint() {
+        String endpointUrl = System.getenv("A2A_ENDPOINT_URL");
+        if (endpointUrl == null || endpointUrl.isBlank()) {
+            throw new IllegalStateException("A2A_ENDPOINT_URL is required");
+        }
+        URI endpoint = URI.create(endpointUrl);
+        if (!"https".equalsIgnoreCase(endpoint.getScheme())) {
+            throw new IllegalStateException("A2A_ENDPOINT_URL must use HTTPS");
+        }
+        return endpointUrl;
     }
 
     private static String requestJson(String fileName) throws Exception {

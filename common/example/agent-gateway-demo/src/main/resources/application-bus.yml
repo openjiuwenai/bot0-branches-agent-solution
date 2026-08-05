@@ -1,0 +1,62 @@
+# FEAT-012 BUS profile for the agent-gateway-demo launcher module.
+#
+# Run: java -jar target/agent-gateway-demo-0.1.0.jar --spring.profiles.active=bus
+# The demo module puts agent-bus-sdk on the classpath; this profile activates the FEAT-013
+# caller-role + reliability autoconfigs (requestProducer / responseConsumer / forwardingOutbox)
+# and turns on the gateway BUS path (gateway.path-mode=bus → GatewayBusConfiguration).
+#
+# Config namespace follows the as-built gateway.* convention (PathSelector reads
+# ${gateway.path-mode}); agent-bus.* is the SDK AgentBusBrokerProperties namespace.
+#
+# Prereq before boot: docker compose up -d (common/agent-bus/event-bus/event-bus-relay/src/test/java/
+# com/openjiuwen/bus/conf/) — Postgres (agentbus:5432) + RocketMQ (9876) + 8 topics; and the
+# relay (eventbus profile) + a runtime (agent-bus-consumer-demo) + RDC (:8092) running.
+
+server:
+  port: ${GATEWAY_PORT:8080}
+
+gateway:
+  path-mode: bus
+  rdc:
+    base-url: ${GATEWAY_RDC_BASE_URL:}
+  default-agent-id: ${GATEWAY_DEFAULT_AGENT_ID:travel-hotel}
+  test-credential:
+    token: ${GATEWAY_TEST_TOKEN:}
+    principalId: ${GATEWAY_TEST_PRINCIPAL:test-principal}
+    tenantId: ${GATEWAY_TEST_TENANT:tenant-1}
+  bus:
+    # FEAT-012 §1.5.1 dual window: accept-wait 30s → UNKNOWN; response-wait 60s after ACCEPTED
+    # → ACCEPTED_WITH_TASK (must NOT downgrade to UNKNOWN).
+    accept-window-ms: ${GATEWAY_BUS_ACCEPT_WINDOW_MS:30000}
+    response-window-ms: ${GATEWAY_BUS_RESPONSE_WINDOW_MS:60000}
+    # FEAT-012 IN-4: deadline to read the first SSE frame after STREAM_READY. A runtime that
+    # accepts SubscribeToTask but never sends a frame (e.g. an already-terminal task whose
+    # subscription does not close) is aborted with STREAM_DEADLINE_EXCEEDED instead of hanging
+    # the servlet thread. Tune below the client's own timeout so the gateway fails fast.
+    stream-first-frame-deadline-ms: ${GATEWAY_BUS_STREAM_FIRST_FRAME_DEADLINE_MS:10000}
+
+agent-bus:
+  nameserver: ${AGENT_BUS_NAMESERVER:}
+  namespace: ${AGENT_BUS_NAMESPACE:ascend-prod}
+  producer-group: ${AGENT_BUS_PRODUCER_GROUP:gateway-producer}
+  tenant: ${AGENT_BUS_TENANT:tenant-a}
+  gateway-service-id: ${AGENT_BUS_GATEWAY_SERVICE_ID:gateway-01}
+  event-bus-service-id: ${AGENT_BUS_EVENT_BUS_SERVICE_ID:eventbus-01}
+  poll-wait-millis: ${AGENT_BUS_POLL_WAIT_MILLIS:3000}
+  role:
+    caller:
+      enabled: true          # activates requestProducer + responseConsumer (FEAT-013 caller role)
+  reliability:
+    enabled: true           # activates JdbcForwardingOutbox (ForwardingOutboxPort) with a DataSource
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:agentbus}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    baseline-on-migrate: true      # relay may have baselined; client must not error on a fresh DB
+    baseline-version: 0
+    locations: classpath:db/migration   # agent-bus-sdk ships V1/V3/V4 on this classpath

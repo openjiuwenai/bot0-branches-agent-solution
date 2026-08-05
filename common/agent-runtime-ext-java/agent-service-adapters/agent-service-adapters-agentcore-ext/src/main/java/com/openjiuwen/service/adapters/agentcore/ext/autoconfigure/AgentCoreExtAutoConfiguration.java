@@ -6,6 +6,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.autoconfigure;
 
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
 import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

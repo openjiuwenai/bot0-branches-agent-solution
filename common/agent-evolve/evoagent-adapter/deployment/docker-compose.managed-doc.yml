@@ -1,0 +1,9 @@
+# 与 docker-compose.yml 叠加使用，显式授予 managed-doc `docker restart` 权限：
+# docker compose --env-file config/.env \
+#   -f docker-compose.yml -f docker-compose.managed-doc.yml up -d
+#
+# 警告：Docker socket 具有宿主机 root 等价权限。仅在受信任的 Adapter 部署中启用。
+services:
+  adapter:
+    volumes:
+      - ${HOST_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock

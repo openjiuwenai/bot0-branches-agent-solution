@@ -4,14 +4,15 @@
 
 package com.openjiuwen.example.agentcoreext.deepa;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.openjiuwen.service.spec.spi.AgentHandler;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies Agent A runtime classpath isolation.
@@ -50,7 +51,7 @@ class RuntimeIsolationTest {
         assertThat(backend)
                 .containsEntry("provider", "OpenAI")
                 .containsEntry("api_key", "test-key")
-                .containsEntry("api_base", "https://api.deepseek.com");
+                .containsEntry("api_base", "test-api-base");
         assertThat(model).containsEntry("model", "deepseek-chat");
         assertThat(properties.getSystemPrompt())
                 .contains("agent-b")
@@ -81,6 +82,7 @@ class RuntimeIsolationTest {
     private static DeepAgentLlmProperties configuredProperties() {
         DeepAgentLlmProperties properties = new DeepAgentLlmProperties();
         properties.setApiKey("test-key");
+        properties.setApiBase("test-api-base");
         properties.setTimeout(Duration.ofSeconds(10));
         return properties;
     }

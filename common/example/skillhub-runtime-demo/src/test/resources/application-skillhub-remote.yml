@@ -1,0 +1,21 @@
+# Profile-specific logging for the skillhub scenario (FEAT-005, issue #30).
+#
+# agent-core's Tool result logger and LLM request logger emit INFO that
+# contains the full readFile result (including SKILL.md content) and the full
+# messages JSON. Both leak skill content into logs.
+#
+# Lowering these two loggers to WARN suppresses the INFO emissions while
+# keeping the SkillHub Provider/Manager (package-name loggers) at INFO so
+# credential=provided / download / verify / retry / register diagnostics
+# remain visible.
+#
+# Logger name mapping (agent-core):
+#   Loggers.TOOL -> logger name "tool"
+#   Loggers.LLM  -> logger name "llm"
+# Spring Boot maps logging.level.<name> to the underlying logger backend.
+#
+# Activation: --spring.profiles.active=skillhub-remote
+logging:
+  level:
+    tool: WARN
+    llm: WARN

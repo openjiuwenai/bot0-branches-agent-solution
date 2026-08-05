@@ -4,13 +4,14 @@
 
 package com.openjiuwen.example.agentcoreext.agenta;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.rails.SkillUseRail;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Verifies the AgentCore extension DeepAgent demo application context.

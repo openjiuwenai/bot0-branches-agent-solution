@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  LOCAL-ONLY checkstyle ruleset (never committed). Approximates the parts of the
+  Huawei white-box gate that a code FORMATTER cannot fix. It is a best-effort net
+  to catch findings before the real gate does - NOT a 1:1 replica of the gate.
+
+  Enforced here:
+    - G.NAM.01  identifier length <= 64          -> *Name format regex capped at 64
+    - line length <= 120                         -> LineLength
+    - unused / redundant imports                 -> UnusedImports / RedundantImport
+
+  NOT expressible in stock checkstyle (still enforced only by the real gate /
+  review): G.MET.01 method parameter count <= 5 without flagging unchanged legacy
+  APIs, G.NAM.08 boolean must start with is/has/can/should (needs type info),
+  G.TYP.13 instanceof-before-downcast. Consider PMD if these must be caught
+  locally.
+-->
+<module name="Checker">
+  <property name="charset" value="UTF-8"/>
+  <property name="severity" value="warning"/>
+  <property name="fileExtensions" value="java"/>
+
+  <!-- line length (Huawei commonly 120) -->
+  <module name="LineLength">
+    <property name="max" value="120"/>
+    <property name="ignorePattern" value="^\s*\*.*$"/>
+  </module>
+
+  <module name="TreeWalker">
+    <!-- G.NAM.01: identifier length <= 64 (camelCase + capped length) -->
+    <module name="MethodName">
+      <property name="format" value="^[a-z][a-zA-Z0-9]{0,63}$"/>
+    </module>
+    <module name="LocalVariableName">
+      <property name="format" value="^[a-z][a-zA-Z0-9]{0,63}$"/>
+    </module>
+    <module name="MemberName">
+      <property name="format" value="^[a-z][a-zA-Z0-9]{0,63}$"/>
+    </module>
+    <module name="ParameterName">
+      <property name="format" value="^[a-z][a-zA-Z0-9]{0,63}$"/>
+    </module>
+
+    <!-- hygiene -->
+    <module name="UnusedImports"/>
+    <module name="RedundantImport"/>
+  </module>
+</module>

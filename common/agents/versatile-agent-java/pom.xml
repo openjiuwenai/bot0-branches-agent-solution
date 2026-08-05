@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.6</version>
+  </parent>
+
+  <groupId>com.openjiuwen</groupId>
+  <artifactId>adapter-versatile-agent-java</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>adapter-versatile-agent-java</name>
+  <description>
+    Standalone A2A process that proxies A2A requests to a remote Versatile REST
+    workflow API. Reuses agent-runtime VersatileAgentHandler so that
+    non-result nodes stream through to the caller (Target.USER), missing End
+    nodes raise an interruption, and the result node feeds back to the LLM
+    (Target.LLM).
+  </description>
+
+  <properties>
+    <java.version>17</java.version>
+    <maven.compiler.release>17</maven.compiler.release>
+    <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
+    <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
+    <!-- 修复 Tomcat 15 个 CVE -->
+    <tomcat.version>11.0.24</tomcat.version>
+    <!-- 修复 jackson-databind 5 个 CVE（Spring Boot 4.0.x 的 jackson-bom.version 控制 Jackson 3.x，不适用此处） -->
+    <jackson.version>2.21.5</jackson.version>
+    <!-- 修复 Logback 2 个 CVE -->
+    <logback.version>1.5.34</logback.version>
+    <!-- 修复 Log4j 1 个 CVE -->
+    <log4j2.version>2.25.5</log4j2.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.openjiuwen</groupId>
+      <artifactId>agent-service-app</artifactId>
+      <version>${agent-runtime-java.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.openjiuwen</groupId>
+      <artifactId>agent-service-adapters-versatile</artifactId>
+      <version>${agent-runtime-ext-java.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- 显式声明 Jackson 2.x 版本，覆盖传递依赖的 2.21.2，修复 5 个 CVE -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <release>17</release>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>com.openjiuwen.versatile.VersatileAgentApplication</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>net.revelc.code.formatter</groupId>
+        <artifactId>formatter-maven-plugin</artifactId>
+        <version>2.23.0</version>
+        <configuration>
+          <configFile>D:\JW\edpa-git\agent-solution\common\agents\.devtools\eclipse-java-formatter.xml</configFile>
+          <includes>
+            <include>**/*.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

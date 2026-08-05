@@ -1,0 +1,19 @@
+# 构建上下文缓存（build.sh 中间产物）
+.build-context/
+
+# 离线打包产物
+bundle/
+*.tar.gz
+*.tar
+*.zip
+
+# 运行时日志/工作区
+logs/
+workspace/
+
+# 本地环境配置（不要提交）
+config/.env
+
+# IDE
+.idea/
+.vscode/

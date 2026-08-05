@@ -1,0 +1,7 @@
+: provenance=synthetic
+: description=Synthetic explicit-interrupt SSE sample for VersatileSseContractTest skeleton.
+: note=Replace with desensitized production recordings before relying on this test for
+: note=compatibility detection. See L2 §5.5.6 for masking requirements.
+data: {"event":"need_user_input","data":{"question":"__SYNTHETIC_PROMPT__","input_schema":"__SYNTHETIC_SCHEMA__","resume_token":"__SYNTHETIC_TOKEN__"}}
+
+data: {"data":{"node_type":"End"}}

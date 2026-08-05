@@ -10,6 +10,7 @@ import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,11 +35,13 @@ public class VersatileAgentHandler implements AgentHandler {
     private final VersatileHttpClient client;
     private final VersatileRequestExtractor extractor;
     private final VersatileProperties properties;
+    private final IntentAgentResolver agentResolver;
 
     public VersatileAgentHandler(VersatileProperties properties) {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.client = new VersatileHttpClient(this.properties);
         this.extractor = new VersatileRequestExtractor(this.properties);
+        this.agentResolver = new IntentAgentResolver(properties);
     }
 
     @Override
@@ -50,7 +53,8 @@ public class VersatileAgentHandler implements AgentHandler {
         Map<String, Object> result = resolveQueryResult(request, invokeForQuery(request));
         QueryResponse response = new QueryResponse(result, request.getConversationId());
         log.info("Completed Versatile query conversation_id={} content_present={}",
-                request.getConversationId(), !String.valueOf(result.get("content")).isEmpty());
+                request.getConversationId(), result.get("content") != null
+                        && !String.valueOf(result.get("content")).isEmpty());
         log.debug("Versatile query response conversation_id={} result={}",
                 request.getConversationId(), result);
         return response;
@@ -59,7 +63,7 @@ public class VersatileAgentHandler implements AgentHandler {
     private List<QueryChunk> invokeForQuery(ServeRequest request) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
         logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
-        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
+        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties, agentResolver);
         List<QueryChunk> chunks = new ArrayList<>();
         try {
             client.postStream(remoteRequest, line -> {
@@ -74,37 +78,119 @@ public class VersatileAgentHandler implements AgentHandler {
     }
 
     private Map<String, Object> resolveQueryResult(ServeRequest request, List<QueryChunk> chunks) {
-        Optional<String> answer = Optional.empty();
-        boolean isInterrupted = false;
-        List<String> interruptMessages = new ArrayList<>();
+        ChunkAccumulator acc = new ChunkAccumulator();
         for (QueryChunk chunk : chunks) {
+            acc.process(chunk, request);
+        }
+        return acc.buildResult(request);
+    }
+
+    private final class ChunkAccumulator {
+        private boolean isInterrupted;
+        private Map<String, Object> interruptPayload;
+        private final List<String> interruptMessages = new ArrayList<>();
+        private Map<String, Object> a2aDelegatePayload;
+        private Object legacyAnswerContent;
+        private String ambiguousIntentId;
+
+        void process(QueryChunk chunk, ServeRequest request) {
             if (QueryChunk.TYPE_ERROR.equals(chunk.getType())) {
                 log.error("Versatile query returned remote error conversation_id={} error={}",
                         request.getConversationId(), chunk.getData());
                 throw new IllegalStateException(String.valueOf(chunk.getData()));
             }
-            Optional<String> answerText = VersatileResponseExtractor.answerText(chunk.getData());
-            if (answerText.isPresent()) {
-                answer = Optional.of(answerText.get());
-                continue;
-            }
             if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType())) {
+                if (chunk.getData() instanceof Map<?, ?> m && isA2aDelegate(m)) {
+                    a2aDelegatePayload = copyToStringMap(m);
+                    return;
+                }
                 isInterrupted = true;
-            } else {
-                interruptMessages.add(String.valueOf(chunk.getData()));
+                interruptPayload = chunk.getData() instanceof Map<?, ?> m
+                        ? copyToStringMap(m) : null;
+                return;
+            }
+            Optional<Map<String, Object>> envelope = answerEnvelope(chunk.getData());
+            if (envelope.isPresent()) {
+                Object content = envelope.get().get("response_content");
+                if (content == null) {
+                    content = envelope.get().get("output");
+                }
+                legacyAnswerContent = content;
+                if (envelope.get().get("intent_id") instanceof String intentId && !intentId.isBlank()) {
+                    ambiguousIntentId = intentId;
+                }
+                return;
+            }
+            interruptMessages.add(String.valueOf(chunk.getData()));
+        }
+
+        Map<String, Object> buildResult(ServeRequest request) {
+            if (a2aDelegatePayload != null) {
+                return a2aDelegateResult(request, a2aDelegatePayload);
+            }
+            if (legacyAnswerContent != null) {
+                Map<String, Object> result = assistantResult(legacyAnswerContent);
+                if (ambiguousIntentId != null) {
+                    result.put("intent_id", ambiguousIntentId);
+                }
+                return result;
+            }
+            if (isInterrupted) {
+                Map<String, Object> result = assistantResult(
+                        interruptPayload != null && interruptPayload.get("message") != null
+                                ? String.valueOf(interruptPayload.get("message"))
+                                : interruptMessage(interruptMessages));
+                if (interruptPayload != null) {
+                    result.put("_interrupt", interruptPayload);
+                }
+                log.info("Versatile query returned interrupt conversation_id={}", request.getConversationId());
+                return result;
+            }
+            return assistantResult(interruptMessage(interruptMessages));
+        }
+    }
+
+    private static boolean isA2aDelegate(Map<?, ?> data) {
+        Object context = data.get("context");
+        if (!(context instanceof Map<?, ?> ctx)) {
+            return false;
+        }
+        return "a2a_delegate".equals(ctx.get("_interrupt_kind"));
+    }
+
+    private static Map<String, Object> a2aDelegateResult(ServeRequest request, Map<String, Object> payload) {
+        Object rc = payload.get("responseContent");
+        String responseContent = rc instanceof String s ? s : "";
+        Map<String, Object> result = assistantResult(responseContent);
+        Map<String, Object> interrupt = new LinkedHashMap<>(payload);
+        interrupt.put("message", request.lastUserQuery());
+        interrupt.put("_stream_mode", request.isStream() ? "sse" : "");
+        result.put("_interrupt", interrupt);
+        return result;
+    }
+
+    private static Optional<Map<String, Object>> answerEnvelope(Object data) {
+        if (!(data instanceof Map<?, ?> envelope) || !"answer".equals(envelope.get("type"))) {
+            return Optional.empty();
+        }
+        if (envelope.get("response_content") == null && envelope.get("output") == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> typed = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : envelope.entrySet()) {
+            typed.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return Optional.of(typed);
+    }
+
+    private static Map<String, Object> copyToStringMap(Map<?, ?> source) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry.getKey() != null) {
+                result.put(String.valueOf(entry.getKey()), entry.getValue());
             }
         }
-        if (answer.isPresent()) {
-            return assistantResult(answer.get());
-        }
-        if (isInterrupted) {
-            String message = interruptMessage(interruptMessages);
-            Map<String, Object> result = assistantResult(message);
-            result.put("_interrupt", Map.of("message", message));
-            log.info("Versatile query returned interrupt conversation_id={}", request.getConversationId());
-            return result;
-        }
-        return assistantResult(interruptMessage(interruptMessages));
+        return result;
     }
 
     private static String interruptMessage(List<String> messages) {
@@ -129,9 +215,23 @@ public class VersatileAgentHandler implements AgentHandler {
                 request.getTenantId(), request.getMessages().size());
         log.debug("Versatile streamQuery request={}", logServeRequest(request));
         try {
-            execute(request, observer);
+            List<QueryChunk> finalEvents = execute(request, observer);
             if (observer.isCancelled()) {
                 log.warn("Versatile streamQuery cancelled conversation_id={}", request.getConversationId());
+                return;
+            }
+            // finish() may have signalled a terminal error as a TYPE_ERROR chunk
+            // (result-contract violation, unmapped agent_id, stream closed without
+            // terminal, etc.). Calling onComplete() here would overwrite that error
+            // terminal with a success terminal — see issue #51. Route it to onError
+            // instead, mirroring the non-stream query() path which throws on TYPE_ERROR.
+            Optional<QueryChunk> terminalError = finalEvents.stream()
+                    .filter(c -> QueryChunk.TYPE_ERROR.equals(c.getType()))
+                    .findFirst();
+            if (terminalError.isPresent()) {
+                log.error("Versatile streamQuery ended with error terminal conversation_id={} error={}",
+                        request.getConversationId(), terminalError.get().getData());
+                observer.onError(new IllegalStateException(String.valueOf(terminalError.get().getData())));
                 return;
             }
             observer.onComplete();
@@ -148,7 +248,7 @@ public class VersatileAgentHandler implements AgentHandler {
     private List<QueryChunk> execute(ServeRequest request, QueryStreamObserver observer) {
         VersatileRequestExtractor.RemoteRequest remoteRequest = extractor.extract(request);
         logRemoteRequest("Resolved Versatile remote request", request, remoteRequest);
-        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties.getResultNodeName());
+        VersatileResponseExtractor responseExtractor = new VersatileResponseExtractor(properties, agentResolver);
         try {
             client.postStream(remoteRequest, line -> {
                 if (observer != null && observer.isCancelled()) {
@@ -162,7 +262,7 @@ public class VersatileAgentHandler implements AgentHandler {
             if (observer != null && observer.isCancelled()) {
                 throw new CancellationException();
             }
-            List<QueryChunk> finalEvents = responseExtractor.finish();
+            List<QueryChunk> finalEvents = enrichDelegateInterrupts(responseExtractor.finish(), request);
             emit(finalEvents, observer);
             return finalEvents;
         } catch (CancellationException exception) {
@@ -185,16 +285,79 @@ public class VersatileAgentHandler implements AgentHandler {
         }
     }
 
-    private static Map<String, Object> logServeRequest(ServeRequest request) {
+    /**
+     * Enriches {@code a2a_delegate} interrupt chunks produced by the extractor
+     * with {@code message} (from the current request's last user query) and
+     * {@code _stream_mode}. The extractor cannot supply these because it only
+     * sees SSE lines; the handler has the {@link ServeRequest}. Without this
+     * enrichment, the orchestrator's streaming recursive-forward path would
+     * lack the user query to forward to the next layer.
+     *
+     * @param chunks the chunks emitted by the response extractor before completion
+     * @param request the current serve request, source of the user query and stream mode
+     * @return the enriched chunk list (same size as the input when non-empty)
+     */
+    private static List<QueryChunk> enrichDelegateInterrupts(List<QueryChunk> chunks, ServeRequest request) {
+        if (chunks == null || chunks.isEmpty()) {
+            return chunks;
+        }
+        List<QueryChunk> result = new ArrayList<>(chunks.size());
+        for (QueryChunk chunk : chunks) {
+            if (QueryChunk.TYPE_INTERRUPT.equals(chunk.getType()) && chunk.getData() instanceof Map<?, ?> m
+                    && isA2aDelegate(m)) {
+                Map<String, Object> enriched = copyToStringMap(m);
+                enriched.put("message", request.lastUserQuery());
+                enriched.put("_stream_mode", request.isStream() ? "sse" : "");
+                result.add(new QueryChunk(QueryChunk.TYPE_INTERRUPT, enriched));
+            } else {
+                result.add(chunk);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Object> logServeRequest(ServeRequest request) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("conversation_id", request.getConversationId());
         data.put("stream", request.isStream());
         data.put("user_id", request.getUserId());
         data.put("space_id", request.getSpaceId());
         data.put("tenant_id", request.getTenantId());
-        data.put("messages", request.getMessages());
-        data.put("metadata", request.getMetadata());
+        if (properties.isLogMaskSensitive()) {
+            data.put("messages", maskMessages(request.getMessages()));
+            data.put("metadata", maskMetadata(request.getMetadata()));
+        } else {
+            data.put("messages", request.getMessages());
+            data.put("metadata", request.getMetadata());
+        }
         return data;
+    }
+
+    private static List<Map<String, Object>> maskMessages(List<Map<String, Object>> messages) {
+        if (messages == null) {
+            return List.of();
+        }
+        List<Map<String, Object>> masked = new ArrayList<>(messages.size());
+        for (Map<String, Object> msg : messages) {
+            Map<String, Object> copy = new LinkedHashMap<>(msg);
+            Object content = copy.get("content");
+            if (content != null) {
+                copy.put("content", "***masked***");
+            }
+            masked.add(copy);
+        }
+        return masked;
+    }
+
+    private static Map<String, Object> maskMetadata(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return Map.of();
+        }
+        Map<String, Object> masked = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+            masked.put(entry.getKey(), "***masked***");
+        }
+        return masked;
     }
 
     private void logRemoteRequest(
@@ -202,7 +365,13 @@ public class VersatileAgentHandler implements AgentHandler {
         log.info("{} conversation_id={} url={} headers={} params={} body_keys={}",
                 message, request.getConversationId(), remoteRequest.url(),
                 remoteRequest.headers().size(), remoteRequest.params().size(), remoteRequest.body().keySet());
-        log.debug("Versatile remote request conversation_id={} request={}",
-                request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+        if (properties.isLogMaskSensitive()) {
+            log.debug("Versatile remote request conversation_id={} url={} headers_keys={} params_keys={} body_keys={}",
+                    request.getConversationId(), remoteRequest.url(),
+                    remoteRequest.headers().keySet(), remoteRequest.params().keySet(), remoteRequest.body().keySet());
+        } else {
+            log.debug("Versatile remote request conversation_id={} request={}",
+                    request.getConversationId(), VersatileHttpClient.logRequest(remoteRequest, remoteRequest.url()));
+        }
     }
 }

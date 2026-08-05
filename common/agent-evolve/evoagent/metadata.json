@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "id": "evo-agent",
+  "name": "EvoAgent",
+  "version": "0.1.0",
+  "updated_at": "2026-06-08T00:00:00Z",
+  "description": "Self-evolving meta-agent that optimizes skill documents via ReflACT pipeline. Tell it which skill to optimize and which dataset to use — it handles the rest.",
+  "author": {
+    "name": "EvoAgent Team",
+    "email": "",
+    "github": ""
+  },
+  "licence": "Apache 2.0",
+  "tags": ["self-evolution", "skill-optimization", "meta-agent", "react", "agent-core"],
+  "category": "devtool"
+}
