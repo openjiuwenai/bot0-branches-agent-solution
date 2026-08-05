@@ -1,26 +1,21 @@
 # Agent Adapter Configuration
-# All values use ${ENV_VAR:default} interpolation: env var set ⇒ use env value;
-# unset ⇒ use the default shown after the colon. Defaults mirror the original
-# values; override every item by copying .env.example → .env and editing.
 #
-# Resolution order for each field: environment variable (from .env) > default
-# in this YAML > pydantic field default. Top-level fields additionally honor
-# the ADAPTER_* prefix via pydantic-settings (env wins over YAML default too).
+# 顶层标量一律由 pydantic-settings 直接从 .env 读取（ADAPTER_* 前缀），默认值定义在
+# src/agent_adapter/config.py 的字段定义里，不在本 yaml 重复。涉及：
+#   log_dir / log_pattern / poll_interval / start_from / pair_timeout /
+#   output_dir / offset_file / skills_root / output_retention_days /
+#   output_max_files / output_max_file_size / output_trim_target_ratio /
+#   host / port / managed_doc_defaults（后者子字段走 ADAPTER_MDD_* 扁平 env）
+# 详见 .env.example。
 #
-# Path resolution rules for log_dir, output_dir, offset_file:
-# - Absolute paths (e.g., "/var/log" on Unix or "C:\\logs" on Windows) are used as-is
-# - Relative paths are resolved relative to the adapter root directory (where pyproject.toml is located)
-# - Per-agent path fields (agents[].log_dir/skills_dir) default to /data/{logs,skills}/{name}
-#   container paths for docker; override only for non-docker runs.
-
-# ── Log source (fallback for single-agent mode when no agents list) ──
-# 顶层 log_dir 在 docker 部署中由 ADAPTER_LOG_DIR 环境变量覆盖（默认 /data/logs）
-log_dir: ${ADAPTER_LOG_DIR:logs}              # Log directory path (absolute or relative to adapter root)
-log_pattern: ${ADAPTER_LOG_PATTERN:process*.log}  # Active log file glob pattern
-
-# ── Read strategy ──
-poll_interval: ${ADAPTER_POLL_INTERVAL:60}   # Poll interval in seconds
-start_from: ${ADAPTER_START_FROM:tail}       # First-start read position: tail | head
+# 本 yaml 只承载「结构化 / per-agent」配置：match_tags 与 agents[] 列表。
+# agents[] 内的 per-agent 标量与 managed_docs 用 ${VAR:default} 占位，由
+# config.py 的 _expand_env_refs 在加载期从 .env 展开（<NAME>_<FIELD> 前缀）：
+# env 设且非空 → 用 env；未设/空串 → 用冒号后默认。
+#
+# Path resolution: 相对路径（log_dir/output_dir/offset_file/skills_root）解析到
+# adapter 根目录；绝对路径原样；env 设置的路径不解析。per-agent log_dir/skills_dir
+# 默认 /data/{logs,skills}/{name}（容器路径，docker 下一般无需改）。
 
 # ── Extraction rules ──
 match_tags:                              # Tags to extract from log lines
@@ -35,28 +30,6 @@ match_tags:                              # Tags to extract from log lines
   - "TAG_SKILL_EXECUTE_END"
   - "TAG_VERSATILE_START"
   - "TAG_VERSATILE_END"
-
-# ── Pairing strategy ──
-pair_timeout: ${ADAPTER_PAIR_TIMEOUT:300}   # START→END pair timeout in seconds
-
-# ── Output (fallback for single-agent mode when no agents list) ──
-output_dir: ${ADAPTER_OUTPUT_DIR:data/output}      # Output directory path (absolute or relative to adapter root)
-offset_file: ${ADAPTER_OFFSET_FILE:data/offsets.json}  # Offset state file path (absolute or relative to adapter root)
-
-# ── Skill storage (bind-mount from business agent containers) ──
-# Layout: {skills_root}/{agent_name}/{skill_name}/SKILL.md
-# See docs/skills-storage-design.md
-skills_root: ${ADAPTER_SKILLS_ROOT:data/skills}
-
-# ── Output file cleanup ──
-output_retention_days: ${ADAPTER_OUTPUT_RETENTION_DAYS:30}  # delete files older than this many days
-output_max_files: ${ADAPTER_OUTPUT_MAX_FILES:2000}           # delete oldest when file count exceeds this
-output_max_file_size: ${ADAPTER_OUTPUT_MAX_FILE_SIZE:20MB}   # head-truncate when single file exceeds this
-output_trim_target_ratio: ${ADAPTER_OUTPUT_TRIM_TARGET_RATIO:0.7}  # after truncation, file size ≈ threshold × ratio
-
-# ── HTTP service ──
-host: ${ADAPTER_HOST:0.0.0.0}                # HTTP listen address
-port: ${ADAPTER_PORT:8900}                   # HTTP listen port
 
 # ── Multi-Agent configuration ──
 # When agents list is present, each agent gets its own Pipeline with independent
@@ -78,7 +51,7 @@ port: ${ADAPTER_PORT:8900}                   # HTTP listen port
 #   edp_agent  → EDP_AGENT_*
 #   other_agent → OTHER_AGENT_*
 # 增删 agent 只需：在 .env 增对应 EDP_/OTHER_/… 变量块、在此列表增删条目、
-# 并在宿主侧建好对应子目录。agent_url 等字段也可走 CRUD API
+# 并在宿主侧建好子目录。agent_url 等字段也可走 CRUD API
 # （PUT /api/v1/config/agents/{name}）热更新写回本文件（写回为具体值，不影响其它条目的占位）。
 agents:
   - name: "edp_agent"
@@ -154,7 +127,8 @@ agents:
 # ── Managed-doc defaults（可选，仅当任一 agent 配了 managed_docs 且 apply=restart 时生效）──
 # profile 决定 burst（canary 训练，快速失败）vs single（人工单次）两套默认基线；
 # 显式字段覆写优先于 profile 基线；字段语义见下方内联说明。
-# profile / task_ttl_seconds 走 env（ADAPTER_MDD_*）；其余 restart 参数见下方注释，按需取消注释。
+# profile / task_ttl_seconds 走 env（ADAPTER_MDD_*，由 .env 提供 → yaml 占位 → resolver 展开）；
+# 其余 restart 参数见下方注释，按需取消注释。
 managed_doc_defaults:
   profile: ${ADAPTER_MDD_PROFILE:burst}            # burst | single
   task_ttl_seconds: ${ADAPTER_MDD_TASK_TTL_SECONDS:600}  # 完成态任务保留时长（轮询窗口）

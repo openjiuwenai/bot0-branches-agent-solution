@@ -13,7 +13,7 @@ class TestAdapterConfigDefaults:
     def test_default_values_when_no_yaml(self, tmp_path):
         config = AdapterConfig()
         assert config.log_dir == "logs"
-        assert config.log_pattern == "process_*.log"
+        assert config.log_pattern == "process*.log"
         assert config.poll_interval == 60
         assert config.start_from == "tail"
         assert config.match_tags == [
@@ -216,17 +216,15 @@ class TestEnvRefInterpolation:
         config = load_config(yaml_path)
         assert config.poll_interval == 99
 
-    def test_nested_managed_docs_and_defaults_resolved(self, tmp_path, monkeypatch):
-        """managed_docs (list[dict]) 与 managed_doc_defaults (嵌套对象) 的占位递归展开。
+    def test_managed_docs_per_agent_resolved(self, tmp_path, monkeypatch):
+        """managed_docs (per-agent list[dict]) 占位由 _expand_env_refs 展开。
 
-        覆盖：int 字段强制转换、Literal 字段、嵌套 dict/list 递归、默认值。
+        覆盖：int 字段强制转换、Literal 字段、嵌套 dict/list 递归、默认值、env 覆盖。
+        managed_docs 仍是 yaml 维护的列表结构（per-agent 唯一 env 通道）。
         """
         yaml_path = tmp_path / "c.yaml"
         yaml_path.write_text(
             textwrap.dedent("""\
-                managed_doc_defaults:
-                  profile: ${ADAPTER_MDD_PROFILE:burst}
-                  task_ttl_seconds: ${ADAPTER_MDD_TASK_TTL_SECONDS:600}
                 agents:
                   - name: edp_agent
                     managed_docs:
@@ -238,33 +236,23 @@ class TestEnvRefInterpolation:
             encoding="utf-8",
         )
         # 默认值路径（env 全不设）
-        for v in ("ADAPTER_MDD_PROFILE", "ADAPTER_MDD_TASK_TTL_SECONDS",
-                  "EDP_AGENT_MDOC0_KIND", "EDP_AGENT_MDOC0_PATH",
-                  "EDP_AGENT_MDOC0_MAX_CONTENT_BYTES", "EDP_AGENT_MDOC0_APPLY"):
+        for v in ("EDP_AGENT_MDOC0_KIND", "EDP_AGENT_MDOC0_PATH",
+                  "EDP_AGENT_MDOC0_MAX_CONTENT_BYTES", "EDP_AGENT_MDOC0_APPLY",
+                  "EDP_AGENT_MDOC0_RESTART_CMD"):
             monkeypatch.delenv(v, raising=False)
         config = load_config(yaml_path)
-        assert config.managed_doc_defaults.profile == "burst"
-        assert config.managed_doc_defaults.task_ttl_seconds == 600
         md = config.agents[0].managed_docs[0]
         assert md.kind == "agent_rule"
         assert md.path == "/data/agents/edp_agent/AgentRule.md"
         assert md.max_content_bytes == 262144  # int coercion from "262144"
         assert md.apply == "file_only"
 
-        # env 覆盖（含 int 与 Literal；managed_doc_defaults 子字段非直接 env 字段，
-        # 必须靠 yaml 里保留 ${...} 占位才能被 resolver 展开）
-        monkeypatch.setenv("ADAPTER_MDD_PROFILE", "single")
-        monkeypatch.setenv("ADAPTER_MDD_TASK_TTL_SECONDS", "120")
+        # env 覆盖（int + Literal）
         monkeypatch.setenv("EDP_AGENT_MDOC0_MAX_CONTENT_BYTES", "1024")
         monkeypatch.setenv("EDP_AGENT_MDOC0_APPLY", "restart")
-        monkeypatch.setenv(
-            "EDP_AGENT_MDOC0_RESTART_CMD", "docker restart edp_agent"
-        )
+        monkeypatch.setenv("EDP_AGENT_MDOC0_RESTART_CMD", "docker restart edp_agent")
         yaml_path.write_text(
             textwrap.dedent("""\
-                managed_doc_defaults:
-                  profile: ${ADAPTER_MDD_PROFILE:burst}
-                  task_ttl_seconds: ${ADAPTER_MDD_TASK_TTL_SECONDS:600}
                 agents:
                   - name: edp_agent
                     managed_docs:
@@ -277,12 +265,40 @@ class TestEnvRefInterpolation:
             encoding="utf-8",
         )
         config = load_config(yaml_path)
-        assert config.managed_doc_defaults.profile == "single"
-        assert config.managed_doc_defaults.task_ttl_seconds == 120
         md = config.agents[0].managed_docs[0]
         assert md.max_content_bytes == 1024
         assert md.apply == "restart"
         assert md.restart_cmd == "docker restart edp_agent"
+
+    def test_managed_doc_defaults_from_yaml_env_placeholder(self, tmp_path, monkeypatch):
+        """managed_doc_defaults 在 yaml 中以 ${ADAPTER_MDD_*:default} 占位，
+        由 _expand_env_refs 在加载期从 .env 展开。env 未设 → 占位默认。
+
+        这是 'managed_doc_defaults 从 yaml 读取、值由 .env 提供' 的机制。
+        """
+        for v in ("ADAPTER_MDD_PROFILE", "ADAPTER_MDD_TASK_TTL_SECONDS",
+                  "ADAPTER_MANAGED_DOC_DEFAULTS"):
+            monkeypatch.delenv(v, raising=False)
+        yaml_path = tmp_path / "c.yaml"
+        yaml_path.write_text(
+            textwrap.dedent("""\
+                managed_doc_defaults:
+                  profile: ${ADAPTER_MDD_PROFILE:burst}
+                  task_ttl_seconds: ${ADAPTER_MDD_TASK_TTL_SECONDS:600}
+            """),
+            encoding="utf-8",
+        )
+        # env 不设 → 占位默认
+        config = load_config(yaml_path)
+        assert config.managed_doc_defaults.profile == "burst"
+        assert config.managed_doc_defaults.task_ttl_seconds == 600
+
+        # env 覆盖（含 int 强制转换）
+        monkeypatch.setenv("ADAPTER_MDD_PROFILE", "single")
+        monkeypatch.setenv("ADAPTER_MDD_TASK_TTL_SECONDS", "120")
+        config = load_config(yaml_path)
+        assert config.managed_doc_defaults.profile == "single"
+        assert config.managed_doc_defaults.task_ttl_seconds == 120
 
 
 class TestRelativePathResolution:

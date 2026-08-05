@@ -223,7 +223,7 @@ class AdapterConfig(BaseSettings):
 
     # ── Log source ──
     log_dir: str = "logs"
-    log_pattern: str = "process_*.log"
+    log_pattern: str = "process*.log"
 
     # ── Read strategy ──
     poll_interval: int = 60
