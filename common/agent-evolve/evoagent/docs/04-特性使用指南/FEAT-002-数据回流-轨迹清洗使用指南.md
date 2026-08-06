@@ -197,7 +197,7 @@ curl -X GET 'http://localhost:8900/api/v1/traces/tests-conv-0004'
 | `poll_interval` | int | 否 | `60` | 采集轮询间隔，影响记录新鲜度 |
 | `output_dir` | str | 否 | `data/output` | 归档目录（log 模式清洗输入来源） |
 
-> **填写说明：** 以上字段对应环境变量 `ADAPTER_` + 字段名大写（如 `trace_wait_timeout` → `ADAPTER_TRACE_WAIT_TIMEOUT`、`pair_timeout` → `ADAPTER_PAIR_TIMEOUT`），在 `config/.env` 填写，优先级：环境变量 > `agent_adapter_config.yaml` > 默认值；`.env` 主机路径项填写见 [轨迹采集使用指南](FEAT-001-数据回流-轨迹采集使用指南.md) 3.2。
+> **填写说明：** 以上字段对应环境变量 `ADAPTER_` + 字段名大写（如 `trace_wait_timeout` → `ADAPTER_TRACE_WAIT_TIMEOUT`、`pair_timeout` → `ADAPTER_PAIR_TIMEOUT`），在 `config/.env` 填写。解析优先级（高 → 低）：环境变量（设且非空；空串视为未设置）> YAML 占位默认值（`${VAR:default}` 冒号后值）> 字段内置默认值；`.env` 主机路径项填写见 [轨迹采集使用指南](FEAT-001-数据回流-轨迹采集使用指南.md) 3.2。
 > - log 模式：按需调 `pair_timeout`（START/END 配对超时，过小会产生 `_incomplete` 不完整记录）。
 > - standard 模式：按需调 `trace_wait_timeout`（查询等根 span 秒数，过小会过早返回 `complete=false`）。
 > - `match_tags` 决定哪些日志标签进入清洗上游记录，仅 log 模式生效；环境变量用 JSON 数组或逗号分隔串。
