@@ -23,7 +23,7 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    用户（自然语言）                        │
-│  "预测京石高速明天早高峰涿州收费站车流，超限给出管控建议"    │
+│  "预测某高速明天早高峰某收费站车流，超限给出管控建议"        │
 └────────────────────────┬────────────────────────────────┘
                          │
                          ▼
@@ -63,7 +63,7 @@
 **部署配置**：
 
 ```yaml
-# config.yaml — 河北交投京石路段配置
+# config.yaml — 某高速路段配置
 openjiuwen:
   tools:
     db-connector:
@@ -72,21 +72,21 @@ openjiuwen:
         type: mysql
         host: env:DB_HOST
         port: 3306
-        database: env:DB_NAME     # 河北交投业务库
+        database: env:DB_NAME     # 高速业务库
         username: env:DB_USER
         password: env:DB_PASSWORD
       schema-import:
         enabled: true
         allowed-tables:
-          - jingshi_traffic_flow       # 京石路段车流明细表
-          - jingshi_toll_station       # 京石路段收费站信息表
-          - road_segment_capacity      # 路段容量表
-          - speed_restriction          # 限速信息表
+          - highway_traffic_flow        # 某高速车流明细表
+          - highway_toll_station        # 某高速收费站信息表
+          - road_segment_capacity       # 路段容量表
+          - speed_restriction           # 限速信息表
         sensitive-columns: ["plate_no", "phone"]
       security:
         allowed-tables:
-          - jingshi_traffic_flow
-          - jingshi_toll_station
+          - highway_traffic_flow
+          - highway_toll_station
           - road_segment_capacity
           - speed_restriction
         max-rows: 50000             # 预测需较多历史数据
@@ -110,19 +110,19 @@ snapshot = tool.import_schema()
 
 **作用**：自然语言 → 意图识别 → 参数抽取 → 数据查询 → 流量预测。
 
-**字段映射配置**（适配京石路段表结构）：
+**字段映射配置**（适配某高速路段表结构）：
 
 ```yaml
 # data-mapping.yml
 traffic-forecast-qa:
   flow-table:
-    name: jingshi_traffic_flow
+    name: highway_traffic_flow
     columns:
-      station-id: station_code       # 收费站编码（如 jingshi_zhuozhou）
-      road-code: road_code           # 道路编码（京石高速=G0451）
+      station-id: station_code       # 收费站编码（如 station_001）
+      road-code: road_code           # 道路编码（某高速=GXXXX）
       timestamp: stat_time           # 统计时刻
       granularity: granularity       # 粒度
-      direction: direction           # 上行/下行（北京方向/石家庄方向）
+      direction: direction           # 上行/下行（A 方向/B 方向）
       flow: vehicle_count            # 车流量
   forecast:
     granularity: HOUR
@@ -148,7 +148,7 @@ from openjiuwen.skills.traffic_forecast_qa import TrafficForecastQaSkill
 skill = TrafficForecastQaSkill(tool, "data-mapping.yml")
 
 # 自然语言提问
-result = skill.ask("预测京石高速涿州收费站明天早高峰车流")
+result = skill.ask("预测某高速某收费站明天早高峰车流")
 # → 返回预测结果（点估计 + 置信区间 + 趋势摘要）
 ```
 
@@ -185,13 +185,13 @@ MCP_TRANSPORT=sse MCP_PORT=8080 ./start.sh
   │  抽取：目标道路/收费站、预测时间窗口、方向
   │  ├─ 参数完整 → 继续
   │  └─ 参数缺失 → 追问（最多 3 轮）
-  │     例："请问您要预测哪个收费站？如涿州收费站、石家庄收费站"
+  │     例："请问您要预测哪个收费站？如 A 收费站、B 收费站"
   │
   ▼
 ③ 数据查询（db-connector）─────────────────────────────────
   │  生成参数化 SQL，查询历史车流数据
   │  SELECT stat_time, vehicle_count
-  │  FROM jingshi_traffic_flow
+  │  FROM highway_traffic_flow
   │  WHERE station_code = %s
   │    AND stat_time BETWEEN %s AND %s
   │    AND granularity = %s
@@ -249,10 +249,10 @@ MCP_TRANSPORT=sse MCP_PORT=8080 ./start.sh
 ### 4.3 多轮对话示例
 
 ```
-用户：预测京石高速涿州收费站明天早高峰车流
-Agent：请问您关注的是上行（北京方向）还是下行（石家庄方向）？
+用户：预测某高速某收费站明天早高峰车流
+Agent：请问您关注的是上行（A 方向）还是下行（B 方向）？
 用户：上行
-Agent：好的，正在查询京石高速涿州收费站上行历史车流数据并预测...
+Agent：好的，正在查询某高速某收费站上行历史车流数据并预测...
 
   预测结果：
   - 明日 7:00-9:00 上行预测车流约 12,500 辆
@@ -260,7 +260,7 @@ Agent：好的，正在查询京石高速涿州收费站上行历史车流数据
   - 置信区间：[11,200, 13,800]
 
   容量判定：
-  - 涿州收费站上行早高峰容量阈值：15,000 辆/小时
+  - 某收费站上行早高峰容量阈值：15,000 辆/小时
   - 当前预测占容量 83% → 黄色预警
 
   管控建议：
@@ -270,9 +270,9 @@ Agent：好的，正在查询京石高速涿州收费站上行历史车流数据
 
 用户：如果超过容量怎么办？
 Agent：若实际车流达到或超过 15,000 辆（容量 100%），将触发红色告警，建议措施：
-  1. 启动涿州收费站限流，控制发卡速率
-  2. 引导车辆绕行 G0451 京津冀高速支线或 G4 京港澳高速平行路段
-  3. 情报板与河北交投 APP 发布分流提示
+  1. 启动某收费站限流，控制发卡速率
+  2. 引导车辆绕行某高速支线或某平行高速路段
+  3. 情报板与某高速 APP 发布分流提示
   4. 联动高速交警加强巡逻与疏导
 ```
 
@@ -282,8 +282,8 @@ Agent：若实际车流达到或超过 15,000 辆（容量 100%），将触发�
 
 | 表名 | 用途 | 关键字段 |
 |------|------|----------|
-| `jingshi_traffic_flow` | 京石路段车流历史数据 | road_code, station_code, stat_time, vehicle_count, direction, granularity |
-| `jingshi_toll_station` | 京石路段收费站信息 | station_code, name, road_code, direction, lane_count |
+| `highway_traffic_flow` | 某高速车流历史数据 | road_code, station_code, stat_time, vehicle_count, direction, granularity |
+| `highway_toll_station` | 某高速收费站信息 | station_code, name, road_code, direction, lane_count |
 | `road_segment_capacity` | 路段容量阈值 | road_code, direction, time_slot, max_capacity, warning_threshold |
 | `speed_restriction` | 限速信息 | road_code, start_km, end_km, restriction_type, start_time, end_time |
 
@@ -317,8 +317,8 @@ pip install -e skills/traffic-forecast-qa
 # 设置环境变量（凭证不落盘）
 export DB_HOST=your-db-host
 export DB_PORT=3306
-export DB_NAME=hebei_jiaotou_db
-export DB_USER=jingshi_agent
+export DB_NAME=highway_business_db
+export DB_USER=highway_agent
 export DB_PASSWORD=your-password
 
 # 或使用 Vault
