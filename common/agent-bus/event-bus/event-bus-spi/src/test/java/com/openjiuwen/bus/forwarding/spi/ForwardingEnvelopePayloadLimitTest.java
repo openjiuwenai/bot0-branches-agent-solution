@@ -61,7 +61,7 @@ class ForwardingEnvelopePayloadLimitTest {
     }
 
     @Test
-    void inline_payload_null_is_accepted_when_payload_ref_carries_the_data() {
+    void inline_null_accepted_when_payload_ref_carries_data() {
         // DATA_BEARING satisfies the data requirement via payloadRef; a null inlinePayload is valid.
         ForwardingEnvelope e = new ForwardingEnvelope(
                 new ForwardingMessageId("msg-ref"),

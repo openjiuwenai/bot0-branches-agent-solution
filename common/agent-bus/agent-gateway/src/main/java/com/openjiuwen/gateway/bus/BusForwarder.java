@@ -148,10 +148,15 @@ public class BusForwarder {
         log.info("forwardSync start corrId={} tenant={} target={}",
                 correlationId, ctx.tenantId(), chosen.targetServiceId());
 
-        long now = System.currentTimeMillis();
-        WaitWindow window = new WaitWindow(now, acceptWindowMillis, responseWindowMillis);
+        WaitWindow window = new WaitWindow(System.currentTimeMillis(), acceptWindowMillis, responseWindowMillis);
         G4BusWiring g4w = new G4BusWiring(g4);
+        String body = pollAndFold(correlationId, ctx, window, g4w, chosen);
+        return ResponseEntity.ok().body(body);
+    }
 
+    /** Polls projections for one correlation until timeout/terminal/input-required, then folds to the status body. */
+    private String pollAndFold(String correlationId, GovernanceContext ctx, WaitWindow window,
+            G4BusWiring g4w, AgentCardRoute chosen) {
         int maxPolls = 100;
         for (int i = 0; i < maxPolls; i++) {
             var timedOut = window.checkTimeout(System.currentTimeMillis());
@@ -160,7 +165,7 @@ public class BusForwarder {
                 String body = statusBody(status, window.taskId(), null);
                 log.info("forwardSync corrId={} TIMEOUT→{} taskId={}", correlationId, status, window.taskId());
                 g4w.onFold(status, ctx.tenantId(), ctx.messageId(), body);
-                return ResponseEntity.ok().body(body);
+                return body;
             }
             var proj = projectionFeed.poll(correlationId);
             if (proj.isEmpty()) {
@@ -185,7 +190,7 @@ public class BusForwarder {
                 log.info("forwardSync corrId={} folded={} taskId={} bodyPresent={}",
                         correlationId, folded, taskId, event.body() != null);
                 g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
-                return ResponseEntity.ok().body(body);
+                return body;
             } else {
                 // non-terminal non-accept (e.g. STREAM_READY): keep polling
                 continue;
@@ -194,7 +199,7 @@ public class BusForwarder {
         String unknownBody = statusBody(InvocationResponseStatus.UNKNOWN, null, null);
         log.info("forwardSync corrId={} UNKNOWN (no projection matched within accept+response window)", correlationId);
         g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), unknownBody);
-        return ResponseEntity.ok().body(unknownBody);
+        return unknownBody;
     }
 
     /**

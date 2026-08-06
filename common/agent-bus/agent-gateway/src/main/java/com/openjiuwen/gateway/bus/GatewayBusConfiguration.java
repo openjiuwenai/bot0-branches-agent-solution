@@ -103,6 +103,7 @@ public class GatewayBusConfiguration {
      * @param responseWindowMillis response-phase timeout after accept
      * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY
      * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
+     * @param stickyIndex taskId→routeHandle sticky index (written on first taskId-bearing projection, read on resume)
      * @param streamFirstFrameDeadlineMillis deadline to read the first SSE frame
      * @return the bus forwarder
      */

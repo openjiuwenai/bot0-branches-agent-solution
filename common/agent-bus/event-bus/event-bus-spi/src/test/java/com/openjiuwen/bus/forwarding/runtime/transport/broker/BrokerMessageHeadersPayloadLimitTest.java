@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.Test;
  * <p>Authority: {@code event-bus 实施修改方案 v1 §5.1} (U2).
  */
 class BrokerMessageHeadersPayloadLimitTest {
-
     /**
      * Minimal valid headers carrying an inline body (control-plane fields populated, no payloadRef).
      *
