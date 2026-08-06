@@ -42,7 +42,7 @@ import java.util.logging.Logger;
  *
  * <p><b>背景（为什么需要这个测试）</b>：Phase2 把 PLAN/BUILD/FIRST_PRINCIPLES 三段 system prompt 外置到
  * classpath 资源（C1）。mock 测试（{@code SystemPromptInjectingModelTest} 2a content-IFF）已证外置内容到达
- * BaseModelClient 边界（model-independent）。但现有 react-rails e2e 全是弱断言（{@code SystemPromptInjectLlmE2eTest}
+ * BaseModelClient 边界（model-independent）。但现有 agent-core-ext-react-rails e2e 全是弱断言（{@code SystemPromptInjectLlmE2eTest}
  * 算了 hasAngleStructure/angleCount 却从不 assert；{@code PreCompletionChecklistRailE2eTest} 只查枚举且自认
  * BUILD_MODE 无法可靠断言），且现有 3 个矩阵测试全是 observability 场景，没有一个压 PLAN/BUILD 注入路径。
  * 本测试补这个缺口：7 模型 × thinking on/off 矩阵下，<b>捕获 BaseModelClient 边界实际收到的 SystemMessage</b>，

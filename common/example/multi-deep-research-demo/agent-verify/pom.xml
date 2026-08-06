@@ -15,7 +15,7 @@
     <packaging>jar</packaging>
 
     <name>agent-verify</name>
-    <description>Verification ReAct sub-agent — SDK (com.openjiuwen.example.deepresearch.verify.*) + Spring Boot runtime (com.openjiuwen.example.deepresearch.verify.runtime.*) with react-rails CriteriaReplanBridgeRail + RootCauseRail attached</description>
+    <description>Verification ReAct sub-agent — SDK (com.openjiuwen.example.deepresearch.verify.*) + Spring Boot runtime (com.openjiuwen.example.deepresearch.verify.runtime.*) with agent-core-ext-react-rails CriteriaReplanBridgeRail + RootCauseRail attached</description>
 
     <dependencies>
         <dependency>
@@ -25,7 +25,7 @@
         </dependency>
         <dependency>
             <groupId>com.openjiuwen</groupId>
-            <artifactId>react-rails</artifactId>
+            <artifactId>agent-core-ext-react-rails</artifactId>
             <version>0.1.0</version>
         </dependency>
         <dependency>

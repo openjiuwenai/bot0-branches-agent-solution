@@ -40,7 +40,7 @@ public final class VerifyAgentFactory {
     }
 
     /**
-     * Builds a {@link ReActAgent} configured as a judge with react-rails cognitive
+     * Builds a {@link ReActAgent} configured as a judge with agent-core-ext-react-rails cognitive
      * guards attached.
      *
      * @param props the verify-agent configuration
