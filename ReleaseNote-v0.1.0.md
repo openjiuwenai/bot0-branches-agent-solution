@@ -17,51 +17,51 @@ Welcome to OpenJiuwen Agent Solution v0.1.0! This release covers two major compo
 
 This component covers three parts: runtime extensions, core framework extensions, and self-evolution engine. Runtime extensions use the runtime's `AgentHandler` SPI, `A2ARemoteAgentCardRegistry`, and Spring Boot auto-configuration as integration entry points, with runtime capabilities provided by `agent-runtime-java` and execution core provided by `agent-core-java`; core framework extensions supplement ReActAgent with cognitive rails for evaluation and verification, replan control, and failure degradation; self-evolution engine performs quality assessment and continuous optimization based on Agent real-world execution trajectories.
 
-**1. Runtime Extension-Versatile Intent Workflow Adaptation:** Supports intent-based routing distribution by selecting endpoints URL templates based on intent, and supports SSE response `result-node-name` minimal result node extraction, extracting the final result when `node_name` matches and `node_type` is `"End"`.
+**1. Runtime Extension-Versatile Intent Workflow Adaptation**: Supports intent-based routing distribution by selecting endpoints URL templates based on intent, and supports SSE response `result-node-name` minimal result node extraction, extracting the final result when `node_name` matches and `node_type` is `"End"`.
 
-**2. Runtime Extension-Custom REST API Service Entry Point:** Provides a custom REST edge adapter on top of standard Agent service semantics, mapping existing REST API patterns to standard Agent service calls through `RestRequestMapper` / `RestResponseMapper` SPI, supporting synchronous JSON and SSE streaming responses. In the current version, a single runtime instance hosts only one Agent and allows only one REST path pattern.
+**2. Runtime Extension-Custom REST API Service Entry Point**: Provides a custom REST edge adapter on top of standard Agent service semantics, mapping existing REST API patterns to standard Agent service calls through `RestRequestMapper` / `RestResponseMapper` SPI, supporting synchronous JSON and SSE streaming responses. In the current version, a single runtime instance hosts only one Agent and allows only one REST path pattern.
 
-**3. Runtime Extension-Heterogeneous Agent Framework Compatibility:** Extends compatibility with the AgentScope framework on top of `agentcore-ext` and `Versatile` adapter, supporting wrapping local `ReActAgent` and `HarnessAgent`, mapping to runtime query, stream, failure, and pause semantics, and verifying three types of pause/resume: message stop, manual confirmation, and single external pending tool.
+**3. Runtime Extension-Heterogeneous Agent Framework Compatibility**: Extends compatibility with the AgentScope framework on top of `agentcore-ext` and `Versatile` adapter, supporting wrapping local `ReActAgent` and `HarnessAgent`, mapping to runtime query, stream, failure, and pause semantics, and verifying three types of pause/resume: message stop, manual confirmation, and single external pending tool.
 
-**4. Runtime Extension-Skill Hub Subscription:** Downloads skill packages declared by the Agent at startup through a replaceable Skill Hub SPI, using required / optional semantics, with SHA-256 or standard integrity verification; required skill failures block ready, optional skill failures allow degraded startup, and credentials are desensitized and not exposed.
+**4. Runtime Extension-Skill Hub Subscription**: Downloads skill packages declared by the Agent at startup through a replaceable Skill Hub SPI, using required / optional semantics, with SHA-256 or standard integrity verification; required skill failures block ready, optional skill failures allow degraded startup, and credentials are desensitized and not exposed.
 
-**5. Core Framework Extension-ReActAgent Cognitive Capability Enhancement (agent-core-ext-react-rails):** Adds the `agent-core-ext-react-rails` module, supplementing ReActAgent with three cognitive rails: `CriteriaVerificationRail` (verifies final answer against success criteria), `ReplanRail` (limits replan count to prevent divergence), `RootCauseRail` (device failure degradation termination), all short-circuiting the loop via `forceFinish` gate in `afterModelCall`. Pure Java SDK, no dependency on Spring or runtime-ext.
+**5. Core Framework Extension-ReActAgent Cognitive Capability Enhancement (agent-core-ext-react-rails)**: Adds the `agent-core-ext-react-rails` module, supplementing ReActAgent with three cognitive rails: `CriteriaVerificationRail` (verifies final answer against success criteria), `ReplanRail` (limits replan count to prevent divergence), `RootCauseRail` (device failure degradation termination), all short-circuiting the loop via `forceFinish` gate in `afterModelCall`. Pure Java SDK, no dependency on Spring or runtime-ext.
 
-**6. Self-Evolution Engine-Data Replay:** Replays structured trajectories from Agent execution logs or OpenTelemetry data, supporting both log and standard (OTel) modes, normalized into standard conversation format through cleaning for evaluation use.
+**6. Self-Evolution Engine-Data Replay**: Replays structured trajectories from Agent execution logs or OpenTelemetry data, supporting both log and standard (OTel) modes, normalized into standard conversation format through cleaning for evaluation use.
 
-**7. Self-Evolution Engine-Trajectory Evaluation:** Provides metric evaluators (F1, precision, keyword matching, semantic similarity) and LLM evaluators (multi-dimensional scoring of task completion, trajectory quality, and security), identifying Skill / Prompt optimization points and outputting actionable recommendations.
+**7. Self-Evolution Engine-Trajectory Evaluation**: Provides metric evaluators (F1, precision, keyword matching, semantic similarity) and LLM evaluators (multi-dimensional scoring of task completion, trajectory quality, and security), identifying Skill / Prompt optimization points and outputting actionable recommendations.
 
-**8. Self-Evolution Engine-Optimization Engine:** Executes Skill optimization (reflection → aggregation → selection → application, supporting SkillOpt/TF-GRPO) and Prompt optimization (automatic iteration with verification through business Agent hot-update) based on evaluation results, writing results back to the target Agent.
+**8. Self-Evolution Engine-Optimization Engine**: Executes Skill optimization (reflection → aggregation → selection → application, supporting SkillOpt/TF-GRPO) and Prompt optimization (automatic iteration with verification through business Agent hot-update) based on evaluation results, writing results back to the target Agent.
 
-**9. Self-Evolution Engine-Self-Evolution Agent:** Chains the full process of dataset import → trajectory evaluation → strategy optimization → sandbox Rollout verification through native agent capabilities, implementing the business Agent self-evolution closed loop.
+**9. Self-Evolution Engine-Self-Evolution Agent**: Chains the full process of dataset import → trajectory evaluation → strategy optimization → sandbox Rollout verification through native agent capabilities, implementing the business Agent self-evolution closed loop.
 
 ### II. General Agent
 
 EDPAgent Java v0.1.0 is the first official Java release of EDPAgent (Enterprise-grade Dynamic Planning Agent). The following are the core capabilities released in this version.
 
-**1. ReAct Mechanism Upgraded to DeepAgent Mechanism:** Implements a closed-loop architecture of "plan — execute — observe — reflect" based on the DeepAgent reasoning loop paradigm, replacing the traditional single-turn ReAct, supporting task state management, dynamic path adjustment, automatic dependency resolution, and planning pre-check hard interception.
+**1. ReAct Mechanism Upgraded to DeepAgent Mechanism**: Implements a closed-loop architecture of "plan — execute — observe — reflect" based on the DeepAgent reasoning loop paradigm, replacing the traditional single-turn ReAct, supporting task state management, dynamic path adjustment, automatic dependency resolution, and planning pre-check hard interception.
 
-**2. Interception and Control Mechanism:** Forms a processing chain through multiple interceptors in priority order, covering the entire process including task cancellation, state maintenance, execution limits, tool invocation, interrupt handling, logging, event push, and utterance rendering, forming a comprehensive governance and security control system.
+**2. Interception and Control Mechanism**: Forms a processing chain through multiple interceptors in priority order, covering the entire process including task cancellation, state maintenance, execution limits, tool invocation, interrupt handling, logging, event push, and utterance rendering, forming a comprehensive governance and security control system.
 
-**3. ask_user (User Information Follow-up) Tool:** Involves users in confirmation at critical decision points to mitigate business risks, supporting interrupt persistence, rich parameter configuration, mandatory scenario constraints, and automatic execution recovery after interruption.
+**3. ask_user (User Information Follow-up) Tool**: Involves users in confirmation at critical decision points to mitigate business risks, supporting interrupt persistence, rich parameter configuration, mandatory scenario constraints, and automatic execution recovery after interruption.
 
-**4. call_mcp (Generic Script Invocation) Tool:** Invokes scripts via MCP SSE service, providing a security-isolated Python script execution sandbox, supporting active-standby auto-switch, Token authentication, data pass-through writing, and invocation count limits.
+**4. call_mcp (Generic Script Invocation) Tool**: Invokes scripts via MCP SSE service, providing a security-isolated Python script execution sandbox, supporting active-standby auto-switch, Token authentication, data pass-through writing, and invocation count limits.
 
-**5. Versatile Workflow Invocation:** Delegates complex business processes to external workflow services for execution, achieving separation of responsibilities between Agent and business systems, supporting REST/A2A dual modes, interrupt-resume, result normalization, and data pass-through reading.
+**5. Versatile Workflow Invocation**: Delegates complex business processes to external workflow services for execution, achieving separation of responsibilities between Agent and business systems, supporting REST/A2A dual modes, interrupt-resume, result normalization, and data pass-through reading.
 
-**6. cancel_task (Cancel Current Task) Tool:** Supports users to terminate the currently executing business process at any time.
+**6. cancel_task (Cancel Current Task) Tool**: Supports users to terminate the currently executing business process at any time.
 
-**7. Inter-Tool Data Channel Pass-Through:** Implements direct structured data passing between tools through session-level key-value storage, without LLM retransmission, avoiding data loss and hallucination injection, supporting multi-level scope isolation and concurrency safety.
+**7. Inter-Tool Data Channel Pass-Through**: Implements direct structured data passing between tools through session-level key-value storage, without LLM retransmission, avoiding data loss and hallucination injection, supporting multi-level scope isolation and concurrency safety.
 
-**8. Task Planning:** Provides task planning and lifecycle management based on the Todo state machine, supporting task templates, state updates, dynamic path rules, and cross-turn persistence, enabling complex business multi-step execution.
+**8. Task Planning**: Provides task planning and lifecycle management based on the Todo state machine, supporting task templates, state updates, dynamic path rules, and cross-turn persistence, enabling complex business multi-step execution.
 
-**9. Rule-Based Business Governance:** Provides hierarchical governance of business scope, tool whitelists, invocation counts, subtask quantities, execution steps, and compliance through both framework default configuration and scenario configuration modes, ensuring Agents execute safely within authorized scope.
+**9. Rule-Based Business Governance**: Provides hierarchical governance of business scope, tool whitelists, invocation counts, subtask quantities, execution steps, and compliance through both framework default configuration and scenario configuration modes, ensuring Agents execute safely within authorized scope.
 
-**10. Chain of Thought:** Implements Agent thinking process visualization through frame control and stage utterance configuration, supporting both real streaming and fixed utterance dual modes, enhancing interaction experience.
+**10. Chain of Thought**: Implements Agent thinking process visualization through frame control and stage utterance configuration, supporting both real streaming and fixed utterance dual modes, enhancing interaction experience.
 
-**11. Utterance Management:** Ensures Agent output is consistent, controllable, and compliant through three-level configuration of general utterances, scenario utterances, and Skill utterances, with variable substitution and scenario-level override mechanisms.
+**11. Utterance Management**: Ensures Agent output is consistent, controllable, and compliant through three-level configuration of general utterances, scenario utterances, and Skill utterances, with variable substitution and scenario-level override mechanisms.
 
-**12. Isolated Execution Environment:** Ensures the security and stability of the Agent execution environment through multi-layer isolation mechanisms, meeting enterprise-grade deployment requirements.
+**12. Isolated Execution Environment**: Ensures the security and stability of the Agent execution environment through multi-layer isolation mechanisms, meeting enterprise-grade deployment requirements.
 
 ---
 
