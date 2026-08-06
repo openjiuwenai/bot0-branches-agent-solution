@@ -34,7 +34,7 @@ class CriteriaVerificationRailRealLlmE2eTest {
         org.junit.jupiter.api.Assumptions.assumeTrue(LlmClient.envPresent(), "OPENJIUWEN_API_KEY 未设置，跳过真 LLM e2e");
 
         DefaultModelClientFactories.ensureRegistered();
-        var cliCfg = ModelClientConfig.builder().clientId("react-rails-e2e-" + System.nanoTime())
+        var cliCfg = ModelClientConfig.builder().clientId("agent-core-ext-react-rails-e2e-" + System.nanoTime())
                 .clientProvider("OpenAI").apiKey(System.getenv("OPENJIUWEN_API_KEY"))
                 .apiBase(System.getenv("OPENJIUWEN_BASE_URL")).verifySsl(false).build();
         String effectiveModel = System.getenv().getOrDefault("OPENJIUWEN_MODEL", "deepseek-v4-pro");

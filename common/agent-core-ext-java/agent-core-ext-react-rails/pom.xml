@@ -11,8 +11,8 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>react-rails</artifactId>
-    <name>react-rails — Beta cognitive rails for ReActAgent (external-judge verifier + replan + root-cause)</name>
+    <artifactId>agent-core-ext-react-rails</artifactId>
+    <name>agent-core-ext-react-rails — Beta cognitive rails for ReActAgent (external-judge verifier + replan + root-cause)</name>
     <description>Beta cognitive rails grafted onto agent-core-java's ReActAgent. Three rails (CriteriaVerificationRail / ReplanRail / RootCauseRail) using afterModelCall forceFinish gate + external-judge CriteriaVerifier. Fills ReActAgent's verify+GEPA-lite gap. Sibling to pev module.</description>
 
     <properties>

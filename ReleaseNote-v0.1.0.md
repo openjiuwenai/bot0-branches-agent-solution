@@ -25,7 +25,7 @@ This component covers three parts: runtime extensions, core framework extensions
 
 **4. Runtime Extension-Skill Hub Subscription:** Downloads skill packages declared by the Agent at startup through a replaceable Skill Hub SPI, using required / optional semantics, with SHA-256 or standard integrity verification; required skill failures block ready, optional skill failures allow degraded startup, and credentials are desensitized and not exposed.
 
-**5. Core Framework Extension-ReActAgent Cognitive Capability Enhancement (react-rails):** Adds the `react-rails` module, supplementing ReActAgent with three cognitive rails: `CriteriaVerificationRail` (verifies final answer against success criteria), `ReplanRail` (limits replan count to prevent divergence), `RootCauseRail` (device failure degradation termination), all short-circuiting the loop via `forceFinish` gate in `afterModelCall`. Pure Java SDK, no dependency on Spring or runtime-ext.
+**5. Core Framework Extension-ReActAgent Cognitive Capability Enhancement (agent-core-ext-react-rails):** Adds the `agent-core-ext-react-rails` module, supplementing ReActAgent with three cognitive rails: `CriteriaVerificationRail` (verifies final answer against success criteria), `ReplanRail` (limits replan count to prevent divergence), `RootCauseRail` (device failure degradation termination), all short-circuiting the loop via `forceFinish` gate in `afterModelCall`. Pure Java SDK, no dependency on Spring or runtime-ext.
 
 **6. Self-Evolution Engine-Data Replay:** Replays structured trajectories from Agent execution logs or OpenTelemetry data, supporting both log and standard (OTel) modes, normalized into standard conversation format through cleaning for evaluation use.
 
@@ -96,7 +96,7 @@ mvn -f common/example/versatile-a2a-adapter-demo/pom.xml clean install
 mvn -f common/example/agentcore-ext-remote-a2a-tool-demo/pom.xml clean install
 mvn -f common/example/agentcore-ext-deepagent-remote-a2a-demo/pom.xml clean install
 mvn -f common/example/multi-deep-research-demo/pom.xml clean install
-mvn -f common/agent-core-ext-java/pom.xml -pl :react-rails -am clean install
+mvn -f common/agent-core-ext-java/pom.xml -pl :agent-core-ext-react-rails -am clean install
 ```
 
 #### Maven Coordinates

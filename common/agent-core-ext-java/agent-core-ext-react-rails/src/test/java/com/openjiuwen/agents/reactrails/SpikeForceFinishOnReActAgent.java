@@ -34,7 +34,7 @@ import java.util.Map;
  * 0.1.13 jar consumes requestForceFinish fired in afterModelCall.
  *
  * javap -c proved bytecode offset 225/700 consumeForceFinish — this is the RUNTIME proof.
- * Pass = react-rails unblocked. Fail = structurally infeasible on this jar version.
+ * Pass = agent-core-ext-react-rails unblocked. Fail = structurally infeasible on this jar version.
  */
 class SpikeForceFinishOnReActAgent {
     static {

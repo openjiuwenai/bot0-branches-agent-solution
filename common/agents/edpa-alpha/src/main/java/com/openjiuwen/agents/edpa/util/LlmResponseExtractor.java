@@ -19,7 +19,7 @@ package com.openjiuwen.agents.edpa.util;
  * Fallback chain: {@code content} → {@code reasoning_content} (GLM) →
  * {@code reasoning} (Qwen) → empty string.
  *
- * <p>Shared by PEV LlmClient, react-rails LlmClient, and e2e tests —
+ * <p>Shared by PEV LlmClient, agent-core-ext-react-rails LlmClient, and e2e tests —
  * eliminates triplicated extraction logic.
  *
  * @since 2026-07

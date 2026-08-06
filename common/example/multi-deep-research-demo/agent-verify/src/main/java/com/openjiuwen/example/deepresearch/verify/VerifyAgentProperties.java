@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * Pure POJO holding configuration for the verify ReAct sub-agent.
  *
- * <p>Library tier: depends only on JDK + agent-core-java + react-rails, no Spring annotations.
+ * <p>Library tier: depends only on JDK + agent-core-java + agent-core-ext-react-rails, no Spring annotations.
  * The runtime wrapper subclasses this to attach {@code @ConfigurationProperties}.
  *
  * @since 2026-07-14
@@ -31,7 +31,7 @@ public class VerifyAgentProperties {
     private String sysOperationId = "deep-research-verify-agent";
 
     /**
-     * The react-rails CriteriaReplanBridgeRail success criteria. Each criterion is a
+     * The agent-core-ext-react-rails CriteriaReplanBridgeRail success criteria. Each criterion is a
      * <b>happy-path phrase</b> — a phrase the LLM emits <em>only when the report
      * genuinely covers that aspect</em>. This is the operating convention of
      * {@code RuleBasedCriteriaVerifier}: {@code output.contains(criterion)} works

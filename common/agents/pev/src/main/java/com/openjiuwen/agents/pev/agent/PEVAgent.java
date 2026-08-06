@@ -266,7 +266,7 @@ public class PEVAgent extends BaseAgent {
 
     /**
      * Emit the terminal trace: fan to the sink (FutureTask-isolated so a throwing sink cannot kill
-     * the invoke control loop — mirrors react-rails {@code RailTelemetry.invokeIsolated}; also
+     * the invoke control loop — mirrors agent-core-ext-react-rails {@code RailTelemetry.invokeIsolated}; also
      * dodges the broad-catch rule), then fire AFTER_INVOKE with the trace as an additive typed
      * {@code "trace"} key alongside {@code "payload"} (rails reading only {@code "payload"} are
      * unaffected; the typed key is the seam for future trace-consuming rails).
