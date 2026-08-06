@@ -92,7 +92,7 @@ cp config/.env.example config/.env          # 复制后编辑 config/.env 填主
 
 **配置填写：**
 
-`.env` 用环境变量覆盖配置（前缀 `ADAPTER_` + 字段名大写），解析优先级：环境变量 > `agent_adapter_config.yaml` > 默认值。
+配置分两层来源：`.env`（环境变量，承载全部标量参数与 `HOST_*` 宿主路径）与 `agent_adapter_config.yaml`（仅承载 `match_tags` 与 `agents[]` 结构化配置，其中 per-agent 字段以 `${VAR:default}` 占位引用环境变量）。解析优先级（高 → 低）：**环境变量**（设且非空；空串视为未设置）> **YAML 占位默认值**（`${VAR:default}` 冒号后的值）> **字段内置默认值**（`src/agent_adapter/config.py`）。顶层标量走 `ADAPTER_<FIELD>` 前缀，per-agent 走 `<NAME>_<FIELD>` 前缀（`<NAME>` 为 agent name 大写）。
 
 log 模式最小填写示例：
 
@@ -378,7 +378,7 @@ curl -X GET 'http://localhost:8900/api/v1/status'
 
 ### 5.3 配置项
 
-配置解析顺序：环境变量（前缀 `ADAPTER_`）> YAML > 默认。
+配置解析顺序（高 → 低）：**环境变量**（设且非空；空串视为未设置，回落下一级）> **YAML 占位默认值**（per-agent/结构化字段的 `${VAR:default}` 冒号后值）> **字段内置默认值**（`src/agent_adapter/config.py`）。顶层标量前缀 `ADAPTER_<FIELD>`，per-agent 前缀 `<NAME>_<FIELD>`，managed-doc 默认前缀 `ADAPTER_MDD_*`。
 
 **standard 模式专用：**
 
@@ -421,7 +421,7 @@ curl -X GET 'http://localhost:8900/api/v1/status'
 | `port` | int | 否 | `8900` | 监听端口 |
 | `agents` | list | 否 | `[]` | 多 Agent 列表，空则单 default Agent |
 
-> **填写说明：** 以上字段对应环境变量为 `ADAPTER_` + 字段名大写（如 `trace_source` → `ADAPTER_TRACE_SOURCE`、`kafka_brokers` → `ADAPTER_KAFKA_BROKERS`、`output_max_file_size` → `ADAPTER_OUTPUT_MAX_FILE_SIZE`）。解析优先级：环境变量 > `agent_adapter_config.yaml` > 默认值。容器部署时在 `config/.env` 填写，最小填写示例见 3.2。
+> **填写说明：** 以上字段对应环境变量为 `ADAPTER_` + 字段名大写（如 `trace_source` → `ADAPTER_TRACE_SOURCE`、`kafka_brokers` → `ADAPTER_KAFKA_BROKERS`、`output_max_file_size` → `ADAPTER_OUTPUT_MAX_FILE_SIZE`）。解析优先级（高 → 低）：环境变量（设且非空；空串视为未设置）> YAML 占位默认值（`${VAR:default}` 冒号后值）> 字段内置默认值。容器部署时在 `config/.env` 填写，最小填写示例见 3.2。
 > - log 模式必填：`log_dir`（容器内路径，单 Agent 时也可仅设 `HOST_LOG_ROOT`）；按需调 `poll_interval`/`start_from`/`pair_timeout`/`output_*`。
 > - standard 模式必填：`trace_source=standard`、`pg_host`、`kafka_brokers`；`db_type` 目前仅支持 `postgres`。
 > - `agents` 为空时按单 default Agent 运行；多 Agent 时在 YAML `agents` 列表逐个配置 `name`/`log_dir`/`output_dir`（见 3.2 示例）。
