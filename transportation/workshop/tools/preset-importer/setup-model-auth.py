@@ -21,7 +21,7 @@ try:
     import requests, pymysql
 except ImportError:
     print("[model-auth] 缺少 requests/pymysql，请用 agent-runtime venv:")
-    print(r"  D:\code\openjiuwen_new\agent-studio\agent-runtime\.venv\Scripts\python.exe setup-model-auth.py")
+    print(r"  ~\agent-runtime\.venv\Scripts\python.exe setup-model-auth.py")
     sys.exit(2)
 
 
@@ -58,14 +58,14 @@ TOKEN = cfg("AUTH_TOKEN", "testUser|0")
 PROJECT_ID = cfg("PROJECT_ID", "0")
 DB_HOST = cfg("DB_HOST", "127.0.0.1")
 DB_PORT = int(cfg("DB_PORT", "3306"))
-DB_USER = cfg("DB_USER", "root")
-DB_PASSWORD = cfg("DB_PASSWORD", "123456")
+DB_USER = cfg("DB_USER", " ")
+DB_PASSWORD = cfg("DB_PASSWORD", " ")
 DB_NAME = cfg("DB_NAME", "agent-builder")
 # OBS(MinIO) 配置 — 改 agent IR 里的模型引用用
 OBS_HOST = cfg("OBS_HOST", "127.0.0.1")
 OBS_PORT = int(cfg("OBS_PORT", "9000"))
-MINIO_AK = cfg("MINIO_AK", "minioadmin")
-MINIO_SK = cfg("MINIO_SK", "minioadmin")
+MINIO_AK = cfg("MINIO_AK", " ")
+MINIO_SK = cfg("MINIO_SK", " ")
 MINIO_BUCKET = cfg("MINIO_BUCKET", "agent-builder")
 
 H = {"X-Auth-Token": TOKEN, "X-Language": "zh-CN", "Content-Type": "application/json"}

@@ -3,7 +3,7 @@
 """
 Agent Studio 一键导入脚本
 =========================
-把历史工程 (D:\\code\\agent-studio-develop) 里的预置数据
+把历史工程里的预置数据
 (插件 marketplace / 智能体模板 / 工作流模板) 转换为当前工程
 (Agent Studio, Java/Spring) 的 JSONL 格式，并通过导入 API 落库。
 
@@ -44,7 +44,7 @@ try:
     import requests
 except ImportError:
     print("[FATAL] 缺少 requests 库，请用 agent-runtime 的 venv 运行:\n"
-          r"  D:\code\openjiuwen_new\agent-studio\agent-runtime\.venv\Scripts\python.exe import-presets.py")
+          r"  ~\agent-runtime\.venv\Scripts\python.exe import-presets.py")
     sys.exit(2)
 
 # ============================== 配置 ==============================
@@ -907,16 +907,17 @@ def publish_plugins_to_market():
         else:
             print("  [skip] 无 preset 旧 custom 插件需更新")
         # 2. 把 preset inner 插件 project_id 设为 OP_SVC_PROJECT_ID（匹配 manager 的 opSvcProjectId）
-        sql_fix = f"SELECT COUNT(*) FROM t_tool WHERE ({like_clauses}) AND type='inner' AND visibility='global' AND published=1 AND project_id<>'{OP_SVC_PROJECT_ID}'"
-        cur.execute(sql_fix, like_args)
+        sql_fix = f"SELECT COUNT(*) FROM t_tool WHERE ({like_clauses}) AND type='inner' AND visibility='global' AND published=1 AND project_id<>%s"
+        cur.execute(sql_fix, like_args + [OP_SVC_PROJECT_ID])
         need_fix = cur.fetchone()[0]
         if need_fix > 0:
-            sql_upd2 = f"UPDATE t_tool SET project_id='{OP_SVC_PROJECT_ID}' WHERE ({like_clauses}) AND type='inner' AND visibility='global' AND published=1"
-            cur.execute(sql_upd2, like_args)
+            sql_upd2 = f"UPDATE t_tool SET project_id=%s WHERE ({like_clauses}) AND type='inner' AND visibility='global' AND published=1"
+            cur.execute(sql_upd2, like_args + [OP_SVC_PROJECT_ID])
             print(f"  [OK] {need_fix} 个 preset inner 插件 project_id 已设为 '{OP_SVC_PROJECT_ID}'")
         else:
             print("  [skip] preset inner 插件 project_id 已正确")
-        cur.execute(f"SELECT COUNT(*) FROM t_tool WHERE ({like_clauses}) AND type='inner' AND published=1 AND visibility='global' AND project_id='{OP_SVC_PROJECT_ID}'", like_args)
+        sql_cus = f"SELECT COUNT(*) FROM t_tool WHERE ({like_clauses}) AND type='inner' AND published=1 AND visibility='global' AND project_id=%s"
+        cur.execute(sql_cus, like_args + [OP_SVC_PROJECT_ID])
         after = cur.fetchone()[0]
         print(f"[plugin-market] preset OFFICIAL 可见 共 {after} 个")
     except Exception as e:
