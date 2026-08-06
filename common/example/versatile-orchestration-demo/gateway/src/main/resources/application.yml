@@ -3,7 +3,7 @@ server:
 
 versatile-orchestration:
   gateway:
-    plan-agent-base-url: ${PLAN_AGENT_BASE_URL:http://127.0.0.1:18093}
+    plan-agent-base-url: ${PLAN_AGENT_BASE_URL}
     # Downstream wire format: a2a (default, JSON-RPC SendStreamingMessage + INPUT_REQUIRED taskId
     # resume) or rest (POST /v1/query, conversation-id shadow-task routing, no taskId cache).
     plan-agent-protocol: ${PLAN_AGENT_PROTOCOL:a2a}
