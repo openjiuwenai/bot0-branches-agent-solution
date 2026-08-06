@@ -120,7 +120,8 @@ public class AgentBusCallerRoleAutoConfiguration {
      * @return the high-level request submitter
      */
     @Bean
-    AgentBusRequestSubmitter requestSubmitter(@Qualifier("requestProducer") BrokerForwardingProducerPort requestProducer) {
+    AgentBusRequestSubmitter requestSubmitter(
+            @Qualifier("requestProducer") BrokerForwardingProducerPort requestProducer) {
         return new DefaultAgentBusRequestSubmitter(requestProducer);
     }
 }
