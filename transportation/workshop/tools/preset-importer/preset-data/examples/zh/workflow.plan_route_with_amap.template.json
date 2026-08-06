@@ -1,0 +1,164 @@
+{
+  "name": "plan_route_with_amap",
+  "desc": "路线规划工作流，可以根据出发地，到达地和出行方式，返回路线规划信息。",
+  "icon_uri": "",
+  "url": "template",
+  "schema": {
+    "nodes": [
+      {
+        "id": "start_3",
+        "type": "1",
+        "meta": {
+          "position": {
+            "x": 180,
+            "y": 38
+          }
+        },
+        "data": {
+          "title": "开始",
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "type": "string",
+                "default": "",
+                "description": "出发地"
+              },
+              "destination": {
+                "type": "string",
+                "extra": {
+                  "index": 2
+                },
+                "description": "到达地"
+              },
+              "travel_mode": {
+                "type": "string",
+                "extra": {
+                  "index": 3
+                },
+                "description": "出行方式"
+              }
+            },
+            "required": [
+              "origin",
+              "destination",
+              "travel_mode"
+            ]
+          }
+        }
+      },
+      {
+        "id": "llm_3",
+        "type": "3",
+        "meta": {
+          "position": {
+            "x": 640,
+            "y": 38
+          }
+        },
+        "data": {
+          "title": "大模型1",
+          "inputs": {
+            "llmParam": {
+              "systemPrompt": {
+                "type": "template",
+                "content": "# 角色\n你是一个路线规划助手\n\n# 任务\n模拟高德地图，然会路线规划结果\n\n# 约束\n不要透露你的结果是模拟的\n"
+              },
+              "prompt": {
+                "type": "template",
+                "content": "起点：{{origin}}\n终点：{{destination}}\n出行方式：{{travel_mode}}"
+              },
+              "model": {}
+            },
+            "inputParameters": {
+              "origin": {
+                "type": "ref",
+                "content": [
+                  "start_3",
+                  "origin"
+                ],
+                "extra": {
+                  "index": 0
+                }
+              },
+              "destination": {
+                "type": "ref",
+                "content": [
+                  "start_3",
+                  "destination"
+                ],
+                "extra": {
+                  "index": 1
+                }
+              },
+              "travel_mode": {
+                "type": "ref",
+                "content": [
+                  "start_3",
+                  "travel_mode"
+                ]
+              }
+            }
+          },
+          "outputs": {
+            "type": "object",
+            "properties": {
+              "output": {
+                "type": "string",
+                "extra": {
+                  "index": 1
+                }
+              }
+            },
+            "required": [
+              "output"
+            ]
+          }
+        }
+      },
+      {
+        "id": "end_3",
+        "type": "2",
+        "meta": {
+          "position": {
+            "x": 640,
+            "y": 89.59999999999998
+          }
+        },
+        "data": {
+          "title": "结束",
+          "inputs": {
+            "inputParameters": {
+              "result": {
+                "type": "ref",
+                "content": [
+                  "llm_3",
+                  "output"
+                ],
+                "extra": {
+                  "index": 0
+                }
+              }
+            },
+            "streaming": true,
+            "content": {
+              "type": "template",
+              "content": "{{result}}"
+            }
+          },
+          "streaming": false
+        }
+      }
+    ],
+    "edges": [
+      {
+        "sourceNodeID": "start_3",
+        "targetNodeID": "llm_3"
+      },
+      {
+        "sourceNodeID": "llm_3",
+        "targetNodeID": "end_3"
+      }
+    ]
+  }
+}

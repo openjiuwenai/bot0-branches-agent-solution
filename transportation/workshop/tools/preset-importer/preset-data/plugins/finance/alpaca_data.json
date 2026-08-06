@@ -1,0 +1,1166 @@
+{
+  "ready": true,
+  "plugin_id": "alpaca_data",
+  "name": "Alpaca Data",
+  "description": "Real-time and historical market data API for stocks, options, crypto, forex, and news. Access OHLCV bars, quotes, trades, snapshots, and corporate actions.",
+  "category": "finance",
+  "category_name": "Finance & Trading",
+  "category_icon": "📊",
+  "icon_uri": "📈",
+  "plugin_type": 1,
+  "version": "1.0.0",
+  "author": "OpenJiuwen",
+  "tags": [
+    "stocks",
+    "market-data",
+    "finance",
+    "real-time",
+    "historical",
+    "options",
+    "crypto",
+    "forex",
+    "news"
+  ],
+  "api_prefix": "https://data.alpaca.markets/v2",
+  "documentation": "https://docs.alpaca.markets/",
+  "desc_mk": "Alpaca Data API provides real-time and historical market data for stocks, options, cryptocurrencies, and forex. Access OHLCV candlestick data, quotes, trades, orderbooks, and corporate actions. Supports multiple data feeds including IEX, SIP, and OTC. **Free tier** available with IEX data. Get API keys at [Alpaca Markets](https://app.alpaca.markets/paper/dashboard/overview).",
+  "header_configuration": {
+    "APCA-API-KEY-ID": {
+      "value": "YOUR_ALPACA_API_KEY_ID",
+      "description": "Alpaca API Key ID (Environment variable: APCA_API_KEY_ID)"
+    },
+    "APCA-API-SECRET-KEY": {
+      "value": "YOUR_ALPACA_SECRET_KEY",
+      "description": "Alpaca API Secret Key (Environment variable: APCA_API_SECRET_KEY)"
+    }
+  },
+  "tools": [
+    {
+      "name": "Get Stock Bars",
+      "path": "/stocks/bars",
+      "method": "GET",
+      "description": "Get historical OHLCV bar data for multiple stocks over a specified time range with customizable timeframe",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA,MSFT')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "timeframe": {
+          "type": "string",
+          "description": "Bar timeframe: '1Min', '5Min', '15Min', '1H', '1D', '1W', '1M'",
+          "required": true,
+          "default": "1D",
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format (e.g., '2024-01-01T00:00:00Z')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format (e.g., '2024-12-31T23:59:59Z')",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of bars per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        },
+        "adjustment": {
+          "type": "string",
+          "description": "Price adjustment: 'raw', 'split', 'dividend', 'all'",
+          "required": false,
+          "default": "raw",
+          "send_method": "Query"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency of prices: 'USD' (default) or 'CAD'",
+          "required": false,
+          "default": "USD",
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Latest Stock Bars",
+      "path": "/stocks/bars/latest",
+      "method": "GET",
+      "description": "Get the most recent OHLCV bar for multiple stocks",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA,MSFT')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency of prices: 'USD' (default) or 'CAD'",
+          "required": false,
+          "default": "USD",
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Stock Quotes",
+      "path": "/stocks/quotes",
+      "method": "GET",
+      "description": "Get historical bid/ask quotes for multiple stocks with size and exchange information",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of quotes per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Latest Stock Quotes",
+      "path": "/stocks/quotes/latest",
+      "method": "GET",
+      "description": "Get the most recent bid/ask quotes for multiple stocks",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA,MSFT')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Stock Trades",
+      "path": "/stocks/trades",
+      "method": "GET",
+      "description": "Get historical trade executions for multiple stocks with price, size, and conditions",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of trades per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Latest Stock Trades",
+      "path": "/stocks/trades/latest",
+      "method": "GET",
+      "description": "Get the most recent trade executions for multiple stocks",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA,MSFT')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Stock Snapshots",
+      "path": "/stocks/snapshots",
+      "method": "GET",
+      "description": "Get comprehensive snapshot data including latest quote, trade, bar, and previous daily bar for multiple stocks",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA,MSFT')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Stock Auctions",
+      "path": "/stocks/auctions",
+      "method": "GET",
+      "description": "Get historical auction data for multiple stocks including opening and closing auctions",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of auctions per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Bars",
+      "path": "/stocks/{symbol}/bars",
+      "method": "GET",
+      "description": "Get historical OHLCV bar data for a single stock symbol",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA', 'MSFT')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "timeframe": {
+          "type": "string",
+          "description": "Bar timeframe: '1Min', '5Min', '15Min', '1H', '1D', '1W', '1M'",
+          "required": true,
+          "default": "1D",
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of bars (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        },
+        "adjustment": {
+          "type": "string",
+          "description": "Price adjustment: 'raw', 'split', 'dividend', 'all'",
+          "required": false,
+          "default": "raw",
+          "send_method": "Query"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency of prices: 'USD' or 'CAD'",
+          "required": false,
+          "default": "USD",
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Latest Bar",
+      "path": "/stocks/{symbol}/bars/latest",
+      "method": "GET",
+      "description": "Get the most recent OHLCV bar for a single stock",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency of prices: 'USD' or 'CAD'",
+          "required": false,
+          "default": "USD",
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Quotes",
+      "path": "/stocks/{symbol}/quotes",
+      "method": "GET",
+      "description": "Get historical bid/ask quotes for a single stock",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of quotes (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Latest Quote",
+      "path": "/stocks/{symbol}/quotes/latest",
+      "method": "GET",
+      "description": "Get the most recent bid/ask quote for a single stock",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'MSFT')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Trades",
+      "path": "/stocks/{symbol}/trades",
+      "method": "GET",
+      "description": "Get historical trade executions for a single stock",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of trades (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Latest Trade",
+      "path": "/stocks/{symbol}/trades/latest",
+      "method": "GET",
+      "description": "Get the most recent trade execution for a single stock",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Snapshot",
+      "path": "/stocks/{symbol}/snapshot",
+      "method": "GET",
+      "description": "Get comprehensive snapshot for a single stock including latest quote, trade, bar, and previous daily bar",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "feed": {
+          "type": "string",
+          "description": "Data feed: 'IEX', 'SIP', 'OTC'",
+          "required": false,
+          "default": "IEX",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Single Stock Auctions",
+      "path": "/stocks/{symbol}/auctions",
+      "method": "GET",
+      "description": "Get historical auction data for a single stock including opening and closing auctions",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Path"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of auctions (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Stock Condition Codes",
+      "path": "/stocks/meta/conditions",
+      "method": "GET",
+      "description": "Get mapping of stock trade and quote condition codes to their descriptions",
+      "request_params": {
+        "type": {
+          "type": "string",
+          "description": "Condition type: 'trade' or 'quote'",
+          "required": false,
+          "default": "trade",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Stock Exchange Codes",
+      "path": "/stocks/meta/exchanges",
+      "method": "GET",
+      "description": "Get mapping of stock exchange codes to their full names",
+      "request_params": {}
+    },
+    {
+      "name": "Get Option Bars",
+      "path": "/options/bars",
+      "method": "GET",
+      "description": "Get historical OHLCV bar data for option contracts",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of option symbols (e.g., 'AAPL240119C00150000')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "timeframe": {
+          "type": "string",
+          "description": "Bar timeframe: '1Min', '5Min', '15Min', '1H', '1D'",
+          "required": true,
+          "default": "1D",
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of bars per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Latest Quotes",
+      "path": "/options/quotes/latest",
+      "method": "GET",
+      "description": "Get the most recent bid/ask quotes for option contracts",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of option symbols",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Snapshots",
+      "path": "/options/snapshots",
+      "method": "GET",
+      "description": "Get comprehensive snapshot data for option contracts including latest quote, trade, and Greeks",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of option symbols",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Chain",
+      "path": "/options/chains",
+      "method": "GET",
+      "description": "Get option chain data for underlying symbols with filtering by expiration, strike, and type",
+      "request_params": {
+        "underlying_symbols": {
+          "type": "string",
+          "description": "Comma-separated list of underlying stock symbols (e.g., 'AAPL,TSLA')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "expiration_date": {
+          "type": "string",
+          "description": "Filter by expiration date in YYYY-MM-DD format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "expiration_date_gte": {
+          "type": "string",
+          "description": "Expiration date greater than or equal to (YYYY-MM-DD)",
+          "required": false,
+          "send_method": "Query"
+        },
+        "expiration_date_lte": {
+          "type": "string",
+          "description": "Expiration date less than or equal to (YYYY-MM-DD)",
+          "required": false,
+          "send_method": "Query"
+        },
+        "strike_price_gte": {
+          "type": "number",
+          "description": "Strike price greater than or equal to",
+          "required": false,
+          "send_method": "Query"
+        },
+        "strike_price_lte": {
+          "type": "number",
+          "description": "Strike price less than or equal to",
+          "required": false,
+          "send_method": "Query"
+        },
+        "type": {
+          "type": "string",
+          "description": "Option type: 'call' or 'put'",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of contracts to return",
+          "required": false,
+          "default": 100,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Trades",
+      "path": "/options/trades",
+      "method": "GET",
+      "description": "Get historical trade executions for option contracts",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of option symbols",
+          "required": true,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of trades per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Latest Trades",
+      "path": "/options/trades/latest",
+      "method": "GET",
+      "description": "Get the most recent trade executions for option contracts",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of option symbols",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Condition Codes",
+      "path": "/options/meta/conditions",
+      "method": "GET",
+      "description": "Get mapping of option trade and quote condition codes to their descriptions",
+      "request_params": {
+        "type": {
+          "type": "string",
+          "description": "Condition type: 'trade' or 'quote'",
+          "required": false,
+          "default": "trade",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Exchange Codes",
+      "path": "/options/meta/exchanges",
+      "method": "GET",
+      "description": "Get mapping of option exchange codes to their full names",
+      "request_params": {}
+    },
+    {
+      "name": "Get Crypto Bars",
+      "path": "/crypto/bars",
+      "method": "GET",
+      "description": "Get historical OHLCV bar data for cryptocurrency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "timeframe": {
+          "type": "string",
+          "description": "Bar timeframe: '1Min', '5Min', '15Min', '1H', '1D', '1W', '1M'",
+          "required": true,
+          "default": "1D",
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of bars per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Crypto Latest Bars",
+      "path": "/crypto/bars/latest",
+      "method": "GET",
+      "description": "Get the most recent OHLCV bar for cryptocurrency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Crypto Latest Orderbook",
+      "path": "/crypto/orderbooks/latest",
+      "method": "GET",
+      "description": "Get the most recent orderbook data for cryptocurrency pairs showing bid/ask levels",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Crypto Latest Quotes",
+      "path": "/crypto/quotes/latest",
+      "method": "GET",
+      "description": "Get the most recent bid/ask quotes for cryptocurrency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Crypto Latest Trades",
+      "path": "/crypto/trades/latest",
+      "method": "GET",
+      "description": "Get the most recent trade executions for cryptocurrency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Crypto Quotes",
+      "path": "/crypto/quotes",
+      "method": "GET",
+      "description": "Get historical bid/ask quotes for cryptocurrency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of quotes per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Crypto Snapshots",
+      "path": "/crypto/snapshots",
+      "method": "GET",
+      "description": "Get comprehensive snapshot data for cryptocurrency pairs including latest quote, trade, and bar",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Crypto Trades",
+      "path": "/crypto/trades",
+      "method": "GET",
+      "description": "Get historical trade executions for cryptocurrency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of crypto symbols (e.g., 'BTC/USD', 'ETH/USD')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of trades per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get News Articles",
+      "path": "/news",
+      "method": "GET",
+      "description": "Get financial news articles with optional filtering by symbols, date range, and content",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols to filter news (e.g., 'AAPL,TSLA')",
+          "required": false,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of articles (1-500)",
+          "required": false,
+          "default": 50,
+          "send_method": "Query"
+        },
+        "include_content": {
+          "type": "boolean",
+          "description": "Include full article content in response",
+          "required": false,
+          "default": false,
+          "send_method": "Query"
+        },
+        "exclude_contentless": {
+          "type": "boolean",
+          "description": "Exclude articles without content",
+          "required": false,
+          "default": false,
+          "send_method": "Query"
+        },
+        "sort": {
+          "type": "string",
+          "description": "Sort order: 'asc' or 'desc'",
+          "required": false,
+          "default": "desc",
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Corporate Actions",
+      "path": "/corporate-actions",
+      "method": "GET",
+      "description": "Get corporate actions data including dividends, splits, mergers, and name changes",
+      "request_params": {
+        "types": {
+          "type": "string",
+          "description": "Comma-separated action types: 'dividends', 'mergers', 'splits', 'name_changes'",
+          "required": false,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in YYYY-MM-DD format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in YYYY-MM-DD format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Filter by specific stock symbol",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of results (1-1000)",
+          "required": false,
+          "default": 100,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Fixed Income Latest Prices",
+      "path": "/fixed-income/prices/latest",
+      "method": "GET",
+      "description": "Get the most recent prices for fixed income securities (bonds, treasuries)",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of fixed income symbols (CUSIPs)",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Forex Latest Rates",
+      "path": "/forex/rates/latest",
+      "method": "GET",
+      "description": "Get the most recent exchange rates for currency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of forex pairs (e.g., 'EUR/USD', 'GBP/USD', 'USD/JPY')",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Forex Rates",
+      "path": "/forex/rates",
+      "method": "GET",
+      "description": "Get historical exchange rates for currency pairs",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of forex pairs (e.g., 'EUR/USD', 'GBP/USD')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of rates per symbol (1-10000)",
+          "required": false,
+          "default": 1000,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Most Active Stocks",
+      "path": "/screener/most-active",
+      "method": "GET",
+      "description": "Get the most actively traded stocks by volume for the current trading day",
+      "request_params": {
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of stocks to return (1-100)",
+          "required": false,
+          "default": 10,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Top Market Movers",
+      "path": "/screener/movers",
+      "method": "GET",
+      "description": "Get top gaining and losing stocks by percentage change for the current trading day",
+      "request_params": {
+        "direction": {
+          "type": "string",
+          "description": "Direction filter: 'gainers', 'losers', or 'all'",
+          "required": false,
+          "default": "all",
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of stocks to return (1-100)",
+          "required": false,
+          "default": 10,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Logos",
+      "path": "/logos",
+      "method": "GET",
+      "description": "Get company logo URLs for stock symbols",
+      "request_params": {
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of stock symbols (e.g., 'AAPL,TSLA,MSFT')",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    }
+  ]
+}
