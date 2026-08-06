@@ -1,0 +1,29 @@
+{
+  "_comment_setup_models": "模型配置说明：历史工程的预置模型数据已随旧 DB 丢失(API key 加密、库不存在)，无法自动迁移。当前工程的模型需用你自己的 API key 配置。推荐直接在前端 UI 配置(模型管理→新增模型服务，会自动处理供应商鉴权)，配置好后在智能体/工作流编辑器里给预制智能体绑定模型即可。下面 entries 仅当你想用脚本批量创建时填写——脚本会尝试: 建用户供应商→建鉴权→建模型 三步流程，但部分 auth_info schema 校验较严，失败属正常，请改用 UI。",
+
+  "_comment_fields": "provider_id: 100=系统预置 ModelArts 供应商(用户无权在其下建模型，需先建用户供应商)。interface_protocol 见 t_model_interface_protocol 表已预置协议(openai/qwen/zhipu/baichuan/minimax/moonshot/maasv1/maasv2 等)。model_type: LLM/Text-Embedding/RERANK/IMAGE-TO-TEXT。",
+
+  "_comment_usage": "脚本会先调用 POST /v1/0/model-manager/integration/providers 建用户供应商，再 POST /model-manager/provider/auths 建鉴权(metadata_id 从新建供应商返回)，再 POST /model-manager/model-services 建模型服务。任一步失败会打印 [model FAIL] 并跳过，不影响插件/智能体/工作流的导入。",
+
+  "entries": [
+    {
+      "provider_name": "DeepSeek",
+      "provider_name_en": "DeepSeek",
+      "description": "DeepSeek API 供应商",
+      "provider_url": "https://api.deepseek.com/v1",
+      "auth_type": "API_KEY",
+      "auth_info_schema": {"API Key": ""},
+      "service_name": "DeepSeek-V3",
+      "model_name": "DeepSeek-V3",
+      "model_type": "LLM",
+      "api_url": "https://api.deepseek.com/v1",
+      "interface_protocol": "openai",
+      "is_support_stream": true,
+      "is_support_function": true,
+      "is_public": true,
+      "is_network": true,
+      "context_length": 64000,
+      "api_key": "在此填你的 DeepSeek API key"
+    }
+  ]
+}

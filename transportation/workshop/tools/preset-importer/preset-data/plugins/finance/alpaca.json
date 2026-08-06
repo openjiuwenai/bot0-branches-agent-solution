@@ -1,0 +1,736 @@
+{
+  "ready": true,
+  "plugin_id": "alpaca",
+  "name": "Alpaca",
+  "description": "Commission-free stock and options trading API with real-time market data, portfolio management, and 24/5 trading capabilities.",
+  "category": "finance",
+  "category_name": "Finance & Trading",
+  "category_icon": "📊",
+  "icon_uri": "🦙",
+  "plugin_type": 1,
+  "version": "1.0.0",
+  "author": "OpenJiuwen",
+  "tags": [
+    "stocks",
+    "trading",
+    "finance",
+    "market-data",
+    "portfolio",
+    "options",
+    "crypto",
+    "brokerage"
+  ],
+  "api_prefix": "https://paper-api.alpaca.markets/v2",
+  "documentation": "https://docs.alpaca.markets/",
+  "desc_mk": "Alpaca provides commission-free stock and options trading API with real-time market data. Build trading applications, execute algorithmic strategies, and manage portfolios programmatically. Supports 24/5 trading, margin trading (up to 4X intraday), and short selling. **Paper trading** available for testing. Get API keys at [Alpaca Markets](https://app.alpaca.markets/paper/dashboard/overview).",
+  "header_configuration": {
+    "APCA-API-KEY-ID": {
+      "value": "YOUR_ALPACA_API_KEY_ID",
+      "description": "Alpaca API Key ID (Environment variable: APCA_API_KEY_ID)"
+    },
+    "APCA-API-SECRET-KEY": {
+      "value": "YOUR_ALPACA_SECRET_KEY",
+      "description": "Alpaca API Secret Key (Environment variable: APCA_API_SECRET_KEY)"
+    }
+  },
+  "tools": [
+    {
+      "name": "Get Account",
+      "path": "/account",
+      "method": "GET",
+      "description": "Get current account information including buying power, portfolio value, cash, and account status",
+      "request_params": {}
+    },
+    {
+      "name": "Get Account Activities",
+      "path": "/account/activities",
+      "method": "GET",
+      "description": "Get account activities such as orders, transactions, and dividends with optional filtering",
+      "request_params": {
+        "activity_types": {
+          "type": "string",
+          "description": "Comma-separated activity types to filter (e.g., 'FILL','DIV','CSD')",
+          "required": false,
+          "send_method": "Query"
+        },
+        "after": {
+          "type": "string",
+          "description": "Start date in ISO 8601 format (e.g., '2024-01-01T00:00:00Z')",
+          "required": false,
+          "send_method": "Query"
+        },
+        "before": {
+          "type": "string",
+          "description": "End date in ISO 8601 format (e.g., '2024-12-31T23:59:59Z')",
+          "required": false,
+          "send_method": "Query"
+        },
+        "sort": {
+          "type": "string",
+          "description": "Sort direction: 'asc' or 'desc'",
+          "required": false,
+          "default": "desc",
+          "send_method": "Query"
+        },
+        "page_size": {
+          "type": "integer",
+          "description": "Number of results per page (1-1000)",
+          "required": false,
+          "default": 100,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Portfolio History",
+      "path": "/account/portfolio/history",
+      "method": "GET",
+      "description": "Get portfolio value history with optional time range and granularity settings",
+      "request_params": {
+        "period": {
+          "type": "string",
+          "description": "Time period: '1D', '1W', '1M', '3M', '6M', '1Y', '3Y', '5Y'",
+          "required": false,
+          "default": "1M",
+          "send_method": "Query"
+        },
+        "granularity": {
+          "type": "string",
+          "description": "Data granularity: '1M', '5M', '15M', '1H', '6H', '1D'",
+          "required": false,
+          "send_method": "Query"
+        },
+        "date_end": {
+          "type": "string",
+          "description": "End date in YYYY-MM-DD format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "extended_hours": {
+          "type": "boolean",
+          "description": "Include extended hours data",
+          "required": false,
+          "default": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Assets",
+      "path": "/assets",
+      "method": "GET",
+      "description": "Get list of tradable assets (stocks, ETFs) with optional filtering by status and asset class",
+      "request_params": {
+        "status": {
+          "type": "string",
+          "description": "Asset status: 'active' (default), 'inactive', or 'all'",
+          "required": false,
+          "default": "active",
+          "send_method": "Query"
+        },
+        "asset_class": {
+          "type": "string",
+          "description": "Asset class: 'us_equity' or 'us_equity_option'",
+          "required": false,
+          "default": "us_equity",
+          "send_method": "Query"
+        },
+        "exchange": {
+          "type": "string",
+          "description": "Filter by exchange: 'NYSE', 'NASDAQ', 'ARCA', 'BATS', 'OPRA', or 'CRYPTO'",
+          "required": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Asset",
+      "path": "/assets/{symbol}",
+      "method": "GET",
+      "description": "Get detailed information about a specific asset including tradability, margin requirements, and shortability",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA', 'MSFT')",
+          "required": true,
+          "send_method": "Path"
+        }
+      }
+    },
+    {
+      "name": "Get Orders",
+      "path": "/orders",
+      "method": "GET",
+      "description": "Get list of orders with optional filtering by status, date, and symbols",
+      "request_params": {
+        "status": {
+          "type": "string",
+          "description": "Order status: 'open', 'closed', 'all' (default: 'open')",
+          "required": false,
+          "default": "open",
+          "send_method": "Query"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of orders to return (1-500)",
+          "required": false,
+          "default": 50,
+          "send_method": "Query"
+        },
+        "after": {
+          "type": "string",
+          "description": "Start time in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "until": {
+          "type": "string",
+          "description": "End time in ISO 8601 format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "direction": {
+          "type": "string",
+          "description": "Sort direction: 'asc' or 'desc'",
+          "required": false,
+          "default": "desc",
+          "send_method": "Query"
+        },
+        "nested": {
+          "type": "boolean",
+          "description": "Include nested orders for multi-leg options strategies",
+          "required": false,
+          "default": false,
+          "send_method": "Query"
+        },
+        "side": {
+          "type": "string",
+          "description": "Filter by order side: 'buy' or 'sell'",
+          "required": false,
+          "send_method": "Query"
+        },
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of symbols to filter (e.g., 'AAPL,TSLA')",
+          "required": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Order by Client Order ID",
+      "path": "/orders:by_client_order_id",
+      "method": "GET",
+      "description": "Get a single order by client order ID",
+      "request_params": {
+        "client_order_id": {
+          "type": "string",
+          "description": "Client order ID (UUID or custom ID)",
+          "required": true,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Order",
+      "path": "/orders/{order_id}",
+      "method": "GET",
+      "description": "Get detailed information about a specific order by order ID",
+      "request_params": {
+        "order_id": {
+          "type": "string",
+          "description": "Order ID (UUID)",
+          "required": true,
+          "send_method": "Path"
+        }
+      }
+    },
+    {
+      "name": "Place Order",
+      "path": "/orders",
+      "method": "POST",
+      "description": "Place a new order for stocks or options",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Body"
+        },
+        "qty": {
+          "type": "number",
+          "description": "Number of shares to order (can be fractional for stocks)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "notional": {
+          "type": "number",
+          "description": "Dollar amount to invest (alternative to qty for fractional shares)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "side": {
+          "type": "string",
+          "description": "Order side: 'buy' or 'sell'",
+          "required": true,
+          "send_method": "Body"
+        },
+        "type": {
+          "type": "string",
+          "description": "Order type: 'market', 'limit', 'stop', 'stop_limit', 'trailing_stop'",
+          "required": true,
+          "send_method": "Body"
+        },
+        "time_in_force": {
+          "type": "string",
+          "description": "Time in force: 'day', 'gtc', 'opg', 'cls', 'ioc', 'fok'",
+          "required": true,
+          "send_method": "Body"
+        },
+        "limit_price": {
+          "type": "number",
+          "description": "Limit price for limit/stop_limit orders",
+          "required": false,
+          "send_method": "Body"
+        },
+        "stop_price": {
+          "type": "number",
+          "description": "Stop price for stop/stop_limit orders",
+          "required": false,
+          "send_method": "Body"
+        },
+        "trail_price": {
+          "type": "number",
+          "description": "Trail price for trailing stop orders",
+          "required": false,
+          "send_method": "Body"
+        },
+        "trail_percent": {
+          "type": "number",
+          "description": "Trail percentage for trailing stop orders",
+          "required": false,
+          "send_method": "Body"
+        },
+        "client_order_id": {
+          "type": "string",
+          "description": "Client-generated order ID for tracking",
+          "required": false,
+          "send_method": "Body"
+        },
+        "extended_hours": {
+          "type": "boolean",
+          "description": "Allow order execution during extended hours",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "order_class": {
+          "type": "string",
+          "description": "Order class: 'simple', 'bracket', 'oco', 'oto'",
+          "required": false,
+          "default": "simple",
+          "send_method": "Body"
+        },
+        "take_profit": {
+          "type": "object",
+          "description": "Take profit order parameters for bracket orders",
+          "required": false,
+          "send_method": "Body"
+        },
+        "stop_loss": {
+          "type": "object",
+          "description": "Stop loss order parameters for bracket orders",
+          "required": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Replace Order",
+      "path": "/orders/{order_id}",
+      "method": "PATCH",
+      "description": "Replace (modify) an existing order with new quantity or price",
+      "request_params": {
+        "order_id": {
+          "type": "string",
+          "description": "Order ID to replace",
+          "required": true,
+          "send_method": "Path"
+        },
+        "qty": {
+          "type": "number",
+          "description": "New quantity for the order",
+          "required": false,
+          "send_method": "Body"
+        },
+        "time_in_force": {
+          "type": "string",
+          "description": "New time in force",
+          "required": false,
+          "send_method": "Body"
+        },
+        "limit_price": {
+          "type": "number",
+          "description": "New limit price",
+          "required": false,
+          "send_method": "Body"
+        },
+        "stop_price": {
+          "type": "number",
+          "description": "New stop price",
+          "required": false,
+          "send_method": "Body"
+        },
+        "trail": {
+          "type": "number",
+          "description": "New trail value for trailing stop orders",
+          "required": false,
+          "send_method": "Body"
+        },
+        "client_order_id": {
+          "type": "string",
+          "description": "New client order ID",
+          "required": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Cancel Order",
+      "path": "/orders/{order_id}",
+      "method": "DELETE",
+      "description": "Cancel an open order by order ID",
+      "request_params": {
+        "order_id": {
+          "type": "string",
+          "description": "Order ID to cancel",
+          "required": true,
+          "send_method": "Path"
+        }
+      }
+    },
+    {
+      "name": "Cancel All Orders",
+      "path": "/orders",
+      "method": "DELETE",
+      "description": "Cancel all open orders",
+      "request_params": {}
+    },
+    {
+      "name": "Get Positions",
+      "path": "/positions",
+      "method": "GET",
+      "description": "Get list of all open positions with unrealized P/L and current market value",
+      "request_params": {
+        "side": {
+          "type": "string",
+          "description": "Filter by position side: 'long' or 'short'",
+          "required": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Position",
+      "path": "/positions/{symbol}",
+      "method": "GET",
+      "description": "Get detailed information about a specific position including quantity, average cost, and unrealized P/L",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., 'AAPL', 'TSLA')",
+          "required": true,
+          "send_method": "Path"
+        }
+      }
+    },
+    {
+      "name": "Close Position",
+      "path": "/positions/{symbol}",
+      "method": "DELETE",
+      "description": "Close a position by market order (liquidates entire position)",
+      "request_params": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol to close",
+          "required": true,
+          "send_method": "Path"
+        },
+        "qty": {
+          "type": "number",
+          "description": "Quantity to close (partial close if less than total)",
+          "required": false,
+          "send_method": "Query"
+        },
+        "percentage": {
+          "type": "number",
+          "description": "Percentage of position to close (1-100)",
+          "required": false,
+          "send_method": "Query"
+        },
+        "side": {
+          "type": "string",
+          "description": "Override side: 'buy' or 'sell' (for short positions)",
+          "required": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Close All Positions",
+      "path": "/positions",
+      "method": "DELETE",
+      "description": "Close all open positions (liquidates entire portfolio)",
+      "request_params": {}
+    },
+    {
+      "name": "Get Clock",
+      "path": "/clock",
+      "method": "GET",
+      "description": "Get current market clock including whether market is open, next open/close times",
+      "request_params": {}
+    },
+    {
+      "name": "Get Calendar",
+      "path": "/calendar",
+      "method": "GET",
+      "description": "Get market trading calendar with open/close times for specified date range",
+      "request_params": {
+        "start": {
+          "type": "string",
+          "description": "Start date in YYYY-MM-DD format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in YYYY-MM-DD format",
+          "required": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Corporate Actions",
+      "path": "/corporate_actions",
+      "method": "GET",
+      "description": "Get corporate actions data including dividends, splits, mergers, and name changes",
+      "request_params": {
+        "types": {
+          "type": "string",
+          "description": "Comma-separated action types: 'dividends', 'mergers', 'splits', 'name_changes'",
+          "required": false,
+          "send_method": "Query"
+        },
+        "start": {
+          "type": "string",
+          "description": "Start date in YYYY-MM-DD format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "end": {
+          "type": "string",
+          "description": "End date in YYYY-MM-DD format",
+          "required": true,
+          "send_method": "Query"
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Filter by specific symbol",
+          "required": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Option Contracts",
+      "path": "/options/contracts",
+      "method": "GET",
+      "description": "Get list of option contracts for an underlying symbol",
+      "request_params": {
+        "underlying_symbols": {
+          "type": "string",
+          "description": "Comma-separated underlying symbols (e.g., 'AAPL,TSLA')",
+          "required": true,
+          "send_method": "Query"
+        },
+        "status": {
+          "type": "string",
+          "description": "Contract status: 'active' (default) or 'inactive'",
+          "required": false,
+          "default": "active",
+          "send_method": "Query"
+        },
+        "expiration_date": {
+          "type": "string",
+          "description": "Filter by expiration date in YYYY-MM-DD format",
+          "required": false,
+          "send_method": "Query"
+        },
+        "expiration_date_gte": {
+          "type": "string",
+          "description": "Expiration date greater than or equal to (YYYY-MM-DD)",
+          "required": false,
+          "send_method": "Query"
+        },
+        "expiration_date_lte": {
+          "type": "string",
+          "description": "Expiration date less than or equal to (YYYY-MM-DD)",
+          "required": false,
+          "send_method": "Query"
+        },
+        "root_symbol": {
+          "type": "string",
+          "description": "Filter by root symbol",
+          "required": false,
+          "send_method": "Query"
+        },
+        "type": {
+          "type": "string",
+          "description": "Option type: 'call' or 'put'",
+          "required": false,
+          "send_method": "Query"
+        },
+        "style": {
+          "type": "string",
+          "description": "Option style: 'american' or 'european'",
+          "required": false,
+          "send_method": "Query"
+        },
+        "strike_price_gte": {
+          "type": "number",
+          "description": "Strike price greater than or equal to",
+          "required": false,
+          "send_method": "Query"
+        },
+        "strike_price_lte": {
+          "type": "number",
+          "description": "Strike price less than or equal to",
+          "required": false,
+          "send_method": "Query"
+        }
+      }
+    },
+    {
+      "name": "Get Watchlists",
+      "path": "/watchlists",
+      "method": "GET",
+      "description": "Get list of all watchlists",
+      "request_params": {}
+    },
+    {
+      "name": "Get Watchlist",
+      "path": "/watchlists/{watchlist_id}",
+      "method": "GET",
+      "description": "Get a specific watchlist by ID",
+      "request_params": {
+        "watchlist_id": {
+          "type": "string",
+          "description": "Watchlist ID (UUID)",
+          "required": true,
+          "send_method": "Path"
+        }
+      }
+    },
+    {
+      "name": "Create Watchlist",
+      "path": "/watchlists",
+      "method": "POST",
+      "description": "Create a new watchlist with a list of symbols",
+      "request_params": {
+        "name": {
+          "type": "string",
+          "description": "Watchlist name",
+          "required": true,
+          "send_method": "Body"
+        },
+        "symbols": {
+          "type": "string",
+          "description": "Comma-separated list of symbols (e.g., 'AAPL,TSLA,MSFT')",
+          "required": true,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Update Watchlist",
+      "path": "/watchlists/{watchlist_id}",
+      "method": "PUT",
+      "description": "Update an existing watchlist's name and/or symbols",
+      "request_params": {
+        "watchlist_id": {
+          "type": "string",
+          "description": "Watchlist ID to update",
+          "required": true,
+          "send_method": "Path"
+        },
+        "name": {
+          "type": "string",
+          "description": "New watchlist name",
+          "required": false,
+          "send_method": "Body"
+        },
+        "symbols": {
+          "type": "string",
+          "description": "New comma-separated list of symbols",
+          "required": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Delete Watchlist",
+      "path": "/watchlists/{watchlist_id}",
+      "method": "DELETE",
+      "description": "Delete a watchlist",
+      "request_params": {
+        "watchlist_id": {
+          "type": "string",
+          "description": "Watchlist ID to delete",
+          "required": true,
+          "send_method": "Path"
+        }
+      }
+    },
+    {
+      "name": "Add Symbol to Watchlist",
+      "path": "/watchlists/{watchlist_id}",
+      "method": "POST",
+      "description": "Add a symbol to an existing watchlist",
+      "request_params": {
+        "watchlist_id": {
+          "type": "string",
+          "description": "Watchlist ID",
+          "required": true,
+          "send_method": "Path"
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Symbol to add",
+          "required": true,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Remove Symbol from Watchlist",
+      "path": "/watchlists/{watchlist_id}/{symbol}",
+      "method": "DELETE",
+      "description": "Remove a symbol from a watchlist",
+      "request_params": {
+        "watchlist_id": {
+          "type": "string",
+          "description": "Watchlist ID",
+          "required": true,
+          "send_method": "Path"
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Symbol to remove",
+          "required": true,
+          "send_method": "Path"
+        }
+      }
+    }
+  ]
+}

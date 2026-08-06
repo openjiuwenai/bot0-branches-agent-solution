@@ -1,0 +1,521 @@
+{
+  "ready": true,
+  "plugin_id": "tavily",
+  "name": "Tavily",
+  "description": "AI-powered search and content extraction API for building intelligent agents. Get real-time search results, extract webpage content, and crawl websites.",
+  "category": "ai",
+  "category_name": "AI & ML Services",
+  "category_icon": "🤖",
+  "icon_uri": "🔍",
+  "plugin_type": 1,
+  "version": "1.0.0",
+  "author": "OpenJiuwen",
+  "tags": [
+    "search",
+    "web-extraction",
+    "ai",
+    "research",
+    "content-extraction",
+    "crawler",
+    "real-time"
+  ],
+  "api_prefix": "https://api.tavily.com",
+  "documentation": "https://docs.tavily.com/",
+  "desc_mk": "Tavily provides AI-powered search and content extraction APIs optimized for agents. Get accurate, real-time search results with citations, extract full webpage content, and crawl websites intelligently. **Search API** offers different depths (basic, advanced, fast, ultra-fast). **Extract API** fetches clean content from URLs. **Crawl/Map APIs** navigate entire sites. Get API key at [Tavily](https://app.tavily.com/).",
+  "header_configuration": {
+    "Authorization": {
+      "type": "string",
+      "send_method": "Header",
+      "value": "Bearer YOUR_TAVILY_API_KEY",
+      "description": "Bearer token for Tavily API authentication (Environment variable: TAVILY_API_KEY). Format: 'Bearer tvly-YOUR_API_KEY'"
+    }
+  },
+  "tools": [
+    {
+      "name": "Search",
+      "path": "/search",
+      "method": "POST",
+      "description": "Perform AI-powered web search with configurable depth, filters, and optional LLM-generated answers",
+      "request_params": {
+        "query": {
+          "type": "string",
+          "description": "The search query to execute",
+          "required": true,
+          "send_method": "Body"
+        },
+        "search_depth": {
+          "type": "string",
+          "description": "Search depth: 'basic' (balanced), 'advanced' (highest relevance, 2 credits), 'fast' (low latency), 'ultra-fast' (minimum latency)",
+          "required": false,
+          "default": "basic",
+          "send_method": "Body"
+        },
+        "topic": {
+          "type": "string",
+          "description": "Search category: 'general', 'news', or 'finance'",
+          "required": false,
+          "default": "general",
+          "send_method": "Body"
+        },
+        "time_range": {
+          "type": "string",
+          "description": "Filter by publish date: 'day', 'week', 'month', 'year', 'd', 'w', 'm', 'y'",
+          "required": false,
+          "send_method": "Body"
+        },
+        "start_date": {
+          "type": "string",
+          "description": "Return results after date (YYYY-MM-DD format)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "end_date": {
+          "type": "string",
+          "description": "Return results before date (YYYY-MM-DD format)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum search results to return (0-20)",
+          "required": false,
+          "default": 5,
+          "send_method": "Body"
+        },
+        "include_domains": {
+          "type": "array",
+          "description": "List of domains to specifically include in results (max 300)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "exclude_domains": {
+          "type": "array",
+          "description": "List of domains to exclude from results (max 150)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "include_answer": {
+          "type": "string",
+          "description": "Include LLM-generated answer: 'basic'/'true' (quick answer), 'advanced' (detailed answer), or false",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_raw_content": {
+          "type": "string",
+          "description": "Include cleaned/parsed content: 'markdown'/'true' (markdown format), 'text' (plain text), or false",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_images": {
+          "type": "boolean",
+          "description": "Perform image search and include image results",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_image_descriptions": {
+          "type": "boolean",
+          "description": "Include descriptive text for each image (requires include_images=true)",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_favicon": {
+          "type": "boolean",
+          "description": "Include favicon URL for each result",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "chunks_per_source": {
+          "type": "integer",
+          "description": "Max chunks per source (max 500 chars each, 1-3). Only with search_depth='advanced'",
+          "required": false,
+          "default": 3,
+          "send_method": "Body"
+        },
+        "country": {
+          "type": "string",
+          "description": "Boost results from specific country (only with topic='general')",
+          "required": false,
+          "send_method": "Body"
+        },
+        "exact_match": {
+          "type": "boolean",
+          "description": "Only return results containing exact quoted phrase(s)",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "auto_parameters": {
+          "type": "boolean",
+          "description": "Automatically configure parameters based on query (may set search_depth to advanced)",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "safe_search": {
+          "type": "boolean",
+          "description": "Filter adult/unsafe content (Enterprise only, not supported for fast/ultra-fast)",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_usage": {
+          "type": "boolean",
+          "description": "Include credit usage information in response",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Extract",
+      "path": "/extract",
+      "method": "POST",
+      "description": "Extract clean, structured content from one or more URLs with optional LLM-based reranking",
+      "request_params": {
+        "urls": {
+          "type": "array",
+          "description": "URL(s) to extract content from (single URL string or array of URLs)",
+          "required": true,
+          "send_method": "Body"
+        },
+        "query": {
+          "type": "string",
+          "description": "User intent for reranking extracted content chunks by relevance",
+          "required": false,
+          "send_method": "Body"
+        },
+        "chunks_per_source": {
+          "type": "integer",
+          "description": "Max relevant chunks per source (500 chars each, 1-5). Only with query parameter",
+          "required": false,
+          "default": 3,
+          "send_method": "Body"
+        },
+        "extract_depth": {
+          "type": "string",
+          "description": "Extraction depth: 'basic' (standard content, 1 credit/5 URLs), 'advanced' (tables, embedded content, 2 credits/5 URLs)",
+          "required": false,
+          "default": "basic",
+          "send_method": "Body"
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format: 'markdown' or 'text'",
+          "required": false,
+          "default": "markdown",
+          "send_method": "Body"
+        },
+        "include_images": {
+          "type": "boolean",
+          "description": "Include list of images extracted from URLs",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_favicon": {
+          "type": "boolean",
+          "description": "Include favicon URL for each result",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Maximum wait time in seconds (1.0-60.0). Default: 10s for basic, 30s for advanced",
+          "required": false,
+          "send_method": "Body"
+        },
+        "include_usage": {
+          "type": "boolean",
+          "description": "Include credit usage information in response",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Crawl",
+      "path": "/crawl",
+      "method": "POST",
+      "description": "Intelligently crawl and extract content from multiple pages of a website with configurable depth and filters",
+      "request_params": {
+        "url": {
+          "type": "string",
+          "description": "Root URL to begin the crawl",
+          "required": true,
+          "send_method": "Body"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Natural language instructions for the crawler (increases cost to 2 credits/10 pages)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "chunks_per_source": {
+          "type": "integer",
+          "description": "Max relevant chunks per source (500 chars each, 1-5). Only with instructions",
+          "required": false,
+          "default": 3,
+          "send_method": "Body"
+        },
+        "max_depth": {
+          "type": "integer",
+          "description": "Max crawl depth from base URL (1-5)",
+          "required": false,
+          "default": 1,
+          "send_method": "Body"
+        },
+        "max_breadth": {
+          "type": "integer",
+          "description": "Max links to follow per page (1-500)",
+          "required": false,
+          "default": 20,
+          "send_method": "Body"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Total links to process before stopping (minimum 1)",
+          "required": false,
+          "default": 50,
+          "send_method": "Body"
+        },
+        "select_paths": {
+          "type": "array",
+          "description": "Regex patterns to select URLs with specific paths (e.g., '/docs/.*', '/api/v1.*')",
+          "required": false,
+          "send_method": "Body"
+        },
+        "select_domains": {
+          "type": "array",
+          "description": "Regex patterns to restrict to specific domains (e.g., '^docs\\.example\\.com$')",
+          "required": false,
+          "send_method": "Body"
+        },
+        "exclude_paths": {
+          "type": "array",
+          "description": "Regex patterns to exclude URL paths (e.g., '/private/.*', '/admin/.*')",
+          "required": false,
+          "send_method": "Body"
+        },
+        "exclude_domains": {
+          "type": "array",
+          "description": "Regex patterns to exclude specific domains (e.g., '^private\\.example\\.com$')",
+          "required": false,
+          "send_method": "Body"
+        },
+        "allow_external": {
+          "type": "boolean",
+          "description": "Include external domain links in results",
+          "required": false,
+          "default": true,
+          "send_method": "Body"
+        },
+        "extract_depth": {
+          "type": "string",
+          "description": "Extraction depth: 'basic' or 'advanced'",
+          "required": false,
+          "default": "basic",
+          "send_method": "Body"
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format: 'markdown' or 'text'",
+          "required": false,
+          "default": "markdown",
+          "send_method": "Body"
+        },
+        "include_images": {
+          "type": "boolean",
+          "description": "Include images in crawl results",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_favicon": {
+          "type": "boolean",
+          "description": "Include favicon URL for each result",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Maximum wait time in seconds (10-150)",
+          "required": false,
+          "default": 150,
+          "send_method": "Body"
+        },
+        "include_usage": {
+          "type": "boolean",
+          "description": "Include credit usage information in response",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Map",
+      "path": "/map",
+      "method": "POST",
+      "description": "Discover and map URLs from a website without extracting content. Fast way to find relevant pages.",
+      "request_params": {
+        "url": {
+          "type": "string",
+          "description": "Root URL to begin mapping",
+          "required": true,
+          "send_method": "Body"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Natural language instructions for the mapper (increases cost to 2 credits/10 pages)",
+          "required": false,
+          "send_method": "Body"
+        },
+        "max_depth": {
+          "type": "integer",
+          "description": "Max mapping depth from base URL (1-5)",
+          "required": false,
+          "default": 1,
+          "send_method": "Body"
+        },
+        "max_breadth": {
+          "type": "integer",
+          "description": "Max links to follow per page (1-500)",
+          "required": false,
+          "default": 20,
+          "send_method": "Body"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Total links to process before stopping (minimum 1)",
+          "required": false,
+          "default": 50,
+          "send_method": "Body"
+        },
+        "select_paths": {
+          "type": "array",
+          "description": "Regex patterns to select URLs with specific paths (e.g., '/docs/.*')",
+          "required": false,
+          "send_method": "Body"
+        },
+        "select_domains": {
+          "type": "array",
+          "description": "Regex patterns to restrict to specific domains",
+          "required": false,
+          "send_method": "Body"
+        },
+        "exclude_paths": {
+          "type": "array",
+          "description": "Regex patterns to exclude URL paths (e.g., '/admin/.*')",
+          "required": false,
+          "send_method": "Body"
+        },
+        "exclude_domains": {
+          "type": "array",
+          "description": "Regex patterns to exclude specific domains",
+          "required": false,
+          "send_method": "Body"
+        },
+        "allow_external": {
+          "type": "boolean",
+          "description": "Include external domain links in results",
+          "required": false,
+          "default": true,
+          "send_method": "Body"
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Maximum wait time in seconds (10-150)",
+          "required": false,
+          "default": 150,
+          "send_method": "Body"
+        },
+        "include_usage": {
+          "type": "boolean",
+          "description": "Include credit usage information in response",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Research",
+      "path": "/research",
+      "method": "POST",
+      "description": "Comprehensive research API for in-depth analysis on complex topics with multi-step search and synthesis",
+      "request_params": {
+        "query": {
+          "type": "string",
+          "description": "The research query or topic to analyze",
+          "required": true,
+          "send_method": "Body"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum search results per search iteration",
+          "required": false,
+          "default": 5,
+          "send_method": "Body"
+        },
+        "include_answer": {
+          "type": "boolean",
+          "description": "Include comprehensive research report/answer",
+          "required": false,
+          "default": true,
+          "send_method": "Body"
+        },
+        "include_raw_content": {
+          "type": "boolean",
+          "description": "Include cleaned/parsed content from sources",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_images": {
+          "type": "boolean",
+          "description": "Include relevant images in results",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "include_favicon": {
+          "type": "boolean",
+          "description": "Include favicon URLs for sources",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        },
+        "depth": {
+          "type": "string",
+          "description": "Research depth: 'basic' or 'advanced' (more iterations)",
+          "required": false,
+          "default": "basic",
+          "send_method": "Body"
+        },
+        "include_usage": {
+          "type": "boolean",
+          "description": "Include credit usage information in response",
+          "required": false,
+          "default": false,
+          "send_method": "Body"
+        }
+      }
+    },
+    {
+      "name": "Get Usage",
+      "path": "/usage",
+      "method": "GET",
+      "description": "Get current API usage information including credits consumed and remaining",
+      "request_params": {}
+    }
+  ]
+}
