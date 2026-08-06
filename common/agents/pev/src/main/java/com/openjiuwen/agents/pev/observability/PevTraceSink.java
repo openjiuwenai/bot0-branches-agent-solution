@@ -13,7 +13,7 @@ package com.openjiuwen.agents.pev.observability;
  * mandatory-install entry point would create).
  *
  * <p>Listener isolation: {@code PEVAgent.emitTrace} wraps {@link #onTrace(PevTrace)} in a FutureTask
- * bridge so a throwing sink cannot kill the invoke control loop (mirrors react-rails
+ * bridge so a throwing sink cannot kill the invoke control loop (mirrors agent-core-ext-react-rails
  * {@code RailTelemetry.invokeIsolated} — a general listener-isolation mechanism, also dodges the
  * broad-catch rule).
  *

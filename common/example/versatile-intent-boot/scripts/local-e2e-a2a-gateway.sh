@@ -111,6 +111,7 @@ L1_PORT="${L1_PORT:-8081}"
 L2_PORT="${L2_PORT:-8082}"
 DOWNSTREAM_PORT="${DOWNSTREAM_PORT:-8083}"
 DEFAULT_WF_PORT="${DEFAULT_WF_PORT:-8085}"
+L1_QUERY_BASE_URL="${L1_QUERY_BASE_URL:?L1_QUERY_BASE_URL is required}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-90}"
 JAR_FILE="$MODULE_DIR/target/versatile-intent-boot-0.1.0.jar"
 LOCAL_SCHEME="${LOCAL_SCHEME:-http}"
@@ -508,7 +509,7 @@ main() {
     local dc_body_file dc_status
     dc_body_file="$(mktemp)"
     dc_status=$(curl -s -o "$dc_body_file" -w "%{http_code}" \
-        -X POST "$(local_base_url "$L1_PORT")/v1/query" \
+        -X POST "${L1_QUERY_BASE_URL}/v1/query" \
         -H "Content-Type: application/json" \
         -d '{"conversation_id":"c5-direct-chain","stream":true,"user_id":"u-42","messages":[{"role":"user","content":"订酒店"}]}')
     local dc_body

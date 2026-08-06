@@ -8,7 +8,7 @@ package com.openjiuwen.agents.edpa.explore;
  * Explore phase SPI — active information gathering before planning.
  *
  * <p>EDPA (Explore→Decision→Plan→Action) adds an explicit Explore phase on top of
- * PEV's sealed dispatch kernel and react-rails' steerable rails. The Explorer is
+ * PEV's sealed dispatch kernel and agent-core-ext-react-rails' steerable rails. The Explorer is
  * the only new SPI — it gathers information actively (not passively observing)
  * before the Plan phase begins.
  *

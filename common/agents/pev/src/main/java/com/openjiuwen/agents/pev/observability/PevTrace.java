@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * Deterministic projection of one {@code PEVAgent.invoke} run (PEV observability — kernel-native trace).
  *
- * <p><b>Design rationale (DSPY/GEPA species B, chosen over direct react-rails port)</b>: PEV's承重
+ * <p><b>Design rationale (DSPY/GEPA species B, chosen over direct agent-core-ext-react-rails port)</b>: PEV's承重
  * truth is a self-contained synchronous state-machine loop; every bearing value (plan / stepResults /
  * VerifyResult / RootCause / ReplanAction) is a local variable of the single invoke method. The trace
  * is therefore a <b>byproduct of the loop</b>, not a parallel埋点 of enforcer transfers. It is emitted
@@ -25,7 +25,7 @@ import java.util.Map;
  * types directly — zero new schema, zero stringly-typed taxonomy.
  *
  * <p><b>Scope = per-PEVAgent-instance</b> (the sink is a PEVAgent field), NOT a process-wide static
- * holder. react-rails needs a static holder because its rails are framework-constructed without an
+ * holder. agent-core-ext-react-rails needs a static holder because its rails are framework-constructed without an
  * agent handle; PEV owns the loop and holds the sink directly. Instance scope avoids the concurrent-
  * instance contamination + silent-install footgun a process-wide static would import.
  *

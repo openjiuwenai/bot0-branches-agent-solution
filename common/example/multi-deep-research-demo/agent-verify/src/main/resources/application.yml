@@ -10,7 +10,7 @@ openjiuwen:
         enabled: false
     a2a:
       agent-name: "VerifyAgent"
-      agent-description: "ReAct-based judge sub-agent — validates a draft research report against 对比矩阵/引用来源/置信度 anchors, backed by react-rails CriteriaReplanBridgeRail + RootCauseRail"
+      agent-description: "ReAct-based judge sub-agent — validates a draft research report against 对比矩阵/引用来源/置信度 anchors, backed by agent-core-ext-react-rails CriteriaReplanBridgeRail + RootCauseRail"
       provider-organization: "OpenJiuwen"
       streaming: true
       default-input-modes: ["text", "text/plain"]
@@ -27,13 +27,13 @@ openjiuwen:
     verify-agent:
       provider: ${LLM_PROVIDER:OpenAI}
       api-key: ${LLM_API_KEY}
-      api-base: ${LLM_API_BASE:https://api.deepseek.com}
+      api-base: ${LLM_API_BASE}
       model-name: ${LLM_MODEL:deepseek-chat}
       ssl-verify: ${LLM_SSL_VERIFY:true}
       temperature: ${LLM_TEMPERATURE:0.0}
       top-p: ${LLM_TOP_P:0.8}
       max-iterations: ${VERIFY_AGENT_MAX_ITERATIONS:2}
-      # react-rails knobs (consumed by VerifyAgentFactory, not by any auto-config)
+      # agent-core-ext-react-rails knobs (consumed by VerifyAgentFactory, not by any auto-config)
       # NOTE: set to 1 to hit the Exit-2 (pushSteering) branch for Bug #3 proof.
       # With max-replan=1, first verify-fail should push a steering hint AND
       # trigger a second ReAct iteration where the hint gets injected into

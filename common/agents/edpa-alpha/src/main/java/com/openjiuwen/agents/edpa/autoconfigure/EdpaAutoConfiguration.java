@@ -43,7 +43,7 @@ import java.util.function.Function;
  * Spring Boot auto-configuration for EDPA-alpha.
  *
  * <p><b>Species B-replace-injected</b>: when {@code edpa.enabled=true}, this
- * auto-config REPLACES react-rails by registering the full EDPA rail stack onto
+ * auto-config REPLACES agent-core-ext-react-rails by registering the full EDPA rail stack onto
  * every {@link ReActAgent}:
  * <ul>
  *   <li>{@link ExploreRail} (new) — Explore phase: explore + pushSteering</li>
@@ -80,7 +80,7 @@ public class EdpaAutoConfiguration {
     }
 
     /**
-     * Default rule-based criteria verifier (mirrors react-rails default).
+     * Default rule-based criteria verifier (mirrors agent-core-ext-react-rails default).
      *
      * @return a {@link RuleBasedCriteriaVerifier} instance
      */
@@ -109,7 +109,7 @@ public class EdpaAutoConfiguration {
 
     /**
      * BeanPostProcessor that registers the EDPA rail stack onto every
-     * {@link ReActAgent}. Mirrors react-rails' registrar shape but registers
+     * {@link ReActAgent}. Mirrors agent-core-ext-react-rails' registrar shape but registers
      * ExploreRail in addition to the 3 reused rails.
      *
      * <p><b>Timing note</b>: the Explorer bean is captured by reference here;
