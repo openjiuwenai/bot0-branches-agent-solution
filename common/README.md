@@ -8,7 +8,7 @@
 common
 |-- agent-core-ext-java
 |   |-- agent-core-ext-react-rails
-|   `-- intent-recognition
+|   `-- agent-intent
 |-- agent-runtime-ext-java
 |   `-- agent-service-adapters
 |       |-- agent-service-adapters-agentcore-ext
@@ -21,15 +21,15 @@ common
 `-- example
     |-- agentcore-ext-deepagent-remote-a2a-demo
     |-- agentcore-ext-remote-a2a-tool-demo
-    |-- intent-recognition-runtime-demo
+    |-- agentcore-ext-intent-bank-a2a-demo
     `-- versatile-a2a-adapter-demo
 ```
 
 ## 扩展工程
 
 - `agent-runtime-ext-java`：运行时扩展模块的 Maven 父工程。
-- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，包含 `agent-core-ext-react-rails` 和 `intent-recognition`。
-  - `intent-recognition`：提供共享意图识别内核、标准 A2A AgentCard 适配、Agent Tool 和 Workflow Component。
+- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，当前包含 `agent-core-ext-react-rails` 和 `agent-intent`。
+  - `agent-intent`：提供 DeepAgent 意图套件、三类 SPI、原子目录更新、reranker 匹配和意图路由 Rail。
 - `agents`：具体 Agent 实现工程，当前包含 PEV Agent。
 - `agent-evolve/evoagent`：Skill/managed-doc 自进化服务，Python 3.12 + uv 独立工程。
 - `agent-evolve/evoagent-adapter`：日志、Skill 与 managed-doc sidecar，Python 3.12 + uv 独立工程。
@@ -45,7 +45,7 @@ common
   - `agent-a-deepagent-runtime`：Agent A，通过注入的远端 A2A 工具委托 Agent B。
   - `agent-b-deepagent-runtime`：Agent B，通过 A2A 暴露 DeepAgent runtime。
 - `example/versatile-a2a-adapter-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
-- `example/intent-recognition-runtime-demo`：两个独立 Spring Boot runtime，分别通过 ReAct Agent Tool 和 Workflow Component 验证标准 A2A AgentCard 意图匹配。
+- `example/agentcore-ext-intent-bank-a2a-demo`：五个 DeepAgent runtime 组成的银行多 Agent 示例，验证意图匹配、A2A 委托、本地工具、中断续接、意图跳转和计划执行。
 
 ## 编译打包流程
 
@@ -72,7 +72,7 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
   clean install
 
-mvn -f common\example\intent-recognition-runtime-demo\pom.xml `
+mvn -f common\example\agentcore-ext-intent-bank-a2a-demo\pom.xml `
   clean install
 ```
 
@@ -124,6 +124,6 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
   clean install
 
-mvn -f common\example\intent-recognition-runtime-demo\pom.xml `
+mvn -f common\example\agentcore-ext-intent-bank-a2a-demo\pom.xml `
   clean install
 ```
