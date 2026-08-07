@@ -27,8 +27,8 @@
     <properties>
         <java.version>17</java.version>
         <maven.compiler.release>17</maven.compiler.release>
-        <agent-runtime-java.version>0.1.1</agent-runtime-java.version>
+        <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
-        <agent-core-java.version>0.1.14</agent-core-java.version>
+        <agent-core-java.version>0.1.14.post1</agent-core-java.version>
     </properties>
 </project>
