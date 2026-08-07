@@ -34,7 +34,7 @@ import java.util.Optional;
  * QueryChunk 流式输出适配器，将 适配版 AgentCore 的结构化 chunk 格式
  * 过滤并转换为前端可正常显示的纯文本 chunk。
  *
- * <h3>适配版 QueryChunk 格式问题</h3>
+ * <h2>适配版 QueryChunk 格式问题</h2>
  * <p>适配版 {@code JiuwenCoreAgentExtHandler} 输出的 QueryChunk.data 包含四种结构化类型：</p>
  * <ul>
  *     <li>{@code llm_reasoning} — LLM 内部推理过程（逐token），不应显示给用户</li>
@@ -43,7 +43,7 @@ import java.util.Optional;
  *     <li>{@code answer} — 最终完整答案，应显示给用户</li>
  * </ul>
  *
- * <h3>适配策略</h3>
+ * <h2>适配策略</h2>
  * <ol>
  *     <li>丢弃 {@code llm_reasoning} chunk — 消除推理过程噪音</li>
  *     <li>丢弃 {@code llm_usage} chunk — 消除token统计噪音 + 减少帧数量约60%</li>

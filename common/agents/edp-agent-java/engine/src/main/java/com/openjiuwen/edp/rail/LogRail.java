@@ -88,7 +88,6 @@ public class LogRail extends AgentRail {
      *
      * @param edpConfig EDP 专有配置
      *
-     * @return result
      *
      */
 

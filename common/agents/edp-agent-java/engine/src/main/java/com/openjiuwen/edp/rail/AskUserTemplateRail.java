@@ -75,7 +75,6 @@ public class AskUserTemplateRail extends AgentRail {
      * @param edpConfig EDP 专有配置，提供话术配置路径
      * @param scripts  话术配置，用于预解析 ask_user 话术
      *
-     * @return result
      */
 
     public AskUserTemplateRail(EdpConfig edpConfig, SysScriptsConfig scripts) {

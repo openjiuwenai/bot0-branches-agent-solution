@@ -66,7 +66,6 @@ public class CancelRail extends AgentRail {
      *
      * @param edpConfig EDP 专有配置
      *
-     * @return result
      */
 
     public CancelRail(EdpConfig edpConfig) {
