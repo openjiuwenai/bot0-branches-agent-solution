@@ -24,10 +24,12 @@ openjiuwen:
         tool-description: >
           根据最新用户语义匹配一个银行业务或本地能力，并在同一次调用中执行匹配结果。
         routing-instructions: >
-          对每个新的单一业务目标，先调用 intent_match，semantic 必须保留最新用户语义及完成当前步骤所需的上下文。
+          单一业务目标先调用 intent_match。包含多个业务目标的请求必须先调用 todo_create 创建计划，
+          不得在计划创建前调用 intent_match；随后按计划为每个单一业务目标分别调用 intent_match。
+          semantic 必须保留最新用户语义及完成当前步骤所需的上下文。
           不得与其他业务工具并行调用 intent_match。intent_match 已经执行匹配目标，直接使用其工具结果。
           当下游结果 status 为 INTENT_CHANGED 且带有 latestSemantic 时，用 latestSemantic 再次调用 intent_match，
-          不要结束本轮。复杂多目标请求先规划成有序单一步骤，每个步骤分别调用 intent_match，全部完成后汇总。
+          不要结束本轮。完成全部计划步骤后再汇总结果。
       custom-intents:
         calculator:
           description: 计算器：执行加减乘除、金额试算或数字运算，例如6*7、6乘以7、计算两个数字

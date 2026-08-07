@@ -22,17 +22,27 @@ public class BankDemoProperties {
     private final Llm llm = new Llm();
     private final RerankerModel reranker = new RerankerModel();
 
-    /** @return chat model properties */
+    /**
+     * Returns the chat model properties.
+     *
+     * @return chat model properties
+     */
     public Llm getLlm() {
         return llm;
     }
 
-    /** @return reranker properties */
+    /**
+     * Returns the reranker properties.
+     *
+     * @return reranker properties
+     */
     public RerankerModel getReranker() {
         return reranker;
     }
 
-    /** Validates that required chat model properties are configured. */
+    /**
+     * Validates that required chat model properties are configured.
+     */
     public void requireLlm() {
         llm.requireConfigured();
     }
