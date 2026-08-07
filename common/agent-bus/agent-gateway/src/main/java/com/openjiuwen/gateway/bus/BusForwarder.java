@@ -156,6 +156,13 @@ public class BusForwarder {
 
     /**
      * Polls projections for one correlation until timeout/terminal/input-required, then folds to the status body.
+     *
+     * @param correlationId BUS correlation id (gateway-generated, pairs request with projection)
+     * @param ctx governance context (tenant, message, trace)
+     * @param window accept/response wait window with timeout + taskId state
+     * @param g4w G4 idempotency wiring (onFold completes/aborts the in-flight create record)
+     * @param chosen routed instance (routeHandle bound to taskId on first taskId-bearing projection)
+     * @return folded status body (UNKNOWN / ACCEPTED_WITH_TASK / terminal / INPUT_REQUIRED)
      */
     private String pollAndFold(String correlationId, GovernanceContext ctx, WaitWindow window,
             G4BusWiring g4w, AgentCardRoute chosen) {
