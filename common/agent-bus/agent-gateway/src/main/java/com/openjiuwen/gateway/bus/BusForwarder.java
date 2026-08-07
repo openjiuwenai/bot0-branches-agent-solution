@@ -154,7 +154,9 @@ public class BusForwarder {
         return ResponseEntity.ok().body(body);
     }
 
-    /** Polls projections for one correlation until timeout/terminal/input-required, then folds to the status body. */
+    /**
+     * Polls projections for one correlation until timeout/terminal/input-required, then folds to the status body.
+     */
     private String pollAndFold(String correlationId, GovernanceContext ctx, WaitWindow window,
             G4BusWiring g4w, AgentCardRoute chosen) {
         int maxPolls = 100;
