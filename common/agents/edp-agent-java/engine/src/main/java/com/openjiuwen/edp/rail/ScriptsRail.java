@@ -86,7 +86,6 @@ public class ScriptsRail extends DeepAgentRail {
      *
      * @param scripts 话术配置
      *
-     * @return result
      *
      */
 
@@ -100,7 +99,6 @@ public class ScriptsRail extends DeepAgentRail {
      * @param scripts 话术配置
      * @param edpConfig EDP 配置（UC-C04 scope 已通过 PlanrulePromptBuilder 注入 prompt，此处不使用）
      *
-     * @return result
      *
      */
 

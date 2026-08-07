@@ -17,6 +17,19 @@ The current version contains three independent extension projects: runtime adapt
 - **Runtime dependency**: `com.openjiuwen:agent-runtime-java:0.1.1.post1`
 - **Execution core dependency**: `com.openjiuwen:agent-core-java:0.1.14.post1`
 
+### Quick Build (Aggregator Pom)
+
+A root aggregator pom (`pom.xml`) builds the managed extension and agent jars in one command. It is a pure build wrapper — it does **not** change any module's parent or dependencies, and the modules remain independent peers.
+
+```bash
+mvn install                      # build all 8 managed jars (default)
+mvn install -Pmechanism          # build only the 6 mechanism jars
+mvn install -Pbusiness           # build only the 2 business jars
+mvn install -DskipTests          # build all, skipping tests
+```
+
+Managed jars: `agent-service-adapters-agentcore-ext`, `agent-service-adapters-agentscope`, `agent-service-adapters-versatile`, `agent-service-app-custom-rest`, `agent-service-spec-ext`, `agent-core-ext-react-rails` (mechanism); `edp-agent-engine`, `adapter-versatile-agent-java` (business). The aggregator pom itself is never published (`maven.deploy.skip=true`).
+
 ### Build Extension Modules
 
 ```powershell

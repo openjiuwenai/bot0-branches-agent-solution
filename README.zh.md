@@ -17,6 +17,19 @@
 - **运行时依赖**：`com.openjiuwen:agent-runtime-java:0.1.1.post1`
 - **执行内核依赖**：`com.openjiuwen:agent-core-java:0.1.14.post1`
 
+### 一键构建（聚合 pom）
+
+根目录的聚合 pom（`pom.xml`）可一条命令构建纳入管理的扩展与智能体 jar。它仅是构建包装，**不改变**任何模块的 parent 或依赖，各模块仍为独立对等工程。
+
+```bash
+mvn install                      # 构建全部 8 个受管 jar（默认）
+mvn install -Pmechanism          # 仅构建 6 个机制特性 jar
+mvn install -Pbusiness           # 仅构建 2 个业务特性 jar
+mvn install -DskipTests          # 构建全部，跳过测试
+```
+
+受管 jar：`agent-service-adapters-agentcore-ext`、`agent-service-adapters-agentscope`、`agent-service-adapters-versatile`、`agent-service-app-custom-rest`、`agent-service-spec-ext`、`agent-core-ext-react-rails`（机制）；`edp-agent-engine`、`adapter-versatile-agent-java`（业务）。聚合 pom 本身不会被发布（`maven.deploy.skip=true`）。
+
 ### 构建扩展模块
 
 ```powershell

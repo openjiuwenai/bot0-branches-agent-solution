@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Aggregator pom (packaging=pom) for one-click builds of the 8 managed jars.
+        Pure aggregation: this pom is NOT the parent of any module and does not
+        change any existing module's inheritance. Each leaf keeps its own parent
+        (agent-runtime-ext-java / agent-core-ext-java / edp-agent-java /
+        spring-boot-starter-parent).
+        This pom itself is never published to a Maven repository (maven.deploy.skip=true).
+
+        Note on module listing: the three intermediate parent poms
+        (agent-runtime-ext-java, agent-core-ext-java, edp-agent-java) already
+        aggregate their own children via their own <modules> blocks, so Maven adds
+        those children to the reactor automatically when the parent is listed. We
+        therefore list only the intermediate parents here (plus versatile-agent-java,
+        which is standalone and not aggregated by any parent). Listing the children
+        explicitly as well would duplicate them in the reactor and fail the build.
+    -->
+    <groupId>com.openjiuwen</groupId>
+    <artifactId>agent-solution-build</artifactId>
+    <version>0.1.0</version>
+    <packaging>pom</packaging>
+
+    <name>agent-solution-build</name>
+    <description>Aggregator pom for one-click builds of the managed mechanism/business jars.</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- This aggregator pom must never be deployed to a Maven repository.
+             It only affects this pom (it is not an inheritance parent), so the
+             managed leaf jars still deploy normally via their own parents. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <profiles>
+        <!-- Default: build all 8 managed jars.
+             agent-runtime-ext-java pulls in its 5 mechanism leaves,
+             agent-core-ext-java pulls in agent-core-ext-react-rails,
+             edp-agent-java pulls in engine,
+             versatile-agent-java is standalone (-> adapter-versatile-agent-java). -->
+        <profile>
+            <id>all</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <modules>
+                <!-- intermediate parent poms (packaging=pom, produce no jar) -->
+                <module>common/agent-runtime-ext-java</module>
+                <module>common/agent-core-ext-java</module>
+                <module>common/agents/edp-agent-java</module>
+                <!-- standalone business jar (not aggregated by any parent) -->
+                <module>common/agents/versatile-agent-java</module>
+            </modules>
+        </profile>
+
+        <!-- Mechanism only: 6 jars (5 from agent-runtime-ext-java + 1 from agent-core-ext-java). -->
+        <profile>
+            <id>mechanism</id>
+            <modules>
+                <module>common/agent-runtime-ext-java</module>
+                <module>common/agent-core-ext-java</module>
+            </modules>
+        </profile>
+
+        <!-- Business only: 2 jars (engine via edp-agent-java + standalone versatile-agent-java). -->
+        <profile>
+            <id>business</id>
+            <modules>
+                <module>common/agents/edp-agent-java</module>
+                <module>common/agents/versatile-agent-java</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

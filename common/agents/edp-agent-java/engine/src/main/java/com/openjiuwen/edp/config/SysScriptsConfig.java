@@ -304,9 +304,6 @@ public class SysScriptsConfig {
      *
      * @param templates 扁平化的模板字典
      * @param outScriptKeys 输出映射的目标 map
-     *
-     * @param Map<String description
-     *
      */
 
     public static void inferScriptKeys(Map<String, String> templates, Map<String, String> outScriptKeys) {
