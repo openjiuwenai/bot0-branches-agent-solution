@@ -16,7 +16,7 @@
 | 可控性 | 只读/读写模式开关、表级/列级权限、行数与超时限制 |
 | 可审计 | 全量 SQL 执行审计日志，可追溯谁在何时执行了什么 |
 | 可扩展 | 通过方言接口支持多种数据库，新增数据库类型无需改动上层 |
-| 易集成 | 以 Python 包 + MCP 服务形式发布，可被 Agent 运行时直接加载 |
+| 易集成 | 以 Python 包 + 独立 HTTP 服务 + MCP 服务三种形态发布，可被 Agent 运行时直接加载 |
 
 ## 3. 支持的数据库
 
@@ -66,14 +66,28 @@
 - **缓存与刷新**：导入结果可缓存，支持手动 `refresh_schema()` 增量刷新
 - **只读元数据**：反射仅读取 `information_schema`，不修改库结构
 
-### 4.5 MCP 服务暴露
+### 4.5 服务暴露
 
-工具内置 MCP（Model Context Protocol）服务层，可对外暴露为标准 MCP 服务：
+本工具支持两种独立服务部署形态，共享同一安全栈：
 
-- **传输方式**：支持 `stdio` / `sse` / `streamable-http`
+**形态 A：独立 HTTP 服务（FastAPI，本工具自带）**
+
+- **协议**：RESTful HTTP（GET / POST）
+- **接口**：`/ping` / `/query` / `/insert` / `/update` / `/delete` / `/import-schema` / `/refresh-schema`
+- **安全透传**：HTTP 层复用本工具安全栈（参数化、黑名单、审计、脱敏），不绕过校验
+- **服务地址**：`http://<host>:<port>/db-connector`
+- **示例**：`http://100.100.135.219:7087/db-connector`
+
+**形态 B：MCP 服务（workshop/mcp/db-connector-server/ 部署）**
+
+- **协议**：MCP（Model Context Protocol）
+- **传输方式**：`stdio` / `sse` / `streamable-http`
 - **工具清单**：`query` / `insert` / `update` / `delete` / `ping` / `import_schema` / `refresh_schema`
-- **安全透传**：MCP 层复用同一安全栈（参数化、黑名单、审计、脱敏），不绕过安全校验
-- **独立部署**：MCP 服务可独立于 Agent 运行时部署，供多个 Agent 共享
+- **安全透传**：MCP 层复用本工具同一安全栈，不绕过校验
+- **服务地址**：`http://<host>:<port>/db-connector-server`
+- **示例**：`http://100.100.135.219:7087/db-connector-server`
+
+部署详情见 [§13 部署](#13-部署)。
 
 ## 5. 安全设计（核心）
 
@@ -269,9 +283,7 @@ db-connector/
 │   ├── audit/
 │   │   ├── __init__.py
 │   │   └── audit_logger.py
-│   └── mcp/
-│       ├── __init__.py
-│       └── server.py                    # MCP 服务暴露
+│   └── server.py                     # 独立 HTTP 服务入口（FastAPI）
 └── tests/
     ├── test_sql_sanitizer.py            # 注入防护测试
     ├── test_sql_guard.py
@@ -285,7 +297,7 @@ db-connector/
 |------|------|
 | `workshop/skills/traffic-forecast-qa/` | 上游消费方：通过本工具查询历史流量数据，严禁绕过本工具直接访问数据库 |
 | `methodology/` | 数据访问规范、口径定义应与 methodology 中的方法论保持一致 |
-| `workshop/mcp/` | 本工具内置 MCP 暴露层；若需独立 MCP 网关，可在 mcp/ 中包装复用同一安全栈 |
+| `workshop/mcp/db-connector-server/` | MCP 服务包装层：导入本工具并暴露为标准 MCP 服务，供外部 Agent 调用 |
 
 ## 9. 技术栈与依赖（Python）
 
@@ -294,12 +306,13 @@ db-connector/
 - PyMySQL（MySQL 驱动）、psycopg[binary]（PostgreSQL 驱动）
 - Pydantic v2 + pydantic-settings（配置与数据模型校验）
 - PyYAML（配置文件加载）
-- mcp（MCP Python SDK，服务暴露）
 - hvac（HashiCorp Vault 客户端，凭证模式 B）
 - （可选）cryptography（本地加密配置 AES-GCM 解密）
+- **FastAPI + uvicorn**（独立 HTTP 服务形态，`pip install -e ".[server]"`）
+- （可选）mcp（MCP 服务形态，`workshop/mcp/db-connector-server/` 使用）
 - pytest（测试）
 
-> 部署形态：可独立作为 Python 库安装（`pip install -e .`），也可作为 MCP 服务独立部署。
+> 部署形态：① 纯 Python 库（`pip install -e .`）；② 独立 HTTP 服务（FastAPI，本工具自带）；③ MCP 服务（由 `workshop/mcp/db-connector-server/` 包装部署）。
 
 ## 10. 安全自检清单（上线前必过）
 
@@ -319,9 +332,254 @@ db-connector/
 | 数据库类型 | 首版仅 MySQL + PostgreSQL |
 | 表结构 | 客户已有表，支持 `import_schema()` 反射导入 |
 | 凭证管理 | 同时支持环境变量与 Vault/KMS 两种模式 |
-| MCP 暴露 | 内置 MCP 服务层，支持 stdio/sse/streamable-http |
+| MCP 暴露 | 工具为纯库；由 `workshop/mcp/db-connector-server/` 包装为 MCP 服务，支持 stdio/sse/streamable-http |
 | 预测粒度 | 由上层 Skill 定义，本工具不限制 |
 
 ## 12. 贡献说明
 
 遵循仓库 [贡献指南](../../../../CONTRIBUTING.md) 提交 PR。
+
+## 13. 部署
+
+`db-connector` 支持三种部署形态：
+
+| 形态 | 说明 | 服务地址 |
+|------|------|----------|
+| Python 库（嵌入式） | Skill / Agent 进程内 import 调用 | 无（进程内调用） |
+| **独立 HTTP 服务**（本工具自带） | FastAPI + uvicorn，GET/POST RESTful 接口 | `http://<host>:<port>/db-connector` |
+| MCP 服务（workshop/mcp 部署） | 标准 MCP 协议，stdio/sse/streamable-http | `http://<host>:<port>/db-connector-server` |
+
+### 13.1 形态一：Python 库（嵌入式，被 Skill / Agent 调用）
+
+适合 Skill 或 Agent 运行时在进程内直接加载，不启动独立进程。
+
+```bash
+pip install -e .
+```
+
+```python
+from openjiuwen.tools.db_connector import DefaultDbConnectorTool
+from openjiuwen.tools.db_connector.config import load_config
+
+tool = DefaultDbConnectorTool(load_config('config/config.yaml'))
+print(tool.ping())
+print(tool.query("SELECT * FROM traffic_flow WHERE station_code = %s", ["S001"]))
+```
+
+服务地址：无（进程内调用）
+
+### 13.2 形态二：独立 HTTP 服务（FastAPI，本工具自带）
+
+本工具内置 FastAPI HTTP 服务入口 `openjiuwen.tools.db_connector.server`，可独立部署为 RESTful 数据访问微服务，暴露 GET / POST 接口。
+
+#### 安装
+
+```bash
+pip install -e ".[server]"   # 含 fastapi + uvicorn
+```
+
+#### 启动
+
+```bash
+# 方式一：前台启动（调试）
+python -m openjiuwen.tools.db_connector.server config/config.yaml \
+    --host 0.0.0.0 --port 7087 --path /db-connector
+
+# 方式二：后台启动（生产推荐）
+./start.sh
+```
+
+#### 启停脚本
+
+本工具自带 [start.sh](start.sh) / [stop.sh](stop.sh)，**在本目录内运行**：
+
+```bash
+# 默认：7087 端口 + /db-connector 路径
+./start.sh
+
+# 自定义：指定端口 + 路径 + 配置
+DB_CONNECTOR_CONFIG=./config/config.yaml DB_CONNECTOR_PORT=7087 ./start.sh
+
+# 停止
+./stop.sh
+
+# 查看日志
+tail -f .logs/db-connector.log
+```
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `DB_CONNECTOR_CONFIG` | `./config/config.example.yaml` | 配置文件路径 |
+| `DB_CONNECTOR_HOST` | `0.0.0.0` | 监听地址 |
+| `DB_CONNECTOR_PORT` | `7087` | 监听端口 |
+| `DB_CONNECTOR_PATH` | `/db-connector` | 服务路径前缀 |
+
+#### 部署后服务地址
+
+- 格式：`http://<host>:<port>/db-connector`
+- 示例：`http://100.100.135.219:7087/db-connector`
+
+#### HTTP API 接口
+
+| 方法 | 路径 | 说明 | 请求体 |
+|------|------|------|--------|
+| `GET` | `/ping` | 数据库健康检查 | 无 |
+| `POST` | `/query` | 参数化查询 | `{"sql_template": "...", "params": [...], "max_rows": N}` |
+| `POST` | `/insert` | 参数化插入 | `{"sql_template": "...", "params": [...]}` |
+| `POST` | `/update` | 参数化更新 | `{"sql_template": "...", "params": [...]}` |
+| `POST` | `/delete` | 参数化删除 | `{"sql_template": "...", "params": [...]}` |
+| `POST` | `/import-schema` | 导入表结构 | `{"tables": ["t1", "t2"]}` |
+| `POST` | `/refresh-schema` | 刷新表结构缓存 | 无 |
+
+#### 调用示例
+
+```bash
+# 健康检查
+curl http://100.100.135.219:7087/db-connector/ping
+
+# 查询
+curl -X POST http://100.100.135.219:7087/db-connector/query \
+  -H "Content-Type: application/json" \
+  -d '{"sql_template": "SELECT * FROM traffic_flow WHERE station_code = %s", "params": ["S001"]}'
+
+# 插入
+curl -X POST http://100.100.135.219:7087/db-connector/insert \
+  -H "Content-Type: application/json" \
+  -d '{"sql_template": "INSERT INTO traffic_flow (station_code, count) VALUES (%s, %s)", "params": ["S001", 1234]}'
+
+# 导入表结构
+curl -X POST http://100.100.135.219:7087/db-connector/import-schema \
+  -H "Content-Type: application/json" \
+  -d '{"tables": ["traffic_flow", "toll_station"]}'
+```
+
+### 13.3 形态三：MCP 服务（由 workshop/mcp/db-connector-server/ 部署）
+
+如需以 MCP 协议对外提供（供支持 MCP 的 Agent 运行时调用），部署 [`workshop/mcp/db-connector-server/`](../../mcp/db-connector-server/) 即可。
+
+```bash
+cd workshop/mcp/db-connector-server
+MCP_TRANSPORT=streamable-http MCP_PORT=7087 ./start.sh
+```
+
+**部署后服务地址**：`http://<host>:<port>/db-connector-server`
+- 示例：`http://100.100.135.219:7087/db-connector-server`
+
+详见 [workshop/mcp/db-connector-server/README.md](../../mcp/db-connector-server/README.md)。
+
+### 13.4 部署形态对比
+
+| 形态 | 协议 | 服务地址 | 适用场景 |
+|------|------|----------|----------|
+| Python 库 | 进程内调用 | 无 | Skill 访问数据、本地开发 |
+| **HTTP 服务** | RESTful HTTP | `http://<host>:7087/db-connector` | 通用 HTTP 调用、前后端联调、轻量部署 |
+| MCP 服务 | MCP 协议 | `http://<host>:7087/db-connector-server` | MCP 兼容 Agent 运行时、多 Agent 共享 |
+
+## 14. 插件配置（OpenJiuwen 平台注册）
+
+以下为 db-connector HTTP 服务在 OpenJiuwen 平台注册为插件时的配置信息，参考 [`插件配置.txt`](../../../../插件配置.txt) 格式整理。
+
+```
+# ===== db-connector 平台插件配置 =====
+
+# ----- 插件：数据库连接工具 -----
+# 服务地址：http://192.168.0.109:7087/db-connector （对应 openjiuwen.tools.db_connector.server，端口7087）
+
+# 工具1：数据库健康检查
+# 功能：探测数据库连通性与延迟，返回状态、数据库名、延迟(ms)；不执行任何 SQL，适合探活
+# 请求方法：GET
+# 请求路径：/ping
+# 输出：健康状态（status、database、latencyMs）
+# 输入参数配置：无
+
+# 工具2：执行参数化查询
+# 功能：执行参数化 SELECT 语句并返回结构化结果集，内置 SQL 注入防护、行数上限与超时控制
+# 请求方法：POST
+# 请求路径：/query
+# 输出：查询结果（columns列名、rows数据列表、rowCount行数、truncated是否截断、durationMs耗时、auditId审计ID）
+# 输入参数配置：
+#   sql_template | string | Body | 必选 | 带 %s 占位符的 SELECT 语句
+#   params | array | Body | 可选 | 占位符参数列表，按顺序替换 %s
+#   max_rows | number | Body | 可选 | 最大返回行数，缺省用配置默认值
+
+# 工具3：执行参数化插入
+# 功能：执行参数化 INSERT 语句并返回影响行数与自增主键，内置危险语句拦截与审计
+# 请求方法：POST
+# 请求路径：/insert
+# 输出：写入结果（status、affectedRows影响行数、lastInsertId自增主键、durationMs耗时、auditId审计ID）
+# 输入参数配置：
+#   sql_template | string | Body | 必选 | 带 %s 占位符的 INSERT 语句
+#   params | array | Body | 可选 | 占位符参数列表，按顺序替换 %s
+
+# 工具4：执行参数化更新
+# 功能：执行参数化 UPDATE 语句并返回影响行数，强制要求 WHERE 条件，内置危险语句拦截与审计
+# 请求方法：POST
+# 请求路径：/update
+# 输出：写入结果（status、affectedRows影响行数、durationMs耗时、auditId审计ID）
+# 输入参数配置：
+#   sql_template | string | Body | 必选 | 带 %s 占位符的 UPDATE 语句（必须含 WHERE）
+#   params | array | Body | 可选 | 占位符参数列表，按顺序替换 %s
+
+# 工具5：执行参数化删除
+# 功能：执行参数化 DELETE 语句并返回影响行数，强制要求 WHERE 条件，内置危险语句拦截与审计
+# 请求方法：POST
+# 请求路径：/delete
+# 输出：写入结果（status、affectedRows影响行数、durationMs耗时、auditId审计ID）
+# 输入参数配置：
+#   sql_template | string | Body | 必选 | 带 %s 占位符的 DELETE 语句（必须含 WHERE）
+#   params | array | Body | 可选 | 占位符参数列表，按顺序替换 %s
+
+# 工具6：导入表结构
+# 功能：反射客户已有表结构，生成字段映射快照，供 NL2SQL / 脱敏标注使用
+# 请求方法：POST
+# 请求路径：/import-schema
+# 输出：表结构快照（tables表清单、columns字段元数据、sensitiveColumns敏感列标注）
+# 输入参数配置：
+#   tables | array | Body | 可选 | 指定表名列表；缺省导入全部白名单表
+
+# 工具7：刷新表结构缓存
+# 功能：重新反射并覆盖已有表结构快照，用于库结构变更后同步
+# 请求方法：POST
+# 请求路径：/refresh-schema
+# 输出：最新表结构快照（同工具6）
+# 输入参数配置：无
+
+# ----- 插件连通性测试值（端口7087）-----
+# 测试1 - 工具1 数据库健康检查：
+#   GET http://192.168.0.109:7087/db-connector/ping
+#   预期：code=200，返回 status=ok、database=<库名>、latencyMs<1000
+#
+# 测试2 - 工具2 执行参数化查询：
+#   POST http://192.168.0.109:7087/db-connector/query
+#   测试值：sql_template = SELECT station_code, count FROM traffic_flow WHERE station_code = %s，params = ["S001"]
+#   预期：code=200，返回 columns=[station_code, count]、rows 为站点 S001 的流量记录列表
+#
+# 测试3 - 工具3 执行参数化插入：
+#   POST http://192.168.0.109:7087/db-connector/insert
+#   测试值：sql_template = INSERT INTO traffic_flow (station_code, count) VALUES (%s, %s)，params = ["S001", 1234]
+#   预期：code=200，返回 status=ok、affectedRows=1、lastInsertId 为新记录主键（执行后会真实插入数据）
+#
+# 测试4 - 工具4 执行参数化更新：
+#   POST http://192.168.0.109:7087/db-connector/update
+#   测试值：sql_template = UPDATE traffic_flow SET count = %s WHERE station_code = %s，params = [1300, "S001"]
+#   预期：code=200，返回 status=ok、affectedRows=1（执行后会真实更新数据）
+#
+# 测试5 - 工具5 执行参数化删除：
+#   POST http://192.168.0.109:7087/db-connector/delete
+#   测试值：sql_template = DELETE FROM traffic_flow WHERE station_code = %s，params = ["S001"]
+#   预期：code=200，返回 status=ok、affectedRows 为删除行数（执行后会真实删除数据，请谨慎测试）
+#
+# 测试6 - 工具6 导入表结构：
+#   POST http://192.168.0.109:7087/db-connector/import-schema
+#   测试值：tables = ["traffic_flow", "toll_station"]
+#   预期：code=200，返回两表的字段元数据（列名、类型、是否敏感列等）
+#
+# 测试7 - 工具7 刷新表结构缓存：
+#   POST http://192.168.0.109:7087/db-connector/refresh-schema
+#   预期：code=200，返回最新表结构快照（同测试6结构）
+```
+
+> 说明：
+> - 服务地址中的 `192.168.0.109` 为示例部署机 IP，实际按部署环境替换；端口与路径前缀可由 `DB_CONNECTOR_PORT` / `DB_CONNECTOR_PATH` 环境变量调整（见 [§13.2](#132-形态二独立-http-服务fastapi本工具自带)）。
+> - 工具 3/4/5 会真实写入/更新/删除数据，连通性测试请使用测试库或可回滚的测试数据。
+> - 所有写操作强制参数化（`%s` 占位符 + `params`），HTTP 层复用工具安全栈，不绕过 SQL 注入防护与审计。

@@ -9,7 +9,11 @@ pydantic>=2.5
 pydantic-settings>=2.1
 PyYAML>=6.0
 
-# MCP 服务
+# HTTP 服务（FastAPI）
+fastapi>=0.110
+uvicorn>=0.27
+
+# MCP 服务（workshop/mcp/db-connector-server 使用）
 mcp>=1.0
 
 # 凭证管理（Vault 模式，按需启用）

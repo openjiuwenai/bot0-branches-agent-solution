@@ -21,11 +21,12 @@ dependencies = [
 [project.optional-dependencies]
 vault = ["hvac>=2.0"]
 crypto = ["cryptography>=42.0"]
+server = ["fastapi>=0.110", "uvicorn>=0.27"]
 mcp = ["mcp>=1.0"]
 dev = ["pytest>=7.0", "pytest-asyncio>=0.23"]
 
 [project.scripts]
-db-connector-mcp = "openjiuwen.tools.db_connector.mcp.server:main"
+db-connector-server = "openjiuwen.tools.db_connector.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
