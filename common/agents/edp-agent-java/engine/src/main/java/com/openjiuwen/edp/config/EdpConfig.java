@@ -32,9 +32,9 @@ import java.util.List;
  * <ul>
  *     <li>各字段 getter/setter：供 Jackson 反序列化和业务代码读取。</li>
  *     <li>{@link Scope}：业务范围配置。</li>
- *     <li>{@link TodolistStep}：轻量 Todo 步骤定义。</li>
+ *     <li>{@code TodolistStep}：轻量 Todo 步骤定义。</li>
  *     <li>{@link LlmSampling}：模型采样参数。</li>
- *     <li>{@link Memory}：记忆开关配置。</li>
+ *     <li>{@code Memory}：记忆开关配置。</li>
  * </ul>
  *
  * @since 2024-01-01

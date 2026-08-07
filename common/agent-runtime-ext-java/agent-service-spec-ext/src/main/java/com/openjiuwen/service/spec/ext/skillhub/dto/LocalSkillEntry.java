@@ -16,9 +16,9 @@ import java.nio.file.Path;
  * <h2>Current status (v1)</h2>
  * <p><b>Not used by the v1 implementation.</b> The first slice simplifies the
  * data flow to plain {@link Path} objects:
- * {@link com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager}
+ * {@code com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager}
  * keeps a {@code List<Path>} of downloaded-and-verified skill directories, and
- * {@link com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubInstaller#install}
+ * {@code com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubInstaller#install}
  * accepts {@code List<Path>} directly. The {@code skillId} carried by this
  * record has no consumer yet because agent-core's
  * {@code BaseAgent.registerSkill(path)} derives the skill name from the

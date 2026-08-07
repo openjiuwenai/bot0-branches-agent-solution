@@ -23,6 +23,27 @@
     (Target.LLM).
   </description>
 
+  <url>https://gitcode.com/openJiuwen/agent-solution</url>
+  <licenses>
+    <license>
+      <name>Apache License 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>liubin</id>
+      <name>liubin</name>
+      <email>nickylba.liubin@huawei.com</email>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://gitcode.com/openJiuwen/agent-solution.git</connection>
+    <developerConnection>scm:git:git@gitcode.com:openJiuwen/agent-solution.git</developerConnection>
+    <url>https://gitcode.com/openJiuwen/agent-solution</url>
+  </scm>
+
   <properties>
     <java.version>17</java.version>
     <maven.compiler.release>17</maven.compiler.release>
@@ -111,4 +132,66 @@
       </plugin>
     </plugins>
   </build>
+
+  <!--
+      central-release: activate with -Pcentral-release to attach -sources/-javadoc jars and
+      GPG-sign all artifacts for manual upload to Maven Central. Not active by default (GPG
+      would prompt on every build). Duplicated across the four publishing poms because they
+      share no common internal parent by design — bump plugin versions in all four together.
+  -->
+  <profiles>
+    <profile>
+      <id>central-release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.3.0</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.7.0</version>
+            <configuration>
+              <encoding>UTF-8</encoding>
+              <charset>UTF-8</charset>
+              <docencoding>UTF-8</docencoding>
+              <doclint>all,-missing</doclint>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
