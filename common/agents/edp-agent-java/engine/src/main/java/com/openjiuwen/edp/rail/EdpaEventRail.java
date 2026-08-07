@@ -118,6 +118,7 @@ public class EdpaEventRail extends DeepAgentRail {
     private static final String TOOL_TODO_MODIFY = ToolConstants.TODO_MODIFY;
     private static final String TOOL_CALL_MCP = ToolConstants.CALL_MCP;
     private static final String TOOL_CALL_VERSATILE = ToolConstants.CALL_VERSATILE;
+    private static final String TOOL_CALL_SUBAGENT = ToolConstants.CALL_SUBAGENT;
     private static final String TOOL_ASK_USER = ToolConstants.ASK_USER;
 
     /**
@@ -789,6 +790,7 @@ public class EdpaEventRail extends DeepAgentRail {
     }
 
     private String resolveToolEndContent(String qi, String toolName, String uiNoticeText) {
+        // 注：query_description 变量替换已移除，话术模板不再支持 {query_description}
         if (uiNoticeText != null && !uiNoticeText.isBlank()) {
             return uiNoticeText;
         }
@@ -960,6 +962,18 @@ public class EdpaEventRail extends DeepAgentRail {
         // 仅缓存参数和标记 A2A 续传，tool_start/tool_end 由 resume 阶段的 beforeToolCall/afterToolCall 发射。
         if (TOOL_CALL_VERSATILE.equals(toolName)) {
             handleCallVersatileInterrupt(ctx, sid, toolName);
+            return;
+        }
+        // call_subagent 中断（a2a_delegate）：只发 interrupt_start，不发射 tool_start/tool_end
+        if (TOOL_CALL_SUBAGENT.equals(toolName)) {
+            // call_subagent 的 interrupt_start 仍正常发射（含 query 内容，供前端展示实体信息）
+            interruptActive.put(sid, true);
+            LOGGER.info(
+                    "[EDPA-DIAG] onToolException ToolInterruptException -> emit interrupt_start"
+                            + "(tool={}, interrupt_id={}, source={})",
+                    toolName, interruptId, interruptSource);
+            emit(ctx, EdpaEventType.INTERRUPT_START,
+                    Map.of("tool", toolName, "content", content, "interrupt_id", interruptId));
             return;
         }
         // 只对真正会发 interrupt_start 的工具（ask_user 等）置位 interruptActive

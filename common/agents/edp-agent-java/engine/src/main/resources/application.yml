@@ -32,6 +32,9 @@ openjiuwen:
         - name: versatile-agent
           url: ${EDP_AGENT_VERSATILE_A2A_URL}
           streaming: true
+        - name: zhidaitong
+          url: ${SUB_AGENT_A2A_URL}
+          streaming: true
       skills:
         - id: "edp_banking_workflow"
           name: "EDP Banking Workflow"

@@ -1,0 +1,31 @@
+# hz-zhidaitong-main 主Agent场景话术
+#
+# 本配置适配企业信贷123分析场景（多实体并行调度、全称确认等业务）
+# 话术键映射自动推断，无需显式声明
+
+scriptconfig:
+  # ── UC-C02: interrupt 追问内容来源开关 ──
+  # script（默认）：追问内容必须来自脚本，LLM 生成内容被拒绝
+  # llm：追问内容可由 LLM 生成
+  interrupt_source: "script"
+
+  # ── 生命周期事件话术（EdpaEventRail 发射时填充）──
+  general_scripts:
+    tool_start: "正在调用：{tool_name}"
+    tool_end: "{tool_name} 执行完成"
+    todo_start: "开始执行：{title}"
+    todo_end: "{title} 已完成"
+    todolist_start: "已生成任务规划"
+    todolist_end: "任务规划完成"
+    interrupt_start: "需要您确认以下信息"
+    request_start: "您的请求已收到。"
+    planning_start: "我们正在为您进行规划。"
+    task_cancelled: "好的，已为您取消当前操作。如需其他帮助，请随时告诉我。"
+    cancel_confirm: "确认要取消当前操作吗？"
+    out_of_scope: "当前请求暂不在可处理范围内。"
+
+  # ── 工具级话术匹配模板（按 query_intent 匹配）──
+  query_intent_tool_text:
+    "公司全称识别":
+      tool_start: "正在查询企业全称..."
+      tool_end: "企业全称查询完成"

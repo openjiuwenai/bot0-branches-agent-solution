@@ -930,7 +930,10 @@ public class VersatileDelegateRail extends BaseInterruptRail {
                     return result;
                 }
             } catch (JsonProcessingException e) {
-                // 降级返回空 Map
+                // 非 JSON 纯文本：保留原始内容，包装为 {"content": "..."} 供归一化脚本处理
+                Map<String, Object> fallback = new LinkedHashMap<>();
+                fallback.put("content", s);
+                return fallback;
             }
         }
         return new LinkedHashMap<>();

@@ -1,0 +1,17 @@
+# hz-zhidaitong-main 场景执行规约（主 Agent）
+
+actrule:
+  allowed_tools:
+    - call_subagent
+    - call_versatile
+    - ask_user
+    - cancel_task
+
+  todolist_entries:
+    - catalog_id: customer_confirm
+      content: "企业全称确认"
+      description: "识别简称/俗称，调用call_versatile查全称，再用ask_user向用户确认"
+      depends_on: []
+      skill: "customer_confirm_skill"
+
+  todolist_dynamic_paths: []

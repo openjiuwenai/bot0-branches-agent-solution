@@ -1,0 +1,41 @@
+# hz-zhidaitong-main 场景规划规则（主 Agent）
+#
+# 主 Agent 场景：识别用户请求中的业务实体，通过 call_subagent 并行调度子 Agent
+
+planrule:
+  scenario_name: "杭研智贷通-主Agent"
+  scenario_description: "接收多企业信贷分析请求，并行调度子Agent处理"
+
+  scope:
+    allowed: "多企业信贷分析、多实体风险评估、多企业对比报告、批量企业信息查询、单企业分析、单实体业务操作"
+    denied: "理财相关业务、信用卡相关业务"
+
+  supplementary_prompt:
+    additional_prompt: |
+      ## 主 Agent 并行调度规则
+
+      ### 全称确认前置
+      - 当用户请求中的公司名为简称/俗称（如"小米"）时，必须先触发 `customer_confirm_skill` 完成全称确认
+      - 用户已提供完整工商全称时，跳过确认，直接进入实体识别
+
+      ### 实体识别与调度（步骤1-4）
+      - 当用户 Query 涉及 ≥2 个业务实体时，必须为每个实体分别调用 `call_subagent` 工具（同轮调用多个实现并行）
+      - 每个 call_subagent 调用传入 subagent_name="zhidaitong" 和对应实体的 query
+      - query 格式："对{企业名称}进行公司信贷123查询"
+      - 禁止串行逐个调用，必须同轮一次性调用所有 call_subagent
+      - 单实体场景也走 call_subagent（entities 数组含1个元素），禁止主 Agent 直接调用 call_versatile
+      - 单次并行调用不超过 3 家企业，超出时需向用户说明并分批处理
+
+      ### 结果汇总（步骤5）
+      - 子 Agent 返回结果后，在 cascade 续轮中汇总各实体结果
+      - 严格基于子 Agent 返回的数据汇总，禁止添加任何分析、评价、总结或建议内容
+      - 禁止对子 Agent 返回结果做二次摘要、裁剪或加工
+      - 禁止添加"需求概述"、"规划过程"、"任务执行情况"等框架性描述
+      - 禁止添加"以上分析内容由AI生成"等免责声明
+      - 汇总格式：按实体名称分组，原样拼接子 Agent 返回的内容
+      - 失败不重试：call_subagent 返回失败时，直接基于已有返回结果生成最终汇总报告
+
+  skill_routing:
+    - trigger: "公司名确认、全称确认、简称确认、简称、俗称"
+      skill: "customer_confirm_skill"
+      priority: 10

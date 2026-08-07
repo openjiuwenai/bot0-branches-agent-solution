@@ -1,0 +1,43 @@
+# hz-zhidaitong-sub 子Agent场景话术
+#
+# 本配置适配子Agent单企业信贷123分析场景（工作流调度：基本信息+信贷综合金融+综合分析+尽调要点）
+# 话术键映射自动推断，无需显式声明
+
+scriptconfig:
+  # ── UC-C02: interrupt 追问内容来源开关 ──
+  interrupt_source: "script"
+
+  # ── 生命周期事件话术（EdpaEventRail 发射时填充）──
+  general_scripts:
+    tool_start: "正在执行：{tool_name}"
+    tool_end: "{tool_name} 执行完成"
+    todo_start: "开始执行：{title}"
+    todo_end: "{title} 已完成"
+    todolist_start: "已生成任务规划"
+    todolist_end: "任务规划完成"
+    interrupt_start: "需要您确认以下信息"
+    request_start: "您的请求已收到。"
+    planning_start: "我们正在为您进行规划。"
+    task_cancelled: "好的，已为您取消当前操作。如需其他帮助，请随时告诉我。"
+    cancel_confirm: "确认要取消当前操作吗？"
+    out_of_scope: "当前请求暂不在可处理范围内。"
+
+  # ── 工具级话术匹配模板（按 query_intent 匹配）──
+  query_intent_tool_text:
+    "基本信息抽取":
+      tool_start: "正在获取企业基本信息..."
+      tool_end: "企业基本信息获取完成"
+    "信贷综合金融":
+      tool_start: "正在查询信贷综合金融信息..."
+      tool_end: "信贷综合金融信息查询完成"
+    "信贷综合分析":
+      tool_start: "正在进行信贷综合分析..."
+      tool_end: "信贷综合分析完成"
+    "尽调要点":
+      tool_start: "正在获取尽调要点..."
+      tool_end: "尽调要点获取完成"
+
+  
+  # ── ask_user 中断确认话术 ──
+  # 业务话术已迁移至各 SKILL.yaml 的 scripts 字段，由 SkillScriptsCollector 收集
+  # 此处仅保留场景级覆盖（如需覆盖 SKILL.yaml 中的话术，在此声明同名键）

@@ -31,6 +31,7 @@ import com.openjiuwen.edp.rail.LogRail;
 import com.openjiuwen.edp.rail.McpInterruptRail;
 import com.openjiuwen.edp.rail.SandboxInterruptRail;
 import com.openjiuwen.edp.rail.ScriptsRail;
+import com.openjiuwen.edp.rail.SubAgentDelegateRail;
 import com.openjiuwen.edp.rail.VersatileDelegateRail;
 import com.openjiuwen.edp.tools.EdpaBusinessTools;
 import com.openjiuwen.core.foundation.tool.Tool;
@@ -339,6 +340,9 @@ public class EdpaAgentEnhancer {
                 ctx.getSpringBootConfig() != null ? ctx.getSpringBootConfig().getVersatile() : null,
                 sharedChannel, ctx.getSkillsDir(), ctx.getScripts(), ctx.getAgentName(),
                 ctx.getSysOp(), skillDeployPath, ctx.getDecoratedSandboxClient()));
+        // 子 Agent 委派：拦截 call_subagent 工具，构造 a2a_delegate 中断，
+        // agentName 由 subagent_name 参数动态指定，支持同轮多 ToolCall 并行调度。
+        rails.add(new SubAgentDelegateRail());
         rails.add(new AskUserTemplateRail(ctx.getEdpConfig(), ctx.getScripts()));
 
         // Log Rail 负责观测日志。

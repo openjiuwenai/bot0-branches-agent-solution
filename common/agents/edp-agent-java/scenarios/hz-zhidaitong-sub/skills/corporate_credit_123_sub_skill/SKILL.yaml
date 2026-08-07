@@ -1,0 +1,2 @@
+name: corporate_credit_123_sub_skill
+description: "子Agent专用Skill：单企业信贷123分析（步骤1串行 + 步骤2/3/4并行）。由主Agent通过call_subagent调度，不直接响应用户请求。"

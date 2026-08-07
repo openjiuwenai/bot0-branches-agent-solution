@@ -1,0 +1,23 @@
+# hz-zhidaitong-sub 场景执行规约（子 Agent）
+
+actrule:
+  allowed_tools:
+    - call_versatile
+    - call_mcp
+    - ask_user
+    - cancel_task
+
+  todolist_entries:
+    - catalog_id: task_analyze
+      content: "任务分析"
+      description: "分析实体任务，拆分为多个工作流意图"
+      depends_on: []
+      skill: "corporate_credit_123_sub_skill"
+    - catalog_id: workflow_parallel
+      content: "并行工作流"
+      description: "同轮调多个call_versatile并行执行分析"
+      depends_on:
+        - task_analyze
+      skill: "corporate_credit_123_sub_skill"
+
+  todolist_dynamic_paths: []

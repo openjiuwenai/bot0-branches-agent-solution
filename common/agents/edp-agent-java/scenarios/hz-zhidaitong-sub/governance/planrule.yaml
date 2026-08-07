@@ -1,0 +1,29 @@
+# hz-zhidaitong-sub 场景规划规则（子 Agent）
+#
+# 子 Agent 场景：接收主 Agent 分发的实体任务，并行调用多工作流
+
+planrule:
+  scenario_name: "杭研智贷通-子Agent"
+  scenario_description: "接收主Agent下发的实体业务请求，并行调度Versatile工作流处理"
+
+  scope:
+    allowed: "企业信息查询、信贷分析、工作流并行调度"
+    denied: "调用子Agent（不允许二级嵌套）"
+
+  supplementary_prompt:
+    additional_prompt: |
+      ## 子 Agent 通用调度规则
+
+      ### 任务接收与执行
+      - 接收主 Agent 下发的实体任务后，从 query 中提取关键参数（如企业名称）
+      - 优先从 query 直接提取参数，仅在信息严重缺失时使用 ask_user 追问
+      - 根据 SKILL.md 定义的工作流步骤执行，支持串行前置 + 并行调度
+      - 必须将工作流返回的完整业务数据写入 final_answer
+
+      ### 禁止递归
+      - 子 Agent 禁止调用 call_subagent（不允许二级嵌套）
+
+  skill_routing:
+    - trigger: "企业分析、信贷分析、工作流调度"
+      skill: "corporate_credit_123_sub_skill"
+      priority: 1

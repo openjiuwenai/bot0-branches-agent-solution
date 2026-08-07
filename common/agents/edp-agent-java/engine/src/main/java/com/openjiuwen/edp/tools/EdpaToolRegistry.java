@@ -19,6 +19,7 @@ package com.openjiuwen.edp.tools;
 import com.openjiuwen.edp.config.EdpConfig;
 import com.openjiuwen.core.foundation.tool.Tool;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -45,11 +46,14 @@ import java.util.function.Function;
 public final class EdpaToolRegistry {
     // call_versatile 保留：携带 query_intent 等业务参数，由 VersatileDelegateRail 拦截后
     // 转换为 a2a_delegate 中断（agentName=versatile-agent），交由框架 A2AEnabledServeOrchestrator 接管。
+    // call_subagent：子 Agent 委派工具，由 SubAgentDelegateRail 拦截后构造 a2a_delegate 中断，
+    // agentName 由 subagent_name 参数动态指定，支持同轮多 ToolCall 实现并行调度。
     private static final Map<String, Function<EdpConfig, Tool>> BUILTIN_TOOLS = Map.of(
             EdpaBusinessTools.TOOL_CALL_MCP, cfg -> CallMcpTool.build(),
             EdpaBusinessTools.TOOL_CALL_VERSATILE, cfg -> CallVersatileTool.build(),
             EdpaBusinessTools.TOOL_ENHANCED_ASK_USER, cfg -> EnhancedAskUserTool.build(),
-            EdpaBusinessTools.TOOL_CANCEL_TASK, cfg -> CancelTaskTool.build());
+            EdpaBusinessTools.TOOL_CANCEL_TASK, cfg -> CancelTaskTool.build(),
+            CallSubAgentTool.TOOL_NAME, cfg -> CallSubAgentTool.build());
 
     private EdpaToolRegistry() {
     }
