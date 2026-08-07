@@ -35,6 +35,8 @@ def create_app(config_path: str | None = None):
             "需安装 FastAPI：pip install openjiuwen-db-connector[server]"
         ) from e
 
+    from typing import Optional
+
     config = load_config(config_path)
     tool = DefaultDbConnectorTool(config)
 
@@ -50,15 +52,15 @@ def create_app(config_path: str | None = None):
 
     class QueryRequest(BaseModel):
         sql_template: str = Field(..., description="带 %s 占位符的 SELECT 语句")
-        params: list[Any] | None = Field(default=None, description="占位符参数列表")
-        max_rows: int | None = Field(default=None, description="最大返回行数")
+        params: Optional[list[Any]] = Field(default=None, description="占位符参数列表")
+        max_rows: Optional[int] = Field(default=None, description="最大返回行数")
 
     class WriteRequest(BaseModel):
         sql_template: str = Field(..., description="带 %s 占位符的 INSERT/UPDATE/DELETE 语句")
-        params: list[Any] | None = Field(default=None, description="占位符参数列表")
+        params: Optional[list[Any]] = Field(default=None, description="占位符参数列表")
 
     class ImportSchemaRequest(BaseModel):
-        tables: list[str] | None = Field(default=None, description="指定表名列表；缺省导入全部白名单表")
+        tables: Optional[list[str]] = Field(default=None, description="指定表名列表；缺省导入全部白名单表")
 
     # ------------------------------------------------------------------
     # 路由
