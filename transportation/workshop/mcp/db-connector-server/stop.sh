@@ -5,8 +5,8 @@
 # 用法：./stop.sh
 # ============================================================
 
-WORKSHOP_DIR="$(cd "$(dirname "$0")" && pwd)"
-PID_DIR="$WORKSHOP_DIR/.pids"
+MCP_DIR="$(cd "$(dirname "$0")" && pwd)"
+PID_DIR="$MCP_DIR/.pids"
 
 echo "=== 停止服务 ==="
 

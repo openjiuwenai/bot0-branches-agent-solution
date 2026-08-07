@@ -3,11 +3,16 @@
 将 db-connector 工具暴露为标准 MCP 服务，支持 stdio / sse / streamable-http 传输。
 
 用法：
-    python server.py <config.yaml> [--transport stdio|sse|streamable-http] [--port 8080]
+    python server.py <config.yaml> [--transport stdio|sse|streamable-http] \
+        [--host 0.0.0.0] [--port 8080] [--path /db-connector-server]
+
+部署后服务地址示例：
+    http://100.100.135.219:7087/db-connector-server
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -24,8 +29,13 @@ def main():
         choices=["stdio", "sse", "streamable-http"],
         help="传输方式（默认 stdio）",
     )
-    parser.add_argument("--port", type=int, default=8080, help="HTTP/SSE 监听端口")
-    parser.add_argument("--host", default="0.0.0.0", help="监听地址")
+    parser.add_argument("--host", default="0.0.0.0", help="监听地址（默认 0.0.0.0）")
+    parser.add_argument("--port", type=int, default=8080, help="监听端口（默认 8080）")
+    parser.add_argument(
+        "--path",
+        default="/db-connector-server",
+        help="服务路径前缀（默认 /db-connector-server，仅 sse/streamable-http 生效）",
+    )
     args = parser.parse_args()
 
     # 将 db-connector 的 src 加入路径（非 pip install 时）
@@ -87,15 +97,21 @@ def main():
         """刷新表结构缓存。"""
         return tool.refresh_schema().to_dict()
 
-    print(f"db-connector MCP 服务启动", file=sys.stderr)
+    # 启动日志
+    print("db-connector MCP 服务启动", file=sys.stderr)
     print(f"  传输方式: {args.transport}", file=sys.stderr)
     print(f"  数据库: {config.data_source.type} @ {config.data_source.host}", file=sys.stderr)
     print(f"  模式: {config.mode}", file=sys.stderr)
+    if args.transport == "stdio":
+        print("  地址: stdio（本地进程通信）", file=sys.stderr)
+    else:
+        display_host = args.host if args.host != "0.0.0.0" else os.environ.get("MCP_HOST", "<本机IP>")
+        print(f"  地址: http://{display_host}:{args.port}{args.path}", file=sys.stderr)
 
     if args.transport == "stdio":
         mcp.run(transport="stdio")
     else:
-        mcp.run(transport=args.transport, host=args.host, port=args.port)
+        mcp.run(transport=args.transport, host=args.host, port=args.port, path=args.path)
 
 
 if __name__ == "__main__":

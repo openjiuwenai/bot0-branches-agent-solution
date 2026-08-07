@@ -267,13 +267,25 @@ openjiuwen:
         version: 0.1.0
 ```
 
-## 传输方式
+## 传输方式与服务地址
 
-| 传输方式 | 适用场景 | 启动命令 |
-|----------|----------|----------|
-| `stdio` | Agent 运行时本地调用（默认） | `python server.py config.yaml` |
-| `sse` | 远程调用，Server-Sent Events | `python server.py config.yaml --transport sse --port 8080` |
-| `streamable-http` | 远程调用，HTTP 流式 | `python server.py config.yaml --transport streamable-http --port 8080` |
+| 传输方式 | 适用场景 | 启动命令 | 部署后服务地址 |
+|----------|----------|----------|----------------|
+| `stdio` | Agent 运行时本地调用（默认） | `python server.py config.yaml` | stdio（本地进程通信） |
+| `sse` | 远程调用，Server-Sent Events | `python server.py config.yaml --transport sse --port 8080` | `http://<host>:8080/db-connector-server` |
+| `streamable-http` | 远程调用，HTTP 流式（推荐） | `python server.py config.yaml --transport streamable-http --port 8080` | `http://<host>:8080/db-connector-server` |
+
+> **服务地址示例**：部署在 `100.100.135.219:7087` 时，完整 MCP 服务地址为 `http://100.100.135.219:7087/db-connector-server`
+
+### 启动参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `config` | `config/config.example.yaml` | 配置文件路径（位置参数） |
+| `--transport` | `stdio` | 传输方式：`stdio` / `sse` / `streamable-http` |
+| `--host` | `0.0.0.0` | 监听地址，`0.0.0.0` 表示对所有网卡开放 |
+| `--port` | `8080` | 监听端口 |
+| `--path` | `/db-connector-server` | 服务路径前缀，构成 `http://host:port/path` |
 
 ## 部署
 
@@ -287,17 +299,61 @@ pip install -e ../../tools/db-connector
 ### 启动
 
 ```bash
-# 方式一：直接运行
+# 方式一：直接运行（前台，适合调试）
 python server.py config/config.yaml
 
-# 方式二：通过 workshop 一键脚本（后台运行）
-cd ../../  # 到 workshop 目录
+# 方式二：通过脚本后台运行（生产推荐）
 ./start.sh
 ```
 
-### 后台运行
+### 后台运行脚本
 
-使用 [start.sh](../../start.sh) 后台启动，日志输出到 `workshop/.logs/`，PID 记录到 `workshop/.pids/`。
+本服务自带 [start.sh](start.sh) / [stop.sh](stop.sh) 脚本，**在本目录内运行**，不再依赖 workshop 公共目录。
+
+**start.sh**：
+
+```bash
+# 默认：stdio 传输 + 示例配置
+./start.sh
+
+# 自定义：streamable-http 传输 + 指定端口 + 指定路径
+MCP_TRANSPORT=streamable-http MCP_PORT=7087 MCP_PATH=/db-connector-server ./start.sh
+
+# 完整示例：指定配置 + SSE + 绑定 IP + 端口 + 路径
+DB_CONNECTOR_CONFIG=./config/config.yaml MCP_TRANSPORT=sse \
+MCP_HOST=0.0.0.0 MCP_PORT=7087 MCP_PATH=/db-connector-server ./start.sh
+```
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `DB_CONNECTOR_CONFIG` | `./config/config.example.yaml` | 配置文件路径 |
+| `MCP_TRANSPORT` | `stdio` | 传输方式：`stdio` / `sse` / `streamable-http` |
+| `MCP_HOST` | `0.0.0.0` | 监听地址 |
+| `MCP_PORT` | `8080` | 监听端口（stdio 模式忽略） |
+| `MCP_PATH` | `/db-connector-server` | 服务路径前缀，构成 `http://host:port/path`（stdio 模式忽略） |
+
+**部署后服务地址**：`http://<本机IP>:$MCP_PORT$MCP_PATH`
+- 示例：`http://100.100.135.219:7087/db-connector-server`
+
+脚本行为：
+1. 安装 db-connector 工具与本服务依赖
+2. `nohup` 后台启动 `server.py`
+3. PID 记录到本目录 `.pids/db-connector-mcp.pid`
+4. 日志输出到本目录 `.logs/db-connector-mcp.log`
+
+**stop.sh**：
+
+```bash
+./stop.sh
+```
+
+读取 `.pids/db-connector-mcp.pid` 并终止进程。
+
+### 查看日志
+
+```bash
+tail -f .logs/db-connector-mcp.log
+```
 
 ## 安全要点
 
