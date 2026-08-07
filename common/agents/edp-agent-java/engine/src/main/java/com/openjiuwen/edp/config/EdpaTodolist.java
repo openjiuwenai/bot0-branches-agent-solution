@@ -82,7 +82,6 @@ public class EdpaTodolist {
      *
      * @param rawEntries  ActRuleConfig.TodolistEntry 列表
      * @param rawPaths    ActRuleConfig.TodolistPath 列表
-     * @return result
      * @throws IllegalArgumentException 校验失败（catalog_id 重复、引用不存在、依赖图有环）
      */
 
