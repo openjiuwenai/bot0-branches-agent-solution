@@ -80,11 +80,9 @@ public final class IntentSuite {
 
         Optional<IntentDefinition> matched;
         try {
-            matched = matcher.match(context);
+            matched = Optional.ofNullable(matcher.match(context))
+                    .orElseThrow(() -> new IntentMatchException("matcher result must not be null"));
         } catch (IntentMatchException exception) {
-            return failed(null, "意图匹配失败");
-        }
-        if (matched == null) {
             return failed(null, "意图匹配失败");
         }
         if (!isValidMatch(matched, snapshot.initializedIntents())) {

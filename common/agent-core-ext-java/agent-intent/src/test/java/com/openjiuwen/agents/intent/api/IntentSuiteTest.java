@@ -167,5 +167,4 @@ class IntentSuiteTest {
     private static CustomIntentRegistration registration(String id) {
         return new CustomIntentRegistration(id, id + " description", RETURN_SELECTED);
     }
-
 }

@@ -9,8 +9,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.interrupt.InterruptRequest;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
-import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
+import com.openjiuwen.harness.deep_agent.DeepAgent;
+import com.openjiuwen.harness.rails.DeepAgentRail;
 import com.openjiuwen.harness.rails.interrupt.BaseInterruptRail;
 import com.openjiuwen.harness.rails.interrupt.InterruptDecision;
 
@@ -59,7 +60,16 @@ public final class BankInterruptRails {
     }
 
     /** Preserves an intent change as the business Agent's terminal structured result. */
-    public static final class IntentChangeTerminationRail extends AgentRail {
+    public static final class IntentChangeTerminationRail extends DeepAgentRail {
+        private volatile DeepAgent deepAgent;
+
+        @Override
+        public void init(Object agent) {
+            if (agent instanceof DeepAgent configuredDeepAgent) {
+                deepAgent = configuredDeepAgent;
+            }
+        }
+
         @Override
         public void afterToolCall(AgentCallbackContext context) {
             if (!(context.getInputs() instanceof ToolCallInputs inputs)
@@ -69,6 +79,9 @@ public final class BankInterruptRails {
             }
             Map<String, Object> terminal = new java.util.LinkedHashMap<>();
             result.forEach((key, value) -> terminal.put(String.valueOf(key), value));
+            if (deepAgent != null && context.getSession() != null) {
+                deepAgent.requestAbort(context.getSession().getSessionId());
+            }
             context.requestForceFinish(terminal);
         }
     }
