@@ -25,6 +25,21 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
     static final int TARGET_STREAM_CHUNKS = 6;
     static final long TARGET_STREAM_DELAY_MILLIS = 300L;
 
+    /**
+     * S1 专属 conversationId：仅此会话走 client_tool 中断序列，用于完整复现 gateway
+     * {@code BusForwarder.drainStreamToClient} 在 INPUT_REQUIRED 后空等 TERMINAL 的 bug（§6.3-A）。
+     * <p>用 conversationId 而非 input 隔离，是因为 S12（scenarioExpiredExposure）故意用与 S1 相同的
+     * input（"please read the page then submit the order"）测过期窗口，input 无法区分；conv-stream-1
+     * 是 S1 专属，其余场景各用不同 conversationId，互不影响。
+     */
+    static final String CLIENT_TOOL_SEQUENCE_CONVERSATION = "conv-stream-1";
+
+    /**
+     * metadata key：runtime 在 INPUT_REQUIRED 续传时回放上轮 {@code _interrupt}（见 A2AAgentExecutor.execute）。
+     * handler 借此区分续传轮次，推进 readPage → submitOrder → COMPLETED 状态机。
+     */
+    private static final String INTERRUPT_META = "_interrupt";
+
     private final boolean caller;
     private final int streamChunks;
     private final long streamDelayMillis;
@@ -70,6 +85,10 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
             return;
         }
         if (!caller) {
+            if (CLIENT_TOOL_SEQUENCE_CONVERSATION.equals(request.getConversationId())) {
+                streamClientToolSequence(request, observer);
+                return;
+            }
             streamTargetResponse(request, observer);
             return;
         }
@@ -90,6 +109,68 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
             }
         }
         observer.onComplete();
+    }
+
+    /**
+     * S1 专用：按续传轮次驱动 readPage → submitOrder → COMPLETED 的 client_tool 中断序列，完整复现
+     * gateway {@code drainStreamToClient} 在 INPUT_REQUIRED 后空等 TERMINAL 的 bug。
+     *
+     * <p>轮次判定靠 {@code metadata._interrupt}（runtime 在 INPUT_REQUIRED 续传时回放上轮 interrupt）：
+     * <ul>
+     *   <li>轮0（无上轮 interrupt）：发 {@code readPage}（client_tool，SDK 自动执行）→ INPUT_REQUIRED</li>
+     *   <li>轮1（上轮 readPage）：发 {@code submitOrder}（ACTION，SDK 审批后执行）→ INPUT_REQUIRED</li>
+     *   <li>轮2（上轮 submitOrder）：发终态文本 → COMPLETED</li>
+     * </ul>
+     * gateway bug 存在时，前两轮 INPUT_REQUIRED 后 gateway 空等 TERMINAL 占用 servlet 线程，
+     * 续传响应无法及时汇回原流 → S1 超时（即 bug 复现点）。bug 修复后此序列可正常收敛。
+     *
+     * @param request the serve request
+     * @param observer the stream observer
+     */
+    private void streamClientToolSequence(ServeRequest request, QueryStreamObserver observer) {
+        String previousToolName = previousInterruptToolName(request);
+        if (previousToolName == null) {
+            observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
+                    clientToolInterrupt("call-readpage-1", "readPage", "please read the page")));
+            return;
+        }
+        if ("readPage".equals(previousToolName)) {
+            observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
+                    clientToolInterrupt("call-submitorder-1", "submitOrder", "please submit the order")));
+            return;
+        }
+        observer.onNext(new QueryChunk(QueryChunk.TYPE_CHUNK,
+                response(request, "order submitted successfully").getResult()));
+        observer.onComplete();
+    }
+
+    private static String previousInterruptToolName(ServeRequest request) {
+        if (request.getMetadata() == null) {
+            return null;
+        }
+        Object value = request.getMetadata().get(INTERRUPT_META);
+        if (!(value instanceof Map<?, ?> interrupt)) {
+            return null;
+        }
+        return interrupt.get("toolName") instanceof String toolName ? toolName : null;
+    }
+
+    /**
+     * 构造 client_tool 中断的 {@code _interrupt} 内层 map。结构对齐 agent-client-sdk
+     * {@code A2aJsonCodec.parseInterrupt}：{@code toolCallId}/{@code toolName}/{@code message}
+     * 顶层字段，{@code context._interrupt_kind="client_tool"} 标识由 SDK 自动执行。
+     *
+     * @param toolCallId the tool call id
+     * @param toolName the tool name (readPage / submitOrder)
+     * @param message the prompt message
+     * @return the interrupt map
+     */
+    private static Map<String, Object> clientToolInterrupt(String toolCallId, String toolName, String message) {
+        return Map.of(
+                "toolCallId", toolCallId,
+                "toolName", toolName,
+                "message", message,
+                "context", Map.of("_interrupt_kind", "client_tool", "arguments", Map.of()));
     }
 
     private boolean pause(QueryStreamObserver observer) {
