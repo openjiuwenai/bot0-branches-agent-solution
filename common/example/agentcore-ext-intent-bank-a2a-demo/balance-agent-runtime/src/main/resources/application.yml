@@ -25,7 +25,7 @@ openjiuwen:
       skills:
         - id: query_balance
           name: Query account balance
-          description: 查询当前账户或指定账户的可用余额、币种和账户信息
+          description: 账户余额查询：查询当前账户或指定账户的可用余额、币种和账户信息，例如查询我的账户余额
           tags: ["bank", "account", "balance"]
           examples: ["查询我的余额", "工资卡还有多少钱"]
           input-modes: ["text", "text/plain"]

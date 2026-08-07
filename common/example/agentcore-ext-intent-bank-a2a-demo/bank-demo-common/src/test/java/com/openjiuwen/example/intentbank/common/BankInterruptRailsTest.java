@@ -12,6 +12,7 @@ import com.openjiuwen.core.singleagent.interrupt.ToolInterruptException;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.example.intentbank.common.BankInterruptRails.ConfirmationRail;
+import com.openjiuwen.example.intentbank.common.BankInterruptRails.IntentChangeTerminationRail;
 import com.openjiuwen.example.intentbank.common.BankInterruptRails.IntentAwareAskUserRail;
 
 import org.junit.jupiter.api.Test;
@@ -30,8 +31,22 @@ class BankInterruptRailsTest {
 
         AgentCallbackContext resumed = context("ask_user", "{\"query\":\"收款人是谁？\"}", "张三");
         rail.beforeToolCall(resumed);
-        assertThat(((ToolCallInputs) resumed.getInputs()).getToolArgs()).isEqualTo("{\"response\":\"张三\"}");
+        assertThat(String.valueOf(((ToolCallInputs) resumed.getInputs()).getToolArgs()))
+                .contains("\"query\":\"收款人是谁？\"", "\"response\":\"张三\"");
         assertThat(resumed.getExtra()).doesNotContainKey("_skip_tool");
+    }
+
+    @Test
+    void intentChangeTerminatesBusinessAgentWithStructuredResult() {
+        AgentCallbackContext context = context(BankTools.TRANSFER, "{}", null);
+        ((ToolCallInputs) context.getInputs()).setToolResult(
+                Map.of("status", "INTENT_CHANGED", "latestSemantic", "购买1000元理财"));
+
+        new IntentChangeTerminationRail().afterToolCall(context);
+
+        assertThat(context.hasForceFinishRequest()).isTrue();
+        assertThat(context.getForceFinishRequest().getResult()).containsEntry("status", "INTENT_CHANGED")
+                .containsEntry("latestSemantic", "购买1000元理财");
     }
 
     @Test

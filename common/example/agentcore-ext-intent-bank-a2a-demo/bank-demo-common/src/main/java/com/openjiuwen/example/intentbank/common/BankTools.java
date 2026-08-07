@@ -8,6 +8,9 @@ import com.openjiuwen.core.foundation.tool.Tool;
 import com.openjiuwen.core.foundation.tool.ToolCard;
 import com.openjiuwen.core.foundation.tool.function.LocalFunction;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
@@ -19,6 +22,7 @@ import java.util.regex.Pattern;
 
 /** Deterministic in-memory tools used by the bank demo. */
 public final class BankTools {
+    public static final String ASK_USER = "ask_user";
     public static final String BALANCE = "query_balance";
     public static final String TRANSFER = "execute_transfer";
     public static final String WEALTH_RECOMMEND = "recommend_wealth";
@@ -29,14 +33,22 @@ public final class BankTools {
 
     private static final Pattern BINARY_EXPRESSION = Pattern
             .compile("([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*([+\\-*/])\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))");
+    private static final Logger log = LoggerFactory.getLogger(BankTools.class);
 
     private BankTools() {
     }
 
+    public static Tool askUser() {
+        return tool(ASK_USER, "缺少业务信息时向用户提出一个开放式问题；必须通过此工具追问，禁止直接文本追问",
+                schema(Map.of("query", stringProperty("需要用户补充回答的明确问题"), "response",
+                        stringProperty("用户续接时提供的回答")), List.of("query")),
+                inputs -> Map.of("response", text(inputs.get("response"), text(inputs.get("query"), ""))));
+    }
+
     public static Tool balance() {
         return tool(BALANCE, "查询银行账户余额", schema(Map.of("account", stringProperty("账户名称或账号；为空时使用当前账户")), List.of()),
-                inputs -> Map.of("handledBy", "balance-agent", "status", "COMPLETED", "account",
-                        text(inputs.get("account"), "当前账户"), "balance", 12800.50D, "currency", "CNY"));
+                inputs -> audited(BALANCE, Map.of("handledBy", "balance-agent", "status", "COMPLETED", "account",
+                        text(inputs.get("account"), "当前账户"), "balance", 12800.50D, "currency", "CNY")));
     }
 
     public static Tool transfer() {
@@ -46,38 +58,42 @@ public final class BankTools {
                 inputs -> {
                     String recipient = text(inputs.get("recipient"), "unknown");
                     BigDecimal amount = decimal(inputs.get("amount"));
-                    return Map.of("handledBy", "transfer-agent", "status", "COMPLETED", "recipient", recipient,
-                            "amount", amount, "currency", "CNY", "transferId", "TR-DEMO-0001");
+                    return audited(TRANSFER,
+                            Map.of("handledBy", "transfer-agent", "status", "COMPLETED", "recipient", recipient,
+                                    "amount", amount, "currency", "CNY", "transferId", "TR-DEMO-0001"));
                 });
     }
 
     public static Tool wealthRecommendation() {
         return tool(WEALTH_RECOMMEND, "根据金额、期限和风险偏好推荐理财产品",
                 schema(Map.of("query", stringProperty("完整理财推荐需求")), List.of("query")),
-                inputs -> Map.of("handledBy", "wealth-advisor-agent", "status", "COMPLETED", "recommendations",
-                        List.of(Map.of("product", "稳盈90天", "risk", "R2", "annualRate", "2.8%"),
-                                Map.of("product", "进取180天", "risk", "R3", "annualRate", "3.6%"))));
+                inputs -> audited(WEALTH_RECOMMEND,
+                        Map.of("handledBy", "wealth-advisor-agent", "status", "COMPLETED", "recommendations",
+                                List.of(Map.of("product", "稳盈90天", "risk", "R2", "annualRate", "2.8%"),
+                                        Map.of("product", "进取180天", "risk", "R3", "annualRate", "3.6%")))));
     }
 
     public static Tool wealthPurchase() {
         return tool(WEALTH_PURCHASE, "执行一笔已收集产品、金额且即将确认的理财购买",
                 schema(Map.of("product", stringProperty("理财产品名称"), "amount", numberProperty("购买金额")),
                         List.of("product", "amount")),
-                inputs -> Map.of("handledBy", "wealth-purchase-agent", "status", "COMPLETED", "product",
-                        text(inputs.get("product"), "稳盈90天"), "amount", decimal(inputs.get("amount")), "currency",
-                        "CNY", "purchaseId", "WP-DEMO-0001"));
+                inputs -> audited(WEALTH_PURCHASE,
+                        Map.of("handledBy", "wealth-purchase-agent", "status", "COMPLETED", "product",
+                                text(inputs.get("product"), "稳盈90天"), "amount", decimal(inputs.get("amount")),
+                                "currency", "CNY", "purchaseId", "WP-DEMO-0001")));
     }
 
     public static Tool calculator() {
         return tool(CALCULATOR, "计算一个包含加减乘除的二元算式",
                 schema(Map.of("query", stringProperty("包含算式的完整请求")), List.of("query")),
-                inputs -> calculate(text(inputs.get("query"), "")));
+                inputs -> audited(CALCULATOR, calculate(text(inputs.get("query"), ""))));
     }
 
     public static Tool currentDate() {
         return tool(CURRENT_DATE, "查询当前日期和星期", schema(Map.of(), List.of()),
-                inputs -> Map.of("handledBy", "intent-agent", "status", "COMPLETED", "date", LocalDate.now().toString(),
-                        "dayOfWeek", LocalDate.now().getDayOfWeek().name()));
+                inputs -> audited(CURRENT_DATE,
+                        Map.of("handledBy", "intent-agent", "status", "COMPLETED", "date",
+                                LocalDate.now().toString(), "dayOfWeek", LocalDate.now().getDayOfWeek().name())));
     }
 
     public static Tool weather() {
@@ -86,7 +102,9 @@ public final class BankTools {
                     String query = text(inputs.get("query"), "");
                     String city = query.contains("上海") ? "上海" : query.contains("北京") ? "北京" : "深圳";
                     String weather = "北京".equals(city) ? "晴，26C" : "上海".equals(city) ? "多云，28C" : "阵雨，30C";
-                    return Map.of("handledBy", "intent-agent", "status", "COMPLETED", "city", city, "weather", weather);
+                    return audited(WEATHER,
+                            Map.of("handledBy", "intent-agent", "status", "COMPLETED", "city", city, "weather",
+                                    weather));
                 });
     }
 
@@ -151,5 +169,10 @@ public final class BankTools {
         } catch (NumberFormatException exception) {
             return BigDecimal.ZERO;
         }
+    }
+
+    private static Object audited(String toolName, Object result) {
+        log.info("BANK_DEMO_EXECUTION tool={} result={}", toolName, result);
+        return result;
     }
 }

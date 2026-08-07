@@ -30,13 +30,13 @@ openjiuwen:
           不要结束本轮。复杂多目标请求先规划成有序单一步骤，每个步骤分别调用 intent_match，全部完成后汇总。
       custom-intents:
         calculator:
-          description: 执行加减乘除计算、金额试算或数字运算
+          description: 计算器：执行加减乘除、金额试算或数字运算，例如6*7、6乘以7、计算两个数字
           result-function-bean: calculatorIntentResult
         current-date:
-          description: 查询今天日期、星期或当前是几号
+          description: 当前日期查询：查询今天日期、星期或当前是几号，例如今天是几号
           result-function-bean: dateIntentResult
         weather:
-          description: 查询北京、上海、深圳等城市的天气
+          description: 城市天气查询：查询北京、上海、深圳等城市天气，例如深圳天气怎么样
           result-function-bean: weatherIntentResult
       fallback:
         id: bank-intent-fallback
