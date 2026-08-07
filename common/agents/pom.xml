@@ -17,7 +17,7 @@
 
     <properties>
         <java.version>17</java.version>
-        <agent-core-java.version>0.1.14</agent-core-java.version>
+        <agent-core-java.version>0.1.14.post1</agent-core-java.version>
         <junit-jupiter.version>6.0.1</junit-jupiter.version>
         <assertj.version>3.27.6</assertj.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
