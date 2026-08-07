@@ -14,8 +14,8 @@ The current version contains three independent extension projects: runtime adapt
 
 - **Java**: JDK 17+
 - **Build tool**: Maven 3.9+
-- **Runtime dependency**: `com.openjiuwen:agent-runtime-java:0.1.0`
-- **Execution core dependency**: `com.openjiuwen:agent-core-java:0.1.13`
+- **Runtime dependency**: `com.openjiuwen:agent-runtime-java:0.1.1.post1`
+- **Execution core dependency**: `com.openjiuwen:agent-core-java:0.1.14.post1`
 
 ### Build Extension Modules
 
