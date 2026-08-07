@@ -8,6 +8,8 @@ import com.openjiuwen.agents.intent.model.IntentAction;
 
 /**
  * Produces the action bound to one initialized intent.
+ *
+ * @since 0.1.0
  */
 @FunctionalInterface
 public interface IntentResultFunction {
@@ -16,7 +18,7 @@ public interface IntentResultFunction {
      *
      * @param context single-call execution context with selected intent
      * @return intent action
-     * @throws Exception when action generation fails
+     * @throws IntentResultException when action generation fails
      */
-    IntentAction apply(IntentExecutionContext context) throws Exception;
+    IntentAction apply(IntentExecutionContext context) throws IntentResultException;
 }

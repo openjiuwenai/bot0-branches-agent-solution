@@ -15,6 +15,8 @@ import java.util.WeakHashMap;
 
 /**
  * Installs the intent Tool and request prompt on a DeepAgent.
+ *
+ * @since 0.1.0
  */
 public final class IntentDeepAgentBinder {
     private final Map<DeepAgent, IntentSuite> bindings = Collections.synchronizedMap(new WeakHashMap<>());

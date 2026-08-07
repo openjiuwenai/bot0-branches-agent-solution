@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+/** Tests model Tool visibility at the intent entry Agent. */
 class IntentOnlyToolVisibilityRailTest {
     @Test
     void hidesLocalTargetsButKeepsOtherModelTools() {

@@ -11,6 +11,8 @@ import java.util.Map;
 
 /**
  * Runtime configuration for DeepAgent intent routing.
+ *
+ * @since 0.1.0
  */
 @ConfigurationProperties(prefix = "openjiuwen.service.intent")
 public class RuntimeIntentProperties {
@@ -78,7 +80,11 @@ public class RuntimeIntentProperties {
         this.extensionOptions = extensionOptions;
     }
 
-    /** Match configuration. */
+    /**
+     * Match configuration.
+     *
+     * @since 0.1.0
+     */
     public static class MatchProperties {
         private double threshold = 0.65D;
 
@@ -91,7 +97,11 @@ public class RuntimeIntentProperties {
         }
     }
 
-    /** Model-visible prompt configuration. */
+    /**
+     * Model-visible prompt configuration.
+     *
+     * @since 0.1.0
+     */
     public static class IntentPromptProperties {
         private String toolDescription = "";
         private String routingInstructions = "";
@@ -113,7 +123,11 @@ public class RuntimeIntentProperties {
         }
     }
 
-    /** One configured custom intent. */
+    /**
+     * One configured custom intent.
+     *
+     * @since 0.1.0
+     */
     public static class CustomIntentProperties {
         private String description;
         private String resultFunctionBean;
@@ -135,7 +149,11 @@ public class RuntimeIntentProperties {
         }
     }
 
-    /** Optional fallback intent. */
+    /**
+     * Optional fallback intent.
+     *
+     * @since 0.1.0
+     */
     public static class FallbackProperties {
         private String id = "default-fallback";
         private String resultFunctionBean;

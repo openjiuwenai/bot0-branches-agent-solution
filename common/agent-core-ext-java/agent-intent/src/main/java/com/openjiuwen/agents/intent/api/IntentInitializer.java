@@ -10,6 +10,8 @@ import com.openjiuwen.agents.intent.model.IntentSuiteConfig;
 
 /**
  * Builds a complete initialized intent directory from one catalog version.
+ *
+ * @since 0.1.0
  */
 @FunctionalInterface
 public interface IntentInitializer {

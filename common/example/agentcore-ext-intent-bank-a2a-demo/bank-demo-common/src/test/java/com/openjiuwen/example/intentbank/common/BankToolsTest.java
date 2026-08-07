@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
+/** Tests deterministic bank demo Tools and schemas. */
 class BankToolsTest {
     @Test
     void returnsDeterministicBankResults() throws Exception {
@@ -21,12 +22,18 @@ class BankToolsTest {
 
         Map<String, Object> transfer = result(BankTools.transfer().invoke(Map.of("recipient", "张三", "amount", 100)));
         assertThat(transfer).containsEntry("handledBy", "transfer-agent").containsEntry("recipient", "张三");
-        assertThat((BigDecimal) transfer.get("amount")).isEqualByComparingTo("100");
+        if (!(transfer.get("amount") instanceof BigDecimal transferAmount)) {
+            throw new AssertionError("expected transfer amount");
+        }
+        assertThat(transferAmount).isEqualByComparingTo("100");
 
         Map<String, Object> purchase = result(
                 BankTools.wealthPurchase().invoke(Map.of("product", "稳盈90天", "amount", 10000)));
         assertThat(purchase).containsEntry("handledBy", "wealth-purchase-agent").containsEntry("product", "稳盈90天");
-        assertThat((BigDecimal) purchase.get("amount")).isEqualByComparingTo("10000");
+        if (!(purchase.get("amount") instanceof BigDecimal purchaseAmount)) {
+            throw new AssertionError("expected purchase amount");
+        }
+        assertThat(purchaseAmount).isEqualByComparingTo("10000");
     }
 
     @Test

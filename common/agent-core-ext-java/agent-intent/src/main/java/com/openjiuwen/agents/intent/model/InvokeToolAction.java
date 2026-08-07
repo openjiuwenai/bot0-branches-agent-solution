@@ -12,6 +12,8 @@ import java.util.Map;
  *
  * @param toolName target tool name
  * @param arguments complete target tool arguments
+ *
+ * @since 0.1.0
  */
 public record InvokeToolAction(String toolName, Map<String, Object> arguments) implements IntentAction {
     /**

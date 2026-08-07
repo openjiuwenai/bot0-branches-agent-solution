@@ -6,6 +6,8 @@ package com.openjiuwen.agents.intent.api;
 
 /**
  * Indicates an intent matcher execution or result mapping failure.
+ *
+ * @since 0.1.0
  */
 public class IntentMatchException extends RuntimeException {
     /**

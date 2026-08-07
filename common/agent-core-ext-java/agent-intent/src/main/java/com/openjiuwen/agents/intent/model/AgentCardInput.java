@@ -13,6 +13,8 @@ import java.util.Objects;
  *
  * @param agentCard protocol Agent Card
  * @param remoteAgentId stable remote registry identifier
+ *
+ * @since 0.1.0
  */
 public record AgentCardInput(AgentCard agentCard, String remoteAgentId) {
     /**

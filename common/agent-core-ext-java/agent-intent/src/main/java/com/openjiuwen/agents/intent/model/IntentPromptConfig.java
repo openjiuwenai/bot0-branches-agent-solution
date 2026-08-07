@@ -9,6 +9,8 @@ package com.openjiuwen.agents.intent.model;
  *
  * @param toolDescription description of the intent tool
  * @param routingInstructions system instructions controlling intent routing
+ *
+ * @since 0.1.0
  */
 public record IntentPromptConfig(String toolDescription, String routingInstructions) {
     /**

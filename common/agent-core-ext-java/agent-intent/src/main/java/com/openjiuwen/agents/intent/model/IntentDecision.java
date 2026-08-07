@@ -11,6 +11,8 @@ package com.openjiuwen.agents.intent.model;
  * @param intentId selected intent identifier
  * @param action generated action
  * @param message failure or unmatched description
+ *
+ * @since 0.1.0
  */
 public record IntentDecision(IntentDecisionStatus status, String intentId, IntentAction action, String message) {
 }

@@ -17,6 +17,8 @@ import java.util.Map;
  * @param metadata immutable metadata
  * @param toolCalls assistant ToolCalls
  * @param toolCallId ToolMessage correlation identifier
+ *
+ * @since 0.1.0
  */
 public record IntentMessageSnapshot(String role, Object contentSnapshot, String name, Map<String, Object> metadata,
         List<IntentToolCallSnapshot> toolCalls, String toolCallId) {

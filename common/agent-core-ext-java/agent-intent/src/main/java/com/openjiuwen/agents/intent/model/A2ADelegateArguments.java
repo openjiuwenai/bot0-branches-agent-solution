@@ -8,6 +8,8 @@ package com.openjiuwen.agents.intent.model;
  * Runtime target bound to all compatible skills of one Agent Card.
  *
  * @param remoteAgentId stable remote registry identifier
+ *
+ * @since 0.1.0
  */
 public record A2ADelegateArguments(String remoteAgentId) implements IntentResultArguments {
     /**

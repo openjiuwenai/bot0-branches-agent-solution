@@ -20,10 +20,13 @@ import java.util.Objects;
 
 /**
  * Keeps the intent Tool visible and appends routing instructions to each model request.
+ *
+ * @since 0.1.0
  */
 public final class IntentPromptRail extends AgentRail {
     /** Name used to deduplicate the request-only system message. */
     public static final String PROMPT_NAME = "intent-routing";
+
     /** Runs after the high-priority Tool filtering Rails. */
     public static final int PRIORITY = 10;
 

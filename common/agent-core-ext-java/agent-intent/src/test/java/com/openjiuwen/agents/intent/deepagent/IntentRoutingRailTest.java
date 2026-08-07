@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
+/** Tests intent Tool routing to return and Tool invocation actions. */
 class IntentRoutingRailTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -113,7 +114,9 @@ class IntentRoutingRailTest {
         AgentRail downstream = new AgentRail() {
             @Override
             public void beforeToolCall(AgentCallbackContext context) {
-                downstreamObserved.set(((ToolCallInputs) context.getInputs()).getToolName());
+                if (context.getInputs() instanceof ToolCallInputs inputs) {
+                    downstreamObserved.set(inputs.getToolName());
+                }
             }
         };
         agent.registerRail(downstream);

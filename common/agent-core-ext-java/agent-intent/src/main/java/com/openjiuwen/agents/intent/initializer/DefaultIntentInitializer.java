@@ -31,6 +31,8 @@ import java.util.Set;
 
 /**
  * Default complete-catalog initializer for Agent Cards, custom intents and fallback.
+ *
+ * @since 0.1.0
  */
 public final class DefaultIntentInitializer implements IntentInitializer {
     private static final Logger log = LoggerFactory.getLogger(DefaultIntentInitializer.class);
@@ -110,7 +112,7 @@ public final class DefaultIntentInitializer implements IntentInitializer {
             return false;
         }
         return modes.stream().filter(value -> value != null).map(value -> value.trim().toLowerCase(Locale.ROOT))
-                .anyMatch(value -> value.equals("text") || value.startsWith("text/"));
+                .anyMatch(value -> "text".equals(value) || value.startsWith("text/"));
     }
 
     private static String buildDescription(AgentCard card, AgentSkill skill) {

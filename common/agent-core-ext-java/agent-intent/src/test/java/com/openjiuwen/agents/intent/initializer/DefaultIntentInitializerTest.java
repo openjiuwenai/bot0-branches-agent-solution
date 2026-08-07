@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+/** Tests Agent Card and custom intent initialization. */
 class DefaultIntentInitializerTest {
     @Test
     void createsCardSkillIntentsWithSharedResultFunction() {
@@ -60,6 +61,6 @@ class DefaultIntentInitializerTest {
 
     private static AgentSkill skill(String id, List<String> inputModes) {
         return new AgentSkill(id, id + " skill", id + " request", List.of("banking"),
-                List.of(id.equals("balance") ? "how much money" : "send money"), inputModes, null, null);
+                List.of("balance".equals(id) ? "how much money" : "send money"), inputModes, null, null);
     }
 }

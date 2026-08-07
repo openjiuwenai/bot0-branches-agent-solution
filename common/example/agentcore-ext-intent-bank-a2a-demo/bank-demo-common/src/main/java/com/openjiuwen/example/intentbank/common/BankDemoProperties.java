@@ -12,24 +12,36 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Shared external-model settings for all bank demo runtimes. */
+/**
+ * Shared external-model settings for all bank demo runtimes.
+ *
+ * @since 0.1.0
+ */
 @ConfigurationProperties(prefix = "bank.demo")
 public class BankDemoProperties {
     private final Llm llm = new Llm();
     private final RerankerModel reranker = new RerankerModel();
 
+    /** @return chat model properties */
     public Llm getLlm() {
         return llm;
     }
 
+    /** @return reranker properties */
     public RerankerModel getReranker() {
         return reranker;
     }
 
+    /** Validates that required chat model properties are configured. */
     public void requireLlm() {
         llm.requireConfigured();
     }
 
+    /**
+     * Creates the DeepAgent model configuration.
+     *
+     * @return model configuration
+     */
     public Map<String, Object> modelConfig() {
         requireLlm();
         Map<String, Object> model = new LinkedHashMap<>();
@@ -39,6 +51,11 @@ public class BankDemoProperties {
         return model;
     }
 
+    /**
+     * Creates the DeepAgent backend configuration.
+     *
+     * @return backend configuration
+     */
     public Map<String, Object> backendConfig() {
         requireLlm();
         Map<String, Object> backend = new LinkedHashMap<>();
@@ -50,6 +67,11 @@ public class BankDemoProperties {
         return backend;
     }
 
+    /**
+     * Creates the reranker configuration.
+     *
+     * @return reranker configuration
+     */
     public RerankerConfig rerankerConfig() {
         reranker.requireConfigured();
         RerankerConfig config = new RerankerConfig();
@@ -61,7 +83,11 @@ public class BankDemoProperties {
         return config;
     }
 
-    /** Chat model settings. */
+    /**
+     * Chat model settings.
+     *
+     * @since 0.1.0
+     */
     public static class Llm {
         private String provider = "OpenAI";
         private String apiKey = "";
@@ -84,66 +110,89 @@ public class BankDemoProperties {
         public String getProvider() {
             return provider;
         }
+
         public void setProvider(String provider) {
             this.provider = provider;
         }
+
         public String getApiKey() {
             return apiKey;
         }
+
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
         }
+
         public String getApiBase() {
             return apiBase;
         }
+
         public void setApiBase(String apiBase) {
             this.apiBase = apiBase;
         }
+
         public String getModelName() {
             return modelName;
         }
+
         public void setModelName(String modelName) {
             this.modelName = modelName;
         }
+
         public boolean isSslVerify() {
             return sslVerify;
         }
+
         public void setSslVerify(boolean sslVerify) {
             this.sslVerify = sslVerify;
         }
+
         public double getTemperature() {
             return temperature;
         }
+
         public void setTemperature(double temperature) {
             this.temperature = temperature;
         }
+
         public double getTopP() {
             return topP;
         }
+
         public void setTopP(double topP) {
             this.topP = topP;
         }
+
         public Duration getTimeout() {
             return timeout;
         }
+
         public void setTimeout(Duration timeout) {
             this.timeout = timeout;
         }
+
         public Duration getCompletionTimeout() {
             return completionTimeout;
         }
+
         public void setCompletionTimeout(Duration completionTimeout) {
             this.completionTimeout = completionTimeout;
         }
+
         public int getMaxIterations() {
             return maxIterations;
         }
+
         public void setMaxIterations(int maxIterations) {
             this.maxIterations = maxIterations;
         }
     }
 
-    /** Reranker endpoint settings used only by the Intent Agent. */
+    /**
+     * Reranker endpoint settings used only by the Intent Agent.
+     *
+     * @since 0.1.0
+     */
     public static class RerankerModel {
         private String apiKey = "";
         private String apiBase = "";
@@ -161,36 +210,47 @@ public class BankDemoProperties {
         public String getApiKey() {
             return apiKey;
         }
+
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
         }
+
         public String getApiBase() {
             return apiBase;
         }
+
         public void setApiBase(String apiBase) {
             this.apiBase = apiBase;
         }
+
         public String getModelName() {
             return modelName;
         }
+
         public void setModelName(String modelName) {
             this.modelName = modelName;
         }
+
         public double getTimeoutSeconds() {
             return timeoutSeconds;
         }
+
         public void setTimeoutSeconds(double timeoutSeconds) {
             this.timeoutSeconds = timeoutSeconds;
         }
+
         public int getMaxRetries() {
             return maxRetries;
         }
+
         public void setMaxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
         }
+
         public Map<String, Object> getExtraBody() {
             return new LinkedHashMap<>(extraBody);
         }
+
         public void setExtraBody(Map<String, Object> extraBody) {
             this.extraBody = extraBody == null ? new LinkedHashMap<>() : new LinkedHashMap<>(extraBody);
         }

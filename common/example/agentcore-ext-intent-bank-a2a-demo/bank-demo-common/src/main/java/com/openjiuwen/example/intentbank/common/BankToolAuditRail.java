@@ -12,7 +12,11 @@ import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Records model-selected Tool order for the executable demo acceptance scripts. */
+/**
+ * Records model-selected Tool order for the executable demo acceptance scripts.
+ *
+ * @since 0.1.0
+ */
 public final class BankToolAuditRail extends AgentRail {
     /** Runs before the intent routing Rail rewrites the model-selected ToolCall. */
     public static final int PRIORITY = 120;

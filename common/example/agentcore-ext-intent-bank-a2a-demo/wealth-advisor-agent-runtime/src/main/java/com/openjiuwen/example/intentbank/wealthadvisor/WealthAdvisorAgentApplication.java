@@ -4,6 +4,7 @@
 
 package com.openjiuwen.example.intentbank.wealthadvisor;
 
+import com.openjiuwen.example.intentbank.common.BankAgentDefinition;
 import com.openjiuwen.example.intentbank.common.BankDemoAgentFactory;
 import com.openjiuwen.example.intentbank.common.BankDemoProperties;
 import com.openjiuwen.example.intentbank.common.BankTools;
@@ -17,7 +18,11 @@ import org.springframework.context.annotation.Bean;
 
 import java.util.List;
 
-/** DeepAgent runtime for wealth product recommendations. */
+/**
+ * DeepAgent runtime for wealth product recommendations.
+ *
+ * @since 0.1.0
+ */
 @SpringBootApplication
 @EnableConfigurationProperties(BankDemoProperties.class)
 public class WealthAdvisorAgentApplication {
@@ -27,9 +32,10 @@ public class WealthAdvisorAgentApplication {
 
     @Bean
     AgentHandler wealthAdvisorAgentHandler(BankDemoProperties properties) {
-        return new JiuwenCoreAgentHandler(BankDemoAgentFactory.create("wealth-advisor-agent", "WealthAdvisorAgent",
+        BankAgentDefinition definition = new BankAgentDefinition("wealth-advisor-agent", "WealthAdvisorAgent",
                 "Recommends wealth products", "你是理财推荐专员。调用 recommend_wealth 分析完整请求，并返回产品、风险等级和参考收益率。",
-                "target/wealth-advisor-agent-workspace", false, List.of(BankTools.wealthRecommendation()), List.of(),
-                properties));
+                "target/wealth-advisor-agent-workspace", false);
+        return new JiuwenCoreAgentHandler(BankDemoAgentFactory.create(definition,
+                List.of(BankTools.wealthRecommendation()), List.of(), properties));
     }
 }

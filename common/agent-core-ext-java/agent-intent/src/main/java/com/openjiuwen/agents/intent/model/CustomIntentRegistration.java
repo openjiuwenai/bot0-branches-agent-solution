@@ -12,6 +12,8 @@ import com.openjiuwen.agents.intent.api.IntentResultFunction;
  * @param id unique intent identifier
  * @param description semantic matching description
  * @param resultFunction function that produces the selected intent action
+ *
+ * @since 0.1.0
  */
 public record CustomIntentRegistration(String id, String description, IntentResultFunction resultFunction) {
 }
