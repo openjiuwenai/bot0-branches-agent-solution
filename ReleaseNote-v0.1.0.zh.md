@@ -88,7 +88,7 @@ EDPAgent Java v0.1.0 是 EDPAgent（企业级通用动态规划智能体）的�
 
 ## 构建与验证
 
-扩展依赖 `agent-runtime-java` 0.1.1 与 `agent-core-java` 0.1.14。
+扩展依赖 `agent-runtime-java` 0.1.1.post1 与 `agent-core-java` 0.1.14.post1。
 
 ```bash
 mvn -f common/agent-runtime-ext-java/pom.xml clean install
@@ -114,7 +114,7 @@ mvn -f common/agent-core-ext-java/pom.xml -pl :agent-core-ext-react-rails -am cl
 </dependency>
 ```
 
-依赖要求：`com.openjiuwen:agent-runtime-java:0.1.1`、`com.openjiuwen:agent-core-java:0.1.14`。
+依赖要求：`com.openjiuwen:agent-runtime-java:0.1.1.post1`、`com.openjiuwen:agent-core-java:0.1.14.post1`。
 
 ---
 
