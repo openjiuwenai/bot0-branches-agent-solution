@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/** Tests model prompt and intent Tool injection. */
 class IntentPromptRailTest {
     @Test
     void restoresIntentToolAndAddsOneRequestSystemMessage() {
@@ -40,7 +41,9 @@ class IntentPromptRailTest {
         assertThat(inputs.getMessages().stream().filter(BaseMessage.class::isInstance).map(BaseMessage.class::cast)
                 .filter(message -> IntentPromptRail.PROMPT_NAME.equals(message.getName()))).hasSize(1);
         assertThat(originalMessages).hasSize(1);
-        SystemMessage prompt = (SystemMessage) inputs.getMessages().get(1);
+        if (!(inputs.getMessages().get(1) instanceof SystemMessage prompt)) {
+            throw new AssertionError("expected intent system prompt");
+        }
         assertThat(prompt.getContentAsString()).isEqualTo("route every request");
     }
 

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
+/** Tests idempotent DeepAgent intent feature installation. */
 class IntentDeepAgentInstallerTest {
     @Test
     void installsIntentToolIdempotentlyAndKeepsInternalDelegateHidden() {

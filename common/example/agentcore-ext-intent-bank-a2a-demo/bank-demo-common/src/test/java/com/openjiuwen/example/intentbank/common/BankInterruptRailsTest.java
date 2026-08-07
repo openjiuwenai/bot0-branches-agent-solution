@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
+/** Tests bank follow-up, confirmation, and intent-change Rails. */
 class BankInterruptRailsTest {
     @Test
     void askUserInterruptsAndFeedsOrdinaryResumeBackToTool() {
@@ -31,16 +32,15 @@ class BankInterruptRailsTest {
 
         AgentCallbackContext resumed = context("ask_user", "{\"query\":\"收款人是谁？\"}", "张三");
         rail.beforeToolCall(resumed);
-        assertThat(String.valueOf(((ToolCallInputs) resumed.getInputs()).getToolArgs()))
-                .contains("\"query\":\"收款人是谁？\"", "\"response\":\"张三\"");
+        assertThat(String.valueOf(toolInputs(resumed).getToolArgs())).contains("\"query\":\"收款人是谁？\"",
+                "\"response\":\"张三\"");
         assertThat(resumed.getExtra()).doesNotContainKey("_skip_tool");
     }
 
     @Test
     void intentChangeTerminatesBusinessAgentWithStructuredResult() {
         AgentCallbackContext context = context(BankTools.TRANSFER, "{}", null);
-        ((ToolCallInputs) context.getInputs()).setToolResult(
-                Map.of("status", "INTENT_CHANGED", "latestSemantic", "购买1000元理财"));
+        toolInputs(context).setToolResult(Map.of("status", "INTENT_CHANGED", "latestSemantic", "购买1000元理财"));
 
         new IntentChangeTerminationRail().afterToolCall(context);
 
@@ -92,8 +92,20 @@ class BankInterruptRailsTest {
                 .extra(extra).build();
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> result(AgentCallbackContext context) {
-        return (Map<String, Object>) ((ToolCallInputs) context.getInputs()).getToolResult();
+        Object result = toolInputs(context).getToolResult();
+        if (!(result instanceof Map<?, ?> map)) {
+            throw new AssertionError("expected a map Tool result");
+        }
+        Map<String, Object> copy = new HashMap<>();
+        map.forEach((key, value) -> copy.put(String.valueOf(key), value));
+        return copy;
+    }
+
+    private static ToolCallInputs toolInputs(AgentCallbackContext context) {
+        if (context.getInputs() instanceof ToolCallInputs inputs) {
+            return inputs;
+        }
+        throw new AssertionError("expected ToolCallInputs");
     }
 }

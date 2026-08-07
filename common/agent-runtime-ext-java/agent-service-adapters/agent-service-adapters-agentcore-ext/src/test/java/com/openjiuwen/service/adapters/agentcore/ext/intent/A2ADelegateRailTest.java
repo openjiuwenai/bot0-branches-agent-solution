@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Tests conversion of intent actions to Runtime A2A interruptions. */
 class A2ADelegateRailTest {
     @Test
     void interruptsRegisteredTargetWithoutExposingToolCard() {
@@ -49,13 +50,13 @@ class A2ADelegateRailTest {
         AgentCallbackContext missing = context("call-2", "{\"agentName\":\"missing\",\"remoteInput\":\"hello\"}",
                 Map.of());
         rail.beforeToolCall(missing);
-        ToolCallInputs missingInputs = (ToolCallInputs) missing.getInputs();
+        ToolCallInputs missingInputs = toolInputs(missing);
         assertThat(missing.getExtra()).containsEntry("_skip_tool", true);
         assertThat(missingInputs.getToolResult()).isEqualTo("Remote A2A agent is not registered: missing");
 
         AgentCallbackContext invalid = context("call-3", "{}", Map.of());
         rail.beforeToolCall(invalid);
-        assertThat(((ToolCallInputs) invalid.getInputs()).getToolResult())
+        assertThat(toolInputs(invalid).getToolResult())
                 .isEqualTo("a2a_delegate requires non-blank agentName and remoteInput");
     }
 
@@ -70,7 +71,7 @@ class A2ADelegateRailTest {
 
         rail.beforeToolCall(resumed);
 
-        ToolCallInputs inputs = (ToolCallInputs) resumed.getInputs();
+        ToolCallInputs inputs = toolInputs(resumed);
         assertThat(resumed.getExtra()).containsEntry("_skip_tool", true);
         assertThat(inputs.getToolResult()).isEqualTo("transfer completed");
         assertThat(inputs.getToolMsg().getToolCallId()).isEqualTo("call-4");
@@ -80,6 +81,13 @@ class A2ADelegateRailTest {
         ToolCall toolCall = ToolCall.builder().id(id).name(A2ADelegateRail.TARGET_NAME).arguments(arguments).build();
         return AgentCallbackContext.builder().inputs(ToolCallInputs.builder().toolCall(toolCall)
                 .toolName(A2ADelegateRail.TARGET_NAME).toolArgs(arguments).build()).extra(new HashMap<>(extra)).build();
+    }
+
+    private static ToolCallInputs toolInputs(AgentCallbackContext context) {
+        if (context.getInputs() instanceof ToolCallInputs inputs) {
+            return inputs;
+        }
+        throw new AssertionError("expected ToolCallInputs");
     }
 
     private static AgentCard card() {

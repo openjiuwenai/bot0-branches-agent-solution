@@ -28,14 +28,19 @@ import java.util.Objects;
 
 /**
  * Resolves the virtual intent Tool and routes the same ToolCall to its selected target.
+ *
+ * @since 0.1.0
  */
 public final class IntentRoutingRail extends AgentRail {
     /** Model-visible intent Tool name. */
     public static final String TOOL_NAME = "intent_match";
+
     /** Tool kwargs key for the active session. */
     public static final String SESSION_KWARG = "session";
+
     /** Tool kwargs key for the active model context. */
     public static final String CONTEXT_KWARG = "context";
+
     /** Rail priority. Callback execution currently uses higher values first. */
     public static final int PRIORITY = 110;
 
@@ -110,7 +115,10 @@ public final class IntentRoutingRail extends AgentRail {
     }
 
     private static Map<String, Object> parseToolInputs(Object toolArgs, String toolCallArguments) {
-        Object source = toolArgs != null ? toolArgs : toolCallArguments;
+        Object source = toolArgs;
+        if (source == null) {
+            source = toolCallArguments;
+        }
         if (source instanceof Map<?, ?> map) {
             Map<String, Object> result = new LinkedHashMap<>();
             map.forEach((key, value) -> result.put(String.valueOf(key), value));

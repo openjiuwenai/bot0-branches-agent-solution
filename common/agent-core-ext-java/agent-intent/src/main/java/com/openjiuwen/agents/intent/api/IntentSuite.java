@@ -25,6 +25,8 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Public entry point for intent catalog replacement and single-intent resolution.
+ *
+ * @since 0.1.0
  */
 public final class IntentSuite {
     private final IntentSuiteConfig config;
@@ -79,7 +81,10 @@ public final class IntentSuite {
         Optional<IntentDefinition> matched;
         try {
             matched = matcher.match(context);
-        } catch (RuntimeException exception) {
+        } catch (IntentMatchException exception) {
+            return failed(null, "意图匹配失败");
+        }
+        if (matched == null) {
             return failed(null, "意图匹配失败");
         }
         if (!isValidMatch(matched, snapshot.initializedIntents())) {
@@ -134,14 +139,14 @@ public final class IntentSuite {
                 return failed(selected.id(), "意图动作无效");
             }
             return new IntentDecision(status, selected.id(), action, null);
-        } catch (Exception exception) {
+        } catch (IntentResultException exception) {
             return failed(selected.id(), "意图结果函数执行失败");
         }
     }
 
     private static boolean isValidMatch(Optional<IntentDefinition> matched, InitializedIntents intents) {
-        if (matched == null || matched.isEmpty()) {
-            return matched != null;
+        if (matched.isEmpty()) {
+            return true;
         }
         IntentDefinition selected = matched.orElseThrow();
         return intents.matchableIntents().stream().anyMatch(candidate -> candidate == selected);

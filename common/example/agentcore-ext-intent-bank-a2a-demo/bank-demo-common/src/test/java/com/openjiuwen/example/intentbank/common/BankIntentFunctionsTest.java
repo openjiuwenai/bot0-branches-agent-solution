@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/** Tests intent result functions used by the bank entry Agent. */
 class BankIntentFunctionsTest {
     @Test
     void localFunctionForwardsRoutingSemanticAsQuery() {

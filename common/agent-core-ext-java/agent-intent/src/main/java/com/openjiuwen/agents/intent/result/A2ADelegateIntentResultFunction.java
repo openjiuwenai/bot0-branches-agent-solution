@@ -15,6 +15,8 @@ import java.util.Map;
 
 /**
  * Shared result function that routes an Agent Card intent to the runtime delegate target.
+ *
+ * @since 0.1.0
  */
 public final class A2ADelegateIntentResultFunction implements IntentResultFunction {
     /**

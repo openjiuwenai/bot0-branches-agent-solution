@@ -18,8 +18,13 @@ import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegist
 import java.util.Map;
 import java.util.Objects;
 
-/** Converts the internal A2A delegate target into the existing Runtime interrupt contract. */
+/**
+ * Converts the internal A2A delegate target into the existing Runtime interrupt contract.
+ *
+ * @since 0.1.0
+ */
 public final class A2ADelegateRail extends BaseInterruptRail {
+    /** Internal Tool target used for Runtime A2A delegation. */
     public static final String TARGET_NAME = A2ADelegateIntentResultFunction.TOOL_NAME;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -28,6 +33,12 @@ public final class A2ADelegateRail extends BaseInterruptRail {
 
     private final A2ARemoteAgentCardRegistry registry;
 
+    /**
+     * Creates an A2A delegate Rail backed by the remote Agent registry.
+     *
+     * @param registry
+     *            remote Agent Card registry
+     */
     public A2ADelegateRail(A2ARemoteAgentCardRegistry registry) {
         super(java.util.List.of(TARGET_NAME));
         this.registry = Objects.requireNonNull(registry, "registry");
@@ -46,7 +57,7 @@ public final class A2ADelegateRail extends BaseInterruptRail {
         }
         String agentName = text(arguments.get("agentName"));
         String remoteInput = text(arguments.get("remoteInput"));
-        if (agentName == null || remoteInput == null) {
+        if (agentName.isBlank() || remoteInput.isBlank()) {
             return reject("a2a_delegate requires non-blank agentName and remoteInput");
         }
         if (registry.get(agentName).isEmpty()) {
@@ -69,7 +80,7 @@ public final class A2ADelegateRail extends BaseInterruptRail {
 
     private static String text(Object value) {
         if (!(value instanceof String text) || text.isBlank()) {
-            return null;
+            return "";
         }
         return text.trim();
     }

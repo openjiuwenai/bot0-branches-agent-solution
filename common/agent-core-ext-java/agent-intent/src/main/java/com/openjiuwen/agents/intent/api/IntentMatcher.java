@@ -10,6 +10,8 @@ import java.util.Optional;
 
 /**
  * Selects one matchable intent for a single execution context.
+ *
+ * @since 0.1.0
  */
 @FunctionalInterface
 public interface IntentMatcher {

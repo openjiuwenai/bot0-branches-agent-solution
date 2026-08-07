@@ -8,6 +8,7 @@ import com.openjiuwen.agents.intent.api.IntentExecutionContext;
 import com.openjiuwen.agents.intent.api.IntentMatchException;
 import com.openjiuwen.agents.intent.api.IntentMatcher;
 import com.openjiuwen.agents.intent.model.IntentDefinition;
+import com.openjiuwen.core.common.exception.BaseError;
 import com.openjiuwen.core.retrieval.common.RetrievalResult;
 import com.openjiuwen.core.retrieval.reranker.Reranker;
 
@@ -20,6 +21,8 @@ import java.util.Optional;
 
 /**
  * Default matcher backed by the AgentCore reranker SPI.
+ *
+ * @since 0.1.0
  */
 public final class RerankerIntentMatcher implements IntentMatcher {
     private final Reranker reranker;
@@ -46,7 +49,7 @@ public final class RerankerIntentMatcher implements IntentMatcher {
         List<RetrievalResult> results;
         try {
             results = reranker.rerank(context.routingSemantic(), candidates, candidates.size());
-        } catch (RuntimeException exception) {
+        } catch (BaseError | IllegalArgumentException exception) {
             throw new IntentMatchException("reranker execution failed", exception);
         }
         RankedIntent top = selectTop(results, intentsById);

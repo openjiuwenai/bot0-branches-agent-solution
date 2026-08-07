@@ -27,6 +27,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
 
+/** Tests Runtime installation of intent routing on DeepAgent handlers. */
 class JiuwenCoreAgentExtHandlerIntentTest {
     @Test
     void keepsRemoteAgentToolsWhenIntentRoutingIsDisabled() throws Exception {
@@ -52,7 +53,7 @@ class JiuwenCoreAgentExtHandlerIntentTest {
     }
 
     @Test
-    void exposesPerAgentToolsAlongsideIntentRoutingWhenCompatibilityFlagIsEnabled() throws Exception {
+    void exposesPerAgentToolsWhenCompatibilityFlagIsEnabled() throws Exception {
         Fixture fixture = fixture();
         JiuwenCoreAgentExtHandler handler = new JiuwenCoreAgentExtHandler(fixture.deepAgent());
         handler.setRemoteA2aToolInstaller(fixture.remoteInstaller());

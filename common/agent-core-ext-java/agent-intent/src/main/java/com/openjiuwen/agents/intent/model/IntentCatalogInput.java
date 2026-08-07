@@ -12,6 +12,8 @@ import java.util.List;
  * @param agentCards all current remote Agent Cards
  * @param customIntents all current custom intents
  * @param fallback optional fallback intent
+ *
+ * @since 0.1.0
  */
 public record IntentCatalogInput(List<AgentCardInput> agentCards, List<CustomIntentRegistration> customIntents,
         CustomIntentRegistration fallback) {

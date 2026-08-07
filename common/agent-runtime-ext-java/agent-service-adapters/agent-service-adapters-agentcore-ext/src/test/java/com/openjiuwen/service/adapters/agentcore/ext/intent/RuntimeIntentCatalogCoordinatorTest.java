@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Optional;
 
+/** Tests full catalog replacement across Runtime intent sources. */
 class RuntimeIntentCatalogCoordinatorTest {
     @Test
     void initializesFromCompleteRegistryAndConfiguredSources() {

@@ -6,6 +6,8 @@ package com.openjiuwen.agents.intent.api;
 
 /**
  * Indicates that a complete intent catalog could not be initialized.
+ *
+ * @since 0.1.0
  */
 public class IntentInitializationException extends RuntimeException {
     /**

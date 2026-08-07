@@ -8,6 +8,8 @@ import com.openjiuwen.agents.intent.model.IntentPromptConfig;
 
 /**
  * Built-in model instructions for DeepAgent intent routing.
+ *
+ * @since 0.1.0
  */
 public final class DefaultIntentPrompt {
     /**

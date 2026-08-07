@@ -14,6 +14,8 @@ import java.util.Objects;
  * @param matchThreshold minimum accepted reranker score
  * @param prompt model-visible intent prompt configuration
  * @param extensionOptions immutable options for custom SPI implementations
+ *
+ * @since 0.1.0
  */
 public record IntentSuiteConfig(double matchThreshold, IntentPromptConfig prompt,
         Map<String, Object> extensionOptions) {

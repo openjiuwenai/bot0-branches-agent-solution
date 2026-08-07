@@ -29,6 +29,8 @@ import java.util.Optional;
 
 /**
  * Immutable single-call data shared by the matcher and selected result function.
+ *
+ * @since 0.1.0
  */
 public final class IntentExecutionContext {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -38,14 +40,14 @@ public final class IntentExecutionContext {
     private final Map<String, Object> toolInputs;
     private final Map<String, Object> toolKwargs;
     private final String routingSemantic;
-    private final Object latestUserInput;
+    private final Optional<Object> latestUserInput;
     private final List<IntentMessageSnapshot> conversation;
 
     private IntentDefinition selectedIntent;
 
     private IntentExecutionContext(IntentSuiteConfig config, IntentCatalogSnapshot catalogSnapshot,
             Map<String, Object> toolInputs, Map<String, Object> toolKwargs, String routingSemantic,
-            Object latestUserInput, List<IntentMessageSnapshot> conversation) {
+            Optional<Object> latestUserInput, List<IntentMessageSnapshot> conversation) {
         this.config = config;
         this.catalogSnapshot = catalogSnapshot;
         this.toolInputs = toolInputs;
@@ -63,7 +65,7 @@ public final class IntentExecutionContext {
         Map<String, Object> copiedKwargs = immutableShallowCopy(kwargs, "kwargs");
         String semantic = requireSemantic(copiedInputs.get("semantic"));
         List<IntentMessageSnapshot> messages = snapshotMessages(copiedKwargs.get("context"));
-        Object latestInput = latestUserInput(messages);
+        Optional<Object> latestInput = latestUserInput(messages);
         return new IntentExecutionContext(config, catalogSnapshot, copiedInputs, copiedKwargs, semantic, latestInput,
                 messages);
     }
@@ -123,9 +125,9 @@ public final class IntentExecutionContext {
     /**
      * Returns the latest user content snapshot, if present.
      *
-     * @return latest user input snapshot or null
+     * @return latest user input snapshot, or empty when unavailable
      */
-    public Object latestUserInput() {
+    public Optional<Object> latestUserInput() {
         return latestUserInput;
     }
 
@@ -206,20 +208,24 @@ public final class IntentExecutionContext {
         return Collections.unmodifiableMap(snapshot);
     }
 
-    private static Object latestUserInput(List<IntentMessageSnapshot> messages) {
+    private static Optional<Object> latestUserInput(List<IntentMessageSnapshot> messages) {
         for (int index = messages.size() - 1; index >= 0; index--) {
             IntentMessageSnapshot message = messages.get(index);
             if ("user".equals(message.role())) {
-                return message.contentSnapshot();
+                return Optional.ofNullable(message.contentSnapshot());
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static Object snapshotValue(Object value) {
-        if (value == null || value instanceof String || value instanceof Boolean || value instanceof Byte
-                || value instanceof Short || value instanceof Integer || value instanceof Long
-                || value instanceof BigInteger || value instanceof BigDecimal) {
+        if (value == null || value instanceof String || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
+            return value;
+        }
+        if (value instanceof BigInteger || value instanceof BigDecimal) {
             return value;
         }
         if (value instanceof Float number) {

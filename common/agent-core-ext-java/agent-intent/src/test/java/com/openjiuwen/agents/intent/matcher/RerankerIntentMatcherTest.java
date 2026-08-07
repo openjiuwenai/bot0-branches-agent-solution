@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+/** Tests reranker-backed intent selection. */
 class RerankerIntentMatcherTest {
     @Test
     void appliesThresholdAndBreaksScoreTiesByIntentId() {
@@ -69,8 +70,11 @@ class RerankerIntentMatcherTest {
             var method = IntentExecutionContext.class.getDeclaredMethod("create", IntentSuiteConfig.class,
                     IntentCatalogSnapshot.class, Map.class, Map.class);
             method.setAccessible(true);
-            return (IntentExecutionContext) method.invoke(null, config, snapshot, Map.of("semantic", "query"),
-                    Map.of());
+            Object result = method.invoke(null, config, snapshot, Map.of("semantic", "query"), Map.of());
+            if (result instanceof IntentExecutionContext context) {
+                return context;
+            }
+            throw new AssertionError("create returned an unexpected type");
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError(exception);
         }

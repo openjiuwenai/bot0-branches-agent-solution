@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
+/** Tests DeepAgent intent Rail binding. */
 class IntentDeepAgentBinderTest {
     @Test
     void bindsOnceAndRejectsConflictingSuiteOrToolName() {

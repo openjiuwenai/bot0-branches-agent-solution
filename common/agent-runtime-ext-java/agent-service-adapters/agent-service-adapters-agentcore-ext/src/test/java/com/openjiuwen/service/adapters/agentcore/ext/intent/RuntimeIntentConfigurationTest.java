@@ -16,9 +16,10 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/** Tests conversion and Bean resolution for Runtime intent configuration. */
 class RuntimeIntentConfigurationTest {
     @Test
-    void convertsCoreConfigAndResolvesCustomAndFallbackFunctionsByBeanName() {
+    void resolvesCustomAndFallbackFunctionsByBeanName() {
         RuntimeIntentProperties properties = new RuntimeIntentProperties();
         properties.getMatch().setThreshold(0.7D);
         properties.getPrompt().setToolDescription("custom tool prompt");

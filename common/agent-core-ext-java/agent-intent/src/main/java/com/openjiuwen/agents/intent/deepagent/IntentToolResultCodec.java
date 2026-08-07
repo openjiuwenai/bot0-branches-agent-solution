@@ -15,6 +15,8 @@ import java.util.Objects;
 
 /**
  * Encodes suite decisions as model-visible Tool results.
+ *
+ * @since 0.1.0
  */
 public final class IntentToolResultCodec {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();

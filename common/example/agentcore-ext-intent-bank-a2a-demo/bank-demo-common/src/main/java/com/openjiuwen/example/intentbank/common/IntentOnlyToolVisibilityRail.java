@@ -12,7 +12,11 @@ import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import java.util.List;
 import java.util.Set;
 
-/** Hides local target tools from the model while retaining their executable registrations. */
+/**
+ * Hides local target tools from the model while retaining their executable registrations.
+ *
+ * @since 0.1.0
+ */
 public final class IntentOnlyToolVisibilityRail extends AgentRail {
     private static final int PRIORITY = 20;
     private static final Set<String> HIDDEN = Set.of(BankTools.CALCULATOR, BankTools.CURRENT_DATE, BankTools.WEATHER);

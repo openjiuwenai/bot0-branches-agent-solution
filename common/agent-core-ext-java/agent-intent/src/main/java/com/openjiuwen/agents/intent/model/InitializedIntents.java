@@ -11,6 +11,8 @@ import java.util.List;
  *
  * @param matchableIntents intents considered by a matcher
  * @param fallback optional fallback intent, never considered by a matcher
+ *
+ * @since 0.1.0
  */
 public record InitializedIntents(List<IntentDefinition> matchableIntents, IntentDefinition fallback) {
     /**

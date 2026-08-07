@@ -15,6 +15,8 @@ import java.util.List;
  *            complete custom intent list
  * @param fallback
  *            optional fallback
+ *
+ * @since 0.1.0
  */
 public record RuntimeConfiguredIntents(List<CustomIntentRegistration> customIntents,
         CustomIntentRegistration fallback) {

@@ -12,11 +12,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Resolves result-function Bean names in Runtime intent configuration. */
+/**
+ * Resolves result-function Bean names in Runtime intent configuration.
+ *
+ * @since 0.1.0
+ */
 public final class RuntimeConfiguredIntentsFactory {
     private RuntimeConfiguredIntentsFactory() {
     }
 
+    /**
+     * Resolves configured custom and fallback intents against Spring result-function Beans.
+     *
+     * @param properties
+     *            Runtime intent properties
+     * @param resultFunctions
+     *            available result-function Beans by name
+     *
+     * @return resolved static intent registrations
+     */
     public static RuntimeConfiguredIntents create(RuntimeIntentProperties properties,
             Map<String, IntentResultFunction> resultFunctions) {
         Objects.requireNonNull(properties, "properties");
@@ -27,8 +41,7 @@ public final class RuntimeConfiguredIntentsFactory {
             configured.forEach((id, value) -> customIntents.add(customIntent(id, value, resultFunctions)));
         }
         RuntimeIntentProperties.FallbackProperties fallbackProperties = properties.getFallback();
-        CustomIntentRegistration fallback = fallbackProperties == null
-                ? null
+        CustomIntentRegistration fallback = fallbackProperties == null ? null
                 : fallback(fallbackProperties, resultFunctions);
         return new RuntimeConfiguredIntents(customIntents, fallback);
     }

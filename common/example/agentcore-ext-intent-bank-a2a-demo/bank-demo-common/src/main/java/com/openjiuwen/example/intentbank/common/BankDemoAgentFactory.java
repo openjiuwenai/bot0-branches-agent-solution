@@ -12,21 +12,41 @@ import com.openjiuwen.harness.workspace.Workspace;
 
 import java.util.List;
 
-/** Creates consistently configured DeepAgent instances for the demo. */
+/**
+ * Creates consistently configured DeepAgent instances for the demo.
+ *
+ * @since 0.1.0
+ */
 public final class BankDemoAgentFactory {
     private BankDemoAgentFactory() {
     }
 
-    public static DeepAgent create(String id, String name, String description, String systemPrompt,
-            String workspacePath, boolean taskPlanning, List<?> tools, List<?> rails, BankDemoProperties properties) {
-        DeepAgentConfig config = DeepAgentConfig.builder().systemPrompt(systemPrompt)
+    /**
+     * Creates a configured demo DeepAgent.
+     *
+     * @param definition
+     *            static Agent definition
+     * @param tools
+     *            DeepAgent Tools
+     * @param rails
+     *            DeepAgent Rails
+     * @param properties
+     *            shared model properties
+     *
+     * @return configured DeepAgent
+     */
+    public static DeepAgent create(BankAgentDefinition definition, List<?> tools, List<?> rails,
+            BankDemoProperties properties) {
+        DeepAgentConfig config = DeepAgentConfig.builder().systemPrompt(definition.systemPrompt())
                 .maxIterations(properties.getLlm().getMaxIterations()).enableTaskLoop(true)
-                .enableTaskPlanning(taskPlanning)
+                .enableTaskPlanning(definition.taskPlanning())
                 .completionTimeout((double) properties.getLlm().getCompletionTimeout().toSeconds())
-                .workspacePath(workspacePath).tools(List.copyOf(toObjects(tools))).rails(List.copyOf(toObjects(rails)))
-                .model(properties.modelConfig()).backend(properties.backendConfig()).build();
-        AgentCard card = AgentCard.builder().id(id).name(name).description(description).build();
-        Workspace workspace = Workspace.builder().rootPath(workspacePath).language("zh-CN").build();
+                .workspacePath(definition.workspacePath()).tools(List.copyOf(toObjects(tools)))
+                .rails(List.copyOf(toObjects(rails))).model(properties.modelConfig())
+                .backend(properties.backendConfig()).build();
+        AgentCard card = AgentCard.builder().id(definition.id()).name(definition.name())
+                .description(definition.description()).build();
+        Workspace workspace = Workspace.builder().rootPath(definition.workspacePath()).language("zh-CN").build();
         return HarnessFactory.createDeepAgent(card, config, workspace);
     }
 

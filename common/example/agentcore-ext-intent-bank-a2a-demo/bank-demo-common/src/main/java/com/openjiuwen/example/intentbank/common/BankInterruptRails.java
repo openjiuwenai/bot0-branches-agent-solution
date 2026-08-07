@@ -19,7 +19,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** User-input and confirmation rails used by transfer and wealth purchase agents. */
+/**
+ * User-input and confirmation rails used by transfer and wealth purchase agents.
+ *
+ * @since 0.1.0
+ */
 public final class BankInterruptRails {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Set<String> AFFIRMATIVE = Set.of("是", "确认", "同意", "继续", "yes", "y", "ok", "confirm");
@@ -46,7 +50,8 @@ public final class BankInterruptRails {
                 return reject(intentChanged(input));
             }
             try {
-                return approve(OBJECT_MAPPER.writeValueAsString(Map.of("query", question(toolCall), "response", input)));
+                return approve(
+                        OBJECT_MAPPER.writeValueAsString(Map.of("query", question(toolCall), "response", input)));
             } catch (JsonProcessingException exception) {
                 return reject(Map.of("status", "INVALID_INPUT", "message", "无法读取用户补充信息"));
             }

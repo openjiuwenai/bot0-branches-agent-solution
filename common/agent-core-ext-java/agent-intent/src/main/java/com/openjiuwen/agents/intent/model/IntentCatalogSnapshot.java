@@ -9,6 +9,8 @@ package com.openjiuwen.agents.intent.model;
  *
  * @param version suite catalog version
  * @param initializedIntents initialized directory
+ *
+ * @since 0.1.0
  */
 public record IntentCatalogSnapshot(long version, InitializedIntents initializedIntents) {
 }

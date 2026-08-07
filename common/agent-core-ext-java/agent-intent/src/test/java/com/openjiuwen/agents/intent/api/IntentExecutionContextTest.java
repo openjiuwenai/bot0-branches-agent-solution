@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Tests immutable intent execution context snapshots. */
 class IntentExecutionContextTest {
     @Test
     void snapshotsConversationWithoutRetainingMutableMessages() {
@@ -47,9 +48,13 @@ class IntentExecutionContextTest {
         call.setName("changed_tool");
 
         assertThat(context.routingSemantic()).isEqualTo("transfer");
-        assertThat(context.latestUserInput()).isEqualTo(context.conversation().get(0).contentSnapshot());
-        assertThat((List<?>) context.latestUserInput()).hasSize(2);
-        assertThat(mutableMap(((List<?>) context.latestUserInput()).get(0))).containsEntry("text", "old");
+        Object latestInput = context.latestUserInput().orElseThrow();
+        assertThat(latestInput).isEqualTo(context.conversation().get(0).contentSnapshot());
+        if (!(latestInput instanceof List<?> latestParts)) {
+            throw new AssertionError("expected latest user input parts");
+        }
+        assertThat(latestParts).hasSize(2);
+        assertThat(mutableMap(latestParts.get(0))).containsEntry("text", "old");
         assertThat(context.conversation().get(0).metadata().get("trace")).isEqualTo(List.of("one"));
         assertThat(context.conversation().get(1).toolCalls().get(0).name()).isEqualTo("intent_match");
         assertThat(context.toolKwargs()).containsKeys("context", "live");
@@ -66,7 +71,7 @@ class IntentExecutionContextTest {
 
         IntentExecutionContext context = IntentExecutionContext.create(IntentSuiteConfig.defaults(), snapshot,
                 Map.of("semantic", "latest request"), Map.of("context", modelContext));
-        assertThat(context.latestUserInput()).isEqualTo("latest");
+        assertThat(context.latestUserInput()).contains("latest");
         assertThatThrownBy(() -> IntentExecutionContext.create(IntentSuiteConfig.defaults(), snapshot,
                 Map.of("semantic", " "), Map.of())).isInstanceOf(IllegalArgumentException.class);
     }

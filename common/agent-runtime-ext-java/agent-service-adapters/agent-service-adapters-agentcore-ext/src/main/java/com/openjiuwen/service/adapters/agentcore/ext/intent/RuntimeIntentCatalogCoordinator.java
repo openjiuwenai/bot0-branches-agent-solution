@@ -4,6 +4,7 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.intent;
 
+import com.openjiuwen.agents.intent.api.IntentInitializationException;
 import com.openjiuwen.agents.intent.api.IntentSuite;
 import com.openjiuwen.agents.intent.model.AgentCardInput;
 import com.openjiuwen.agents.intent.model.CustomIntentRegistration;
@@ -22,7 +23,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
-/** Aggregates Runtime intent sources and atomically replaces the Core catalog. */
+/**
+ * Aggregates Runtime intent sources and atomically replaces the Core catalog.
+ *
+ * @since 0.1.0
+ */
 public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
     private static final Logger log = LoggerFactory.getLogger(RuntimeIntentCatalogCoordinator.class);
 
@@ -35,6 +40,16 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
     private CustomIntentRegistration fallback;
     private long remoteCatalogVersion = -1L;
 
+    /**
+     * Creates a coordinator for all Runtime-owned intent sources.
+     *
+     * @param suite
+     *            global intent suite
+     * @param registry
+     *            remote Agent Card registry
+     * @param configuredIntents
+     *            static custom and fallback intents
+     */
     public RuntimeIntentCatalogCoordinator(IntentSuite suite, A2ARemoteAgentCardRegistry registry,
             RuntimeConfiguredIntents configuredIntents) {
         this.suite = Objects.requireNonNull(suite, "suite");
@@ -56,6 +71,12 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
         }
     }
 
+    /**
+     * Rebuilds the complete intent catalog from a newer remote Agent Card snapshot.
+     *
+     * @param event
+     *            remote catalog update event
+     */
     @EventListener
     public void onRemoteAgentCatalogChanged(RemoteAgentCatalogChangedEvent event) {
         if (event == null || event.snapshot() == null) {
@@ -69,7 +90,7 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
             acceptRemoteSnapshot(event.snapshot());
             try {
                 refresh();
-            } catch (RuntimeException exception) {
+            } catch (IntentInitializationException exception) {
                 log.error("Failed to refresh intent catalog from remote Agent Card version={}", remoteCatalogVersion,
                         exception);
             }
@@ -78,6 +99,14 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
         }
     }
 
+    /**
+     * Replaces all dynamic custom intents and the fallback registration.
+     *
+     * @param customIntents
+     *            complete custom intent list
+     * @param fallback
+     *            fallback registration, or null to remove it
+     */
     public void replaceCustomIntents(List<CustomIntentRegistration> customIntents, CustomIntentRegistration fallback) {
         List<CustomIntentRegistration> replacement = customIntents == null ? List.of() : List.copyOf(customIntents);
         updateLock.lock();
@@ -90,6 +119,11 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
         }
     }
 
+    /**
+     * Returns the latest accepted remote catalog version.
+     *
+     * @return remote catalog version
+     */
     public long remoteCatalogVersion() {
         updateLock.lock();
         try {
@@ -110,12 +144,19 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
                 && currentIntents.matchableIntents().isEmpty() && currentIntents.fallback() == null) {
             return;
         }
-        List<AgentCardInput> cards = remoteEntries.stream().map(entry -> new AgentCardInput(entry.card(), entry.name()))
+        List<AgentCardInput> cards = remoteEntries.stream().map(RuntimeIntentCatalogCoordinator::toAgentCardInput)
                 .toList();
         long suiteVersion = suite.replaceCatalog(new IntentCatalogInput(cards, customIntents, fallback));
         log.info(
                 "Replaced complete intent catalog suiteVersion={} remoteCatalogVersion={} remoteAgents={} "
                         + "customIntents={} fallback={}",
                 suiteVersion, remoteCatalogVersion, cards.size(), customIntents.size(), fallback != null);
+    }
+
+    private static AgentCardInput toAgentCardInput(A2ARemoteAgentCardRegistry.RemoteAgentEntry entry) {
+        if (entry == null || entry.card() == null) {
+            throw new IntentInitializationException("remote Agent Card entry must not be null");
+        }
+        return new AgentCardInput(entry.card(), entry.name());
     }
 }
