@@ -14,8 +14,8 @@
 
 - **Java 版本**：JDK 17+
 - **构建工具**：Maven 3.9+
-- **运行时依赖**：`com.openjiuwen:agent-runtime-java:0.1.0`
-- **执行内核依赖**：`com.openjiuwen:agent-core-java:0.1.13`
+- **运行时依赖**：`com.openjiuwen:agent-runtime-java:0.1.1.post1`
+- **执行内核依赖**：`com.openjiuwen:agent-core-java:0.1.14.post1`
 
 ### 一键构建（聚合 pom）
 
