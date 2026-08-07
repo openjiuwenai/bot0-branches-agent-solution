@@ -13,8 +13,8 @@ PyYAML>=6.0
 fastapi>=0.110
 uvicorn>=0.27
 
-# MCP 服务（workshop/mcp/db-connector-server 使用）
-mcp>=1.0
+# MCP 服务（workshop/mcp/db-connector-server 使用，按需安装）
+# mcp>=1.0
 
 # 凭证管理（Vault 模式，按需启用）
 hvac>=2.0

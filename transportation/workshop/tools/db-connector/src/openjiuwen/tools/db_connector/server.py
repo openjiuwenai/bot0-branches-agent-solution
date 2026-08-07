@@ -4,8 +4,8 @@
 适合作为独立数据访问微服务部署。
 
 用法：
-    python -m openjiuwen.tools.db_connector.server config/config.yaml
-    python -m openjiuwen.tools.db_connector.server config/config.yaml \\
+    python3 -m openjiuwen.tools.db_connector.server config/config.yaml
+    python3 -m openjiuwen.tools.db_connector.server config/config.yaml \\
         --host 0.0.0.0 --port 7087 --path /db-connector
 
 部署后服务地址示例：

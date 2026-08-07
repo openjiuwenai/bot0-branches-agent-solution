@@ -301,7 +301,7 @@ db-connector/
 
 ## 9. 技术栈与依赖（Python）
 
-- Python 3.10+
+- Python 3.9+
 - SQLAlchemy（连接池 `QueuePool` + 方言抽象 + `inspect()` 反射）
 - PyMySQL（MySQL 驱动）、psycopg[binary]（PostgreSQL 驱动）
 - Pydantic v2 + pydantic-settings（配置与数据模型校验）
