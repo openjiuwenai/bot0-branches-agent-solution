@@ -72,6 +72,18 @@ class DefaultDbConnectorTool:
     # 内部方法
     # ------------------------------------------------------------------
 
+    def is_configured(self) -> bool:
+        """是否已配置真实数据源（host/user/password 非空）。"""
+        ds = self._config.data_source
+        return bool(ds.host and ds.username and ds.database)
+
+    def _ensure_configured(self) -> None:
+        """未配置数据源时抛出 RuntimeError，提示先调 /config。"""
+        if not self.is_configured():
+            raise RuntimeError(
+                "数据库尚未配置，请先 POST /config 提交真实数据库信息"
+            )
+
     def _check_guard(self, sql_template: str) -> None:
         """执行前安全检查，不通过则抛出 ValueError。"""
         result = self._guard.check(sql_template, self._config.mode)
@@ -108,6 +120,7 @@ class DefaultDbConnectorTool:
         options: QueryOptions | None = None,
     ) -> QueryResult:
         """执行参数化查询，返回结构化结果集。"""
+        self._ensure_configured()
         params = params or []
         self._check_guard(sql_template)
 
@@ -152,6 +165,7 @@ class DefaultDbConnectorTool:
     def _execute_write(
         self, sql_template: str, params: list | None, op_name: str,
     ) -> WriteResult:
+        self._ensure_configured()
         params = params or []
         self._check_guard(sql_template)
         audit_id = self._gen_audit_id()
@@ -197,6 +211,8 @@ class DefaultDbConnectorTool:
     # ------------------------------------------------------------------
 
     def ping(self) -> HealthStatus:
+        if not self.is_configured():
+            return HealthStatus(status="unconfigured", database="", latency_ms=0)
         start = time.perf_counter()
         ok = self._conn_mgr.ping()
         latency = int((time.perf_counter() - start) * 1000)
@@ -211,9 +227,11 @@ class DefaultDbConnectorTool:
     # ------------------------------------------------------------------
 
     def import_schema(self, tables: list[str] | None = None) -> SchemaSnapshot:
+        self._ensure_configured()
         return self._schema_importer.import_schema(tables)
 
     def refresh_schema(self) -> SchemaSnapshot:
+        self._ensure_configured()
         return self._schema_importer.refresh_schema()
 
     # ------------------------------------------------------------------
@@ -222,3 +240,25 @@ class DefaultDbConnectorTool:
 
     def dispose(self) -> None:
         self._conn_mgr.dispose()
+
+    # ------------------------------------------------------------------
+    # 运行期重配置（切换数据源）
+    # ------------------------------------------------------------------
+
+    def reconfigure(self, config: DbConnectorConfig) -> None:
+        """用新配置重建内部组件（连接池、守卫、审计、schema 导入器）。
+
+        先释放旧连接池，再用新 config 构建各组件。已存在的 schema 快照不保留。
+        """
+        try:
+            self._conn_mgr.dispose()
+        except Exception:
+            pass
+        self._config = config
+        self._conn_mgr = ConnectionManager(config.data_source, config.credential)
+        self._guard = SqlGuard(config.security)
+        self._sanitizer = SqlSanitizer(config.security.allowed_tables)
+        self._audit = AuditLogger(config.audit)
+        self._schema_importer = SchemaImporter(
+            self._conn_mgr.engine, config.schema_import
+        )

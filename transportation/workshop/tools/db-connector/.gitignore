@@ -10,6 +10,7 @@ build/
 
 # 本地配置（含凭证，禁止提交）
 config/config.local.yaml
+config/config.runtime.yaml
 
 # 表结构快照
 schema-snapshot.json
