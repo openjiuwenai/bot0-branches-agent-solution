@@ -97,7 +97,7 @@ import java.util.stream.Stream;
  * </ul>
  *
  * <p>优先级 priority=80：低于 TaskPlanningRail(90)，保证 afterToolCall 时读取刷新后的 todo 缓存。
- * 框架排序：数字越大越早执行；80 < 90 表示本 Rail 在 TaskPlanningRail 之后执行。</p>
+ * 框架排序：数字越大越早执行；80 &lt; 90 表示本 Rail 在 TaskPlanningRail 之后执行。</p>
  *
  * @since 2024-01-01
  *

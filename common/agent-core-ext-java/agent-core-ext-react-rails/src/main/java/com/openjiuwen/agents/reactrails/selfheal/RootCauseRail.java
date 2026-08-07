@@ -22,7 +22,7 @@ import java.util.Map;
  * the same input re-raises the same error. This rail detects tool failures and degrades
  * honestly instead of letting ReActAgent spin through maxIterations on a broken tool.
  *
- * <p><b>Dual-hook collaboration</b> (bytecode-verified consumption at offsets 700 & 878).
+ * <p><b>Dual-hook collaboration</b> (bytecode-verified consumption at offsets 700 &amp; 878).
  * ReActAgent.invoke has multiple consumeForceFinish sites on the 0.1.13 jar, all reading the same
  * shared AgentCallbackContext.forceFinishRequest field (context built once at invoke-entry, astore 8):
  * <ul>

@@ -19,12 +19,35 @@
         <formatter.plugin.version>2.24.1</formatter.plugin.version>
         <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
         <checkstyle.version>10.21.0</checkstyle.version>
+        <jackson.version>2.21.2</jackson.version>
+        <slf4j.version>2.0.17</slf4j.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>com.openjiuwen</groupId>
             <artifactId>agent-core-java</artifactId>
+        </dependency>
+        <!--
+          agent-core-java 0.1.14 发布到 .m2 的 POM 是不含 <dependencies> 的元数据 stub，
+          不会传递其运行期需要的第三方依赖；本模块经由 agent-core-java 调用链触发时即抛
+          NoClassDefFoundError。此处显式补齐测试与运行期实际加载到的两个依赖：
+            - jackson-databind：agent-core-java 用 ObjectMapper 做 JSON 序列化（JsonProcessingException）；
+            - slf4j-api：BaseModelClient / Runner 等类的静态日志字段（LoggerFactory）。
+          本模块 main/test 代码均不直接引用这些类型，只在运行期用到，故用 runtime scope；
+          版本对齐 engine 的 Spring Boot 4.0.6 管理版本。与 engine 显式补 okhttp/jedis 同类。
+        -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
