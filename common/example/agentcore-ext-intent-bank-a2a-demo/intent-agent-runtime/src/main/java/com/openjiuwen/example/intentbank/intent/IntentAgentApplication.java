@@ -10,6 +10,7 @@ import com.openjiuwen.core.retrieval.reranker.StandardReranker;
 import com.openjiuwen.example.intentbank.common.BankDemoAgentFactory;
 import com.openjiuwen.example.intentbank.common.BankDemoProperties;
 import com.openjiuwen.example.intentbank.common.BankIntentFunctions;
+import com.openjiuwen.example.intentbank.common.BankToolAuditRail;
 import com.openjiuwen.example.intentbank.common.BankTools;
 import com.openjiuwen.example.intentbank.common.IntentOnlyToolVisibilityRail;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
@@ -43,7 +44,7 @@ public class IntentAgentApplication {
                         每个步骤分别调用 intent_match，完成全部步骤后再汇总结果。
                         """, WORKSPACE, true,
                 List.of(BankTools.calculator(), BankTools.currentDate(), BankTools.weather()),
-                List.of(new IntentOnlyToolVisibilityRail()), properties));
+                List.of(new BankToolAuditRail(), new IntentOnlyToolVisibilityRail()), properties));
     }
 
     @Bean

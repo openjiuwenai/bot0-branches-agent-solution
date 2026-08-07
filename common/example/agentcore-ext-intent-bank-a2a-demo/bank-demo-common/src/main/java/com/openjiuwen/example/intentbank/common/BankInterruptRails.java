@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.interrupt.InterruptRequest;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
+import com.openjiuwen.core.singleagent.rail.AgentRail;
+import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
 import com.openjiuwen.harness.rails.interrupt.BaseInterruptRail;
 import com.openjiuwen.harness.rails.interrupt.InterruptDecision;
 
@@ -29,7 +31,7 @@ public final class BankInterruptRails {
     /** Makes the standard ask_user Tool aware of a resumed request that changes intent. */
     public static final class IntentAwareAskUserRail extends BaseInterruptRail {
         public IntentAwareAskUserRail() {
-            super(List.of("ask_user"));
+            super(List.of(BankTools.ASK_USER));
         }
 
         @Override
@@ -44,10 +46,25 @@ public final class BankInterruptRails {
                 return reject(intentChanged(input));
             }
             try {
-                return approve(OBJECT_MAPPER.writeValueAsString(Map.of("response", input)));
+                return approve(OBJECT_MAPPER.writeValueAsString(Map.of("query", question(toolCall), "response", input)));
             } catch (JsonProcessingException exception) {
                 return reject(Map.of("status", "INVALID_INPUT", "message", "无法读取用户补充信息"));
             }
+        }
+    }
+
+    /** Preserves an intent change as the business Agent's terminal structured result. */
+    public static final class IntentChangeTerminationRail extends AgentRail {
+        @Override
+        public void afterToolCall(AgentCallbackContext context) {
+            if (!(context.getInputs() instanceof ToolCallInputs inputs)
+                    || !(inputs.getToolResult() instanceof Map<?, ?> result)
+                    || !"INTENT_CHANGED".equals(result.get("status"))) {
+                return;
+            }
+            Map<String, Object> terminal = new java.util.LinkedHashMap<>();
+            result.forEach((key, value) -> terminal.put(String.valueOf(key), value));
+            context.requestForceFinish(terminal);
         }
     }
 

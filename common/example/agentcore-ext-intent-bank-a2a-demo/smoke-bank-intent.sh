@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 BASE_URL="${INTENT_AGENT_BASE_URL:-http://127.0.0.1:18200}"
 REQUEST_TIMEOUT="${BANK_INTENT_REQUEST_TIMEOUT_SECONDS:-600}"
+KEEP_ARTIFACTS="${BANK_INTENT_KEEP_ARTIFACTS:-false}"
 TMP_DIR="$(mktemp -d)"
 PIDS=()
 
@@ -21,10 +22,10 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do
     kill "$pid" 2>/dev/null || true
   done
-  if [ "$status" -eq 0 ]; then
+  if [ "$status" -eq 0 ] && [ "$KEEP_ARTIFACTS" != "true" ]; then
     rm -rf "$TMP_DIR"
   else
-    printf '\nLogs and responses retained in %s\n' "$TMP_DIR" >&2
+    printf '\nLogs and responses retained in %s\n' "$TMP_DIR"
   fi
 }
 trap cleanup EXIT
@@ -186,6 +187,45 @@ run_completed() {
   pass "$label"
 }
 
+assert_log_count() {
+  local label="$1"
+  local log_file="$2"
+  local expected="$3"
+  shift 3
+  local actual
+  actual="$($PYTHON - "$log_file" "$@" <<'PY'
+import re, sys
+path, *needles = sys.argv[1:]
+with open(path, encoding="utf-8") as stream:
+    lines = stream.readlines()
+def contains(line, needle):
+    if needle and needle[-1].isdigit():
+        return re.search(re.escape(needle) + r"(?![0-9.])", line) is not None
+    return needle in line
+print(sum(1 for line in lines if all(contains(line, needle) for needle in needles)))
+PY
+)"
+  [ "$actual" -eq "$expected" ] || fail "$label count=$actual, expected=$expected"
+}
+
+assert_log_order() {
+  local label="$1"
+  local log_file="$2"
+  local first="$3"
+  local second="$4"
+  "$PYTHON" - "$log_file" "$first" "$second" <<'PY'
+import sys
+path, first, second = sys.argv[1:]
+with open(path, encoding="utf-8") as stream:
+    lines = stream.readlines()
+first_index = next((index for index, line in enumerate(lines) if first in line), None)
+second_index = next((index for index, line in enumerate(lines) if second in line), None)
+if first_index is None or second_index is None or first_index >= second_index:
+    raise SystemExit(f"expected {first!r} before {second!r}")
+PY
+  pass "$label"
+}
+
 echo "[4/4] Run routing, interruption, intent-change, and planning scenarios"
 run_completed balance-routing "查询我的账户余额" "12800"
 run_completed wealth-advisor-routing "推荐一款稳健的三个月理财" "稳盈90天"
@@ -198,7 +238,10 @@ today_zh="$(date +%Y)年$((10#$(date +%m)))月$((10#$(date +%d)))日"
 assert_contains_any "$date_response" "$today_iso" "$today_zh"
 pass "date-routing"
 run_completed weather-routing "深圳天气怎么样" "深圳"
-run_completed fallback-routing "请帮我写一首关于星空的诗" "匹配" "银行"
+run_completed fallback-routing "请帮我写一首关于星空的诗" "银行"
+assert_log_count "fallback intent result" "$TMP_DIR/intent.log" 1 \
+  "BANK_DEMO_TOOL_RESULT tool=intent_match" '"status":"FALLBACK"' \
+  '"intentId":"bank-intent-fallback"'
 
 transfer_context="$(new_context transfer-confirm)"
 transfer_first="$TMP_DIR/transfer-confirm-1.json"
@@ -260,6 +303,7 @@ pass "intent change re-enters intent_match"
 
 plan_context="$(new_context transfer-plan)"
 plan_response="$TMP_DIR/transfer-plan-1.json"
+plan_log_start="$(wc -l < "$TMP_DIR/intent.log")"
 write_request "$plan_context" "" "给张三和李四各转100元" "$plan_response"
 plan_task="$(task_field "$plan_response" id)"
 for step in 2 3 4 5; do
@@ -275,5 +319,39 @@ done
 assert_state "$plan_response" TASK_STATE_COMPLETED
 assert_contains "$plan_response" "张三" "李四" "100"
 pass "DeepAgent plan executes two routed transfer steps"
+
+tail -n "+$((plan_log_start + 1))" "$TMP_DIR/intent.log" >"$TMP_DIR/intent-plan.log"
+assert_log_order "todo_create precedes planned intent routing" "$TMP_DIR/intent-plan.log" \
+  "BANK_DEMO_TOOL_CALL tool=todo_create" "BANK_DEMO_TOOL_CALL tool=intent_match"
+assert_log_count "planned intent_match calls" "$TMP_DIR/intent-plan.log" 2 \
+  "BANK_DEMO_TOOL_CALL tool=intent_match"
+
+assert_log_count "balance execution" "$TMP_DIR/balance.log" 1 \
+  "BANK_DEMO_EXECUTION tool=query_balance"
+assert_log_count "wealth recommendation execution" "$TMP_DIR/wealth-advisor.log" 1 \
+  "BANK_DEMO_EXECUTION tool=recommend_wealth"
+assert_log_count "calculator execution" "$TMP_DIR/intent.log" 1 \
+  "BANK_DEMO_EXECUTION tool=bank_calculator"
+assert_log_count "date execution" "$TMP_DIR/intent.log" 1 \
+  "BANK_DEMO_EXECUTION tool=current_date"
+assert_log_count "weather execution" "$TMP_DIR/intent.log" 1 \
+  "BANK_DEMO_EXECUTION tool=weather_query"
+assert_log_count "all confirmed transfer executions" "$TMP_DIR/transfer.log" 4 \
+  "BANK_DEMO_EXECUTION tool=execute_transfer"
+assert_log_count "no abandoned Wang Wu transfer" "$TMP_DIR/transfer.log" 0 \
+  "BANK_DEMO_EXECUTION tool=execute_transfer" "recipient=王五"
+assert_log_count "Zhang San 100 transfers" "$TMP_DIR/transfer.log" 2 \
+  "BANK_DEMO_EXECUTION tool=execute_transfer" "recipient=张三" "amount=100"
+assert_log_count "Li Si follow-up transfer" "$TMP_DIR/transfer.log" 1 \
+  "BANK_DEMO_EXECUTION tool=execute_transfer" "recipient=李四" "amount=200"
+assert_log_count "Li Si planned transfer" "$TMP_DIR/transfer.log" 1 \
+  "BANK_DEMO_EXECUTION tool=execute_transfer" "recipient=李四" "amount=100"
+assert_log_count "all confirmed wealth purchases" "$TMP_DIR/wealth-purchase.log" 2 \
+  "BANK_DEMO_EXECUTION tool=purchase_wealth"
+assert_log_count "10000 wealth purchase" "$TMP_DIR/wealth-purchase.log" 1 \
+  "BANK_DEMO_EXECUTION tool=purchase_wealth" "amount=10000"
+assert_log_count "1000 wealth purchase after intent change" "$TMP_DIR/wealth-purchase.log" 1 \
+  "BANK_DEMO_EXECUTION tool=purchase_wealth" "amount=1000"
+pass "business routing and exact execution audit"
 
 echo "All bank intent routing scenarios passed."

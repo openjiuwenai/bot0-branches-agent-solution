@@ -79,10 +79,20 @@ Linux/macOS 使用：
 bash smoke-bank-intent.sh
 ```
 
+需要在成功后保留五个进程日志和响应作为验收证据时使用：
+
+```bash
+BANK_INTENT_KEEP_ARTIFACTS=true bash smoke-bank-intent.sh
+```
+
 Windows PowerShell 使用：
 
 ```powershell
 ./smoke-bank-intent.ps1
+```
+
+```powershell
+./smoke-bank-intent.ps1 -KeepArtifacts
 ```
 
 脚本构建并启动全部服务，通过 IntentBankRouter 验证：
@@ -94,5 +104,9 @@ Windows PowerShell 使用：
 - 转账确认阶段输入新的理财购买意图后，原 Agent 返回 `INTENT_CHANGED`，入口 Agent 重新调用
   `intent_match` 并进入理财购买确认；
 - “给张三和李四各转100元”先生成计划，再按单一意图逐项执行直至计划完成。
+
+脚本除校验 A2A 任务状态和用户可见结果外，还会读取本次启动进程的审计日志，确认每个请求实际到达
+指定业务 Tool、意图跳转没有执行原转账、所有有副作用的 Tool 只执行预期次数，并确认复杂转账中
+`todo_create` 早于首次 `intent_match` 且恰好执行两个意图步骤。
 
 失败时脚本保留临时目录中的五个服务日志和 A2A 响应；成功时自动停止进程并清理临时目录。

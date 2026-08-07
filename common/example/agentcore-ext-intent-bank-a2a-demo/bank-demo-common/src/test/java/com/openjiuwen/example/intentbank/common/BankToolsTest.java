@@ -42,6 +42,7 @@ class BankToolsTest {
 
     @Test
     void publishesRequiredToolSchemas() {
+        assertThat(required(BankTools.askUser())).containsExactly("query");
         assertThat(required(BankTools.transfer())).containsExactlyInAnyOrder("recipient", "amount");
         assertThat(required(BankTools.wealthPurchase())).containsExactlyInAnyOrder("product", "amount");
         assertThat(BankTools.calculator().getCard().getName()).isEqualTo(BankTools.CALCULATOR);

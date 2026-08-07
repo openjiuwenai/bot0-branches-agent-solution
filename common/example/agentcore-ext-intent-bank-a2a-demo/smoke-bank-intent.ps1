@@ -1,12 +1,14 @@
 param(
     [string]$IntentAgentBaseUrl = "http://127.0.0.1:18200",
-    [int]$RequestTimeoutSeconds = 600
+    [int]$RequestTimeoutSeconds = 600,
+    [switch]$KeepArtifacts
 )
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("intent-bank-" + [guid]::NewGuid())
 $processes = @()
+$keepRunArtifacts = $KeepArtifacts -or $env:BANK_INTENT_KEEP_ARTIFACTS -eq "true"
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 
 function Fail([string]$Message) {
@@ -97,6 +99,47 @@ function Run-Completed([string]$Label, [string]$Message, [string[]]$ExpectedText
     Write-Host "PASS: $Label"
 }
 
+function Assert-LogCount([string]$Label, [string]$LogFile, [int]$Expected, [string[]]$Needles) {
+    $actual = 0
+    foreach ($line in Get-Content -Path $LogFile -Encoding UTF8) {
+        $matches = $true
+        foreach ($needle in $Needles) {
+            $contains = if ($needle -match '\d$') {
+                [regex]::IsMatch($line, [regex]::Escape($needle) + '(?![0-9.])')
+            } else {
+                $line.Contains($needle)
+            }
+            if (-not $contains) {
+                $matches = $false
+                break
+            }
+        }
+        if ($matches) {
+            $actual++
+        }
+    }
+    if ($actual -ne $Expected) {
+        Fail "$Label count=$actual, expected=$Expected"
+    }
+}
+
+function Assert-LogOrder([string]$Label, [string[]]$Lines, [string]$First, [string]$Second) {
+    $firstIndex = -1
+    $secondIndex = -1
+    for ($index = 0; $index -lt $Lines.Count; $index++) {
+        if ($firstIndex -lt 0 -and $Lines[$index].Contains($First)) {
+            $firstIndex = $index
+        }
+        if ($secondIndex -lt 0 -and $Lines[$index].Contains($Second)) {
+            $secondIndex = $index
+        }
+    }
+    if ($firstIndex -lt 0 -or $secondIndex -lt 0 -or $firstIndex -ge $secondIndex) {
+        Fail "$Label did not observe '$First' before '$Second'"
+    }
+    Write-Host "PASS: $Label"
+}
+
 try {
     if (-not (Test-Path (Join-Path $scriptDir "application-intent_local.yml") -PathType Leaf)) {
         Fail "copy application-intent_local-example.yml to application-intent_local.yml and configure both models"
@@ -133,7 +176,10 @@ try {
     Assert-TaskContainsAny $response @($today.ToString("yyyy-MM-dd"), "$($today.Year)年$($today.Month)月$($today.Day)日")
     Write-Host "PASS: date-routing"
     Run-Completed "weather-routing" "深圳天气怎么样" @("深圳")
-    Run-Completed "fallback-routing" "请帮我写一首关于星空的诗" @("匹配", "银行")
+    Run-Completed "fallback-routing" "请帮我写一首关于星空的诗" @("银行")
+    Assert-LogCount "fallback intent result" (Join-Path $tempDir "intent.out.log") 1 `
+        @("BANK_DEMO_TOOL_RESULT tool=intent_match", '"status":"FALLBACK"', `
+            '"intentId":"bank-intent-fallback"')
 
     $context = New-Context "transfer-confirm"
     $response = Send-BankMessage $context "" "给张三转100元"
@@ -170,6 +216,8 @@ try {
     Write-Host "PASS: intent change re-enters intent_match"
 
     $context = New-Context "transfer-plan"
+    $intentLog = Join-Path $tempDir "intent.out.log"
+    $planLogStart = @(Get-Content -Path $intentLog -Encoding UTF8).Count
     $response = Send-BankMessage $context "" "给张三和李四各转100元"
     $task = $response.result.task
     for ($step = 0; $step -lt 4 -and $task.status.state -ne "TASK_STATE_COMPLETED"; $step++) {
@@ -179,6 +227,40 @@ try {
     }
     $null = Assert-Task $response "TASK_STATE_COMPLETED" @("张三", "李四", "100")
     Write-Host "PASS: DeepAgent plan executes two routed transfer steps"
+
+    $planLines = @(Get-Content -Path $intentLog -Encoding UTF8 | Select-Object -Skip $planLogStart)
+    Assert-LogOrder "todo_create precedes planned intent routing" $planLines `
+        "BANK_DEMO_TOOL_CALL tool=todo_create" "BANK_DEMO_TOOL_CALL tool=intent_match"
+    $planAuditLog = Join-Path $tempDir "intent-plan.log"
+    $planLines | Set-Content -Path $planAuditLog -Encoding UTF8
+    Assert-LogCount "planned intent_match calls" $planAuditLog 2 @("BANK_DEMO_TOOL_CALL tool=intent_match")
+
+    Assert-LogCount "balance execution" (Join-Path $tempDir "balance.out.log") 1 `
+        @("BANK_DEMO_EXECUTION tool=query_balance")
+    Assert-LogCount "wealth recommendation execution" (Join-Path $tempDir "wealth-advisor.out.log") 1 `
+        @("BANK_DEMO_EXECUTION tool=recommend_wealth")
+    Assert-LogCount "calculator execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=bank_calculator")
+    Assert-LogCount "date execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=current_date")
+    Assert-LogCount "weather execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=weather_query")
+    $transferLog = Join-Path $tempDir "transfer.out.log"
+    Assert-LogCount "all confirmed transfer executions" $transferLog 4 `
+        @("BANK_DEMO_EXECUTION tool=execute_transfer")
+    Assert-LogCount "no abandoned Wang Wu transfer" $transferLog 0 `
+        @("BANK_DEMO_EXECUTION tool=execute_transfer", "recipient=王五")
+    Assert-LogCount "Zhang San 100 transfers" $transferLog 2 `
+        @("BANK_DEMO_EXECUTION tool=execute_transfer", "recipient=张三", "amount=100")
+    Assert-LogCount "Li Si follow-up transfer" $transferLog 1 `
+        @("BANK_DEMO_EXECUTION tool=execute_transfer", "recipient=李四", "amount=200")
+    Assert-LogCount "Li Si planned transfer" $transferLog 1 `
+        @("BANK_DEMO_EXECUTION tool=execute_transfer", "recipient=李四", "amount=100")
+    $purchaseLog = Join-Path $tempDir "wealth-purchase.out.log"
+    Assert-LogCount "all confirmed wealth purchases" $purchaseLog 2 `
+        @("BANK_DEMO_EXECUTION tool=purchase_wealth")
+    Assert-LogCount "10000 wealth purchase" $purchaseLog 1 `
+        @("BANK_DEMO_EXECUTION tool=purchase_wealth", "amount=10000")
+    Assert-LogCount "1000 wealth purchase after intent change" $purchaseLog 1 `
+        @("BANK_DEMO_EXECUTION tool=purchase_wealth", "amount=1000")
+    Write-Host "PASS: business routing and exact execution audit"
     Write-Host "All bank intent routing scenarios passed."
 } catch {
     Write-Error $_
@@ -193,4 +275,8 @@ try {
     Pop-Location -ErrorAction SilentlyContinue
 }
 
-Remove-Item -Recurse -Force $tempDir
+if ($keepRunArtifacts) {
+    Write-Host "Logs and responses retained in $tempDir" -ForegroundColor Yellow
+} else {
+    Remove-Item -Recurse -Force $tempDir
+}
