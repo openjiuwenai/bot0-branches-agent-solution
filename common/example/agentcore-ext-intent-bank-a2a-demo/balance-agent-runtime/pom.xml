@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+    <parent><groupId>com.openjiuwen.example</groupId><artifactId>agentcore-ext-intent-bank-a2a-demo</artifactId><version>0.1.0</version><relativePath>../pom.xml</relativePath></parent>
+    <artifactId>intent-bank-balance-agent-runtime</artifactId>
+    <dependencies>
+        <dependency><groupId>com.openjiuwen.example</groupId><artifactId>bank-demo-common</artifactId></dependency>
+        <dependency><groupId>com.openjiuwen</groupId><artifactId>agent-service-app</artifactId><version>${agent-runtime-java.version}</version></dependency>
+        <dependency><groupId>com.openjiuwen</groupId><artifactId>agent-service-adapters-agentcore</artifactId><version>${agent-runtime-java.version}</version></dependency>
+        <dependency><groupId>com.google.protobuf</groupId><artifactId>protobuf-java</artifactId><version>${protobuf.version}</version></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webmvc</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    </dependencies>
+    <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><mainClass>com.openjiuwen.example.intentbank.balance.BalanceAgentApplication</mainClass></configuration></plugin></plugins></build>
+</project>

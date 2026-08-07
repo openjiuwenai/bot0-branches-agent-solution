@@ -1,0 +1,32 @@
+server:
+  port: ${BALANCE_AGENT_PORT:18201}
+
+spring:
+  application:
+    name: balance-agent
+  config:
+    import: optional:file:./application-intent_local.yml
+
+openjiuwen:
+  service:
+    agent-id: balance-agent
+    handler: agentcore
+    query:
+      legacy-path-enabled: true
+      webflux:
+        enabled: false
+    a2a:
+      agent-name: BalanceAgent
+      agent-description: 查询个人银行账户余额
+      provider-organization: OpenJiuwen
+      streaming: true
+      default-input-modes: ["text", "text/plain"]
+      default-output-modes: ["text", "text/plain", "application/json"]
+      skills:
+        - id: query_balance
+          name: Query account balance
+          description: 查询当前账户或指定账户的可用余额、币种和账户信息
+          tags: ["bank", "account", "balance"]
+          examples: ["查询我的余额", "工资卡还有多少钱"]
+          input-modes: ["text", "text/plain"]
+          output-modes: ["text", "text/plain", "application/json"]
