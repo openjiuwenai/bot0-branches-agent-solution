@@ -141,7 +141,7 @@ public class PreCompletionChecklistRail extends AgentRail {
      *
      * <p>Decides what guardrail to inject based on current state:
      * <ol>
-     *   <li>First few iterations (callCount < planMaxRounds): PLAN_MODE
+     *   <li>First few iterations (callCount &lt; planMaxRounds): PLAN_MODE
      *       — exploratory system prompt, with optional tool-usage guardrail.</li>
      *   <li>Later iterations (callCount >= planMaxRounds): BUILD_MODE
      *       — convergent system prompt with coverage guardrail.</li>
