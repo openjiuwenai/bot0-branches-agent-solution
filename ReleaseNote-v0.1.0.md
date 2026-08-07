@@ -88,7 +88,7 @@ EDPAgent Java v0.1.0 is the first official Java release of EDPAgent (Enterprise-
 
 ## Build and Verification
 
-Extension depends on `agent-runtime-java` 0.1.1 and `agent-core-java` 0.1.14.
+Extension depends on `agent-runtime-java` 0.1.1.post1 and `agent-core-java` 0.1.14.post1.
 
 ```bash
 mvn -f common/agent-runtime-ext-java/pom.xml clean install
@@ -114,7 +114,7 @@ mvn -f common/agent-core-ext-java/pom.xml -pl :agent-core-ext-react-rails -am cl
 </dependency>
 ```
 
-Dependency requirements: `com.openjiuwen:agent-runtime-java:0.1.1`, `com.openjiuwen:agent-core-java:0.1.14`.
+Dependency requirements: `com.openjiuwen:agent-runtime-java:0.1.1.post1`, `com.openjiuwen:agent-core-java:0.1.14.post1`.
 
 ---
 
