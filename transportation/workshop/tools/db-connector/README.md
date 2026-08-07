@@ -73,7 +73,8 @@
 **形态 A：独立 HTTP 服务（FastAPI，本工具自带）**
 
 - **协议**：RESTful HTTP（GET / POST）
-- **接口**：`/ping` / `/query` / `/insert` / `/update` / `/delete` / `/import-schema` / `/refresh-schema`
+- **接口**：`/config`(GET/POST) / `/ping` / `/query` / `/insert` / `/update` / `/delete` / `/import-schema` / `/refresh-schema`
+- **首次使用**：必须先 `POST /config` 提交真实数据库信息，否则 CRUD 返回 428
 - **安全透传**：HTTP 层复用本工具安全栈（参数化、黑名单、审计、脱敏），不绕过校验
 - **服务地址**：`http://<host>:<port>/db-connector`
 - **示例**：`http://100.100.135.219:7087/db-connector`
@@ -421,8 +422,14 @@ tail -f .logs/db-connector.log
 
 #### HTTP API 接口
 
+> **首次使用流程**：启动服务 → `POST /config` 提交真实数据库信息 → `GET /ping` 验证连通 → CRUD 可用。
+> 未配置时 `/ping` 返回 `status=unconfigured`，CRUD 返回 `428` 提示先 `POST /config`。
+> 配置成功后写入 `config/config.runtime.yaml`，重启自动加载，无需重复配置。
+
 | 方法 | 路径 | 说明 | 请求体 |
 |------|------|------|--------|
+| `GET` | `/config` | 查看当前数据库配置（密码脱敏） | 无 |
+| `POST` | `/config` | 提交/更新数据库配置，即时生效并持久化 | `{"type":"mysql","host":"...","port":3306,"database":"...","username":"...","password":"...","mode":"readonly","allowed_tables":[...]}` |
 | `GET` | `/ping` | 数据库健康检查 | 无 |
 | `POST` | `/query` | 参数化查询 | `{"sql_template": "...", "params": [...], "max_rows": N}` |
 | `POST` | `/insert` | 参数化插入 | `{"sql_template": "...", "params": [...]}` |
@@ -434,7 +441,15 @@ tail -f .logs/db-connector.log
 #### 调用示例
 
 ```bash
-# 健康检查
+# 0. 提交数据库配置（首次使用必做，替换为你的真实 DB 信息）
+curl -X POST http://100.100.135.219:7087/db-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{"type":"mysql","host":"100.100.135.219","port":3306,"database":"traffic","username":"root","password":"your_password","mode":"readonly","allowed_tables":["traffic_flow","toll_station"]}'
+
+# 1. 查看当前配置（密码已脱敏）
+curl http://100.100.135.219:7087/db-connector/config
+
+# 2. 健康检查
 curl http://100.100.135.219:7087/db-connector/ping
 
 # 查询
@@ -484,9 +499,33 @@ MCP_TRANSPORT=streamable-http MCP_PORT=7087 ./start.sh
 
 # ----- 插件：数据库连接工具 -----
 # 服务地址：http://192.168.0.109:7087/db-connector （对应 openjiuwen.tools.db_connector.server，端口7087）
+# 说明：首次使用必须先调用"工具0：数据库配置"提交真实 DB 信息，否则其他工具将返回 428（未配置）
+
+# 工具0：数据库配置（首次使用入口）
+# 功能：提交真实数据库连接信息，即时切换数据源并持久化到 config/config.runtime.yaml，重启后自动加载
+# 请求方法：POST
+# 请求路径：/config
+# 输出：配置结果（status、configured、host、database、message）
+# 输入参数配置：
+#   type | string | Body | 必选 | 数据库类型：mysql | postgresql
+#   host | string | Body | 必选 | 数据库主机
+#   port | number | Body | 必选 | 端口（MySQL 3306 / PostgreSQL 5432）
+#   database | string | Body | 必选 | 数据库名
+#   username | string | Body | 必选 | 数据库用户名
+#   password | string | Body | 必选 | 数据库密码（明文传入，GET /config 不回显）
+#   schema | string | Body | 可选 | 模式名（PostgreSQL 用，默认 public）
+#   mode | string | Body | 可选 | 运行模式：readonly | readwrite | ddl（默认 readonly）
+#   allowed_tables | array | Body | 可选 | 允许访问的表白名单；缺省不限制
+
+# 工具0b：查看数据库配置
+# 功能：查看当前数据源配置，密码字段已脱敏（显示 ***），用于核对配置是否生效
+# 请求方法：GET
+# 请求路径：/config
+# 输出：当前配置（configured、type、host、port、database、username、password=***、schema、mode、allowed_tables）
+# 输入参数配置：无
 
 # 工具1：数据库健康检查
-# 功能：探测数据库连通性与延迟，返回状态、数据库名、延迟(ms)；不执行任何 SQL，适合探活
+# 功能：探测数据库连通性与延迟，返回状态、数据库名、延迟(ms)；不执行任何 SQL，适合探活；未配置时返回 status=unconfigured
 # 请求方法：GET
 # 请求路径：/ping
 # 输出：健康状态（status、database、latencyMs）
@@ -545,6 +584,11 @@ MCP_TRANSPORT=streamable-http MCP_PORT=7087 ./start.sh
 # 输入参数配置：无
 
 # ----- 插件连通性测试值（端口7087）-----
+# 测试0 - 工具0 提交数据库配置（首次使用必做）：
+#   POST http://192.168.0.109:7087/db-connector/config
+#   测试值：{"type":"mysql","host":"100.100.135.219","port":3306,"database":"traffic","username":"root","password":"your_password","mode":"readonly","allowed_tables":["traffic_flow","toll_station"]}
+#   预期：code=200，返回 status=ok、configured=true、配置已持久化
+#
 # 测试1 - 工具1 数据库健康检查：
 #   GET http://192.168.0.109:7087/db-connector/ping
 #   预期：code=200，返回 status=ok、database=<库名>、latencyMs<1000
