@@ -7,12 +7,15 @@ package com.openjiuwen.agents.reactrails.verification;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.agents.reactrails.replan.ReplanRail;
+import com.openjiuwen.agents.reactrails.replan.ReplanTool;
+import com.openjiuwen.agents.reactrails.types.Violation;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import com.openjiuwen.core.singleagent.rail.SteeringQueue;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -201,6 +204,60 @@ class CriteriaReplanBridgeRailTest {
         assertThat(secondInvocation.hasForceFinishRequest())
                 .as("a fresh invocation must start with a fresh criteria retry budget").isFalse();
     }
+    // ==================== Site 1 handshake (issue #16 follow-up, xuefanfan 5.1 建议) ============
+
+    /**
+     * Locks the Site 1 reachability-gate handshake as a CI contract (not just a social-contract TODO).
+     *
+     * <p>Today {@code CriteriaReplanBridgeRail.buildGradientHint} is dead code — no react-rails
+     * verifier produces {@code isPartial} metadata, so {@code hasGradient} is always false and the
+     * gradient branch (which appends {@code "call __replan__"}) is never reached. The Site 1 fix
+     * is therefore deliberately deferred (TODO in {@code buildGradientHint}).
+     *
+     * <p>This test is {@link Disabled} UNTIL a future {@code GradientVerifier} activates the
+     * gradient branch. The fixer who activates it must:
+     * <ol>
+     *   <li>thread {@code ctx} through {@code buildCorrectionHint}/{@code buildGradientHint}, and</li>
+     *   <li>gate the {@code __replan__} append on {@link ReplanTool#isReachable} (mirroring
+     *       {@code PreCompletionChecklistRail}'s COVERAGE branch), then</li>
+     *   <li>remove the {@code @Disabled} below.</li>
+     * </ol>
+     * Once enabled, this test asserts the handshake: when {@code ReplanTool} is NOT reachable
+     * (bare/mock ctx), the gradient hint must fall back to a tool-agnostic hint and must NOT
+     * reference {@code __replan__}. If the fixer forgets the gate, this test goes RED.
+     *
+     * <p>Social contract → CI contract: the fixer is forced to confront this test when activating
+     * GradientVerifier, rather than relying on someone reading a TODO comment a year later.
+     */
+    @Disabled("Remove when a GradientVerifier activates isPartial metadata; then this test locks the "
+            + "reachability-gate handshake for Site 1 (CriteriaReplanBridgeRail gradient hint). "
+            + "See issue #16 Site 1 TODO in buildGradientHint.")
+    @Test
+    void gradientHintMustGateReplanReferenceOnReachability() {
+        // Given: a fake GradientVerifier producing isPartial metadata (activates the gradient branch),
+        // and a bare/mock ctx (agent=Object, not a BaseAgent → ReplanTool.isReachable returns false).
+        CaptureSteeringQueue steeringQ = new CaptureSteeringQueue();
+        CriteriaVerifier gradientVerifier = (criteria, output, history) -> List.of(
+                new Violation("对比矩阵", "缺失", Map.of("isPartial", Boolean.TRUE, "covered",
+                        List.<String>of(), "missing", List.of("对比矩阵"))));
+        CriteriaReplanBridgeRail rail = new CriteriaReplanBridgeRail(gradientVerifier,
+                List.of("对比矩阵"), new ReplanRail(3));
+
+        // When: rail fires the under-limit fail path → gradient hint → pushSteering
+        AgentCallbackContext ctx = ctxWithFinalAnswer("bad answer", steeringQ);
+        rail.afterModelCall(ctx);
+
+        // Then: once the Site 1 reachability gate is wired, the gradient hint must NOT reference
+        // __replan__ when ReplanTool is not reachable (mock ctx → isReachable false → tool-agnostic
+        // fallback, mirroring Site 3 COVERAGE). Until the gate is wired this assertion fails, which
+        // is exactly why this test is @Disabled today.
+        assertThat(steeringQ.captured).as("gradient hint must be pushed").hasSize(1);
+        assertThat(steeringQ.captured.get(0))
+                .as("gradient hint must NOT reference __replan__ when ReplanTool is not reachable "
+                        + "(reachability-gate handshake for Site 1)")
+                .doesNotContain(ReplanTool.TOOL_NAME);
+    }
+
     /**
      * Capture steering queue spy — records pushSteering calls for mutation-RED assertions.
      */
