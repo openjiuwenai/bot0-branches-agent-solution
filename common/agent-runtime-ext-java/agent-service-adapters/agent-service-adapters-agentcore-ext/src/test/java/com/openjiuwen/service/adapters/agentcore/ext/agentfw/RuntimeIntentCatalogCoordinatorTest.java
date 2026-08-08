@@ -50,7 +50,7 @@ class RuntimeIntentCatalogCoordinatorTest {
     }
 
     @Test
-    void ignoresLateEventsAndAcceptsFailedLatestSourceForLaterRetry() {
+    void failedRemoteRefreshKeepsAcceptedVersionAndAllowsSameVersionRetry() {
         A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
         IntentSuite suite = suite();
         RuntimeIntentCatalogCoordinator coordinator = new RuntimeIntentCatalogCoordinator(suite, registry,
@@ -61,19 +61,21 @@ class RuntimeIntentCatalogCoordinatorTest {
         RemoteAgentEntry invalid = new RemoteAgentEntry("broken", null, 30, false);
         coordinator.onRemoteAgentCatalogChanged(
                 new RemoteAgentCatalogChangedEvent(new RemoteAgentCatalogSnapshot(3L, List.of(invalid))));
-        assertThat(coordinator.remoteCatalogVersion()).isEqualTo(3L);
+        assertThat(coordinator.remoteCatalogVersion()).isZero();
         assertThat(suite.snapshot().version()).isEqualTo(1L);
+
+        RemoteAgentEntry valid = new RemoteAgentEntry("balance-agent", card("balance"), 30, false);
+        coordinator.onRemoteAgentCatalogChanged(
+                new RemoteAgentCatalogChangedEvent(new RemoteAgentCatalogSnapshot(3L, List.of(valid))));
+        assertThat(coordinator.remoteCatalogVersion()).isEqualTo(3L);
+        assertThat(suite.snapshot().version()).isEqualTo(2L);
+        assertThat(suite.snapshot().initializedIntents().matchableIntents()).extracting(IntentDefinition::id)
+                .containsExactly("a2a:balance-agent:balance", "local");
 
         coordinator.onRemoteAgentCatalogChanged(
                 new RemoteAgentCatalogChangedEvent(new RemoteAgentCatalogSnapshot(2L, List.of())));
         assertThat(coordinator.remoteCatalogVersion()).isEqualTo(3L);
-
-        RemoteAgentEntry valid = new RemoteAgentEntry("balance-agent", card("balance"), 30, false);
-        coordinator.onRemoteAgentCatalogChanged(
-                new RemoteAgentCatalogChangedEvent(new RemoteAgentCatalogSnapshot(4L, List.of(valid))));
         assertThat(suite.snapshot().version()).isEqualTo(2L);
-        assertThat(suite.snapshot().initializedIntents().matchableIntents()).extracting(IntentDefinition::id)
-                .containsExactly("a2a:balance-agent:balance", "local");
     }
 
     @Test

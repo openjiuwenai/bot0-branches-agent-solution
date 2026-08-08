@@ -66,8 +66,7 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
         RemoteAgentCatalogSnapshot snapshot = registry.snapshot();
         updateLock.lock();
         try {
-            acceptRemoteSnapshot(snapshot);
-            refresh();
+            replaceRemoteSnapshot(snapshot);
         } finally {
             updateLock.unlock();
         }
@@ -89,12 +88,11 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
             if (event.snapshot().version() <= remoteCatalogVersion) {
                 return;
             }
-            acceptRemoteSnapshot(event.snapshot());
             try {
-                refresh();
-            } catch (IntentInitializationException exception) {
-                log.error("Failed to refresh intent catalog from remote Agent Card version={}", remoteCatalogVersion,
-                        exception);
+                replaceRemoteSnapshot(event.snapshot());
+            } catch (RuntimeException exception) {
+                log.error("Failed to refresh intent catalog from remote Agent Card version={}",
+                        event.snapshot().version(), exception);
             }
         } finally {
             updateLock.unlock();
@@ -113,9 +111,9 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
         List<CustomIntentRegistration> replacement = customIntents == null ? List.of() : List.copyOf(customIntents);
         updateLock.lock();
         try {
+            refresh(remoteEntries, replacement, fallback, remoteCatalogVersion);
             this.customIntents = replacement;
             this.fallback = fallback;
-            refresh();
         } finally {
             updateLock.unlock();
         }
@@ -135,12 +133,15 @@ public final class RuntimeIntentCatalogCoordinator implements InitializingBean {
         }
     }
 
-    private void acceptRemoteSnapshot(RemoteAgentCatalogSnapshot snapshot) {
-        remoteEntries = snapshot.entries() == null ? List.of() : List.copyOf(snapshot.entries());
+    private void replaceRemoteSnapshot(RemoteAgentCatalogSnapshot snapshot) {
+        List<RemoteAgentEntry> replacement = snapshot.entries() == null ? List.of() : List.copyOf(snapshot.entries());
+        refresh(replacement, customIntents, fallback, snapshot.version());
+        remoteEntries = replacement;
         remoteCatalogVersion = snapshot.version();
     }
 
-    private void refresh() {
+    private void refresh(List<RemoteAgentEntry> remoteEntries, List<CustomIntentRegistration> customIntents,
+            CustomIntentRegistration fallback, long remoteCatalogVersion) {
         InitializedIntents currentIntents = suite.snapshot().initializedIntents();
         if (remoteEntries.isEmpty() && customIntents.isEmpty() && fallback == null
                 && currentIntents.matchableIntents().isEmpty() && currentIntents.fallback() == null) {
