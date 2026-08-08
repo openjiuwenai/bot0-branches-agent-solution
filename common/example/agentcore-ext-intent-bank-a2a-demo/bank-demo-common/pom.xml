@@ -18,8 +18,8 @@
         </dependency>
         <dependency>
             <groupId>com.openjiuwen</groupId>
-            <artifactId>agent-intent</artifactId>
-            <version>${agent-intent.version}</version>
+            <artifactId>agent-core-ext-intent-suite</artifactId>
+            <version>${agent-core-ext-intent-suite.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

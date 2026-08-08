@@ -8,7 +8,7 @@
 common
 |-- agent-core-ext-java
 |   |-- agent-core-ext-react-rails
-|   `-- agent-intent
+|   `-- agent-core-ext-intent-suite
 |-- agent-runtime-ext-java
 |   `-- agent-service-adapters
 |       |-- agent-service-adapters-agentcore-ext
@@ -28,8 +28,8 @@ common
 ## 扩展工程
 
 - `agent-runtime-ext-java`：运行时扩展模块的 Maven 父工程。
-- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，当前包含 `agent-core-ext-react-rails` 和 `agent-intent`。
-  - `agent-intent`：提供 DeepAgent 意图套件、三类 SPI、原子目录更新、reranker 匹配和意图路由 Rail。
+- `agent-core-ext-java`：`agent-core-java` 的纯 SDK 扩展工程，当前包含 `agent-core-ext-react-rails` 和 `agent-core-ext-intent-suite`。
+  - `agent-core-ext-intent-suite`：提供 DeepAgent 意图套件、三类 SPI、原子目录更新、reranker 匹配和意图路由 Rail。
 - `agents`：具体 Agent 实现工程，当前包含 PEV Agent。
 - `agent-evolve/evoagent`：Skill/managed-doc 自进化服务，Python 3.12 + uv 独立工程。
 - `agent-evolve/evoagent-adapter`：日志、Skill 与 managed-doc sidecar，Python 3.12 + uv 独立工程。

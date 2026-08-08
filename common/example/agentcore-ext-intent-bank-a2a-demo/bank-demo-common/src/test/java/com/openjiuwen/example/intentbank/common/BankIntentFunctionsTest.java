@@ -6,7 +6,7 @@ package com.openjiuwen.example.intentbank.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.agents.intent.api.IntentResultFunction;
+import com.openjiuwen.agents.intent.spi.IntentResultFunction;
 import com.openjiuwen.agents.intent.api.IntentSuite;
 import com.openjiuwen.agents.intent.initializer.DefaultIntentInitializer;
 import com.openjiuwen.agents.intent.model.CustomIntentRegistration;

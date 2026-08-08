@@ -79,5 +79,5 @@ openjiuwen:
 logging:
   level:
     com.openjiuwen.agents.intent: INFO
-    com.openjiuwen.service.adapters.agentcore.ext.intent: INFO
+    com.openjiuwen.service.adapters.agentcore.ext: INFO
     com.openjiuwen.service.app.controller.a2a: INFO

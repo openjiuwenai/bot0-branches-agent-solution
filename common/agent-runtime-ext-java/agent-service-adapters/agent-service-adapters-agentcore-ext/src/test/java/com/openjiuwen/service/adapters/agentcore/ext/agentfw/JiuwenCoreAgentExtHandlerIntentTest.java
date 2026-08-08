@@ -14,8 +14,7 @@ import com.openjiuwen.agents.intent.model.IntentSuiteConfig;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.IntentDeepAgentInstaller;
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 
 import org.a2aproject.sdk.spec.AgentCapabilities;
 import org.a2aproject.sdk.spec.AgentCard;

@@ -10,7 +10,7 @@ import com.openjiuwen.core.singleagent.ReActAgent;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 import com.openjiuwen.harness.deep_agent.DeepAgent;
 import com.openjiuwen.harness.schema.config.DeepAgentConfig;
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
