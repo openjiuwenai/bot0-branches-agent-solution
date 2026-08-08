@@ -86,7 +86,7 @@ public final class BankInterruptRails {
         protected InterruptDecision resolveInterrupt(AgentCallbackContext context, ToolCall toolCall,
                 Object resumeInput) {
             if (resumeInput == null) {
-                return interrupt(InterruptRequest.builder().message(confirmationMessage)
+                return interrupt(InterruptRequest.builder().message(confirmationMessage(toolCall))
                         .context(Map.of("_interrupt_kind", "ask_user")).build());
             }
             String input = normalize(resumeInput);
@@ -99,8 +99,25 @@ public final class BankInterruptRails {
             if (NEGATIVE.contains(input.toLowerCase(Locale.ROOT))) {
                 return reject(Map.of("status", "CANCELLED", "message", "用户已取消操作"));
             }
-            return interrupt(InterruptRequest.builder().message("请明确回复确认或取消。")
+            return interrupt(InterruptRequest.builder()
+                    .message(confirmationMessage(toolCall) + "\n请明确回复确认或取消。")
                     .context(Map.of("_interrupt_kind", "ask_user")).build());
+        }
+
+        private String confirmationMessage(ToolCall toolCall) {
+            if (toolCall == null || toolCall.getArguments() == null || toolCall.getArguments().isBlank()) {
+                return confirmationMessage;
+            }
+            try {
+                Map<?, ?> arguments = OBJECT_MAPPER.readValue(toolCall.getArguments(), Map.class);
+                String rendered = confirmationMessage;
+                for (Map.Entry<?, ?> entry : arguments.entrySet()) {
+                    rendered = rendered.replace("{" + entry.getKey() + "}", String.valueOf(entry.getValue()));
+                }
+                return rendered;
+            } catch (JsonProcessingException exception) {
+                return confirmationMessage;
+            }
         }
     }
 

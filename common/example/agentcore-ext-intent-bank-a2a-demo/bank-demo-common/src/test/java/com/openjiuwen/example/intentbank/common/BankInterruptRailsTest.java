@@ -63,10 +63,10 @@ class BankInterruptRailsTest {
 
     @Test
     void confirmationSupportsInterruptApproveCancelAndIntentChange() {
-        ConfirmationRail rail = new ConfirmationRail(BankTools.TRANSFER, "请确认转账");
+        ConfirmationRail rail = new ConfirmationRail(BankTools.TRANSFER, "请确认向{recipient}转账{amount}元");
         AgentCallbackContext initial = context(BankTools.TRANSFER, "{\"recipient\":\"张三\",\"amount\":100}", null);
         assertThatThrownBy(() -> rail.beforeToolCall(initial)).isInstanceOfSatisfying(ToolInterruptException.class,
-                exception -> assertThat(exception.getRequest().getMessage()).isEqualTo("请确认转账"));
+                exception -> assertThat(exception.getRequest().getMessage()).isEqualTo("请确认向张三转账100元"));
 
         AgentCallbackContext approved = context(BankTools.TRANSFER, "{\"recipient\":\"张三\",\"amount\":100}", "确认");
         rail.beforeToolCall(approved);

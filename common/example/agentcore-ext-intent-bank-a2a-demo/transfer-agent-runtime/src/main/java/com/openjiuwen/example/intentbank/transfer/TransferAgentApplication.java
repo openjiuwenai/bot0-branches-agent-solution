@@ -44,7 +44,8 @@ public class TransferAgentApplication {
                         """, "target/transfer-agent-workspace", false);
         return new JiuwenCoreAgentHandler(BankDemoAgentFactory.create(definition,
                 List.of(BankTools.askUser(), BankTools.transfer()), List.of(new IntentAwareAskUserRail(),
-                        new ConfirmationRail(BankTools.TRANSFER, "请确认是否执行这笔转账。"), new IntentChangeTerminationRail()),
+                        new ConfirmationRail(BankTools.TRANSFER, "请确认是否向{recipient}转账{amount}元。"),
+                        new IntentChangeTerminationRail()),
                 properties));
     }
 }

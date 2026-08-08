@@ -261,7 +261,7 @@ transfer_context="$(new_context transfer-confirm)"
 transfer_first="$TMP_DIR/transfer-confirm-1.json"
 write_request "$transfer_context" "" "给张三转100元" "$transfer_first"
 assert_state "$transfer_first" TASK_STATE_INPUT_REQUIRED
-assert_contains "$transfer_first" "确认"
+assert_contains "$transfer_first" "确认" "张三" "100"
 transfer_task="$(task_field "$transfer_first" id)"
 [ -n "$transfer_task" ] || fail "transfer confirmation returned no task id"
 transfer_second="$TMP_DIR/transfer-confirm-2.json"
@@ -281,7 +281,7 @@ assert_state "$follow_2" TASK_STATE_INPUT_REQUIRED
 follow_3="$TMP_DIR/transfer-followup-3.json"
 write_request "$follow_context" "$follow_task" "金额是200元" "$follow_3"
 assert_state "$follow_3" TASK_STATE_INPUT_REQUIRED
-assert_contains "$follow_3" "确认"
+assert_contains "$follow_3" "确认" "李四" "200"
 follow_4="$TMP_DIR/transfer-followup-4.json"
 write_request "$follow_context" "$follow_task" "确认" "$follow_4"
 assert_state "$follow_4" TASK_STATE_COMPLETED
@@ -316,23 +316,25 @@ assert_contains "$change_3" "稳盈90天" "1000"
 pass "intent change re-enters intent_match"
 
 plan_context="$(new_context transfer-plan)"
-plan_response="$TMP_DIR/transfer-plan-1.json"
+plan_1="$TMP_DIR/transfer-plan-1.json"
 plan_log_start="$(wc -l < "$TMP_DIR/intent.log")"
-write_request "$plan_context" "" "给张三和李四各转100元" "$plan_response"
-plan_task="$(task_field "$plan_response" id)"
-for step in 2 3 4 5; do
-  state="$(task_field "$plan_response" state)"
-  if [ "$state" = TASK_STATE_COMPLETED ]; then
-    break
-  fi
-  [ "$state" = TASK_STATE_INPUT_REQUIRED ] || fail "planned transfer reached unexpected state $state"
-  next="$TMP_DIR/transfer-plan-$step.json"
-  write_request "$plan_context" "$plan_task" "确认" "$next"
-  plan_response="$next"
-done
-assert_state "$plan_response" TASK_STATE_COMPLETED
-assert_contains "$plan_response" "张三" "李四" "100"
-pass "DeepAgent plan executes two routed transfer steps"
+write_request "$plan_context" "" "给张三和李四各转100元" "$plan_1"
+assert_state "$plan_1" TASK_STATE_INPUT_REQUIRED
+assert_contains "$plan_1" "执行计划" "1. 给张三转账100元" "2. 给李四转账100元" \
+  "当前执行第 1/2 步" "确认" "张三" "100"
+plan_task="$(task_field "$plan_1" id)"
+[ -n "$plan_task" ] || fail "planned transfer returned no task id"
+
+plan_2="$TMP_DIR/transfer-plan-2.json"
+write_request "$plan_context" "$plan_task" "确认" "$plan_2"
+assert_state "$plan_2" TASK_STATE_INPUT_REQUIRED
+assert_contains "$plan_2" "第 1/2 步已完成" "张三" "100" "当前执行第 2/2 步" "确认" "李四"
+
+plan_3="$TMP_DIR/transfer-plan-3.json"
+write_request "$plan_context" "$plan_task" "确认" "$plan_3"
+assert_state "$plan_3" TASK_STATE_COMPLETED
+assert_contains "$plan_3" "张三" "李四" "100"
+pass "DeepAgent exposes its plan and completes routed transfers one by one"
 
 tail -n "+$((plan_log_start + 1))" "$TMP_DIR/intent.log" >"$TMP_DIR/intent-plan.log"
 assert_log_order "todo_create precedes planned intent routing" "$TMP_DIR/intent-plan.log" \
