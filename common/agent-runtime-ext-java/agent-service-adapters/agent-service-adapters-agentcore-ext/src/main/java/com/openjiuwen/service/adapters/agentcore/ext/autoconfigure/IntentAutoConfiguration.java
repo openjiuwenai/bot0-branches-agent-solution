@@ -4,22 +4,18 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.autoconfigure;
 
-import com.openjiuwen.agents.intent.api.IntentInitializer;
-import com.openjiuwen.agents.intent.api.IntentMatcher;
-import com.openjiuwen.agents.intent.api.IntentResultFunction;
 import com.openjiuwen.agents.intent.api.IntentSuite;
 import com.openjiuwen.agents.intent.deepagent.IntentDeepAgentBinder;
 import com.openjiuwen.agents.intent.initializer.DefaultIntentInitializer;
 import com.openjiuwen.agents.intent.matcher.RerankerIntentMatcher;
 import com.openjiuwen.agents.intent.model.IntentSuiteConfig;
+import com.openjiuwen.agents.intent.spi.IntentInitializer;
+import com.openjiuwen.agents.intent.spi.IntentMatcher;
+import com.openjiuwen.agents.intent.spi.IntentResultFunction;
 import com.openjiuwen.core.retrieval.reranker.Reranker;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.IntentDeepAgentInstaller;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.RuntimeConfiguredIntents;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.RuntimeConfiguredIntentsFactory;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.RuntimeIntentCatalogCoordinator;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.RuntimeIntentCoreConfigFactory;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.RuntimeIntentProperties;
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.IntentDeepAgentInstaller;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.RuntimeIntentCatalogCoordinator;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

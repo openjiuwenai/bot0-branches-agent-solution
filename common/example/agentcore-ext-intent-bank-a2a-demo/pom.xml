@@ -31,7 +31,7 @@
         <agent-runtime-java.version>0.1.1.post1</agent-runtime-java.version>
         <agent-runtime-ext-java.version>0.1.0</agent-runtime-ext-java.version>
         <agent-core-java.version>0.1.14.post1</agent-core-java.version>
-        <agent-intent.version>0.1.0</agent-intent.version>
+        <agent-core-ext-intent-suite.version>0.1.0</agent-core-ext-intent-suite.version>
         <protobuf.version>4.33.2</protobuf.version>
     </properties>
 

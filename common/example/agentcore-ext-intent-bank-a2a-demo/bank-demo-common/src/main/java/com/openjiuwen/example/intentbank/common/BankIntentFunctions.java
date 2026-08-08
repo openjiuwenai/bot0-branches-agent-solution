@@ -4,7 +4,7 @@
 
 package com.openjiuwen.example.intentbank.common;
 
-import com.openjiuwen.agents.intent.api.IntentResultFunction;
+import com.openjiuwen.agents.intent.spi.IntentResultFunction;
 import com.openjiuwen.agents.intent.model.InvokeToolAction;
 import com.openjiuwen.agents.intent.model.ReturnAction;
 

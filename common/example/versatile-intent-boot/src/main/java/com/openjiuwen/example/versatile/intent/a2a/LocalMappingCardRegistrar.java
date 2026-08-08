@@ -4,7 +4,7 @@
 
 package com.openjiuwen.example.versatile.intent.a2a;
 
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 
 import jakarta.annotation.PostConstruct;

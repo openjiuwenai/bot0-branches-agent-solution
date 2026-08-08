@@ -6,14 +6,13 @@ package com.openjiuwen.service.adapters.agentcore.ext.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.agents.intent.api.IntentMatcher;
 import com.openjiuwen.agents.intent.api.IntentSuite;
+import com.openjiuwen.agents.intent.spi.IntentMatcher;
 import com.openjiuwen.core.retrieval.reranker.Reranker;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.IntentDeepAgentInstaller;
+import com.openjiuwen.service.adapters.agentcore.ext.agentfw.RuntimeIntentCatalogCoordinator;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.IntentDeepAgentInstaller;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.RuntimeIntentCatalogCoordinator;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.RuntimeIntentProperties;
-import com.openjiuwen.service.app.controller.a2a.client.A2ARemoteAgentCardRegistry;
+import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
 import org.junit.jupiter.api.Tag;

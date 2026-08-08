@@ -7,7 +7,6 @@ package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
 import com.openjiuwen.service.adapters.agentcore.ext.external.ClientToolRail;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
-import com.openjiuwen.service.adapters.agentcore.ext.intent.IntentDeepAgentInstaller;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRailBinding;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntimeSupport;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager;

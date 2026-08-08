@@ -4,7 +4,7 @@
 
 package com.openjiuwen.example.intentbank.intent;
 
-import com.openjiuwen.agents.intent.api.IntentResultFunction;
+import com.openjiuwen.agents.intent.spi.IntentResultFunction;
 import com.openjiuwen.core.retrieval.reranker.Reranker;
 import com.openjiuwen.core.retrieval.reranker.StandardReranker;
 import com.openjiuwen.example.intentbank.common.BankAgentDefinition;
