@@ -105,16 +105,20 @@ class PEVAgentControlFlowTest {
     void planErrorFewFailedLocalReplanRetriesUntilPass() {
         AtomicInteger execCount = new AtomicInteger();
         AtomicInteger verifyCount = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicReference<String> redoDescription =
+                new java.util.concurrent.atomic.AtomicReference<>();
         PevComponents.Planner planner = in -> new PevComponents.Plan("g",
                 List.of(new PevComponents.PlanNode("A", "do A")));
         PevComponents.Executor executor = nodes -> {
             int n = execCount.incrementAndGet();
-            // 第一次返回错值，重做返回对值
+            // capture the redo node description to verify feedback injection (issue #35 fix)
+            if (n == 2) {
+                redoDescription.set(nodes.get(0).description());
+            }
             return Map.of("A", new NodeResult.Success(n == 1 ? "wrong" : "right"));
         };
         PevComponents.Verifier verifier = (in, r) -> {
             int n = verifyCount.incrementAndGet();
-            // 第一次判 fail（A），第二次 pass
             return n == 1
                     ? new PevKernel.VerifyResult(false, Set.of("A"), "wrong answer")
                     : new PevKernel.VerifyResult(true, Set.of(), "ok");
@@ -123,9 +127,29 @@ class PEVAgentControlFlowTest {
         PEVAgent agent = new PEVAgent(card(), planner, executor, verifier);
         Object out = agent.invoke("do A", null);
 
-        assertThat(execCount.get()).isGreaterThanOrEqualTo(2); // LocalReplan 重执行过
+        assertThat(execCount.get()).isGreaterThanOrEqualTo(2);
         assertThat(out).isEqualTo("A: right");
-        // mutation-RED: 剥 LocalReplan 分支 → execCount==1 → out="A: wrong" → RED
+        // Issue #35 fix: feedback must be injected into the redo node description
+        assertThat(redoDescription.get()).as("redo node description must contain corrective feedback")
+                .contains("correction");
+        // mutation-RED: 剥 PEVAgent.java handleLocalReplan 的 feedback 注入
+        // (改回 redo.add(n) 原始节点) → redoDescription=="do A" 不含 "correction" → RED
+    }
+
+    @Test
+    void localReplanFeedbackNullDoesNotBreakRetry() {
+        // When verifier returns null/blank feedback, LocalReplan still retries with original desc
+        AtomicInteger execCount = new AtomicInteger();
+        PevComponents.Planner planner = in -> new PevComponents.Plan("g",
+                List.of(new PevComponents.PlanNode("A", "do A")));
+        PevComponents.Executor executor = nodes -> {
+            execCount.incrementAndGet();
+            return Map.of("A", new NodeResult.Success("ok"));
+        };
+        PevComponents.Verifier verifier = (in, r) -> new PevKernel.VerifyResult(true, Set.of(), "ok");
+        PEVAgent agent = new PEVAgent(card(), planner, executor, verifier);
+        agent.invoke("do A", null);
+        assertThat(execCount.get()).isEqualTo(1); // pass on first try, no retry needed
     }
 
     // ==================== maxRetries exceeded → terminal ====================
