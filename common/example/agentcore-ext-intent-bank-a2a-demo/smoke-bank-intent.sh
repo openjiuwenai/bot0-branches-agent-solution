@@ -39,6 +39,18 @@ pass() {
   echo "PASS: $1"
 }
 
+print_json() {
+  local label="$1"
+  local path="$2"
+  printf '\n=== %s ===\n' "$label"
+  "$PYTHON" - "$path" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    json.dump(json.load(stream), sys.stdout, ensure_ascii=False, indent=2)
+print()
+PY
+}
+
 if [ ! -r "$SCRIPT_DIR/application-intent_local.yml" ]; then
   fail "copy application-intent_local-example.yml to application-intent_local.yml and configure both models"
 fi
@@ -113,8 +125,10 @@ payload = {
 with open(output, "w", encoding="utf-8") as stream:
     json.dump(payload, stream, ensure_ascii=False)
 PY
+  print_json "REQUEST $(basename "$output")" "$output.request"
   curl -fsS --max-time "$REQUEST_TIMEOUT" -X POST "$BASE_URL/a2a/" \
     -H 'Content-Type: application/json' --data-binary "@$output.request" >"$output"
+  print_json "RESPONSE $(basename "$output")" "$output"
 }
 
 task_field() {
