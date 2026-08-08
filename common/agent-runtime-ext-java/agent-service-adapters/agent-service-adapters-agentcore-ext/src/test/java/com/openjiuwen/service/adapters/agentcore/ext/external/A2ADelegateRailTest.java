@@ -45,6 +45,24 @@ class A2ADelegateRailTest {
     }
 
     @Test
+    void carriesParentProgressWithoutChangingRemoteInput() {
+        A2ARemoteAgentCardRegistry registry = new A2ARemoteAgentCardRegistry();
+        registry.register("transfer-agent", card());
+        A2ADelegateRail rail = new A2ADelegateRail(registry);
+        AgentCallbackContext context = context("call-progress", """
+                {"agentName":"transfer-agent","remoteInput":"transfer 100 to Zhang San",
+                 "parentProgress":"Execution plan: step 1 of 2"}
+                """, Map.of());
+
+        assertThatThrownBy(() -> rail.beforeToolCall(context)).isInstanceOfSatisfying(ToolInterruptException.class,
+                exception -> {
+                    assertThat(exception.getRequest().getMessage()).isEqualTo("transfer 100 to Zhang San");
+                    assertThat(exception.getRequest().getContext())
+                            .containsEntry(A2ADelegateRail.PARENT_PROGRESS, "Execution plan: step 1 of 2");
+                });
+    }
+
+    @Test
     void returnsClearToolResultForMissingTargetOrInvalidArguments() {
         A2ADelegateRail rail = new A2ADelegateRail(new A2ARemoteAgentCardRegistry());
         AgentCallbackContext missing = context("call-2", "{\"agentName\":\"missing\",\"remoteInput\":\"hello\"}",

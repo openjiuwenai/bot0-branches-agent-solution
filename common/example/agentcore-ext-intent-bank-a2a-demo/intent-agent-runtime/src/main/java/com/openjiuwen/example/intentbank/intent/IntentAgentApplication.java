@@ -11,6 +11,7 @@ import com.openjiuwen.example.intentbank.common.BankAgentDefinition;
 import com.openjiuwen.example.intentbank.common.BankDemoAgentFactory;
 import com.openjiuwen.example.intentbank.common.BankDemoProperties;
 import com.openjiuwen.example.intentbank.common.BankIntentFunctions;
+import com.openjiuwen.example.intentbank.common.BankPlanProgressRail;
 import com.openjiuwen.example.intentbank.common.BankToolAuditRail;
 import com.openjiuwen.example.intentbank.common.BankTools;
 import com.openjiuwen.example.intentbank.common.IntentOnlyToolVisibilityRail;
@@ -22,6 +23,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -51,7 +53,8 @@ public class IntentAgentApplication {
                         """, WORKSPACE, true);
         return new JiuwenCoreAgentExtHandler(BankDemoAgentFactory.create(definition,
                 List.of(BankTools.calculator(), BankTools.currentDate(), BankTools.weather()),
-                List.of(new BankToolAuditRail(), new IntentOnlyToolVisibilityRail()), properties));
+                List.of(new BankToolAuditRail(), new IntentOnlyToolVisibilityRail(),
+                        new BankPlanProgressRail(Path.of(WORKSPACE))), properties));
     }
 
     @Bean
