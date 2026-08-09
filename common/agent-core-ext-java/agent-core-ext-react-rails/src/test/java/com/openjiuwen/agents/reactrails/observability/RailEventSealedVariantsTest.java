@@ -27,7 +27,6 @@ import java.util.Map;
  * containsExactlyInAnyOrder(7 个) RED → 必须同步给 instanceof 链加分支。
  */
 class RailEventSealedVariantsTest {
-
     /**
      * Snapshot of RailEvent's permitted variants — HostLoggerRailEventListener must cover all.
      */
