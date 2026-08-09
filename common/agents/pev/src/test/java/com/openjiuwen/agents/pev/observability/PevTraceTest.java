@@ -207,20 +207,21 @@ class PevTraceTest {
         PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier, traces::add);
         agent.invoke("理赔", null);
 
-        PevTrace.Planned planned = (PevTrace.Planned) traces.get(0).phases().get(0);
-        assertThat(planned.goal()).as("goal must be exact copy of Plan.goal")
-                .isEqualTo("分析理赔案件");
-        assertThat(planned.nodes()).as("nodes must be exact copy with id+description")
-                .hasSize(2)
-                .satisfiesExactly(
-                        n -> {
-                            assertThat(n.id()).isEqualTo("A");
-                            assertThat(n.description()).isEqualTo("查询案件信息");
-                        },
-                        n -> {
-                            assertThat(n.id()).isEqualTo("B");
-                            assertThat(n.description()).isEqualTo("理算赔付金额");
-                        });
+        assertThat(traces.get(0).phases().get(0)).isInstanceOfSatisfying(PevTrace.Planned.class, planned -> {
+            assertThat(planned.goal()).as("goal must be exact copy of Plan.goal")
+                    .isEqualTo("分析理赔案件");
+            assertThat(planned.nodes()).as("nodes must be exact copy with id+description")
+                    .hasSize(2)
+                    .satisfiesExactly(
+                            n -> {
+                                assertThat(n.id()).isEqualTo("A");
+                                assertThat(n.description()).isEqualTo("查询案件信息");
+                            },
+                            n -> {
+                                assertThat(n.id()).isEqualTo("B");
+                                assertThat(n.description()).isEqualTo("理算赔付金额");
+                            });
+        });
         // mutation-RED: strip n.description() from NodeSnapshot constructor → description=null → RED
         // mutation-RED: strip entire nodes mapping → nodes=empty → hasSize(2) RED
     }
@@ -311,7 +312,7 @@ class PevTraceTest {
                 .hasSize(2);
         assertThat(plannedPhases.get(0).goal()).as("initial plan goal").isEqualTo("do ABC");
         assertThat(plannedPhases.get(1).goal())
-                .as("GlobalReplan goal must include correction feedback (planner called with 'do ABC [correction: ...]')")
+                .as("GlobalReplan goal must include correction feedback")
                 .contains("correction");
         assertThat(plannedPhases.get(1).nodes()).as("GlobalReplan new plan nodes must be projected")
                 .hasSize(3);

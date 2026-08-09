@@ -143,6 +143,9 @@ public class PEVAgent extends BaseAgent {
      * Record a Planned phase (eager snapshot of goal + nodes) into the trace.
      * Called at initial plan adoption, after LocalReplan, and after GlobalReplan,
      * so the trace shows plan evolution across replan cycles.
+     *
+     * @param plan the plan to project (goal + nodes eager-copied into NodeSnapshots)
+     * @param phases the phase list to append the Planned phase to
      */
     private static void recordPlanned(PevComponents.Plan plan, List<PevTrace.Phase> phases) {
         phases.add(new PevTrace.Planned(plan.goal(),
@@ -153,6 +156,9 @@ public class PEVAgent extends BaseAgent {
 
     /**
      * Overload accepting VerifyLoopState (used by replan paths).
+     *
+     * @param plan the plan to project
+     * @param state the verify-loop state whose phases list is appended to
      */
     private static void recordPlanned(PevComponents.Plan plan, VerifyLoopState state) {
         recordPlanned(plan, state.phases);

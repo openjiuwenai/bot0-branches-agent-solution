@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.pev.arch;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -11,8 +13,6 @@ import com.tngtech.archunit.lang.ArchRule;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
  * PEV 包依赖方向承重测试——ArchUnit 把"文件夹约定"升为 CI 强制契约（呼应铁律⑰）。
@@ -25,13 +25,13 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  *   <li>rail 不得依赖 agent（rail 只读 kernel 类型）</li>
  * </ul>
  *
- * <p>mutation-RED：在 observability 加 {@code import ...agent.PevComponents} → 规则 3 RED（observabilityMustNotDependOnAgent）；
+ * <p>mutation-RED：在 observability 加 {@code import ...agent.PevComponents}
+     * → 规则 3 RED（observabilityMustNotDependOnAgent）；
  * 在 kernel 加 {@code import ...agent.PEVAgent} → 规则 1 RED。
  *
  * @since 2026-08
  */
 class PackageDependencyArchTest {
-
     private static JavaClasses pevClasses;
 
     @BeforeAll
