@@ -4,6 +4,8 @@
 
 package com.openjiuwen.agents.reactrails.arch;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -11,8 +13,6 @@ import com.tngtech.archunit.lang.ArchRule;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
  * react-rails intra-module package-direction bearing test (mirrors PEV's PackageDependencyArchTest).
@@ -35,7 +35,6 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * @since 2026-08
  */
 class PackageDependencyArchTest {
-
     private static JavaClasses classes;
 
     @BeforeAll
