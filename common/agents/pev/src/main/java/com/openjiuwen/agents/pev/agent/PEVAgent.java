@@ -121,7 +121,7 @@ public class PEVAgent extends BaseAgent {
         Map<String, NodeResult> completed = new LinkedHashMap<>();
         boolean[] terminal = {false};
         List<PevTrace.Phase> phases = new ArrayList<>();
-        phases.add(new PevTrace.Planned(plan));
+        recordPlanned(plan, phases);
         PevTrace.TerminalReason[] terminalReason = {null};
         runVerifyLoop(userInput, plan,
                 new VerifyLoopState(completed, terminal, phases, terminalReason, 0, session));
@@ -137,6 +137,31 @@ public class PEVAgent extends BaseAgent {
     public Iterator<Object> stream(Object input, Session session, List<StreamMode> modes) {
         // Honest boundary: real streaming needs Executor to emit a Flux of node results.
         return List.of(invoke(input, session)).iterator();
+    }
+
+    /**
+     * Record a Planned phase (eager snapshot of goal + nodes) into the trace.
+     * Called at initial plan adoption, after LocalReplan, and after GlobalReplan,
+     * so the trace shows plan evolution across replan cycles.
+     *
+     * @param plan the plan to project (goal + nodes eager-copied into NodeSnapshots)
+     * @param phases the phase list to append the Planned phase to
+     */
+    private static void recordPlanned(PevComponents.Plan plan, List<PevTrace.Phase> phases) {
+        phases.add(new PevTrace.Planned(plan.goal(),
+                plan.nodes().stream()
+                        .map(n -> new PevTrace.NodeSnapshot(n.id(), n.description()))
+                        .toList()));
+    }
+
+    /**
+     * Overload accepting VerifyLoopState (used by replan paths).
+     *
+     * @param plan the plan to project
+     * @param state the verify-loop state whose phases list is appended to
+     */
+    private static void recordPlanned(PevComponents.Plan plan, VerifyLoopState state) {
+        recordPlanned(plan, state.phases);
     }
 
     private void runVerifyLoop(String userInput, PevComponents.Plan plan, VerifyLoopState state) {
@@ -213,6 +238,13 @@ public class PEVAgent extends BaseAgent {
             state.terminal[0] = true;
             return;
         }
+        // Dispatch over the sealed ReplanAction hierarchy. This module builds at --release 17
+        // without --enable-preview, and pattern-matching switch over types is preview-only until
+        // Java 21 — so an instanceof chain is the only option at this language level and the
+        // compiler cannot enforce exhaustiveness here. The catch-all throw below is the defensive
+        // runtime backstop; replanActionSealedVariantsSnapshot is the test-time guard (adding a
+        // 4th permitted variant goes RED there, forcing this chain to grow a case). True
+        // compile-time exhaustiveness (sealed pattern switch) is deferred to a Java 21 upgrade.
         if (action instanceof ReplanAction.AcceptPartial) {
             state.terminalReason[0] = PevTrace.TerminalReason.ACCEPT_PARTIAL;
             state.terminal[0] = true;
@@ -225,9 +257,13 @@ public class PEVAgent extends BaseAgent {
         if (action instanceof ReplanAction.GlobalReplan globalReplan) {
             PevComponents.Plan newPlan = planner.plan(userInput + " [correction: " + globalReplan.feedback() + "]");
             state.completed.clear();
+            recordPlanned(newPlan, state);
             runVerifyLoop(userInput, newPlan, state.nextRetry());
             return;
         }
+        // Defensive: structurally unreachable for a sealed ReplanAction with exactly 3 permitted
+        // variants (all handled above). Kept — not silently dropped — so a future variant that slips
+        // past the snapshot guard fails loudly instead of returning silently.
         throw new IllegalArgumentException("Unsupported replan action: " + action);
     }
 
@@ -250,16 +286,24 @@ public class PEVAgent extends BaseAgent {
             }
         }
         if (!redo.isEmpty()) {
-            runVerifyLoop(userInput, new PevComponents.Plan(plan.goal() + " (局部重做)", redo), state.nextRetry());
+            PevComponents.Plan redoPlan = new PevComponents.Plan(plan.goal() + " (局部重做)", redo);
+            recordPlanned(redoPlan, state);
+            runVerifyLoop(userInput, redoPlan, state.nextRetry());
         } else {
             // Degenerate path (pre-existing edge case, now honestly observable): the verifier
             // reported failed nodes not present in the plan (verifier/executor contract mismatch),
-            // so LocalReplan has nothing to redo and the loop falls through without a clean
-            // PASSED/ACCEPT_PARTIAL/MAX_RETRIES terminal. Mark INCONCLUSIVE so the trace truthfully
-            // reports the unterminated state instead of null (violating the PevTrace contract).
-            // Pure observability — does not change invoke's output (terminal[0] is not re-checked
-            // after runVerifyLoop returns).
+            // so LocalReplan has nothing to redo. Mark INCONCLUSIVE — a degenerate terminal — so the
+            // trace truthfully reports this state instead of null (violating the PevTrace contract).
+            //
+            // terminal[0]=true closes an invariant crack: the other three terminalReason values
+            // (PASSED/ACCEPT_PARTIAL/MAX_RETRIES_EXCEEDED) all set terminal[0]=true; INCONCLUSIVE
+            // previously did not, relying on "terminal[0] is never re-read post-dispatch" — a latent
+            // assumption any future post-dispatch terminal guard would crack. The loop IS ending here
+            // (this branch does not recurse into runVerifyLoop), so terminal[0]=true is semantically
+            // honest. Pure observability: invoke's output is unchanged, and terminal[0] is not externally
+            // observable / not bearing-testable (honest boundary — internal-consistency fix only).
             state.terminalReason[0] = PevTrace.TerminalReason.INCONCLUSIVE;
+            state.terminal[0] = true;
         }
     }
 
