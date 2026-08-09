@@ -7,6 +7,7 @@ package com.openjiuwen.agents.reactrails.verification;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.openjiuwen.agents.reactrails.enforcing.PromptInjectionState;
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
@@ -122,7 +123,10 @@ class StagnationDetectionRailTest {
 
         assertThat(ctx7.hasForceFinishRequest()).as("persistent stagnation after max brakes must forceFinish(degraded)")
                 .isTrue();
-        // mutation-RED: strip ctx.requestForceFinish(...) in stagnation escalation → hasForceFinishRequest false → RED
+        Map<String, Object> degraded = ctx7.getForceFinishRequest().getResult();
+        assertThat(degraded).as("degraded result must explicitly mark criteria_verified=false (attribution invariant)")
+                .containsEntry(ObservingRail.VERIFIED_KEY, false);
+        // mutation-RED: strip VERIFIED_KEY=false put → key absent → containsEntry RED
     }
 
     @Test

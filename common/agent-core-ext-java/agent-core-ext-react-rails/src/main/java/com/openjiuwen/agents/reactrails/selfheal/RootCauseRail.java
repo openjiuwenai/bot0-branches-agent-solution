@@ -88,7 +88,7 @@ public class RootCauseRail extends AgentRail {
         InvocationState state = state(context);
         state.failedTool = extractToolName(context);
         state.hasPendingDegrade = true;
-        RailTelemetry.current().fire(new RailEvent.DeviceFailureEvent("RootCauseRail", state.failedTool, "MARKED"));
+        RailTelemetry.current().fire(new RailEvent.DeviceFailureEvent("RootCauseRail", state.failedTool, RailEvent.DeviceFailurePhase.MARKED));
     }
 
     /**
@@ -103,7 +103,7 @@ public class RootCauseRail extends AgentRail {
             Map<String, Object> d = degradedMap(state.failedTool);
             context.requestForceFinish(d);
             state.hasPendingDegrade = false;
-            RailTelemetry.current().fire(new RailEvent.DeviceFailureEvent("RootCauseRail", state.failedTool, "FIRED"));
+            RailTelemetry.current().fire(new RailEvent.DeviceFailureEvent("RootCauseRail", state.failedTool, RailEvent.DeviceFailurePhase.FIRED));
         }
     }
 
@@ -121,6 +121,7 @@ public class RootCauseRail extends AgentRail {
     private static Map<String, Object> degradedMap(String tool) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(ObservingRail.SOURCE_RAIL_KEY, "RootCauseRail");
+        result.put(ObservingRail.VERIFIED_KEY, false);
         result.put(ROOT_CAUSE_DEGRADED_KEY, true);
         result.put(DEGRADED_KEY, true);
         result.put(ROOT_CAUSE_KEY, "DeviceFailure");

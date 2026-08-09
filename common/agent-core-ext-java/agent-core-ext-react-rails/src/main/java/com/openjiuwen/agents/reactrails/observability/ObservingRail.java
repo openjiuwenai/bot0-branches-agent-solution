@@ -32,8 +32,18 @@ public class ObservingRail extends AgentRail {
     /** Result-map key each rail sets to its own name for deterministic attribution. */
     public static final String SOURCE_RAIL_KEY = "source_rail";
 
-    /** Result-map key used by agent-core-ext-react-rails to mark a verified terminal. */
-    private static final String VERIFIED_KEY = "criteria_verified";
+    /**
+     * Result-map key used by agent-core-ext-react-rails to mark a verified terminal
+     * (true = Exit-1 verified, false = Exit-3 / degraded). Canonical single source —
+     * all forceFinish producers reference this constant (no independent literals),
+     * so the key cannot drift across rails.
+     *
+     * <p>Scope: {@code VERIFIED_KEY} + {@link #SOURCE_RAIL_KEY} are the cross-rail attribution
+     * keys single-sourced here (ObservingRail reads both). Other result keys (OUTPUT_KEY /
+     * DEGRADED_KEY / ...) are rail-local — each rail declares its own; they have no cross-rail
+     * reader, so full single-sourcing is deferred.
+     */
+    public static final String VERIFIED_KEY = "criteria_verified";
 
     /**
      * Construct at the lowest priority so this rail runs last in every hook fan-out.

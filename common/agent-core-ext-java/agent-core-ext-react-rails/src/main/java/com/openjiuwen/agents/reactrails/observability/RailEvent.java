@@ -52,6 +52,13 @@ public sealed interface RailEvent {
      */
     record ForceFinishEvent(String railName, boolean verified, Map<String, Object> result)
             implements RailEvent {
+        public ForceFinishEvent {
+            // Eager defensive copy (mirror PEV NodeSnapshot) so a later ctx mutation cannot
+            // mutate an already-fired event. details() already copies; this keeps result()
+            // non-aliased too.
+            result = result == null ? null : new LinkedHashMap<>(result);
+        }
+
         @Override
         public RailEventType type() {
             return RailEventType.FORCE_FINISH;
@@ -159,7 +166,10 @@ public sealed interface RailEvent {
      * Phase override / mode set on the prompt-injection state (soft transfer via ThreadLocal).
      *
      * @param railName emitting rail
-     * @param mode PLAN / BUILD / BREAK_TOOL / BREAK_STAGNATION / BREAK_LOOP / null
+     * @param mode the {@code InjectionMode} name when set via {@code setMode}
+     *     (NONE / SYSTEM_PROMPT_APPEND / USER_MESSAGE_INJECT / FIRST_PRINCIPLES / PLAN_MODE /
+     *     BUILD_MODE), {@code "PHASE_OVERRIDE"} when set via {@code setPhaseOverride},
+     *     or {@code null}
      * @param overrideExcerpt truncated override text
      */
     record PhaseOverrideEvent(String railName, String mode, String overrideExcerpt)
@@ -202,13 +212,23 @@ public sealed interface RailEvent {
     }
 
     /**
+     * Phase of a device-failure lifecycle. Enum (not string) so the consumer match is typo-proof.
+     */
+    enum DeviceFailurePhase {
+        /** Tool failure recorded; degrade pending (afterModelCall will fire). */
+        MARKED,
+        /** Degrade forceFinish issued. */
+        FIRED
+    }
+
+    /**
      * Device-failure (tool exception) recorded or fired a degrade.
      *
      * @param railName emitting rail
      * @param tool failed tool name
      * @param phase MARKED (pending degrade) or FIRED (degrade forceFinish issued)
      */
-    record DeviceFailureEvent(String railName, String tool, String phase) implements RailEvent {
+    record DeviceFailureEvent(String railName, String tool, DeviceFailurePhase phase) implements RailEvent {
         @Override
         public RailEventType type() {
             return RailEventType.DEVICE_FAILURE;
@@ -218,7 +238,7 @@ public sealed interface RailEvent {
         public Map<String, Object> details() {
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("tool", tool);
-            d.put("phase", phase);
+            d.put("phase", phase == null ? null : phase.name());
             return d;
         }
     }
