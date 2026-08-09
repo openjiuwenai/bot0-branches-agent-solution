@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
+import com.openjiuwen.agents.pev.kernel.ReplanAction;
 import com.openjiuwen.core.singleagent.schema.AgentCard;
 
 import org.junit.jupiter.api.Test;
@@ -174,5 +175,28 @@ class PEVAgentControlFlowTest {
         // maxRetries=2 → verify 最多 3 次（初 + 2 retry）后 terminalGuard 截断，不死循环
         assertThat(verifyCount.get()).isLessThanOrEqualTo(3);
         // mutation-RED: 剥 terminalGuard → 死循环 → 测试挂/超时 → RED
+    }
+
+    // ==================== dispatch 穷尽守卫（Java 17 无 sealed switch 的替代）====================
+
+    /**
+     * ReplanAction sealed 层次的变体快照——加新 permitted 变体时 RED，迫使同步更新
+     * dispatchReplanAction 的 instanceof 链 + 加对应承重测试。
+     *
+     * <p>背景：Java 17 GA 无类型模式 switch（preview-only，本模块 --release 17 无 --enable-preview），
+     * dispatchReplanAction 用 instanceof 链而非编译期穷尽 switch，编译器无法在此强制穷尽。
+     * 本测试是运行期穷尽守卫：反射枚举 ReplanAction 的 permitted subclasses，断言恰为今日三变体。
+     *
+     * <p>mutation-RED：给 ReplanAction 加第 4 个 permitted record → getPermittedSubclasses 返回 4 个 →
+     * containsExactlyInAnyOrder(三变体) RED → 必须同步加 dispatch 分支 + 承重测试。
+     */
+    @Test
+    void replanActionSealedVariantsSnapshot() {
+        Class<?>[] permitted = ReplanAction.class.getPermittedSubclasses();
+        assertThat(permitted).as("ReplanAction must be sealed (getPermittedSubclasses non-null)")
+                .isNotNull();
+        assertThat(java.util.Arrays.stream(permitted).map(Class::getSimpleName).toList())
+                .as("ReplanAction permitted variants snapshot — dispatchReplanAction must cover all")
+                .containsExactlyInAnyOrder("LocalReplan", "GlobalReplan", "AcceptPartial");
     }
 }
