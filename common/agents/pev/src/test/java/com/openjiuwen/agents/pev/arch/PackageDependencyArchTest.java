@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
  * </ul>
  *
  * <p>mutation-RED：在 observability 加 {@code import ...agent.PevComponents}
-     * → 规则 3 RED（observabilityMustNotDependOnAgent）；
+ * → 规则 3 RED（observabilityMustNotDependOnAgent）；
  * 在 kernel 加 {@code import ...agent.PEVAgent} → 规则 1 RED。
  *
  * @since 2026-08
