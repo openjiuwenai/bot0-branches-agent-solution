@@ -101,6 +101,61 @@ class BusStreamingAndResumeTest {
     }
 
     @Test
+    void streamingInputRequiredStopsEarlyInsteadOfEmptyWaitingTerminal() throws Exception {
+        // issue-A: a streaming task that goes INPUT_REQUIRED (after STREAM_READY) must NOT empty-wait
+        // responseWindowMillis for a TERMINAL that won't come, and must NOT emit a synthetic COMPLETED.
+        // pollTerminalEvent stops on INPUT_REQUIRED; the terminal frame envelopes the INPUT_REQUIRED body.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-ir", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-ir", "sr-ir");
+        feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "task-ir", null, null,
+                "{\"task\":{\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}");
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-ir\",\"status\":{\"state\":\"working\"}}}"));
+        // small response window so the RED (timeout→synthetic COMPLETED) is fast, not 60s
+        BusForwarder f = new BusForwarder(rdc,
+                new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
+                feed, g4, "svc-gw", 30_000L, 300L, runtime, new DefaultAgentResolver(""), sticky);
+        f.setStreamFirstFrameDeadlineMillis(2_000L);
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        Optional<String> result = f.forwardStreaming(createCtx("agent-1", "m-ir"), mockResponse, sseBridge);
+        assertThat(result).isEmpty();   // SSE written (no early FAILED body)
+        String sse = mockResponse.getContentAsString();
+        // terminal frame reflects INPUT_REQUIRED (enveloped body), NOT a synthetic completed
+        assertThat(sse).contains("input-required");
+        assertThat(sse).doesNotContain("completed");
+    }
+
+    @Test
+    void streamingInputRequiredSkipsRuntimeDrainWhenProjectionPreStaged() throws Exception {
+        // issue-S1 (drain 并发收尾): when INPUT_REQUIRED has already been routed to staging
+        // (before the runtime SSE drain), the gateway surfaces it WITHOUT draining the runtime SSE.
+        // Some runtimes end the stream after an interrupt but don't close the HTTP response → the
+        // drain (frameIterator.hasNext) would block forever. The pre-drain projection check skips
+        // the drain — the runtime first-frame marker must NOT appear in the SSE.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-ir", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-ir", "sr-ir");
+        feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "task-ir", null, null,
+                "{\"task\":{\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}");
+        // a distinctive runtime first frame — if the drain runs, this marker appears in the SSE;
+        // if the pre-drain check skips the drain (the fix), it does NOT appear.
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-ir\",\"status\":{\"state\":\"working\"},"
+                + "\"runtimeDrainMarker\":\"should-not-appear\"}}"));
+        BusForwarder f = new BusForwarder(rdc,
+                new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
+                feed, g4, "svc-gw", 30_000L, 300L, runtime, new DefaultAgentResolver(""), sticky);
+        f.setStreamFirstFrameDeadlineMillis(2_000L);
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        Optional<String> result = f.forwardStreaming(createCtx("agent-1", "m-ir-skip"), mockResponse, sseBridge);
+        assertThat(result).isEmpty();
+        String sse = mockResponse.getContentAsString();
+        assertThat(sse).contains("input-required");          // terminal frame reflects INPUT_REQUIRED
+        assertThat(sse).doesNotContain("should-not-appear"); // runtime SSE drain was SKIPPED
+    }
+
+    @Test
     void b5_streamReadySeparableFromAccepted() throws Exception {
         rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
         rdc.setResolved(new ResolvedRoute("http://rt:8000"));
