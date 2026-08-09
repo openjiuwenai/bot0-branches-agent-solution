@@ -206,6 +206,17 @@ Object out = agent.invoke("用 fetchData 获取数据。", null);
 
 三个阶段都是接口（`PevComponents`），你注入实现。生产用 LLM-backed，测试用 mock。
 
+> **如何接 LLM**：PEV **不定义 LLM 接口**——你的 Planner/Executor/Verifier 实现闭包持有自选 client（OpenAI SDK / Spring AI / 自研 HTTP client 均可）。最小形态：
+> ```java
+> interface ChatClient { String chat(String prompt); }   // 你自己定义，或直接用现成 SDK
+> 
+> PevComponents.Planner planner = in -> {
+>     String json = client.chat("把任务拆成 JSON 计划：" + in);
+>     return parsePlan(json);          // 你自己解析成 Plan
+> };
+> ```
+> 参考实现（test-scope）：`src/test/java/.../pev/e2e/LlmClient.java`——但它包私有、仅测试用，**别直接 copy 进生产**；自己接你选的 SDK。
+
 ### Planner — 任务 → 计划
 
 ```java
@@ -213,7 +224,7 @@ public interface Planner {
     Plan plan(String userInput);
 }
 public record Plan(String goal, List<PlanNode> nodes) {}
-public record PlanNode(String id, description) {}
+public record PlanNode(String id, String description) {}
 ```
 
 - **LlmPlanner**（test-scope 参考）：调 LLM 产 JSON 计划，解析成 `Plan`。健壮：解析失败 fallback 单 LLM_CALL 节点。
@@ -240,12 +251,16 @@ public interface Executor {
 public interface Verifier {
     PevKernel.VerifyResult verify(String userInput, Map<String, NodeResult> completed);
 }
-public record VerifyResult(boolean passed, Set<String> failedNodes, String feedback, boolean parseFailure) {}
+// 实际 5 字段（PEVAgent 容错会自动置位 hasThrown/hasParseFailure）：
+public record VerifyResult(boolean isPassed, Set<String> failedNodes, String feedback,
+                           boolean hasParseFailure, boolean hasThrown) {}
+// 自定义 Verifier 正常只需 3 参便捷构造（另两字段由 PEVAgent 容错填）：
+//   new VerifyResult(isPassed, failedNodes, feedback)
 ```
 
-- `passed=true` → PEV 终止出结果。
-- `passed=false` + `failedNodes` → 进 Diagnose→Dispatch。
-- `parseFailure=true`（verifier 自己崩/返 null）→ `PerceptionUnreliable` → `AcceptPartial`。
+- `isPassed=true` → PEV 终止出结果。
+- `isPassed=false` + `failedNodes` → 进 Diagnose→Dispatch。
+- verifier 抛异常或返回 null → **PEVAgent 自动**降级为 `PerceptionUnreliable` → `AcceptPartial`（你不用手动处理）。
 
 ---
 
