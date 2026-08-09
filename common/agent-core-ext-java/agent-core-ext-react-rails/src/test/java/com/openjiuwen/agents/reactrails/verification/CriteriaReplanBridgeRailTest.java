@@ -6,6 +6,7 @@ package com.openjiuwen.agents.reactrails.verification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.agents.reactrails.replan.ReplanRail;
 import com.openjiuwen.agents.reactrails.replan.ReplanTool;
 import com.openjiuwen.agents.reactrails.types.Violation;
@@ -70,7 +71,7 @@ class CriteriaReplanBridgeRailTest {
 
         ForceFinishRequestCapture cap = consumeForceFinish(ctx);
         assertThat(cap.result()).as("verified forceFinish result must contain VERIFIED_KEY=true")
-                .containsEntry(CriteriaReplanBridgeRail.VERIFIED_KEY, true);
+                .containsEntry(ObservingRail.VERIFIED_KEY, true);
     }
     @Test
     void verifyFailUnderLimitPushSteeringNoForceFinish() {

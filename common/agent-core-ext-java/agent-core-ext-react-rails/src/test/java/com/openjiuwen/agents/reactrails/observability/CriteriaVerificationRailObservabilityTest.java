@@ -113,7 +113,7 @@ class CriteriaVerificationRailObservabilityTest {
                     .as("ForceFinishEvent.railName must be attributed to CriteriaVerificationRail via SOURCE_RAIL_KEY")
                     .isEqualTo("CriteriaVerificationRail");
             assertThat(force.result()).as("ForceFinishEvent.result must carry VERIFIED_KEY=true")
-                    .containsEntry(CriteriaVerificationRail.VERIFIED_KEY, true);
+                    .containsEntry(ObservingRail.VERIFIED_KEY, true);
         }
         // mutation-RED: strip the SOURCE_RAIL_KEY put in verifiedResult → railName="ObservingRail" → RED
         // mutation-RED: if ObservingRail's peek were removed → FORCE_FINISH 0 → RED
@@ -158,7 +158,7 @@ class CriteriaVerificationRailObservabilityTest {
                     .as("ForceFinishEvent.railName must be attributed to CriteriaVerificationRail via SOURCE_RAIL_KEY")
                     .isEqualTo("CriteriaVerificationRail");
             assertThat(force.result()).as("fail result must carry VERIFIED_KEY=false")
-                    .containsEntry(CriteriaVerificationRail.VERIFIED_KEY, false);
+                    .containsEntry(ObservingRail.VERIFIED_KEY, false);
             assertThat(force.result()).as("fail result must carry DEGRADED_KEY=true")
                     .containsEntry(CriteriaVerificationRail.DEGRADED_KEY, true);
             assertThat(force.result()).as("fail result must carry UNMET_KEY (non-empty)")

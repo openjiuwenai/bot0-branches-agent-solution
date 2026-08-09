@@ -32,9 +32,10 @@ import java.util.logging.Logger;
 /**
  * Real-LLM matrix (6 models x thinking on/off) that proves the observability SPI actually
  * surfaces rail state transitions. Each config runs a CriteriaReplanBridgeRail with hard
- * criteria (GDP/CPI/通胀率) that an LLM rarely satisfies in a short answer, so verify→fail→
- * steer/degrade fires — and a CollectingRailEventListener asserts real RailEvents arrived
- * (the pre-issue-#15 silent state would collect zero).
+ * criteria (GDP/CPI/通胀率) that an LLM rarely satisfies in a short answer, so the first
+ * verify fails → degrade forceFinish fires (maxRetries=0 guarantees a forceFinish terminal on
+ * round 1 across all models) — and a CollectingRailEventListener asserts real RailEvents + an
+ * attributed ForceFinish arrived (the pre-issue-#15 silent state would collect zero).
  *
  * <p>Matrix:
  * <ul>
@@ -164,7 +165,12 @@ class ReactRailsObservabilityMatrixRealLlmE2eTest {
         ReActAgent agent = new ReActAgent(AgentCard.builder().name("obs-matrix").build());
         agent.setLlm(model);
 
-        ReplanRail counter = new ReplanRail(2);
+        // maxRetries=0: forceFinish on the FIRST verify round (degrade on fail, verified on pass).
+        // A higher budget left the terminal to ReActAgent's maxIterations, which cut the loop
+        // before the bridge's retry budget exhausted → 0 ForceFinishEvents → the attribution
+        // gate failed vacuously across all models. maxRetries=0 guarantees a forceFinish terminal
+        // on round 1 regardless of the agent's loop budget, so the gate reliably holds.
+        ReplanRail counter = new ReplanRail(0);
         agent.registerRail(new CriteriaReplanBridgeRail(
                 new RuleBasedCriteriaVerifier(), CRITERIA, counter));
 

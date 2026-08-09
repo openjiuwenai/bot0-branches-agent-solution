@@ -6,6 +6,7 @@ package com.openjiuwen.agents.reactrails.replan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.core.foundation.llm.schema.AssistantMessage;
 import com.openjiuwen.core.foundation.llm.schema.ToolCall;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
@@ -14,6 +15,7 @@ import com.openjiuwen.core.singleagent.rail.ModelCallInputs;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * ReplanRail 承重测试 — mock context 证 replan 计数 + 超限 escalate 控制流。
@@ -55,7 +57,10 @@ class ReplanRailTest {
 
         assertThat(rail.replanCount(ctx)).isEqualTo(3);
         assertThat(ctx.hasForceFinishRequest()).as("count>max must fire requestForceFinish(degraded)").isTrue();
-        // mutation-RED: strip forceFinish degraded call → hasForceFinishRequest false → RED
+        Map<String, Object> degraded = ctx.getForceFinishRequest().getResult();
+        assertThat(degraded).as("degraded result must explicitly mark criteria_verified=false (attribution invariant)")
+                .containsEntry(ObservingRail.VERIFIED_KEY, false);
+        // mutation-RED: strip VERIFIED_KEY=false put → key absent → containsEntry RED
     }
 
     @Test

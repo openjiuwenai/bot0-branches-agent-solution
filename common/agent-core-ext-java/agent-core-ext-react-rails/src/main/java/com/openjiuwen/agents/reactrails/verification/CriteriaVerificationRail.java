@@ -51,9 +51,6 @@ public class CriteriaVerificationRail extends AgentRail {
     /** Result key for checked output text. */
     public static final String OUTPUT_KEY = "output";
 
-    /** Result key for criteria verification status. */
-    public static final String VERIFIED_KEY = "criteria_verified";
-
     /** Result key for criteria verification result. */
     public static final String RESULT_KEY = "criteria_result";
 
@@ -142,7 +139,7 @@ public class CriteriaVerificationRail extends AgentRail {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(ObservingRail.SOURCE_RAIL_KEY, RAIL);
         result.put(OUTPUT_KEY, output);
-        result.put(VERIFIED_KEY, true);
+        result.put(ObservingRail.VERIFIED_KEY, true);
         result.put(RESULT_KEY, "PASS");
         return result;
     }
@@ -151,7 +148,7 @@ public class CriteriaVerificationRail extends AgentRail {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(ObservingRail.SOURCE_RAIL_KEY, RAIL);
         result.put(OUTPUT_KEY, output);
-        result.put(VERIFIED_KEY, false);
+        result.put(ObservingRail.VERIFIED_KEY, false);
         result.put(RESULT_KEY, "FAIL");
         result.put(DEGRADED_KEY, true);
         result.put(UNMET_KEY, violations.stream().map(v -> v.criterion() + ": " + v.reason()).toList());
