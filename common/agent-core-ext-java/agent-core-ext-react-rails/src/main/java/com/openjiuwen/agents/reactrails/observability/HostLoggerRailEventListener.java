@@ -50,14 +50,19 @@ public class HostLoggerRailEventListener implements RailEventListener {
             LOG.info("[{}] context compressed: {} -> {} messages",
                     rail, ce.beforeMsgCount(), ce.afterMsgCount());
         } else if (event instanceof RailEvent.DeviceFailureEvent de) {
-            if ("FIRED".equals(de.phase())) {
+            if (de.phase() == RailEvent.DeviceFailurePhase.FIRED) {
                 LOG.error("[{}] device-failure degrade fired (tool={})", rail, de.tool());
             } else {
                 LOG.warning("[{}] device-failure marked (tool={})", rail, de.tool());
             }
         } else {
-            // RailEvent is sealed; future variants land here instead of being silently dropped.
-            LOG.debug("[{}] unmapped rail event: {}", rail, event.type());
+            // RailEvent is sealed over 7 records (all handled above); this branch is structurally
+            // unreachable today. Fail-fast throw (not silent debug-log): in direct/test invocation
+            // it surfaces an unmapped variant immediately; in production RailTelemetry.fire isolates
+            // listener exceptions (FutureTask -> ExecutionException -> swallowed), so the throw does
+            // NOT propagate to the rail bearing path — railEventSealedVariantsSnapshot is the real
+            // production guard. Java 17 has no sealed pattern switch; mirrors PEV's dispatch catch-all.
+            throw new IllegalStateException("unmapped rail event: " + event.type());
         }
     }
 }

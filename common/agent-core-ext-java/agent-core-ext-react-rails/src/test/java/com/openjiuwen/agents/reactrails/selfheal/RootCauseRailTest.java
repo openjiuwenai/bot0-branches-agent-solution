@@ -6,6 +6,7 @@ package com.openjiuwen.agents.reactrails.selfheal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,10 @@ class RootCauseRailTest {
 
         assertThat(modelCtx.hasForceFinishRequest())
                 .as("afterModelCall must fire requestForceFinish when hasPendingDegrade").isTrue();
-        // mutation-RED: strip afterModelCall forceFinish → hasForceFinishRequest false → RED
+        Map<String, Object> degraded = modelCtx.getForceFinishRequest().getResult();
+        assertThat(degraded).as("degraded result must explicitly mark criteria_verified=false (attribution invariant)")
+                .containsEntry(ObservingRail.VERIFIED_KEY, false);
+        // mutation-RED: strip VERIFIED_KEY=false put → key absent → containsEntry RED
     }
 
     @Test

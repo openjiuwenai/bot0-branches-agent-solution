@@ -128,6 +128,7 @@ public class ReplanRail extends AgentRail {
     private Map<String, Object> degradedResult(int replanCount) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(ObservingRail.SOURCE_RAIL_KEY, "ReplanRail");
+        result.put(ObservingRail.VERIFIED_KEY, false);
         result.put(REPLAN_EXCEEDED_KEY, true);
         result.put(DEGRADED_KEY, true);
         result.put(REPLAN_COUNT_KEY, replanCount);

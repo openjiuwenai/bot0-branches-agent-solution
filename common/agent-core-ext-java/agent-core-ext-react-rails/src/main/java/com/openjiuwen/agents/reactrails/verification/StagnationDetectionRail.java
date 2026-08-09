@@ -366,6 +366,7 @@ public class StagnationDetectionRail extends AgentRail {
     private static Map<String, Object> degradedResult(String reason) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(ObservingRail.SOURCE_RAIL_KEY, "StagnationDetectionRail");
+        result.put(ObservingRail.VERIFIED_KEY, false);
         result.put(DEGRADED_KEY, true);
         result.put(STAGNATION_KEY, true);
         result.put(STAGNATION_REASON_KEY, reason);
