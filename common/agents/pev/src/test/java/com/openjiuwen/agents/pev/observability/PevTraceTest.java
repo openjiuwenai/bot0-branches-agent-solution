@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * PevTrace observability承重测试 —— content-IFF 钉死 PEVAgent.invoke 的状态机转移被 trace 捕获，
@@ -181,6 +182,171 @@ class PevTraceTest {
         PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier);
         Object out = agent.invoke("do A", null);
         assertThat(out).isEqualTo("A: a-result");
+    }
+
+    // ==================== content-IFF: Planned 投影值承重（goal + nodes 一字不差）====================
+
+    /**
+     * Planned phase 的 goal + nodes 投影值必须与原始 Plan 一字不差——content-IFF 承重，
+     * 非 instanceof 弱断言。
+     *
+     * <p>mutation-RED：剥 recordPlanned 的 NodeSnapshot 映射（改成空 list 或丢 description）
+     * → nodes 断言 RED。
+     */
+    @Test
+    void plannedProjectionCapturesGoalAndNodesContentIff() {
+        List<PevTrace> traces = new ArrayList<>();
+        PevComponents.Planner planner = in -> new PevComponents.Plan("分析理赔案件",
+                List.of(new PevComponents.PlanNode("A", "查询案件信息"),
+                        new PevComponents.PlanNode("B", "理算赔付金额")));
+        PevComponents.Executor executor = nodes -> Map.of(
+                "A", new NodeResult.Success("a-result"),
+                "B", new NodeResult.Success("b-result"));
+        PevComponents.Verifier verifier = (in, r) -> new PevKernel.VerifyResult(true, Set.of(), "ok");
+
+        PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier, traces::add);
+        agent.invoke("理赔", null);
+
+        PevTrace.Planned planned = (PevTrace.Planned) traces.get(0).phases().get(0);
+        assertThat(planned.goal()).as("goal must be exact copy of Plan.goal")
+                .isEqualTo("分析理赔案件");
+        assertThat(planned.nodes()).as("nodes must be exact copy with id+description")
+                .hasSize(2)
+                .satisfiesExactly(
+                        n -> {
+                            assertThat(n.id()).isEqualTo("A");
+                            assertThat(n.description()).isEqualTo("查询案件信息");
+                        },
+                        n -> {
+                            assertThat(n.id()).isEqualTo("B");
+                            assertThat(n.description()).isEqualTo("理算赔付金额");
+                        });
+        // mutation-RED: strip n.description() from NodeSnapshot constructor → description=null → RED
+        // mutation-RED: strip entire nodes mapping → nodes=empty → hasSize(2) RED
+    }
+
+    // ==================== content-IFF: replan 后新 Plan 进 trace ====================
+
+    /**
+     * LocalReplan 后新 Plan（含 correction feedback）必须进 trace——replan 后的 plan 演进可见。
+     *
+     * <p>mutation-RED：剥 handleLocalReplan 的 recordPlanned → trace 缺第二个 Planned → RED。
+     */
+    @Test
+    void localReplanEmitsNewPlannedPhaseWithCorrectedPlan() {
+        List<PevTrace> traces = new ArrayList<>();
+        PevComponents.Planner planner = in -> new PevComponents.Plan("g",
+                List.of(new PevComponents.PlanNode("A", "do A")));
+        AtomicInteger execCount = new AtomicInteger();
+        PevComponents.Executor executor = nodes -> {
+            int n = execCount.incrementAndGet();
+            return Map.of("A", new NodeResult.Success(n == 1 ? "wrong" : "right"));
+        };
+        PevComponents.Verifier verifier = (in, r) -> {
+            return execCount.get() == 1
+                    ? new PevKernel.VerifyResult(false, Set.of("A"), "wrong answer")
+                    : new PevKernel.VerifyResult(true, Set.of(), "ok");
+        };
+
+        PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier, traces::add);
+        agent.invoke("do A", null);
+
+        PevTrace trace = traces.get(0);
+        List<PevTrace.Planned> plannedPhases = trace.phases().stream()
+                .filter(p -> p instanceof PevTrace.Planned)
+                .map(p -> (PevTrace.Planned) p)
+                .toList();
+        assertThat(plannedPhases).as("LocalReplan must emit a 2nd Planned for the corrected plan")
+                .hasSize(2);
+        assertThat(plannedPhases.get(0).goal()).isEqualTo("g");
+        assertThat(plannedPhases.get(1).goal()).as("redo plan goal carries '(局部重做)' suffix")
+                .contains("局部重做");
+        assertThat(plannedPhases.get(1).nodes().get(0).description())
+                .as("redo node description must carry correction feedback")
+                .contains("correction");
+        // mutation-RED: strip recordPlanned in handleLocalReplan → only 1 Planned → hasSize(2) RED
+    }
+
+    // ==================== content-IFF: GlobalReplan 后新 Plan 进 trace ====================
+
+    /**
+     * GlobalReplan 后新 Plan（含 correction feedback 注入 goal）必须进 trace。
+     *
+     * <p>mutation-RED：剥 dispatchReplanAction 的 recordPlanned(newPlan, state)
+     * → trace 缺 GlobalReplan 后的 Planned → RED。
+     */
+    @Test
+    void globalReplanEmitsNewPlannedPhaseWithCorrectedGoal() {
+        List<PevTrace> traces = new ArrayList<>();
+        // planner 每次产同一个 plan（模拟 LLM 重新规划但输出不变）
+        PevComponents.Planner planner = in -> new PevComponents.Plan(in,
+                List.of(new PevComponents.PlanNode("A", "redo A"),
+                        new PevComponents.PlanNode("B", "redo B"),
+                        new PevComponents.PlanNode("C", "redo C")));
+        AtomicInteger execCount = new AtomicInteger();
+        PevComponents.Executor executor = nodes -> {
+            execCount.incrementAndGet();
+            return Map.of("A", new NodeResult.Success("a"), "B", new NodeResult.Success("b"),
+                    "C", new NodeResult.Success("c"));
+        };
+        // verifier 首次 FAIL 全部 3 节点 → >2 → GlobalReplan；第二次 PASS
+        AtomicInteger verifyCount = new AtomicInteger();
+        PevComponents.Verifier verifier = (in, r) -> {
+            int n = verifyCount.incrementAndGet();
+            return n == 1
+                    ? new PevKernel.VerifyResult(false, Set.of("A", "B", "C"), "all wrong")
+                    : new PevKernel.VerifyResult(true, Set.of(), "ok");
+        };
+
+        PEVAgent agent = new PEVAgent(AgentCard.builder().build(), planner, executor, verifier, traces::add);
+        agent.configure(new PEVAgent.PevConfig(2));
+        agent.invoke("do ABC", null);
+
+        PevTrace trace = traces.get(0);
+        List<PevTrace.Planned> plannedPhases = trace.phases().stream()
+                .filter(p -> p instanceof PevTrace.Planned)
+                .map(p -> (PevTrace.Planned) p)
+                .toList();
+        assertThat(plannedPhases).as("GlobalReplan must emit a 2nd Planned for the corrected goal")
+                .hasSize(2);
+        assertThat(plannedPhases.get(0).goal()).as("initial plan goal").isEqualTo("do ABC");
+        assertThat(plannedPhases.get(1).goal())
+                .as("GlobalReplan goal must include correction feedback (planner called with 'do ABC [correction: ...]')")
+                .contains("correction");
+        assertThat(plannedPhases.get(1).nodes()).as("GlobalReplan new plan nodes must be projected")
+                .hasSize(3);
+        // mutation-RED: strip recordPlanned in GlobalReplan branch → only 1 Planned → hasSize(2) RED
+    }
+
+    // ==================== schema-drift 真守卫：NodeSnapshot↔PlanNode 反射字段镜像 ====================
+
+    /**
+     * NodeSnapshot 必须镜像 PlanNode 的全部承重字段——反射比较两 record 的 component 集合。
+     * 防止 PlanNode 未来加字段时 NodeSnapshot 静默丢字段 → trace 说谎但全绿。
+     *
+     * <p>schema-drift 真守卫：ArchUnit 只看字节码包依赖，看不到跨类型字段集相等性，须反射断言。
+     *
+     * <p>mutation-RED：给 PlanNode 加第三字段（如 expectedOutcome）但不更新 NodeSnapshot →
+     * PlanNode 3 component、NodeSnapshot 仍 2 → hasSize RED。修法=同步加到 NodeSnapshot +
+     * recordPlanned 映射。
+     */
+    @Test
+    void nodeSnapshotMirrorsAllPlanNodeBearingFields() {
+        // 反射比较：NodeSnapshot 的 record component 必须与 PlanNode 一一镜像（同数同序同名）。
+        java.lang.reflect.RecordComponent[] planNodeFields =
+                PevComponents.PlanNode.class.getRecordComponents();
+        java.lang.reflect.RecordComponent[] snapshotFields =
+                PevTrace.NodeSnapshot.class.getRecordComponents();
+        assertThat(snapshotFields)
+                .as("NodeSnapshot component count must equal PlanNode's (schema-drift guard)")
+                .hasSize(planNodeFields.length);
+        List<String> planNodeNames = java.util.Arrays.stream(planNodeFields)
+                .map(java.lang.reflect.RecordComponent::getName).toList();
+        List<String> snapshotNames = java.util.Arrays.stream(snapshotFields)
+                .map(java.lang.reflect.RecordComponent::getName).toList();
+        assertThat(snapshotNames)
+                .as("NodeSnapshot field names must mirror PlanNode's, in order")
+                .containsExactlyElementsOf(planNodeNames);
     }
 
     // ==================== 第三态承重：MAX_RETRIES_EXCEEDED（闭合 Lens 2/4 NIT）====================

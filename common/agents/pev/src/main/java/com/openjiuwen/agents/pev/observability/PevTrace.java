@@ -4,7 +4,6 @@
 
 package com.openjiuwen.agents.pev.observability;
 
-import com.openjiuwen.agents.pev.agent.PevComponents;
 import com.openjiuwen.agents.pev.kernel.NodeResult;
 import com.openjiuwen.agents.pev.kernel.PevKernel;
 import com.openjiuwen.agents.pev.kernel.ReplanAction;
@@ -21,8 +20,10 @@ import java.util.Map;
  * truth is a self-contained synchronous state-machine loop; every bearing value (plan / stepResults /
  * VerifyResult / RootCause / ReplanAction) is a local variable of the single invoke method. The trace
  * is therefore a <b>byproduct of the loop</b>, not a parallel埋点 of enforcer transfers. It is emitted
- * once at invoke return (terminal byproduct), and each {@link Phase} wraps PEV's OWN sealed kernel
- * types directly — zero new schema, zero stringly-typed taxonomy.
+ * once at invoke return (terminal byproduct). 4 of 5 Phase variants wrap PEV's OWN sealed kernel
+ * types directly (Verified/Executed/Diagnosed/Dispatched); the Planned variant uses an
+ * observability-local {@link NodeSnapshot} projection (eager-copied from Plan at construction
+ * time) to avoid importing the agent package — observability depends only on kernel + JDK.
  *
  * <p><b>Scope = per-PEVAgent-instance</b> (the sink is a PEVAgent field), NOT a process-wide static
  * holder. agent-core-ext-react-rails needs a static holder because its rails are framework-constructed without an
@@ -48,9 +49,10 @@ import java.util.Map;
 public record PevTrace(List<Phase> phases, TerminalReason terminalReason, int verifyIterations) {
 
     /**
-     * One state-machine transition phase. Payload wraps a PEV kernel sealed type directly (zero new
-     * schema). Three of the five (Verified / Diagnosed / Dispatched) were previously dark transfers
-     * — consumed as invoke-local variables, invisible to outside observers.
+     * One state-machine transition phase. Payload wraps a PEV kernel sealed type directly
+     * (Verified/Executed/Diagnosed/Dispatched) or an observability-local projection
+     * (Planned → {@link NodeSnapshot}). Three of the five (Verified / Diagnosed / Dispatched)
+     * were previously dark transfers — consumed as invoke-local variables, invisible to outside observers.
      */
     public sealed interface Phase permits Planned, Executed, Verified, Diagnosed, Dispatched {
         /**
@@ -69,8 +71,23 @@ public record PevTrace(List<Phase> phases, TerminalReason terminalReason, int ve
         Map<String, Object> detail();
     }
 
-    /** Plan phase — the planner output that drives execution. */
-    public record Planned(PevComponents.Plan plan) implements Phase {
+    /**
+     * Plan phase — full projection of the plan adopted at this transition (goal + all of its nodes).
+     *
+     * <p>Stores a local {@link NodeSnapshot} list (eager-copied at construction time from
+     * {@code PevComponents.PlanNode}), so observability does not depend on the agent package.
+     * This resolves the dependency-direction gap identified by xuefanfan: PevTrace no longer
+     * imports PevComponents, yet every field of the adopted plan is projected (goal + each
+     * node's id + description). Sink consumers can read full node details or just {@code goal()}.
+     *
+     * <p><b>Per-phase completeness, not cross-replan completeness</b>: each Planned phase fully
+     * projects the plan passed to it, but a replan cycle may adopt a different plan. LocalReplan's
+     * redo plan is intentionally a failed-node subset (completed nodes are retained in the
+     * completed map, not re-planned), so its Planned carries fewer nodes than the initial Planned.
+     * Consumers aggregating across replan generations must read the phase sequence — the latest
+     * Planned does not necessarily reflect the full original plan.
+     */
+    public record Planned(String goal, List<NodeSnapshot> nodes) implements Phase {
         @Override
         public String phaseName() {
             return "PLANNED";
@@ -80,9 +97,22 @@ public record PevTrace(List<Phase> phases, TerminalReason terminalReason, int ve
         public Map<String, Object> detail() {
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("phase", phaseName());
-            d.put("goal", plan == null ? null : plan.goal());
+            d.put("goal", goal);
+            d.put("nodeCount", nodes == null ? 0 : nodes.size());
+            d.put("nodes", nodes);
             return d;
         }
+    }
+
+    /**
+     * Projection of a {@code PevComponents.PlanNode} — observability-local record carrying
+     * the node's id and description. Defined in observability (not imported from agent) to
+     * keep the dependency direction observability → kernel (not → agent).
+     *
+     * @param id node stable identifier
+     * @param description node description (Executor input; may carry LocalReplan feedback injection)
+     */
+    public record NodeSnapshot(String id, String description) {
     }
 
     /** Execute phase — the executor's per-superstep node-result map. */
