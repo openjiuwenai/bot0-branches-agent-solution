@@ -6,6 +6,7 @@ package com.openjiuwen.agents.reactrails.verification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.openjiuwen.agents.reactrails.observability.ObservingRail;
 import com.openjiuwen.core.foundation.llm.Model;
 import com.openjiuwen.core.foundation.llm.model_clients.BaseModelClient;
 import com.openjiuwen.core.foundation.llm.model_clients.DefaultModelClientFactories;
@@ -51,7 +52,7 @@ class CriteriaVerificationRailTest {
         Object result = agent.invoke("give advice", null);
         Map<?, ?> map = toMap(result);
 
-        assertThat(map.get(CriteriaVerificationRail.VERIFIED_KEY)).isEqualTo(true);
+        assertThat(map.get(ObservingRail.VERIFIED_KEY)).isEqualTo(true);
         assertThat(map.get(CriteriaVerificationRail.RESULT_KEY)).isEqualTo("PASS");
         // mutation-RED: strip forceFinish(verifiedResult) → map null → RED
     }
@@ -65,7 +66,7 @@ class CriteriaVerificationRailTest {
         Object result = agent.invoke("give advice", null);
         Map<?, ?> map = toMap(result);
 
-        assertThat(map.get(CriteriaVerificationRail.VERIFIED_KEY)).isEqualTo(false);
+        assertThat(map.get(ObservingRail.VERIFIED_KEY)).isEqualTo(false);
         assertThat(map.get(CriteriaVerificationRail.DEGRADED_KEY)).isEqualTo(true);
         assertThat(map.get(CriteriaVerificationRail.RESULT_KEY)).isEqualTo("FAIL");
         assertThat((List<?>) map.get(CriteriaVerificationRail.UNMET_KEY)).isNotEmpty();

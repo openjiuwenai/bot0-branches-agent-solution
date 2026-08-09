@@ -95,7 +95,7 @@ class CriteriaReplanBridgeRailObservabilityTest {
             assertThat(force.verified())
                     .as("ForceFinishEvent.verified must be true on Exit-1 (verified terminal)").isTrue();
             assertThat(force.result()).as("ForceFinishEvent.result must carry VERIFIED_KEY=true")
-                    .containsEntry(CriteriaReplanBridgeRail.VERIFIED_KEY, true);
+                    .containsEntry(ObservingRail.VERIFIED_KEY, true);
             // source_rail attribution: ObservingRail reads SOURCE_RAIL_KEY from the forceFinish
             // result map (ObservingRail.extractSource). CriteriaReplanBridgeRail.verifiedResult
             // sets SOURCE_RAIL_KEY="CriteriaReplanBridgeRail", so railName must mirror it.
