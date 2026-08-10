@@ -105,14 +105,14 @@ class RuntimeHandler(BaseHTTPRequestHandler):
             body = {
                 "jsonrpc": "2.0",
                 "id": req.get("id", "1"),
-                "result": {"id": task_id, "status": "working", "kind": "resume-ack"},
+                "result": {"id": task_id, "status": {"state": "TASK_STATE_WORKING"}, "kind": "resume-ack"},
             }
         else:
             tid = f"task-stub-{n}"
             body = {
                 "jsonrpc": "2.0",
                 "id": req.get("id", "1"),
-                "result": {"id": tid, "status": "completed"},
+                "result": {"id": tid, "status": {"state": "TASK_STATE_COMPLETED"}},
             }
         payload = json.dumps(body).encode()
         accept = self.headers.get("Accept", "")

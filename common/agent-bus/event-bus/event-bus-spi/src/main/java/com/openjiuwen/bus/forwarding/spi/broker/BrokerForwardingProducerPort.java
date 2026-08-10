@@ -30,6 +30,24 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingOutboxRecord;
  * ships this independent SPI; Stage 27 decides how the producer adapter composes
  * with the worker / {@code ForwardingDeliveryPort}.
  *
+ * <p><b>Three result types, three layers — do not conflate them.</b>
+ * {@link BrokerProduceOutcome} ({@link BrokerProduceOutcome.Outcome#ACCEPTED ACCEPTED}
+ * / {@link BrokerProduceOutcome.Outcome#UNAVAILABLE UNAVAILABLE}
+ * / {@link BrokerProduceOutcome.Outcome#ROUTE_NOT_FOUND ROUTE_NOT_FOUND}) is the
+ * broker-acceptance outcome of a single produce;
+ * {@link com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult}
+ * ({@link com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult.Outcome#ACKED ACKED}
+ * / {@link com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult.Outcome#RETRY_SCHEDULED RETRY_SCHEDULED}
+ * / {@link com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult.Outcome#DLQ DLQ}
+ * / {@link com.openjiuwen.bus.forwarding.spi.ForwardingDeliveryResult.Outcome#EXPIRED EXPIRED})
+ * is the terminal delivery lifecycle of an outbox record across retries; and
+ * {@link com.openjiuwen.bus.forwarding.spi.ForwardingReceipt} (accepted / rejected)
+ * is the gateway / caller-facing synchronous ack for a client enqueue. A caller
+ * never invokes {@code produce} directly — it enqueues the outbox, and the relay
+ * internally absorbs the produce three-state (ACCEPTED advances toward
+ * AWAITING_ACK, UNAVAILABLE reschedules under the retry policy, ROUTE_NOT_FOUND
+ * moves to DLQ) into the delivery lifecycle the caller ultimately observes.
+ *
  * <p>Broker native retry is OFF — the agent-bus retry policy (Stage 14) leads, so
  * a {@link BrokerProduceOutcome.Outcome#UNAVAILABLE UNAVAILABLE} outcome surfaces
  * a retryable failure for the policy to schedule, never a double-retry.

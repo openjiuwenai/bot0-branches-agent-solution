@@ -22,6 +22,7 @@ import com.openjiuwen.gateway.routing.AgentCardRoute;
 import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
 import com.openjiuwen.gateway.routing.ResolvedRoute;
+import com.openjiuwen.gateway.routing.Router;
 import com.openjiuwen.gateway.routing.StickyIndex;
 import com.openjiuwen.gateway.sse.SseBridge;
 
@@ -60,7 +61,7 @@ class BusStreamingAndResumeTest {
     private BusForwarder forwarder() {
         return new BusForwarder(rdc,
                 new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
-                feed, g4, "svc-gw", 30_000L, 60_000L, runtime, new DefaultAgentResolver(""));
+                feed, g4, "svc-gw", 30_000L, 60_000L, runtime, new DefaultAgentResolver(""), sticky);
     }
 
     @Test
@@ -83,6 +84,75 @@ class BusStreamingAndResumeTest {
         // control event was enqueued (inlinePayload = A2A body, no token)
         assertThat(outbox.enqueued().get(0).inlinePayload()).isNotNull();
         assertThat(outbox.enqueued().get(0).inlinePayload()).doesNotContain("token");
+    }
+
+    @Test
+    void streamingCreateBindsStickyOnAccepted() throws Exception {
+        // P-13: BUS streaming create must bind taskId -> routeHandle too (same as sync), so a task
+        // created via the streaming path can be resumed to its owner instead of 404.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-s", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-s", "sr-1");
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-s\",\"status\":\"working\"}}"));
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        forwarder().forwardStreaming(createCtx("agent-1", "ms-sticky"), mockResponse, sseBridge);
+        assertThat(sticky.find("task-s")).contains("h1");
+    }
+
+    @Test
+    void streamingInputRequiredStopsEarlyInsteadOfEmptyWaitingTerminal() throws Exception {
+        // issue-A: a streaming task that goes INPUT_REQUIRED (after STREAM_READY) must NOT empty-wait
+        // responseWindowMillis for a TERMINAL that won't come, and must NOT emit a synthetic COMPLETED.
+        // pollTerminalEvent stops on INPUT_REQUIRED; the terminal frame envelopes the INPUT_REQUIRED body.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-ir", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-ir", "sr-ir");
+        feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "task-ir", null, null,
+                "{\"task\":{\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}");
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-ir\",\"status\":{\"state\":\"working\"}}}"));
+        // small response window so the RED (timeout→synthetic COMPLETED) is fast, not 60s
+        BusForwarder f = new BusForwarder(rdc,
+                new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
+                feed, g4, "svc-gw", 30_000L, 300L, runtime, new DefaultAgentResolver(""), sticky);
+        f.setStreamFirstFrameDeadlineMillis(2_000L);
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        Optional<String> result = f.forwardStreaming(createCtx("agent-1", "m-ir"), mockResponse, sseBridge);
+        assertThat(result).isEmpty();   // SSE written (no early FAILED body)
+        String sse = mockResponse.getContentAsString();
+        // terminal frame reflects INPUT_REQUIRED (enveloped body), NOT a synthetic completed
+        assertThat(sse).contains("input-required");
+        assertThat(sse).doesNotContain("completed");
+    }
+
+    @Test
+    void streamingInputRequiredSkipsRuntimeDrainWhenProjectionPreStaged() throws Exception {
+        // issue-S1 (drain 并发收尾): when INPUT_REQUIRED has already been routed to staging
+        // (before the runtime SSE drain), the gateway surfaces it WITHOUT draining the runtime SSE.
+        // Some runtimes end the stream after an interrupt but don't close the HTTP response → the
+        // drain (frameIterator.hasNext) would block forever. The pre-drain projection check skips
+        // the drain — the runtime first-frame marker must NOT appear in the SSE.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-ir", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-ir", "sr-ir");
+        feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "task-ir", null, null,
+                "{\"task\":{\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}");
+        // a distinctive runtime first frame — if the drain runs, this marker appears in the SSE;
+        // if the pre-drain check skips the drain (the fix), it does NOT appear.
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-ir\",\"status\":{\"state\":\"working\"},"
+                + "\"runtimeDrainMarker\":\"should-not-appear\"}}"));
+        BusForwarder f = new BusForwarder(rdc,
+                new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
+                feed, g4, "svc-gw", 30_000L, 300L, runtime, new DefaultAgentResolver(""), sticky);
+        f.setStreamFirstFrameDeadlineMillis(2_000L);
+        MockHttpServletResponse mockResponse = new MockHttpServletResponse();
+        Optional<String> result = f.forwardStreaming(createCtx("agent-1", "m-ir-skip"), mockResponse, sseBridge);
+        assertThat(result).isEmpty();
+        String sse = mockResponse.getContentAsString();
+        assertThat(sse).contains("input-required");          // terminal frame reflects INPUT_REQUIRED
+        assertThat(sse).doesNotContain("should-not-appear"); // runtime SSE drain was SKIPPED
     }
 
     @Test
@@ -222,5 +292,29 @@ class BusStreamingAndResumeTest {
         forwarder().forwardSync(createCtx("agent-1", "m-cfg"));
         var env = outbox.enqueued().get(0);
         assertThat(env.eventType()).isEqualTo(AgentBusEventType.CLIENT_INVOCATION_REQUESTED);
+    }
+
+    @Test
+    void busSyncCreateThenDirectResumeReachesStickyOwner() {
+        // P-13 acceptance (unit level): a task created via the BUS sync path (INPUT_REQUIRED + taskId)
+        // must resume via the DIRECT Router.routeResume to its owning runtime — NOT 404
+        // RESUME_OWNER_UNKNOWN. Before the fix the BUS path never wrote StickyIndex, so the resume
+        // missed. This round-trip proves the shared StickyIndex bridges BUS-create and DIRECT-resume.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "ti-resume", null);
+        var createResp = forwarder().forwardSync(createCtx("agent-1", "m-resume"));
+        assertThat(createResp.getBody()).contains("INPUT_REQUIRED").contains("ti-resume");
+        assertThat(sticky.find("ti-resume")).contains("h1");
+        // DIRECT resume reads the sticky binding (read-only, no re-search) and reaches the owner.
+        runtime.setResponse("{\"result\":{\"id\":\"ti-resume\",\"status\":{\"state\":\"completed\"}}}");
+        Router router = new Router(rdc, runtime, sticky, new DefaultAgentResolver(""));
+        GovernanceContext resumeCtx = new GovernanceContext();
+        resumeCtx.setTenantId("T1");
+        resumeCtx.setTaskId("ti-resume");
+        resumeCtx.setRawBody("{\"jsonrpc\":\"2.0\"}");
+        String resumeResp = router.routeResume(resumeCtx);
+        assertThat(resumeResp).contains("ti-resume");
+        assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
     }
 }

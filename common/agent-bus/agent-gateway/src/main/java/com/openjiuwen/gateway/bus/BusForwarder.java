@@ -21,6 +21,7 @@ import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.RdcRouteClient;
 import com.openjiuwen.gateway.routing.ResolvedRoute;
 import com.openjiuwen.gateway.routing.RouteResolutionException;
+import com.openjiuwen.gateway.routing.StickyIndex;
 import com.openjiuwen.gateway.sse.SseBridge;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -62,6 +63,7 @@ public class BusForwarder {
     private final long responseWindowMillis;
     private final AgentRuntimeClient agentRuntimeClient;
     private final DefaultAgentResolver defaultAgentResolver;
+    private final StickyIndex stickyIndex;
     private long streamFirstFrameDeadlineMillis = 10_000L;
 
     /** Dedicated daemon threads for bounded first-frame reads (never blocks a caller thread). */
@@ -91,11 +93,15 @@ public class BusForwarder {
      * @param responseWindowMillis response-phase timeout window after accept
      * @param agentRuntimeClient runtime client for SSE bridge after STREAM_READY (null on sync-only wiring)
      * @param defaultAgentResolver default logical agent resolver (used when ctx carries no agentId)
+     * @param stickyIndex taskId -> routeHandle index; written on the first taskId-bearing projection
+     *                    so a BUS-created task resumes to its owning runtime (P-13, mirrors DIRECT
+     *                    Router.routeCreate which writes sticky from the response taskId)
      */
     public BusForwarder(RdcRouteClient rdc, BusControlForwarder control, ProjectionFeed projectionFeed,
                         IdempotencyRule g4, String sourceServiceId,
                         long acceptWindowMillis, long responseWindowMillis,
-                        AgentRuntimeClient agentRuntimeClient, DefaultAgentResolver defaultAgentResolver) {
+                        AgentRuntimeClient agentRuntimeClient, DefaultAgentResolver defaultAgentResolver,
+                        StickyIndex stickyIndex) {
         this.rdc = rdc;
         this.control = control;
         this.projectionFeed = projectionFeed;
@@ -105,6 +111,7 @@ public class BusForwarder {
         this.responseWindowMillis = responseWindowMillis;
         this.agentRuntimeClient = agentRuntimeClient;
         this.defaultAgentResolver = defaultAgentResolver;
+        this.stickyIndex = stickyIndex;
     }
 
     /**
@@ -141,10 +148,24 @@ public class BusForwarder {
         log.info("forwardSync start corrId={} tenant={} target={}",
                 correlationId, ctx.tenantId(), chosen.targetServiceId());
 
-        long now = System.currentTimeMillis();
-        WaitWindow window = new WaitWindow(now, acceptWindowMillis, responseWindowMillis);
+        WaitWindow window = new WaitWindow(System.currentTimeMillis(), acceptWindowMillis, responseWindowMillis);
         G4BusWiring g4w = new G4BusWiring(g4);
+        String body = pollAndFold(correlationId, ctx, window, g4w, chosen);
+        return ResponseEntity.ok().body(body);
+    }
 
+    /**
+     * Polls projections for one correlation until timeout/terminal/input-required, then folds to the status body.
+     *
+     * @param correlationId BUS correlation id (gateway-generated, pairs request with projection)
+     * @param ctx governance context (tenant, message, trace)
+     * @param window accept/response wait window with timeout + taskId state
+     * @param g4w G4 idempotency wiring (onFold completes/aborts the in-flight create record)
+     * @param chosen routed instance (routeHandle bound to taskId on first taskId-bearing projection)
+     * @return folded status body (UNKNOWN / ACCEPTED_WITH_TASK / terminal / INPUT_REQUIRED)
+     */
+    private String pollAndFold(String correlationId, GovernanceContext ctx, WaitWindow window,
+            G4BusWiring g4w, AgentCardRoute chosen) {
         int maxPolls = 100;
         for (int i = 0; i < maxPolls; i++) {
             var timedOut = window.checkTimeout(System.currentTimeMillis());
@@ -153,13 +174,20 @@ public class BusForwarder {
                 String body = statusBody(status, window.taskId(), null);
                 log.info("forwardSync corrId={} TIMEOUT→{} taskId={}", correlationId, status, window.taskId());
                 g4w.onFold(status, ctx.tenantId(), ctx.messageId(), body);
-                return ResponseEntity.ok().body(body);
+                return body;
             }
             var proj = projectionFeed.poll(correlationId);
             if (proj.isEmpty()) {
                 continue;
             }
             var event = proj.get();
+            // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
+            // DIRECT Router.routeCreate, which writes sticky from the response taskId). The BUS
+            // "response" arrives as projections; any taskId-bearing projection (ACCEPTED /
+            // INPUT_REQUIRED / RESPONSE / TERMINAL) binds the owner so a later resume re-routes to it.
+            if (event.taskId() != null && !event.taskId().isBlank()) {
+                stickyIndex.put(event.taskId(), chosen.routeHandle());
+            }
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
                 window.onProjection(folded, event.taskId(), System.currentTimeMillis());
@@ -171,7 +199,7 @@ public class BusForwarder {
                 log.info("forwardSync corrId={} folded={} taskId={} bodyPresent={}",
                         correlationId, folded, taskId, event.body() != null);
                 g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), body);
-                return ResponseEntity.ok().body(body);
+                return body;
             } else {
                 // non-terminal non-accept (e.g. STREAM_READY): keep polling
                 continue;
@@ -180,7 +208,7 @@ public class BusForwarder {
         String unknownBody = statusBody(InvocationResponseStatus.UNKNOWN, null, null);
         log.info("forwardSync corrId={} UNKNOWN (no projection matched within accept+response window)", correlationId);
         g4w.onFold(InvocationResponseStatus.UNKNOWN, ctx.tenantId(), ctx.messageId(), unknownBody);
-        return ResponseEntity.ok().body(unknownBody);
+        return unknownBody;
     }
 
     /**
@@ -219,7 +247,7 @@ public class BusForwarder {
         WaitWindow window = new WaitWindow(now, acceptWindowMillis, responseWindowMillis);
         G4BusWiring g4w = new G4BusWiring(g4);
 
-        StreamReadyOutcome outcome = pollForStreamReady(ctx, window, g4w, correlationId);
+        StreamReadyOutcome outcome = pollForStreamReady(ctx, window, g4w, correlationId, chosen);
         if (outcome.earlyReturnBody() != null) {
             return Optional.of(outcome.earlyReturnBody());
         }
@@ -236,10 +264,12 @@ public class BusForwarder {
      * @param window accept/response timeout window
      * @param g4w G4 wiring (fold callbacks)
      * @param correlationId correlation id to match projections
+     * @param chosen chosen agent route (P-13: bound to taskId in StickyIndex on the first
+     *              taskId-bearing projection, mirroring DIRECT Router.routeStream)
      * @return a STREAM_READY outcome, or an early-return body outcome (already folded)
      */
     private StreamReadyOutcome pollForStreamReady(GovernanceContext ctx, WaitWindow window, G4BusWiring g4w,
-                                                  String correlationId) {
+                                                  String correlationId, AgentCardRoute chosen) {
         int maxPolls = 100;
         for (int i = 0; i < maxPolls; i++) {
             var timedOut = window.checkTimeout(System.currentTimeMillis());
@@ -255,6 +285,11 @@ public class BusForwarder {
                 continue;
             }
             var event = proj.get();
+            // P-13: bind taskId -> chosen routeHandle on the first taskId-bearing projection (mirrors
+            // DIRECT Router.routeStream, which writes sticky on the first taskId frame).
+            if (event.taskId() != null && !event.taskId().isBlank()) {
+                stickyIndex.put(event.taskId(), chosen.routeHandle());
+            }
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
             if (folded == InvocationResponseStatus.ACCEPTED_WITH_TASK) {
                 window.onProjection(folded, event.taskId(), System.currentTimeMillis());
@@ -387,12 +422,21 @@ public class BusForwarder {
         try {
             OutputStream out = response.getOutputStream();
             sctx.sseBridge().writeSse(out, acceptFrame);                 // 先写合成的 task 面(A2A v1.0 {"task":{...}})
-            sctx.sseBridge().writeSse(out, frameIterator, firstFrame);  // 再透传 runtime data 流
-            // data 流结束后,从 TERMINAL 投影取 runtime 产出的完整 A2A Task(a2aResponse),直接透传给客户端。
-            // 不合成、不改写——TERMINAL 投影的 body 就是 runtime 产出的 
+            // issue-S1 (drain 并发收尾): pre-drain projection check. If INPUT_REQUIRED/TERMINAL has
+            // already been routed to staging (dispatcher), surface it NOW — skip the runtime SSE drain.
+            // Some runtimes end the stream after an interrupt but don't close the HTTP response → the
+            // drain (frameIterator.hasNext) would block forever. The projection is the authoritative
+            // signal; the runtime SSE is just data passthrough (skipped when the projection is ready).
+            Optional<ProjectionFeed.ProjectionEvent> early = pollEarlyTerminal(sctx);
+            if (early.isPresent()) {
+                terminalEvent = early.get();
+            } else {
+                sctx.sseBridge().writeSse(out, frameIterator, firstFrame);  // 再透传 runtime data 流
+                terminalEvent = pollTerminalEvent(sctx, taskId, window);
+            }
+            // 不合成、不改写——TERMINAL/INPUT_REQUIRED 投影的 body 就是 runtime 产出的
             // {"task":{"id":"...","status":{"state":"..."},"artifacts":[...]}}，
             // gateway 只包 JSON-RPC envelope(同 runtime 直出格式),符合 §8 "wire 契约与直连 runtime 等价"。
-            terminalEvent = pollTerminalEvent(sctx, taskId, window);
             String terminalFrame = terminalTaskFrame(terminalEvent);
             sctx.sseBridge().writeSse(out, terminalFrame);
         } catch (IOException ex) {
@@ -404,6 +448,31 @@ public class BusForwarder {
                 : (firstFrame != null ? firstFrame : "{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"completed\"}}");
         g4w.onFold(folded, ctx.tenantId(), ctx.messageId(), replayResult);
         log.info("forwardStreaming corrId={} stream done folded={}", correlationId, folded);
+        return Optional.empty();
+    }
+
+    /**
+     * Pre-drain projection check (issue-S1): poll ONCE for a terminal / INPUT_REQUIRED projection.
+     * If one is already staged (the dispatcher routed it before the drain), surface it and SKIP the
+     * runtime SSE drain — the drain would block forever on a runtime that ends the stream after an
+     * interrupt but doesn't close the HTTP response. Non-terminal projections (e.g., repeated
+     * ACCEPTED/STREAM_READY) are consumed + ignored (the drain proceeds for data passthrough).
+     *
+     * @param sctx streaming context (for the correlation id)
+     * @return the early terminal/input-required projection, or empty if none ready
+     */
+    private Optional<ProjectionFeed.ProjectionEvent> pollEarlyTerminal(StreamingCtx sctx) {
+        Optional<ProjectionFeed.ProjectionEvent> proj = projectionFeed.poll(sctx.correlationId());
+        if (proj.isEmpty()) {
+            return Optional.empty();
+        }
+        InvocationResponseStatus folded = FiveStateFolder.fold(proj.get().eventType());
+        if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.INPUT_REQUIRED) {
+            log.info("forwardStreaming corrId={} early terminal/input-required projection "
+                    + "matched folded={} taskId={} (runtime SSE drain skipped)",
+                    sctx.correlationId(), folded, proj.get().taskId());
+            return proj;
+        }
         return Optional.empty();
     }
 
@@ -434,8 +503,13 @@ public class BusForwarder {
             }
             var event = proj.get();
             InvocationResponseStatus folded = FiveStateFolder.fold(event.eventType());
-            if (FiveStateFolder.isTerminal(folded)) {
-                log.info("forwardStreaming corrId={} terminal projection matched folded={} taskId={}",
+            // issue-A: stop on INPUT_REQUIRED too — a streaming task that goes input-required
+            // mid-stream will never emit a TERMINAL; waiting responseWindowMillis would empty-wait
+            // + synthesize a wrong COMPLETED. Return the INPUT_REQUIRED event so its body (the
+            // input-required task) is enveloped as the terminal frame and the client folds
+            // INPUT_REQUIRED (execute tools / resume) instead of a spurious COMPLETED.
+            if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.INPUT_REQUIRED) {
+                log.info("forwardStreaming corrId={} terminal/input-required projection matched folded={} taskId={}",
                         correlationId, folded, event.taskId());
                 return event;
             }

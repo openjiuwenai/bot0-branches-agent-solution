@@ -19,6 +19,7 @@ import com.openjiuwen.gateway.governance.idempotency.IdempotencyRule;
 import com.openjiuwen.gateway.routing.AgentCardRoute;
 import com.openjiuwen.gateway.routing.DefaultAgentResolver;
 import com.openjiuwen.gateway.routing.FakeRdcRouteClient;
+import com.openjiuwen.gateway.routing.StickyIndex;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,9 +35,10 @@ class BusForwarderTest {
     private final FakeForwardingOutboxPort outbox = new FakeForwardingOutboxPort();
     private final FakeProjectionFeed feed = new FakeProjectionFeed();
     private final IdempotencyRule g4 = new IdempotencyRule();
+    private final StickyIndex sticky = new StickyIndex();
     private final BusForwarder forwarder = new BusForwarder(rdc,
             new BusControlForwarder(new EnvelopeBuilder(), new InMemoryPayloadStore(), outbox),
-            feed, g4, "svc-gw", 30_000L, 60_000L, null, new DefaultAgentResolver("default-agent-1"));
+            feed, g4, "svc-gw", 30_000L, 60_000L, null, new DefaultAgentResolver("default-agent-1"), sticky);
 
     private GovernanceContext ctx(String agentId, String messageId) {
         GovernanceContext c = new GovernanceContext();
@@ -168,5 +170,29 @@ class BusForwarderTest {
         var resp = forwarder.forwardSync(ctx(null, "m-da"));
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(rdc.lastAgentId()).isEqualTo("default-agent-1");
+    }
+
+    @Test
+    void syncCreateBindsStickyOnAcceptedWithTask() {
+        // P-13: BUS create must bind taskId -> routeHandle on a taskId-bearing projection (mirrors
+        // DIRECT Router.routeCreate, which writes sticky from the response taskId), so a later resume
+        // re-routes to the owning runtime instead of 404 RESUME_OWNER_UNKNOWN.
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-7", null);
+        feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null);
+        forwarder.forwardSync(ctx("agent-1", "m-sticky"));
+        assertThat(sticky.find("task-7")).contains("h1");
+    }
+
+    @Test
+    void syncCreateInputRequiredBindsStickyEvenWithoutAccepted() {
+        // P-13: a create that returns INPUT_REQUIRED (taskId on the INPUT_REQUIRED projection, no prior
+        // ACCEPTED) must STILL bind sticky — the resume path reads only StickyIndex, so a miss here
+        // means the user's follow-up input can never resume (RESUME_OWNER_UNKNOWN).
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "ti-1", null);
+        var resp = forwarder.forwardSync(ctx("agent-1", "m-ir-sticky"));
+        assertThat(resp.getBody()).contains("INPUT_REQUIRED").contains("ti-1");
+        assertThat(sticky.find("ti-1")).contains("h1");
     }
 }
