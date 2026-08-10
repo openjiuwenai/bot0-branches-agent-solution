@@ -1,4 +1,4 @@
-﻿# Adapter-Versatile-Agent 使用手册
+# Adapter-Versatile-Agent 使用手册
 
 ## Versatile 工作流 A2A 独立代理适配器
 
@@ -30,7 +30,7 @@ Adapter-Versatile-Agent 是一个独立部署的 A2A（Agent-to-Agent）代理�
 | **Versatile REST/SSE 适配** | URL 模板占位符替换、Header 白名单透传、超时控制，无缝对接 Versatile 工作流 API |
 | **非结果节点流式透传** | 菜单（menu）、提示（notice）、表单（form）等交互节点实时流式推送给前端用户（Target.USER） |
 | **用户输入中断** | 缺失 End 节点或需要用户输入时触发 `ToolInterruptException`，等待用户输入后续传 |
-| **结果节点 LLM 反馈** | 结果节点（`GXZQAResponseNode`，可配置）作为工具结果返回给上游 LLM（Target.LLM） |
+| **结果节点 LLM 反馈** | 结果节点（`ABCDEResponseNode`，可配置）作为工具结果返回给上游 LLM（Target.LLM） |
 | **无状态轻量级** | 无 Redis、无数据库、无 Python 依赖，水平扩展只需增加副本 |
 
 ---
@@ -135,7 +135,7 @@ curl http://localhost:8191/.well-known/agent-card.json
         │
         ├─► 需要用户输入 ────────────────► Interrupt (中断等待续传)
         │
-        └─► 结果节点(GXZQAResponseNode) ──► Target.LLM (上游 Agent)
+        └─► 结果节点(ABCDEResponseNode) ──► Target.LLM (上游 Agent)
 ```
 
 **三分流处理逻辑：**
@@ -170,5 +170,5 @@ curl http://localhost:8191/.well-known/agent-card.json
 
 > **默认端口**：8191  
 > **默认 Agent ID**：versatile-agent  
-> **默认结果节点**：GXZQAResponseNode  
+> **默认结果节点**：ABCDEResponseNode  
 > **默认超时**：600 秒

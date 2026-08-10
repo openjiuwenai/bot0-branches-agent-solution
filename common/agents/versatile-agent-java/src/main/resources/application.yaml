@@ -47,6 +47,6 @@ agent-runtime:
 
   # 结果节点（语义等价 Python 的 va_workflow_result_node）：仅 node_type 与 node_name
   # 同时命中时才回灌上游 Agent，其余 message 节点完整 JSON 透传前端。
-  # mock(versatile_main.py) 的结果帧为 node_type=QA、node_name=GXZQAResponseNode。
+  # mock(versatile_main.py) 的结果帧为 node_type=QA、node_name=ABCDEResponseNode。
   result-node-type: ${VERSATILE_RESULT_NODE_TYPE:QA}
-  result-node-name: ${VERSATILE_RESULT_NODE_NAME:GXZQAResponseNode}
+  result-node-name: ${VERSATILE_RESULT_NODE_NAME:ABCDEResponseNode}

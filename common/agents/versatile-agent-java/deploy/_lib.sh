@@ -92,7 +92,7 @@ load_runtime_config() {
     VERSATILE_URL="$(get_env_value "${ENV_FILE}" VERSATILE_URL "")"
     VERSATILE_TIMEOUT="$(get_env_value "${ENV_FILE}" VERSATILE_TIMEOUT "600s")"
     VERSATILE_INSECURE_SKIP_VERIFY="$(get_env_value "${ENV_FILE}" VERSATILE_INSECURE_SKIP_VERIFY "false")"
-    VERSATILE_RESULT_NODE="$(get_env_value "${ENV_FILE}" VERSATILE_RESULT_NODE "GXZQAResponseNode")"
+    VERSATILE_RESULT_NODE="$(get_env_value "${ENV_FILE}" VERSATILE_RESULT_NODE "ABCDEResponseNode")"
     VERSATILE_AGENT_TENANT_ID="$(get_env_value "${ENV_FILE}" VERSATILE_AGENT_TENANT_ID "edp-tenant")"
 
     [ -n "${VERSATILE_URL}" ] || die "${ENV_FILE} 中 VERSATILE_URL 必须填写。"

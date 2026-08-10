@@ -12,7 +12,7 @@ adapter-versatile-agent-java作为A2A到Versatile REST/SSE的代理适配器，�
 5. 解析Versatile返回的SSE流
 6. 按节点类型三分流：
    - **Target.USER**：非结果节点透传给前端（如菜单、提示文本）
-   - **Target.LLM**：结果节点（`GXZQAResponseNode`）回灌LLM
+   - **Target.LLM**：结果节点（`ABCDEResponseNode`）回灌LLM
    - **Interrupt**：缺少End节点或需要用户输入时触发中断
 
 核心实现：`VersatileAgentHandler`封装了HttpClient、请求提取（VersatileRequestExtractor）、响应提取（VersatileResponseExtractor）。
@@ -49,7 +49,7 @@ adapter-versatile-agent-java作为A2A到Versatile REST/SSE的代理适配器，�
 | 配置错误 | 占位符未替换 | URL中`{conversation_id}`未被正确替换 |
 | 网络问题 | 网络不通/防火墙/Docker网络 | 容器间网络隔离、防火墙阻断、DNS解析失败 |
 | 超时配置 | 超时设置过短 | 默认600s一般够用，但某些超长工作流可能需要更长 |
-| 工作流配置 | resultNodeName不匹配 | `VERSATILE_RESULT_NODE`配置与实际Versatile返回节点名不一致（默认`GXZQAResponseNode`） |
+| 工作流配置 | resultNodeName不匹配 | `VERSATILE_RESULT_NODE`配置与实际Versatile返回节点名不一致（默认`ABCDEResponseNode`） |
 | Header问题 | Header缺失或被白名单过滤 | 白名单外的Header被过滤，默认Header未正确设置 |
 | 响应格式 | Versatile返回格式异常 | 非SSE格式、节点结构异常、字段缺失 |
 | 资源限制 | 连接池耗尽 | HttpClient连接池满，无法创建新连接 |
@@ -176,14 +176,14 @@ docker logs adapter-versatile 2>&1 | grep -E "node|result|passthrough|interrupt"
 
 ### 步骤6：检查resultNodeName是否匹配实际返回节点
 
-结果节点识别逻辑：**只有当node_name匹配`VERSATILE_RESULT_NODE`（默认`GXZQAResponseNode`）时，才会识别为结果节点回灌LLM**。如果不匹配，所有节点都会透传或导致中断。
+结果节点识别逻辑：**只有当node_name匹配`VERSATILE_RESULT_NODE`（默认`ABCDEResponseNode`）时，才会识别为结果节点回灌LLM**。如果不匹配，所有节点都会透传或导致中断。
 
 **排查方法：**
 
 1. **开启DEBUG日志**查看实际返回的node_name：
    ```
    # 在日志中搜索类似内容
-   Received SSE node: {"node_type":"QA","node_name":"GXZQAResponseNode",...}
+   Received SSE node: {"node_type":"QA","node_name":"ABCDEResponseNode",...}
    ```
 
 2. **直接curl Versatile**查看返回的SSE节点结构：
@@ -344,7 +344,7 @@ openjiuwen:
 ```
 
 **Mock服务的结果节点名：**
-- Mock服务（versatile_main.py）的结果帧为`node_type=QA, node_name=GXZQAResponseNode`
+- Mock服务（versatile_main.py）的结果帧为`node_type=QA, node_name=ABCDEResponseNode`
 - 开发环境使用Mock时保持默认值即可
 
 ### 方案4：调整超时时间
@@ -442,7 +442,7 @@ docker exec adapter-versatile telnet versatile 30001
 ```
 data: {"node_type":"...","node_name":"...","text":"...","...":"..."}
 
-data: {"node_type":"QA","node_name":"GXZQAResponseNode","text":"最终答案",...}
+data: {"node_type":"QA","node_name":"ABCDEResponseNode","text":"最终答案",...}
 
 data: [DONE]
 ```
@@ -461,7 +461,7 @@ data: [DONE]
 |----------|----------|--------|------|
 | `VERSATILE_URL` | `openjiuwen.service.versatile.url-template` | `http://localhost:30001/v1/0/agent-manager/workflows/mock_workflow/conversations/{conversation_id}?type=controller&workspace_id=10` | Versatile REST URL模板，必须含`{conversation_id}` |
 | `VERSATILE_TIMEOUT` | `openjiuwen.service.versatile.timeout` | `600s` | 调用超时，支持ms/s/m |
-| `VERSATILE_RESULT_NODE` | `openjiuwen.service.versatile.result-node-name` | `GXZQAResponseNode` | 结果节点名称，匹配后回灌LLM |
+| `VERSATILE_RESULT_NODE` | `openjiuwen.service.versatile.result-node-name` | `ABCDEResponseNode` | 结果节点名称，匹配后回灌LLM |
 | - | `openjiuwen.service.versatile.forward-header-whitelist` | `stream, x-invoke-mode, x-language` | 允许透传的Header白名单 |
 | - | `openjiuwen.service.versatile.headers-template` | 见application.yml | 默认请求头 |
 | - | `openjiuwen.service.versatile.passthrough-headers` | `x-invoke-mode, x-language` | passthrough headers |

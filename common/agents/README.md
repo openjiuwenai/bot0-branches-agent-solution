@@ -243,7 +243,7 @@ $env:VERSATILE_URL = "http://127.0.0.1:30001/v1/0/agent-manager/workflows/wealth
 
 # 其他常用配置（可选）
 $env:VERSATILE_TIMEOUT        = "600s"
-$env:VERSATILE_RESULT_NODE    = "GXZQAResponseNode"
+$env:VERSATILE_RESULT_NODE    = "ABCDEResponseNode"
 $env:VERSATILE_AGENT_TENANT_ID = "edp-tenant"
 
 # 启动
@@ -365,7 +365,7 @@ Adapter 常用：
 | `VERSATILE_AGENT_PORT` | 8191 | Adapter 端口 |
 | `VERSATILE_URL` | 本地 30001 | Versatile URL 模板，必须含 `{conversation_id}` |
 | `VERSATILE_TIMEOUT` | 600s | 上游超时 |
-| `VERSATILE_RESULT_NODE` | GXZQAResponseNode | 工作流结果节点名 |
+| `VERSATILE_RESULT_NODE` | ABCDEResponseNode | 工作流结果节点名 |
 | `VERSATILE_AGENT_TENANT_ID` | edp-tenant | A2A 默认租户 |
 
 EDP 常用：

@@ -28,7 +28,7 @@ openjiuwen:
         x-invoke-mode: DEBUG
         x-language: zh-cn
         Cookie: "AGENT_SID=testUser|0"
-      result-node-name: GXZQAResponseNode
+      result-node-name: ABCDEResponseNode
 
 logging:
   level:

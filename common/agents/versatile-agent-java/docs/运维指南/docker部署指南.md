@@ -70,7 +70,7 @@ docker run -d \
   -p 8191:8191 \
   -e VERSATILE_URL="http://your-versatile-host:port/v1/0/agent-manager/workflows/your_workflow/conversations/{conversation_id}?type=controller&workspace_id=10" \
   -e VERSATILE_TIMEOUT=600s \
-  -e VERSATILE_RESULT_NODE=GXZQAResponseNode \
+  -e VERSATILE_RESULT_NODE=ABCDEResponseNode \
   adapter-versatile-agent-java:latest
 ```
 
@@ -121,7 +121,7 @@ services:
       - VERSATILE_AGENT_PORT=8191
       - VERSATILE_URL=http://host.docker.internal:30001/v1/0/agent-manager/workflows/mock_workflow/conversations/{conversation_id}?type=controller&workspace_id=10
       - VERSATILE_TIMEOUT=600s
-      - VERSATILE_RESULT_NODE=GXZQAResponseNode
+      - VERSATILE_RESULT_NODE=ABCDEResponseNode
       - TZ=Asia/Shanghai
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8191/.well-known/agent-card.json"]

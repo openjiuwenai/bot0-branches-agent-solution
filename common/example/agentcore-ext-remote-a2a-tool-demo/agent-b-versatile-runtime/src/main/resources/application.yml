@@ -27,7 +27,7 @@ openjiuwen:
         stream: "true"
         x-invoke-mode: DEBUG
         x-language: zh-cn
-      result-node-name: ${VERSATILE_RESULT_NODE:GXZQAResponseNode}
+      result-node-name: ${VERSATILE_RESULT_NODE:ABCDEResponseNode}
 
 logging:
   level:

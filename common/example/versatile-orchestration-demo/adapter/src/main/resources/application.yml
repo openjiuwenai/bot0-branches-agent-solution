@@ -37,4 +37,4 @@ openjiuwen:
         Content-Type: application/json
         accept: text/event-stream
         stream: "true"
-      result-node-name: GXZQAResponseNode
+      result-node-name: ABCDEResponseNode
