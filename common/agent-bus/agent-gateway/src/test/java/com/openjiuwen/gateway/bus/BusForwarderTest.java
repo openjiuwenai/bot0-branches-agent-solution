@@ -155,9 +155,13 @@ class BusForwarderTest {
     void completedResponseSurfacesA2aBody() {
         rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
         feed.inject(AgentBusEventType.INVOCATION_RESPONSE, null, null, null,
-                "{\"result\":{\"id\":\"t9\"}}");
+                "{\"jsonrpc\":\"2.0\",\"id\":\"req-9\",\"result\":{\"task\":{"
+                        + "\"id\":\"t9\",\"status\":{\"state\":\"completed\"},"
+                        + "\"artifacts\":[{\"parts\":[{\"text\":\"answer\"}]}]}}}");
         var resp = forwarder.forwardSync(ctx("agent-1", "m-body"));
-        assertThat(resp.getBody()).isEqualTo("{\"result\":{\"id\":\"t9\"}}");
+        assertThat(resp.getBody()).isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":\"req-9\",\"result\":{\"task\":{"
+                + "\"id\":\"t9\",\"status\":{\"state\":\"completed\"},"
+                + "\"artifacts\":[{\"parts\":[{\"text\":\"answer\"}]}]}}}");
     }
 
     @Test
