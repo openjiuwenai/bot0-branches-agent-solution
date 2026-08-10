@@ -355,7 +355,7 @@ async def submit_build_gu(
     """
     try:
         parsed = BuildGUConfig.model_validate_json(config)
-    except (ValueError, json.JSONDecodeError) as e:
+    except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}") from e
 
     data = await file.read()

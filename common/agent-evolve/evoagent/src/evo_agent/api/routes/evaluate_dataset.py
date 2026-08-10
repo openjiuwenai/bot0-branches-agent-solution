@@ -253,7 +253,7 @@ async def submit_dataset_eval(
     """
     try:
         parsed = DatasetEvalConfig.model_validate_json(config)
-    except (ValueError, json.JSONDecodeError) as e:
+    except ValueError as e:
         raise HTTPException(status_code=422, detail=f"Invalid config: {e}") from e
 
     # 校验每组配置（batch 名、kind、gold/keywords 完备性）。

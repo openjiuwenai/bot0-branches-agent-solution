@@ -191,7 +191,7 @@ def _load_and_validate(
             object_pairs_hook=build_object,
             parse_constant=reject_nonstandard_constant,
         )
-    except (json.JSONDecodeError, TypeError, ValueError):
+    except (TypeError, ValueError):
         return StructuredOutputResult(None, "invalid JSON syntax", "syntax", "failed")
     if policy.reject_duplicate_keys and duplicate_keys:
         return StructuredOutputResult(

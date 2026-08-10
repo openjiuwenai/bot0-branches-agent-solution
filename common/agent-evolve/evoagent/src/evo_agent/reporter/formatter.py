@@ -331,13 +331,13 @@ class ReportFormatter:
         try:
             with first_path.open(encoding="utf-8") as f:
                 first_data = json.load(f)
-        except (json.JSONDecodeError, ValueError, KeyError):
+        except (ValueError, KeyError):
             first_data = {}
 
         try:
             with last_path.open(encoding="utf-8") as f:
                 last_data = json.load(f)
-        except (json.JSONDecodeError, ValueError, KeyError):
+        except (ValueError, KeyError):
             last_data = {}
 
         return first_data, last_data
@@ -353,7 +353,7 @@ class ReportFormatter:
             with eval_files[0].open(encoding="utf-8") as f:
                 data = json.load(f)
             return len(data.get("results", []))
-        except (json.JSONDecodeError, ValueError, KeyError):
+        except (ValueError, KeyError):
             return 0
 
     def _read_max_avg_score(self) -> float | None:
@@ -371,7 +371,7 @@ class ReportFormatter:
                 avg = data.get("avg_score")
                 if avg is not None:
                     scores.append(float(avg))
-            except (json.JSONDecodeError, ValueError, KeyError):
+            except (ValueError, KeyError):
                 continue
         return max(scores) if scores else None
 
@@ -395,7 +395,7 @@ class ReportFormatter:
             try:
                 with ef.open(encoding="utf-8") as f:
                     data = json.load(f)
-            except (json.JSONDecodeError, ValueError, KeyError):
+            except (ValueError, KeyError):
                 continue
             avg = data.get("avg_score")
             if avg is None:
@@ -551,7 +551,7 @@ class ReportFormatter:
                 avg = data.get("avg_score")
                 if avg is not None:
                     scores_list.append(float(avg))
-            except (json.JSONDecodeError, ValueError, KeyError):
+            except (ValueError, KeyError):
                 continue
 
         score_before = scores_list[0] if scores_list else 0.0
@@ -565,7 +565,7 @@ class ReportFormatter:
                 first_data = json.load(f)
             first_scores = [float(r.get("score", 0.0)) for r in first_data.get("results", [])]
             pass_rate_before = self._compute_pass_rate(first_scores, self._score_threshold)
-        except (json.JSONDecodeError, ValueError, KeyError):
+        except (ValueError, KeyError):
             pass
 
         try:
@@ -573,7 +573,7 @@ class ReportFormatter:
                 last_data = json.load(f)
             last_scores = [float(r.get("score", 0.0)) for r in last_data.get("results", [])]
             pass_rate_after = self._compute_pass_rate(last_scores, self._score_threshold)
-        except (json.JSONDecodeError, ValueError, KeyError):
+        except (ValueError, KeyError):
             pass
 
         # 计算该 skill 的 edits 总数
@@ -587,7 +587,7 @@ class ReportFormatter:
                         with sf.open(encoding="utf-8") as f:
                             data = json.load(f)
                         total_edits += len(data.get("edits", []))
-                    except (json.JSONDecodeError, ValueError, KeyError):
+                    except (ValueError, KeyError):
                         continue
 
         return SkillScore(
