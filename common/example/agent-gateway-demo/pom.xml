@@ -36,7 +36,7 @@
   <description>Gateway example module: the FEAT-012 BUS launcher fat-jar (agent-bus-sdk on the runtime classpath → caller role + reliability outbox + response consumer) running the formal GatewayApplication in bus mode, plus DIRECT/BUS curl smoke scripts (feat-011-direct / feat-012-bus / validate.sh).</description>
 
   <properties>
-    <java.version>21</java.version>
+    <java.version>17</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <start-class>com.openjiuwen.gateway.GatewayApplication</start-class>
   </properties>

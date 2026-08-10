@@ -166,7 +166,9 @@ class RealRocketMqFeat017IntegrationTest {
         assertThat(bridgeCalls).hasValue(1);
 
         List<BrokerInboundMessage> busIngress = pollResponses(correlationId, 2);
-        assertThat(busIngress).extracting(BrokerInboundMessage::eventType).containsExactly(acceptedType, responseType);
+        // ISSUE-008 修复 E：两条响应可能落不同队列、跨队列顺序不保证；仅断集合，不断顺序。
+        assertThat(busIngress).extracting(BrokerInboundMessage::eventType)
+                .containsExactlyInAnyOrder(acceptedType, responseType);
         assertThat(busIngress).allSatisfy(message -> {
             assertThat(message.correlationId()).isEqualTo(correlationId);
             assertThat(message.targetServiceId()).isEqualTo(gatewayServiceId);

@@ -38,7 +38,9 @@ public record BrokerInboundMessage(
         String consumerServiceId,
         String payloadRef,
         // FEAT-013 cross-hop correlation key (mirrored from headers at poll). Nullable (control-only /
-        // JDBC back-compat); the gateway (S2) matches responses by this field (L2 feat-013 §4.2).
+        // JDBC back-compat); the gateway (S2) matches responses by this field (L2 feat-013 §4.2). The
+        // broker does NOT filter on correlationId — matching happens at the consumer application layer
+        // (gateway S2 / caller pending table), never in the broker subscription.
         String correlationId,
         // FEAT-013/014 event-type discriminator (mirrored from headers at poll). Nullable; the gateway
         // (S2) classifies responses by this field (L2 §4.2), avoiding descriptor-decoding coupling.

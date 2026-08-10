@@ -17,10 +17,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Gateway-side projection feed backed by the agent-bus SDK {@code responseConsumer}
@@ -29,12 +34,18 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * maps the descriptor to {@link ProjectionEvent}, and commits
  * (FEAT-012 §4.5 I-04 inbound + §4.6 fold).
  *
- * <p>Concurrent multi-request model: each {@link #poll} first drains this correlationId's
- * staging queue, then pulls one message from the shared consumer. A non-matching message is
- * committed (broker advances) and staged under its own correlationId for the owning request
- * to drain — concurrent requests cannot consume-and-drop each other's projections. The SDK
- * {@code poll} blocks up to {@code poll-wait-millis} so the {@code BusForwarder} wait loop
- * does not busy-spin (FEAT-013 §5.2).
+ * <p><b>issue E-layer2 dispatcher model.</b> A single background dispatcher thread owns the shared
+ * blocking consumer (RocketMQ {@code poll} blocks up to {@code pollWaitMillis}); it drains messages
+ * and routes each to its {@code correlationId}'s staging queue. {@link #poll} reads ONLY its own
+ * staging queue (bounded wait) — servlet threads no longer contend on the shared consumer, and an
+ * event for {@code corrId A} is delivered to {@code A}'s queue the moment the dispatcher pulls it
+ * (no one-message-per-poll stage-retry that caused 14-15s TERMINAL match latency under concurrent
+ * streams). Routing + ack-after-consume ({@code commit}) happen in the dispatcher; the SPI
+ * at-least-once contract (commit after map) is preserved.
+ *
+ * <p>Staging cleanup is race-free: {@code drainOnce} adds to a queue under {@code synchronized(queue)},
+ * and {@link #poll} removes the corrId entry only when its queue is empty under the same lock — a
+ * concurrently-routed event is never dropped (it lands in a fresh queue the next poll drains).
  *
  * <p>Subscribes to the INVOCATION_* family ONLY — A2A_CALL_* (FEAT-014) folding is the caller
  * runtime's job (FEAT-005), not the gateway's.
@@ -55,30 +66,48 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
             AgentBusEventType.INVOCATION_TERMINAL
     };
 
+    /** Default max wait (ms) for {@link #poll} on an empty staging queue (production). */
+    private static final long DEFAULT_POLL_TIMEOUT_MILLIS = 500L;
+
+    /** Backoff (ms) when the dispatcher finds the consumer empty (non-blocking test fakes). */
+    private static final long DISPATCHER_BACKOFF_MILLIS = 10L;
+
     private final BrokerForwardingConsumerPort consumer;
     private final String gatewayServiceId;
+    private final long pollTimeoutMillis;
     private volatile boolean running = false;
+    private ScheduledExecutorService dispatcher;
 
     /**
-     * Per-correlationId staging queues for concurrent multi-request projection routing.
-     * A polled message whose correlationId does not match the polling request is committed
-     * (so the broker advances) and staged here under its own correlationId; the owning
-     * request's next {@link #poll} drains its queue first before hitting the broker again.
-     * This prevents concurrent requests from consuming-and-dropping each other's projections
-     * (the prior single-request model committed-and-skipped non-matching messages, which
-     * permanently lost them to the owning request).
+     * Per-correlationId staging queues. Filled by the dispatcher; drained by {@link #poll}.
+     * A polled message whose corrId matches is routed here; the owner's next {@link #poll} reads it.
      */
-    private final ConcurrentHashMap<String, Queue<ProjectionEvent>> stagingByCorrId = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, LinkedBlockingQueue<ProjectionEvent>> stagingByCorrId =
+            new ConcurrentHashMap<>();
 
     /**
-     * Creates a feed over the given response consumer.
+     * Creates a feed over the given response consumer with the default poll timeout.
      *
      * @param consumer SDK response-consumer port (suffix {@code resp_out})
      * @param gatewayServiceId gateway service identity (subscribe group + target filter + self-source)
      */
     public BrokerProjectionFeed(BrokerForwardingConsumerPort consumer, String gatewayServiceId) {
-        this.consumer = consumer;
-        this.gatewayServiceId = gatewayServiceId;
+        this(consumer, gatewayServiceId, DEFAULT_POLL_TIMEOUT_MILLIS);
+    }
+
+    /**
+     * Creates a feed with an explicit poll timeout (how long {@link #poll} blocks on an empty
+     * staging queue before returning empty).
+     *
+     * @param consumer SDK response-consumer port (suffix {@code resp_out})
+     * @param gatewayServiceId gateway service identity (subscribe group + target filter + self-source)
+     * @param pollTimeoutMillis max wait (ms) on an empty per-corrId staging queue
+     */
+    public BrokerProjectionFeed(BrokerForwardingConsumerPort consumer, String gatewayServiceId,
+                                long pollTimeoutMillis) {
+        this.consumer = Objects.requireNonNull(consumer, "consumer is required");
+        this.gatewayServiceId = Objects.requireNonNull(gatewayServiceId, "gatewayServiceId is required");
+        this.pollTimeoutMillis = pollTimeoutMillis;
     }
 
     @Override
@@ -88,63 +117,86 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
             consumer.subscribe(gatewayServiceId, type, filter);
         }
         running = true;
-        log.info("SUBSCRIBE gateway={} to {} INVOCATION_* response types on resp_out (filter targetServiceId={})",
+        dispatcher = Executors.newSingleThreadScheduledExecutor(daemonFactory());
+        dispatcher.scheduleWithFixedDelay(
+                this::safeDispatch, 0, DISPATCHER_BACKOFF_MILLIS, TimeUnit.MILLISECONDS);
+        log.info("SUBSCRIBE gateway={} to {} INVOCATION_* response types on resp_out "
+                        + "(filter targetServiceId={}); dispatcher started",
                 gatewayServiceId, RESPONSE_FAMILY.length, gatewayServiceId);
     }
 
-    @Override
-    public Optional<ProjectionEvent> poll(String correlationId) {
-        // 1) Drain this correlationId's staging queue first (concurrent routing: a prior poll by
-        //    another request may have committed + staged a projection belonging to this corrId).
-        Queue<ProjectionEvent> staged = stagingByCorrId.get(correlationId);
-        if (staged != null) {
-            ProjectionEvent head = staged.poll();
-            if (head != null) {
-                log.info("POLL staged-hit corrId={} eventType={} taskId={} bodyPresent={}",
-                        correlationId, head.eventType(), head.taskId(), head.body() != null);
-                if (staged.isEmpty()) {
-                    stagingByCorrId.remove(correlationId, staged);
-                }
-                return Optional.of(head);
-            }
+    private void safeDispatch() {
+        if (!running) {
+            return;
         }
-        // 2) Pull the next uncommitted message from the shared broker consumer.
+        try {
+            drainOnce();
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            log.warn("projection dispatcher drain failed", failure);
+        }
+    }
+
+    /**
+     * Drain ONE message from the shared consumer and route it to its corrId's staging queue.
+     * Package-private test seam (the dispatcher loops this; tests call it for deterministic routing).
+     *
+     * @return {@code true} if a message was processed (routed / skipped / dropped);
+     *         {@code false} if the consumer was empty
+     */
+    boolean drainOnce() {
         Optional<BrokerInboundMessage> polled = consumer.poll(System.currentTimeMillis());
         if (polled.isEmpty()) {
-            return Optional.empty();
+            return false;
         }
         BrokerInboundMessage m = polled.get();
-        log.info("POLL waiting corrId={} got msg corrId={} target={} eventType={} source={} inlinePayload={}",
-                correlationId, m.correlationId(), m.targetServiceId(), m.eventType(),
-                m.sourceServiceId(), m.inlinePayload());
         try {
             if (gatewayServiceId.equals(m.sourceServiceId())) {
                 // self-source: the gateway does not consume its own response traffic (defensive)
                 log.info("skip self-source corrId={}", m.correlationId());
                 consumer.commit(m);
-                return Optional.empty();
+                return true;
             }
             ProjectionEvent evt = map(m);
             consumer.commit(m); // ack-after-consume: commit regardless of match (broker advances)
-            if (!correlationId.equals(m.correlationId())) {
-                // non-matching: commit + stage under the message's own corrId (do NOT drop — the
-                // owning request must be able to drain it from its staging queue).
-                stagingByCorrId
-                        .computeIfAbsent(m.correlationId(), k -> new ConcurrentLinkedQueue<>())
-                        .add(evt);
-                log.info("stage non-matching corrId={} (wanted {}) eventType={} stagedForOwner",
-                        m.correlationId(), correlationId, evt.eventType());
-                return Optional.empty();
+            LinkedBlockingQueue<ProjectionEvent> queue =
+                    stagingByCorrId.computeIfAbsent(m.correlationId(), k -> new LinkedBlockingQueue<>());
+            synchronized (queue) {
+                queue.add(evt);
             }
-            log.info("MATCH corrId={} eventType={} taskId={} streamRef={} bodyPresent={}",
-                    m.correlationId(), evt.eventType(), evt.taskId(), evt.streamRef(), evt.body() != null);
-            return Optional.of(evt);
+            log.info("ROUTE corrId={} eventType={} taskId={} bodyPresent={}",
+                    m.correlationId(), evt.eventType(), evt.taskId(), evt.body() != null);
+            return true;
         } catch (IllegalArgumentException decodeFailure) {
-            // a malformed projection must not wedge the wait loop; commit + drop so the broker advances
+            // a malformed projection must not wedge the dispatcher; commit + drop so the broker advances
             log.warn("decode failure corrId={} → drop", m.correlationId(), decodeFailure);
             consumer.commit(m);
+            return true;
+        }
+    }
+
+    @Override
+    public Optional<ProjectionEvent> poll(String correlationId) {
+        LinkedBlockingQueue<ProjectionEvent> queue =
+                stagingByCorrId.computeIfAbsent(correlationId, k -> new LinkedBlockingQueue<>());
+        ProjectionEvent evt;
+        try {
+            evt = queue.poll(pollTimeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            // do not re-interrupt; surface empty so the wait loop can re-check its own timeout
             return Optional.empty();
         }
+        if (evt != null) {
+            log.info("POLL staged-hit corrId={} eventType={} taskId={} bodyPresent={}",
+                    correlationId, evt.eventType(), evt.taskId(), evt.body() != null);
+            return Optional.of(evt);
+        }
+        // empty after the bounded wait — remove this corrId's queue if still empty (race-free w/ drainOnce)
+        synchronized (queue) {
+            if (queue.isEmpty()) {
+                stagingByCorrId.remove(correlationId, queue);
+            }
+        }
+        return Optional.empty();
     }
 
     private ProjectionEvent map(BrokerInboundMessage m) {
@@ -187,9 +239,25 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
+    private static ThreadFactory daemonFactory() {
+        ThreadFactory defaultFactory = Executors.defaultThreadFactory();
+        AtomicInteger seq = new AtomicInteger();
+        return r -> {
+            Thread t = defaultFactory.newThread(r);
+            t.setName("broker-projection-feed-dispatcher-" + seq.incrementAndGet());
+            t.setDaemon(true);
+            t.setUncaughtExceptionHandler((thread, ex) ->
+                    log.warn("uncaught exception in dispatcher thread " + thread.getName(), ex));
+            return t;
+        };
+    }
+
     @Override
     public void stop() {
         running = false;
+        if (dispatcher != null) {
+            dispatcher.shutdownNow();
+        }
         consumer.close();
     }
 

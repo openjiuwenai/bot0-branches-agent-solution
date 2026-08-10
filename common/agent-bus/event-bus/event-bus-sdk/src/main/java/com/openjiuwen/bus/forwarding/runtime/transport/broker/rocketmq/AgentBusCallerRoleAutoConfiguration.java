@@ -5,12 +5,15 @@
 package com.openjiuwen.bus.forwarding.runtime.transport.broker.rocketmq;
 
 import com.openjiuwen.bus.forwarding.common.AgentBusBrokerProperties;
+import com.openjiuwen.bus.forwarding.runtime.transport.DefaultAgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.runtime.transport.DefaultBrokerTopicResolver;
 import com.openjiuwen.bus.forwarding.runtime.transport.broker.BrokerClientProperties;
+import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingConsumerPort;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerForwardingProducerPort;
 
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -104,5 +107,21 @@ public class AgentBusCallerRoleAutoConfiguration {
         return new RocketMqBrokerForwardingConsumer(new DefaultBrokerTopicResolver(), "resp_out",
                 RocketMqBrokerForwardingConsumer.defaultPollerFactory(broker.nameserverEndpoints()),
                 props.pollWaitMillis());
+    }
+
+    /**
+     * P-14 high-level Runtime submit port — wraps {@code requestProducer} so a Runtime caller
+     * submits a {@link com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope} to the request
+     * path without a JDBC outbox (the SDK impl maps the envelope to a {@code BrokerOutboundMessage}
+     * and directly produces). Same {@code @ConditionalOnProperty} as the caller ports, so it is
+     * absent when the caller role is disabled; no {@code DataSource}.
+     *
+     * @param requestProducer the caller-role hop1 request producer ({@code "req"} suffix)
+     * @return the high-level request submitter
+     */
+    @Bean
+    AgentBusRequestSubmitter requestSubmitter(
+            @Qualifier("requestProducer") BrokerForwardingProducerPort requestProducer) {
+        return new DefaultAgentBusRequestSubmitter(requestProducer);
     }
 }
