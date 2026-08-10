@@ -868,7 +868,7 @@ async def run_optimization_with_cancellation_recovery(
                     raise CancelRollbackError(
                         code="CANCEL_ROLLBACK_TIMEOUT",
                         diagnostics="total cancellation recovery deadline exhausted",
-                    )
+                    ) from original
                 baseline_revision = request.managed_doc_expected_revision or (
                     verified_baseline.file_revision if verified_baseline is not None else None
                 )
@@ -876,7 +876,7 @@ async def run_optimization_with_cancellation_recovery(
                     raise CancelRollbackError(
                         code="CANCEL_ROLLBACK_FAILED",
                         diagnostics="verified baseline revision unavailable",
-                    )
+                    ) from original
                 async with AdapterClient(
                     request.adapter_url,
                     agent_name=request.agent_name,
