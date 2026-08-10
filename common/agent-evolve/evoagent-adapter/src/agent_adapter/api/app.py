@@ -220,7 +220,7 @@ def create_app(config: AdapterConfig) -> FastAPI:
     )
     app.state.repo = None  # standard 模式 TraceRepository (lifespan 填充)
     app.state.consumer = None  # standard 模式 kafka 消费者 (lifespan 填充, 可能为 None)
-    app.state._config_lock = asyncio.Lock()  # protect YAML concurrent writes
+    setattr(app.state, "_config_lock", asyncio.Lock())  # protect YAML concurrent writes
 
     logger.info(
         "app_created",

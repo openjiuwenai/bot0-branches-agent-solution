@@ -557,11 +557,7 @@ async def run_optimization(
 
         # 关闭 setup 阶段创建的 async client（绑定到 main thread event loop），
         # 让 worker thread 的 _async_client property 在自己的 event loop 中重建。
-        _setup_client = getattr(adapter_client, "_async_http", None)
-        if _setup_client is not None:
-            await _setup_client.aclose()
-            adapter_client._async_http = None
-            adapter_client._async_http_loop = None
+        await adapter_client.reset_async_http()
 
         # 3. 构建 RemoteAgent
         card = AgentCard(name=resolved.agent_name)
@@ -680,8 +676,8 @@ async def run_optimization(
                     return len(cases)
                 return 0
 
-            progress_callback._num_train_cases = _case_count(dataset.train_cases)
-            progress_callback._num_val_cases = _case_count(dataset.val_cases)
+            setattr(progress_callback, "_num_train_cases", _case_count(dataset.train_cases))
+            setattr(progress_callback, "_num_val_cases", _case_count(dataset.val_cases))
 
         # 8.5 手动跑验证集基线评估（vendor Trainer 对 SkillDocumentOptimizer 跳过此步骤）
         # C6 (#2): 只要有 val_cases 即预热 baseline + record_validation_baseline，
@@ -709,8 +705,7 @@ async def run_optimization(
             # asyncio.run() 返回后该 loop 已关闭，但 client 仍挂在 _async_http 上
             # 且 is_closed == False。若不重置，train 的 worker thread 会复用这个
             # 绑定到已关闭 loop 的 client，导致 RuntimeError: Event loop is closed。
-            adapter_client._async_http = None
-            adapter_client._async_http_loop = None
+            adapter_client.clear_async_http()
 
         # 9. 训练（Trainer.train 是同步的，在独立线程中运行）
         # Prompt 的 expected revision 来自 Studio 持久化 baseline。baseline eval 可能
@@ -1044,7 +1039,7 @@ def _bind_evaluator_invocation(evaluator: Any, invocation: LLMInvocation) -> Non
         seen.add(id(current))
         attributes = vars(current)
         if "_invocation" in attributes or hasattr(type(current), "_invocation"):
-            current._invocation = invocation
+            setattr(current, "_invocation", invocation)
         # ``getattr(MagicMock, name)`` manufactures an endless chain of child
         # mocks.  A decorator link is valid only when the object really stores it.
         current = attributes.get("_delegate")

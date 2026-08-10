@@ -479,6 +479,22 @@ class AdapterClient:
                 pass  # event loop closed — connections will be GC'd
         self._sync_http.close()
 
+    async def reset_async_http(self) -> None:
+        """关闭并丢弃缓存的 async httpx client（绑定的事件循环仍存活时使用）。
+
+        跨线程切换前清掉绑定到旧 event loop 的 client，让后续访问在当前 loop
+        中重建。旧 loop 已关闭（aclose 会抛 RuntimeError）时改用 clear_async_http。
+        """
+        if self._async_http is not None and not self._async_http.is_closed:
+            await self._async_http.aclose()
+        self._async_http = None
+        self._async_http_loop = None
+
+    def clear_async_http(self) -> None:
+        """仅清空缓存的 async httpx client（不 aclose，用于旧 loop 已关闭场景）。"""
+        self._async_http = None
+        self._async_http_loop = None
+
     async def __aenter__(self) -> AdapterClient:
         return self
 
