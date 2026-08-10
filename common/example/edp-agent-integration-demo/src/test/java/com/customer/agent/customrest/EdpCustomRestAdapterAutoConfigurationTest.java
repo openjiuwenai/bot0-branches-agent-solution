@@ -7,7 +7,7 @@ package com.customer.agent.customrest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.customer.agent.customrest.ghzhy.EdpaGhzhyCustomRestAdapter;
+import com.customer.agent.customrest.abcde.EdpaAbcdeCustomRestAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 
@@ -28,7 +28,7 @@ class EdpCustomRestAdapterAutoConfigurationTest {
     void doesNotRegisterAdapterWithoutQueryPathConfigured() {
         contextRunner.run(context -> {
             assertThat(context).doesNotHaveBean(CustomRestProtocolAdapter.class);
-            assertThat(context).doesNotHaveBean(EdpaGhzhyCustomRestAdapter.class);
+            assertThat(context).doesNotHaveBean(EdpaAbcdeCustomRestAdapter.class);
         });
     }
 
@@ -41,7 +41,7 @@ class EdpCustomRestAdapterAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(CustomRestProtocolAdapter.class);
-                    assertThat(context).hasSingleBean(EdpaGhzhyCustomRestAdapter.class);
+                    assertThat(context).hasSingleBean(EdpaAbcdeCustomRestAdapter.class);
                 });
     }
 
@@ -52,7 +52,7 @@ class EdpCustomRestAdapterAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(CustomRestProtocolAdapter.class);
                     assertThat(context.getBean(CustomRestProtocolAdapter.class))
-                            .isNotInstanceOf(EdpaGhzhyCustomRestAdapter.class);
+                            .isNotInstanceOf(EdpaAbcdeCustomRestAdapter.class);
                 });
     }
 

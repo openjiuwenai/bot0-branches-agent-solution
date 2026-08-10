@@ -116,7 +116,7 @@ openjiuwen:
           examples: ["帮我规划资金", "购买理财产品"]
           input-modes: ["text", "text/plain"]
           output-modes: ["text", "text/plain"]
-    # Custom REST 协议适配配置（GHZHY 网关）
+    # Custom REST 协议适配配置（ABCDE 网关）
     # 配置 query-path 后激活适配器，注释掉或删除此行即可关闭
     custom-rest:
       query-path: /v1/{project_id}/agents/{agent_id}/conversations/{conversation_id}

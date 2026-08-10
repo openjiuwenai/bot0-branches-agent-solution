@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.customer.agent.customrest.ghzhy;
+package com.customer.agent.customrest.abcde;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -30,12 +30,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * GHZHY Agent gateway protocol adapter for the A2A bridge Custom REST SPI.
+ * ABCDE Agent gateway protocol adapter for the A2A bridge Custom REST SPI.
  *
- * <p>Maps GHZHY-specific REST API fields (input/query/message aliases,
+ * <p>Maps ABCDE-specific REST API fields (input/query/message aliases,
  * conversion_id fallback, x-tenant-id header) to standard A2A protocol,
  * and unwraps A2A SDK StreamingEventKind objects into flat
- * {@code {event, content, data}} format inside GHZHY 7-field response envelopes.</p>
+ * {@code {event, content, data}} format inside ABCDE 7-field response envelopes.</p>
  *
  * <p>Unwrapping is necessary because the frontend's {@code normalizeRestFrame}
  * expects flat {@code custom_rsp_data.event/content/data} fields, while A2A SDK objects
@@ -45,8 +45,8 @@ import java.util.UUID;
  *
  * @since 2026-07-24
  */
-public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapter {
-    private static final Logger LOGGER = LoggerFactory.getLogger(EdpaGhzhyCustomRestAdapter.class);
+public final class EdpaAbcdeCustomRestAdapter implements CustomRestProtocolAdapter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(EdpaAbcdeCustomRestAdapter.class);
 
     private static final Map<TaskState, String> STATUS_EVENT_MAP = Map.of(
             TaskState.TASK_STATE_SUBMITTED, "task_submitted",
@@ -60,9 +60,9 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
 
     private final ObjectMapper objectMapper;
 
-    public EdpaGhzhyCustomRestAdapter(ObjectMapper objectMapper) {
+    public EdpaAbcdeCustomRestAdapter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-        LOGGER.info("[EDP-CUSTOM-REST] EdpaGhzhyCustomRestAdapter initialized");
+        LOGGER.info("[EDP-CUSTOM-REST] EdpaAbcdeCustomRestAdapter initialized");
     }
 
     @Override
@@ -428,7 +428,7 @@ public final class EdpaGhzhyCustomRestAdapter implements CustomRestProtocolAdapt
     }
 
     /**
-     * GHZHY 7-field response envelope with flat {@code custom_rsp_data}.
+     * ABCDE 7-field response envelope with flat {@code custom_rsp_data}.
      *
      * @param success 是否成功
      * @param error 错误消息（成功时为空字符串）

@@ -5,7 +5,7 @@
 package com.customer.agent.customrest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.customer.agent.customrest.ghzhy.EdpaGhzhyCustomRestAdapter;
+import com.customer.agent.customrest.abcde.EdpaAbcdeCustomRestAdapter;
 import com.openjiuwen.service.app.custom.rest.CustomRestProtocolAdapter;
 
 import jakarta.annotation.PostConstruct;
@@ -21,7 +21,7 @@ import org.springframework.context.annotation.Bean;
  * EDPAgent custom REST protocol adapter AutoConfiguration.
  *
  * <p>When {@code openjiuwen.service.custom-rest.query-path} is configured in application.yml,
- * this AutoConfiguration activates and registers {@link EdpaGhzhyCustomRestAdapter}
+ * this AutoConfiguration activates and registers {@link EdpaAbcdeCustomRestAdapter}
  * as the unique {@link CustomRestProtocolAdapter} implementation.</p>
  *
  * <p>When the property is not configured, this AutoConfiguration does not activate,
@@ -39,9 +39,9 @@ public class EdpCustomRestAdapterAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(CustomRestProtocolAdapter.class)
-    CustomRestProtocolAdapter edpaGhzhyCustomRestAdapter(ObjectMapper objectMapper) {
-        LOGGER.info("[EDP-CUSTOM-REST-CONF] Registering EdpaGhzhyCustomRestAdapter as CustomRestProtocolAdapter");
-        return new EdpaGhzhyCustomRestAdapter(objectMapper);
+    CustomRestProtocolAdapter edpaAbcdeCustomRestAdapter(ObjectMapper objectMapper) {
+        LOGGER.info("[EDP-CUSTOM-REST-CONF] Registering EdpaAbcdeCustomRestAdapter as CustomRestProtocolAdapter");
+        return new EdpaAbcdeCustomRestAdapter(objectMapper);
     }
 
     @PostConstruct

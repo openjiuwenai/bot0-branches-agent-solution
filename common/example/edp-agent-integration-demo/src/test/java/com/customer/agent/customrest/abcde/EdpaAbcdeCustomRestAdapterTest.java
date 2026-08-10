@@ -2,7 +2,7 @@
  * Copyright (c) Huawei Technologies Co., Ltd. 2026-2026. All rights reserved.
  */
 
-package com.customer.agent.customrest.ghzhy;
+package com.customer.agent.customrest.abcde;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,11 +23,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Unit tests for GHZHY protocol adapter — verifies flat {event, content, data} unwrapping.
+ * Unit tests for ABCDE protocol adapter - verifies flat {event, content, data} unwrapping.
  */
-class EdpaGhzhyCustomRestAdapterTest {
+class EdpaAbcdeCustomRestAdapterTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final EdpaGhzhyCustomRestAdapter adapter = new EdpaGhzhyCustomRestAdapter(objectMapper);
+    private final EdpaAbcdeCustomRestAdapter adapter = new EdpaAbcdeCustomRestAdapter(objectMapper);
 
     // ===== Request mapping tests (unchanged) =====
 
