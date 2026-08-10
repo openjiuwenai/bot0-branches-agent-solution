@@ -67,7 +67,7 @@ echo "=== 启动 db-connector HTTP 服务 ==="
 echo "  配置: $DB_CONFIG"
 echo "  监听: $DB_HOST:$DB_PORT$DB_PATH"
 
-nohup "$PYTHON_BIN" -m openjiuwen.tools.db_connector.server "$DB_CONFIG" \
+nohup "$PYTHON_BIN" -m db_connector.server "$DB_CONFIG" \
     --host "$DB_HOST" \
     --port "$DB_PORT" \
     --path "$DB_PATH" \

@@ -4,8 +4,8 @@
 适合作为独立数据访问微服务部署。
 
 用法：
-    python3 -m openjiuwen.tools.db_connector.server config/config.yaml
-    python3 -m openjiuwen.tools.db_connector.server config/config.yaml \\
+    python3 -m db_connector.server config/config.yaml
+    python3 -m db_connector.server config/config.yaml \\
         --host 0.0.0.0 --port 7087 --path /db-connector
 
 部署后服务地址示例：
@@ -31,8 +31,8 @@ from .tool import DefaultDbConnectorTool, QueryOptions
 def _runtime_config_path() -> Path:
     """运行期配置持久化路径（与 start.sh 同目录的 config/config.runtime.yaml）。"""
     here = Path(__file__).resolve()
-    # src/openjiuwen/tools/db_connector/server.py → 项目根（pyproject 所在）
-    proj_root = here.parents[4]
+    # src/db_connector/server.py → 项目根（pyproject 所在）
+    proj_root = here.parents[2]
     return proj_root / "config" / "config.runtime.yaml"
 
 
@@ -51,11 +51,7 @@ def _dump_config(config: DbConnectorConfig) -> None:
     rt = _runtime_config_path()
     rt.parent.mkdir(parents=True, exist_ok=True)
     data = {
-        "openjiuwen": {
-            "tools": {
-                "db-connector": config.model_dump(by_alias=False)
-            }
-        }
+        "db-connector": config.model_dump(by_alias=False)
     }
     rt.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 

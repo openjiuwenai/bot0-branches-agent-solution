@@ -158,51 +158,49 @@ affected_rows | duration_ms | result_status | client_ip
 ### 6.1 工具加载配置（config.yaml 示例）
 
 ```yaml
-openjiuwen:
-  tools:
-    db-connector:
-      enabled: true
-      mode: readonly                 # readonly | readwrite | ddl
-      data-source:
-        type: mysql                  # mysql | postgresql
-        host: env:DB_HOST            # 支持 env: / vault: 前缀引用凭证
-        port: 3306
-        database: env:DB_NAME
-        username: env:DB_USER
-        password: env:DB_PASSWORD    # 运行期注入，禁止明文落盘
-        schema: public
-        pool:
-          max-pool-size: 10
-          min-idle: 2
-          connection-timeout-ms: 5000
-      credential:
-        provider: env                # env | vault
-        vault:                       # provider=vault 时生效
-          addr: env:VAULT_ADDR
-          mount: database
-          path: traffic/db
-          role: db-connector
-      schema-import:
-        enabled: true                # 启用表结构导入/反射
-        allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
-        sensitive-columns: ["phone", "plate_no"]   # 自动脱敏列
-        snapshot-path: ./schema-snapshot.json
-      security:
-        allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
-        blocked-keywords: ["DROP", "TRUNCATE", "SHUTDOWN"]
-        max-rows: 10000
-        query-timeout-ms: 30000
-        allow-ddl: false
-        sql-template-whitelist: false   # true 则仅允许预登记模板
-      audit:
-        enabled: true
-        sink: file                    # file | logger | kafka
-        path: ${AUDIT_LOG_DIR:/var/log/openjiuwen/db-connector}
-      mcp:
-        enabled: true                 # 以 MCP 服务对外暴露
-        transport: stdio              # stdio | sse | streamable-http
-        name: db-connector
-        version: 0.1.0
+db-connector:
+  enabled: true
+  mode: readonly                 # readonly | readwrite | ddl
+  data-source:
+    type: mysql                  # mysql | postgresql
+    host: env:DB_HOST            # 支持 env: / vault: 前缀引用凭证
+    port: 3306
+    database: env:DB_NAME
+    username: env:DB_USER
+    password: env:DB_PASSWORD    # 运行期注入，禁止明文落盘
+    schema: public
+    pool:
+      max-pool-size: 10
+      min-idle: 2
+      connection-timeout-ms: 5000
+  credential:
+    provider: env                # env | vault
+    vault:                       # provider=vault 时生效
+      addr: env:VAULT_ADDR
+      mount: database
+      path: traffic/db
+      role: db-connector
+  schema-import:
+    enabled: true                # 启用表结构导入/反射
+    allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
+    sensitive-columns: ["phone", "plate_no"]   # 自动脱敏列
+    snapshot-path: ./schema-snapshot.json
+  security:
+    allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
+    blocked-keywords: ["DROP", "TRUNCATE", "SHUTDOWN"]
+    max-rows: 10000
+    query-timeout-ms: 30000
+    allow-ddl: false
+    sql-template-whitelist: false   # true 则仅允许预登记模板
+  audit:
+    enabled: true
+    sink: file                    # file | logger | kafka
+    path: ${AUDIT_LOG_DIR:/var/log/openjiuwen/db-connector}
+  mcp:
+    enabled: true                 # 以 MCP 服务对外暴露
+    transport: stdio              # stdio | sse | streamable-http
+    name: db-connector
+    version: 0.1.0
 ```
 
 ### 6.2 Agent 调用接口（Tool 接口签名）
@@ -259,7 +257,7 @@ db-connector/
 ├── pyproject.toml                 # Python 包元数据（PEP 621）
 ├── config/
 │   └── config.example.yaml        # 配置示例
-├── src/openjiuwen/tools/db_connector/
+├── src/db_connector/
 │   ├── __init__.py
 │   ├── tool.py                    # DbConnectorTool 接口与默认实现
 │   ├── config.py                  # 配置加载（pydantic-settings）
@@ -359,8 +357,8 @@ pip install -e .
 ```
 
 ```python
-from openjiuwen.tools.db_connector import DefaultDbConnectorTool
-from openjiuwen.tools.db_connector.config import load_config
+from db_connector import DefaultDbConnectorTool
+from db_connector.config import load_config
 
 tool = DefaultDbConnectorTool(load_config('config/config.yaml'))
 print(tool.ping())
@@ -371,7 +369,7 @@ print(tool.query("SELECT * FROM traffic_flow WHERE station_code = %s", ["S001"])
 
 ### 13.2 形态二：独立 HTTP 服务（FastAPI，本工具自带）
 
-本工具内置 FastAPI HTTP 服务入口 `openjiuwen.tools.db_connector.server`，可独立部署为 RESTful 数据访问微服务，暴露 GET / POST 接口。
+本工具内置 FastAPI HTTP 服务入口 `db_connector.server`，可独立部署为 RESTful 数据访问微服务，暴露 GET / POST 接口。
 
 #### 安装
 
@@ -383,7 +381,7 @@ pip install -e ".[server]"   # 含 fastapi + uvicorn
 
 ```bash
 # 方式一：前台启动（调试）
-python -m openjiuwen.tools.db_connector.server config/config.yaml \
+python -m db_connector.server config/config.yaml \
     --host 0.0.0.0 --port 7087 --path /db-connector
 
 # 方式二：后台启动（生产推荐）
@@ -498,7 +496,7 @@ MCP_TRANSPORT=streamable-http MCP_PORT=7087 ./start.sh
 # ===== db-connector 平台插件配置 =====
 
 # ----- 插件：数据库连接工具 -----
-# 服务地址：http://192.168.0.109:7087/db-connector （对应 openjiuwen.tools.db_connector.server，端口7087）
+# 服务地址：http://192.168.0.109:7087/db-connector （对应 db_connector.server，端口7087）
 # 说明：首次使用必须先调用"工具0：数据库配置"提交真实 DB 信息，否则其他工具将返回 428（未配置）
 
 # 工具0：数据库配置（首次使用入口）

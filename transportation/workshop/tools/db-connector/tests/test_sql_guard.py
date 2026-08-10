@@ -2,8 +2,8 @@
 
 import pytest
 
-from openjiuwen.tools.db_connector.config import SecurityConfig
-from openjiuwen.tools.db_connector.security.sql_guard import SqlGuard
+from db_connector.config import SecurityConfig
+from db_connector.security.sql_guard import SqlGuard
 
 
 @pytest.fixture

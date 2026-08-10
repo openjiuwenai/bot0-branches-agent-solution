@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
 
-from openjiuwen.tools.db_connector.config import SchemaImportConfig
-from openjiuwen.tools.db_connector.schema.schema_importer import (
+from db_connector.config import SchemaImportConfig
+from db_connector.schema.schema_importer import (
     SchemaImporter,
     SchemaSnapshot,
 )

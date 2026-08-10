@@ -1,4 +1,4 @@
-"""openjiuwen.tools.db_connector — 数据库连接 Agent 工具"""
+"""db_connector — 数据库连接 Agent 工具"""
 
 from __future__ import annotations
 

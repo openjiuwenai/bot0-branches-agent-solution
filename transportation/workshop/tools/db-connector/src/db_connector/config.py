@@ -141,9 +141,9 @@ def load_config(path: str | Path | None = None) -> DbConnectorConfig:
         return DbConnectorConfig()
 
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    # 定位到 openjiuwen.tools.db-connector
+    # 定位到 db-connector
     node = raw
-    for key in ("openjiuwen", "tools", "db-connector"):
+    for key in ("db-connector",):
         if not isinstance(node, dict) or key not in node:
             return DbConnectorConfig()
         node = node[key]

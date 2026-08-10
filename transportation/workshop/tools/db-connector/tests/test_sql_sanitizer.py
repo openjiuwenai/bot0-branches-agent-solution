@@ -2,7 +2,7 @@
 
 import pytest
 
-from openjiuwen.tools.db_connector.security.sql_sanitizer import (
+from db_connector.security.sql_sanitizer import (
     validate_identifier,
     SqlSanitizer,
 )

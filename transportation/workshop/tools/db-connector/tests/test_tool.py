@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy import create_engine, Column, Integer, String, MetaData, Table
 
-from openjiuwen.tools.db_connector.config import (
+from db_connector.config import (
     DbConnectorConfig,
     DataSourceConfig,
     SecurityConfig,
@@ -13,7 +13,7 @@ from openjiuwen.tools.db_connector.config import (
     McpConfig,
     PoolConfig,
 )
-from openjiuwen.tools.db_connector.tool import DefaultDbConnectorTool, QueryOptions
+from db_connector.tool import DefaultDbConnectorTool, QueryOptions
 
 
 @pytest.fixture

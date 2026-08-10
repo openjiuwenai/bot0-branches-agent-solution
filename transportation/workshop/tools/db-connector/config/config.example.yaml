@@ -1,54 +1,52 @@
 # db-connector 配置示例
 # 复制为 config.yaml 并按实际环境修改；凭证请用 env:/vault: 前缀引用，禁止明文。
 
-openjiuwen:
-  tools:
-    db-connector:
-      enabled: true
-      mode: readonly                 # readonly | readwrite | ddl
+db-connector:
+  enabled: true
+  mode: readonly                 # readonly | readwrite | ddl
 
-      data-source:
-        type: mysql                  # mysql | postgresql
-        host: env:DB_HOST
-        port: 3306
-        database: env:DB_NAME
-        username: env:DB_USER
-        password: env:DB_PASSWORD
-        schema: public
-        pool:
-          max-pool-size: 10
-          min-idle: 2
-          connection-timeout-ms: 5000
+  data-source:
+    type: mysql                  # mysql | postgresql
+    host: env:DB_HOST
+    port: 3306
+    database: env:DB_NAME
+    username: env:DB_USER
+    password: env:DB_PASSWORD
+    schema: public
+    pool:
+      max-pool-size: 10
+      min-idle: 2
+      connection-timeout-ms: 5000
 
-      credential:
-        provider: env                # env | vault
-        vault:                       # provider=vault 时生效
-          addr: env:VAULT_ADDR
-          mount: database
-          path: traffic/db
-          role: db-connector
+  credential:
+    provider: env                # env | vault
+    vault:                       # provider=vault 时生效
+      addr: env:VAULT_ADDR
+      mount: database
+      path: traffic/db
+      role: db-connector
 
-      schema-import:
-        enabled: true
-        allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
-        sensitive-columns: ["phone", "plate_no"]
-        snapshot-path: ./schema-snapshot.json
+  schema-import:
+    enabled: true
+    allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
+    sensitive-columns: ["phone", "plate_no"]
+    snapshot-path: ./schema-snapshot.json
 
-      security:
-        allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
-        blocked-keywords: ["DROP", "TRUNCATE", "SHUTDOWN"]
-        max-rows: 10000
-        query-timeout-ms: 30000
-        allow-ddl: false
-        sql-template-whitelist: false
+  security:
+    allowed-tables: ["traffic_flow", "toll_station", "road_segment"]
+    blocked-keywords: ["DROP", "TRUNCATE", "SHUTDOWN"]
+    max-rows: 10000
+    query-timeout-ms: 30000
+    allow-ddl: false
+    sql-template-whitelist: false
 
-      audit:
-        enabled: true
-        sink: file                   # file | logger | kafka
-        path: ./logs/db-connector-audit.log
+  audit:
+    enabled: true
+    sink: file                   # file | logger | kafka
+    path: ./logs/db-connector-audit.log
 
-      mcp:
-        enabled: true
-        transport: stdio             # stdio | sse | streamable-http
-        name: db-connector
-        version: 0.1.0
+  mcp:
+    enabled: true
+    transport: stdio             # stdio | sse | streamable-http
+    name: db-connector
+    version: 0.1.0
