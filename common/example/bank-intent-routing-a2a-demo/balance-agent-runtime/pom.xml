@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
-    <parent><groupId>com.openjiuwen.example</groupId><artifactId>agentcore-ext-intent-bank-a2a-demo</artifactId><version>0.1.0</version><relativePath>../pom.xml</relativePath></parent>
+    <parent><groupId>com.openjiuwen.example</groupId><artifactId>bank-intent-routing-a2a-demo</artifactId><version>0.1.0</version><relativePath>../pom.xml</relativePath></parent>
     <artifactId>intent-bank-balance-agent-runtime</artifactId>
     <dependencies>
         <dependency><groupId>com.openjiuwen.example</groupId><artifactId>bank-demo-common</artifactId></dependency>
