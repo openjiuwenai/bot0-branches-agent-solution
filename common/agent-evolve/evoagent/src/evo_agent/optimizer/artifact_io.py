@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -34,10 +35,19 @@ def atomic_write_bytes(path: Path, payload: bytes) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
         temporary = Path(temp_name)
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except BaseException:
+            # If os.fdopen raised before taking ownership of the descriptor,
+            # the raw fd is still open and must be closed. When fdopen
+            # succeeded the `with` already closed it, and this os.close is a
+            # swallowed no-op.
+            with suppress(OSError):
+                os.close(descriptor)
+            raise
         os.replace(temporary, path)
         temporary = None
         # Best-effort directory fsync so rename is durable on POSIX. Windows (and
