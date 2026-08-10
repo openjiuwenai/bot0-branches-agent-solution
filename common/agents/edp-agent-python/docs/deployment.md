@@ -798,15 +798,6 @@ PLANNING_AGENT_MODEL_USER_ID=user-001
 PLANNING_AGENT_MODEL_USER_ID_HEADER=userId
 ```
 
-**示例网关（X-Example-Token + X-User-Id + 附加渠道号）：**
-```env
-PLANNING_AGENT_MODEL_TOKEN=example-token-001
-PLANNING_AGENT_MODEL_TOKEN_HEADER=X-Example-Token
-PLANNING_AGENT_MODEL_USER_ID=user-1001
-PLANNING_AGENT_MODEL_USER_ID_HEADER=X-User-Id
-PLANNING_AGENT_MODEL_EXTRA_HEADERS={"X-Channel-Id":"example-channel"}
-```
-
 ### E.4 Redis 地址快速选择表
 
 | 场景 | `REDIS_HOST` 值 |
