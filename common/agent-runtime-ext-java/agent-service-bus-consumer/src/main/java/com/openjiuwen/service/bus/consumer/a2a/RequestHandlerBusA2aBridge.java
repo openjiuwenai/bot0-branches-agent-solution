@@ -7,6 +7,7 @@ package com.openjiuwen.service.bus.consumer.a2a;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.bus.consumer.model.AgentBusEventEnvelope;
 import com.openjiuwen.service.bus.consumer.model.BusDispatchResult;
 
@@ -125,6 +126,35 @@ public class RequestHandlerBusA2aBridge {
         }
         MessageSendParams params = messageSendParams(decode(payload).params());
         return Optional.ofNullable(params.message().taskId()).filter(value -> !value.isBlank());
+    }
+
+    /**
+     * Returns the JSON-RPC request identity carried by an A2A bus payload.
+     *
+     * @param payload decoded request payload
+     * @return request identity, or {@code null} when the request is a notification
+     */
+    public Object requestId(byte[] payload) {
+        return decode(payload).requestId();
+    }
+
+    /**
+     * Serializes a bridge result through the same response serializer used by the HTTP controller.
+     *
+     * @param payload original A2A JSON-RPC request
+     * @param result handler dispatch result
+     * @return complete standard A2A JSON-RPC response
+     */
+    public String response(byte[] payload, BusDispatchResult result) {
+        Payload decoded = decode(payload);
+        try {
+            if (isMethod(decoded, "GetTask")) {
+                return A2aJsonRpcResponseSerializer.queryResult(decoded.requestId(), result.task());
+            }
+            return A2aJsonRpcResponseSerializer.sendMessage(decoded.requestId(), result.response());
+        } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
+            throw new IllegalStateException("Failed to serialize A2A bridge response", failure);
+        }
     }
 
     /**
@@ -251,7 +281,10 @@ public class RequestHandlerBusA2aBridge {
         if (params == null || params.isNull()) {
             throw new IllegalArgumentException("PAYLOAD_INVALID");
         }
-        return new Payload(method, params);
+        Object requestId = root.has("id") && !root.get("id").isNull()
+                ? MAPPER.convertValue(root.get("id"), Object.class)
+                : null;
+        return new Payload(method, params, requestId);
     }
 
     private static <T> T convert(JsonNode params, Class<T> type) {
@@ -311,6 +344,6 @@ public class RequestHandlerBusA2aBridge {
         }
     }
 
-    private record Payload(String method, JsonNode params) {
+    private record Payload(String method, JsonNode params, Object requestId) {
     }
 }

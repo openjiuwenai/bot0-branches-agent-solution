@@ -41,6 +41,19 @@ class AgentBusProjectionContractTest {
                         + "errorCode=TASK_NOT_FOUND;retryable=false");
     }
 
+    @Test
+    void completeJsonRpcResponseMatchesGoldenDescriptor() {
+        String response = "{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"task\":{"
+                + "\"id\":\"task-1\"}}}";
+        BusResponseProjection projection = projection("A2A_CALL_RESPONSE", "task-1", "RESPONSE",
+                Map.of("a2aResponse", response));
+
+        assertThat(AgentBusResponsePublisher.encodeProjection(projection)).isEqualTo(
+                "taskId=task-1;projectionKind=RESPONSE;revision=0;"
+                        + "a2aResponseType=JsonRpcResponse;"
+                        + "a2aResponse=eyJqc29ucnBjIjoiMi4wIiwiaWQiOiJyZXEtMSIsInJlc3VsdCI6eyJ0YXNrIjp7ImlkIjoidGFzay0xIn19fQ");
+    }
+
     private static BusResponseProjection projection(String eventType, String taskId, String kind,
             Map<String, Object> data) {
         return new BusResponseProjection("event-1", eventType, "tenant-a", "correlation-1", taskId,

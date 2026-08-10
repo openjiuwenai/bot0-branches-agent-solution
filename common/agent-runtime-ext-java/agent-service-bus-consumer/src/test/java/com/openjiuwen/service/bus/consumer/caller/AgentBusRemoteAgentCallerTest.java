@@ -12,6 +12,7 @@ import com.openjiuwen.bus.forwarding.spi.AgentBusRequestSubmitter;
 import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
+import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcResponseSerializer;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
@@ -19,7 +20,6 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
-import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.client.ClientEvent;
 import org.a2aproject.sdk.client.TaskEvent;
 import org.a2aproject.sdk.client.TaskUpdateEvent;
@@ -105,18 +105,32 @@ class AgentBusRemoteAgentCallerTest {
 
         Task completed = Task.builder().id("task-b").contextId("context-a")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).build();
-        String json = JsonUtil.toJson(completed);
+        String json = A2aJsonRpcResponseSerializer.streamingEvent("request-1", completed);
         String encoded = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(json.getBytes(StandardCharsets.UTF_8));
         caller.accept(response(request, AgentBusEventType.A2A_CALL_TERMINAL,
                 "taskId=task-b;projectionKind=TERMINAL;revision=1;status=completed;"
-                        + "a2aResponseType=Task;a2aResponse=" + encoded));
+                        + "a2aResponseType=JsonRpcResponse;a2aResponse=" + encoded));
 
         assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
         assertThat(future.join().remoteTaskId()).isEqualTo("task-b");
         assertThat(caller.pendingCount()).isZero();
         assertThat(caller.accept(response(request, AgentBusEventType.A2A_CALL_TERMINAL,
                 "taskId=task-b;projectionKind=TERMINAL;revision=1;status=completed"))).isFalse();
+    }
+
+    @Test
+    void rejectsLegacyBareTaskAndMessageProjectionFormats() {
+        AgentBusProjectionDecoder decoder = new AgentBusProjectionDecoder();
+        String encoded = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{}".getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> decoder.decode("a2aResponseType=Task;a2aResponse=" + encoded))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Unsupported a2aResponseType: Task");
+        assertThatThrownBy(() -> decoder.decode("a2aResponseType=Message;a2aResponse=" + encoded))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Unsupported a2aResponseType: Message");
     }
 
     @Test

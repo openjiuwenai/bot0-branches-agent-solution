@@ -4,6 +4,9 @@
 
 package com.openjiuwen.service.bus.consumer.caller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.a2aproject.sdk.jsonrpc.common.json.JsonUtil;
 import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.Task;
@@ -19,6 +22,8 @@ import java.util.Map;
  * @since 2026-08-04
  */
 final class AgentBusProjectionDecoder {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     DecodedProjection decode(String inlinePayload) {
         Map<String, String> fields = fields(inlinePayload);
         String response = fields.get("a2aResponse");
@@ -27,17 +32,33 @@ final class AgentBusProjectionDecoder {
         }
         String responseType = required(fields, "a2aResponseType");
         String json = decodeBase64Url(response);
-        try {
-            if ("Task".equals(responseType)) {
-                return new DecodedProjection(fields, JsonUtil.fromJson(json, Task.class), null);
-            }
-            if ("Message".equals(responseType)) {
-                return new DecodedProjection(fields, null, JsonUtil.fromJson(json, Message.class));
-            }
-        } catch (org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
-            throw new IllegalArgumentException("Invalid A2A response projection", failure);
+        if (!"JsonRpcResponse".equals(responseType)) {
+            throw new IllegalArgumentException("Unsupported a2aResponseType: " + responseType);
         }
-        throw new IllegalArgumentException("Unsupported a2aResponseType: " + responseType);
+        return decodeJsonRpc(fields, json);
+    }
+
+    private static DecodedProjection decodeJsonRpc(Map<String, String> fields, String json) {
+        try {
+            JsonNode root = MAPPER.readTree(json);
+            JsonNode result = root.path("result");
+            JsonNode task = result.path("task");
+            if (task.isMissingNode() && result.has("status")) {
+                task = result;
+            }
+            if (!task.isMissingNode() && !task.isNull()) {
+                return new DecodedProjection(fields, JsonUtil.fromJson(task.toString(), Task.class), null);
+            }
+            JsonNode message = result.path("message");
+            if (!message.isMissingNode() && !message.isNull()) {
+                return new DecodedProjection(fields, null,
+                        JsonUtil.fromJson(message.toString(), Message.class));
+            }
+            throw new IllegalArgumentException("JSON-RPC response has no A2A Task or Message result");
+        } catch (com.fasterxml.jackson.core.JsonProcessingException
+                | org.a2aproject.sdk.jsonrpc.common.json.JsonProcessingException failure) {
+            throw new IllegalArgumentException("Invalid A2A JSON-RPC response projection", failure);
+        }
     }
 
     private static Map<String, String> fields(String inlinePayload) {

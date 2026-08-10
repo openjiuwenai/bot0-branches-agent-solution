@@ -45,6 +45,19 @@ class RuntimeBusDemoAgentHandlerTest {
     }
 
     @Test
+    void calleeEchoesTraceAndAgentMetadataIntoResult() {
+        ServeRequest request = request("hello");
+        request.setMetadata(Map.of("attributes", Map.of("traceId", "trace-11"),
+                "agentId", "demo-a2a-agent-a"));
+
+        QueryResponse response = RuntimeBusDemoAgentHandler.callee().query(request);
+
+        assertThat(response.getResult().toString())
+                .contains("[trace=trace-11]")
+                .contains("[agent=demo-a2a-agent-a]");
+    }
+
+    @Test
     void calleeRequestsInputForApprovalScenario() {
         QueryResponse response = RuntimeBusDemoAgentHandler.callee()
                 .query(request(RuntimeBusDemoAgentHandler.INPUT_REQUIRED_TRIGGER));
