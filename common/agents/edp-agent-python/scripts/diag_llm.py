@@ -165,8 +165,8 @@ CASES: dict[str, dict[str, Any]] = {
                 "role": "tool",
                 "tool_call_id": "call_1",
                 "content": (
-                    '[{"id":"P001","name":"稳健月月盈","yield":3.2},'
-                    '{"id":"P002","name":"安心90天","yield":3.5}]'
+                    '[{"id":"P001","name":"示例理财产品001","yield":3.2},'
+                    '{"id":"P002","name":"示例理财产品002","yield":3.5}]'
                 ),
             },
             {
