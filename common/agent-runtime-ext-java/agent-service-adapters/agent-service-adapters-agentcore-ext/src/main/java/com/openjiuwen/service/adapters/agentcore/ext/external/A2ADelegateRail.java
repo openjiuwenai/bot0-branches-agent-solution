@@ -18,7 +18,6 @@ import com.openjiuwen.service.app.a2a.catalog.A2ARemoteAgentCardRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -30,9 +29,6 @@ import java.util.Objects;
 public final class A2ADelegateRail extends BaseInterruptRail {
     /** Internal Tool target used for Runtime A2A delegation. */
     public static final String TARGET_NAME = A2ADelegateIntentResultFunction.TOOL_NAME;
-
-    /** Optional parent-Agent progress shown before a remote input request. */
-    public static final String PARENT_PROGRESS = "parentProgress";
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -80,15 +76,8 @@ public final class A2ADelegateRail extends BaseInterruptRail {
         }
         log.info("A2A delegate Rail created interrupt toolCallId={} agentName={} remoteInputLength={}",
                 toolCallId(toolCall), agentName, remoteInput.length());
-        Map<String, Object> interruptContext = new LinkedHashMap<>();
-        interruptContext.put("agentName", agentName);
-        interruptContext.put("_interrupt_kind", "a2a_delegate");
-        String parentProgress = text(arguments.get(PARENT_PROGRESS));
-        if (!parentProgress.isBlank()) {
-            interruptContext.put(PARENT_PROGRESS, parentProgress);
-        }
         return interrupt(InterruptRequest.builder().message(remoteInput)
-                .context(interruptContext).build());
+                .context(Map.of("agentName", agentName, "_interrupt_kind", "a2a_delegate")).build());
     }
 
     private static Map<String, Object> parseArguments(ToolCall toolCall) {

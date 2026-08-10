@@ -45,8 +45,10 @@ class BankInterruptRailsTest {
         new IntentChangeTerminationRail().afterToolCall(context);
 
         assertThat(context.hasForceFinishRequest()).isTrue();
-        assertThat(context.getForceFinishRequest().getResult()).containsEntry("status", "INTENT_CHANGED")
-                .containsEntry("latestSemantic", "购买1000元理财");
+        assertThat(context.getForceFinishRequest().getResult()).containsEntry("result_type", "answer");
+        assertThat(context.getForceFinishRequest().getResult().get("output")).isInstanceOfSatisfying(Map.class,
+                output -> assertThat(output).containsEntry("status", "INTENT_CHANGED")
+                        .containsEntry("latestSemantic", "购买1000元理财"));
     }
 
     @Test

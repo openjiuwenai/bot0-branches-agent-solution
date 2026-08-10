@@ -54,36 +54,63 @@ function Send-BankMessage([string]$ContextId, [string]$TaskId, [string]$Message)
     if ($TaskId) {
         $requestMessage.taskId = $TaskId
     }
-    $payload = [ordered]@{
+    $request = [ordered]@{
         jsonrpc = "2.0"
         id = [guid]::NewGuid().ToString()
-        method = "SendMessage"
+        method = "SendStreamingMessage"
         params = @{ message = $requestMessage }
-    } | ConvertTo-Json -Depth 20
-    return Invoke-RestMethod -Method Post -Uri "$IntentAgentBaseUrl/a2a/" -ContentType "application/json" `
+    }
+    $payload = $request | ConvertTo-Json -Depth 20
+    Write-Host "`n=== REQUEST ==="
+    Write-Host ($request | ConvertTo-Json -Depth 20)
+    $rawResponse = Invoke-WebRequest -Method Post -Uri "$IntentAgentBaseUrl/a2a/" `
+        -ContentType "application/json" -Headers @{ Accept = "text/event-stream" } `
         -Body $payload -TimeoutSec $RequestTimeoutSeconds
+    $events = @()
+    foreach ($line in ($rawResponse.Content -split "`r?`n")) {
+        if ($line.StartsWith("data:")) {
+            $events += ($line.Substring(5).Trim() | ConvertFrom-Json)
+        }
+    }
+    if ($events.Count -eq 0) {
+        Fail "SSE response contained no JSON-RPC data events"
+    }
+    Write-Host "`n=== RESPONSE ==="
+    Write-Host ($events | ConvertTo-Json -Depth 30)
+    return [pscustomobject]@{ Events = $events }
 }
 
 function Assert-Task($Response, [string]$ExpectedState, [string[]]$ExpectedText = @()) {
-    if ($Response.error) {
-        Fail ("JSON-RPC error: " + ($Response.error | ConvertTo-Json -Depth 20 -Compress))
+    foreach ($event in $Response.Events) {
+        if ($event.error) {
+            Fail ("JSON-RPC error: " + ($event.error | ConvertTo-Json -Depth 20 -Compress))
+        }
     }
-    $task = $Response.result.task
-    if ($task.status.state -ne $ExpectedState) {
-        Fail "task state is $($task.status.state), expected $ExpectedState"
+    $updates = @($Response.Events | ForEach-Object {
+        if ($_.result.statusUpdate) { $_.result.statusUpdate }
+        elseif ($_.result.artifactUpdate) { $_.result.artifactUpdate }
+    })
+    $states = @($updates | ForEach-Object { if ($_.status.state) { $_.status.state } })
+    $state = if ($states.Count -gt 0) { $states[-1] } else { "" }
+    if ($state -ne $ExpectedState) {
+        Fail "task state is $state, expected $ExpectedState"
     }
-    $json = ($Response | ConvertTo-Json -Depth 30 -Compress).ToLowerInvariant().Replace(",", "").Replace(" ", "")
+    $taskIds = @($updates | ForEach-Object { if ($_.taskId) { [string]$_.taskId } } | Select-Object -Unique)
+    if ($taskIds.Count -ne 1) {
+        Fail "SSE response did not contain one stable taskId: $($taskIds -join ', ')"
+    }
+    $json = ($Response.Events | ConvertTo-Json -Depth 30 -Compress).ToLowerInvariant().Replace(",", "").Replace(" ", "")
     foreach ($text in $ExpectedText) {
         $normalized = $text.ToLowerInvariant().Replace(",", "").Replace(" ", "")
         if (-not $json.Contains($normalized)) {
             Fail "response does not contain '$text'"
         }
     }
-    return $task
+    return [pscustomobject]@{ id = $taskIds[0]; status = [pscustomobject]@{ state = $state } }
 }
 
 function Assert-TaskContainsAny($Response, [string[]]$ExpectedText) {
-    $json = ($Response | ConvertTo-Json -Depth 30 -Compress).ToLowerInvariant().Replace(",", "").Replace(" ", "")
+    $json = ($Response.Events | ConvertTo-Json -Depth 30 -Compress).ToLowerInvariant().Replace(",", "").Replace(" ", "")
     foreach ($text in $ExpectedText) {
         $normalized = $text.ToLowerInvariant().Replace(",", "").Replace(" ", "")
         if ($json.Contains($normalized)) {
@@ -91,6 +118,23 @@ function Assert-TaskContainsAny($Response, [string[]]$ExpectedText) {
         }
     }
     Fail "response does not contain any accepted date format"
+}
+
+function Assert-EventOrder($Response, [string]$First, [string]$Second) {
+    $firstIndex = -1
+    $secondIndex = -1
+    for ($index = 0; $index -lt $Response.Events.Count; $index++) {
+        $json = ($Response.Events[$index] | ConvertTo-Json -Depth 30 -Compress).ToLowerInvariant()
+        if ($firstIndex -lt 0 -and $json.Contains($First.ToLowerInvariant())) {
+            $firstIndex = $index
+        }
+        if ($secondIndex -lt 0 -and $json.Contains($Second.ToLowerInvariant())) {
+            $secondIndex = $index
+        }
+    }
+    if ($firstIndex -lt 0 -or $secondIndex -lt 0 -or $firstIndex -ge $secondIndex) {
+        Fail "expected SSE event '$First' before '$Second'"
+    }
 }
 
 function Run-Completed([string]$Label, [string]$Message, [string[]]$ExpectedText) {
@@ -183,7 +227,7 @@ try {
 
     $context = New-Context "transfer-confirm"
     $response = Send-BankMessage $context "" "给张三转100元"
-    $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" @("确认")
+    $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" @("确认", "张三", "100")
     $response = Send-BankMessage $context $task.id "确认"
     $null = Assert-Task $response "TASK_STATE_COMPLETED" @("张三", "100")
     Write-Host "PASS: transfer confirmation and resume"
@@ -219,14 +263,16 @@ try {
     $intentLog = Join-Path $tempDir "intent.out.log"
     $planLogStart = @(Get-Content -Path $intentLog -Encoding UTF8).Count
     $response = Send-BankMessage $context "" "给张三和李四各转100元"
-    $task = $response.result.task
-    for ($step = 0; $step -lt 4 -and $task.status.state -ne "TASK_STATE_COMPLETED"; $step++) {
-        $null = Assert-Task $response "TASK_STATE_INPUT_REQUIRED"
-        $response = Send-BankMessage $context $task.id "确认"
-        $task = $response.result.task
-    }
+    $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" `
+        @("执行计划", "1. 给张三转账100元", "2. 给李四转账100元", "当前执行第 1/2 步", "确认")
+    Assert-EventOrder $response "bank_plan_progress" "TASK_STATE_INPUT_REQUIRED"
+    $response = Send-BankMessage $context $task.id "确认"
+    $null = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" `
+        @("第 1/2 步已完成", "当前执行第 2/2 步", "李四", "确认")
+    Assert-EventOrder $response "bank_plan_progress" "TASK_STATE_INPUT_REQUIRED"
+    $response = Send-BankMessage $context $task.id "确认"
     $null = Assert-Task $response "TASK_STATE_COMPLETED" @("张三", "李四", "100")
-    Write-Host "PASS: DeepAgent plan executes two routed transfer steps"
+    Write-Host "PASS: DeepAgent exposes its plan and completes routed transfers one by one"
 
     $planLines = @(Get-Content -Path $intentLog -Encoding UTF8 | Select-Object -Skip $planLogStart)
     Assert-LogOrder "todo_create precedes planned intent routing" $planLines `

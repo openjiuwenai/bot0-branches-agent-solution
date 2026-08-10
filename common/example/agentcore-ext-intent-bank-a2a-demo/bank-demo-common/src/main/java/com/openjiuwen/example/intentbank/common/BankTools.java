@@ -51,7 +51,8 @@ public final class BankTools {
     public static final String WEATHER = "weather_query";
 
     private static final Pattern BINARY_EXPRESSION = Pattern
-            .compile("([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*([+\\-*/])\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))");
+            .compile("([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*(加上|减去|乘以|除以|[+\\-*/×÷加减乘除])\\s*"
+                    + "([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))");
     private static final Logger log = LoggerFactory.getLogger(BankTools.class);
 
     private BankTools() {
@@ -196,10 +197,10 @@ public final class BankTools {
         BigDecimal left = new BigDecimal(matcher.group(1));
         BigDecimal right = new BigDecimal(matcher.group(3));
         BigDecimal result = switch (matcher.group(2)) {
-        case "+" -> left.add(right);
-        case "-" -> left.subtract(right);
-        case "*" -> left.multiply(right);
-        case "/" -> right.signum() == 0 ? null : left.divide(right, MathContext.DECIMAL128);
+        case "+", "加", "加上" -> left.add(right);
+        case "-", "减", "减去" -> left.subtract(right);
+        case "*", "×", "乘", "乘以" -> left.multiply(right);
+        case "/", "÷", "除", "除以" -> right.signum() == 0 ? null : left.divide(right, MathContext.DECIMAL128);
         default -> null;
         };
         if (result == null) {

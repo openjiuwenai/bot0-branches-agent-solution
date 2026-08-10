@@ -51,6 +51,24 @@ print()
 PY
 }
 
+print_sse() {
+  local label="$1"
+  local path="$2"
+  printf '\n=== %s ===\n' "$label"
+  "$PYTHON" - "$path" <<'PY'
+import json, sys
+events = []
+with open(sys.argv[1], encoding="utf-8") as stream:
+    for line in stream:
+        if line.startswith("data:"):
+            events.append(json.loads(line[5:].strip()))
+if not events:
+    raise SystemExit("SSE response contained no JSON-RPC data events")
+json.dump(events, sys.stdout, ensure_ascii=False, indent=2)
+print()
+PY
+}
+
 if [ ! -r "$SCRIPT_DIR/application-intent_local.yml" ]; then
   fail "copy application-intent_local-example.yml to application-intent_local.yml and configure both models"
 fi
@@ -119,16 +137,17 @@ if task_id:
 payload = {
     "jsonrpc": "2.0",
     "id": str(uuid.uuid4()),
-    "method": "SendMessage",
+    "method": "SendStreamingMessage",
     "params": {"message": request_message},
 }
 with open(output, "w", encoding="utf-8") as stream:
     json.dump(payload, stream, ensure_ascii=False)
 PY
   print_json "REQUEST $(basename "$output")" "$output.request"
-  curl -fsS --max-time "$REQUEST_TIMEOUT" -X POST "$BASE_URL/a2a/" \
-    -H 'Content-Type: application/json' --data-binary "@$output.request" >"$output"
-  print_json "RESPONSE $(basename "$output")" "$output"
+  curl -fsS -N --max-time "$REQUEST_TIMEOUT" -X POST "$BASE_URL/a2a/" \
+    -H 'Content-Type: application/json' -H 'Accept: text/event-stream' \
+    --data-binary "@$output.request" >"$output"
+  print_sse "RESPONSE $(basename "$output")" "$output"
 }
 
 task_field() {
@@ -137,15 +156,31 @@ task_field() {
   "$PYTHON" - "$response" "$field" <<'PY'
 import json, sys
 path, field = sys.argv[1:]
+events = []
 with open(path, encoding="utf-8") as stream:
-    response = json.load(stream)
-if response.get("error"):
-    raise SystemExit("JSON-RPC error: " + json.dumps(response["error"], ensure_ascii=False))
-task = ((response.get("result") or {}).get("task") or {})
+    for line in stream:
+        if line.startswith("data:"):
+            events.append(json.loads(line[5:].strip()))
+if not events:
+    raise SystemExit("SSE response contained no JSON-RPC data events")
+for event in events:
+    if event.get("error"):
+        raise SystemExit("JSON-RPC error: " + json.dumps(event["error"], ensure_ascii=False))
+updates = []
+for event in events:
+    result = event.get("result") or {}
+    update = result.get("statusUpdate") or result.get("artifactUpdate") or {}
+    if update:
+        updates.append(update)
 if field == "state":
-    print(((task.get("status") or {}).get("state")) or "")
+    states = [((update.get("status") or {}).get("state")) for update in updates]
+    states = [state for state in states if state]
+    print(states[-1] if states else "")
 elif field == "id":
-    print(task.get("id") or "")
+    task_ids = [str(update.get("taskId")) for update in updates if update.get("taskId")]
+    if task_ids and len(set(task_ids)) != 1:
+        raise SystemExit("SSE response changed taskId: " + repr(task_ids))
+    print(task_ids[-1] if task_ids else "")
 PY
 }
 
@@ -163,8 +198,12 @@ assert_contains() {
   "$PYTHON" - "$response" "$@" <<'PY'
 import json, sys
 path, *expected = sys.argv[1:]
+events = []
 with open(path, encoding="utf-8") as stream:
-    text = json.dumps(json.load(stream), ensure_ascii=False).lower()
+    for line in stream:
+        if line.startswith("data:"):
+            events.append(json.loads(line[5:].strip()))
+text = json.dumps(events, ensure_ascii=False).lower()
 normalized = text.replace(",", "").replace(" ", "")
 missing = [item for item in expected if item.lower().replace(",", "").replace(" ", "") not in normalized]
 if missing:
@@ -178,11 +217,35 @@ assert_contains_any() {
   "$PYTHON" - "$response" "$@" <<'PY'
 import json, sys
 path, *expected = sys.argv[1:]
+events = []
 with open(path, encoding="utf-8") as stream:
-    text = json.dumps(json.load(stream), ensure_ascii=False).lower()
+    for line in stream:
+        if line.startswith("data:"):
+            events.append(json.loads(line[5:].strip()))
+text = json.dumps(events, ensure_ascii=False).lower()
 normalized = text.replace(",", "").replace(" ", "")
 if not any(item.lower().replace(",", "").replace(" ", "") in normalized for item in expected):
     raise SystemExit("response contains none of " + repr(expected) + ": " + text[:4000])
+PY
+}
+
+assert_event_order() {
+  local response="$1"
+  local first="$2"
+  local second="$3"
+  "$PYTHON" - "$response" "$first" "$second" <<'PY'
+import json, sys
+path, first, second = sys.argv[1:]
+events = []
+with open(path, encoding="utf-8") as stream:
+    for line in stream:
+        if line.startswith("data:"):
+            events.append(json.loads(line[5:].strip()))
+rendered = [json.dumps(event, ensure_ascii=False).lower() for event in events]
+first_index = next((index for index, event in enumerate(rendered) if first.lower() in event), None)
+second_index = next((index for index, event in enumerate(rendered) if second.lower() in event), None)
+if first_index is None or second_index is None or first_index >= second_index:
+    raise SystemExit(f"expected SSE event {first!r} before {second!r}")
 PY
 }
 
@@ -322,6 +385,7 @@ write_request "$plan_context" "" "给张三和李四各转100元" "$plan_1"
 assert_state "$plan_1" TASK_STATE_INPUT_REQUIRED
 assert_contains "$plan_1" "执行计划" "1. 给张三转账100元" "2. 给李四转账100元" \
   "当前执行第 1/2 步" "确认" "张三" "100"
+assert_event_order "$plan_1" "bank_plan_progress" "TASK_STATE_INPUT_REQUIRED"
 plan_task="$(task_field "$plan_1" id)"
 [ -n "$plan_task" ] || fail "planned transfer returned no task id"
 
@@ -329,6 +393,7 @@ plan_2="$TMP_DIR/transfer-plan-2.json"
 write_request "$plan_context" "$plan_task" "确认" "$plan_2"
 assert_state "$plan_2" TASK_STATE_INPUT_REQUIRED
 assert_contains "$plan_2" "第 1/2 步已完成" "张三" "100" "当前执行第 2/2 步" "确认" "李四"
+assert_event_order "$plan_2" "bank_plan_progress" "TASK_STATE_INPUT_REQUIRED"
 
 plan_3="$TMP_DIR/transfer-plan-3.json"
 write_request "$plan_context" "$plan_task" "确认" "$plan_3"

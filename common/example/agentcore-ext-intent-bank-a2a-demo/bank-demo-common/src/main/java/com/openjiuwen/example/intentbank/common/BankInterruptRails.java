@@ -69,7 +69,7 @@ public final class BankInterruptRails {
             }
             Map<String, Object> terminal = new java.util.LinkedHashMap<>();
             result.forEach((key, value) -> terminal.put(String.valueOf(key), value));
-            context.requestForceFinish(terminal);
+            context.requestForceFinish(Map.of("output", terminal, "result_type", "answer"));
         }
     }
 
