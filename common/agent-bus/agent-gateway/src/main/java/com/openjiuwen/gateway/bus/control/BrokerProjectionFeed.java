@@ -240,9 +240,11 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
     }
 
     private static ThreadFactory daemonFactory() {
+        ThreadFactory defaultFactory = Executors.defaultThreadFactory();
         AtomicInteger seq = new AtomicInteger();
         return r -> {
-            Thread t = new Thread(r, "broker-projection-feed-dispatcher-" + seq.incrementAndGet());
+            Thread t = defaultFactory.newThread(r);
+            t.setName("broker-projection-feed-dispatcher-" + seq.incrementAndGet());
             t.setDaemon(true);
             t.setUncaughtExceptionHandler((thread, ex) ->
                     log.warn("uncaught exception in dispatcher thread " + thread.getName(), ex));
