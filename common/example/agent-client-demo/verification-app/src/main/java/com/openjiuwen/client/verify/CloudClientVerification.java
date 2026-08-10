@@ -448,7 +448,6 @@ public final class CloudClientVerification {
                     continuation.set(client.continueInput(ContinueInputRequest.builder()
                             .conversationId(call.conversationId())
                             .relatedInvocationRef(call.invocationRef())
-                            .mode(InvocationMode.STREAMING)
                             .input("ok")
                             .build()));
                     continued.countDown();

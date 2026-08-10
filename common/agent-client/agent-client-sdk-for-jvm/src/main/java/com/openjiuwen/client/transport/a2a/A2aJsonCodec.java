@@ -24,8 +24,8 @@ import java.util.UUID;
 /**
  * A2A JSON-RPC 2.0 报文的编解码（仅在 transport 内部使用 Jackson）。
  *
- * <p>请求侧：把中立指令映射为 {@code SendStreamingMessage}（创建/流式）与 {@code SendMessage}（unary）；
- * unary 返回时机由 {@code params.configuration.returnImmediately} 表达。
+ * <p>请求侧：把中立指令映射为 {@code SendStreamingMessage}（创建/流式续跑）与 {@code SendMessage}（unary 创建/续跑）；
+ * wire method 由首轮 mode 决定并沿续跑继承。unary 返回时机由 {@code params.configuration.returnImmediately} 表达。
  * 业务标识到 wire 字段的映射：{@code conversationId → message.contextId}、
  * {@code invocationId/idempotencyKey → message.messageId}、ToolView → {@code params.metadata.clientTools}、
  * 可选 {@code agentId → params.metadata.agentId}。
@@ -107,10 +107,16 @@ final class A2aJsonCodec {
      */
 
     ObjectNode buildResume(TransportProvider.ResumeCommand cmd) {
-        // 工具结果 / 用户输入续跑一律走 unary SendMessage（Feat-Func-011 §5.9.3）：非 SSE、单条 JSON 响应。
-        ObjectNode root = newRequest("SendMessage");
+        // 续跑 method 沿用首轮 mode（FEAT-006 §47）：STREAMING 走 SendStreamingMessage（SSE），
+        // BLOCKING / ASYNC 走 unary SendMessage（由 configuration.returnImmediately 表达返回时机）。
+        String method = (cmd.mode() == InvocationMode.STREAMING)
+                ? "SendStreamingMessage" : "SendMessage";
+        ObjectNode root = newRequest(method);
         ObjectNode params = root.putObject("params");
-        fillReturnImmediately(params, cmd.mode());
+        // unary 才写 configuration.returnImmediately；流式 method 本身即流式返回，无此语义。
+        if (cmd.mode() != InvocationMode.STREAMING) {
+            fillReturnImmediately(params, cmd.mode());
+        }
         ObjectNode message = params.putObject("message");
         message.put("role", "ROLE_USER");
         // 每次续跑用新的 messageId；taskId 关联既有 Task。toolCallId 在多并行工具场景下写入 part.metadata（见下）。

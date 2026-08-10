@@ -8,6 +8,7 @@ import com.openjiuwen.client.api.AgentClient;
 import com.openjiuwen.client.api.AgentClients;
 import com.openjiuwen.client.api.ContinueInputRequest;
 import com.openjiuwen.client.api.InvocationCall;
+import com.openjiuwen.client.api.InvocationEvent;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationRequest;
 import com.openjiuwen.client.api.InvocationSnapshot;
@@ -147,7 +148,9 @@ class A2aHttpTransportProviderTest {
     }
 
     @Test
-    void continueInputUsesRequestedAsyncMode() throws Exception {
+    void continueInputInheritsInitialMode() throws Exception {
+        // FEAT-006 §47：续轮 mode 强制继承首轮 invocation 的 mode，业务在 continueInput 中声明的 mode 被忽略。
+        // 首轮 BLOCKING → 续轮仍 BLOCKING（unary SendMessage, returnImmediately=false），即使业务传 ASYNC 也不生效。
         AtomicInteger sendMessageCalls = new AtomicInteger();
         AtomicInteger getTaskCalls = new AtomicInteger();
         List<String> returnImmediatelyValues = new CopyOnWriteArrayList<>();
@@ -161,30 +164,97 @@ class A2aHttpTransportProviderTest {
                 .transport(new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5)))
                 .build()) {
             InvocationCall initial = client.invoke(InvocationRequest.builder()
-                    .conversationId("async-continue")
+                    .conversationId("inherit-blocking")
                     .mode(InvocationMode.BLOCKING)
                     .input("need user input")
                     .build());
             initial.completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
 
+            // 业务显式传 ASYNC，但续轮应继承首轮 BLOCKING → returnImmediately=false
             InvocationCall resumed = client.continueInput(ContinueInputRequest.builder()
-                    .conversationId("async-continue")
+                    .conversationId("inherit-blocking")
                     .relatedInvocationRef(initial.invocationRef())
                     .mode(InvocationMode.ASYNC)
                     .input("user answer")
                     .build());
-            var accepted = resumed.accepted().toCompletableFuture().get(3, TimeUnit.SECONDS);
+            InvocationSnapshot completed = resumed.completion().toCompletableFuture().get(3, TimeUnit.SECONDS);
 
+            assertEquals(TaskState.COMPLETED, completed.state());
             assertEquals(2, sendMessageCalls.get());
             assertEquals(0, getTaskCalls.get());
-            assertEquals(List.of("false", "true"), returnImmediatelyValues);
-            assertEquals("task-working", accepted.diagnosticTaskRef());
-            assertFalse(resumed.completion().toCompletableFuture().isDone());
+            // 续轮继承 BLOCKING：returnImmediately=false（而非业务声明的 ASYNC=true）
+            assertEquals(List.of("false", "false"), returnImmediatelyValues);
+        } finally {
+            server.stop(0);
+        }
+    }
 
-            InvocationSnapshot observed = client.getInvocation(resumed.invocationRef())
-                    .toCompletableFuture().get(3, TimeUnit.SECONDS);
-            assertEquals(TaskState.COMPLETED, observed.state());
-            assertEquals(1, getTaskCalls.get());
+    @Test
+    void continueInputStreamingResumeInheritsStreamingMode() throws Exception {
+        // FEAT-006 §47：首轮 STREAMING → 续轮继承 STREAMING，走 SendStreamingMessage（SSE）而非 unary SendMessage。
+        AtomicInteger sendMessageCalls = new AtomicInteger();
+        AtomicInteger streamingResumeCalls = new AtomicInteger();
+        AtomicInteger getTaskCalls = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/a2a", exchange ->
+                handleStreamingResume(exchange, sendMessageCalls, streamingResumeCalls, getTaskCalls));
+        server.start();
+
+        String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+        try (AgentClient client = AgentClients.builder()
+                .transport(new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5)))
+                .build()) {
+            // 首轮 STREAMING 创建，mock 返回 INPUT_REQUIRED 等待用户输入。
+            InvocationCall initial = client.invoke(InvocationRequest.builder()
+                    .conversationId("inherit-streaming")
+                    .mode(InvocationMode.STREAMING)
+                    .input("need user input")
+                    .build());
+
+            // STREAMING + INPUT_REQUIRED 时不结算 completion（通道保持开放等待续跑），
+            // 需订阅事件流获取 InputRequired 信号后再发起 continueInput。
+            java.util.concurrent.atomic.AtomicReference<InvocationCall> continuation = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.CountDownLatch prompted = new java.util.concurrent.CountDownLatch(1);
+            initial.events().subscribe(new java.util.concurrent.Flow.Subscriber<>() {
+                @Override
+                public void onSubscribe(java.util.concurrent.Flow.Subscription s) {
+                    s.request(Long.MAX_VALUE);
+                }
+
+                @Override
+                public void onNext(InvocationEvent event) {
+                    if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null
+                            && continuation.get() == null) {
+                        continuation.set(client.continueInput(ContinueInputRequest.builder()
+                                .conversationId("inherit-streaming")
+                                .relatedInvocationRef(initial.invocationRef())
+                                .input("user answer")
+                                .build()));
+                        prompted.countDown();
+                    }
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    prompted.countDown();
+                }
+
+                @Override
+                public void onComplete() {
+                    prompted.countDown();
+                }
+            });
+
+            prompted.await(5, TimeUnit.SECONDS);
+            InvocationCall resumed = continuation.get();
+            assertNotNull(resumed, "continueInput issued after INPUT_REQUIRED prompt");
+
+            // 续轮应继承 STREAMING → 走 SendStreamingMessage（SSE）
+            InvocationSnapshot completed = resumed.completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+            assertEquals(TaskState.COMPLETED, completed.state());
+            assertEquals(1, streamingResumeCalls.get());
+            assertEquals(0, sendMessageCalls.get(), "STREAMING resume must not use unary SendMessage");
+            assertEquals(0, getTaskCalls.get());
         } finally {
             server.stop(0);
         }
@@ -224,6 +294,75 @@ class A2aHttpTransportProviderTest {
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(200, bytes.length);
         exchange.getResponseBody().write(bytes);
+        exchange.close();
+    }
+
+    /**
+     * Mock server handler for STREAMING resume scenarios: supports SendStreamingMessage create
+     * (returns SSE with INPUT_REQUIRED) and SendStreamingMessage resume (returns SSE with COMPLETED).
+     */
+    private static void handleStreamingResume(HttpExchange exchange, AtomicInteger sendMessageCalls,
+            AtomicInteger streamingResumeCalls, AtomicInteger getTaskCalls) throws IOException {
+        JsonNode request = MAPPER.readTree(exchange.getRequestBody());
+        String method = request.path("method").asText();
+        JsonNode message = request.path("params").path("message");
+        String taskId = message.path("taskId").asText("");
+        String contextId = message.path("contextId").asText("inherit-streaming");
+
+        if ("SendStreamingMessage".equals(method)) {
+            if (taskId.isBlank()) {
+                // 创建：返回 SSE 流，首帧 INPUT_REQUIRED（模拟等待用户输入）。
+                String frame = "{\"jsonrpc\":\"2.0\",\"result\":{\"task\":{\"id\":\"task-streaming\",\"contextId\":\""
+                        + contextId + "\",\"status\":{\"state\":\"TASK_STATE_INPUT_REQUIRED\"}}}}";
+                writeSseResponse(exchange, frame);
+            } else {
+                // 流式续跑：返回 SSE 流，首帧 COMPLETED。
+                streamingResumeCalls.incrementAndGet();
+                String frame = "{\"jsonrpc\":\"2.0\",\"result\":{\"task\":{\"id\":\"task-streaming\",\"contextId\":\""
+                        + contextId + "\",\"status\":{\"state\":\"TASK_STATE_COMPLETED\","
+                        + "\"message\":{\"parts\":[{\"text\":\"done\"}]}}}}}";
+                writeSseResponse(exchange, frame);
+            }
+        } else if ("SendMessage".equals(method)) {
+            sendMessageCalls.incrementAndGet();
+            String body = "{\"jsonrpc\":\"2.0\",\"id\":\"unary\",\"result\":{\"task\":{"
+                    + "\"id\":\"task-streaming\",\"contextId\":\"" + contextId + "\","
+                    + "\"status\":{\"state\":\"TASK_STATE_COMPLETED\"}}}}";
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        } else if ("GetTask".equals(method)) {
+            getTaskCalls.incrementAndGet();
+            String body = "{\"jsonrpc\":\"2.0\",\"id\":\"get\",\"result\":{\"task\":{"
+                    + "\"id\":\"task-streaming\",\"contextId\":\"" + contextId + "\","
+                    + "\"status\":{\"state\":\"TASK_STATE_COMPLETED\"}}}}";
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        } else {
+            String body = "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32601,"
+                    + "\"message\":\"method not found\"}}";
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        }
+    }
+
+    /**
+     * Write a single SSE frame and close the stream (simulates a short SSE response).
+     */
+    private static void writeSseResponse(HttpExchange exchange, String frame) throws IOException {
+        byte[] payload = ("event: jsonrpc\ndata: " + frame + "\n\n").getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+        exchange.sendResponseHeaders(200, payload.length);
+        exchange.getResponseBody().write(payload);
+        exchange.getResponseBody().flush();
         exchange.close();
     }
 }

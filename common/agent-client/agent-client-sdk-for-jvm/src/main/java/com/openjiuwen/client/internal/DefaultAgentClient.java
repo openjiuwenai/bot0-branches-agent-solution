@@ -192,9 +192,12 @@ public final class DefaultAgentClient implements AgentClient {
         }
         // 006 §3.4.1：建立业务可见的新 invocationRef，映射到同一 taskRef（一个 Task 可被多个 invocationRef 引用）。
         String newInvocationRef = request.invocationId();
-        // 续传轮继承原轮的暴露窗口：续接的是同一个服务端 Task，授权窗口不应因换了个 invocation 而重开。
+        // 续轮 mode 强制继承首轮 invocation 的 mode（FEAT-006 §47）：同一 conversation 内不得流式/非流式横跳，
+        // 业务在 continueInput 中声明的 mode 被忽略。续传轮继承原轮的暴露窗口：续接的是同一个服务端 Task，
+        // 授权窗口不应因换了个 invocation 而重开。
+        InvocationMode inheritedMode = related.mode;
         InvocationState newState = new InvocationState(
-                newInvocationRef, request.conversationId(), request.mode(),
+                newInvocationRef, request.conversationId(), inheritedMode,
                 related.clientTools, related.credentialToken, request.idempotencyKey(), true,
                 related.exposureExpiresAt);
         newState.taskRef = related.taskRef;
@@ -205,7 +208,7 @@ public final class DefaultAgentClient implements AgentClient {
         // 用 invocationId 会让调用方显式设置的幂等键失效，续传重试就会产生重复副作用。
         TransportProvider.ResumeCommand cmd = new TransportProvider.ResumeCommand(
                 newInvocationRef, related.taskRef, request.idempotencyKey(), null,
-                request.input(), request.mode(), related.clientTools, related.credentialToken,
+                request.input(), inheritedMode, related.clientTools, related.credentialToken,
                 related.conversationId, TransportProvider.ResumeDelivery.SNAPSHOT_ONLY);
 
         // 新 CallImpl：不订阅 transport 旧 Channel，而是由续跑 unary 响应直接驱动其事件流与 completion。

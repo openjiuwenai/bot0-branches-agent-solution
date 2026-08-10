@@ -11,10 +11,12 @@ import java.util.UUID;
  * 用户输入续传请求（FEAT-006 §L-11）。
  *
  * <p>当某次调用进入 {@code INPUT_REQUIRED} 且属于"需要用户补充输入"（区别于 client_tool 由 SDK 自动驱动），
- * 业务用本请求把用户输入续传给同一个服务端 Task。它在 wire 上是一次针对既有 {@code taskId} 的
- * unary {@code SendMessage}（携带用户输入 {@code TextPart}，并由 mode 映射返回时机，Feat-Func-011 §5.9.3）。
+ * 业务用本请求把用户输入续传给同一个服务端 Task。它在 wire 上是一次针对既有 {@code taskId} 的续跑请求，
+ * method 由首轮 invocation 的 mode 决定（Feat-Func-011 §5.9.3）：首轮 STREAMING 走
+ * {@code SendStreamingMessage}（SSE），首轮 BLOCKING/ASYNC 走 unary {@code SendMessage}。
  *
- * <p>{@code relatedInvocationRef} 指向那次处于 INPUT_REQUIRED 的调用句柄，SDK 借此解析出内部 {@code taskId}。
+ * <p>{@code relatedInvocationRef} 指向那次处于 INPUT_REQUIRED 的调用句柄，SDK 借此解析出内部 {@code taskId}
+ * 与首轮 mode。续轮 mode <b>强制继承</b>首轮 invocation 的 mode，业务通过 {@link #mode()} 声明的值被忽略。
  *
  * @since 2026-07-27
  */
@@ -30,7 +32,9 @@ public final class ContinueInputRequest {
         this.conversationId = Objects.requireNonNull(b.conversationId, "conversationId");
         this.relatedInvocationRef = Objects.requireNonNull(b.relatedInvocationRef, "relatedInvocationRef");
         this.input = Objects.requireNonNull(b.input, "input");
-        this.mode = Objects.requireNonNull(b.mode, "mode");
+        // mode 保留字段以便二进制兼容，但 SDK 内核不再读取它（续轮强制继承首轮 mode）。
+        // 不做非空校验：业务可完全不调 mode(...) 而依赖继承语义。
+        this.mode = b.mode;
         this.invocationId = (b.invocationId != null) ? b.invocationId : "inv-" + UUID.randomUUID();
         this.idempotencyKey = (b.idempotencyKey != null) ? b.idempotencyKey : this.invocationId;
     }
@@ -65,8 +69,12 @@ public final class ContinueInputRequest {
     /**
      * 调用模式。
      *
-     * @return 调用模式
+     * <p><b>已废弃</b>：续轮 mode 强制继承首轮 invocation 的 mode（FEAT-006 §47），SDK 内核不再读取此值。
+     * 保留该方法仅为二进制兼容，调用方可安全忽略。
+     *
+     * @return 调用模式，可能为 null（未设置时）
      */
+    @Deprecated
     public InvocationMode mode() {
         return mode;
     }
@@ -107,7 +115,7 @@ public final class ContinueInputRequest {
         private String conversationId;
         private String relatedInvocationRef;
         private String input;
-        private InvocationMode mode = InvocationMode.STREAMING;
+        private InvocationMode mode;
         private String invocationId;
         private String idempotencyKey;
 
@@ -147,9 +155,13 @@ public final class ContinueInputRequest {
         /**
          * 设置调用模式。
          *
+         * <p><b>已废弃</b>：续轮 mode 强制继承首轮 invocation 的 mode（FEAT-006 §47），此入参被 SDK 忽略。
+         * 保留方法仅为二进制兼容，调用方可不再调用此方法。
+         *
          * @param v 调用模式
          * @return 本构造器
          */
+        @Deprecated
         public Builder mode(InvocationMode v) {
             this.mode = v;
             return this;
