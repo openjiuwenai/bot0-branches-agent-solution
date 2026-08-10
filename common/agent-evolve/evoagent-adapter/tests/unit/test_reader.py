@@ -15,7 +15,10 @@ class TestHalfLineCaching:
         log_file = log_dir / "process_12345.log"
 
         # Write a line without trailing newline (simulates mid-write read)
-        log_file.write_text("2026-06-09 14:30:15.123\x01INFO\x01src\x01trace\x01agent\x01conv\x01TAG_LLM_CALL_START\x010\x01{\"id\": \"uu", encoding="utf-8")
+        log_file.write_text(
+            '2026-06-09 14:30:15.123\x01INFO\x01src\x01trace\x01agent\x01conv\x01TAG_LLM_CALL_START\x010\x01{"id": "uu',
+            encoding="utf-8",
+        )
 
         reader = LogReader(log_dir=log_dir, log_pattern="process_*.log", start_from="head")
         lines1, pending = reader.read_new_lines()
@@ -25,7 +28,7 @@ class TestHalfLineCaching:
 
         # Now append the rest of the line with a newline
         with open(log_file, "a", encoding="utf-8") as f:
-            f.write("id-001\"}\n")
+            f.write('id-001"}\n')
 
         lines2, pending2 = reader.read_new_lines()
         assert len(lines2) == 1
@@ -169,22 +172,27 @@ class TestMultiFileReading:
         (log_dir / "process_111.log").write_text("line_a1\n", encoding="utf-8")
         (log_dir / "process_222.log").write_text("line_b1\n", encoding="utf-8")
 
-        reader = LogReader(log_dir=log_dir, log_pattern="process_*.log", start_from="head",
-                           offset_file=offset_file)
+        reader = LogReader(
+            log_dir=log_dir, log_pattern="process_*.log", start_from="head", offset_file=offset_file
+        )
         lines1, _ = reader.read_new_lines()
         assert len(lines1) == 2
 
         # Mark the older file as completed
         from agent_adapter.offset import OffsetManager, FileOffset
+
         mgr = OffsetManager(offset_file=offset_file)
         entry = mgr.get("process_111.log")
         if entry is not None:
-            mgr.update("process_111.log", FileOffset(
-                offset=entry.offset,
-                file_size=entry.file_size,
-                first_line_hash=entry.first_line_hash,
-                completed=True,
-            ))
+            mgr.update(
+                "process_111.log",
+                FileOffset(
+                    offset=entry.offset,
+                    file_size=entry.file_size,
+                    first_line_hash=entry.first_line_hash,
+                    completed=True,
+                ),
+            )
 
         # Append new content to both files
         with open(log_dir / "process_111.log", "a", encoding="utf-8") as f:
@@ -193,8 +201,9 @@ class TestMultiFileReading:
             f.write("line_b2\n")
 
         # Re-create reader to reload offsets
-        reader2 = LogReader(log_dir=log_dir, log_pattern="process_*.log", start_from="head",
-                            offset_file=offset_file)
+        reader2 = LogReader(
+            log_dir=log_dir, log_pattern="process_*.log", start_from="head", offset_file=offset_file
+        )
         lines2, _ = reader2.read_new_lines()
         # Only process_222 should have new data (process_111 is completed)
         assert len(lines2) == 1

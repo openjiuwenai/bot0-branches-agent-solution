@@ -28,18 +28,46 @@ from agent_adapter.repository.aggregation import (
 
 # spans 表列序 (与 _SPAN_SQL 对齐) —— 18 列, 对齐 schema/postgres.sql (无 duration_ns, session_id)
 _SPAN_COLUMNS = (
-    "trace_id", "span_id", "parent_span_id", "trace_state", "name", "kind",
-    "start_time", "end_time", "service_name", "scope_name", "scope_version",
-    "status_code", "status_message", "attributes",
-    "resource_attributes", "events", "links", "session_id",
+    "trace_id",
+    "span_id",
+    "parent_span_id",
+    "trace_state",
+    "name",
+    "kind",
+    "start_time",
+    "end_time",
+    "service_name",
+    "scope_name",
+    "scope_version",
+    "status_code",
+    "status_message",
+    "attributes",
+    "resource_attributes",
+    "events",
+    "links",
+    "session_id",
 )
 
 # $7/$8 timestamptz, $14-17 jsonb
 _SPAN_PLACEHOLDERS = (
-    "$1", "$2", "$3", "$4", "$5", "$6",
-    "$7::timestamptz", "$8::timestamptz", "$9", "$10", "$11",
-    "$12", "$13",
-    "$14::jsonb", "$15::jsonb", "$16::jsonb", "$17::jsonb", "$18",
+    "$1",
+    "$2",
+    "$3",
+    "$4",
+    "$5",
+    "$6",
+    "$7::timestamptz",
+    "$8::timestamptz",
+    "$9",
+    "$10",
+    "$11",
+    "$12",
+    "$13",
+    "$14::jsonb",
+    "$15::jsonb",
+    "$16::jsonb",
+    "$17::jsonb",
+    "$18",
 )
 
 _SPAN_SQL = f"""
@@ -151,8 +179,12 @@ def _trace_params(trace: dict[str, Any]) -> tuple:
         _to_dt(trace.get("end_time")),
         trace.get("span_count"),
         trace.get("status"),
-        json.dumps(trace.get("request_summary"), ensure_ascii=False) if trace.get("request_summary") is not None else None,
-        json.dumps(trace.get("response_summary"), ensure_ascii=False) if trace.get("response_summary") is not None else None,
+        json.dumps(trace.get("request_summary"), ensure_ascii=False)
+        if trace.get("request_summary") is not None
+        else None,
+        json.dumps(trace.get("response_summary"), ensure_ascii=False)
+        if trace.get("response_summary") is not None
+        else None,
     )
 
 
@@ -173,7 +205,9 @@ def _row_to_span(row: asyncpg.Record) -> dict[str, Any]:
         "status_code": row["status_code"],
         "status_message": row["status_message"] or "",
         "attributes": json.loads(row["attributes"]) if row["attributes"] else {},
-        "resource_attributes": json.loads(row["resource_attributes"]) if row["resource_attributes"] else {},
+        "resource_attributes": json.loads(row["resource_attributes"])
+        if row["resource_attributes"]
+        else {},
         "events": json.loads(row["events"]) if row["events"] else [],
         "links": json.loads(row["links"]) if row["links"] else [],
         "session_id": row["session_id"],
@@ -192,7 +226,9 @@ def _trace_row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
         "span_count": row["span_count"],
         "status": row["status"],
         "request_summary": json.loads(row["request_summary"]) if row["request_summary"] else None,
-        "response_summary": json.loads(row["response_summary"]) if row["response_summary"] else None,
+        "response_summary": json.loads(row["response_summary"])
+        if row["response_summary"]
+        else None,
     }
 
 
@@ -212,7 +248,9 @@ class PostgresTraceRepository:
     async def start(self) -> None:
         """建连接池。"""
         self.pool = await asyncpg.create_pool(
-            dsn=self.dsn, min_size=self._min_size, max_size=self._max_size,
+            dsn=self.dsn,
+            min_size=self._min_size,
+            max_size=self._max_size,
         )
 
     async def stop(self) -> None:
@@ -282,9 +320,7 @@ class PostgresTraceRepository:
         summary = compute_trace_summary(trace_id, [_row_to_span(r) for r in rows])
         await conn.execute(_TRACE_SQL, *_trace_params(summary))
 
-    async def _backfill_session_id_for_trace(
-        self, conn: asyncpg.Connection, trace_id: str
-    ) -> None:
+    async def _backfill_session_id_for_trace(self, conn: asyncpg.Connection, trace_id: str) -> None:
         """同 trace 内用首个非空 session_id 回填空 session_id 行 (跨批兜底, B 段, 幂等)。
 
         晚到 span 的 session 兄弟可能在前一批已入库 → 批内回填 (A) 看不到, 在此用 DB
@@ -312,8 +348,9 @@ class PostgresTraceRepository:
         if self.pool is None:
             raise RuntimeError("start() 未调用")
         async with self.pool.acquire() as conn:
-            return await conn.fetchval(
-                """
+            return (
+                await conn.fetchval(
+                    """
                 WITH filled AS (
                     UPDATE spans s
                     SET session_id = sub.sid
@@ -326,7 +363,9 @@ class PostgresTraceRepository:
                 )
                 SELECT count(*) FROM filled
                 """
-            ) or 0
+                )
+                or 0
+            )
 
     # ---- 读 ----
 
