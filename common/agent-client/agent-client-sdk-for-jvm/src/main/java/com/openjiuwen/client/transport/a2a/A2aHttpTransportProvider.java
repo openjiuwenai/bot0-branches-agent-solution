@@ -291,51 +291,106 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         ch.touch();
         ch.idleTimedOut.set(false);
         ScheduledFuture<?> watchdog = armWatchdog(ch, in);
-        A2aJsonCodec.Frame[] lastFrame = {null};
-        Throwable failure = null;
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-            StringBuilder data = new StringBuilder();
-            String line;
-            while ((line = r.readLine()) != null) {
-                ch.touch();
-                if (line.isEmpty()) {
-                    A2aJsonCodec.Frame f = flushResumeFrame(ch, sink, data);
-                    if (f != null) {
-                        lastFrame[0] = f;
-                        TaskState st = f.state();
-                        if (st != null && (st.isTerminal() || st == TaskState.INPUT_REQUIRED)) {
-                            // 终态或等待输入点：本段流已尽其用，结算 future。
-                            // 终态帧需释放通道；INPUT_REQUIRED 保留通道供后续续跑。
-                            if (st.isTerminal()) {
-                                releaseChannel(ch);
-                            }
-                            ack.complete(snapshotFromFrame(snapshotRef, f));
-                            return;
-                        }
-                    }
-                } else if (line.startsWith("data:")) {
-                    data.append(line.substring(5).trim());
-                } else {
-                    continue;
-                }
-            }
-            // 流正常关闭但未到终态/INPUT_REQUIRED：尝试最后一帧结算，否则走查询兜底。
-            A2aJsonCodec.Frame f = flushResumeFrame(ch, sink, data);
-            if (f != null) {
-                lastFrame[0] = f;
-            }
-        } catch (IOException | IllegalStateException | NullPointerException e) {
-            failure = e;
-        } finally {
-            if (watchdog != null) {
-                watchdog.cancel(false);
-            }
+        ResumeTail tail = readResumeLines(ch, sink, in, ack, snapshotRef);
+        if (watchdog != null) {
+            watchdog.cancel(false);
         }
         if (ack.isDone()) {
             return;
         }
         // 中途断连或未达终态：用 GetTask 查询确认真实状态。
-        confirmResumeByQuery(ch, sink, ack, snapshotRef, lastFrame[0], failure);
+        confirmResumeByQuery(ch, sink, ack, snapshotRef, tail);
+    }
+
+    /**
+     * 逐行读取续跑 SSE 流并尝试结算，返回流尾观测结果供兜底查询使用。
+     *
+     * @param ch 通道
+     * @param sink 事件汇入目标；为 null 表示帧不进入任何事件流
+     * @param in SSE 输入流
+     * @param ack 待结算的 future
+     * @param snapshotRef 返回快照使用的 invocationRef
+     * @return 流尾观测结果（最后帧与读取异常）
+     */
+    private ResumeTail readResumeLines(Channel ch, Channel sink, InputStream in,
+                                       CompletableFuture<InvocationSnapshot> ack, String snapshotRef) {
+        A2aJsonCodec.Frame[] lastFrame = {null};
+        Throwable failure = null;
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            StringBuilder data = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null && !ack.isDone()) {
+                ch.touch();
+                Optional<A2aJsonCodec.Frame> parsed = onResumeLine(ch, sink, data, line);
+                if (parsed.isPresent()) {
+                    lastFrame[0] = parsed.get();
+                    if (maybeSettleResume(ch, ack, snapshotRef, parsed.get())) {
+                        break;
+                    }
+                }
+            }
+            // 流正常关闭但未到终态/INPUT_REQUIRED：尝试最后一帧结算，否则走查询兜底。
+            // 已结算（终态/等待点触发了 break）则不再 flush，避免向已关闭的 publisher 投递。
+            if (!ack.isDone()) {
+                flushResumeFrame(ch, sink, data).ifPresent(f -> lastFrame[0] = f);
+            }
+        } catch (IOException | IllegalStateException | NullPointerException e) {
+            failure = e;
+        }
+        return new ResumeTail(lastFrame[0], failure);
+    }
+
+    /**
+     * 处理单行续跑 SSE：空行触发帧解析与投递，data: 行累积，其余行忽略。
+     *
+     * @param ch 通道
+     * @param sink 事件汇入目标
+     * @param data 累积缓冲
+     * @param line 当前 SSE 行
+     * @return 空行触发并解析出的帧；其他情况为空
+     */
+    private Optional<A2aJsonCodec.Frame> onResumeLine(Channel ch, Channel sink, StringBuilder data, String line) {
+        if (line.isEmpty()) {
+            return flushResumeFrame(ch, sink, data);
+        }
+        if (line.startsWith("data:")) {
+            data.append(line.substring(5).trim());
+        }
+        // event: / id: / 注释行当前不参与语义，忽略。
+        return Optional.empty();
+    }
+
+    /**
+     * 终态或 INPUT_REQUIRED 帧的结算：释放通道并完成 future。
+     *
+     * @param ch 通道
+     * @param ack 待结算的 future
+     * @param snapshotRef 返回快照使用的 invocationRef
+     * @param f 当前帧
+     * @return 已结算返回 true，表示本段流已尽其用应停止读取
+     */
+    private boolean maybeSettleResume(Channel ch, CompletableFuture<InvocationSnapshot> ack,
+                                      String snapshotRef, A2aJsonCodec.Frame f) {
+        TaskState st = f.state();
+        if (st == null || (!st.isTerminal() && st != TaskState.INPUT_REQUIRED)) {
+            return false;
+        }
+        // 终态帧需释放通道；INPUT_REQUIRED 保留通道供后续续跑。
+        if (st.isTerminal()) {
+            releaseChannel(ch);
+        }
+        ack.complete(snapshotFromFrame(snapshotRef, f));
+        return true;
+    }
+
+    /**
+     * 续跑 SSE 流尾观测结果：最后帧与读取异常，供兜底查询使用。
+     *
+     * @param lastFrame 流内最后观测到的帧；可能为 null
+     * @param failure 读取异常；正常关闭为 null
+     */
+    private record ResumeTail(A2aJsonCodec.Frame lastFrame, Throwable failure) {
+        // 仅规范构造器，无额外成员。
     }
 
     /**
@@ -344,11 +399,11 @@ public final class A2aHttpTransportProvider implements TransportProvider {
      * @param ch 通道
      * @param sink 事件汇入目标；为 null 只解析不投递
      * @param data 累积的 data 行内容（会被清空）
-     * @return 解析出的帧，可能为 null
+     * @return 解析出的帧；无内容时为空
      */
-    private A2aJsonCodec.Frame flushResumeFrame(Channel ch, Channel sink, StringBuilder data) {
+    private Optional<A2aJsonCodec.Frame> flushResumeFrame(Channel ch, Channel sink, StringBuilder data) {
         if (data.length() == 0) {
-            return null;
+            return Optional.empty();
         }
         String json = data.toString();
         data.setLength(0);
@@ -358,7 +413,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         if (sink != null) {
             emit(sink, f);
         }
-        return f;
+        return Optional.ofNullable(f);
     }
 
     /**
@@ -368,11 +423,12 @@ public final class A2aHttpTransportProvider implements TransportProvider {
      * @param sink 事件汇入目标；为 null 不投递
      * @param ack 待结算的 future
      * @param snapshotRef 返回快照使用的 invocationRef
-     * @param lastFrame 流内最后观测到的帧
-     * @param failure 读取异常；正常关闭为 null
+     * @param tail 流尾观测结果（最后帧与读取异常）
      */
     private void confirmResumeByQuery(Channel ch, Channel sink, CompletableFuture<InvocationSnapshot> ack,
-                                      String snapshotRef, A2aJsonCodec.Frame lastFrame, Throwable failure) {
+                                      String snapshotRef, ResumeTail tail) {
+        A2aJsonCodec.Frame lastFrame = tail.lastFrame();
+        Throwable failure = tail.failure();
         if (ch.taskRef == null) {
             // 没有 taskRef 无法查询：用最后观测帧兜底结算，否则报错。
             if (lastFrame != null) {
@@ -385,22 +441,35 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             return;
         }
         sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, snapshotRef)
-                .whenComplete((snap, ex) -> {
-                    if (ex != null) {
-                        String reason = (failure != null)
-                                ? "sse read failed: " + rootMessage(failure) + "; state query failed: " + rootMessage(ex)
-                                : "sse stream closed before terminal; state query failed: " + rootMessage(ex);
-                        A2aTransportException e = A2aTransportException.network(reason, ex);
-                        ack.completeExceptionally(e);
-                        failStream(sink, e);
-                        return;
-                    }
-                    if (sink != null && snap.state() != null) {
-                        // 把查询确认的状态作为事件投递到原流（与创建场景 confirmByQuery 行为对齐）。
-                        projectQueriedState(sink, snap);
-                    }
-                    ack.complete(snap);
-                });
+                .whenComplete((snap, ex) -> onQueryComplete(sink, ack, failure, snap, ex));
+    }
+
+    /**
+     * 查询完成后的结算：失败时合成原因并传播，成功时按需投递事件并完成 future。
+     *
+     * @param sink 事件汇入目标；为 null 不投递
+     * @param ack 待结算的 future
+     * @param failure SSE 读取异常；正常关闭为 null
+     * @param snap 查询返回的快照
+     * @param ex 查询异常；成功为 null
+     */
+    private void onQueryComplete(Channel sink, CompletableFuture<InvocationSnapshot> ack,
+                                 Throwable failure, InvocationSnapshot snap, Throwable ex) {
+        if (ex != null) {
+            String reason = (failure != null)
+                    ? "sse read failed: " + rootMessage(failure)
+                            + "; state query failed: " + rootMessage(ex)
+                    : "sse stream closed before terminal; state query failed: " + rootMessage(ex);
+            A2aTransportException e = A2aTransportException.network(reason, ex);
+            ack.completeExceptionally(e);
+            failStream(sink, e);
+            return;
+        }
+        if (sink != null && snap.state() != null) {
+            // 把查询确认的状态作为事件投递到原流（与创建场景 confirmByQuery 行为对齐）。
+            projectQueriedState(sink, snap);
+        }
+        ack.complete(snap);
     }
 
     /**

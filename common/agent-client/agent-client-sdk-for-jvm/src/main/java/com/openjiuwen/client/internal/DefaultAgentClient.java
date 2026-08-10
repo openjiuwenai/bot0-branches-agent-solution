@@ -660,44 +660,76 @@ public final class DefaultAgentClient implements AgentClient {
                 output.append(text);
             }
             if (st == TaskState.INPUT_REQUIRED) {
-                // 等待点之前的正文单独作为增量投递；终态分支不这样做，避免与 Completed 携带的文本重复。
-                if (text != null && !text.isEmpty()) {
-                    forward(new InvocationEvent.ContentDelta(invocationRef, text));
-                }
-                forward(new InvocationEvent.StatusChanged(invocationRef, st, false));
-                InvocationEvent.ToolCall tc = snap.pendingToolCall();
-                if (tc != null && state != null) {
-                    // 续轮里服务端又要求端侧工具：仍由 SDK 自动执行并续传，业务不感知（FRZ-1）。
-                    // 置位 resumeToolAtInputPoint：此处工具若超时/失败，按方案 A 回退工具结果而非拉死 Call，
-                    // 让服务端 Task 继续挂在 INPUT_REQUIRED，业务仍可再次 continueInput。
-                    pendingClientTool.set(true);
-                    state.resumeToolAtInputPoint = true;
-                    driveClientTool(state, tc);
-                } else {
-                    forward(new InvocationEvent.InputRequired(invocationRef, null, null));
-                    finishTerminal(TaskState.INPUT_REQUIRED, null, null);
-                }
+                handleResumeInputRequired(state, snap, text);
                 return;
             }
-            if (st == TaskState.COMPLETED) {
-                forward(new InvocationEvent.Completed(invocationRef, text));
-            } else if (st == TaskState.FAILED) {
-                String code = (snap.errorCode() != null) ? snap.errorCode() : ErrorCodes.AGENT_ERROR;
-                forward(new InvocationEvent.Failed(invocationRef, code, snap.message()));
-            } else if (st.isTerminal()) {
-                forward(new InvocationEvent.StatusChanged(invocationRef, st, true));
-            } else {
-                forward(new InvocationEvent.StatusChanged(invocationRef, st, false));
-                if (text != null && !text.isEmpty()) {
-                    forward(new InvocationEvent.ContentDelta(invocationRef, text));
-                }
-                if (state != null && state.mode == InvocationMode.ASYNC) {
-                    return;
-                }
-                uncertainReason = "strict unary SendMessage returned non-terminal state " + st;
-                forward(new InvocationEvent.ProgressUncertain(invocationRef, st, uncertainReason));
+            if (forwardResumeStateEvent(st, snap, text)) {
+                // ASYNC 非终态：保持 Call 未完成，等待业务后续 getInvocation，不结算。
+                return;
             }
             finishTerminal(st, snap.errorCode(), snap.message());
+        }
+
+        /**
+         * 续跑响应到达 INPUT_REQUIRED：投递等待点事件，并按是否有 client_tool 分流。
+         *
+         * @param state 内部状态，可为 null
+         * @param snap 续跑响应快照
+         * @param text 累积后的输出文本
+         */
+        private void handleResumeInputRequired(InvocationState state, InvocationSnapshot snap, String text) {
+            // 等待点之前的正文单独作为增量投递；终态分支不这样做，避免与 Completed 携带的文本重复。
+            if (text != null && !text.isEmpty()) {
+                forward(new InvocationEvent.ContentDelta(invocationRef, text));
+            }
+            forward(new InvocationEvent.StatusChanged(invocationRef, TaskState.INPUT_REQUIRED, false));
+            InvocationEvent.ToolCall tc = snap.pendingToolCall();
+            if (tc != null && state != null) {
+                // 续轮里服务端又要求端侧工具：仍由 SDK 自动执行并续传，业务不感知（FRZ-1）。
+                // 置位 resumeToolAtInputPoint：此处工具若超时/失败，按方案 A 回退工具结果而非拉死 Call，
+                // 让服务端 Task 继续挂在 INPUT_REQUIRED，业务仍可再次 continueInput。
+                pendingClientTool.set(true);
+                state.resumeToolAtInputPoint = true;
+                driveClientTool(state, tc);
+            } else {
+                forward(new InvocationEvent.InputRequired(invocationRef, null, null));
+                finishTerminal(TaskState.INPUT_REQUIRED, null, null);
+            }
+        }
+
+        /**
+         * 续跑响应到达非 INPUT_REQUIRED 状态：按状态类型投递对应事件。
+         *
+         * @param st 任务状态
+         * @param snap 续跑响应快照
+         * @param text 累积后的输出文本
+         * @return ASYNC 非终态返回 true（保持 Call 未完成，跳过 finishTerminal）；其余返回 false
+         */
+        private boolean forwardResumeStateEvent(TaskState st, InvocationSnapshot snap, String text) {
+            if (st == TaskState.COMPLETED) {
+                forward(new InvocationEvent.Completed(invocationRef, text));
+                return false;
+            }
+            if (st == TaskState.FAILED) {
+                String code = (snap.errorCode() != null) ? snap.errorCode() : ErrorCodes.AGENT_ERROR;
+                forward(new InvocationEvent.Failed(invocationRef, code, snap.message()));
+                return false;
+            }
+            if (st.isTerminal()) {
+                forward(new InvocationEvent.StatusChanged(invocationRef, st, true));
+                return false;
+            }
+            forward(new InvocationEvent.StatusChanged(invocationRef, st, false));
+            if (text != null && !text.isEmpty()) {
+                forward(new InvocationEvent.ContentDelta(invocationRef, text));
+            }
+            InvocationState state = invocations.get(invocationRef);
+            if (state != null && state.mode == InvocationMode.ASYNC) {
+                return true;
+            }
+            uncertainReason = "strict unary SendMessage returned non-terminal state " + st;
+            forward(new InvocationEvent.ProgressUncertain(invocationRef, st, uncertainReason));
+            return false;
         }
 
         /**

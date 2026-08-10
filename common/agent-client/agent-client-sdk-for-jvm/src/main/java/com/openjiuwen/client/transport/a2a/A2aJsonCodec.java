@@ -144,6 +144,9 @@ final class A2aJsonCodec {
 
     /**
      * 在 unary A2A 请求上表达服务端返回时机。ASYNC 在受理后立即返回，其他模式等待本轮结果。
+     *
+     * @param params 请求参数节点；configuration 子对象会被追加到此节点下
+     * @param mode 调用模式；决定 returnImmediately 的取值
      */
     private static void fillReturnImmediately(ObjectNode params, InvocationMode mode) {
         params.putObject("configuration")
@@ -416,6 +419,9 @@ final class A2aJsonCodec {
                 if (!text.isEmpty()) {
                     sb.append(text);
                 }
+            } else {
+                // 其他 Part 类型（如 FilePart）当前不参与文本提取，跳过。
+                continue;
             }
         }
         return sb.length() > 0 ? Optional.of(sb.toString()) : Optional.empty();

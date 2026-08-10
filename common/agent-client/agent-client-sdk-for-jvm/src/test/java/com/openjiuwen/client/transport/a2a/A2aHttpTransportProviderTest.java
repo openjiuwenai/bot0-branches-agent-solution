@@ -4,6 +4,10 @@
 
 package com.openjiuwen.client.transport.a2a;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import com.openjiuwen.client.api.AgentClient;
 import com.openjiuwen.client.api.AgentClients;
 import com.openjiuwen.client.api.ContinueInputRequest;
@@ -16,6 +20,7 @@ import com.openjiuwen.client.api.TaskState;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -27,13 +32,17 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
+/**
+ * A2A HTTP transport provider 的单元测试，验证 BLOCKING/ASYNC/STREAMING 模式下的创建、续跑与恢复行为。
+ *
+ * @since 2026-07-27
+ */
 class A2aHttpTransportProviderTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -204,52 +213,19 @@ class A2aHttpTransportProviderTest {
         try (AgentClient client = AgentClients.builder()
                 .transport(new A2aHttpTransportProvider(baseUrl, MAPPER, Duration.ofSeconds(5)))
                 .build()) {
-            // 首轮 STREAMING 创建，mock 返回 INPUT_REQUIRED 等待用户输入。
             InvocationCall initial = client.invoke(InvocationRequest.builder()
                     .conversationId("inherit-streaming")
                     .mode(InvocationMode.STREAMING)
                     .input("need user input")
                     .build());
 
-            // STREAMING + INPUT_REQUIRED 时不结算 completion（通道保持开放等待续跑），
-            // 需订阅事件流获取 InputRequired 信号后再发起 continueInput。
-            java.util.concurrent.atomic.AtomicReference<InvocationCall> continuation = new java.util.concurrent.atomic.AtomicReference<>();
-            java.util.concurrent.CountDownLatch prompted = new java.util.concurrent.CountDownLatch(1);
-            initial.events().subscribe(new java.util.concurrent.Flow.Subscriber<>() {
-                @Override
-                public void onSubscribe(java.util.concurrent.Flow.Subscription s) {
-                    s.request(Long.MAX_VALUE);
-                }
-
-                @Override
-                public void onNext(InvocationEvent event) {
-                    if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null
-                            && continuation.get() == null) {
-                        continuation.set(client.continueInput(ContinueInputRequest.builder()
-                                .conversationId("inherit-streaming")
-                                .relatedInvocationRef(initial.invocationRef())
-                                .input("user answer")
-                                .build()));
-                        prompted.countDown();
-                    }
-                }
-
-                @Override
-                public void onError(Throwable throwable) {
-                    prompted.countDown();
-                }
-
-                @Override
-                public void onComplete() {
-                    prompted.countDown();
-                }
-            });
-
+            AtomicReference<InvocationCall> continuation = new AtomicReference<>();
+            CountDownLatch prompted = new CountDownLatch(1);
+            initial.events().subscribe(streamingPromptSubscriber(client, initial, continuation, prompted));
             prompted.await(5, TimeUnit.SECONDS);
             InvocationCall resumed = continuation.get();
             assertNotNull(resumed, "continueInput issued after INPUT_REQUIRED prompt");
 
-            // 续轮应继承 STREAMING → 走 SendStreamingMessage（SSE）
             InvocationSnapshot completed = resumed.completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
             assertEquals(TaskState.COMPLETED, completed.state());
             assertEquals(1, streamingResumeCalls.get());
@@ -258,6 +234,49 @@ class A2aHttpTransportProviderTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    /**
+     * 创建用于 STREAMING + INPUT_REQUIRED 场景的订阅者：收到 InputRequired 后发起 continueInput。
+     *
+     * @param client Agent 客户端
+     * @param initial 首轮调用
+     * @param continuation 续跑调用容器
+     * @param prompted 倒计时锁
+     * @return 订阅者
+     */
+    private static Flow.Subscriber<InvocationEvent> streamingPromptSubscriber(
+            AgentClient client, InvocationCall initial,
+            AtomicReference<InvocationCall> continuation, CountDownLatch prompted) {
+        return new Flow.Subscriber<>() {
+            @Override
+            public void onSubscribe(Flow.Subscription s) {
+                s.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(InvocationEvent event) {
+                if (event instanceof InvocationEvent.InputRequired ir && ir.toolCall() == null
+                        && continuation.get() == null) {
+                    continuation.set(client.continueInput(ContinueInputRequest.builder()
+                            .conversationId("inherit-streaming")
+                            .relatedInvocationRef(initial.invocationRef())
+                            .input("user answer")
+                            .build()));
+                    prompted.countDown();
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                prompted.countDown();
+            }
+
+            @Override
+            public void onComplete() {
+                prompted.countDown();
+            }
+        };
     }
 
     private static void handle(HttpExchange exchange, AtomicInteger sendMessageCalls,
@@ -300,6 +319,12 @@ class A2aHttpTransportProviderTest {
     /**
      * Mock server handler for STREAMING resume scenarios: supports SendStreamingMessage create
      * (returns SSE with INPUT_REQUIRED) and SendStreamingMessage resume (returns SSE with COMPLETED).
+     *
+     * @param exchange HTTP 交换对象
+     * @param sendMessageCalls unary SendMessage 调用计数
+     * @param streamingResumeCalls 流式续跑调用计数
+     * @param getTaskCalls GetTask 调用计数
+     * @throws IOException 写响应失败时抛出
      */
     private static void handleStreamingResume(HttpExchange exchange, AtomicInteger sendMessageCalls,
             AtomicInteger streamingResumeCalls, AtomicInteger getTaskCalls) throws IOException {
@@ -356,6 +381,10 @@ class A2aHttpTransportProviderTest {
 
     /**
      * Write a single SSE frame and close the stream (simulates a short SSE response).
+     *
+     * @param exchange HTTP 交换对象
+     * @param frame JSON 帧内容
+     * @throws IOException 写响应失败时抛出
      */
     private static void writeSseResponse(HttpExchange exchange, String frame) throws IOException {
         byte[] payload = ("event: jsonrpc\ndata: " + frame + "\n\n").getBytes(StandardCharsets.UTF_8);
