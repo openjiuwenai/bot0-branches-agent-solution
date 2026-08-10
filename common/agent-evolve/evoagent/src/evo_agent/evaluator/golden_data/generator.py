@@ -198,8 +198,8 @@ class ExpectedBehaviorGenerator:
             logger.warning("%s 第 %d/%d 次返回空响应", label, attempt, max_retries)
         raise EvaluationError(f"{label} LLM 调用 {max_retries} 次全失败: {last_err}")
 
+    @staticmethod
     def _parse_eb(
-        self,
         raw: str,
         first_input: str,
         customer_turns: list[str],

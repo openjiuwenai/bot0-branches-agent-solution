@@ -409,7 +409,8 @@ class AdapterClient:
 
     # ── 内部方法 ──
 
-    def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
+    @staticmethod
+    def _handle_response(response: httpx.Response) -> dict[str, Any]:
         """统一响应处理：成功返回 JSON body，失败抛出 AdapterError。
 
         错误格式优先读契约 ``{"error":{"code","message"}}``，

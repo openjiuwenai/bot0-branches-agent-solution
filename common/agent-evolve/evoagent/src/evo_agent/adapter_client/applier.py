@@ -561,7 +561,8 @@ class ManagedDocApplier:
         self._sleeper(min(self._poll_interval, remaining))
         return True
 
-    def _classify_task(self, task: TaskState, expected_hash: str) -> _TaskOutcome:
+    @staticmethod
+    def _classify_task(task: TaskState, expected_hash: str) -> _TaskOutcome:
         if task.status == "SUCCEEDED":
             if task.revision == expected_hash:
                 return _TaskOutcome(is_terminal_success=True)
