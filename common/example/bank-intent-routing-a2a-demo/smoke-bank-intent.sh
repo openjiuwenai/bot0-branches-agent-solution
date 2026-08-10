@@ -363,6 +363,23 @@ assert_state "$purchase_2" TASK_STATE_COMPLETED
 assert_contains "$purchase_2" "稳盈90天" "10000"
 pass "wealth purchase confirmation and resume"
 
+reference_context="$(new_context semantic-reference)"
+reference_1="$TMP_DIR/semantic-reference-1.json"
+write_request "$reference_context" "" "推荐一款稳健的三个月理财" "$reference_1"
+assert_state "$reference_1" TASK_STATE_COMPLETED
+assert_contains "$reference_1" "稳盈90天"
+reference_2="$TMP_DIR/semantic-reference-2.json"
+write_request "$reference_context" "" "购买刚才推荐的第一个产品，投入5000元" "$reference_2"
+assert_state "$reference_2" TASK_STATE_INPUT_REQUIRED
+assert_contains "$reference_2" "确认" "稳盈90天" "5000"
+reference_task="$(task_field "$reference_2" id)"
+[ -n "$reference_task" ] || fail "semantic reference purchase returned no task id"
+reference_3="$TMP_DIR/semantic-reference-3.json"
+write_request "$reference_context" "$reference_task" "确认" "$reference_3"
+assert_state "$reference_3" TASK_STATE_COMPLETED
+assert_contains "$reference_3" "稳盈90天" "5000"
+pass "semantic reference uses conversation history"
+
 change_context="$(new_context intent-change)"
 change_1="$TMP_DIR/intent-change-1.json"
 write_request "$change_context" "" "给王五转50元" "$change_1"
@@ -409,7 +426,7 @@ assert_log_count "planned intent_match calls" "$TMP_DIR/intent-plan.log" 2 \
 
 assert_log_count "balance execution" "$TMP_DIR/balance.log" 1 \
   "BANK_DEMO_EXECUTION tool=query_balance"
-assert_log_count "wealth recommendation execution" "$TMP_DIR/wealth-advisor.log" 1 \
+assert_log_count "wealth recommendation execution" "$TMP_DIR/wealth-advisor.log" 2 \
   "BANK_DEMO_EXECUTION tool=recommend_wealth"
 assert_log_count "calculator execution" "$TMP_DIR/intent.log" 1 \
   "BANK_DEMO_EXECUTION tool=bank_calculator"
@@ -427,12 +444,14 @@ assert_log_count "Li Si follow-up transfer" "$TMP_DIR/transfer.log" 1 \
   "BANK_DEMO_EXECUTION tool=execute_transfer" "recipient=李四" "amount=200"
 assert_log_count "Li Si planned transfer" "$TMP_DIR/transfer.log" 1 \
   "BANK_DEMO_EXECUTION tool=execute_transfer" "recipient=李四" "amount=100"
-assert_log_count "all confirmed wealth purchases" "$TMP_DIR/wealth-purchase.log" 2 \
+assert_log_count "all confirmed wealth purchases" "$TMP_DIR/wealth-purchase.log" 3 \
   "BANK_DEMO_EXECUTION tool=purchase_wealth"
 assert_log_count "10000 wealth purchase" "$TMP_DIR/wealth-purchase.log" 1 \
   "BANK_DEMO_EXECUTION tool=purchase_wealth" "amount=10000"
 assert_log_count "1000 wealth purchase after intent change" "$TMP_DIR/wealth-purchase.log" 1 \
   "BANK_DEMO_EXECUTION tool=purchase_wealth" "amount=1000"
+assert_log_count "5000 wealth purchase from semantic reference" "$TMP_DIR/wealth-purchase.log" 1 \
+  "BANK_DEMO_EXECUTION tool=purchase_wealth" "product=稳盈90天" "amount=5000"
 pass "business routing and exact execution audit"
 
 echo "All bank intent routing scenarios passed."

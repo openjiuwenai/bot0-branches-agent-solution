@@ -110,6 +110,26 @@ class IntentSuiteTest {
     }
 
     @Test
+    void convertsUnexpectedSpiRuntimeExceptionsToFailedDecisions() {
+        IntentSuite matcherFailure = suite(context -> {
+            throw new IllegalStateException("matcher defect");
+        });
+        matcherFailure.replaceCatalog(catalog(registration("candidate"), null));
+        assertThat(matcherFailure.resolve(Map.of("semantic", "pay"), Map.of()).status())
+                .isEqualTo(IntentDecisionStatus.FAILED);
+
+        CustomIntentRegistration broken = new CustomIntentRegistration("broken", "broken", context -> {
+            throw new IllegalStateException("result function defect");
+        });
+        AtomicReference<IntentDefinition> selected = new AtomicReference<>();
+        IntentSuite resultFailure = suite(context -> Optional.of(selected.get()));
+        resultFailure.replaceCatalog(catalog(broken, null));
+        selected.set(resultFailure.snapshot().initializedIntents().matchableIntents().get(0));
+        assertThat(resultFailure.resolve(Map.of("semantic", "pay"), Map.of()).status())
+                .isEqualTo(IntentDecisionStatus.FAILED);
+    }
+
+    @Test
     void failedReplacementKeepsPreviousSnapshot() {
         IntentSuite suite = suite(context -> Optional.empty());
         assertThat(suite.replaceCatalog(catalog(registration("one"), null))).isEqualTo(1L);

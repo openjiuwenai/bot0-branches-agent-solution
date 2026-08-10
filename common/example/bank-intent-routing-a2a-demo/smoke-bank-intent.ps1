@@ -250,6 +250,15 @@ try {
     $null = Assert-Task $response "TASK_STATE_COMPLETED" @("稳盈90天", "10000")
     Write-Host "PASS: wealth purchase confirmation and resume"
 
+    $context = New-Context "semantic-reference"
+    $response = Send-BankMessage $context "" "推荐一款稳健的三个月理财"
+    $null = Assert-Task $response "TASK_STATE_COMPLETED" @("稳盈90天")
+    $response = Send-BankMessage $context "" "购买刚才推荐的第一个产品，投入5000元"
+    $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED" @("确认", "稳盈90天", "5000")
+    $response = Send-BankMessage $context $task.id "确认"
+    $null = Assert-Task $response "TASK_STATE_COMPLETED" @("稳盈90天", "5000")
+    Write-Host "PASS: semantic reference uses conversation history"
+
     $context = New-Context "intent-change"
     $response = Send-BankMessage $context "" "给王五转50元"
     $task = Assert-Task $response "TASK_STATE_INPUT_REQUIRED"
@@ -283,7 +292,7 @@ try {
 
     Assert-LogCount "balance execution" (Join-Path $tempDir "balance.out.log") 1 `
         @("BANK_DEMO_EXECUTION tool=query_balance")
-    Assert-LogCount "wealth recommendation execution" (Join-Path $tempDir "wealth-advisor.out.log") 1 `
+    Assert-LogCount "wealth recommendation execution" (Join-Path $tempDir "wealth-advisor.out.log") 2 `
         @("BANK_DEMO_EXECUTION tool=recommend_wealth")
     Assert-LogCount "calculator execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=bank_calculator")
     Assert-LogCount "date execution" $intentLog 1 @("BANK_DEMO_EXECUTION tool=current_date")
@@ -300,12 +309,14 @@ try {
     Assert-LogCount "Li Si planned transfer" $transferLog 1 `
         @("BANK_DEMO_EXECUTION tool=execute_transfer", "recipient=李四", "amount=100")
     $purchaseLog = Join-Path $tempDir "wealth-purchase.out.log"
-    Assert-LogCount "all confirmed wealth purchases" $purchaseLog 2 `
+    Assert-LogCount "all confirmed wealth purchases" $purchaseLog 3 `
         @("BANK_DEMO_EXECUTION tool=purchase_wealth")
     Assert-LogCount "10000 wealth purchase" $purchaseLog 1 `
         @("BANK_DEMO_EXECUTION tool=purchase_wealth", "amount=10000")
     Assert-LogCount "1000 wealth purchase after intent change" $purchaseLog 1 `
         @("BANK_DEMO_EXECUTION tool=purchase_wealth", "amount=1000")
+    Assert-LogCount "5000 wealth purchase from semantic reference" $purchaseLog 1 `
+        @("BANK_DEMO_EXECUTION tool=purchase_wealth", "product=稳盈90天", "amount=5000")
     Write-Host "PASS: business routing and exact execution audit"
     Write-Host "All bank intent routing scenarios passed."
 } catch {
