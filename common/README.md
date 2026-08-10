@@ -21,7 +21,7 @@ common
 `-- example
     |-- agentcore-ext-deepagent-remote-a2a-demo
     |-- agentcore-ext-remote-a2a-tool-demo
-    |-- agentcore-ext-intent-bank-a2a-demo
+    |-- bank-intent-routing-a2a-demo
     `-- versatile-a2a-adapter-demo
 ```
 
@@ -45,7 +45,7 @@ common
   - `agent-a-deepagent-runtime`：Agent A，通过注入的远端 A2A 工具委托 Agent B。
   - `agent-b-deepagent-runtime`：Agent B，通过 A2A 暴露 DeepAgent runtime。
 - `example/versatile-a2a-adapter-demo`：Versatile adapter 的独立查询和 A2A 请求示例。
-- `example/agentcore-ext-intent-bank-a2a-demo`：五个 DeepAgent runtime 组成的银行多 Agent 示例，验证意图匹配、A2A 委托、本地工具、中断续接、意图跳转和计划执行。
+- `example/bank-intent-routing-a2a-demo`：五个 DeepAgent runtime 组成的银行多 Agent 示例，验证意图匹配、A2A 委托、本地工具、中断续接、意图跳转和计划执行。
 
 ## 编译打包流程
 
@@ -72,7 +72,7 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
   clean install
 
-mvn -f common\example\agentcore-ext-intent-bank-a2a-demo\pom.xml `
+mvn -f common\example\bank-intent-routing-a2a-demo\pom.xml `
   clean install
 ```
 
@@ -124,6 +124,6 @@ mvn -f common\example\agentcore-ext-remote-a2a-tool-demo\pom.xml `
 mvn -f common\example\agentcore-ext-deepagent-remote-a2a-demo\pom.xml `
   clean install
 
-mvn -f common\example\agentcore-ext-intent-bank-a2a-demo\pom.xml `
+mvn -f common\example\bank-intent-routing-a2a-demo\pom.xml `
   clean install
 ```

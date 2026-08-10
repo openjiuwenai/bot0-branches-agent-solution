@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.openjiuwen.example</groupId>
-        <artifactId>agentcore-ext-intent-bank-a2a-demo</artifactId>
+        <artifactId>bank-intent-routing-a2a-demo</artifactId>
         <version>0.1.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
