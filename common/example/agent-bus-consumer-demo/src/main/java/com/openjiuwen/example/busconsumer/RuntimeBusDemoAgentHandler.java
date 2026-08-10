@@ -65,6 +65,9 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
     @Override
     public QueryResponse query(ServeRequest request) {
         if (!caller) {
+            if (CLIENT_TOOL_SEQUENCE_CONVERSATION.equals(request.getConversationId())) {
+                return clientToolSequenceResponse(request);
+            }
             if (INPUT_REQUIRED_TRIGGER.equals(request.lastUserQuery())) {
                 return inputRequired(request);
             }
@@ -76,6 +79,21 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
         }
         return new QueryResponse(Map.of("role", "assistant", "_interrupt", interrupt(request)),
                 request.getConversationId());
+    }
+
+    /**
+     * Sync (query) version of the conv-stream-1 client_tool sequence — the resume (SendMessage)
+     * goes through query, not streamQuery. After readPage → send submitOrder interrupt; after
+     * submitOrder → COMPLETED.
+     */
+    private QueryResponse clientToolSequenceResponse(ServeRequest request) {
+        String previousToolName = previousInterruptToolName(request);
+        if ("readPage".equals(previousToolName)) {
+            return new QueryResponse(Map.of("role", "assistant", "_interrupt",
+                    clientToolInterrupt("call-submitorder-1", "submitOrder", "please submit the order")),
+                    request.getConversationId());
+        }
+        return response(request, "order submitted successfully");
     }
 
     @Override
@@ -166,11 +184,16 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
      * @return the interrupt map
      */
     private static Map<String, Object> clientToolInterrupt(String toolCallId, String toolName, String message) {
+        Map<String, Object> arguments = switch (toolName) {
+            case "readPage" -> Map.of("pageId", "page-1");
+            case "submitOrder" -> Map.of("orderId", "order-1");
+            default -> Map.of();
+        };
         return Map.of(
                 "toolCallId", toolCallId,
                 "toolName", toolName,
                 "message", message,
-                "context", Map.of("_interrupt_kind", "client_tool", "arguments", Map.of()));
+                "context", Map.of("_interrupt_kind", "client_tool", "arguments", arguments));
     }
 
     private boolean pause(QueryStreamObserver observer) {
