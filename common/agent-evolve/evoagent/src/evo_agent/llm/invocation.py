@@ -294,8 +294,6 @@ class LLMInvocation:
                     result.transport_complete,
                 )
                 return result
-            except asyncio.CancelledError:
-                raise
             except Exception as exc:
                 last_error = exc
                 retryable = _is_retryable(exc) or (
