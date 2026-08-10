@@ -20,8 +20,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Gateway-side projection feed backed by the agent-bus SDK {@code responseConsumer}
@@ -72,13 +76,14 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
     private final String gatewayServiceId;
     private final long pollTimeoutMillis;
     private volatile boolean running = false;
-    private Thread dispatcherThread;
+    private ScheduledExecutorService dispatcher;
 
     /**
      * Per-correlationId staging queues. Filled by the dispatcher; drained by {@link #poll}.
      * A polled message whose corrId matches is routed here; the owner's next {@link #poll} reads it.
      */
-    private final ConcurrentHashMap<String, LinkedBlockingQueue<ProjectionEvent>> stagingByCorrId = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, LinkedBlockingQueue<ProjectionEvent>> stagingByCorrId =
+            new ConcurrentHashMap<>();
 
     /**
      * Creates a feed over the given response consumer with the default poll timeout.
@@ -112,26 +117,22 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
             consumer.subscribe(gatewayServiceId, type, filter);
         }
         running = true;
-        dispatcherThread = new Thread(this::dispatchLoop, "broker-projection-feed-dispatcher");
-        dispatcherThread.setDaemon(true);
-        dispatcherThread.start();
-        log.info("SUBSCRIBE gateway={} to {} INVOCATION_* response types on resp_out (filter targetServiceId={}); dispatcher started",
+        dispatcher = Executors.newSingleThreadScheduledExecutor(daemonFactory());
+        dispatcher.scheduleWithFixedDelay(
+                this::safeDispatch, 0, DISPATCHER_BACKOFF_MILLIS, TimeUnit.MILLISECONDS);
+        log.info("SUBSCRIBE gateway={} to {} INVOCATION_* response types on resp_out "
+                        + "(filter targetServiceId={}); dispatcher started",
                 gatewayServiceId, RESPONSE_FAMILY.length, gatewayServiceId);
     }
 
-    private void dispatchLoop() {
-        while (running) {
-            boolean processed;
+    private void safeDispatch() {
+        if (!running) {
+            return;
+        }
         try {
-                processed = drainOnce();
-            } catch (RuntimeException failure) {
-                // a transient consumer failure must not kill the dispatcher (the wait loop would starve)
-                log.warn("projection dispatcher drain failed", failure);
-                processed = false;
-            }
-            if (!processed) {
-                sleepQuiet(DISPATCHER_BACKOFF_MILLIS);
-            }
+            drainOnce();
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            log.warn("projection dispatcher drain failed", failure);
         }
     }
 
@@ -139,7 +140,8 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
      * Drain ONE message from the shared consumer and route it to its corrId's staging queue.
      * Package-private test seam (the dispatcher loops this; tests call it for deterministic routing).
      *
-     * @return {@code true} if a message was processed (routed / skipped / dropped), {@code false} if the consumer was empty
+     * @return {@code true} if a message was processed (routed / skipped / dropped);
+     *         {@code false} if the consumer was empty
      */
     boolean drainOnce() {
         Optional<BrokerInboundMessage> polled = consumer.poll(System.currentTimeMillis());
@@ -180,7 +182,7 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
         try {
             evt = queue.poll(pollTimeoutMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            // G.CON.10: do not re-interrupt; surface empty so the wait loop can re-check its own timeout
+            // do not re-interrupt; surface empty so the wait loop can re-check its own timeout
             return Optional.empty();
         }
         if (evt != null) {
@@ -237,19 +239,22 @@ public class BrokerProjectionFeed implements ProjectionFeed, SmartLifecycle {
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
-    private static void sleepQuiet(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            // dispatcher interrupted (stop) — exit the sleep; the loop re-checks running
-        }
+    private static ThreadFactory daemonFactory() {
+        AtomicInteger seq = new AtomicInteger();
+        return r -> {
+            Thread t = new Thread(r, "broker-projection-feed-dispatcher-" + seq.incrementAndGet());
+            t.setDaemon(true);
+            t.setUncaughtExceptionHandler((thread, ex) ->
+                    log.warn("uncaught exception in dispatcher thread " + thread.getName(), ex));
+            return t;
+        };
     }
 
     @Override
     public void stop() {
         running = false;
-        if (dispatcherThread != null) {
-            dispatcherThread.interrupt();
+        if (dispatcher != null) {
+            dispatcher.shutdownNow();
         }
         consumer.close();
     }

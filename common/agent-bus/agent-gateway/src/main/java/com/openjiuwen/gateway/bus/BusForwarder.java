@@ -468,7 +468,8 @@ public class BusForwarder {
         }
         InvocationResponseStatus folded = FiveStateFolder.fold(proj.get().eventType());
         if (FiveStateFolder.isTerminal(folded) || folded == InvocationResponseStatus.INPUT_REQUIRED) {
-            log.info("forwardStreaming corrId={} early terminal/input-required projection matched folded={} taskId={} (runtime SSE drain skipped)",
+            log.info("forwardStreaming corrId={} early terminal/input-required projection "
+                    + "matched folded={} taskId={} (runtime SSE drain skipped)",
                     sctx.correlationId(), folded, proj.get().taskId());
             return proj;
         }
