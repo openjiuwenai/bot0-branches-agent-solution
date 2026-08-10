@@ -1,4 +1,4 @@
-﻿# Adapter-Versatile-Agent 使用手册
+# Adapter-Versatile-Agent 使用手册
 
 ## Versatile 工作流 A2A 独立代理适配器
 
