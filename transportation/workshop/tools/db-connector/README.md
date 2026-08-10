@@ -377,6 +377,37 @@ print(tool.query("SELECT * FROM traffic_flow WHERE station_code = %s", ["S001"])
 pip install -e ".[server]"   # 含 fastapi + uvicorn
 ```
 
+#### 首次部署（全新机器）
+
+```bash
+cd <db-connector 目录>
+
+# 1. 安装依赖（推荐用 venv 沙箱）
+python3 -m venv .venv
+source .venv/bin/activate                     # Windows: .venv\Scripts\activate
+pip install --upgrade pip
+pip install -e ".[server]"
+
+# 2. 启动服务（空配置也可启动，/ping 返回 unconfigured）
+./start.sh
+
+# 3. 提交真实数据库配置（首次使用必做）
+curl -X POST http://127.0.0.1:7087/db-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{"type":"mysql","host":"<DB_HOST>","port":3306,"database":"<DB_NAME>","username":"<DB_USER>","password":"<DB_PWD>","mode":"readonly","allowed_tables":["traffic_flow","toll_station"]}'
+
+# 4. 验证连通
+curl http://127.0.0.1:7087/db-connector/ping
+# 期望：{"status":"ok","database":"<DB_NAME>","latencyMs":...}
+
+# 5. 验证查询
+curl -X POST http://127.0.0.1:7087/db-connector/query \
+  -H "Content-Type: application/json" \
+  -d '{"sql_template":"SELECT * FROM traffic_flow LIMIT %s","params":[5]}'
+```
+
+> 配置成功后写入 `config/config.runtime.yaml`，重启自动加载，无需重复配置。
+
 #### 启动
 
 ```bash
@@ -412,6 +443,29 @@ tail -f .logs/db-connector.log
 | `DB_CONNECTOR_HOST` | `0.0.0.0` | 监听地址 |
 | `DB_CONNECTOR_PORT` | `7087` | 监听端口 |
 | `DB_CONNECTOR_PATH` | `/db-connector` | 服务路径前缀 |
+
+#### 更新/升级（已部署机器）
+
+```bash
+cd <db-connector 目录>
+
+# 1. 停止旧服务
+./stop.sh
+
+# 2. 拉取最新代码
+git pull
+
+# 3. 升级依赖（若 requirements.txt / pyproject.toml 有变化）
+pip install -e ".[server]"   # 或 pip install -r requirements.txt
+
+# 4. 重新启动（已有 config.runtime.yaml 会自动加载，无需重新 POST /config）
+./start.sh
+
+# 5. 验证
+curl http://127.0.0.1:7087/db-connector/ping
+```
+
+> 若升级涉及破坏性变更（如包名/import 路径变化），需先 `pip uninstall openjiuwen-db-connector -y` 再重装。
 
 #### 部署后服务地址
 
