@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Unit tests for ABCDE protocol adapter — verifies flat {event, content, data} unwrapping.
+ * Unit tests for ABCDE protocol adapter - verifies flat {event, content, data} unwrapping.
  */
 class EdpaAbcdeCustomRestAdapterTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
