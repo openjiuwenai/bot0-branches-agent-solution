@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
 
 /**
  * {@link AgentClient} 的默认实现（FEAT-006/007 内核编排）。
@@ -193,7 +194,7 @@ public final class DefaultAgentClient implements AgentClient {
         String newInvocationRef = request.invocationId();
         // 续传轮继承原轮的暴露窗口：续接的是同一个服务端 Task，授权窗口不应因换了个 invocation 而重开。
         InvocationState newState = new InvocationState(
-                newInvocationRef, request.conversationId(), related.mode,
+                newInvocationRef, request.conversationId(), request.mode(),
                 related.clientTools, related.credentialToken, request.idempotencyKey(), true,
                 related.exposureExpiresAt);
         newState.taskRef = related.taskRef;
@@ -204,10 +205,10 @@ public final class DefaultAgentClient implements AgentClient {
         // 用 invocationId 会让调用方显式设置的幂等键失效，续传重试就会产生重复副作用。
         TransportProvider.ResumeCommand cmd = new TransportProvider.ResumeCommand(
                 newInvocationRef, related.taskRef, request.idempotencyKey(), null,
-                request.input(), related.mode, related.clientTools, related.credentialToken,
+                request.input(), request.mode(), related.clientTools, related.credentialToken,
                 related.conversationId, TransportProvider.ResumeDelivery.SNAPSHOT_ONLY);
 
-        // 新 CallImpl：不订阅 transport 旧 Channel，而是由续跑同步响应直接驱动其事件流与 completion。
+        // 新 CallImpl：不订阅 transport 旧 Channel，而是由续跑 unary 响应直接驱动其事件流与 completion。
         CallImpl newCall = new CallImpl(newInvocationRef, request.conversationId());
         calls.put(newInvocationRef, newCall);
 
@@ -302,11 +303,33 @@ public final class DefaultAgentClient implements AgentClient {
                 state.conversationId, state.invocationRef, state.invocationRef,
                 call.deadline(), Map.of(), visibleNames);
         dispatcher.dispatch(call, ctx)
-                .thenAccept(record -> submitToolResult(state, call.toolCallId(), record));
+                .orTimeout(10, TimeUnit.SECONDS)
+                .thenAccept(record -> submitToolResult(state, call.toolCallId(), record))
+                .exceptionally(ex -> {
+                    // dispatch timed out or failed (e.g., stale inFlight entry from a previous run,
+                    // toolExecutor saturated, tool execution hung) — clear the stale entry so the next
+                    // dispatch for the same toolCallId gets a fresh pipeline.
+                    dispatcher.clearInFlight(call.toolCallId());
+                    if (state.resumeToolAtInputPoint) {
+                        // 方案 A：续轮 INPUT_REQUIRED 等待点上的端侧工具超时/失败不应拉死整个调用。
+                        // 把工具失败回退为 error record 走 submitToolResult，让服务端 Task 继续挂在
+                        // INPUT_REQUIRED、Call 保持开放，业务仍可再次 continueInput。
+                        String errMsg = (ex.getMessage() != null) ? ex.getMessage() : ex.getClass().getSimpleName();
+                        submitToolResult(state, call.toolCallId(),
+                                com.openjiuwen.client.tool.spi.ToolExecutionRecord.error(
+                                        call.toolCallId(), "tool_execution_error", errMsg));
+                    } else {
+                        // 首次创建调用场景：工具失败直接失败整个调用，避免业务悬挂。
+                        failCall(state.invocationRef, ex);
+                    }
+                    return null;
+                });
     }
 
     private void submitToolResult(InvocationState state, String toolCallId,
                                   com.openjiuwen.client.tool.spi.ToolExecutionRecord record) {
+        // 工具续传已了结（无论下面哪条 return 路径），清掉续轮等待点标记，避免污染下一次工具请求。
+        state.resumeToolAtInputPoint = false;
         if (store.isSubmitted(toolCallId)) {
             return;
         }
@@ -391,6 +414,16 @@ public final class DefaultAgentClient implements AgentClient {
          */
         final Instant exposureExpiresAt;
         volatile String taskRef;
+
+        /**
+         * 标记当前是否处于"续轮 INPUT_REQUIRED 等待点 + SDK 正在自动驱动端侧工具"语义。
+         *
+         * <p>置位后，{@code driveClientTool} 的超时/异常分支不再 {@code failCall} 拉死整个调用，
+         * 而是把工具失败回退为 {@link ToolExecutionRecord#error} 走 {@code submitToolResult}，
+         * 让服务端 Task 继续挂在 INPUT_REQUIRED、Call 保持开放，业务仍可再次 {@code continueInput}。
+         * 仅在 {@link #completeFromResume} 的续轮 INPUT_REQUIRED + pendingToolCall 分支置位，工具续传完成后清零。
+         */
+        volatile boolean resumeToolAtInputPoint;
 
         InvocationState(String invocationRef, String conversationId, InvocationMode mode,
                         List<ToolWireSpec> clientTools, String credentialToken, String idempotencyKey,
@@ -597,7 +630,7 @@ public final class DefaultAgentClient implements AgentClient {
         }
 
         /**
-         * continueInput 续跑同步响应成功：把响应快照转为面向业务的事件投递到新 Call 的事件流，
+         * continueInput 续跑 unary 响应成功：把响应快照转为面向业务的事件投递到新 Call 的事件流，
          * 并据此完成 completion（006 §3.4.1：新 invocationRef 的 events/completion 复用同一 Task 后续投影）。
          *
          * @param snap 续跑响应快照
@@ -605,6 +638,13 @@ public final class DefaultAgentClient implements AgentClient {
         void completeFromResume(InvocationSnapshot snap) {
             if (finished.get()) {
                 return;
+            }
+            InvocationState state = invocations.get(invocationRef);
+            String taskRef = (state != null && state.taskRef != null)
+                    ? state.taskRef : snap.diagnosticTaskRef();
+            if (!accepted.isDone()) {
+                accepted.complete(new Handle(invocationRef, conversationId, taskRef));
+                forward(new InvocationEvent.Accepted(invocationRef, taskRef, conversationId));
             }
             TaskState st = (snap.state() != null) ? snap.state() : TaskState.UNKNOWN;
             lastState = st;
@@ -623,15 +663,17 @@ public final class DefaultAgentClient implements AgentClient {
                 }
                 forward(new InvocationEvent.StatusChanged(invocationRef, st, false));
                 InvocationEvent.ToolCall tc = snap.pendingToolCall();
-                InvocationState state = invocations.get(invocationRef);
                 if (tc != null && state != null) {
                     // 续轮里服务端又要求端侧工具：仍由 SDK 自动执行并续传，业务不感知（FRZ-1）。
+                    // 置位 resumeToolAtInputPoint：此处工具若超时/失败，按方案 A 回退工具结果而非拉死 Call，
+                    // 让服务端 Task 继续挂在 INPUT_REQUIRED，业务仍可再次 continueInput。
                     pendingClientTool.set(true);
+                    state.resumeToolAtInputPoint = true;
                     driveClientTool(state, tc);
                 } else {
                     forward(new InvocationEvent.InputRequired(invocationRef, null, null));
+                    finishTerminal(TaskState.INPUT_REQUIRED, null, null);
                 }
-                // INPUT_REQUIRED 非终态：保持新 Call 开放，等待业务再次 continueInput 或 SDK 自动工具续跑。
                 return;
             }
             if (st == TaskState.COMPLETED) {
@@ -642,10 +684,15 @@ public final class DefaultAgentClient implements AgentClient {
             } else if (st.isTerminal()) {
                 forward(new InvocationEvent.StatusChanged(invocationRef, st, true));
             } else {
-                // 非终态且非等待点：正文作为增量投递，状态留待后续帧推进。
+                forward(new InvocationEvent.StatusChanged(invocationRef, st, false));
                 if (text != null && !text.isEmpty()) {
                     forward(new InvocationEvent.ContentDelta(invocationRef, text));
                 }
+                if (state != null && state.mode == InvocationMode.ASYNC) {
+                    return;
+                }
+                uncertainReason = "strict unary SendMessage returned non-terminal state " + st;
+                forward(new InvocationEvent.ProgressUncertain(invocationRef, st, uncertainReason));
             }
             finishTerminal(st, snap.errorCode(), snap.message());
         }

@@ -46,7 +46,7 @@ public interface TransportProvider extends AutoCloseable {
     CompletionStage<InvocationSnapshot> getTask(String taskRef, String credentialToken);
 
     /**
-     * 续跑既有 Task（wire 方法为同步 {@code SendMessage}），返回该 Task 的<b>下一状态</b>快照。
+     * 续跑既有 Task（wire 方法为 unary {@code SendMessage}，返回时机由 mode 决定），返回该 Task 的<b>下一状态</b>快照。
      *
      * <p>返回快照必须是响应正文解析出的<b>完整</b>状态（含 outputText / pendingToolCall / errorCode），
      * 不能是占位的"working"快照——{@code continueInput} 依赖它驱动新 invocation 的事件流与结算。

@@ -45,7 +45,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 默认传输实现：A2A JSON-RPC 2.0 over HTTP + SSE（基于 JDK 内置 {@link HttpClient}，无额外网络框架）。
  *
  * <p><b>承载形态（v0730 冻结）</b>：创建走 {@code SendStreamingMessage}（SSE）；一切续跑
- * （端侧工具结果 / {@code continueInput}）走同步 {@code SendMessage}，响应为单次 JSON。
+ * （端侧工具结果 / {@code continueInput}）走 unary {@code SendMessage}，响应为单次 JSON；
+ * {@code params.configuration.returnImmediately} 决定受理即返或等待本轮结果。
  * 状态查询走 {@code GetTask}。{@code CancelTask} / {@code SubscribeToTask} 延至后续版本，本类不实现。
  * 每一次出站 HTTP 都附带 {@code Authorization: Bearer <token>}。
  *
@@ -78,12 +79,6 @@ public final class A2aHttpTransportProvider implements TransportProvider {
 
     /** UNKNOWN 恢复的最大重发次数（含首次恢复尝试）。耗尽后投递进展不确定，不无限重试。 */
     private static final int MAX_CREATE_RECOVERY_ATTEMPTS = 3;
-
-    /** BLOCKING 模式下轮询 GetTask 的最大次数。 */
-    private static final int MAX_BLOCKING_POLLS = 60;
-
-    /** BLOCKING 模式下轮询间隔。 */
-    private static final Duration BLOCKING_POLL_INTERVAL = Duration.ofSeconds(1);
 
     private final URI endpoint;
     private final HttpClient http;
@@ -227,7 +222,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
     }
 
     /**
-     * 同步 {@code SendMessage}：解析响应为该 Task 的<b>完整</b>下一状态快照。
+     * Unary {@code SendMessage}：解析响应为该 Task 的<b>完整</b>下一状态快照。
      *
      * @param ch 用于 taskRef 绑定与失败传播的通道
      * @param sink 事件汇入目标；为 null 表示本次响应帧不进入任何事件流
@@ -279,12 +274,13 @@ public final class A2aHttpTransportProvider implements TransportProvider {
     }
 
     /**
-     * 非流式创建（{@code BLOCKING} / {@code ASYNC}）：单次 {@code SendMessage} 取回首个状态。
+     * 非流式创建（{@code BLOCKING} / {@code ASYNC}）：单次 {@code SendMessage} 取回当前状态。
      *
-     * <p>{@code BLOCKING} 语义要求"一次调用拿到最终结果"，若首个响应仍是非终态，则用
-     * {@code GetTask} 有界轮询推进到终态或等待输入点。<b>禁止</b>改走 SSE 再聚合成一次性响应
-     * （FEAT-006 §5.1.2）。{@code ASYNC} 不轮询：受理后即返回，由调用方用
-     * {@code getInvocation} 观察。
+     * <p>{@code BLOCKING} 严格保持 unary 语义，不在响应非终态时追加 {@code GetTask} 轮询。
+     * 服务端若返回 {@code SUBMITTED}/{@code WORKING}，本次调用以
+     * {@link InvocationEvent.ProgressUncertain} 非终态结算；需要持续查询的业务应使用
+     * {@code ASYNC} 并显式调用 {@code getInvocation}。协议要求的 client-tool / 用户输入续跑
+     * 仍可另行发送关联原 Task 的 {@code SendMessage}。
      *
      * @param ch 通道
      * @param body 请求正文
@@ -295,42 +291,24 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             if (ex != null || snap == null) {
                 return; // 失败已由 sendUnary 传播到事件流
             }
-            if (ch.terminal.get() || snap.state() == TaskState.INPUT_REQUIRED) {
-                return; // 已结算或已到等待输入点
+            if (ch.terminal.get()) {
+                return; // 已由响应帧结算终态
+            }
+            if (snap.state() == TaskState.INPUT_REQUIRED) {
+                // client_tool 需要保持原通道开放，让 SDK 自动续跑并把后续帧汇回同一调用。
+                // 用户输入等待点没有自动动作：关闭本段观察窗口，使 completion() 以
+                // INPUT_REQUIRED 非终态快照结算；保留 taskRef 通道供 continueInput 使用。
+                if (snap.pendingToolCall() == null && !ch.publisher.isClosed()) {
+                    ch.publisher.close();
+                }
+                return;
             }
             if (ch.mode == InvocationMode.BLOCKING) {
-                pollUntilSettled(ch, credential, 1);
+                publishUncertain(ch, "strict BLOCKING SendMessage returned non-terminal state "
+                        + snap.state() + "; SDK did not poll GetTask");
             }
-            // ASYNC：受理即止，不轮询。
+            // ASYNC：受理后由调用方按需 getInvocation，不主动轮询。
         });
-    }
-
-    /**
-     * BLOCKING 模式的有界轮询：推进到终态或等待输入点为止。
-     *
-     * @param ch 通道
-     * @param credential 凭据
-     * @param attempt 当前尝试序号，从 1 开始
-     */
-    private void pollUntilSettled(Channel ch, String credential, int attempt) {
-        if (ch.terminal.get() || ch.publisher.isClosed()) {
-            return;
-        }
-        if (attempt > MAX_BLOCKING_POLLS) {
-            publishUncertain(ch, "blocking poll budget exhausted after " + MAX_BLOCKING_POLLS + " attempts");
-            return;
-        }
-        scheduler.schedule(() -> sendForSnapshot(codec.buildGet(ch.taskRef), credential, ch.invocationRef)
-                .whenComplete((snap, ex) -> {
-                    if (ex != null) {
-                        publishUncertain(ch, "blocking poll failed: " + rootMessage(ex));
-                        return;
-                    }
-                    projectQueriedState(ch, snap);
-                    if (!ch.terminal.get() && snap.state() != TaskState.INPUT_REQUIRED) {
-                        pollUntilSettled(ch, credential, attempt + 1);
-                    }
-                }), BLOCKING_POLL_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /**

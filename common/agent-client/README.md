@@ -70,12 +70,11 @@ com.openjiuwen.client
 ├── state.spi/      客户端状态存储 SPI：ClientStateStore（幂等去重 / 提交去重）
 ├── transport.spi/  传输抽象：TransportProvider / ToolWireSpec / CredentialProvider
 ├── transport.a2a/  ★ 默认传输：A2aHttpTransportProvider（真实 A2A JSON-RPC over HTTP+SSE）+ A2aJsonCodec
-├── transport.fake/ 测试工具（非交付）：InProcessFakeGateway（进程内、无网络）
 └── internal/       内核编排：DefaultAgentClient(invocationRef↔taskRef 映射) / ToolDispatcher
                     / DefaultToolRegistry / InMemoryStateStore / ObservationTextRenderer
 ```
 
-**依赖红线**：业务代码只应依赖 `api` / `tool.spi` / `spi` / `state.spi` / `transport.spi` 这五个包。`internal` 与 `transport.a2a` / `transport.fake` 是实现细节，不保证兼容；`transport.a2a.A2aHttpTransportProvider` 是默认实现，可直接 new 出来用，但其内部类型不要在业务代码里传递。
+**依赖红线**：业务代码只应依赖 `api` / `tool.spi` / `spi` / `state.spi` / `transport.spi` 这五个包。`internal` 与 `transport.a2a` 是实现细节，不保证兼容；`transport.a2a.A2aHttpTransportProvider` 是默认实现，可直接 new 出来用，但其内部类型不要在业务代码里传递。
 
 ---
 
@@ -219,10 +218,10 @@ public class QuickStart {
 | 模式 | wire 方法 | 业务消费方式 | 状态 |
 |------|-----------|--------------|------|
 | `STREAMING` | `SendStreamingMessage`（HTTP + SSE） | 订阅 `events()` 增量消费 | **已交付** |
-| `BLOCKING` | `SendMessage`（单条 JSON），非终态时 SDK 用 `GetTask` 有界轮询推进 | 忽略事件流，直接等 `completion()` | **已交付** |
-| `ASYNC` | `SendMessage`，受理即返回 | 拿到 `accepted()` 即返回，之后用 `getInvocation` 观察 | **已交付** |
+| `BLOCKING` | 严格 unary `SendMessage` + `params.configuration.returnImmediately=false`，不自动调用 `GetTask`；非终态时以 `ProgressUncertain` 结算 | 忽略事件流，直接等 `completion()`；需要持续观察时改用 ASYNC 或显式 `getInvocation` | **client 已交付** |
+| `ASYNC` | `SendMessage` + `params.configuration.returnImmediately=true`，要求受理即返回 | 拿到 `accepted()` 即返回，之后用 `getInvocation` 观察 | **client 已交付；gateway 需执行该字段** |
 
-> BLOCKING **不是**"在本地把流式结果聚合"，而是走网关的同步接口；这一点是设计约束，不要试图自己把 STREAMING 结果攒成一次性响应。
+> BLOCKING **不是**"在本地把流式结果聚合"，也不是隐藏的 `GetTask` 轮询；它只消费一次创建 `SendMessage` 响应。`SendMessage` 只表示 unary，真正区分 ASYNC/BLOCKING 返回时机的是 `returnImmediately`。client-tool / 用户输入续跑仍可按协议另发关联原 Task 的 `SendMessage`。
 
 ### 事件流（sealed `InvocationEvent`）
 
@@ -525,7 +524,7 @@ CredentialProvider dynamic = conversationId -> {
 | 创建调用 | `params.message.taskId` 为空；按 `message.messageId` 幂等去重；读 `params.metadata.clientTools` 获取客户端工具清单 |
 | `agentId` | 可选（缺省路由到默认 Agent）；显式给出时不得为空串（否则 400 `VALIDATION_AGENT_ID`）；SDK 会把空白串归一化为 null |
 | 请求工具 | `INPUT_REQUIRED` 状态，工具调用意图放在 `result.task.status.message.metadata._interrupt`（非流式）或 `result.statusUpdate.status.message.metadata._interrupt`（流式），含 `_interrupt_kind=client_tool`、`toolCallId`/`toolName`/`arguments` |
-| 续传 | 客户端对既有 `taskId` 再发**同步** `SendMessage`，正文为一个 text part。单一 pending 场景不上 wire 回传 `toolCallId`，由 runtime 自动关联；**多并行工具**场景须在 `parts[].metadata.toolCallId` 定向，否则返回 `REMOTE_TOOL_INPUT_TARGET_REQUIRED` |
+| 续传 | 客户端对既有 `taskId` 再发 unary `SendMessage`，正文为一个 text part；`returnImmediately` 由当前 mode 决定。单一 pending 场景不上 wire 回传 `toolCallId`，由 runtime 自动关联；**多并行工具**场景须在 `parts[].metadata.toolCallId` 定向，否则返回 `REMOTE_TOOL_INPUT_TARGET_REQUIRED` |
 | 中断即关流 | 投递 `INPUT_REQUIRED` 后关闭当前 SSE 流，等客户端续传后再开下一段。这是**约定行为**，客户端不会当异常 |
 | 完成 | `TASK_STATE_COMPLETED`，输出文本放在 `result.artifactUpdate.artifact.parts[].text` 或 `result.statusUpdate.status.message.parts[].text` |
 
@@ -624,20 +623,21 @@ SDK 提供五个可替换的 SPI，默认实现适合开发/测试，生产环�
 
 | SPI | 默认实现 | 何时需要替换 |
 |-----|----------|--------------|
-| `TransportProvider` | `A2aHttpTransportProvider`（真实 HTTP+SSE） | 测试时换 `InProcessFakeGateway`（无网络）；或换自定义协议传输 |
+| `TransportProvider` | `A2aHttpTransportProvider`（真实 HTTP+SSE） | 换自定义协议传输，或测试时指向独立运行的 `mock-gateway` |
 | `CredentialProvider` | 无（必填项，无默认） | 接企业凭据代理、按会话/租户区分 token、支持刷新 |
 | `LocalToolRegistry` | `DefaultToolRegistry`（内存） | 需要工具元数据持久化或动态发现时 |
 | `ClientStateStore` | `InMemoryStateStore`（内存） | 需要跨进程重启恢复时（持久化执行记录 outbox 与提交 ACK） |
 | `Governance.PolicyGuard` / `ApprovalProvider` | `allowAll` / `autoApprove` | 生产环境**必须**替换为真实策略与审批实现 |
 
-### 自定义传输示例（测试用）
+### 自定义传输示例
+
+`TransportProvider` 是 SDK 内核与"协议/网络"之间的抽象缝。默认实现 `A2aHttpTransportProvider` 走真实 A2A JSON-RPC over HTTP+SSE，测试时把它指向独立运行的 `mock-gateway` 即可；若你的运行环境不用 HTTP（例如直连进程内 bus），实现该接口替换之：
 
 ```java
-TransportProvider fake = new InProcessFakeGateway();
+TransportProvider custom = new YourTransportProvider();
 AgentClient client = AgentClients.builder()
-        .transport(fake)
+        .transport(custom)
         .build();
-// 完全无网络，可在单测里跑通多轮工具驱动、幂等去重、治理编排
 ```
 
 ### 持久化状态存储示例
@@ -666,7 +666,7 @@ AgentClient client = AgentClients.builder()
 |--------|------|------|--------|
 | 工具执行器 | 执行 `LocalTool.execute` | 4 线程守护池（`agent-client-tool-N`） | `Builder.toolExecutor` |
 | 传输 IO（A2aHttpTransportProvider 内部） | SSE 读取、HTTP 异步发送 | 无界缓存守护池（`a2a-transport-io`） | 不可直接替换，可换自定义 `TransportProvider` |
-| 看护调度器（A2aHttpTransportProvider 内部） | SSE 读空闲看护、BLOCKING 轮询、恢复退避 | 单线程守护（`a2a-transport-watchdog`） | 同上 |
+| 看护调度器（A2aHttpTransportProvider 内部） | SSE 读空闲看护、创建恢复退避 | 单线程守护（`a2a-transport-watchdog`） | 同上 |
 
 所有线程都是 daemon，不阻塞 JVM 退出。未捕获异常处理器为 best-effort，不打断主流程。
 
@@ -701,41 +701,6 @@ AgentClients.builder()
 
 ## 测试与调试
 
-### 进程内假网关（无网络单测）
-
-`transport.fake.InProcessFakeGateway` 是**测试工具，非 SDK 交付**。行为对齐 mock-gateway：依据 ToolView 按序请求各工具一次，全部完成后结束；并对首个工具故意重复投递一次 `INPUT_REQUIRED` 以验证客户端去重。
-
-```java
-@Test
-void shouldDeduplicateToolExecution() throws Exception {
-    AtomicInteger count = new AtomicInteger();
-    try (AgentClient client = AgentClients.builder()
-            .transport(new InProcessFakeGateway())
-            .build()) {
-        client.tools().register(LocalTool.of(
-                LocalToolDescriptor.builder("ping")
-                        .sideEffect(LocalToolDescriptor.SideEffect.OBSERVATION)
-                        .inputSchema("{\"type\":\"object\"}")
-                        .build(),
-                (inv, ctx) -> {
-                    count.incrementAndGet();
-                    return ToolExecutionRecord.ok(inv.toolCallId(), Map.of("pong", true));
-                }));
-        client.exposeInConversation("test", ToolExposurePolicy.all());
-
-        InvocationCall call = client.invoke(InvocationRequest.builder()
-                .conversationId("test")
-                .mode(InvocationMode.STREAMING)
-                .input("ping")
-                .build());
-        InvocationSnapshot snap = call.completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
-
-        assertEquals(TaskState.COMPLETED, snap.state());
-        assertEquals(1, count.get());   // 即使重复投递 INPUT_REQUIRED，工具也只执行一次
-    }
-}
-```
-
 ### 端到端验证（mock-gateway + verification-app）
 
 SDK 的可运行示例（mock-gateway + verification-app + Dockerfile + 对接手册）已挪到项目共享示例区：
@@ -748,10 +713,11 @@ demo 工程是独立的多模块 reactor（父 pom = `agent-client-demo-parent`�
 ```bash
 cd common/example/agent-client-demo
 mvn -q -o clean package
-java -jar verification-app/target/verification-app.jar   # 退出码 0 = 全部断言通过
+# 必须先配 AGENT_GATEWAY_URL 指向一个真实 gateway（可用同仓 mock-gateway 独立起，或你自己的 gateway）
+AGENT_GATEWAY_URL=http://127.0.0.1:8080 java -jar verification-app/target/verification-app.jar   # 退出码 0 = 全部断言通过
 ```
 
-verification-app 内嵌启动 mock-gateway，再由 SDK 经真实 HTTP + SSE 发起调用，覆盖 13 个场景：
+verification-app 经 SDK 对 `AGENT_GATEWAY_URL` 指定的外部 gateway 发起真实 HTTP + SSE 调用，覆盖 13 个场景：
 
 | 场景 | 考察点 |
 |------|--------|
@@ -808,7 +774,7 @@ verification-app 内嵌启动 mock-gateway，再由 SDK 经真实 HTTP + SSE 发
 ### 不要做的事
 
 - **不要**直接使用 `diagnosticTaskRef`（即服务端 taskId）作为业务操作句柄。所有后续操作用 `invocationRef`。
-- **不要**在业务代码里传递 `internal` / `transport.a2a` / `transport.fake` 包的类型——这些是实现细节，不保证兼容。
+- **不要**在业务代码里传递 `internal` / `transport.a2a` 包的类型——这些是实现细节，不保证兼容。
 - **不要**把 `STREAMING` 的结果在本地聚合成一次性响应来模拟 BLOCKING——后者走的是网关同步接口，语义不同。
 - **不要**对 `ProgressUncertain` 当作失败处理——它是"不确定"，附恢复线索，应按 `Recovery.suggestedAction` 处置。
 - **不要**对不可重试的错误码无限重试（如 `AUTH_INVALID` / `PERMISSION_DENIED` / `IDEMPOTENCY_PAYLOAD_MISMATCH`）。
@@ -836,7 +802,7 @@ verification-app 内嵌启动 mock-gateway，再由 SDK 经真实 HTTP + SSE 发
 
 ## 可运行示例
 
-SDK 的可运行示例（mock-gateway + verification-app + Dockerfile + 对接手册）已挪到项目共享示例区：
+SDK 的可运行示例（verification-app + Dockerfile + 对接手册，配合独立运行的 `mock-gateway` 参考网关）已挪到项目共享示例区：
 
 - 工程根：[`../example/agent-client-demo/`](../example/agent-client-demo/)
 - 对接手册：[`../example/agent-client-demo/Guidance4GatewayTest.md`](../example/agent-client-demo/Guidance4GatewayTest.md)
@@ -847,7 +813,8 @@ demo 工程是独立的多模块 reactor（父 pom = `agent-client-demo-parent`�
 ```bash
 cd common/example/agent-client-demo
 mvn -q -o clean package
-java -jar verification-app/target/verification-app.jar   # 退出码 0 = 全部断言通过
+# 必须先配 AGENT_GATEWAY_URL 指向一个真实 gateway（可用同仓 mock-gateway 独立起，或你自己的 gateway）
+AGENT_GATEWAY_URL=http://127.0.0.1:8080 java -jar verification-app/target/verification-app.jar   # 退出码 0 = 全部断言通过
 ```
 
 详细构建/运行/Docker 说明见 [demo 的 README](../example/agent-client-demo/README.md)。

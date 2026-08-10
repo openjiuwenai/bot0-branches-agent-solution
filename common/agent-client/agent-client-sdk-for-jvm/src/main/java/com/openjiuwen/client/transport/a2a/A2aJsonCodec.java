@@ -4,6 +4,7 @@
 
 package com.openjiuwen.client.transport.a2a;
 
+import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.transport.spi.ToolWireSpec;
 import com.openjiuwen.client.transport.spi.TransportProvider;
@@ -23,7 +24,8 @@ import java.util.UUID;
 /**
  * A2A JSON-RPC 2.0 报文的编解码（仅在 transport 内部使用 Jackson）。
  *
- * <p>请求侧：把中立指令映射为 {@code SendStreamingMessage}（创建/流式）与 {@code SendMessage}（续跑/同步）。
+ * <p>请求侧：把中立指令映射为 {@code SendStreamingMessage}（创建/流式）与 {@code SendMessage}（unary）；
+ * unary 返回时机由 {@code params.configuration.returnImmediately} 表达。
  * 业务标识到 wire 字段的映射：{@code conversationId → message.contextId}、
  * {@code invocationId/idempotencyKey → message.messageId}、ToolView → {@code params.metadata.clientTools}、
  * 可选 {@code agentId → params.metadata.agentId}。
@@ -73,11 +75,14 @@ final class A2aJsonCodec {
      */
 
     ObjectNode buildCreate(TransportProvider.CreateCommand cmd) {
-        // 仅 STREAMING 交付：创建用 SendStreamingMessage（SSE）；预留模式回退 SendMessage。
-        String method = (cmd.mode() == com.openjiuwen.client.api.InvocationMode.STREAMING)
+        // STREAMING 用方法名表达；BLOCKING / ASYNC 共用 SendMessage，由 configuration 区分返回时机。
+        String method = (cmd.mode() == InvocationMode.STREAMING)
                 ? "SendStreamingMessage" : "SendMessage";
         ObjectNode root = newRequest(method);
         ObjectNode params = root.putObject("params");
+        if (cmd.mode() != InvocationMode.STREAMING) {
+            fillReturnImmediately(params, cmd.mode());
+        }
         ObjectNode message = params.putObject("message");
         message.put("role", "ROLE_USER");
         // invocationId / idempotencyKey → message.messageId（网关据此去重，Feat-Func-011 §4.9 AC-4）。
@@ -102,9 +107,10 @@ final class A2aJsonCodec {
      */
 
     ObjectNode buildResume(TransportProvider.ResumeCommand cmd) {
-        // 工具结果 / 用户输入续跑一律走同步 SendMessage（Feat-Func-011 §5.9.3）：非 SSE、单条 JSON 响应。
+        // 工具结果 / 用户输入续跑一律走 unary SendMessage（Feat-Func-011 §5.9.3）：非 SSE、单条 JSON 响应。
         ObjectNode root = newRequest("SendMessage");
         ObjectNode params = root.putObject("params");
+        fillReturnImmediately(params, cmd.mode());
         ObjectNode message = params.putObject("message");
         message.put("role", "ROLE_USER");
         // 每次续跑用新的 messageId；taskId 关联既有 Task。toolCallId 在多并行工具场景下写入 part.metadata（见下）。
@@ -128,6 +134,14 @@ final class A2aJsonCodec {
         // 续跑不重复声明 clientTools（仅创建时声明），metadata 保持空对象以对齐 A2A 结构。
         params.putObject("metadata");
         return root;
+    }
+
+    /**
+     * 在 unary A2A 请求上表达服务端返回时机。ASYNC 在受理后立即返回，其他模式等待本轮结果。
+     */
+    private static void fillReturnImmediately(ObjectNode params, InvocationMode mode) {
+        params.putObject("configuration")
+                .put("returnImmediately", mode == InvocationMode.ASYNC);
     }
 
     private void fillMetadata(ObjectNode params, String agentId, List<ToolWireSpec> clientTools,
@@ -387,6 +401,15 @@ final class A2aJsonCodec {
             // 兼容旧 mock 形态：{kind:"text", text:"..."}。
             if (p.has("text")) {
                 sb.append(p.path("text").asText(""));
+            } else if (p.has("data")) {
+                // DataPart：runtime 把流式回复包成 {"data":{"role":"assistant","content":"..."}}
+                // （ChunkMapper：Map→DataPart，符合 A2A 程序间接口定位）。这里兼容提取其中
+                // 的文本字段（content / text / message），让 outputText() 对 DataPart 也能返回非空。
+                JsonNode data = p.path("data");
+                String text = data.path("content").asText(data.path("text").asText(data.path("message").asText("")));
+                if (!text.isEmpty()) {
+                    sb.append(text);
+                }
             }
         }
         return sb.length() > 0 ? Optional.of(sb.toString()) : Optional.empty();

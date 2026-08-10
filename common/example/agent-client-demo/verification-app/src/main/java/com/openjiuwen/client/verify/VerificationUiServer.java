@@ -259,7 +259,7 @@ public final class VerificationUiServer {
                     LOG.log(java.util.logging.Level.INFO, "[ui] {0} {1}{2}",
                             new Object[] {event.kind(), scenario, event.message()});
                 }, ids);
-            } catch (IOException | IllegalStateException e) {
+            } catch (IllegalStateException e) {
                 broadcast("progress", jsonEvent("RUN_END", null,
                         "unexpected failure: " + e.getMessage(), false));
                 LOG.log(java.util.logging.Level.WARNING, "verification run failed", e);

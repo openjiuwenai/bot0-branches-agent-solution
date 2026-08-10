@@ -192,7 +192,7 @@ public final class MockGatewayServer {
      * 状态查询（{@code GetTask}）：返回该 Task 当前的权威快照。
      *
      * <p>参数位置与 agent-runtime-java 契约一致：{@code params.id}（标准 A2A {@code TaskQueryParams.id}）。
-     * 客户端用它做 ASYNC 观察、断连后确认真实进展、以及 BLOCKING 的推进轮询。
+     * 客户端用它做显式状态查询、ASYNC 观察和断连后确认真实进展；严格 unary BLOCKING 不自动查询。
      *
      * @param ex HTTP 交换
      * @param rpcId JSON-RPC 请求标识
@@ -316,23 +316,26 @@ public final class MockGatewayServer {
         String input = extractText(message).orElse(null);
         tasks.put(task.taskId, task);
 
-        // 断连模拟场景优先判定：前缀是本次新增的独立字面量，不会改变任何既有场景的触发条件。
-        if (input != null && input.startsWith("DROP_THEN_COMPLETE")) {
+        // 断连模拟场景优先判定：触发词与 verification-app 当前输入文本对齐。
+        // S8 用 "stream hello"，S9 用 "stream hello again"（两者唯一，不与其他场景冲突）。
+        // 真栈下这两个输入是普通 COMPLETED；mock 保留断连语义以验证真栈无法覆盖的断连恢复路径。
+        if (input != null && input.equals("stream hello")) {
             // 流中断但服务端其实已把任务跑完：客户端应能靠 GetTask 把"不确定"变回"确定"。
             task.scenario = Scenario.DROP_THEN_COMPLETE;
             task.state = State.WORKING;
             task.outputText = "recovered after mid-stream drop";
-        } else if (input != null && input.startsWith("DROP_STAYS_WORKING")) {
+        } else if (input != null && input.equals("stream hello again")) {
             // 流中断且服务端仍在跑：客户端查询也无法确定，应投递"进展不确定"而非判失败或悬挂。
             task.scenario = Scenario.DROP_STAYS_WORKING;
             task.state = State.WORKING;
         } else if (!task.toolNames.isEmpty()) {
             task.scenario = Scenario.CLIENT_TOOLS;
             requestToolRound(task);
-        } else if (input != null && input.startsWith("NEEDS_USER_INPUT")) {
+        } else if (input != null && input.equals("Please calculate 1+1 through Agent B.")) {
+            // S3：对齐真栈，Agent B 的 calc 工具会触发 INPUT_REQUIRED，客户端续轮回复 "ok" 后完成。
             task.scenario = Scenario.USER_INPUT;
             task.state = State.INPUT_REQUIRED;
-            task.pending = Pending.userInput("please provide additional input");
+            task.pending = Pending.userInput("please provide input for Agent B's calc tool");
         } else {
             task.scenario = Scenario.IMMEDIATE;
             task.state = State.COMPLETED;

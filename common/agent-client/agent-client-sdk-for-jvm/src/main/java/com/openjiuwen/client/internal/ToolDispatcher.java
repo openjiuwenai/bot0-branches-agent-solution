@@ -66,7 +66,24 @@ final class ToolDispatcher {
         if (already.isPresent()) {
             return CompletableFuture.completedFuture(already.get());
         }
+        // Defensive: if a previous run's pipeline completed exceptionally but wasn't cleaned up
+        // (runPipeline.whenComplete should have removed it), remove the stale entry so the current
+        // run gets a fresh pipeline instead of a dead future.
+        CompletableFuture<ToolExecutionRecord> existing = inFlight.get(toolCallId);
+        if (existing != null && existing.isCompletedExceptionally()) {
+            inFlight.remove(toolCallId, existing);
+        }
         return inFlight.computeIfAbsent(toolCallId, k -> runPipeline(call, ctx));
+    }
+
+    /**
+     * Remove an in-flight entry (e.g., after a dispatch timeout/abandonment) so the next dispatch
+     * for the same toolCallId gets a fresh pipeline instead of a stale incomplete future.
+     *
+     * @param toolCallId the tool call id to clear
+     */
+    void clearInFlight(String toolCallId) {
+        inFlight.remove(toolCallId);
     }
 
     /**
@@ -84,7 +101,7 @@ final class ToolDispatcher {
                 .exceptionally(ex -> ToolExecutionRecord.error(
                         toolCallId, "tool_execution_error", rootMessage(ex)))
                 .thenApply(rec -> store.saveRecordIfAbsent(toolCallId, rec))
-                .whenComplete((r, e) -> inFlight.remove(toolCallId));
+                .whenCompleteAsync((r, e) -> inFlight.remove(toolCallId));
     }
 
     /**
