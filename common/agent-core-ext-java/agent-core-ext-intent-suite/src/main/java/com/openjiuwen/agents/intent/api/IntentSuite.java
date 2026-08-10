@@ -6,7 +6,6 @@ package com.openjiuwen.agents.intent.api;
 
 import com.openjiuwen.agents.intent.exception.IntentInitializationException;
 import com.openjiuwen.agents.intent.exception.IntentMatchException;
-import com.openjiuwen.agents.intent.exception.IntentResultException;
 import com.openjiuwen.agents.intent.model.InitializedIntents;
 import com.openjiuwen.agents.intent.model.IntentAction;
 import com.openjiuwen.agents.intent.model.IntentCatalogInput;
@@ -96,7 +95,7 @@ public final class IntentSuite {
         try {
             matched = Optional.ofNullable(matcher.match(context))
                     .orElseThrow(() -> new IntentMatchException("matcher result must not be null"));
-        } catch (IntentMatchException exception) {
+        } catch (RuntimeException exception) {
             log.info("Intent matching failed catalogVersion={} reason={}", snapshot.version(), exception.getMessage());
             return failed(null, "意图匹配失败");
         }
@@ -161,7 +160,7 @@ public final class IntentSuite {
             log.info("Intent result function completed intentId={} actionType={}", selected.id(),
                     action.getClass().getSimpleName());
             return new IntentDecision(status, selected.id(), action, null);
-        } catch (IntentResultException exception) {
+        } catch (RuntimeException exception) {
             log.info("Intent result function failed intentId={} reason={}", selected.id(), exception.getMessage());
             return failed(selected.id(), "意图结果函数执行失败");
         }
