@@ -4,48 +4,39 @@
 
 package com.openjiuwen.example.intentbank.common;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.openjiuwen.core.foundation.llm.schema.ToolCall;
+import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.singleagent.rail.AgentCallbackContext;
 import com.openjiuwen.core.singleagent.rail.AgentRail;
 import com.openjiuwen.core.singleagent.rail.ToolCallInputs;
-import com.openjiuwen.harness.tools.FileTodoStorage;
+import com.openjiuwen.harness.rails.TaskPlanningRail;
 import com.openjiuwen.harness.tools.TodoItem;
 import com.openjiuwen.harness.tools.TodoStatus;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
-/** Adds the Intent Agent's actual task-plan progress to remote input requests. */
+/** Emits the Intent Agent's actual task-plan progress before a remote invocation. */
 public final class BankPlanProgressRail extends AgentRail {
     /** Runs after intent routing and before the A2A delegate interrupt Rail. */
     public static final int PRIORITY = 100;
 
     private static final String A2A_DELEGATE = "a2a_delegate";
-    private static final String PARENT_PROGRESS = "parentProgress";
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
-    };
     private static final Logger log = LoggerFactory.getLogger(BankPlanProgressRail.class);
 
-    private final FileTodoStorage todoStorage;
+    private final TaskPlanningRail taskPlanningRail;
 
     /**
      * Creates a progress Rail for the DeepAgent workspace.
      *
-     * @param workspace Intent Agent workspace
+     * @param taskPlanningRail Intent Agent task-planning Rail
      */
-    public BankPlanProgressRail(Path workspace) {
-        todoStorage = new FileTodoStorage(workspace.resolve(".todo"));
+    public BankPlanProgressRail(TaskPlanningRail taskPlanningRail) {
+        this.taskPlanningRail = Objects.requireNonNull(taskPlanningRail, "taskPlanningRail");
     }
 
     @Override
@@ -63,59 +54,32 @@ public final class BankPlanProgressRail extends AgentRail {
         if (sessionId == null || sessionId.isBlank()) {
             return;
         }
-        List<TodoItem> todos;
-        try {
-            todos = todoStorage.load(sessionId);
-        } catch (IOException exception) {
-            log.info("BANK_DEMO_PLAN_PROGRESS unavailable sessionId={} reason={}", sessionId,
-                    exception.getMessage());
-            return;
-        }
+        List<TodoItem> todos = taskPlanningRail.cachedTodos(sessionId);
         if (todos.size() < 2) {
-            return;
-        }
-        Map<String, Object> arguments;
-        try {
-            arguments = arguments(inputs);
-        } catch (IllegalArgumentException exception) {
-            log.info("BANK_DEMO_PLAN_PROGRESS skipped sessionId={} reason={}", sessionId,
-                    exception.getMessage());
             return;
         }
         String progress = progressMessage(todos);
         if (progress.isBlank()) {
             return;
         }
-        arguments.put(PARENT_PROGRESS, progress);
-        ToolCall toolCall = inputs.getToolCall();
-        if (toolCall != null) {
-            try {
-                toolCall.setArguments(OBJECT_MAPPER.writeValueAsString(arguments));
-            } catch (JsonProcessingException exception) {
-                log.info("BANK_DEMO_PLAN_PROGRESS skipped sessionId={} reason=serialization", sessionId);
-                return;
-            }
-        }
-        inputs.setToolArgs(arguments);
+        int currentIndex = currentIndex(todos);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("message", progress);
+        payload.put("currentStep", currentIndex + 1);
+        payload.put("totalSteps", todos.size());
+        payload.put("tasks", todos.stream().map(BankPlanProgressRail::taskPayload).toList());
+        context.getSession().writeStream(new OutputSchema("bank_plan_progress", 0, payload));
         log.info("BANK_DEMO_PLAN_PROGRESS sessionId={} taskCount={} currentStep={}", sessionId, todos.size(),
-                currentIndex(todos) + 1);
+                currentIndex + 1);
     }
 
-    private static Map<String, Object> arguments(ToolCallInputs inputs) {
-        Object source = inputs.getToolArgs();
-        if (source instanceof Map<?, ?> map) {
-            Map<String, Object> result = new LinkedHashMap<>();
-            map.forEach((key, value) -> result.put(String.valueOf(key), value));
-            return result;
-        }
-        if (!(source instanceof String json) || json.isBlank()) {
-            throw new IllegalArgumentException("A2A delegate arguments are missing");
-        }
-        try {
-            return OBJECT_MAPPER.readValue(json, MAP_TYPE);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("A2A delegate arguments are invalid", exception);
-        }
+    private static Map<String, Object> taskPayload(TodoItem todo) {
+        Map<String, Object> task = new LinkedHashMap<>();
+        task.put("id", todo == null ? "" : text(todo.getId()));
+        task.put("content", content(todo));
+        task.put("status", todo == null || todo.getStatus() == null ? "" : todo.getStatus().name());
+        task.put("resultSummary", todo == null ? "" : text(todo.getResultSummary()));
+        return task;
     }
 
     private static String progressMessage(List<TodoItem> todos) {
@@ -167,5 +131,9 @@ public final class BankPlanProgressRail extends AgentRail {
 
     private static String content(TodoItem todo) {
         return todo == null || todo.getContent() == null ? "" : todo.getContent();
+    }
+
+    private static String text(String value) {
+        return value == null ? "" : value;
     }
 }

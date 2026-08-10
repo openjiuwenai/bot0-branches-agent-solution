@@ -15,6 +15,7 @@ import com.openjiuwen.example.intentbank.common.BankPlanProgressRail;
 import com.openjiuwen.example.intentbank.common.BankToolAuditRail;
 import com.openjiuwen.example.intentbank.common.BankTools;
 import com.openjiuwen.example.intentbank.common.IntentOnlyToolVisibilityRail;
+import com.openjiuwen.harness.rails.TaskPlanningRail;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
 import com.openjiuwen.service.spec.spi.AgentHandler;
 
@@ -23,7 +24,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
-import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -42,6 +42,7 @@ public class IntentAgentApplication {
 
     @Bean
     AgentHandler intentAgentHandler(BankDemoProperties properties) {
+        TaskPlanningRail taskPlanningRail = new TaskPlanningRail();
         BankAgentDefinition definition = new BankAgentDefinition("intent-bank-router", "IntentBankRouter",
                 "Routes bank and local utility requests", """
                         你是银行业务统一入口。单一业务目标必须先交给 intent_match，不能自行选择业务工具。
@@ -53,8 +54,8 @@ public class IntentAgentApplication {
                         """, WORKSPACE, true);
         return new JiuwenCoreAgentExtHandler(BankDemoAgentFactory.create(definition,
                 List.of(BankTools.calculator(), BankTools.currentDate(), BankTools.weather()),
-                List.of(new BankToolAuditRail(), new IntentOnlyToolVisibilityRail(),
-                        new BankPlanProgressRail(Path.of(WORKSPACE))), properties));
+                List.of(new BankToolAuditRail(), new IntentOnlyToolVisibilityRail(), taskPlanningRail,
+                        new BankPlanProgressRail(taskPlanningRail)), properties));
     }
 
     @Bean

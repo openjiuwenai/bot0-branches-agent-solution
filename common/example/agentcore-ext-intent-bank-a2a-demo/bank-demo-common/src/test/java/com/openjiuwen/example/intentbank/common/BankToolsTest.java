@@ -40,6 +40,8 @@ class BankToolsTest {
     void executesLocalUtilityTools() throws Exception {
         assertThat(result(BankTools.calculator().invoke(Map.of("query", "6 * 7")))).containsEntry("status", "COMPLETED")
                 .containsEntry("result", "42");
+        assertThat(result(BankTools.calculator().invoke(Map.of("query", "计算 6 乘以 7 的结果"))))
+                .containsEntry("status", "COMPLETED").containsEntry("result", "42");
         assertThat(result(BankTools.calculator().invoke(Map.of("query", "1 / 0")))).containsEntry("status",
                 "INVALID_INPUT");
         assertThat(result(BankTools.weather().invoke(Map.of("query", "上海天气")))).containsEntry("city", "上海")
