@@ -208,9 +208,38 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
     }
 
     private static QueryResponse response(ServeRequest request, String content) {
-        return new QueryResponse(Map.of("role", "assistant", "content", content,
+        return new QueryResponse(Map.of("role", "assistant", "content", content + echoSuffix(request),
                 "tenantId", request.getTenantId() == null ? "" : request.getTenantId()),
                 request.getConversationId());
+    }
+
+    /**
+     * 把请求携带的业务属性回显进输出文本后缀，供 S11（traceId）/ S13（agentId）断言验证属性确实上 wire
+     * 并到达 runtime。
+     *
+     * <p>读取路径（对齐 SDK {@code A2aJsonCodec.fillMetadata} 与 runtime {@code A2AProtocolAdapter}）：
+     * <ul>
+     *   <li>{@code metadata.attributes.traceId} — SDK 经 {@code .attribute("traceId", ...)} 传入</li>
+     *   <li>{@code metadata.agentId} — SDK 经 {@code .agentId(...)} 传入，gateway 路由后透传给 runtime</li>
+     * </ul>
+     * 不存在则对应后缀省略，不影响其他场景的输出。
+     *
+     * @param request the serve request
+     * @return echo suffix string, empty when no traceable attributes present
+     */
+    private static String echoSuffix(ServeRequest request) {
+        StringBuilder suffix = new StringBuilder();
+        if (request.getMetadata() != null) {
+            Object attrs = request.getMetadata().get("attributes");
+            if (attrs instanceof Map<?, ?> attrMap && attrMap.get("traceId") instanceof String traceId
+                    && !traceId.isBlank()) {
+                suffix.append("[trace=").append(traceId).append("]");
+            }
+            if (request.getMetadata().get("agentId") instanceof String agentId && !agentId.isBlank()) {
+                suffix.append("[agent=").append(agentId).append("]");
+            }
+        }
+        return suffix.toString();
     }
 
     private static QueryResponse inputRequired(ServeRequest request) {
