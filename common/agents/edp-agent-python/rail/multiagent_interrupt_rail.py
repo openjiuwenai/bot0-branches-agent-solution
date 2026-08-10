@@ -121,7 +121,7 @@ class MultiagentInterruptRail(BaseInterruptRail):
         # 为每个 entity 根据 entity_type 映射 sub_agent_url
         enriched_entities = []
         for entity in entities:
-            entity_type = entity.get("entity_type", "ZDT")
+            entity_type = entity.get("entity_type", "ABC")
             url, name = self._type_to_agent.get(entity_type, ("", ""))
             
             if not url:

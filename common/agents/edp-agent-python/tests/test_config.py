@@ -18,12 +18,12 @@ class TestSubAgentsConfig:
     def test_with_entries(self):
         config = SubAgentsConfig(
             sub_agents=[
-                SubAgentEntry(entity_type="ZDT", url="http://zdt-agent:8080", name="SubEDPAgent"),
+                SubAgentEntry(entity_type="ABC", url="http://abc-agent:8080", name="SubEDPAgent"),
             ]
         )
         assert len(config.sub_agents) == 1
-        assert config.sub_agents[0].entity_type == "ZDT"
-        assert config.sub_agents[0].url == "http://zdt-agent:8080"
+        assert config.sub_agents[0].entity_type == "ABC"
+        assert config.sub_agents[0].url == "http://abc-agent:8080"
         assert config.sub_agents[0].name == "SubEDPAgent"
 
 
@@ -44,8 +44,8 @@ class TestLoadSubAgentsConfig:
         """TC-26: sub_agents.yaml 加载与校验"""
         yaml_content = """
 sub_agents:
-  - entity_type: ZDT
-    url: http://zdt-agent:8080
+  - entity_type: ABC
+    url: http://abc-agent:8080
     name: SubEDPAgent
   - entity_type: FUND
     url: http://fund-agent:8080
@@ -57,8 +57,8 @@ sub_agents:
         config = load_sub_agents_config(config_path=str(yaml_file))
 
         assert len(config.sub_agents) == 2
-        assert config.sub_agents[0].entity_type == "ZDT"
-        assert config.sub_agents[0].url == "http://zdt-agent:8080"
+        assert config.sub_agents[0].entity_type == "ABC"
+        assert config.sub_agents[0].url == "http://abc-agent:8080"
         assert config.sub_agents[0].name == "SubEDPAgent"
         assert config.sub_agents[1].entity_type == "FUND"
         assert config.sub_agents[1].url == "http://fund-agent:8080"

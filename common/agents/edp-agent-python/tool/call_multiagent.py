@@ -26,7 +26,7 @@ async def call_multiagent(
         entities: 多个子 Agent 的调用信息列表，每项包含：
             - entity_id: 业务实体唯一标识
             - entity_name: 中文实体名称
-            - entity_type: 实体类型（用于映射子Agent，如 "ZDT"）
+            - entity_type: 实体类型（用于映射子Agent，如 "ABC"）
             - query: 针对该实体的子任务描述
     """
     if entities is None:
@@ -69,7 +69,7 @@ call_multiagent_tool = LocalFunction(
                             },
                             "entity_type": {
                                 "type": "string",
-                                "description": "实体类型，用于映射子Agent（如 ZDT、RISK）",
+                                "description": "实体类型，用于映射子Agent（如 ABC、RISK）",
                             },
                             "query": {
                                 "type": "string",

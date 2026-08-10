@@ -15,7 +15,7 @@ def _make_sub_agents_config():
     """创建测试用的 sub_agents 配置"""
     return SubAgentsConfig(
         sub_agents=[
-            SubAgentEntry(entity_type="ZDT", url="http://zdt-agent:8080", name="SubEDPAgent"),
+            SubAgentEntry(entity_type="ABC", url="http://abc-agent:8080", name="SubEDPAgent"),
         ]
     )
 
@@ -84,7 +84,7 @@ class TestMultiagentInterruptRail:
                 {
                     "entity_id": "entity_001",
                     "entity_name": "企业A",
-                    "entity_type": "ZDT",
+                    "entity_type": "ABC",
                     "query": "分析贷款风险",
                 }
             ]
@@ -103,7 +103,7 @@ class TestMultiagentInterruptRail:
         assert len(pending_dispatch) == 1
 
         # 验证 sub_agent_url 已映射
-        assert pending_dispatch[0]["sub_agent_url"] == "http://zdt-agent:8080"
+        assert pending_dispatch[0]["sub_agent_url"] == "http://abc-agent:8080"
         assert pending_dispatch[0]["entity_id"] == "entity_001"
 
         # 验证防重入标记
@@ -193,7 +193,7 @@ class TestMultiagentInterruptRail:
         ctx.session.update_state({"multiagent_dispatched": True})
         ctx.inputs.tool_args = {
             "entities": [
-                {"entity_id": "entity_001", "entity_name": "企业A", "entity_type": "ZDT", "query": "test"}
+                {"entity_id": "entity_001", "entity_name": "企业A", "entity_type": "ABC", "query": "test"}
             ]
         }
 
@@ -301,7 +301,7 @@ class TestCancelledAndSkipped:
         ctx.session.update_state({"multiagent_dispatched": True})
         ctx.inputs.tool_args = {
             "entities": [
-                {"entity_id": "entity_001", "entity_name": "企业A", "entity_type": "ZDT", "query": "test"}
+                {"entity_id": "entity_001", "entity_name": "企业A", "entity_type": "ABC", "query": "test"}
             ]
         }
 

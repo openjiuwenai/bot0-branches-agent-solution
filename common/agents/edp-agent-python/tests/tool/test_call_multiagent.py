@@ -17,7 +17,7 @@ class TestCallMultiagent:
                 {
                     "entity_id": "entity_001",
                     "entity_name": "企业A",
-                    "entity_type": "ZDT",
+                    "entity_type": "ABC",
                     "query": "分析企业A的贷款风险",
                 }
             ]
@@ -38,7 +38,7 @@ class TestCallMultiagent:
                 {
                     "entity_id": "entity_001",
                     "entity_name": "企业A",
-                    "entity_type": "ZDT",
+                    "entity_type": "ABC",
                     "query": "分析企业A",
                 }
             ]
