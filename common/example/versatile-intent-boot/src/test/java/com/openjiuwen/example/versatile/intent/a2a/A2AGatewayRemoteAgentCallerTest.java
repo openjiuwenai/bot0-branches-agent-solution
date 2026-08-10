@@ -15,14 +15,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller.EventObserver;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
-import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.a2aproject.sdk.spec.AgentCard;
 import org.a2aproject.sdk.spec.AgentInterface;
+import org.a2aproject.sdk.spec.TaskArtifactUpdateEvent;
 import org.a2aproject.sdk.spec.TaskState;
+import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -78,21 +79,6 @@ class A2AGatewayRemoteAgentCallerTest {
                 return Optional.ofNullable(upstreamHeaders.get(name));
             }
         };
-    }
-
-    @Test
-    void supportedRequiresNonBlankAgentIdBaseUrlAndToken() {
-        A2AGatewayRemoteAgentCaller caller = new A2AGatewayRemoteAgentCaller(props, resolver);
-        assertThat(caller.supported("agent_card_L2_hotel")).isTrue();
-        assertThat(caller.supported("")).isFalse();
-        assertThat(caller.supported(null)).isFalse();
-
-        props.setToken(null);
-        assertThat(caller.supported("agent_card_L2_hotel")).isFalse();
-
-        props.setToken("tok-abc");
-        props.setBaseUrl(null);
-        assertThat(caller.supported("agent_card_L2_hotel")).isFalse();
     }
 
     @Test
@@ -189,7 +175,7 @@ class A2AGatewayRemoteAgentCallerTest {
             RemoteCall call = new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null,
                     Map.of("userId", "u-42"));
             CapturingObserver observer = new CapturingObserver();
-            RemoteCallOutcome outcome = caller.callOutcome(call, observer, null)
+            RemoteCallOutcome outcome = caller.callOutcome(call, observer)
                     .get(10, TimeUnit.SECONDS);
 
             wireMock.verify(postRequestedFor(urlPathMatching("/a2a/agent_card_L2_hotel"))
@@ -200,13 +186,14 @@ class A2AGatewayRemoteAgentCallerTest {
 
             assertThat(outcome.remoteState()).isEqualTo(TaskState.TASK_STATE_COMPLETED);
             assertThat(outcome.result()).isEqualTo("酒店预订成功：上海今晚五星");
-            assertThat(observer.chunks).hasSize(1);
-            assertThat(observer.chunks.get(0).getType()).isEqualTo(QueryChunk.TYPE_CHUNK);
-            Object data = observer.chunks.get(0).getData();
-            assertThat(data).isInstanceOf(Map.class);
-            Map<?, ?> envelope = (Map<?, ?>) data;
-            assertThat(envelope.get("type")).isEqualTo("answer");
-            assertThat(envelope.get("output")).isEqualTo("酒店预订成功：上海今晚五星");
+            assertThat(observer.artifacts).singleElement().satisfies(update -> {
+                assertThat(update.taskId()).isEqualTo("task-1");
+                assertThat(update.artifact().artifactId()).isEqualTo("art-1");
+                assertThat(update.append()).isFalse();
+                assertThat(update.lastChunk()).isTrue();
+            });
+            assertThat(observer.statuses).extracting(update -> update.status().state())
+                    .containsExactly(TaskState.TASK_STATE_COMPLETED);
         } finally {
             wireMock.stop();
         }
@@ -234,7 +221,7 @@ class A2AGatewayRemoteAgentCallerTest {
             RemoteCall call = new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null,
                     Map.of("trace", "abc"));
             CapturingObserver observer = new CapturingObserver();
-            caller.callOutcome(call, observer, null).get(10, TimeUnit.SECONDS);
+            caller.callOutcome(call, observer).get(10, TimeUnit.SECONDS);
 
             // The SDK generates UUIDs for id/messageId/contextId; assert only on stable fields.
             wireMock.verify(postRequestedFor(urlPathMatching("/a2a/agent_card_L2_hotel"))
@@ -272,19 +259,16 @@ class A2AGatewayRemoteAgentCallerTest {
 
             RemoteCall call = new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null, null);
             CapturingObserver observer = new CapturingObserver();
-            RemoteCallOutcome outcome = caller.callOutcome(call, observer, null)
+            RemoteCallOutcome outcome = caller.callOutcome(call, observer)
                     .get(10, TimeUnit.SECONDS);
 
             assertThat(outcome.remoteState()).isEqualTo(TaskState.TASK_STATE_INPUT_REQUIRED);
             assertThat(outcome.inputPrompt()).isEqualTo("请提供入住日期");
             assertThat(outcome.remoteTaskId()).isEqualTo("task-99");
-            assertThat(observer.chunks).hasSize(1);
-            QueryChunk interrupt = observer.chunks.get(0);
-            assertThat(interrupt.getType()).isEqualTo(QueryChunk.TYPE_INTERRUPT);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> payload = (Map<String, Object>) interrupt.getData();
-            assertThat(payload).containsEntry("message", "请提供入住日期");
-            assertThat(payload).containsEntry("remote_task_id", "task-99");
+            assertThat(observer.statuses).singleElement().satisfies(update -> {
+                assertThat(update.status().state()).isEqualTo(TaskState.TASK_STATE_INPUT_REQUIRED);
+                assertThat(update.status().message()).isNotNull();
+            });
         } finally {
             wireMock.stop();
         }
@@ -297,36 +281,151 @@ class A2AGatewayRemoteAgentCallerTest {
 
         RemoteCall call = new RemoteCall("agent_card_L2_hotel", "hi", "c-1", null, null);
         CapturingObserver observer = new CapturingObserver();
-        CompletableFuture<RemoteCallOutcome> future = caller.callOutcome(call, observer, null);
+        CompletableFuture<RemoteCallOutcome> future = caller.callOutcome(call, observer);
 
         assertThatThrownBy(() -> future.get(10, TimeUnit.SECONDS))
                 .isInstanceOf(ExecutionException.class)
                 .hasMessageContaining("token is not configured");
     }
 
-    private static final class CapturingObserver implements QueryStreamObserver {
-        final List<QueryChunk> chunks = new ArrayList<>();
-        volatile boolean completed;
-        volatile Throwable error;
+    private static final class CapturingObserver implements EventObserver {
+        final List<TaskStatusUpdateEvent> statuses = new ArrayList<>();
+        final List<TaskArtifactUpdateEvent> artifacts = new ArrayList<>();
 
         @Override
-        public void onNext(QueryChunk chunk) {
-            chunks.add(chunk);
+        public void onStatus(TaskStatusUpdateEvent event) {
+            statuses.add(event);
         }
 
         @Override
-        public void onComplete() {
-            completed = true;
+        public void onArtifact(TaskArtifactUpdateEvent event) {
+            artifacts.add(event);
         }
+    }
 
-        @Override
-        public void onError(Throwable t) {
-            error = t;
+    @Test
+    void callOutcomePreservesIntentEnvelopeForClientSideToolCalling() throws Exception {
+        WireMockServer wireMock = new WireMockServer(options().dynamicPort());
+        try {
+            wireMock.start();
+            props.setBaseUrl("http://localhost:" + wireMock.port());
+            props.setStreaming(false);
+            A2AGatewayRemoteAgentCaller caller = new A2AGatewayRemoteAgentCaller(props, resolver);
+            String envelope = "{\"type\":\"answer\",\"payload\":{\"output\":\"酒店预订成功\"},"
+                    + "\"intent_id\":\"intent-hotel\"}";
+            String escapedEnvelope = envelope.replace("\\", "\\\\").replace("\"", "\\\"");
+            wireMock.stubFor(post(urlPathMatching("/a2a/.*"))
+                    .willReturn(aResponse().withHeader("Content-Type", "application/json")
+                            .withBody("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"task\":{"
+                                    + "\"id\":\"task-1\",\"contextId\":\"ctx-1\","
+                                    + "\"status\":{\"state\":\"TASK_STATE_COMPLETED\"},"
+                                    + "\"artifacts\":[{\"artifactId\":\"art-1\",\"parts\":[{\"text\":\""
+                                    + escapedEnvelope
+                                    + "\",\"metadata\":{},\"filename\":\"\",\"mediaType\":\"\"}]}]}}}")));
+
+            RemoteCallOutcome outcome = caller.callOutcome(
+                    new RemoteCall("agent_card_L2_hotel", "订酒店", "c-1", null, Map.of()),
+                    new CapturingObserver()).get(10, TimeUnit.SECONDS);
+
+            assertThat(outcome.result()).isEqualTo(envelope);
+        } finally {
+            wireMock.stop();
         }
+    }
 
-        @Override
-        public boolean isCancelled() {
-            return false;
+    @Test
+    void completedTaskWithoutArtifactsUsesStatusMessage() throws Exception {
+        WireMockServer wireMock = new WireMockServer(options().dynamicPort());
+        try {
+            wireMock.start();
+            props.setBaseUrl("http://localhost:" + wireMock.port());
+            props.setStreaming(false);
+            A2AGatewayRemoteAgentCaller caller = new A2AGatewayRemoteAgentCaller(props, resolver);
+            wireMock.stubFor(post(urlPathMatching("/a2a/.*"))
+                    .willReturn(aResponse().withHeader("Content-Type", "application/json")
+                            .withBody("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"task\":{"
+                                    + "\"id\":\"task-1\",\"contextId\":\"ctx-1\","
+                                    + "\"status\":{\"state\":\"TASK_STATE_COMPLETED\",\"message\":{"
+                                    + "\"messageId\":\"msg-1\",\"contextId\":\"ctx-1\","
+                                    + "\"taskId\":\"task-1\",\"role\":\"ROLE_AGENT\","
+                                    + "\"parts\":[{\"text\":\"status result\",\"metadata\":{},"
+                                    + "\"filename\":\"\",\"mediaType\":\"\"}],\"metadata\":{},"
+                                    + "\"extensions\":[],\"referenceTaskIds\":[]}},\"artifacts\":[]}}}")));
+
+            RemoteCallOutcome outcome = caller.callOutcome(
+                    new RemoteCall("status-agent", "hello", "ctx-1", null, Map.of()), new CapturingObserver())
+                    .get(10, TimeUnit.SECONDS);
+
+            assertThat(outcome.remoteState()).isEqualTo(TaskState.TASK_STATE_COMPLETED);
+            assertThat(outcome.result()).isEqualTo("status result");
+        } finally {
+            wireMock.stop();
+        }
+    }
+
+    @Test
+    void failedTaskStatusMessageOverridesEarlierArtifact() throws Exception {
+        WireMockServer wireMock = new WireMockServer(options().dynamicPort());
+        try {
+            wireMock.start();
+            props.setBaseUrl("http://localhost:" + wireMock.port());
+            props.setStreaming(false);
+            A2AGatewayRemoteAgentCaller caller = new A2AGatewayRemoteAgentCaller(props, resolver);
+            wireMock.stubFor(post(urlPathMatching("/a2a/.*"))
+                    .willReturn(aResponse().withHeader("Content-Type", "application/json")
+                            .withBody("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"task\":{"
+                                    + "\"id\":\"task-1\",\"contextId\":\"ctx-1\","
+                                    + "\"status\":{\"state\":\"TASK_STATE_FAILED\",\"message\":{"
+                                    + "\"messageId\":\"msg-1\",\"contextId\":\"ctx-1\","
+                                    + "\"taskId\":\"task-1\",\"role\":\"ROLE_AGENT\","
+                                    + "\"parts\":[{\"text\":\"declined\",\"metadata\":{},"
+                                    + "\"filename\":\"\",\"mediaType\":\"\"}],\"metadata\":{},"
+                                    + "\"extensions\":[],\"referenceTaskIds\":[]}},"
+                                    + "\"artifacts\":[{\"artifactId\":\"art-1\","
+                                    + "\"parts\":[{\"text\":\"premature\",\"metadata\":{},"
+                                    + "\"filename\":\"\",\"mediaType\":\"\"}]}]}}}")));
+
+            RemoteCallOutcome outcome = caller.callOutcome(
+                    new RemoteCall("failed-agent", "hello", "ctx-1", null, Map.of()), new CapturingObserver())
+                    .get(10, TimeUnit.SECONDS);
+
+            assertThat(outcome.remoteState()).isEqualTo(TaskState.TASK_STATE_FAILED);
+            assertThat(outcome.result()).isEqualTo("declined");
+        } finally {
+            wireMock.stop();
+        }
+    }
+
+    @Test
+    void callOutcomeAcceptsTasklessMessageWithoutPublishingSyntheticTaskEvents() throws Exception {
+        WireMockServer wireMock = new WireMockServer(options().dynamicPort());
+        try {
+            wireMock.start();
+            props.setBaseUrl("http://localhost:" + wireMock.port());
+            props.setStreaming(false);
+            A2AGatewayRemoteAgentCaller caller = new A2AGatewayRemoteAgentCaller(props, resolver);
+            wireMock.stubFor(post(urlPathMatching("/a2a/.*"))
+                    .willReturn(aResponse().withHeader("Content-Type", "application/json")
+                            .withBody("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{\"message\":{"
+                                    + "\"messageId\":\"message-1\",\"contextId\":\"context-1\","
+                                    + "\"role\":\"ROLE_AGENT\",\"parts\":[{\"text\":\"hello \","
+                                    + "\"metadata\":{},\"filename\":\"\",\"mediaType\":\"\"},{"
+                                    + "\"text\":\"world\",\"metadata\":{},\"filename\":\"\","
+                                    + "\"mediaType\":\"\"}],\"metadata\":{},\"extensions\":[],"
+                                    + "\"referenceTaskIds\":[]}}}")));
+            CapturingObserver observer = new CapturingObserver();
+
+            RemoteCallOutcome outcome = caller.callOutcome(
+                    new RemoteCall("message-agent", "hello", "conversation-1", null, Map.of()), observer)
+                    .get(10, TimeUnit.SECONDS);
+
+            assertThat(outcome.remoteState()).isEqualTo(TaskState.TASK_STATE_COMPLETED);
+            assertThat(outcome.remoteTaskId()).isNull();
+            assertThat(outcome.result()).isEqualTo("hello world");
+            assertThat(observer.statuses).isEmpty();
+            assertThat(observer.artifacts).isEmpty();
+        } finally {
+            wireMock.stop();
         }
     }
 }
