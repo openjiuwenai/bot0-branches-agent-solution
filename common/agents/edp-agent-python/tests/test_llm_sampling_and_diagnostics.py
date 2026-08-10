@@ -228,7 +228,7 @@ async def test_rail_logs_tool_keyword_for_suppressed_ask_user(captured_logs):
     args = {
         "response_template_status": "confirm",
         "response_template_keys": '{"product_select_confirm":"product_select_confirm"}',
-        "response_template_vars": '{"productName":"安心90天","amount":"6.00"}',
+        "response_template_vars": '{"productName":"示例理财产品002","amount":"6.00"}',
     }
     ctx = _mk_rail_ctx("ask_user", args)
 
@@ -239,7 +239,7 @@ async def test_rail_logs_tool_keyword_for_suppressed_ask_user(captured_logs):
     blob = " ".join(matched)
     assert "ask_user" in blob
     assert "product_select_confirm" in blob
-    assert "安心90天" in blob, "话术 vars 应出现在日志里"
+    assert "示例理财产品002" in blob, "话术 vars 应出现在日志里"
 
 
 async def test_rail_tool_log_does_not_truncate_args(captured_logs):

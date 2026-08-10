@@ -57,7 +57,7 @@ ask_user_tool = LocalFunction(
                     "type": "string",
                     "description": (
                         "用于话术模板变量替换的 JSON 字符串，例如 "
-                        '\'{"amount": "50000", "productName": "添利宝"}\'。模板未引用的变量会被忽略；'
+                        '\'{"amount": "50000", "productName": "示例理财产品"}'。模板未引用的变量会被忽略；'
                         "模板引用但未提供的变量会被替换为空字符串。"
                     ),
                 },
