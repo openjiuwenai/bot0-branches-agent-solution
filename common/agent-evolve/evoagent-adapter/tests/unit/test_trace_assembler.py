@@ -362,7 +362,6 @@ class TestTraceArchiveWriter:
 
     def _read_jsonl(self, path: Path) -> list[dict]:
         """Helper to read a JSONL file into a list of dicts."""
-        import json
         records = []
         for line in path.read_text(encoding="utf-8").strip().split("\n"):
             if line.strip():

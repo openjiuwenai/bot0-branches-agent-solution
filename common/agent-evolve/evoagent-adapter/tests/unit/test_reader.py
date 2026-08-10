@@ -179,7 +179,7 @@ class TestMultiFileReading:
         assert len(lines1) == 2
 
         # Mark the older file as completed
-        from agent_adapter.offset import OffsetManager, FileOffset
+        from agent_adapter.offset import OffsetManager
 
         mgr = OffsetManager(offset_file=offset_file)
         entry = mgr.get("process_111.log")
