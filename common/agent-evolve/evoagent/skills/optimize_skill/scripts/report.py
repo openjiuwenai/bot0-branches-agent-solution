@@ -139,7 +139,8 @@ def _collect_validations(run_dir: Path) -> tuple[ValidationSummary, ...]:
         epoch = _as_int(gate.get("epoch"))
         if epoch is None:
             epoch = _epoch_number(epoch_dir)
-        assert epoch is not None
+        if epoch is None:
+            raise RuntimeError("无法确定 epoch 编号")
 
         base_score = _as_float(gate.get("base_score"))
         candidate_score = _as_float(gate.get("candidate_score"))
@@ -387,7 +388,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     run_dir = args.run_dir or args.artifact_dir
-    assert run_dir is not None
+    if run_dir is None:
+        raise RuntimeError("run_dir or --artifact-dir is required")
     try:
         report = render_markdown(summarize_run(run_dir))
     except ValueError as exc:

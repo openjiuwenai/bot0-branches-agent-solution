@@ -175,7 +175,8 @@ def _parse_goal_response(response: str) -> dict[str, Any]:
         )
 
     goal = data["goal"]
-    assert isinstance(goal, str)
+    if not isinstance(goal, str):
+        raise TypeError("goal must be a string")
     data["goal"] = goal.strip()
     return data
 

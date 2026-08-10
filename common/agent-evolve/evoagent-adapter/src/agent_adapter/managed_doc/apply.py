@@ -170,7 +170,8 @@ class RestartApply:
                 await proc.wait()
             raise
         rc = proc.returncode
-        assert rc is not None  # set after wait()/kill() in every path above
+        if rc is None:  # set after wait()/kill() in every path above
+            raise RuntimeError("returncode not available after wait/kill")
         return rc
 
     @staticmethod

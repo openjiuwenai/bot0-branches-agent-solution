@@ -223,7 +223,8 @@ class PostgresTraceRepository:
 
     async def init_schema(self) -> None:
         """读 schema/postgres.sql 建表 (按 ';' 拆分逐条执行, IF NOT EXISTS 幂等)。"""
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         sql = _SCHEMA_SQL.read_text(encoding="utf-8")
         # 先剔除 -- 行注释 (含句内分号的注释会让 split(';') 误切断), 再按 ';' 拆分。
         sql_no_comments = re.sub(r"--[^\n]*", "", sql)
@@ -236,7 +237,8 @@ class PostgresTraceRepository:
 
     async def insert_span(self, span: dict[str, Any]) -> None:
         """插一条 span + 重算并 upsert 其 trace 汇总 (一个事务, 幂等)。"""
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(_SPAN_SQL, *_span_params(span))
@@ -251,7 +253,8 @@ class PostgresTraceRepository:
                  (session 兄弟可能在前一批已入库, 本批 in-memory 看不到)。
         B 在 _reupsert_trace 之前跑, 使 traces 汇总读到回填后的 session_id 列。
         """
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         if not spans:
             return
         spans = backfill_session_id(spans)  # A: 批内回填 (非原地, 返回新列表)
@@ -264,7 +267,8 @@ class PostgresTraceRepository:
 
     async def upsert_trace(self, trace: dict[str, Any]) -> None:
         """显式 upsert 一条 traces 汇总 (调用方提供完整 summary)。"""
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         async with self.pool.acquire() as conn:
             await conn.execute(_TRACE_SQL, *_trace_params(trace))
 
@@ -305,7 +309,8 @@ class PostgresTraceRepository:
         一次性维护用: 部署本回填逻辑后, 对历史已入库的空 session span 做一次性补齐。
         常规摄取路径无需调用 (bulk_insert_spans 已含 per-trace 兜底)。
         """
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         async with self.pool.acquire() as conn:
             return await conn.fetchval(
                 """
@@ -326,14 +331,16 @@ class PostgresTraceRepository:
     # ---- 读 ----
 
     async def get_spans_by_trace(self, trace_id: str) -> list[dict[str, Any]]:
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         rows = await self.pool.fetch(
             "SELECT * FROM spans WHERE trace_id=$1 ORDER BY start_time", trace_id
         )
         return [_row_to_span(r) for r in rows]
 
     async def get_spans_by_session(self, session_id: str) -> list[dict[str, Any]]:
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         rows = await self.pool.fetch(
             "SELECT * FROM spans WHERE session_id=$1 ORDER BY start_time", session_id
         )
@@ -345,7 +352,8 @@ class PostgresTraceRepository:
 
     async def get_root_span(self, session_id: str) -> dict[str, Any] | None:
         """会话根 span: kind=SERVER 且 parent 为空 (镜像 aggregation.is_root_span)。"""
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         row = await self.pool.fetchrow(
             "SELECT * FROM spans WHERE session_id=$1 AND kind='SERVER' "
             "AND (parent_span_id IS NULL OR parent_span_id='') ORDER BY start_time LIMIT 1",
@@ -354,7 +362,8 @@ class PostgresTraceRepository:
         return _row_to_span(row) if row else None
 
     async def list_sessions(self, agent_name: str | None = None) -> list[dict[str, Any]]:
-        assert self.pool is not None, "start() 未调用"
+        if self.pool is None:
+            raise RuntimeError("start() 未调用")
         if agent_name is not None:
             rows = await self.pool.fetch(
                 "SELECT * FROM traces WHERE service_name=$1 ORDER BY start_time DESC", agent_name
