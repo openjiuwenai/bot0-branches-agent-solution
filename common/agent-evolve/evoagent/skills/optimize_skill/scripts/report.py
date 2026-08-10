@@ -116,12 +116,13 @@ def _selected_pass_rate(epoch_dir: Path, gate: dict[str, Any]) -> float | None:
     rows = results_data.get("results")
     if threshold is None or not isinstance(rows, list):
         return None
-    scores = [
-        score
-        for row in rows
-        if isinstance(row, dict)
-        if (score := _as_float(row.get("score"))) is not None
-    ]
+    scores = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        score = _as_float(row.get("score"))
+        if score is not None:
+            scores.append(score)
     if not scores:
         return None
     return sum(score >= threshold for score in scores) / len(scores)
@@ -202,25 +203,27 @@ def _skill_dirs(run_dir: Path) -> list[Path]:
 
 def _artifact_epoch_offset(run_dir: Path, skill_dirs: list[Path]) -> int:
     """Map gate epoch numbers to patch epoch numbers across artifact schemas."""
-    gate_epochs = [
-        number
-        for path in _epoch_dirs(run_dir)
-        if (path / "gate_result.json").exists()
-        if (number := _epoch_number(path)) is not None
-    ]
-    skill_epochs = [
-        number
-        for skill_dir in skill_dirs
-        for path in _epoch_dirs(skill_dir)
-        if (number := _epoch_number(path)) is not None
-    ]
+    gate_epochs = []
+    for path in _epoch_dirs(run_dir):
+        if not (path / "gate_result.json").exists():
+            continue
+        number = _epoch_number(path)
+        if number is not None:
+            gate_epochs.append(number)
+    skill_epochs = []
+    for skill_dir in skill_dirs:
+        for path in _epoch_dirs(skill_dir):
+            number = _epoch_number(path)
+            if number is not None:
+                skill_epochs.append(number)
     if not skill_dirs:
-        skill_epochs = [
-            number
-            for path in _epoch_dirs(run_dir)
-            if any(path.glob("step_*/applied_diff.patch"))
-            if (number := _epoch_number(path)) is not None
-        ]
+        skill_epochs = []
+        for path in _epoch_dirs(run_dir):
+            if not any(path.glob("step_*/applied_diff.patch")):
+                continue
+            number = _epoch_number(path)
+            if number is not None:
+                skill_epochs.append(number)
     if gate_epochs and skill_epochs and min(gate_epochs) == 1 and min(skill_epochs) == 0:
         return 1
     return 0
