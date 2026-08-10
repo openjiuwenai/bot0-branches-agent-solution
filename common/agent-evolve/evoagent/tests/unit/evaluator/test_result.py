@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 import json
 from unittest.mock import MagicMock
 
@@ -33,7 +34,7 @@ class TestEvaluatedStatus:
         evaluated = _evaluated(score=0.9, per_metric={"safety": 1.0})
         result = EvaluationResult.from_evaluated_case(evaluated)
         assert result.status == "evaluated"
-        assert result.score == 0.9
+        assert result.score == pytest.approx(0.9)
         assert result.is_pass is True
         assert result.per_metric == {"safety": 1.0}
         assert result.filter_matches == []
@@ -202,5 +203,5 @@ class TestDuckTypedEvaluated:
         fake.per_metric = {"m": 0.5}
         fake.reason = ""
         result = EvaluationResult.from_evaluated_case(fake)
-        assert result.score == 0.5
+        assert result.score == pytest.approx(0.5)
         assert result.per_metric == {"m": 0.5}

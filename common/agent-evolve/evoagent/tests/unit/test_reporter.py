@@ -167,17 +167,17 @@ def test_missing_skill_dir_defaults(tmp_path: Path) -> None:
 
 def test_compute_pass_rate_all_pass() -> None:
     """所有 score >= 0.5 → pass_rate = 1.0。"""
-    assert ReportFormatter._compute_pass_rate([0.6, 0.7, 0.8]) == 1.0
+    assert ReportFormatter._compute_pass_rate([0.6, 0.7, 0.8]) == pytest.approx(1.0)
 
 
 def test_compute_pass_rate_all_fail() -> None:
     """所有 score < 0.5 → pass_rate = 0.0。"""
-    assert ReportFormatter._compute_pass_rate([0.1, 0.2]) == 0.0
+    assert ReportFormatter._compute_pass_rate([0.1, 0.2]) == pytest.approx(0.0)
 
 
 def test_compute_pass_rate_empty() -> None:
     """空列表 → pass_rate = 0.0。"""
-    assert ReportFormatter._compute_pass_rate([]) == 0.0
+    assert ReportFormatter._compute_pass_rate([]) == pytest.approx(0.0)
 
 
 def test_compute_pass_rate_mixed() -> None:

@@ -61,29 +61,29 @@ def test_defaults_profile_default_burst() -> None:
     d = ManagedDocDefaults()
     assert d.profile == "burst"
     assert d.task_ttl_seconds == 600
-    assert d.shutdown_grace_timeout == 10.0
+    assert d.shutdown_grace_timeout == pytest.approx(10.0)
 
 
 def test_defaults_effective_burst() -> None:
     d = ManagedDocDefaults()
     eff = d.effective_defaults()
     assert eff["max_attempts"] == 2
-    assert eff["backoff_base"] == 3.0
-    assert eff["backoff_max"] == 30.0
-    assert eff["health_down_timeout"] == 15.0
-    assert eff["health_up_timeout"] == 60.0
+    assert eff["backoff_base"] == pytest.approx(3.0)
+    assert eff["backoff_max"] == pytest.approx(30.0)
+    assert eff["health_down_timeout"] == pytest.approx(15.0)
+    assert eff["health_up_timeout"] == pytest.approx(60.0)
     assert eff["health_up_consecutive"] == 2
-    assert eff["health_poll_interval"] == 0.5
+    assert eff["health_poll_interval"] == pytest.approx(0.5)
 
 
 def test_defaults_effective_single() -> None:
     d = ManagedDocDefaults(profile="single")
     eff = d.effective_defaults()
     assert eff["max_attempts"] == 3
-    assert eff["backoff_base"] == 5.0
-    assert eff["backoff_max"] == 60.0
-    assert eff["health_up_timeout"] == 90.0
-    assert eff["health_poll_interval"] == 1.0
+    assert eff["backoff_base"] == pytest.approx(5.0)
+    assert eff["backoff_max"] == pytest.approx(60.0)
+    assert eff["health_up_timeout"] == pytest.approx(90.0)
+    assert eff["health_poll_interval"] == pytest.approx(1.0)
 
 
 def test_defaults_explicit_override_kept() -> None:

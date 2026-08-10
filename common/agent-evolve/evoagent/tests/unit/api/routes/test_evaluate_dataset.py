@@ -153,7 +153,7 @@ def test_mode3_keyword_group() -> None:
     result = body["result"]
     agg = result["aggregate"]["责任判定"]
     assert agg["keyword_hit"] == 0.5  # 命中率
-    assert agg["precision"] == 1.0
+    assert agg["precision"] == pytest.approx(1.0)
     assert agg["recall"] == 0.5
     assert agg["accuracy"] == 0.5
     assert agg["f1"] == pytest.approx(2 * 0.5 / 1.5)

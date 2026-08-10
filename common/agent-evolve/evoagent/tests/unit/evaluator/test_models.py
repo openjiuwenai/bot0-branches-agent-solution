@@ -169,11 +169,11 @@ class TestLLMEvaluationOutput:
         out = LLMEvaluationOutput()
         assert out.reason == ""
         assert out.is_pass is True
-        assert out.score == 0.0
+        assert out.score == pytest.approx(0.0)
         assert out.attributed_skill == ""
-        assert out.task_completion == 0.0
-        assert out.trajectory_quality == 0.0
-        assert out.safety == 0.0
+        assert out.task_completion == pytest.approx(0.0)
+        assert out.trajectory_quality == pytest.approx(0.0)
+        assert out.safety == pytest.approx(0.0)
 
     def test_with_scores_and_attribution(self) -> None:
         out = LLMEvaluationOutput(
@@ -185,11 +185,11 @@ class TestLLMEvaluationOutput:
             score=0.9,
             attributed_skill="product_recommend_skill",
         )
-        assert out.task_completion == 1.0
-        assert out.trajectory_quality == 0.8
-        assert out.safety == 1.0
+        assert out.task_completion == pytest.approx(1.0)
+        assert out.trajectory_quality == pytest.approx(0.8)
+        assert out.safety == pytest.approx(1.0)
         assert out.is_pass is True
-        assert out.score == 0.9
+        assert out.score == pytest.approx(0.9)
         assert out.attributed_skill == "product_recommend_skill"
 
     def test_with_empty_attributed_skill(self) -> None:
