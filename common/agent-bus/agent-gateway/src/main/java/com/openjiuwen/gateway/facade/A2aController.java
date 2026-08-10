@@ -139,7 +139,7 @@ public class A2aController {
         if (context.taskId() == null) {
             return forwardCreate(context, response);
         }
-        return forwardResume(context);
+        return forwardResume(context, response);
     }
 
     /**
@@ -213,10 +213,30 @@ public class A2aController {
     /**
      * Forward a resume call to the original Task owner via the sticky index.
      *
+     * <p>STREAMING 续跑（{@code SendStreamingMessage} + taskId）走 sticky 路由 + SSE 桥接
+     * （{@link Router#routeResumeStream}），与流式创建同构；其余续跑走同步 JSON
+     * （{@link Router#routeResume}）。
+     *
      * @param context governance context with taskId bound
-     * @return sync JSON response from the sticky owner runtime
+     * @param response servlet response (used to write the SSE stream for streaming resume)
+     * @return sync JSON response from the sticky owner runtime, or {@code null} once an SSE
+     *         stream has been written
+     * @throws IOException if writing the SSE stream to the client fails (disconnect)
      */
-    private Object forwardResume(GovernanceContext context) {
+    private Object forwardResume(GovernanceContext context, HttpServletResponse response) throws IOException {
+        if ("SendStreamingMessage".equals(context.method())) {
+            // 流式续跑：sticky 路由 + SSE 桥接。BUS 路径的流式续跑暂未支持，仅 DIRECT 路径。
+            if (pathSelector.isBus() && busForwarder.isPresent()) {
+                throw new GovernanceException(HttpStatus.NOT_IMPLEMENTED,
+                        "STREAMING_RESUME_BUS_UNSUPPORTED",
+                        "Streaming resume over the BUS path is not yet supported");
+            }
+            Stream<String> frames = router.routeResumeStream(context);
+            response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+            response.setCharacterEncoding("UTF-8");
+            sseBridge.writeSse(response.getOutputStream(), frames);
+            return null;
+        }
         try {
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(router.routeResume(context));
         } catch (GovernanceException ex) {

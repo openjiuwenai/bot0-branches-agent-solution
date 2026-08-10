@@ -125,6 +125,34 @@ public class Router {
     }
 
     /**
+     * Route a streaming resume to its original Task owner via the sticky index.
+     * Read-only: does NOT call {@code searchInstancesByAgentId} (no re-selection).
+     * A sticky miss is a definite failure (never a new create / fallback search).
+     *
+     * <p>与 {@link #routeStream}（流式创建）同构，但路由依据是 sticky index 中已有的
+     * taskId → routeHandle 绑定（创建时写入），不做 agent 搜索。用于首轮 STREAMING
+     * 的续跑场景（FEAT-006 §47：续轮继承首轮 mode，STREAMING 续跑走 SendStreamingMessage）。
+     *
+     * @param ctx governance context (tenantId, taskId, rawBody)
+     * @return lazy stream of SSE data payloads (sticky-write hooked, idempotent)
+     */
+    public Stream<String> routeResumeStream(GovernanceContext ctx) {
+        String taskId = ctx.taskId();
+        String routeHandle = stickyIndex.find(taskId)
+                .orElseThrow(() -> new GovernanceException(HttpStatus.NOT_FOUND, "RESUME_OWNER_UNKNOWN",
+                        "No sticky owner for task " + taskId));
+        ResolvedRoute resolved;
+        try {
+            resolved = rdc.resolveRouteHandle(routeHandle, ctx.tenantId());
+        } catch (RouteResolutionException ex) {
+            throw new GovernanceException(HttpStatus.SERVICE_UNAVAILABLE, "ROUTE_RESOLVE_FAILED",
+                    "Cannot resolve route handle", ex);
+        }
+        String outbound = injectTenantId(ctx.rawBody(), ctx.tenantId());
+        return runtime.openStream(resolved.endpointUrl(), outbound);
+    }
+
+    /**
      * Route a resume to its original Task owner via the sticky index (L2 §5).
      * Read-only: does NOT call {@code searchInstancesByAgentId} (no re-selection).
      * A sticky miss is a definite failure (never a new create / fallback search).
