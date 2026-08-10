@@ -59,7 +59,7 @@ def create_app() -> FastAPI:
                 body = await request.body()
                 if body:
                     decoded = body.decode("utf-8", errors="replace")[:2000]
-                    print(f"POST {request.url.path} body: {decoded}", flush=True)
+                    logger.info("POST %s body: %s", request.url.path, decoded)
         return await call_next(request)  # type: ignore[no-any-return]
 
     @app.get("/health")

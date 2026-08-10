@@ -518,13 +518,10 @@ async def start_optimize(api_request: OptimizeAPIRequest) -> JobResponse:
             )
         except asyncio.CancelledError:
             # 仅用于进程关闭等外部协程取消；用户取消走 cooperative token。
-            print(f"[OPTIMIZE CANCELLED] job_id={job.job_id}", flush=True)
+            logger.warning("[OPTIMIZE CANCELLED] job_id=%s", job.job_id)
             raise
         except Exception as e:
-            import traceback
-
-            tb = traceback.format_exc()
-            print(f"[OPTIMIZE FAILED] {type(e).__name__}: {e}\n{tb}", flush=True)
+            logger.exception("[OPTIMIZE FAILED] %s: %s", type(e).__name__, e)
             job_manager.set_status(job, JobStatus.FAILED)
             job.error = f"{type(e).__name__}: {e}"
             job.error_code = _normalize_error_code(getattr(e, "code", None))
