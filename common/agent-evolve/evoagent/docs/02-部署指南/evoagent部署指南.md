@@ -70,6 +70,26 @@ HOST_AGENTS_ROOT=/opt/agents/runtime    # managed-doc父目录（读写挂载）
 HOST_OUTPUT_DIR=/opt/agent-adapter/data # Adapter输出目录（offsets/归档）
 HOST_CONFIG_FILE=/opt/agent-adapter/agent_adapter_config.yaml  # 配置文件持久化路径
 ```
+
+> 上述 `HOST_*` 仅为必填宿主路径项。`.env` 还承载全部运行参数（`ADAPTER_*`），完整字段表见《数据回流-轨迹采集使用指南》5.3。
+
+**配置来源与解析优先级**
+
+Adapter 配置分两层来源：
+
+| 层 | 承载内容 | 环境变量命名 |
+|----|---------|------------|
+| `.env`（环境变量） | 全部标量参数 + 宿主路径 | 顶层字段：`ADAPTER_<FIELD>`（如 `ADAPTER_POLL_INTERVAL`）<br>managed-doc 默认：`ADAPTER_MDD_*`（如 `ADAPTER_MDD_PROFILE`）<br>per-agent 字段：`<NAME>_<FIELD>`（`<NAME>` 为 agent name 大写，如 `EDP_AGENT_URL`）<br>宿主路径：`HOST_*` |
+| `agent_adapter_config.yaml` | 仅结构化配置：`match_tags`、`agents[]` 列表（含每 agent 的 `managed_docs`） | per-agent 字段以 `${VAR:default}` 占位引用上表环境变量 |
+
+解析优先级（高 → 低）：
+
+1. **环境变量**——设且非空时生效；**空串视为未设置**，回落到下一级（避免 `int`/`float` 字段因空串强制转换报错）。
+2. **YAML 占位默认值**——`${VAR:default}` 中冒号后的值（仅 per-agent / 结构化字段适用）。
+3. **字段内置默认值**——定义在 `src/agent_adapter/config.py` 的字段定义里。
+
+> 顶层标量已统一收敛到 `.env`，YAML 不再重复；per-agent 字段必须经 YAML 的 `${VAR:default}` 占位注入（环境变量按 `<NAME>_<FIELD>` 命名，`<NAME>` 为 agent name 大写）。`agent_adapter_config.yaml` 经 CRUD 接口 `/api/v1/config/agents` 热更新写回 `HOST_CONFIG_FILE` 指向的宿主文件，跨容器重建不丢失；改动 per-agent 配置热生效，改 `ADAPTER_*` / `HOST_*` 需重启容器。
+
 > 如需要使用adapter 额外的能力（如使用Otel进行轨迹收集），请参考《数据回流-轨迹采集使用指南》，打开相应的配置开关。
 
 ### 2.3 创建 Adapter 依赖的主机目录
