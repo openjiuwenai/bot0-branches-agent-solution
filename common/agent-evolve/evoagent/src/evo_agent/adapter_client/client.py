@@ -95,11 +95,7 @@ class AdapterClient:
         except RuntimeError:
             current_loop = None
 
-        if (
-            self._async_http is None
-            or self._async_http.is_closed
-            or (self._async_http_loop is not None and self._async_http_loop is not current_loop)
-        ):
+        if self._async_http_needs_rebuild(current_loop):
             self._async_http = httpx.AsyncClient(
                 base_url=self._base_url,
                 timeout=httpx.Timeout(self._timeout),
@@ -107,6 +103,14 @@ class AdapterClient:
             )
             self._async_http_loop = current_loop
         return self._async_http
+
+    def _async_http_needs_rebuild(self, current_loop: object | None) -> bool:
+        """是否需要（重新）创建 async HTTP client（G.CTL.03：拆分多条件守卫）。"""
+        return (
+            self._async_http is None
+            or self._async_http.is_closed
+            or (self._async_http_loop is not None and self._async_http_loop is not current_loop)
+        )
 
     # ── 对话 ──
 
