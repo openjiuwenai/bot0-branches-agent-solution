@@ -58,7 +58,7 @@ def start_http_request_span(method: str, route: str, session_id: str,
 
 
 @contextmanager
-def start_versatile_adapter_span(  # pylint: disable=huawei-too-many-arguments
+def start_versatile_adapter_span(
     query_intent: str,
     query_description: str,
     session_id: str,
@@ -99,7 +99,7 @@ def start_versatile_adapter_span(  # pylint: disable=huawei-too-many-arguments
 
 
 @contextmanager
-def start_sub_agent_dispatch_span(  # pylint: disable=huawei-too-many-arguments
+def start_sub_agent_dispatch_span(
     entity_id: str,
     entity_name: str,
     query: str,

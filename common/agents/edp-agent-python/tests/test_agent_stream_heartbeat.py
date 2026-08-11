@@ -11,7 +11,6 @@
 测试策略：mock _emit_heartbeat 为 spy，mock 外部依赖（session/agent/checkpointer），
 驱动 _agent_event_stream 到心跳发送点，验证 spy 的调用参数。
 """
-# pylint: disable=protected-access
 
 from __future__ import annotations
 

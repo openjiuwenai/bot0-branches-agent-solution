@@ -236,7 +236,7 @@ class MemoryRail(AgentRail):
             ctx.extra["_memory_typed"] = typed_sections
 
             if typed_sections:
-                _TYPE_LABELS = {  # pylint: disable=huawei-invalid-name
+                _type_labels = {
                     "user_profile": "用户画像",
                     "semantic_memory": "语义记忆",
                     "episodic_memory": "情景记忆",
@@ -245,7 +245,7 @@ class MemoryRail(AgentRail):
                 }
                 lines = []
                 for t, items in typed_sections.items():
-                    label = _TYPE_LABELS.get(t, t)
+                    label = _type_labels.get(t, t)
                     lines.append(f"[{label}]")
                     lines.extend(f"- {c}" for c in items)
                 result["sys_long_term_memory"] = "\n".join(lines)

@@ -9,7 +9,6 @@ These tests never touch real Redis / ES / DB; they use lightweight async mock
 resources that record close calls so we can assert ordering, isolation and
 state reset.
 """
-# pylint: disable=protected-access
 from __future__ import annotations
 
 import pytest

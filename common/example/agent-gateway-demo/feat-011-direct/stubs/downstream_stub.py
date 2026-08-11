@@ -33,7 +33,7 @@ class RdcHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quieter
         pass
 
-    def do_GET(self):  # pylint: disable=huawei-invalid-name
+    def do_GET(self):
         path = urlparse(self.path).path
         # GET /api/registry/instances/{tenant}/{agentId}
         prefix = "/api/registry/instances/"
@@ -57,7 +57,7 @@ class RdcHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_POST(self):  # pylint: disable=huawei-invalid-name
+    def do_POST(self):
         path = urlparse(self.path).path
         if path != "/api/registry/route-handle/resolve":
             self.send_error(404)
@@ -89,7 +89,7 @@ class RuntimeHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def do_POST(self):  # pylint: disable=huawei-invalid-name
+    def do_POST(self):
         path = urlparse(self.path).path
         if path not in ("/a2a", "a2a"):
             # accept "/a2a" only

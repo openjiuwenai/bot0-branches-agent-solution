@@ -10,7 +10,6 @@ sentinel values where the code under test depends on identity (e.g.
 EDPAgent owns its local event schema in `EDPAgent.events`; tests keep
 runtime-only `common.*` modules stubbed only where rails need them.
 """
-# pylint: disable=protected-access
 
 from __future__ import annotations
 

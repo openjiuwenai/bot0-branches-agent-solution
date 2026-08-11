@@ -208,7 +208,7 @@ class LogRail(AgentRail):
                 f"[LogRail] before repair | name={getattr(tc, 'name', '?')} | "
                 f"args_len={len(args)} | args={args!r}"
             )
-            repaired = AbilityManager._repair_tool_arguments_json(args)  # pylint: disable=protected-access
+            repaired = AbilityManager._repair_tool_arguments_json(args)
             if not repaired or repaired == args:
                 logger.error(
                     f"[LogRail] FAILED to repair malformed tool_call arguments | "

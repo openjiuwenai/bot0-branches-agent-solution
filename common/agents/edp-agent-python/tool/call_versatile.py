@@ -20,7 +20,7 @@ from loguru import logger
 from openjiuwen.core.foundation.tool import LocalFunction, ToolCard
 
 
-async def call_versatile(  # pylint: disable=huawei-too-many-arguments
+async def call_versatile(
     query_description: str = "",
     query_intent: str = "",
     query_response_analysis_scripts: str = "",

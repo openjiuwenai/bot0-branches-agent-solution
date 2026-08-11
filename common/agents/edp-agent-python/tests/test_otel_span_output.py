@@ -5,7 +5,6 @@
   2. LogRail._emit_metric 能补充 span 属性
   3. 被 Intercept Rail 的 _create_intercepted_tool_span 能创建 tool span
 """
-# pylint: disable=protected-access
 from __future__ import annotations
 
 import json
@@ -58,10 +57,10 @@ class _FakeTracer:
         span = _FakeSpan()
 
         class _CM:
-            def __enter__(self):  # pylint: disable=no-self-use
+            def __enter__(self):
                 return span
 
-            def __exit__(self, *args):  # pylint: disable=no-self-use
+            def __exit__(self, *args):
                 span.end()
                 return False
 

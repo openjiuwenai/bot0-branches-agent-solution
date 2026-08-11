@@ -3,7 +3,6 @@
 被测对象：EDPAgent.agent._emit_heartbeat
 心跳协议契约：HB-CONTRACT-1.0
 """
-# pylint: disable=protected-access
 
 from __future__ import annotations
 

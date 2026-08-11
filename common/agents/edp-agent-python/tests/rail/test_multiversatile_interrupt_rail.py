@@ -1,5 +1,4 @@
 """Unit tests for MultiversatileInterruptRail (TC-14~TC-17, TC-32~TC-39)."""
-# pylint: disable=protected-access
 from __future__ import annotations
 
 from unittest.mock import MagicMock, AsyncMock, patch

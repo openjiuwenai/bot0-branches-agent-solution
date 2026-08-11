@@ -42,6 +42,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -289,12 +290,18 @@ def _build_headers(env: dict) -> dict[str, str]:
     return headers
 
 
+@dataclass
+class _DiagCtx:
+    env: dict
+    headers: dict
+    dump_dir: Path
+
+
 # ── 单次调用 ───────────────────────────────────────────────────────────────
 
-def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,  # pylint: disable=huawei-too-many-arguments
-               case_name: str, idx: int) -> dict[str, Any]:
+def _call_once(ctx: _DiagCtx, case: dict, case_name: str, idx: int) -> dict[str, Any]:
     body = {
-        "model": env["model"],
+        "model": ctx.env["model"],
         "messages": case["messages"],
         "temperature": 0.3,
         "top_p": 0.95,
@@ -304,10 +311,10 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,  # pylint: 
         body["tools"] = _TOOLS
         body["tool_choice"] = "auto"
 
-    url = os.path.join(env["base_url"].rstrip("/"), "chat/completions")
+    url = os.path.join(ctx.env["base_url"].rstrip("/"), "chat/completions")
     started = time.monotonic()
     try:
-        r = httpx.post(url, json=body, headers=headers, timeout=env["timeout"])
+        r = httpx.post(url, json=body, headers=ctx.headers, timeout=ctx.env["timeout"])
         elapsed = time.monotonic() - started
         try:
             data = r.json()
@@ -318,7 +325,7 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,  # pylint: 
 
     if r.status_code != 200:
         # HTTP 异常：dump 整段
-        path = dump_dir / f"{case_name}-{idx}-http{r.status_code}.json"
+        path = ctx.dump_dir / f"{case_name}-{idx}-http{r.status_code}.json"
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         return {"ok": False, "http_status": r.status_code, "dump": str(path),
                 "elapsed_ms": int(elapsed * 1000)}
@@ -353,7 +360,7 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,  # pylint: 
         info["tool_name"] = fn.get("name")
         info["tool_args"] = fn.get("arguments", "")
     if is_empty:
-        path = dump_dir / f"{case_name}-{idx}-EMPTY.json"
+        path = ctx.dump_dir / f"{case_name}-{idx}-EMPTY.json"
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         info["dump"] = str(path)
     return info
@@ -361,18 +368,17 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,  # pylint: 
 
 # ── 主流程 ─────────────────────────────────────────────────────────────────
 
-def _run_case(env: dict, case_name: str, case: dict, runs: int,  # pylint: disable=huawei-too-many-arguments
-              dump_dir: Path, headers: dict) -> int:
+def _run_case(ctx: _DiagCtx, case_name: str, case: dict, runs: int) -> int:
     logger.info(f"\n{'='*78}")
     logger.info(f"Case: {case_name} — {case['desc']}")
-    logger.info(f"  base_url = {env['base_url']}")
-    logger.info(f"  model    = {env['model']}")
+    logger.info(f"  base_url = {ctx.env['base_url']}")
+    logger.info(f"  model    = {ctx.env['model']}")
     logger.info(f"  tools    = {case['tools_enabled']}    runs = {runs}")
     logger.info('=' * 78)
 
     empty_count = 0
     for i in range(1, runs + 1):
-        info = _call_once(env, case, headers, dump_dir, case_name, i)
+        info = _call_once(ctx, case, case_name, i)
         if not info.get("ok"):
             empty_count += 1
             mark = "⚠ EMPTY" if info.get("is_empty") else "❌ FAIL"
@@ -421,6 +427,7 @@ def main() -> None:
     headers = _build_headers(env)
     dump_dir = Path(args.dump_dir)
     dump_dir.mkdir(parents=True, exist_ok=True)
+    ctx = _DiagCtx(env, headers, dump_dir)
 
     # 打印的 header 摘要里，对 Authorization / token 做脱敏（只保留前后 4 字符）
     def _mask(s: str) -> str:
@@ -444,7 +451,7 @@ def main() -> None:
 
     total_empty = 0
     for name in case_names:
-        total_empty += _run_case(env, name, CASES[name], args.runs, dump_dir, headers)
+        total_empty += _run_case(ctx, name, CASES[name], args.runs)
 
     logger.info(f"\n{'='*78}")
     logger.info(f"汇总：{len(case_names)} 个用例 × {args.runs} 次 = "
