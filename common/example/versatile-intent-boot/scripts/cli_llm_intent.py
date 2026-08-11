@@ -16,15 +16,15 @@
 # processes — the client commands (card/scenario/chat) just talk to L1 over HTTP.
 #
 # Usage:
-#     python3 scripts/cli-llm-intent.py start                       # launch stack + interactive chat
-#     python3 scripts/cli-llm-intent.py start --scenario all        # launch stack + replay A->B->C, then exit
-#     python3 scripts/cli-llm-intent.py start --no-build            # reuse existing jars
-#     python3 scripts/cli-llm-intent.py card                        # show L1 agent card (stack must be up)
-#     python3 scripts/cli-llm-intent.py scenario a                  # replay scenario A
-#     python3 scripts/cli-llm-intent.py scenario all               # replay A -> B -> C
-#     python3 scripts/cli-llm-intent.py chat                        # interactive loop (non-streaming)
-#     python3 scripts/cli-llm-intent.py chat --stream               # interactive loop (SSE streaming)
-#     python3 scripts/cli-llm-intent.py --base-url http://host:8081 chat
+#     python3 scripts/cli_llm_intent.py start                       # launch stack + interactive chat
+#     python3 scripts/cli_llm_intent.py start --scenario all        # launch stack + replay A->B->C, then exit
+#     python3 scripts/cli_llm_intent.py start --no-build            # reuse existing jars
+#     python3 scripts/cli_llm_intent.py card                        # show L1 agent card (stack must be up)
+#     python3 scripts/cli_llm_intent.py scenario a                  # replay scenario A
+#     python3 scripts/cli_llm_intent.py scenario all               # replay A -> B -> C
+#     python3 scripts/cli_llm_intent.py chat                        # interactive loop (non-streaming)
+#     python3 scripts/cli_llm_intent.py chat --stream               # interactive loop (SSE streaming)
+#     python3 scripts/cli_llm_intent.py --base-url http://host:8081 chat
 #
 # Options:
 #     --base-url URL         L1 base URL (default http://localhost:8081)
@@ -37,6 +37,7 @@
 import argparse
 import atexit
 import json
+import logging
 import os
 import re
 import signal
@@ -98,6 +99,25 @@ SCENARIOS = {
 }
 
 
+class CliError(Exception):
+    """Fatal CLI error that should be reported and exit with a non-zero status."""
+
+
+_LOGGER = logging.getLogger("cli_llm_intent")
+_LOGGER.setLevel(logging.INFO)
+_LOGGER.propagate = False
+_LOG_FMT = logging.Formatter("%(message)s")
+_LOG_OUT = logging.StreamHandler(sys.stdout)
+_LOG_OUT.setLevel(logging.INFO)
+_LOG_OUT.setFormatter(_LOG_FMT)
+_LOG_OUT.addFilter(lambda record: record.levelno < logging.WARNING)
+_LOG_ERR = logging.StreamHandler(sys.stderr)
+_LOG_ERR.setLevel(logging.WARNING)
+_LOG_ERR.setFormatter(_LOG_FMT)
+_LOGGER.addHandler(_LOG_OUT)
+_LOGGER.addHandler(_LOG_ERR)
+
+
 def http_get_json(url):
     """GET a JSON document, returning the parsed object."""
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
@@ -139,8 +159,8 @@ def get_agent_card(base_url):
 def show_agent_card(base_url):
     """Pretty-print the public agent card (cf. test_client.get_agent_card)."""
     card = get_agent_card(base_url)
-    print("--- Public Agent Card ---")
-    print(json.dumps(card, ensure_ascii=False, indent=2))
+    _LOGGER.info("--- Public Agent Card ---")
+    _LOGGER.info("%s", json.dumps(card, ensure_ascii=False, indent=2))
 
 
 def build_query_body(text, conversation_id, user_id, stream):
@@ -167,7 +187,7 @@ def send_message(base_url, text, conversation_id, user_id, stream=False):
         chunks = []
         for data in payload:
             chunks.append(data)
-            print(f"  event: {data}")
+            _LOGGER.info("  event: %s", data)
         return chunks
     return json.loads(payload.decode("utf-8"))
 
@@ -229,29 +249,29 @@ def _routed_agent_since(path, offset):
     return matches[-1] if matches else None
 
 
-def send_message_traced(base_url, text, conversation_id, user_id, stream=False, log_path=L1_LOG):
+def send_message_traced(base_url, text, conversation_id, user_id, stream=False):
     """Send one user turn and recover the L2 agentId L1 routed to this turn.
 
     Returns (response, routed_agent); routed_agent is None when the L1 log is
     unavailable or no L2 forwarding happened (e.g. L1 answered directly).
     """
-    offset = _log_size(log_path)
+    offset = _log_size(L1_LOG)
     response = send_message(base_url, text, conversation_id, user_id, stream=stream)
-    return response, _routed_agent_since(log_path, offset)
+    return response, _routed_agent_since(L1_LOG, offset)
 
 
 def print_response(response, routed_agent=None):
     """Pretty-print a non-streaming query response."""
     if isinstance(response, list):
         if routed_agent:
-            print(f"  routed L2 agent: {routed_agent}")
+            _LOGGER.info("  routed L2 agent: %s", routed_agent)
         return
     conversation_id = response.get("conversation_id", "?")
     text = extract_text(response.get("result"))
-    print(f"  conversation_id={conversation_id}")
+    _LOGGER.info("  conversation_id=%s", conversation_id)
     if routed_agent:
-        print(f"  routed L2 agent: {routed_agent}")
-    print(f"  assistant: {text}")
+        _LOGGER.info("  routed L2 agent: %s", routed_agent)
+    _LOGGER.info("  assistant: %s", text)
 
 
 def run_scenario(base_url, which, conversation_id, user_id, stream=False):
@@ -259,25 +279,25 @@ def run_scenario(base_url, which, conversation_id, user_id, stream=False):
     order = ["a", "b", "c"] if which == "all" else [which]
     for code in order:
         turns = SCENARIOS[code]
-        print(f"\n==== 场景 {code.upper()}: {' -> '.join(turns)} ====")
+        _LOGGER.info("\n==== 场景 %s: %s ====", code.upper(), " -> ".join(turns))
         for turn in turns:
-            print(f"user > {turn}")
+            _LOGGER.info("user > %s", turn)
             response, agent = send_message_traced(base_url, turn, conversation_id, user_id, stream=stream)
             if not stream:
                 print_response(response, routed_agent=agent)
             elif agent:
-                print(f"  routed L2 agent: {agent}")
+                _LOGGER.info("  routed L2 agent: %s", agent)
 
 
 def chat(base_url, conversation_id, user_id, stream=False):
     """Interactive loop, mirroring test_client.main()."""
-    print(f"\n交互式会话 L1={base_url} conversation_id={conversation_id} stream={stream}")
-    print("输入消息回车发送，`exit` 退出，`card` 显示 agent card，`reset` 清空会话。")
+    _LOGGER.info("\n交互式会话 L1=%s conversation_id=%s stream=%s", base_url, conversation_id, stream)
+    _LOGGER.info("输入消息回车发送，`exit` 退出，`card` 显示 agent card，`reset` 清空会话。")
     while True:
         try:
             prompt = input("user > ").strip()
         except (EOFError, KeyboardInterrupt):
-            print()
+            _LOGGER.info("")
             break
         if not prompt:
             continue
@@ -287,25 +307,24 @@ def chat(base_url, conversation_id, user_id, stream=False):
             try:
                 show_agent_card(base_url)
             except Exception as exc:  # noqa: BLE001
-                print(f"  获取 agent card 失败: {exc}")
+                _LOGGER.info("  获取 agent card 失败: %s", exc)
             continue
         if prompt == "reset":
             conversation_id = f"c-cli-{_short_id()}"
-            print(f"  已切换 conversation_id={conversation_id}")
+            _LOGGER.info("  已切换 conversation_id=%s", conversation_id)
             continue
         try:
             response, agent = send_message_traced(base_url, prompt, conversation_id, user_id, stream=stream)
             if not stream:
                 print_response(response, routed_agent=agent)
             elif agent:
-                print(f"  routed L2 agent: {agent}")
+                _LOGGER.info("  routed L2 agent: %s", agent)
         except Exception as exc:  # noqa: BLE001
-            print(f"  发送失败: {exc}")
+            _LOGGER.info("  发送失败: %s", exc)
 
 
 def _short_id():
     """A short pseudo-id for new conversation ids (no external deps)."""
-    import time
     return f"{int(time.time() * 1000) % 100000:05d}"
 
 
@@ -352,7 +371,7 @@ def _require_llm_env():
     """Validate that the LLM env vars needed to launch the stack are present."""
     missing = [k for k in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL") if not os.environ.get(k)]
     if missing:
-        raise SystemExit(
+        raise CliError(
             f"ERROR: 缺少 LLM 环境变量 {', '.join(missing)}。\n"
             f"请复制 .env.example 为 .env 并填入真实值（{MODULE_DIR}/.env），\n"
             "或通过环境变量导出。密钥仅经环境变量/.env 传入，绝不提交到代码。")
@@ -364,22 +383,22 @@ def _build_if_needed():
         return
     for jar, mdir in [(JAR_FILE, MODULE_DIR), (AGENT_B_JAR, AGENT_B_MODULE)]:
         if not os.path.isfile(jar):
-            print(f"==> 构建 {os.path.basename(jar)} ...")
+            _LOGGER.info("==> 构建 %s ...", os.path.basename(jar))
             try:
                 subprocess.run(["mvn", "-q", "package", "-DskipTests"], cwd=mdir, check=True)
-            except FileNotFoundError:
-                raise SystemExit("ERROR: 未找到 mvn，请先安装 Maven 并加入 PATH。")
+            except FileNotFoundError as exc:
+                raise CliError("ERROR: 未找到 mvn，请先安装 Maven 并加入 PATH。") from exc
             except subprocess.CalledProcessError as exc:
-                raise SystemExit(f"ERROR: 构建失败 ({mdir}): {exc}")
+                raise CliError(f"ERROR: 构建失败 ({mdir}): {exc}") from exc
 
 
 def _start_proc(jar, args, logname):
     """Launch `java -jar <jar> <args>` in its own process group, log to target/."""
     os.makedirs(LOG_DIR, exist_ok=True)
-    log = open(os.path.join(LOG_DIR, f"{logname}.log"), "ab", buffering=0)
-    proc = subprocess.Popen(
-        ["java", "-jar", jar, *args],
-        cwd=MODULE_DIR, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    with open(os.path.join(LOG_DIR, f"{logname}.log"), "ab", buffering=0) as log:
+        proc = subprocess.Popen(
+            ["java", "-jar", jar, *args],
+            cwd=MODULE_DIR, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     return proc
 
 
@@ -388,14 +407,17 @@ def _gateway_args(gw, l2f, abh, abf):
     return [
         "--spring.profiles.active=mock-a2a-gateway",
         f"--server.port={gw}",
-        f"--openjiuwen.service.versatile.url-template=http://localhost:{gw}/v1/proj/agents/agent_mock_gateway/conversations/{{conversation_id}}",
+        f"--openjiuwen.service.versatile.url-template=http://localhost:{gw}"
+        "/v1/proj/agents/agent_mock_gateway/conversations/{conversation_id}",
         f"--openjiuwen.example.mock-a2a-gateway.{r}L2_flight=http://localhost:{l2f}",
         f"--openjiuwen.example.mock-a2a-gateway.{r}L2_flight_a=http://localhost:{l2f}",
         f"--openjiuwen.example.mock-a2a-gateway.{r}L2_flight_b=http://localhost:{l2f}",
         f"--openjiuwen.example.mock-a2a-gateway.{r}biz_hotel_domestic=http://localhost:{abh}",
         f"--openjiuwen.example.mock-a2a-gateway.{r}biz_hotel_international=http://localhost:{abh}",
         f"--openjiuwen.example.mock-a2a-gateway.{r}biz_flight_domestic=http://localhost:{abf}",
-        "--openjiuwen.example.mock-a2a-gateway.passthrough-cards=agent_card_biz_hotel_domestic,agent_card_biz_hotel_international,agent_card_biz_flight_domestic",
+        "--openjiuwen.example.mock-a2a-gateway.passthrough-cards="
+        "agent_card_biz_hotel_domestic,agent_card_biz_hotel_international,"
+        "agent_card_biz_flight_domestic",
     ]
 
 
@@ -403,7 +425,8 @@ def _versatile_args(profiles, port, seg, extra):
     return [
         f"--spring.profiles.active={profiles}",
         f"--server.port={port}",
-        f"--openjiuwen.service.versatile.url-template=http://localhost:{port}/v1/proj/agents/{seg}/conversations/{{conversation_id}}",
+        f"--openjiuwen.service.versatile.url-template=http://localhost:{port}/v1/proj/agents/{seg}"
+        "/conversations/{conversation_id}",
         *extra,
     ]
 
@@ -432,14 +455,14 @@ def _wait_health(port, name, timeout=120):
     deadline = time.time() + timeout
     while time.time() < deadline:
         if _reachable(port):
-            print(f"    {name:<14} UP (port {port})")
+            _LOGGER.info("    %s UP (port %s)", f"{name:<14}", port)
             return True
         time.sleep(1)
-    print(f"    {name:<14} TIMEOUT (port {port})", file=sys.stderr)
+    _LOGGER.error("    %s TIMEOUT (port %s)", f"{name:<14}", port)
     tail = os.path.join(LOG_DIR, f"{name}.log")
     if os.path.isfile(tail):
         with open(tail, encoding="utf-8", errors="replace") as fh:
-            print("".join(fh.readlines()[-30:]), file=sys.stderr)
+            _LOGGER.error("%s", "".join(fh.readlines()[-30:]))
     return False
 
 
@@ -473,12 +496,12 @@ def start_stack():
     procs.append(("agent-b-flight", _start_proc(AGENT_B_JAR,
         _agent_b_args(abf, "target/agent-b-flight", FLIGHT_PROMPT), "agent-b-flight")))
 
-    print("==> 等待进程就绪 ...")
+    _LOGGER.info("==> 等待进程就绪 ...")
     for name, port in [("gateway", gw), ("layer1", l1), ("layer2-hotel", l2h),
                        ("layer2-flight", l2f), ("agent-b-hotel", abh), ("agent-b-flight", abf)]:
         if not _wait_health(port, name):
             cleanup(procs)
-            raise SystemExit(f"ERROR: {name} 启动失败 (port {port})")
+            raise CliError(f"ERROR: {name} 启动失败 (port {port})")
     return procs, f"http://localhost:{l1}"
 
 
@@ -507,15 +530,18 @@ def cmd_start(args):
     """Launch the stack, then run a scenario or chat, then tear down."""
     procs, base_url = start_stack()
     atexit.register(cleanup, procs)
-    print(f"\n==> 演示栈就绪，L1={base_url}  日志: {LOG_DIR}/{{gateway,layer1,layer2-hotel,layer2-flight,agent-b-hotel,agent-b-flight}}.log")
-    print("==> Ctrl+C 退出并清理进程。")
+    _LOGGER.info(
+        "\n==> 演示栈就绪，L1=%s  日志: %s/"
+        "{gateway,layer1,layer2-hotel,layer2-flight,agent-b-hotel,agent-b-flight}.log",
+        base_url, LOG_DIR)
+    _LOGGER.info("==> Ctrl+C 退出并清理进程。")
     try:
         if args.scenario:
             run_scenario(base_url, args.scenario, args.conversation_id, args.user_id, stream=args.stream)
         else:
             chat(base_url, args.conversation_id, args.user_id, stream=args.stream)
     except KeyboardInterrupt:
-        print("\n==> 中断，清理进程 ...")
+        _LOGGER.info("\n==> 中断，清理进程 ...")
     finally:
         cleanup(procs)
     return 0
@@ -547,7 +573,7 @@ def main(argv=None):
     # the client commands. Real env vars keep precedence.
     env_path = load_dotenv(args.env_file)
     if args.command == "start" and env_path:
-        print(f"==> 已加载 .env: {env_path}")
+        _LOGGER.info("==> 已加载 .env: %s", env_path)
     if args.command == "start" and args.no_build:
         os.environ["SKIP_BUILD"] = "1"
 
@@ -562,8 +588,11 @@ def main(argv=None):
         elif command == "chat":
             chat(args.base_url, args.conversation_id, args.user_id, stream=args.stream)
     except urllib.error.URLError as exc:
-        print(f"ERROR: 无法连接 L1 ({args.base_url}): {exc.reason}", file=sys.stderr)
-        print("请先启动演示进程栈：python3 scripts/cli-llm-intent.py start", file=sys.stderr)
+        _LOGGER.error("ERROR: 无法连接 L1 (%s): %s", args.base_url, exc.reason)
+        _LOGGER.error("请先启动演示进程栈：python3 scripts/cli_llm_intent.py start")
+        return 1
+    except CliError as exc:
+        _LOGGER.error("%s", exc)
         return 1
     return 0
 

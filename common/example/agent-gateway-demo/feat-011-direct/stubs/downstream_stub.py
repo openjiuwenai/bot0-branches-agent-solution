@@ -12,9 +12,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
+
+_LOGGER = logging.getLogger("downstream_stub")
+_LOGGER.setLevel(logging.INFO)
+_LOGGER.propagate = False
+_LOG_HANDLER = logging.StreamHandler(sys.stdout)
+_LOG_HANDLER.setFormatter(logging.Formatter("%(message)s"))
+_LOGGER.addHandler(_LOG_HANDLER)
 
 
 class RdcHandler(BaseHTTPRequestHandler):
@@ -24,14 +33,14 @@ class RdcHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quieter
         pass
 
-    def do_GET(self):
+    def do_GET(self):  # pylint: disable=huawei-invalid-name
         path = urlparse(self.path).path
         # GET /api/registry/instances/{tenant}/{agentId}
         prefix = "/api/registry/instances/"
         if not path.startswith(prefix):
             self.send_error(404)
             return
-        parts = path[len(prefix) :].split("/")
+        parts = path[len(prefix):].split("/")
         if len(parts) != 2:
             self.send_error(400)
             return
@@ -48,7 +57,7 @@ class RdcHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_POST(self):
+    def do_POST(self):  # pylint: disable=huawei-invalid-name
         path = urlparse(self.path).path
         if path != "/api/registry/route-handle/resolve":
             self.send_error(404)
@@ -80,7 +89,7 @@ class RuntimeHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def do_POST(self):
+    def do_POST(self):  # pylint: disable=huawei-invalid-name
         path = urlparse(self.path).path
         if path not in ("/a2a", "a2a"):
             # accept "/a2a" only
@@ -142,10 +151,9 @@ def main():
     rt = ThreadingHTTPServer(("127.0.0.1", args.runtime_port), RuntimeHandler)
     threading.Thread(target=rdc.serve_forever, daemon=True).start()
     threading.Thread(target=rt.serve_forever, daemon=True).start()
-    print(
-        f"stub-rdc=http://127.0.0.1:{args.rdc_port} "
-        f"stub-runtime=http://127.0.0.1:{args.runtime_port}",
-        flush=True,
+    _LOGGER.info(
+        "stub-rdc=http://127.0.0.1:%s stub-runtime=http://127.0.0.1:%s",
+        args.rdc_port, args.runtime_port,
     )
     threading.Event().wait()
 
