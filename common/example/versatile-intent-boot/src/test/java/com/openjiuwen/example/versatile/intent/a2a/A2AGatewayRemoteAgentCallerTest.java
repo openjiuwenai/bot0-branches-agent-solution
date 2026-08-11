@@ -397,7 +397,7 @@ class A2AGatewayRemoteAgentCallerTest {
     }
 
     @Test
-    void callOutcomeAcceptsTasklessMessageWithoutPublishingSyntheticTaskEvents() throws Exception {
+    void acceptsTasklessMessageWithoutSyntheticEvents() throws Exception {
         WireMockServer wireMock = new WireMockServer(options().dynamicPort());
         try {
             wireMock.start();

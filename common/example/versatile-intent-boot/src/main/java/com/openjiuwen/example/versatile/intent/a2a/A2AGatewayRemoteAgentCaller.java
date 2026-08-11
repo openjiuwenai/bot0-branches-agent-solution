@@ -173,32 +173,14 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
         log.info("A2AGateway call agent={} url={} userId={} messageLen={}",
                 agentName, jsonRpcUrl, userId.orElse(null), messageText.length());
 
-        Message.Builder msgBuilder = Message.builder()
-                .role(Message.Role.ROLE_USER)
-                .contextId(contextId)
-                .parts(List.<Part<?>>of(new TextPart(messageText)));
-        if (call.taskId() != null && !call.taskId().isBlank()) {
-            msgBuilder.taskId(call.taskId());
-        }
-        Message message = msgBuilder.build();
-        MessageSendParams params = MessageSendParams.builder()
-                .message(message)
-                .metadata(call.metadata())
-                .build();
-
+        MessageSendParams params = buildSendParams(call, contextId, messageText);
         AgentCard card = buildEphemeralCard(agentName, jsonRpcUrl, streaming);
         Client client = getOrCreateClient(card, streaming);
         ClientCallContext context = new ClientCallContext(Map.of(), buildHeaders(userId.orElse(null)));
-
         CompletableFuture<RemoteCallOutcome> result = new CompletableFuture<>();
         result.orTimeout(properties.getCallTimeoutSeconds(), TimeUnit.SECONDS);
-        BiConsumer<ClientEvent, AgentCard> eventConsumer = (event, ignoredCard) -> {
-            try {
-                handleClientEvent(event, agentName, result, eventObserver, streaming);
-            } catch (RuntimeException ex) {
-                result.completeExceptionally(ex);
-            }
-        };
+        BiConsumer<ClientEvent, AgentCard> eventConsumer = createEventConsumer(
+                agentName, result, eventObserver, streaming);
         try {
             client.sendMessage(params, List.of(eventConsumer),
                     error -> completeOnStreamEnd(agentName, result, error), context);
@@ -207,6 +189,31 @@ public class A2AGatewayRemoteAgentCaller implements RemoteAgentCaller {
                     "A2AGateway call failed for agentId=" + agentName, ex));
         }
         return result;
+    }
+
+    private static MessageSendParams buildSendParams(RemoteCall call, String contextId, String messageText) {
+        Message.Builder msgBuilder = Message.builder()
+                .role(Message.Role.ROLE_USER)
+                .contextId(contextId)
+                .parts(List.<Part<?>>of(new TextPart(messageText)));
+        if (call.taskId() != null && !call.taskId().isBlank()) {
+            msgBuilder.taskId(call.taskId());
+        }
+        return MessageSendParams.builder()
+                .message(msgBuilder.build())
+                .metadata(call.metadata())
+                .build();
+    }
+
+    private BiConsumer<ClientEvent, AgentCard> createEventConsumer(String agentName,
+            CompletableFuture<RemoteCallOutcome> result, EventObserver eventObserver, boolean streaming) {
+        return (event, ignoredCard) -> {
+            try {
+                handleClientEvent(event, agentName, result, eventObserver, streaming);
+            } catch (IllegalArgumentException | IllegalStateException | NullPointerException ex) {
+                result.completeExceptionally(ex);
+            }
+        };
     }
 
     private static Optional<String> resolveUserId(RemoteCall call) {
