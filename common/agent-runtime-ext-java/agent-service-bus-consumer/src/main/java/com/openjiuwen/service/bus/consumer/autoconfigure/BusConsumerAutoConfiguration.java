@@ -36,6 +36,8 @@ import com.openjiuwen.service.bus.consumer.validation.BusEnvelopeValidator;
 
 import org.a2aproject.sdk.server.requesthandlers.RequestHandler;
 import org.a2aproject.sdk.server.tasks.TaskStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -54,7 +56,10 @@ import java.time.Clock;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -73,9 +78,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 @EnableAspectJAutoProxy
 @ConditionalOnProperty(prefix = "openjiuwen.service.bus.consumer", name = "enabled", havingValue = "true")
 public class BusConsumerAutoConfiguration {
+    private static final Logger LOG = LoggerFactory.getLogger(BusConsumerAutoConfiguration.class);
     private static final String SERVICE_ID_PROPERTY = "openjiuwen.service.service-id";
     private static final long STREAM_REF_TTL_SECONDS = 60L * 60L;
     private static final int CALLER_IO_THREADS = 4;
+
     @Bean
     BusEnvelopeValidator busEnvelopeValidator(Environment environment, AgentBusBrokerProperties bus) {
         return new BusEnvelopeValidator(Clock.systemUTC(), tenantId(bus), serviceId(environment));
@@ -110,14 +117,19 @@ public class BusConsumerAutoConfiguration {
 
     @Bean(destroyMethod = "shutdownNow")
     ExecutorService agentBusCallerExecutor() {
-        return Executors.newFixedThreadPool(CALLER_IO_THREADS, daemonThreadFactory("bus-caller-io"));
+        return executor(CALLER_IO_THREADS, "bus-caller-io");
+    }
+
+    @Bean
+    CallerSettings agentBusCallerSettings(AgentBusBrokerProperties bus, Environment environment) {
+        return new CallerSettings(tenantId(bus), serviceId(environment), bus.responseTimeoutMs());
     }
 
     @Bean
     RemoteAgentCaller agentBusRemoteAgentCaller(ObjectProvider<RuntimeRdcClient> registry,
             ObjectProvider<AgentBusRequestSubmitter> requestSubmitter,
             @Qualifier("agentBusCallerExecutor") ExecutorService agentBusCallerExecutor,
-            AgentBusBrokerProperties bus, Environment environment,
+            CallerSettings settings,
             ObjectProvider<A2ATaskSubscriptionClient> subscriptionClient) {
         RuntimeRdcClient registryClient = registry.getIfAvailable();
         AgentBusRequestSubmitter submitter = requestSubmitter.getIfAvailable();
@@ -125,7 +137,7 @@ public class BusConsumerAutoConfiguration {
             return new UnavailableAgentBusRemoteAgentCaller();
         }
         return new AgentBusRemoteAgentCaller(registryClient, submitter, agentBusCallerExecutor,
-                tenantId(bus), serviceId(environment), bus.responseTimeoutMs(),
+                settings.tenantId(), settings.sourceServiceId(), settings.responseTimeoutMillis(),
                 subscriptionClient.getIfAvailable(A2ATaskSubscriptionClient::new));
     }
 
@@ -137,7 +149,7 @@ public class BusConsumerAutoConfiguration {
         if (!(agentBusRemoteAgentCaller instanceof AgentBusRemoteAgentCaller caller)) {
             throw new IllegalStateException("Agent Bus caller infrastructure is incomplete");
         }
-        ExecutorService executor = Executors.newSingleThreadExecutor(daemonThreadFactory("bus-caller-response"));
+        ExecutorService executor = executor(1, "bus-caller-response");
         String serviceId = serviceId(environment);
         return new AgentBusCallerResponseLifecycle(consumer, caller, executor,
                 callerConsumerServiceId(serviceId), tenantId(bus), serviceId);
@@ -299,10 +311,22 @@ public class BusConsumerAutoConfiguration {
 
     private static ThreadFactory daemonThreadFactory(String prefix) {
         AtomicInteger index = new AtomicInteger();
+        ThreadFactory delegate = Executors.defaultThreadFactory();
         return runnable -> {
-            Thread thread = new Thread(runnable, prefix + "-" + index.incrementAndGet());
+            Thread thread = delegate.newThread(runnable);
+            thread.setName(prefix + "-" + index.incrementAndGet());
             thread.setDaemon(true);
+            thread.setUncaughtExceptionHandler((worker, failure) ->
+                    LOG.error("Uncaught failure in thread {}", worker.getName(), failure));
             return thread;
         };
+    }
+
+    private static ExecutorService executor(int threads, String threadNamePrefix) {
+        return new ThreadPoolExecutor(threads, threads, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), daemonThreadFactory(threadNamePrefix));
+    }
+
+    record CallerSettings(String tenantId, String sourceServiceId, long responseTimeoutMillis) {
     }
 }

@@ -95,7 +95,7 @@ public final class AgentBusCallerResponseLifecycle implements SmartLifecycle {
         while (running && !Thread.currentThread().isInterrupted()) {
             try {
                 consumer.poll(System.currentTimeMillis()).ifPresent(this::process);
-            } catch (RuntimeException failure) {
+            } catch (IllegalArgumentException | IllegalStateException failure) {
                 if (running) {
                     LOG.warn("Agent Bus caller response poll failed", failure);
                 }

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Internal HTTP client for the FEAT-015/016 registry discovery API.
@@ -90,8 +91,9 @@ public final class RuntimeRdcClient {
                 .timeout(REQUEST_TIMEOUT).POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
         JsonNode response = execute(request, "RDC route-handle resolve failed");
-        return new ResolvedRoute(requiredText(response, "endpointUrl"), optionalText(response, "instanceId"),
-                optionalText(response, "routeKey"), optionalText(response, "contractVersion"));
+        return new ResolvedRoute(requiredText(response, "endpointUrl"),
+                optionalText(response, "instanceId").orElse(null), optionalText(response, "routeKey").orElse(null),
+                optionalText(response, "contractVersion").orElse(null));
     }
 
     private JsonNode execute(HttpRequest request, String failureMessage) {
@@ -103,7 +105,6 @@ public final class RuntimeRdcClient {
             }
             return objectMapper.readTree(response.body());
         } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
             throw new RouteDiscoveryException(failureMessage, failure);
         } catch (IOException failure) {
             throw new RouteDiscoveryException(failureMessage, failure);
@@ -129,19 +130,16 @@ public final class RuntimeRdcClient {
     }
 
     private static String requiredText(JsonNode node, String field) {
-        String value = optionalText(node, field);
-        if (value == null) {
-            throw new RouteDiscoveryException("RDC response is missing " + field);
-        }
-        return value;
+        return optionalText(node, field)
+                .orElseThrow(() -> new RouteDiscoveryException("RDC response is missing " + field));
     }
 
-    private static String optionalText(JsonNode node, String field) {
+    private static Optional<String> optionalText(JsonNode node, String field) {
         if (node == null || !node.hasNonNull(field)) {
-            return null;
+            return Optional.empty();
         }
         String value = node.get(field).asText();
-        return value.isBlank() ? null : value;
+        return value.isBlank() ? Optional.empty() : Optional.of(value);
     }
 
     private static String require(String value, String name) {

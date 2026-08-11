@@ -68,8 +68,8 @@ class AgentBusResponsePublisherTest {
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).metadata(Map.of("result", "done")).build();
         String response = A2aJsonRpcResponseSerializer.streamingEvent("request-1", task);
         publisher.publish(new BusResponseProjection("response-event", "INVOCATION_RESPONSE", "tenant-a", "corr",
-                "task", Instant.now(), Map.of("a2aResponse", response), "trace", "runtime-a", "gateway-a", "route", "idem",
-                "request-message", "RESPONSE", 1));
+                "task", Instant.now(), Map.of("a2aResponse", response), "trace", "runtime-a", "gateway-a", "route",
+                "idem", "request-message", "RESPONSE", 1));
 
         String inlinePayload = captured.get().headers().inlinePayload();
         assertThat(inlinePayload).contains("taskId=task", "a2aResponseType=JsonRpcResponse");

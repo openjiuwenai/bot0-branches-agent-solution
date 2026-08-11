@@ -51,7 +51,8 @@ class AgentBusProjectionContractTest {
         assertThat(AgentBusResponsePublisher.encodeProjection(projection)).isEqualTo(
                 "taskId=task-1;projectionKind=RESPONSE;revision=0;"
                         + "a2aResponseType=JsonRpcResponse;"
-                        + "a2aResponse=eyJqc29ucnBjIjoiMi4wIiwiaWQiOiJyZXEtMSIsInJlc3VsdCI6eyJ0YXNrIjp7ImlkIjoidGFzay0xIn19fQ");
+                        + "a2aResponse=eyJqc29ucnBjIjoiMi4wIiwiaWQiOiJyZXEtMSIsInJlc3VsdCI6"
+                        + "eyJ0YXNrIjp7ImlkIjoidGFzay0xIn19fQ");
     }
 
     private static BusResponseProjection projection(String eventType, String taskId, String kind,

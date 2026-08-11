@@ -20,16 +20,19 @@ import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcomeMapper;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.a2aproject.sdk.client.ClientEvent;
+import org.a2aproject.sdk.spec.A2AException;
 import org.a2aproject.sdk.spec.TaskState;
 
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -87,7 +90,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             Executor executor, String tenantId, String sourceServiceId, long responseTimeoutMillis,
             A2ATaskSubscriptionClient subscriptionClient) {
         this(registry, requestSubmitter, executor, tenantId, sourceServiceId, responseTimeoutMillis,
-                Objects.requireNonNull(subscriptionClient, "subscriptionClient is required")::subscribe);
+                subscriber(subscriptionClient));
     }
 
     AgentBusRemoteAgentCaller(RuntimeRdcClient registry, AgentBusRequestSubmitter requestSubmitter,
@@ -173,13 +176,13 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
                 pending.remove(correlationId, pendingCall);
                 pendingCall.closeStream();
             });
-            ForwardingEnvelope envelope = creationEnvelope(call, route, correlationId, idempotencyKey, now, deadline);
+            ForwardingEnvelope envelope = creationEnvelope(call, route, correlationId, idempotencyKey, deadline);
             if (result.isDone()) {
                 pending.remove(correlationId, pendingCall);
                 return;
             }
             submit(envelope, result);
-        } catch (RuntimeException failure) {
+        } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException failure) {
             result.completeExceptionally(failure);
         }
     }
@@ -194,26 +197,28 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     private ForwardingEnvelope creationEnvelope(RemoteCall call, RuntimeRdcClient.RouteCandidate route,
-            String correlationId, String idempotencyKey, long now, long deadline) {
+            String correlationId, String idempotencyKey, long deadline) {
         String requestId = "bus-" + UUID.randomUUID();
         String payload = requestEncoder.encode(call, requestId, tenantId);
-        return envelope(AgentBusEventType.A2A_CALL_REQUESTED, route, correlationId, idempotencyKey,
-                traceId(call.metadata(), correlationId), requestId, payload, deadline);
+        EnvelopeIdentity identity = new EnvelopeIdentity(correlationId, idempotencyKey,
+                traceId(call.metadata(), correlationId), requestId, deadline);
+        return envelope(AgentBusEventType.A2A_CALL_REQUESTED, route, identity, payload);
     }
 
     private ForwardingEnvelope subscriptionEnvelope(PendingRemoteCall call) {
         String requestId = "bus-stream-" + UUID.randomUUID();
         String payload = requestEncoder.encodeSubscription(call.taskId, requestId, tenantId);
-        return envelope(AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED, call.route, call.correlationId,
-                call.idempotencyKey, call.correlationId, requestId, payload, call.deadline);
+        EnvelopeIdentity identity = new EnvelopeIdentity(call.correlationId, call.idempotencyKey,
+                call.correlationId, requestId, call.deadline);
+        return envelope(AgentBusEventType.A2A_STREAM_SUBSCRIBE_REQUESTED, call.route, identity, payload);
     }
 
     private ForwardingEnvelope envelope(AgentBusEventType eventType, RuntimeRdcClient.RouteCandidate route,
-            String correlationId, String idempotencyKey, String traceId, String requestId, String payload,
-            long deadline) {
-        return new ForwardingEnvelope(new ForwardingMessageId(requestId), eventType, tenantId, traceId,
-                correlationId, idempotencyKey, new ForwardingRouteHandle(route.routeHandle(), tenantId), CAPABILITY,
-                sourceServiceId, route.serviceId(), deadline, ForwardingEnvelope.PayloadPolicy.DATA_BEARING,
+            EnvelopeIdentity identity, String payload) {
+        return new ForwardingEnvelope(new ForwardingMessageId(identity.requestId), eventType, tenantId,
+                identity.traceId, identity.correlationId, identity.idempotencyKey,
+                new ForwardingRouteHandle(route.routeHandle(), tenantId), CAPABILITY, sourceServiceId,
+                route.serviceId(), identity.deadline, ForwardingEnvelope.PayloadPolicy.DATA_BEARING,
                 null, payload, sourceServiceId);
     }
 
@@ -253,13 +258,13 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             A2ATaskSubscriptionClient.TaskSubscriptionRequest request =
                     new A2ATaskSubscriptionClient.TaskSubscriptionRequest(call.endpointUrl, call.taskId,
                             streamReference);
-            AutoCloseable subscription = streamSubscriber.subscribe(request,
+            StreamHandle subscription = streamSubscriber.subscribe(request,
                     event -> acceptStreamEvent(call, event),
                     () -> streamFailed(call, generation,
                             new IllegalStateException("SubscribeToTask stream closed before a terminal event")),
                     failure -> streamFailed(call, generation, failure));
             call.installStream(generation, subscription);
-        } catch (RuntimeException failure) {
+        } catch (A2AException | IllegalArgumentException | IllegalStateException failure) {
             streamFailed(call, generation, failure);
         }
     }
@@ -278,7 +283,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         }
         try {
             executor.execute(() -> refreshStreamReference(call));
-        } catch (RuntimeException rejected) {
+        } catch (RejectedExecutionException rejected) {
             call.result.completeExceptionally(rejected);
         }
     }
@@ -294,7 +299,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
                 return;
             }
             submit(subscriptionEnvelope(call), call.result);
-        } catch (RuntimeException failure) {
+        } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException failure) {
             call.result.completeExceptionally(failure);
         }
     }
@@ -312,7 +317,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             return;
         }
         TaskState fallback = eventType == AgentBusEventType.A2A_CALL_INPUT_REQUIRED
-                ? TaskState.TASK_STATE_INPUT_REQUIRED : state(projection.value("status"));
+                ? TaskState.TASK_STATE_INPUT_REQUIRED : state(projection.value("status")).orElse(null);
         completeState(call, projection, fallback);
     }
 
@@ -331,16 +336,16 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         return value;
     }
 
-    private static TaskState state(String value) {
+    private static Optional<TaskState> state(String value) {
         if (value == null || value.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         String normalized = value.toUpperCase(Locale.ROOT);
         if (!normalized.startsWith("TASK_STATE_")) {
             normalized = "TASK_STATE_" + normalized;
         }
         try {
-            return TaskState.valueOf(normalized);
+            return Optional.of(TaskState.valueOf(normalized));
         } catch (IllegalArgumentException failure) {
             throw new IllegalArgumentException("Unsupported A2A task status: " + value, failure);
         }
@@ -369,11 +374,40 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         return value;
     }
 
+    private static StreamSubscriber subscriber(A2ATaskSubscriptionClient subscriptionClient) {
+        A2ATaskSubscriptionClient client = Objects.requireNonNull(subscriptionClient,
+                "subscriptionClient is required");
+        return (request, eventConsumer, completionHandler, errorHandler) -> {
+            A2ATaskSubscriptionClient.TaskSubscription subscription = client.subscribe(request, eventConsumer,
+                    completionHandler, errorHandler);
+            return subscription::close;
+        };
+    }
+
+    private record EnvelopeIdentity(String correlationId, String idempotencyKey, String traceId,
+            String requestId, long deadline) {
+    }
+
     @FunctionalInterface
     interface StreamSubscriber {
-        AutoCloseable subscribe(
+        /**
+         * Opens the standard A2A Task event stream.
+         *
+         * @param request subscription coordinates
+         * @param eventConsumer decoded event consumer
+         * @param completionHandler completion callback
+         * @param errorHandler error callback
+         * @return local stream handle
+         */
+        StreamHandle subscribe(
                 A2ATaskSubscriptionClient.TaskSubscriptionRequest request,
                 Consumer<ClientEvent> eventConsumer, Runnable completionHandler, Consumer<Throwable> errorHandler);
+    }
+
+    @FunctionalInterface
+    interface StreamHandle {
+        /** Closes the local stream subscription. */
+        void close();
     }
 
     private static final class PendingRemoteCall {
@@ -390,7 +424,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         private String streamReference;
         private int streamGeneration;
         private int streamReferenceRefreshes;
-        private AutoCloseable subscription;
+        private StreamHandle subscription;
 
         private PendingRemoteCall(CompletableFuture<RemoteCallOutcome> result,
                 Consumer<String> taskIdObserver, QueryStreamObserver streamObserver, boolean streaming,
@@ -428,7 +462,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         }
 
         private synchronized void installStream(int generation,
-                AutoCloseable value) {
+                StreamHandle value) {
             if (generation != streamGeneration || result.isDone()) {
                 close(value);
                 return;
@@ -462,12 +496,8 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             }
         }
 
-        private static void close(AutoCloseable value) {
-            try {
-                value.close();
-            } catch (Exception ignored) {
-                // The local call is already closed; transport cleanup is best effort.
-            }
+        private static void close(StreamHandle value) {
+            value.close();
         }
     }
 }

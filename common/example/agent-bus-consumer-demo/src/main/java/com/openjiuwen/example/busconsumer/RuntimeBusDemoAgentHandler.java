@@ -12,6 +12,7 @@ import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Deterministic caller/callee handlers for the Runtime-to-Runtime Agent Bus E2E.
@@ -73,9 +74,9 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
             }
             return response(request, "target runtime received: " + request.lastUserQuery());
         }
-        Object remoteResult = remoteResult(request);
-        if (remoteResult != null) {
-            return response(request, "source runtime received remote result: " + remoteResult);
+        Optional<Object> remoteResult = remoteResult(request);
+        if (remoteResult.isPresent()) {
+            return response(request, "source runtime received remote result: " + remoteResult.get());
         }
         return new QueryResponse(Map.of("role", "assistant", "_interrupt", interrupt(request)),
                 request.getConversationId());
@@ -85,9 +86,12 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
      * Sync (query) version of the conv-stream-1 client_tool sequence — the resume (SendMessage)
      * goes through query, not streamQuery. After readPage → send submitOrder interrupt; after
      * submitOrder → COMPLETED.
+     *
+     * @param request the serve request
+     * @return the response for the current client-tool sequence step
      */
     private QueryResponse clientToolSequenceResponse(ServeRequest request) {
-        String previousToolName = previousInterruptToolName(request);
+        String previousToolName = previousInterruptToolName(request).orElse("");
         if ("readPage".equals(previousToolName)) {
             return new QueryResponse(Map.of("role", "assistant", "_interrupt",
                     clientToolInterrupt("call-submitorder-1", "submitOrder", "please submit the order")),
@@ -98,7 +102,7 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
 
     @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
-        if (caller && remoteResult(request) == null) {
+        if (caller && remoteResult(request).isEmpty()) {
             observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT, interrupt(request)));
             return;
         }
@@ -146,13 +150,13 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
      * @param observer the stream observer
      */
     private void streamClientToolSequence(ServeRequest request, QueryStreamObserver observer) {
-        String previousToolName = previousInterruptToolName(request);
-        if (previousToolName == null) {
+        Optional<String> previousToolName = previousInterruptToolName(request);
+        if (previousToolName.isEmpty()) {
             observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
                     clientToolInterrupt("call-readpage-1", "readPage", "please read the page")));
             return;
         }
-        if ("readPage".equals(previousToolName)) {
+        if (previousToolName.filter("readPage"::equals).isPresent()) {
             observer.onNext(new QueryChunk(QueryChunk.TYPE_INTERRUPT,
                     clientToolInterrupt("call-submitorder-1", "submitOrder", "please submit the order")));
             return;
@@ -162,15 +166,15 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
         observer.onComplete();
     }
 
-    private static String previousInterruptToolName(ServeRequest request) {
+    private static Optional<String> previousInterruptToolName(ServeRequest request) {
         if (request.getMetadata() == null) {
-            return null;
+            return Optional.empty();
         }
         Object value = request.getMetadata().get(INTERRUPT_META);
         if (!(value instanceof Map<?, ?> interrupt)) {
-            return null;
+            return Optional.empty();
         }
-        return interrupt.get("toolName") instanceof String toolName ? toolName : null;
+        return interrupt.get("toolName") instanceof String toolName ? Optional.of(toolName) : Optional.empty();
     }
 
     /**
@@ -201,7 +205,6 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
             Thread.sleep(streamDelayMillis);
             return true;
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
             observer.onError(interrupted);
             return false;
         }
@@ -257,14 +260,14 @@ final class RuntimeBusDemoAgentHandler implements AgentHandler {
                 "context", Map.of("_interrupt_kind", "a2a_delegate", "agentName", TARGET_AGENT_ID))));
     }
 
-    private static Object remoteResult(ServeRequest request) {
+    private static Optional<Object> remoteResult(ServeRequest request) {
         if (request.getMetadata() == null) {
-            return null;
+            return Optional.empty();
         }
         Object value = request.getMetadata().get("runtime.remoteToolResults");
         if (!(value instanceof Map<?, ?> results)) {
-            return null;
+            return Optional.empty();
         }
-        return results.get(TOOL_CALL_ID);
+        return Optional.ofNullable(results.get(TOOL_CALL_ID));
     }
 }

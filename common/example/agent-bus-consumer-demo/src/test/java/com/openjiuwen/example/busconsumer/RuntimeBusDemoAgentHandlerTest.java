@@ -4,6 +4,8 @@
 
 package com.openjiuwen.example.busconsumer;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.openjiuwen.service.spec.dto.QueryChunk;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
@@ -16,8 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * Tests the deterministic Runtime Bus demo handler behavior.
+ *
+ * @since 2026-08-05
+ */
 class RuntimeBusDemoAgentHandlerTest {
     @Test
     void callerDelegatesThenReturnsRemoteResult() {
