@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -30,10 +31,10 @@ class RuntimeRdcClientTest {
     private RuntimeRdcClient client;
 
     @BeforeEach
-    void setUp() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.start();
-        client = new RuntimeRdcClient(URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"));
+    void createRegistryClient() throws IOException {
+        server = startRegistryStub();
+        URI registryUri = URI.create("http://127.0.0.1:%d/".formatted(server.getAddress().getPort()));
+        client = new RuntimeRdcClient(registryUri);
     }
 
     @AfterEach
@@ -90,5 +91,12 @@ class RuntimeRdcClientTest {
         exchange.sendResponseHeaders(status, bytes.length);
         exchange.getResponseBody().write(bytes);
         exchange.close();
+    }
+
+    private static HttpServer startRegistryStub() throws IOException {
+        InetSocketAddress loopbackAddress = new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0);
+        HttpServer registryStub = HttpServer.create(loopbackAddress, 1);
+        registryStub.start();
+        return registryStub;
     }
 }

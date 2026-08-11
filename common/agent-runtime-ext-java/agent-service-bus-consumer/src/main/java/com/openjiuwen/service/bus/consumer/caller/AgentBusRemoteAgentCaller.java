@@ -406,7 +406,9 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
 
     @FunctionalInterface
     interface StreamHandle {
-        /** Closes the local stream subscription. */
+        /**
+         * Closes the local stream subscription.
+         */
         void close();
     }
 
