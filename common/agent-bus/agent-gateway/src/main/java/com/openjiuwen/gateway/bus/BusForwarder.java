@@ -589,8 +589,10 @@ public class BusForwarder {
     /**
      * Builds the client-facing status body. A completed projection already contains the complete
      * JSON-RPC response produced by the Runtime and is forwarded unchanged. Other statuses return
-     * {@code {"result":{"status":...}}}, with {@code taskId} when known and {@code reason} for
-     * REJECTED/FAILED.
+     * a synthesized JSON-RPC envelope {@code {"jsonrpc":"2.0","result":{"status":...}}}, with
+     * {@code taskId} when known and {@code reason} for REJECTED/FAILED. The {@code jsonrpc}
+     * envelope mirrors the streaming terminal-frame fallback so ACCEPTED_WITH_TASK / UNKNOWN
+     * (and the other non-completed states) are not emitted as bare {@code {"result":...}}.
      *
      * @param s folded invocation status
      * @param taskId task id when known (ACCEPTED_WITH_TASK / INPUT_REQUIRED / accepted-then-response)
@@ -601,7 +603,7 @@ public class BusForwarder {
         if (s == InvocationResponseStatus.COMPLETED_RESPONSE && body != null && !body.isBlank()) {
             return body;
         }
-        StringBuilder sb = new StringBuilder("{\"result\":{\"status\":\"").append(s.name()).append("\"");
+        StringBuilder sb = new StringBuilder("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"").append(s.name()).append("\"");
         if (taskId != null && !taskId.isBlank()) {
             sb.append(",\"taskId\":\"").append(taskId).append("\"");
         }

@@ -217,6 +217,12 @@ public class A2aController {
      * （{@link Router#routeResumeStream}），与流式创建同构；其余续跑走同步 JSON
      * （{@link Router#routeResume}）。
      *
+     * <p>续跑（含 BUS 模式）统一走 DIRECT sticky 路由：续跑针对已有 taskId，sticky index
+     * 在创建时已写入（BUS 创建于首个 taskId 投影处绑定），只需读 sticky 解析 owner runtime
+     * 直接转发；不经过 BUS 控制面（无 control.forward → 投影轮询 → STREAM_READY），与同步
+     * 续跑走 {@link Router#routeResume} 完全对称。runtime 原生支持
+     * {@code SendStreamingMessage + taskId} 续跑（恢复过程以 SSE 返回）。
+     *
      * @param context governance context with taskId bound
      * @param response servlet response (used to write the SSE stream for streaming resume)
      * @return sync JSON response from the sticky owner runtime, or {@code null} once an SSE
@@ -225,12 +231,10 @@ public class A2aController {
      */
     private Object forwardResume(GovernanceContext context, HttpServletResponse response) throws IOException {
         if ("SendStreamingMessage".equals(context.method())) {
-            // 流式续跑：sticky 路由 + SSE 桥接。BUS 路径的流式续跑暂未支持，仅 DIRECT 路径。
-            if (pathSelector.isBus() && busForwarder.isPresent()) {
-                throw new GovernanceException(HttpStatus.NOT_IMPLEMENTED,
-                        "STREAMING_RESUME_BUS_UNSUPPORTED",
-                        "Streaming resume over the BUS path is not yet supported");
-            }
+            // 流式续跑：sticky 路由 + SSE 桥接。续跑针对已有 taskId，走 DIRECT sticky 路由
+            // （与同步续跑 routeResume 对称）；不走 BUS 控制面（续跑不产生新 STREAM_READY，
+            // 故无需 control.forward → 投影轮询）。BUS 创建已在首个 taskId 投影写入 stickyIndex。
+            // runtime 原生支持 SendStreamingMessage + taskId（对话接口输入与输出.md §恢复请求）。
             Stream<String> frames = router.routeResumeStream(context);
             response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
             response.setCharacterEncoding("UTF-8");
