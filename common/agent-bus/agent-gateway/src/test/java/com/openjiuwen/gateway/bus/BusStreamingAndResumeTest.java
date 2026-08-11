@@ -42,6 +42,7 @@ import java.util.Optional;
  */
 class BusStreamingAndResumeTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private final FakeRdcRouteClient rdc = new FakeRdcRouteClient();
     private final FakeForwardingOutboxPort outbox = new FakeForwardingOutboxPort();
     private final FakeProjectionFeed feed = new FakeProjectionFeed();

@@ -603,7 +603,8 @@ public class BusForwarder {
         if (s == InvocationResponseStatus.COMPLETED_RESPONSE && body != null && !body.isBlank()) {
             return body;
         }
-        StringBuilder sb = new StringBuilder("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"").append(s.name()).append("\"");
+        StringBuilder sb = new StringBuilder("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"");
+        sb.append(s.name()).append("\"");
         if (taskId != null && !taskId.isBlank()) {
             sb.append(",\"taskId\":\"").append(taskId).append("\"");
         }

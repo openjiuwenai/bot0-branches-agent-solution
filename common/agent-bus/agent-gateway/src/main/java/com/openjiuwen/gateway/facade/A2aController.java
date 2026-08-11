@@ -239,6 +239,7 @@ public class A2aController {
             response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
             response.setCharacterEncoding("UTF-8");
             sseBridge.writeSse(response.getOutputStream(), frames);
+            // Spring MVC contract: null tells the framework the SSE stream is already committed.
             return null;
         }
         try {
