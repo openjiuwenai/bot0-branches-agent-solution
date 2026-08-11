@@ -244,7 +244,8 @@ class VersatileInterruptRail(BaseInterruptRail):
                 skill_input["input_data"] = input_data
                 logger.info(
                     f"[VersatileInterruptRail] input_key 数据注入："
-                    f"input_key={input_key!r}, data_keys={list(input_data.keys()) if isinstance(input_data, dict) else type(input_data)}"
+                    f"input_key={input_key!r}, "
+                    f"data_keys={list(input_data.keys()) if isinstance(input_data, dict) else type(input_data)}"
                 )
             else:
                 logger.warning(
@@ -259,9 +260,14 @@ class VersatileInterruptRail(BaseInterruptRail):
         # 脚本主动返回 ui_notice 时，表示该轮话术由 ui_notice 接管，
         # 不再走 response_template_keys 二选一逻辑，避免两条话术同时北向输出。
         has_ui_notice = isinstance(normalized, dict) and isinstance(normalized.get("ui_notice"), dict)
-        if response_template_keys_str and status and self._scripts_config and not has_ui_notice:
+        has_template_config = response_template_keys_str and status and self._scripts_config
+        if has_template_config and not has_ui_notice:
             try:
-                response_template_keys = json.loads(response_template_keys_str) if isinstance(response_template_keys_str, str) else response_template_keys_str
+                response_template_keys = (
+                    json.loads(response_template_keys_str)
+                    if isinstance(response_template_keys_str, str)
+                    else response_template_keys_str
+                )
                 if isinstance(response_template_keys, list):
                     key_index = 0 if status == "success" else 1
                     if key_index < len(response_template_keys):
@@ -270,13 +276,29 @@ class VersatileInterruptRail(BaseInterruptRail):
                         if template_text:
                             ctx.session.update_state({"response_template": template_text})
                         else:
-                            logger.warning("[VersatileInterruptRail] response_template 处理异常：key=%r, status=%r, keys=%r", template_key, status, response_template_keys_str[:120])
+                            logger.warning(
+                                "[VersatileInterruptRail] response_template 处理异常："
+                                "key=%r, status=%r, keys=%r",
+                                template_key, status, response_template_keys_str[:120],
+                            )
                     else:
-                        logger.warning("[VersatileInterruptRail] response_template 处理异常：key=%r, status=%r, keys=%r", None, status, response_template_keys_str[:120])
+                        logger.warning(
+                            "[VersatileInterruptRail] response_template 处理异常："
+                            "key=%r, status=%r, keys=%r",
+                            None, status, response_template_keys_str[:120],
+                        )
                 else:
-                    logger.warning("[VersatileInterruptRail] response_template 处理异常：key=%r, status=%r, keys=%r", None, status, response_template_keys_str[:120])
+                    logger.warning(
+                        "[VersatileInterruptRail] response_template 处理异常："
+                        "key=%r, status=%r, keys=%r",
+                        None, status, response_template_keys_str[:120],
+                    )
             except ValueError:
-                logger.warning("[VersatileInterruptRail] response_template 处理异常：key=%r, status=%r, keys=%r", None, status, response_template_keys_str[:120])
+                logger.warning(
+                    "[VersatileInterruptRail] response_template 处理异常："
+                    "key=%r, status=%r, keys=%r",
+                    None, status, response_template_keys_str[:120],
+                )
 
 
         # 非中断话术提示：脚本可在 normalized 中注入 ui_notice，
@@ -299,7 +321,8 @@ class VersatileInterruptRail(BaseInterruptRail):
                         # 中断话术：走 response_template 机制，由 agent_stream() 末尾直接 yield InterruptStartEvent
                         ctx.session.update_state({"response_template": notice_text})
                         logger.info(
-                            f"[VersatileInterruptRail] ui_notice 中断话术：event={notice_event!r}, key={notice_key!r}, text={notice_text!r}"
+                            f"[VersatileInterruptRail] ui_notice 中断话术："
+                            f"event={notice_event!r}, key={notice_key!r}, text={notice_text!r}"
                         )
                     else:
                         # 非中断话术（tool_end / todo_end）：走 write_stream 机制
@@ -314,7 +337,8 @@ class VersatileInterruptRail(BaseInterruptRail):
                                 },
                             ))
                             logger.info(
-                                f"[VersatileInterruptRail] ui_notice 直发：event={notice_event!r}, key={notice_key!r}, text={notice_text!r}"
+                                f"[VersatileInterruptRail] ui_notice 直发："
+                                f"event={notice_event!r}, key={notice_key!r}, text={notice_text!r}"
                             )
                         except Exception as exc:
                             logger.warning(
@@ -322,7 +346,8 @@ class VersatileInterruptRail(BaseInterruptRail):
                             )
                 else:
                     logger.warning(
-                        f"[VersatileInterruptRail] ui_notice 丢弃：event={notice_event!r}, key={notice_key!r}, has_text={bool(notice_text)}"
+                        f"[VersatileInterruptRail] ui_notice 丢弃："
+                        f"event={notice_event!r}, key={notice_key!r}, has_text={bool(notice_text)}"
                     )
 
         # 方案 A 配套：cascade resume 完成时设置 flag，让本 rail 的 after_tool_call
@@ -341,9 +366,13 @@ class VersatileInterruptRail(BaseInterruptRail):
                 ctx.session.update_state({
                     "history_info": normalized["history_info"],
                 })
+            history_info_desc = (
+                'persisted:' + str(normalized['history_info'])
+                if has_history_info else 'not in result'
+            )
             logger.info(
                 f"[VersatileInterruptRail] persistence check: "
-                f"history_info={'persisted:' + str(normalized['history_info']) if has_history_info else 'not in result'}"
+                f"history_info={history_info_desc}"
             )
 
         # ═══════════════════════════════════════════════════════════════════════════
@@ -659,21 +688,33 @@ class VersatileInterruptRail(BaseInterruptRail):
     @staticmethod
     def _extract_business_data(cascade_result) -> dict:
         if not isinstance(cascade_result, dict):
-            logger.info(f"[VersatileInterruptRail] _extract_business_data: cascade_result is not dict, type={type(cascade_result)}")
+            logger.info(
+                f"[VersatileInterruptRail] _extract_business_data: "
+                f"cascade_result is not dict, type={type(cascade_result)}"
+            )
             return {}
 
         workflow_result = cascade_result.get("workflow_result")
-        logger.info(f"[VersatileInterruptRail] _extract_business_data: workflow_result type={type(workflow_result)}, value={str(workflow_result)[:200]}")
+        logger.info(
+            f"[VersatileInterruptRail] _extract_business_data: "
+            f"workflow_result type={type(workflow_result)}, value={str(workflow_result)[:200]}"
+        )
         
         if workflow_result is not None:
             if isinstance(workflow_result, dict):
-                logger.info(f"[VersatileInterruptRail] _extract_business_data: returning workflow_result dict, keys={list(workflow_result.keys())}")
+                logger.info(
+                    f"[VersatileInterruptRail] _extract_business_data: "
+                    f"returning workflow_result dict, keys={list(workflow_result.keys())}"
+                )
                 return workflow_result
             if isinstance(workflow_result, str):
                 try:
                     parsed = json.loads(workflow_result)
                     if isinstance(parsed, dict):
-                        logger.info(f"[VersatileInterruptRail] _extract_business_data: parsed workflow_result dict, keys={list(parsed.keys())}")
+                        logger.info(
+                            f"[VersatileInterruptRail] _extract_business_data: "
+                            f"parsed workflow_result dict, keys={list(parsed.keys())}"
+                        )
                         return parsed
                 except ValueError as e:
                     logger.info(f"[VersatileInterruptRail] _extract_business_data: json parse error={e}")
@@ -686,7 +727,10 @@ class VersatileInterruptRail(BaseInterruptRail):
             for key, value in cascade_result.items()
             if key not in ("node_type", "node_name")
         }
-        logger.info(f"[VersatileInterruptRail] _extract_business_data: returning filtered cascade_result, keys={list(result.keys())}")
+        logger.info(
+            f"[VersatileInterruptRail] _extract_business_data: "
+            f"returning filtered cascade_result, keys={list(result.keys())}"
+        )
         return result
 
     @staticmethod

@@ -17,14 +17,14 @@ def test_lite_todo_tools_returns_single_tool():
     assert tools[0].card.name == "lite_todo_write"
 
 
-def test_TOOLS_contains_lite_todo_write():
+def test_tools_contains_lite_todo_write():
     from EDPAgent.tool import TOOLS
 
     names = {t.card.name for t in TOOLS}
     assert "lite_todo_write" in names
 
 
-def test_TOOLS_does_not_contain_legacy_todolist_tools():
+def test_tools_does_not_contain_legacy_todolist_tools():
     """Legacy 3 tools (todolist_create / todolist_modify / todolist_query)
     must be gone from registration after Phase 1.
     """
@@ -37,7 +37,7 @@ def test_TOOLS_does_not_contain_legacy_todolist_tools():
     )
 
 
-def test_TOOLS_keeps_business_tools():
+def test_tools_keeps_business_tools():
     """ask_user / call_mcp / call_versatile must still be registered."""
     from EDPAgent.tool import TOOLS
 
@@ -52,7 +52,8 @@ def test_TOOLS_keeps_business_tools():
 class TestBuildToolsScenarioRegistration:
     """Test build_tools() with scenario_tools parameter."""
 
-    def test_main_agent_scenario(self):
+    @staticmethod
+    def test_main_agent_scenario():
         """TC-18: 主 Agent 场景注册 call_multiagent + 通用工具"""
         from EDPAgent.tool import build_tools
 
@@ -70,7 +71,8 @@ class TestBuildToolsScenarioRegistration:
         # 不应包含子 Agent 专属工具
         assert "call_multiversatile" not in names
 
-    def test_sub_agent_scenario(self):
+    @staticmethod
+    def test_sub_agent_scenario():
         """TC-19: 子 Agent 场景注册 call_multiversatile + 通用工具"""
         from EDPAgent.tool import build_tools
 
@@ -88,7 +90,8 @@ class TestBuildToolsScenarioRegistration:
         # 不应包含主 Agent 专属工具
         assert "call_multiagent" not in names
 
-    def test_common_tools_always_registered(self):
+    @staticmethod
+    def test_common_tools_always_registered():
         """TC-20: 通用工具在所有场景下始终注册"""
         from EDPAgent.tool import build_tools
 
@@ -109,7 +112,8 @@ class TestBuildToolsScenarioRegistration:
         names_none = {t.card.name for t in tools_none}
         assert common_names.issubset(names_none)
 
-    def test_coexistence_multiagent(self):
+    @staticmethod
+    def test_coexistence_multiagent():
         """TC-21: call_versatile 与 call_multiagent 共存"""
         from EDPAgent.tool import build_tools
 
@@ -123,7 +127,8 @@ class TestBuildToolsScenarioRegistration:
         multiagent_ids = {t.card.id for t in tools if t.card.name == "call_multiagent"}
         assert versatile_ids != multiagent_ids
 
-    def test_coexistence_multiversatile(self):
+    @staticmethod
+    def test_coexistence_multiversatile():
         """TC-22: call_versatile 与 call_multiversatile 共存"""
         from EDPAgent.tool import build_tools
 

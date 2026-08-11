@@ -65,7 +65,7 @@ def _resolve_decrypt() -> Callable[[str], str]:
     ]
     for p in candidates:
         if (p / "common" / "crypto.py").exists():
-            sys.path.insert(0, str(p))
+            sys.path.append(str(p))
             try:
                 from common.crypto import decrypt_config_value  # type: ignore
                 return decrypt_config_value
@@ -211,8 +211,8 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
     raw_api_key = os.environ.get("PLANNING_AGENT_MODEL_API_KEY", "")
     required = {
         "base_url": os.environ.get("PLANNING_AGENT_MODEL_BASE_URL", ""),
-        "api_key":  decrypt(raw_api_key) if raw_api_key else "",
-        "model":    os.environ.get("PLANNING_AGENT_MODEL_NAME", ""),
+        "api_key": decrypt(raw_api_key) if raw_api_key else "",
+        "model": os.environ.get("PLANNING_AGENT_MODEL_NAME", ""),
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
@@ -223,7 +223,7 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
             "     PLANNING_AGENT_MODEL_API_KEY\n"
             "     PLANNING_AGENT_MODEL_NAME"
         )
-        raise SystemExit(2)
+        raise RuntimeError(f"missing required environment variables: {missing}")
 
     # token / user_id（成对校验，与 config.py 行为一致）
     raw_token = os.environ.get("PLANNING_AGENT_MODEL_TOKEN", "")
@@ -233,14 +233,14 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
             "❌ PLANNING_AGENT_MODEL_TOKEN 已设置但 PLANNING_AGENT_MODEL_TOKEN_HEADER 缺失。\n"
             "   生产环境 EDPAgent 在这种情况下会启动失败，脚本同样不允许。"
         )
-        raise SystemExit(2)
+        raise RuntimeError("PLANNING_AGENT_MODEL_TOKEN set but PLANNING_AGENT_MODEL_TOKEN_HEADER missing")
     user_id = os.environ.get("PLANNING_AGENT_MODEL_USER_ID", "")
     user_id_header = os.environ.get("PLANNING_AGENT_MODEL_USER_ID_HEADER", "")
     if user_id and not user_id_header:
         logger.error(
             "❌ PLANNING_AGENT_MODEL_USER_ID 已设置但 PLANNING_AGENT_MODEL_USER_ID_HEADER 缺失。"
         )
-        raise SystemExit(2)
+        raise RuntimeError("PLANNING_AGENT_MODEL_USER_ID set but PLANNING_AGENT_MODEL_USER_ID_HEADER missing")
 
     # extra headers（JSON dict）
     extra_raw = os.environ.get("PLANNING_AGENT_MODEL_EXTRA_HEADERS", "")
@@ -262,11 +262,11 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
     return {
         **required,
         "timeout": float(os.environ.get("PLANNING_AGENT_MODEL_TIMEOUT", "120")),
-        "token":          decrypt(raw_token) if raw_token else "",
-        "token_header":   token_header,
-        "user_id":        user_id,
+        "token": decrypt(raw_token) if raw_token else "",
+        "token_header": token_header,
+        "user_id": user_id,
         "user_id_header": user_id_header,
-        "extra_headers":  extra_headers,
+        "extra_headers": extra_headers,
     }
 
 
@@ -291,7 +291,7 @@ def _build_headers(env: dict) -> dict[str, str]:
 
 # ── 单次调用 ───────────────────────────────────────────────────────────────
 
-def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
+def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,  # pylint: disable=huawei-too-many-arguments
                case_name: str, idx: int) -> dict[str, Any]:
     body = {
         "model": env["model"],
@@ -304,7 +304,7 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
         body["tools"] = _TOOLS
         body["tool_choice"] = "auto"
 
-    url = env["base_url"].rstrip("/") + "/chat/completions"
+    url = os.path.join(env["base_url"].rstrip("/"), "chat/completions")
     started = time.monotonic()
     try:
         r = httpx.post(url, json=body, headers=headers, timeout=env["timeout"])
@@ -314,14 +314,14 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
         except Exception:
             data = {"_raw_text": r.text, "_status": r.status_code}
     except Exception as e:
-        return {"ok": False, "exception": repr(e), "elapsed_ms": int((time.monotonic()-started)*1000)}
+        return {"ok": False, "exception": repr(e), "elapsed_ms": int((time.monotonic() - started) * 1000)}
 
     if r.status_code != 200:
         # HTTP 异常：dump 整段
         path = dump_dir / f"{case_name}-{idx}-http{r.status_code}.json"
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         return {"ok": False, "http_status": r.status_code, "dump": str(path),
-                "elapsed_ms": int(elapsed*1000)}
+                "elapsed_ms": int(elapsed * 1000)}
 
     # 拆解 OpenAI-shape 响应
     choices = data.get("choices") or [{}]
@@ -361,7 +361,7 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
 
 # ── 主流程 ─────────────────────────────────────────────────────────────────
 
-def _run_case(env: dict, case_name: str, case: dict, runs: int,
+def _run_case(env: dict, case_name: str, case: dict, runs: int,  # pylint: disable=huawei-too-many-arguments
               dump_dir: Path, headers: dict) -> int:
     logger.info(f"\n{'='*78}")
     logger.info(f"Case: {case_name} — {case['desc']}")

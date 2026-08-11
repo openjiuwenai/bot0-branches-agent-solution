@@ -58,12 +58,15 @@ def start_http_request_span(method: str, route: str, session_id: str,
 
 
 @contextmanager
-def start_versatile_adapter_span(query_intent: str, query_description: str,
-                                  session_id: str,
-                                  dispatch_mode: str = "single",
-                                  workflow_id: str = "",
-                                  target_agent: str = "",
-                                  sub_task_path: str = ""):
+def start_versatile_adapter_span(  # pylint: disable=huawei-too-many-arguments
+    query_intent: str,
+    query_description: str,
+    session_id: str,
+    dispatch_mode: str = "single",
+    workflow_id: str = "",
+    target_agent: str = "",
+    sub_task_path: str = "",
+):
     """创建 service.versatile_adapter span（CLIENT），记录 VA 调用。
 
     单次调用（_call_versatile_adapter）和工作流并行调度（_drive_workflow_va）
@@ -96,9 +99,15 @@ def start_versatile_adapter_span(query_intent: str, query_description: str,
 
 
 @contextmanager
-def start_sub_agent_dispatch_span(entity_id: str, entity_name: str, query: str,
-                                   sub_agent_url: str, sub_task_path: str,
-                                   context_id: str, session_id: str):
+def start_sub_agent_dispatch_span(  # pylint: disable=huawei-too-many-arguments
+    entity_id: str,
+    entity_name: str,
+    query: str,
+    sub_agent_url: str,
+    sub_task_path: str,
+    context_id: str,
+    session_id: str,
+):
     """创建 sub_agent.dispatch span（CLIENT），记录子 Agent 调用。
 
     在 remote_agent_handler.py 的 _drive_sub_agent 入口处调用，

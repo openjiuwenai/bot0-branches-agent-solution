@@ -30,7 +30,8 @@ class TestToolDataChannel:
     def channel(self, mock_session):
         return ToolDataChannel(mock_session)
     
-    def test_store_and_get(self, channel):
+    @staticmethod
+    def test_store_and_get(channel):
         """Test storing and retrieving data."""
         test_data = {"products": ["WM001", "WM002"], "bankCardNumber": "6605", "total": 1000.0}
         channel.store("test_key", test_data)
@@ -49,7 +50,8 @@ class TestToolDataChannel:
         channel.store("invalid_key", "not_a_dict")
         assert channel.get("invalid_key") is None
     
-    def test_store_overwrite(self, channel):
+    @staticmethod
+    def test_store_overwrite(channel):
         """Test overwriting existing key."""
         channel.store("key", {"value": 1})
         channel.store("key", {"value": 2})
@@ -69,7 +71,8 @@ class TestToolDataChannel:
         all_data = channel.get_all()
         assert all_data == {"key1": {"a": 1}, "key2": {"b": 2}}
     
-    def test_get_keys(self, channel):
+    @staticmethod
+    def test_get_keys(channel):
         """Test getting all keys."""
         channel.store("key1", {"a": 1})
         channel.store("key2", {"b": 2})

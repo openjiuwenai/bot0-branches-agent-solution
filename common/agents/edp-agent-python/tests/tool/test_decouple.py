@@ -99,7 +99,8 @@ def _agent_ns() -> dict:
 
 class TestScenarioLoading:
 
-    def test_tc01_load_real_scenario(self):
+    @staticmethod
+    def test_tc01_load_real_scenario():
         from EDPAgent.agent_rule import load_scenario_config
         target = (
             Path(__file__).resolve().parents[1].parent
@@ -115,18 +116,21 @@ class TestScenarioLoading:
             "product_select_skill", "fund_planning_skill",
         }
 
-    def test_tc02_md_priority_over_yaml(self, tmp_path):
+    @staticmethod
+    def test_tc02_md_priority_over_yaml(tmp_path):
         from EDPAgent.agent_rule import find_scenario_file
         (tmp_path / "AgentRule_demo.md").write_text("---\nname: demo\n---\n", encoding="utf-8")
         (tmp_path / "AgentRule_demo.yaml").write_text("name: demo\n", encoding="utf-8")
         assert find_scenario_file(tmp_path, "AgentRule_demo").suffix == ".md"
 
-    def test_tc03_not_found_raises(self, tmp_path):
+    @staticmethod
+    def test_tc03_not_found_raises(tmp_path):
         from EDPAgent.agent_rule import find_scenario_file
         with pytest.raises(FileNotFoundError):
             find_scenario_file(tmp_path, "AgentRule_missing")
 
-    def test_tc28_yaml_only_fallback(self, tmp_path):
+    @staticmethod
+    def test_tc28_yaml_only_fallback(tmp_path):
         from EDPAgent.agent_rule import find_scenario_file
         (tmp_path / "AgentRule_y.yaml").write_text("name: y\n", encoding="utf-8")
         assert find_scenario_file(tmp_path, "AgentRule_y").suffix == ".yaml"
@@ -136,7 +140,8 @@ class TestScenarioLoading:
 
 class TestOnDemandRegistration:
 
-    def test_tc04_required_skills_from_scenario(self):
+    @staticmethod
+    def test_tc04_required_skills_from_scenario():
         from EDPAgent.agent_rule import ScenarioConfig, ScenarioScopeConfig, TodoStepConfig
         scenario = ScenarioConfig(
             name="test",
@@ -150,26 +155,32 @@ class TestOnDemandRegistration:
         result = _agent_ns()["_get_required_skills_for_scenario"](scenario)
         assert result == {"skill_a", "skill_b", "skill_c"}
 
-    def test_tc05_required_skills_none_scenario(self):
+    @staticmethod
+    def test_tc05_required_skills_none_scenario():
         assert _agent_ns()["_get_required_skills_for_scenario"](None) == set()
 
-    def test_tc06_validate_all_exist(self, tmp_path):
+    @staticmethod
+    def test_tc06_validate_all_exist(tmp_path):
         _build_skills_root(tmp_path, skills=["skill_a", "skill_b"])
         _agent_ns()["_validate_scenario_skills"](tmp_path / "skills", {"skill_a", "skill_b"})
 
-    def test_tc07_validate_missing_raises(self, tmp_path):
+    @staticmethod
+    def test_tc07_validate_missing_raises(tmp_path):
         _build_skills_root(tmp_path, skills=["skill_a"])
         with pytest.raises(RuntimeError, match="skill_b"):
             _agent_ns()["_validate_scenario_skills"](tmp_path / "skills", {"skill_a", "skill_b"})
 
-    def test_tc08_placeholder_only_true(self):
+    @staticmethod
+    def test_tc08_placeholder_only_true():
         assert _agent_ns()["_is_placeholder_only"]({"_placeholder_"}) is True
 
-    def test_tc09_placeholder_only_false(self):
+    @staticmethod
+    def test_tc09_placeholder_only_false():
         assert _agent_ns()["_is_placeholder_only"]({"_placeholder_", "skill_a"}) is False
         assert _agent_ns()["_is_placeholder_only"]({"skill_a"}) is False
 
-    def test_tc10_placeholder_only_empty(self):
+    @staticmethod
+    def test_tc10_placeholder_only_empty():
         assert _agent_ns()["_is_placeholder_only"](set()) is False
 
 
@@ -177,14 +188,16 @@ class TestOnDemandRegistration:
 
 class TestRegisterScenarioSkills:
 
-    def test_tc11_local_path_registration(self, tmp_path):
+    @staticmethod
+    def test_tc11_local_path_registration(tmp_path):
         skills_root = _build_skills_root(tmp_path, skills=["skill_a"])
         agent = _FakeAgent()
         count = asyncio.run(_agent_ns()["_register_scenario_skills"](agent, skills_root, {"skill_a"}))
         assert count == 1
         assert agent.registered_paths == [str(skills_root / "skill_a")]
 
-    def test_tc12_remote_prefix_registration(self, tmp_path):
+    @staticmethod
+    def test_tc12_remote_prefix_registration(tmp_path):
         skills_root = _build_skills_root(tmp_path, skills=["skill_a", "skill_b", "skill_c"])
         agent = _FakeAgent()
         count = asyncio.run(_agent_ns()["_register_scenario_skills"](
@@ -194,7 +207,8 @@ class TestRegisterScenarioSkills:
         assert count == 2
         assert sorted(agent.registered_paths) == ["/tmp/skills/skill_a", "/tmp/skills/skill_c"]
 
-    def test_tc13_trailing_slash(self, tmp_path):
+    @staticmethod
+    def test_tc13_trailing_slash(tmp_path):
         skills_root = _build_skills_root(tmp_path, skills=["skill_a"])
         agent = _FakeAgent()
         count = asyncio.run(_agent_ns()["_register_scenario_skills"](
@@ -209,24 +223,28 @@ class TestRegisterScenarioSkills:
 
 class TestScriptsConfig:
 
-    def test_tc14_two_level_lookup(self):
+    @staticmethod
+    def test_tc14_two_level_lookup():
         from EDPAgent.agent_rule import ScriptsConfig
         cfg = ScriptsConfig(extra_scripts={"product_select_intro": "ok"})
         assert cfg.get_response_template("tool_start") == "\u6b63\u5728\u8c03\u7528\uff1a{tool_name}"
         assert cfg.get_response_template("product_select_intro") == "ok"
 
-    def test_tc15_business_keys_not_polluting_schema(self):
+    @staticmethod
+    def test_tc15_business_keys_not_polluting_schema():
         from EDPAgent.agent_rule import ScriptsConfig
         fields = set(ScriptsConfig.model_fields.keys())
         assert "product_select_intro" not in fields
         assert "extra_scripts" in fields
 
-    def test_tc16_default_fallback(self):
+    @staticmethod
+    def test_tc16_default_fallback():
         from EDPAgent.agent_rule import ScriptsConfig
         cfg = ScriptsConfig()
         assert cfg.get_response_template("missing_key", "FALLBACK") == "FALLBACK"
 
-    def test_tc17_collect_skill_scripts(self, tmp_path):
+    @staticmethod
+    def test_tc17_collect_skill_scripts(tmp_path):
         from EDPAgent.agent_rule import collect_skill_scripts
         _build_skills_root(tmp_path, skills=["skill_a"],
                            scripts_map={"skill_a": {"intro": "hi", "confirm": "ok"}})
@@ -234,7 +252,8 @@ class TestScriptsConfig:
         assert result.get("intro") == "hi"
         assert result.get("confirm") == "ok"
 
-    def test_tc18_collect_skill_scripts_no_scripts(self, tmp_path):
+    @staticmethod
+    def test_tc18_collect_skill_scripts_no_scripts(tmp_path):
         from EDPAgent.agent_rule import collect_skill_scripts
         _build_skills_root(tmp_path, skills=["skill_a"])
         result = collect_skill_scripts(tmp_path / "skills")
@@ -245,7 +264,8 @@ class TestScriptsConfig:
 
 class TestConfigModels:
 
-    def test_tc19_deprecation_warning(self, tmp_path):
+    @staticmethod
+    def test_tc19_deprecation_warning(tmp_path):
         from EDPAgent.agent_rule import load_agent_rule
         rule = tmp_path / "AgentRule.md"
         rule.write_text(
@@ -259,16 +279,19 @@ class TestConfigModels:
         deprec = [w for w in caught if issubclass(w.category, DeprecationWarning)]
         assert len(deprec) >= 1
 
-    def test_tc20_enable_resume_scripts_default(self):
+    @staticmethod
+    def test_tc20_enable_resume_scripts_default():
         from EDPAgent.agent_rule import FixedScriptsConfig
         assert FixedScriptsConfig().enable_resume_scripts is True
 
-    def test_tc21_configure_steps_empty(self):
+    @staticmethod
+    def test_tc21_configure_steps_empty():
         from EDPAgent.tool.lite_todo.models import configure_steps
         with pytest.raises(ValueError):
             configure_steps([])
 
-    def test_tc22_configure_steps_duplicate_step_id(self):
+    @staticmethod
+    def test_tc22_configure_steps_duplicate_step_id():
         from EDPAgent.tool.lite_todo.models import configure_steps
         with pytest.raises(ValueError):
             configure_steps([
@@ -276,7 +299,8 @@ class TestConfigModels:
                 {"step_id": 1, "content": "b", "skill": "s2"},
             ])
 
-    def test_tc23_configure_steps_negative_step_id(self):
+    @staticmethod
+    def test_tc23_configure_steps_negative_step_id():
         from EDPAgent.tool.lite_todo.models import configure_steps
         with pytest.raises(ValueError):
             configure_steps([{"step_id": -1, "content": "a", "skill": "s"}])
@@ -286,7 +310,8 @@ class TestConfigModels:
 
 class TestPrompt:
 
-    def test_tc24_build_system_prompt_with_scenario(self):
+    @staticmethod
+    def test_tc24_build_system_prompt_with_scenario():
         from EDPAgent.prompt import build_system_prompt
         from EDPAgent.agent_rule import ScenarioConfig, ScenarioScopeConfig, TodoStepConfig
         scenario = ScenarioConfig(
@@ -306,7 +331,8 @@ class TestPrompt:
 
 class TestZipFilter:
 
-    def test_tc25_zip_filters_scenarios(self, tmp_path):
+    @staticmethod
+    def test_tc25_zip_filters_scenarios(tmp_path):
         skills_root = _build_skills_root(tmp_path, skills=["skill_a"],
                                           scenarios=["AgentRule_x.md"])
         out_zip = tmp_path / "test.zip"
@@ -322,7 +348,8 @@ class TestZipFilter:
 
 class TestDataModels:
 
-    def test_tc26_scenario_config_full_construction(self):
+    @staticmethod
+    def test_tc26_scenario_config_full_construction():
         from EDPAgent.agent_rule import (
             ScenarioConfig, ScenarioScopeConfig, TodoStepConfig,
             ScenarioSkillRouting, ScenarioArchitectureConfig,
@@ -341,12 +368,14 @@ class TestDataModels:
         assert len(cfg.todolist_steps) == 1
         assert len(cfg.skill_routing) == 1
 
-    def test_tc27_agent_rule_config_scope_defaults(self):
+    @staticmethod
+    def test_tc27_agent_rule_config_scope_defaults():
         from EDPAgent.agent_rule import AgentRuleConfig
         cfg = AgentRuleConfig()
         assert cfg.scope.allowed == ""
 
-    def test_tc29_required_skills_from_architecture(self):
+    @staticmethod
+    def test_tc29_required_skills_from_architecture():
         from EDPAgent.agent_rule import ScenarioConfig, ScenarioScopeConfig, ScenarioArchitectureConfig
         scenario = ScenarioConfig(
             name="arch_test",

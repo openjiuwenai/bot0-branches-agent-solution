@@ -19,12 +19,12 @@ import tempfile
 import zipfile
 from dataclasses import asdict, is_dataclass
 from typing import Any, AsyncGenerator, Optional
-
-from loguru import logger
-from openjiuwen.core.single_agent.interrupt.state import INTERRUPTION_KEY
 import uuid
 from datetime import datetime, timezone
 import time
+
+from loguru import logger
+from openjiuwen.core.single_agent.interrupt.state import INTERRUPTION_KEY
 import httpx
 
 from .agent_rule import (
@@ -77,8 +77,9 @@ from common.logger import (
     build_http_request_tag_context,
     build_http_trace,
     to_logger,
-    get_real_ip, Level, ResultEnum,TagObservation,ObservationType
+    get_real_ip, Level, ResultEnum, TagObservation, ObservationType
 )
+
 
 def _log_stream_payload(evt: AgentEvent) -> None:
     """在每次 yield AgentEvent 前打一条日志（对齐抓包的 stream payload 行）。"""
@@ -1086,9 +1087,14 @@ async def _agent_event_stream(
     if mode_to_use == ThinkChunkMode.FIXED_SCRIPT:
         cfg = scripts_config_data.think_chunk_fixed_scripts
         is_resume = cascade_result is not None
+        scenario_query_patterns = (
+            _agent_rule.active_scenario.query_patterns
+            if _agent_rule and _agent_rule.active_scenario
+            else None
+        )
         selected = _select_fixed_scripts(
             query, cfg,
-            scenario_query_patterns=_agent_rule.active_scenario.query_patterns if _agent_rule and _agent_rule.active_scenario else None,
+            scenario_query_patterns=scenario_query_patterns,
             is_resume=is_resume,
             is_first_thinking_round=True,
         )
@@ -1756,7 +1762,11 @@ class _StreamProcessor:
                             "status": t.get("status", "pending"),
                             "tool_name": "lite_todo_write",
                             "skill_name": skill_map.get(t.get("step_id"), "<未知技能>"),
-                            "content": f"{visible_pos}.{canonical_map.get(t.get('step_id'), '<未知步骤>')}（{TODO_STATUS_CN.get(t.get('status', 'pending'), t.get('status', 'pending'))}）"
+                            "content": (
+                                f"{visible_pos}."
+                                f"{canonical_map.get(t.get('step_id'), '<未知步骤>')}（"
+                                f"{TODO_STATUS_CN.get(t.get('status', 'pending'), t.get('status', 'pending'))}）"
+                            ),
                         }
                         for visible_pos, t in enumerate(todos, start=1)
                     ]},

@@ -1,4 +1,5 @@
 """Unit tests for MultiagentInterruptRail (TC-09~TC-13, TC-28~TC-31)."""
+# pylint: disable=protected-access
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -210,7 +211,8 @@ class TestMultiagentInterruptRail:
 class TestExtractBusinessData:
     """Test _extract_business_data static method."""
 
-    def test_sub_agent_results_only(self):
+    @staticmethod
+    def test_sub_agent_results_only():
         """仅 sub_agent_results"""
         cascade = {
             "sub_agent_results": [{"entity_id": "A", "status": "done"}]
@@ -233,14 +235,16 @@ class TestExtractBusinessData:
         assert "concurrency_limit" in data
         assert data["concurrency_limit"] == 1
 
-    def test_workflow_result_dict(self):
+    @staticmethod
+    def test_workflow_result_dict():
         """兼容 workflow_result（dict）"""
         cascade = {"workflow_result": {"products": ["WM001"]}}
         data = MultiagentInterruptRail._extract_business_data(cascade)
         assert "sub_agent_results" in data
         assert len(data["sub_agent_results"]) == 1
 
-    def test_workflow_result_list(self):
+    @staticmethod
+    def test_workflow_result_list():
         """兼容 workflow_result（list）"""
         cascade = {"workflow_result": [{"a": 1}, {"b": 2}]}
         data = MultiagentInterruptRail._extract_business_data(cascade)
@@ -252,7 +256,8 @@ class TestExtractBusinessData:
         data = MultiagentInterruptRail._extract_business_data("not a dict")
         assert data == {}
 
-    def test_no_known_fields(self):
+    @staticmethod
+    def test_no_known_fields():
         """无已知字段时返回原始数据（过滤内部字段）"""
         cascade = {"custom_data": "value", "node_type": "End", "node_name": "test"}
         data = MultiagentInterruptRail._extract_business_data(cascade)

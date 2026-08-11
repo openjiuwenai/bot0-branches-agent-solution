@@ -10,6 +10,8 @@ sentinel values where the code under test depends on identity (e.g.
 EDPAgent owns its local event schema in `EDPAgent.events`; tests keep
 runtime-only `common.*` modules stubbed only where rails need them.
 """
+# pylint: disable=protected-access
+
 from __future__ import annotations
 
 import importlib.abc
@@ -34,7 +36,7 @@ _A2A_SERVICE_DIR = _REPO_ROOT / "agent-runtime" / "applications" / "a2a_service"
 
 for p in (str(_COMMUNITY_DIR), str(_A2A_SERVICE_DIR)):
     if p not in sys.path:
-        sys.path.insert(0, p)
+        sys.path.append(p)
 
 
 # ── openjiuwen + common.* auto-stub via meta path ─────────
@@ -80,7 +82,11 @@ class _AutoStubFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         # Make attribute access lazy: any unset name returns a MagicMock so
         # `from x import Y` succeeds for unknown Y.
         mock = MagicMock(name=spec.name)
-        mod.__getattr__ = lambda name, _m=mock: getattr(_m, name)  # type: ignore[attr-defined]
+
+        def _mod_getattr(name, _m=mock):
+            return getattr(_m, name)
+
+        mod.__getattr__ = _mod_getattr  # type: ignore[attr-defined]
         mod.__path__ = []  # mark as package so submodule imports keep going
         return mod
 
@@ -100,13 +106,17 @@ def _make_module(name: str) -> types.ModuleType:
         # would turn StreamSchemas into a mock object and crash pydantic typing
         # at class definition time.
         try:
-            __import__(name)
+            importlib.import_module(name)
             return sys.modules[name]
         except ImportError:
             pass
         mod = types.ModuleType(name)
         mock = MagicMock(name=name)
-        mod.__getattr__ = lambda attr, _m=mock: getattr(_m, attr)  # type: ignore[attr-defined]
+
+        def _mod_getattr(attr, _m=mock):
+            return getattr(_m, attr)
+
+        mod.__getattr__ = _mod_getattr  # type: ignore[attr-defined]
         mod.__path__ = []
         sys.modules[name] = mod
     return mod
@@ -149,7 +159,11 @@ def _install_real_sentinels() -> None:
     # implementation is used — no sentinel needed.
 
     crypto_mod = _make_module("common.crypto")
-    crypto_mod.decrypt_config_value = lambda v: v
+
+    def _decrypt_config_value(v):
+        return v
+
+    crypto_mod.decrypt_config_value = _decrypt_config_value
 
     # common.logger 真实实现要 fastapi（runtime 包），unit-test venv 没装。
     # 这里强制注入 stub —— 即便真模块在 a2a_service/common/logger.py 里能找到，
@@ -161,6 +175,7 @@ def _install_real_sentinels() -> None:
     logger_mod.TagObservation = MagicMock(name="common.logger.TagObservation")
     logger_mod.ObservationType = MagicMock(name="common.logger.ObservationType")
     logger_mod.Level = MagicMock(name="common.logger.Level")
+
     def _stub_to_logger(*args, **kwargs):
         from loguru import logger
         msg = kwargs.get('message', {})
@@ -253,8 +268,15 @@ def fake_session():
     state: dict[str, Any] = {}
     sess = MagicMock(name="AgentSession")
     sess.session_id = "test-conv"
-    sess.get_state.side_effect = lambda key: state.get(key)
-    sess.update_state.side_effect = lambda d: state.update(d)
+
+    def _get_state(key):
+        return state.get(key)
+
+    def _update_state(d):
+        state.update(d)
+
+    sess.get_state.side_effect = _get_state
+    sess.update_state.side_effect = _update_state
     sess.pre_run = AsyncMock()
     sess.write_stream = AsyncMock()
     sess._state = state

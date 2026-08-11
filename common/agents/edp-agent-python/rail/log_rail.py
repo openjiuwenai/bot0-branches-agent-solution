@@ -15,8 +15,9 @@ import time
 from pathlib import Path
 from datetime import datetime
 from typing import Any
-from loguru import logger
 
+from loguru import logger
+from openjiuwen.core.foundation.tool import Tool
 from openjiuwen.core.single_agent.rail.base import (
     AgentCallbackContext,
     AgentRail,
@@ -25,8 +26,6 @@ from openjiuwen.core.single_agent.rail.base import (
 from openjiuwen.core.single_agent.ability_manager import AbilityManager
 
 from common.logger import Extra, Tag, to_logger, TagObservation, ObservationType, Level
-
-from openjiuwen.core.foundation.tool import Tool
 
 
 class LogRail(AgentRail):
@@ -71,7 +70,8 @@ class LogRail(AgentRail):
         #     name="agent初始化",
         #     start_time=now,
         #     end_time=now,
-        #     input={"tool_list": list(map(lambda tool: tool.card.tool_info().model_dump(exclude_none=True), self.tools))},
+        #     input={"tool_list": list(map(lambda tool: tool.card.tool_info().model_dump(
+        #         exclude_none=True), self.tools))},
         # )
         #
         # trace_id = str(int(time.time() * 1000))
@@ -111,7 +111,7 @@ class LogRail(AgentRail):
             id=call_id,
             type=ObservationType.GENERATION,
             name=self.model_name,
-            start_time= datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            start_time=datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
             input={"messages": self._extract_model_text(ctx.inputs)},
         )
         to_logger(level=Level.INFO, message=llm_call_start, extra=Extra(tag=Tag.TAG_LLM_CALL_START, cost=0))
@@ -147,7 +147,7 @@ class LogRail(AgentRail):
             id=call_id,
             type=ObservationType.GENERATION,
             name=self.model_name,
-            end_time= datetime.fromtimestamp(end_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            end_time=datetime.fromtimestamp(end_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
             output=response.model_dump(),
             status_message=0,
             # cost_details={"first_token": 1}, 这里取不到值，在agent.py流式那里取
@@ -208,7 +208,7 @@ class LogRail(AgentRail):
                 f"[LogRail] before repair | name={getattr(tc, 'name', '?')} | "
                 f"args_len={len(args)} | args={args!r}"
             )
-            repaired = AbilityManager._repair_tool_arguments_json(args)
+            repaired = AbilityManager._repair_tool_arguments_json(args)  # pylint: disable=protected-access
             if not repaired or repaired == args:
                 logger.error(
                     f"[LogRail] FAILED to repair malformed tool_call arguments | "
@@ -261,8 +261,8 @@ class LogRail(AgentRail):
 
         to_logger(
             level=Level.INFO,
-            message= json.dumps({
-                "id":call_id,
+            message=json.dumps({
+                "id": call_id,
                 "type": "TOOL",
                 "start_time": datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                 "name": tool_name if tool_name is not None else "",
@@ -289,13 +289,15 @@ class LogRail(AgentRail):
             self._log_skill_call_end(ctx, tool_name)
         to_logger(
                 level=Level.INFO,
-                message= json.dumps({
-                    "id":call_id,
+                message=json.dumps({
+                    "id": call_id,
                     "type": "TOOL",
                     "end_time": datetime.fromtimestamp(end_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                     "name": tool_name if tool_name is not None else "",
-                    "output": getattr(tool_result, 'model_dump', lambda: getattr(tool_result, '__dict__',
-                                                                                 tool_result))() if tool_result is not None else {},
+                    "output": getattr(
+                        tool_result, 'model_dump',
+                        lambda: getattr(tool_result, '__dict__', tool_result),
+                    )() if tool_result is not None else {},
                     "status_message": 0,
                     "metadata": {},
                     "total_cost": duration_ms
@@ -316,13 +318,17 @@ class LogRail(AgentRail):
                 span.set_attribute("session.id", session_id)
                 if tool_result is not None:
                     output_data = getattr(tool_result, "data", None) or tool_result
-                    span.set_attribute("openjiuwen.agent.outputs", json.dumps(output_data, ensure_ascii=False, default=str))
+                    span.set_attribute(
+                        "openjiuwen.agent.outputs",
+                        json.dumps(output_data, ensure_ascii=False, default=str),
+                    )
         except ImportError:
             pass
 
     # ── Skill 调用日志相关常量 ─────────────────────────────────────
     SKILL_STATE_KEY = "_current_skill"
     TIMING_KEY = "_tool_start_time"
+
     def _log_skill_call_start(self, ctx, tool_name: str, tool_args: dict) -> None:
         """记录工具调用开始：检测 Skill 切换并输出 EXEC_LOG START 日志。"""
         conv_id = ctx.session.get_session_id()
@@ -343,7 +349,7 @@ class LogRail(AgentRail):
 
         to_logger(
             level=Level.INFO,
-            message= json.dumps({
+            message=json.dumps({
                 "id": call_id,
                 "start_time": datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                 "type": "SKILL",
@@ -365,7 +371,7 @@ class LogRail(AgentRail):
                 ctx.session.get_state(f"_skill_start_time_{tool_name}")
                 or time.time()
         )
-        call_id= ctx.session.get_state(f"_skill_call_id_{tool_name}")
+        call_id = ctx.session.get_state(f"_skill_call_id_{tool_name}")
         end_time = time.time()
         duration_ms = int((end_time - start_time) * 1000) if start_time else -1
         ctx.session.update_state({self.TIMING_KEY: None})
@@ -375,7 +381,7 @@ class LogRail(AgentRail):
         result_keys = list(tool_result.keys()) if isinstance(tool_result, dict) else None
         to_logger(
             level=Level.INFO,
-            message= json.dumps({
+            message=json.dumps({
                 "id": call_id,
                 "end_time": datetime.fromtimestamp(end_time).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                 "type": "SKILL",

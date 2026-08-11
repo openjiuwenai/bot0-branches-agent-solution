@@ -16,7 +16,7 @@ import pytest
 
 # 把 scripts/ 加 sys.path 让 import diag_llm 可行
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
-sys.path.insert(0, str(_SCRIPTS))
+sys.path.append(str(_SCRIPTS))
 
 
 @pytest.fixture(autouse=True)
@@ -98,7 +98,7 @@ def test_build_headers_extra_overrides_user_id():
 def test_load_env_exits_when_required_missing():
     from diag_llm import _load_env
     # 不 set required vars
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit):  # pylint: disable=avoid-using-exit
         _load_env(_identity)
 
 
@@ -108,7 +108,7 @@ def test_load_env_token_without_header_exits():
     _set_required()
     os.environ["PLANNING_AGENT_MODEL_TOKEN"] = "ent-tok"
     # 故意不 set TOKEN_HEADER
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit):  # pylint: disable=avoid-using-exit
         _load_env(_identity)
 
 
@@ -116,7 +116,7 @@ def test_load_env_user_id_without_header_exits():
     from diag_llm import _load_env
     _set_required()
     os.environ["PLANNING_AGENT_MODEL_USER_ID"] = "u-1"
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit):  # pylint: disable=avoid-using-exit
         _load_env(_identity)
 
 
@@ -168,6 +168,7 @@ def test_load_env_calls_decrypt_on_token_and_api_key():
     os.environ["PLANNING_AGENT_MODEL_TOKEN_HEADER"] = "X-Auth"
 
     seen: list[str] = []
+
     def _fake_decrypt(v: str) -> str:
         seen.append(v)
         return v.replace("ENCRYPTED:", "DECRYPTED:")

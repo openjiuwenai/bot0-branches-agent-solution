@@ -1,3 +1,4 @@
+# pylint: disable=huawei-invalid-name
 """
 EDPAgent — 企业动态规划智能体。
 

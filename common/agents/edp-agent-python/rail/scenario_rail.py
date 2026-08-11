@@ -25,7 +25,7 @@ _SCENARIO_RAIL_MAP = {
 }
 
 
-def build_rails(
+def build_rails(  # pylint: disable=huawei-too-many-arguments
     scenario_tools: list[str] | None = None,
     agent_rule=None,
     scripts_config: Optional[ScriptsConfig] = None,

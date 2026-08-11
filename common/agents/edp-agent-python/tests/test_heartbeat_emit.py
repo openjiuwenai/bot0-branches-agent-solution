@@ -3,6 +3,8 @@
 被测对象：EDPAgent.agent._emit_heartbeat
 心跳协议契约：HB-CONTRACT-1.0
 """
+# pylint: disable=protected-access
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -16,7 +18,8 @@ from EDPAgent.events import HeartbeatEvent
 class TestEmitHeartbeat:
     """_emit_heartbeat 函数单元测试。"""
 
-    def test_emit_initial_heartbeat(self):
+    @staticmethod
+    def test_emit_initial_heartbeat():
         """TC-HB-001: 主 Agent initial 心跳——返回 HeartbeatEvent，字段正确。"""
         hb = agent_mod._emit_heartbeat(
             "conv-001", "initial", "processing", is_sub_agent=False
@@ -28,7 +31,8 @@ class TestEmitHeartbeat:
         assert hb.data["status"] == "processing"
         assert hb.data["request_id"] == "conv-001"
 
-    def test_emit_end_heartbeat(self):
+    @staticmethod
+    def test_emit_end_heartbeat():
         """TC-HB-002: 主 Agent end 心跳——heartbeat_type=end, status=completed。"""
         hb = agent_mod._emit_heartbeat(
             "conv-001", "end", "completed", is_sub_agent=False
@@ -38,7 +42,8 @@ class TestEmitHeartbeat:
         assert hb.data["heartbeat_type"] == "end"
         assert hb.data["status"] == "completed"
 
-    def test_emit_heartbeat_sub_agent_returns_none(self):
+    @staticmethod
+    def test_emit_heartbeat_sub_agent_returns_none():
         """TC-HB-003: 子 Agent is_sub_agent=True——返回 None，不发送心跳。"""
         for hb_type in ("initial", "end", "normal"):
             hb = agent_mod._emit_heartbeat(
@@ -46,7 +51,8 @@ class TestEmitHeartbeat:
             )
             assert hb is None, f"is_sub_agent=True 时 heartbeat_type={hb_type} 应返回 None"
 
-    def test_heartbeat_contract_version(self):
+    @staticmethod
+    def test_heartbeat_contract_version():
         """TC-HB-004: contract_version 字段固定为 HB-CONTRACT-1.0。"""
         hb = agent_mod._emit_heartbeat(
             "conv-001", "initial", "processing", is_sub_agent=False
@@ -54,7 +60,8 @@ class TestEmitHeartbeat:
         assert hb is not None
         assert hb.data["contract_version"] == "HB-CONTRACT-1.0"
 
-    def test_heartbeat_source_field(self):
+    @staticmethod
+    def test_heartbeat_source_field():
         """TC-HB-005: source 字段固定为 edp_agent。"""
         hb = agent_mod._emit_heartbeat(
             "conv-001", "initial", "processing", is_sub_agent=False
@@ -62,7 +69,8 @@ class TestEmitHeartbeat:
         assert hb is not None
         assert hb.data["source"] == "edp_agent"
 
-    def test_heartbeat_timestamp_format(self):
+    @staticmethod
+    def test_heartbeat_timestamp_format():
         """TC-HB-006: timestamp 为 UTC ISO8601 格式（YYYY-MM-DDTHH:MM:SSZ）。"""
         hb = agent_mod._emit_heartbeat(
             "conv-001", "initial", "processing", is_sub_agent=False
@@ -77,7 +85,8 @@ class TestEmitHeartbeat:
         now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
         assert abs((now_utc - parsed).total_seconds()) < 5
 
-    def test_heartbeat_data_excludes_seq(self):
+    @staticmethod
+    def test_heartbeat_data_excludes_seq():
         """TC-HB-007: data 中不包含 seq 字段（seq 由 Runtime 出流层统一注入）。
 
         依据：技术方案 §3.3 —— "EDPAgent 侧构造 HeartbeatEvent 时不设 seq

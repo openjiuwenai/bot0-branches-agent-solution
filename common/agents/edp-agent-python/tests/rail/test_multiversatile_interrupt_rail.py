@@ -1,4 +1,5 @@
 """Unit tests for MultiversatileInterruptRail (TC-14~TC-17, TC-32~TC-39)."""
+# pylint: disable=protected-access
 from __future__ import annotations
 
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -161,7 +162,8 @@ class TestMultiversatileInterruptRail:
 class TestMapWorkflowFields:
     """Test _map_workflow_fields method."""
 
-    def test_basic_mapping(self):
+    @staticmethod
+    def test_basic_mapping():
         rail = MultiversatileInterruptRail()
         workflows = [
             {"query": "查询信息", "query_intent": "信息查询"},
@@ -175,7 +177,8 @@ class TestMapWorkflowFields:
         assert result[0]["workflow_id"] == "wf_001"
         assert result[1]["workflow_id"] == "wf_002"
 
-    def test_custom_workflow_id(self):
+    @staticmethod
+    def test_custom_workflow_id():
         """如果 workflow 已提供 workflow_id，则保留"""
         rail = MultiversatileInterruptRail()
         workflows = [
@@ -184,7 +187,8 @@ class TestMapWorkflowFields:
         result = rail._map_workflow_fields(workflows)
         assert result[0]["workflow_id"] == "custom_001"
 
-    def test_fallback_to_intent_key(self):
+    @staticmethod
+    def test_fallback_to_intent_key():
         """如果无 query_intent 但有 intent，使用 intent"""
         rail = MultiversatileInterruptRail()
         workflows = [
@@ -194,7 +198,8 @@ class TestMapWorkflowFields:
         assert result[0]["intent"] == "test_intent"
         assert result[0]["task_description"] == "test desc"
 
-    def test_non_dict_items_skipped(self):
+    @staticmethod
+    def test_non_dict_items_skipped():
         """非 dict 元素被跳过"""
         rail = MultiversatileInterruptRail()
         workflows = [
@@ -209,13 +214,15 @@ class TestMapWorkflowFields:
 class TestExtractBusinessData:
     """Test _extract_business_data static method."""
 
-    def test_workflows_field(self):
+    @staticmethod
+    def test_workflows_field():
         cascade = {"workflows": [{"workflow_id": "wf_001", "status": "done"}]}
         data = MultiversatileInterruptRail._extract_business_data(cascade)
         assert "workflows" in data
         assert len(data["workflows"]) == 1
 
-    def test_workflow_result_dict(self):
+    @staticmethod
+    def test_workflow_result_dict():
         cascade = {"workflow_result": {"workflow_id": "wf_001", "status": "done"}}
         data = MultiversatileInterruptRail._extract_business_data(cascade)
         assert "workflows" in data
@@ -231,7 +238,8 @@ class TestExtractBusinessData:
         data = MultiversatileInterruptRail._extract_business_data("not a dict")
         assert data == {}
 
-    def test_no_known_fields(self):
+    @staticmethod
+    def test_no_known_fields():
         cascade = {"custom_data": "value", "node_type": "End"}
         data = MultiversatileInterruptRail._extract_business_data(cascade)
         assert "custom_data" in data
@@ -241,7 +249,8 @@ class TestExtractBusinessData:
 class TestCascadeResumeWithDataChannel:
     """Test cascade resume with input_key/result_key/result_message (TC-32~TC-39)."""
 
-    def _setup_cascade_resume(self, ctx, workflows_args, cascade_workflows):
+    @staticmethod
+    def _setup_cascade_resume(ctx, workflows_args, cascade_workflows):
         """构造 cascade 续轮的 session state"""
         ctx.session.update_state({
             "cascade_result": {
@@ -436,7 +445,10 @@ class TestCascadeResumeWithDataChannel:
         self._setup_cascade_resume(ctx, workflows_args, cascade_workflows)
 
         with patch.object(rail, '_sandbox_normalize', new_callable=AsyncMock) as mock_normalize:
-            mock_normalize.return_value = ("success", {"ui_notice": {"event": "tool_end", "key": "notice_key"}, "data": {}})
+            mock_normalize.return_value = ("success", {
+                "ui_notice": {"event": "tool_end", "key": "notice_key"},
+                "data": {},
+            })
             # Mock write_stream
             ctx.session.write_stream = AsyncMock()
             result = await rail.resolve_interrupt(ctx, tool_call, "")
