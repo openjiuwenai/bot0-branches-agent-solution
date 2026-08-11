@@ -14,12 +14,11 @@ import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
-import com.openjiuwen.service.app.controller.a2a.client.RemoteCallEventConsumer;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcome;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCallOutcomeMapper;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import org.a2aproject.sdk.client.ClientEvent;
+import org.a2aproject.sdk.client.TaskEvent;
 import org.a2aproject.sdk.spec.A2AException;
 import org.a2aproject.sdk.spec.TaskState;
 
@@ -48,7 +47,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     private final RuntimeRdcClient registry;
     private final AgentBusRequestSubmitter requestSubmitter;
     private final RemoteCallOutcomeMapper outcomeMapper;
-    private final RemoteCallEventConsumer eventConsumer;
+    private final BusRemoteCallEventConsumer eventConsumer;
     private final AgentBusRequestEncoder requestEncoder = new AgentBusRequestEncoder();
     private final AgentBusProjectionDecoder projectionDecoder = new AgentBusProjectionDecoder();
     private final Map<String, PendingRemoteCall> pending = new ConcurrentHashMap<>();
@@ -72,7 +71,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             Executor executor,
             String tenantId, String sourceServiceId, long responseTimeoutMillis) {
         this(registry, requestSubmitter, executor, tenantId, sourceServiceId, responseTimeoutMillis,
-                new A2ATaskSubscriptionClient());
+                subscriber(new BusTaskSubscriptionClient(new A2ATaskSubscriptionClient())));
     }
 
     /**
@@ -90,7 +89,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             Executor executor, String tenantId, String sourceServiceId, long responseTimeoutMillis,
             A2ATaskSubscriptionClient subscriptionClient) {
         this(registry, requestSubmitter, executor, tenantId, sourceServiceId, responseTimeoutMillis,
-                subscriber(subscriptionClient));
+                subscriber(new BusTaskSubscriptionClient(subscriptionClient)));
     }
 
     AgentBusRemoteAgentCaller(RuntimeRdcClient registry, AgentBusRequestSubmitter requestSubmitter,
@@ -104,22 +103,18 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         this.responseTimeoutMillis = positive(responseTimeoutMillis, "responseTimeoutMillis");
         this.streamSubscriber = Objects.requireNonNull(streamSubscriber, "streamSubscriber is required");
         this.outcomeMapper = new RemoteCallOutcomeMapper();
-        this.eventConsumer = new RemoteCallEventConsumer();
+        this.eventConsumer = new BusRemoteCallEventConsumer();
     }
 
     @Override
-    public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call, QueryStreamObserver streamObserver,
-            Consumer<String> remoteTaskIdObserver) {
+    public CompletableFuture<RemoteCallOutcome> callOutcome(RemoteCall call,
+            RemoteAgentCaller.EventObserver eventObserver) {
         Objects.requireNonNull(call, "call is required");
+        Objects.requireNonNull(eventObserver, "eventObserver is required");
         CompletableFuture<RemoteCallOutcome> result = new CompletableFuture<>();
         result.orTimeout(responseTimeoutMillis, TimeUnit.MILLISECONDS);
-        executor.execute(() -> startCall(call, streamObserver, remoteTaskIdObserver, result));
+        executor.execute(() -> startCall(call, eventObserver, result));
         return result;
-    }
-
-    @Override
-    public boolean supported(String agentName) {
-        return agentName != null && !agentName.isBlank();
     }
 
     /**
@@ -155,8 +150,8 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         return pending.size();
     }
 
-    private void startCall(RemoteCall call, QueryStreamObserver streamObserver,
-            Consumer<String> taskIdObserver, CompletableFuture<RemoteCallOutcome> result) {
+    private void startCall(RemoteCall call, RemoteAgentCaller.EventObserver eventObserver,
+            CompletableFuture<RemoteCallOutcome> result) {
         try {
             RuntimeRdcClient.RouteCandidate route = firstRoute(call.agentName());
             RuntimeRdcClient.ResolvedRoute resolved = call.isCallerStreaming()
@@ -168,8 +163,8 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             String idempotencyKey = UUID.randomUUID().toString();
             long now = System.currentTimeMillis();
             long deadline = now + responseTimeoutMillis;
-            PendingRemoteCall pendingCall = new PendingRemoteCall(result, taskIdObserver, streamObserver,
-                    call.isCallerStreaming(), route, resolved == null ? null : resolved.endpointUrl(),
+            PendingRemoteCall pendingCall = new PendingRemoteCall(result, eventObserver, call.isCallerStreaming(),
+                    route, resolved == null ? null : resolved.endpointUrl(),
                     correlationId, idempotencyKey, deadline);
             pending.put(correlationId, pendingCall);
             result.whenComplete((outcome, failure) -> {
@@ -255,8 +250,8 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             return;
         }
         try {
-            A2ATaskSubscriptionClient.TaskSubscriptionRequest request =
-                    new A2ATaskSubscriptionClient.TaskSubscriptionRequest(call.endpointUrl, call.taskId,
+            BusTaskSubscriptionClient.SubscriptionRequest request =
+                    new BusTaskSubscriptionClient.SubscriptionRequest(call.endpointUrl, call.taskId,
                             streamReference);
             StreamHandle subscription = streamSubscriber.subscribe(request,
                     event -> acceptStreamEvent(call, event),
@@ -270,7 +265,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
     }
 
     private void acceptStreamEvent(PendingRemoteCall call, ClientEvent event) {
-        eventConsumer.accept(event, call.result, call.streamObserver, call.taskIdObserver, false);
+        eventConsumer.accept(event, call.result, call.eventObserver, true);
     }
 
     private void streamFailed(PendingRemoteCall call, int generation, Throwable failure) {
@@ -308,7 +303,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
             AgentBusEventType eventType) {
         if (projection.task() != null) {
             call.captureTaskId(projection.task().id());
-            outcomeMapper.mapTask(projection.task(), false).ifPresent(call.result::complete);
+            eventConsumer.accept(new TaskEvent(projection.task()), call.result, call.eventObserver, call.streaming);
             return;
         }
         if (projection.message() != null) {
@@ -374,8 +369,8 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         return value;
     }
 
-    private static StreamSubscriber subscriber(A2ATaskSubscriptionClient subscriptionClient) {
-        A2ATaskSubscriptionClient client = Objects.requireNonNull(subscriptionClient,
+    private static StreamSubscriber subscriber(BusTaskSubscriptionClient subscriptionClient) {
+        BusTaskSubscriptionClient client = Objects.requireNonNull(subscriptionClient,
                 "subscriptionClient is required");
         return (request, eventConsumer, completionHandler, errorHandler) -> {
             A2ATaskSubscriptionClient.TaskSubscription subscription = client.subscribe(request, eventConsumer,
@@ -400,7 +395,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
          * @return local stream handle
          */
         StreamHandle subscribe(
-                A2ATaskSubscriptionClient.TaskSubscriptionRequest request,
+                BusTaskSubscriptionClient.SubscriptionRequest request,
                 Consumer<ClientEvent> eventConsumer, Runnable completionHandler, Consumer<Throwable> errorHandler);
     }
 
@@ -414,8 +409,7 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
 
     private static final class PendingRemoteCall {
         private final CompletableFuture<RemoteCallOutcome> result;
-        private final Consumer<String> taskIdObserver;
-        private final QueryStreamObserver streamObserver;
+        private final RemoteAgentCaller.EventObserver eventObserver;
         private final boolean streaming;
         private final RuntimeRdcClient.RouteCandidate route;
         private final String endpointUrl;
@@ -429,12 +423,11 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
         private StreamHandle subscription;
 
         private PendingRemoteCall(CompletableFuture<RemoteCallOutcome> result,
-                Consumer<String> taskIdObserver, QueryStreamObserver streamObserver, boolean streaming,
+                RemoteAgentCaller.EventObserver eventObserver, boolean streaming,
                 RuntimeRdcClient.RouteCandidate route, String endpointUrl, String correlationId,
                 String idempotencyKey, long deadline) {
             this.result = result;
-            this.taskIdObserver = taskIdObserver;
-            this.streamObserver = streamObserver;
+            this.eventObserver = eventObserver;
             this.streaming = streaming;
             this.route = route;
             this.endpointUrl = endpointUrl;
@@ -448,9 +441,6 @@ public final class AgentBusRemoteAgentCaller implements RemoteAgentCaller {
                 return;
             }
             taskId = value;
-            if (taskIdObserver != null) {
-                taskIdObserver.accept(value);
-            }
         }
 
         private synchronized int beginStream(String value) {

@@ -242,7 +242,7 @@ class BusConsumerAutoConfigurationTest {
                     assertThat(context).doesNotHaveBean(RuntimeBusEventConsumer.class);
                     RemoteAgentCaller caller = context.getBean(RemoteAgentCaller.class);
                     RemoteCall call = new RemoteCall("agent-b", "hello", "context-1", null, Map.of());
-                    assertThatThrownBy(() -> caller.callOutcome(call, null, null).join())
+                    assertThatThrownBy(() -> caller.callOutcome(call, null).join())
                             .hasRootCauseMessage("Agent Bus caller role is unavailable; "
                                     + "Runtime-to-Runtime HTTP fallback is disabled");
                 });

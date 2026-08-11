@@ -13,9 +13,8 @@ import com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope;
 import com.openjiuwen.bus.forwarding.spi.ForwardingReceipt;
 import com.openjiuwen.bus.forwarding.spi.broker.BrokerInboundMessage;
 import com.openjiuwen.service.app.controller.a2a.A2aJsonRpcResponseSerializer;
+import com.openjiuwen.service.app.controller.a2a.client.RemoteAgentCaller;
 import com.openjiuwen.service.app.controller.a2a.client.RemoteCall;
-import com.openjiuwen.service.spec.dto.QueryChunk;
-import com.openjiuwen.service.spec.spi.QueryStreamObserver;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -28,6 +27,7 @@ import org.a2aproject.sdk.spec.Task;
 import org.a2aproject.sdk.spec.TaskArtifactUpdateEvent;
 import org.a2aproject.sdk.spec.TaskState;
 import org.a2aproject.sdk.spec.TaskStatus;
+import org.a2aproject.sdk.spec.TaskStatusUpdateEvent;
 import org.a2aproject.sdk.spec.TextPart;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,8 +37,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -84,9 +84,8 @@ class AgentBusRemoteAgentCallerTest {
 
     @Test
     void enqueuesA2aRequestAndCompletesFromTerminalProjection() throws Exception {
-        AtomicReference<String> remoteTaskId = new AtomicReference<>();
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
-                null, remoteTaskId::set);
+                observer(new ArrayList<>()));
 
         assertThat(submitted).singleElement().satisfies(record -> {
             assertThat(record.eventType()).isEqualTo(AgentBusEventType.A2A_CALL_REQUESTED);
@@ -101,7 +100,6 @@ class AgentBusRemoteAgentCallerTest {
         ForwardingEnvelope request = submitted.get(0);
         assertThat(caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
                 "taskId=task-b;projectionKind=ACCEPTED;revision=0"))).isTrue();
-        assertThat(remoteTaskId.get()).isEqualTo("task-b");
 
         Task completed = Task.builder().id("task-b").contextId("context-a")
                 .status(new TaskStatus(TaskState.TASK_STATE_COMPLETED)).build();
@@ -136,7 +134,7 @@ class AgentBusRemoteAgentCallerTest {
     @Test
     void mapsRejectedProjectionToRemoteRejectedOutcome() throws Exception {
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
-                null, null);
+                observer(new ArrayList<>()));
         ForwardingEnvelope request = submittedSingle();
 
         assertThat(caller.accept(response(request, AgentBusEventType.A2A_CALL_REJECTED,
@@ -155,7 +153,7 @@ class AgentBusRemoteAgentCallerTest {
                 "tenant-a", "runtime-a", 20L);
 
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null, Map.of()),
-                null, null);
+                observer(new ArrayList<>()));
 
         assertThatThrownBy(future::join).hasCauseInstanceOf(TimeoutException.class);
         assertThat(caller.pendingCount()).isZero();
@@ -163,8 +161,7 @@ class AgentBusRemoteAgentCallerTest {
 
     @Test
     void opensSseAfterStreamReadyAndForwardsChunks() throws Exception {
-        AtomicReference<com.openjiuwen.service.app.controller.a2a.client.A2ATaskSubscriptionClient
-                .TaskSubscriptionRequest> subscriptionRequest = new AtomicReference<>();
+        AtomicReference<BusTaskSubscriptionClient.SubscriptionRequest> subscriptionRequest = new AtomicReference<>();
         AtomicReference<Consumer<ClientEvent>> streamEvents = new AtomicReference<>();
         AtomicBoolean subscriptionClosed = new AtomicBoolean();
         RuntimeRdcClient registry = new RuntimeRdcClient(
@@ -175,11 +172,11 @@ class AgentBusRemoteAgentCallerTest {
                     streamEvents.set(events);
                     return () -> subscriptionClosed.set(true);
                 });
-        List<QueryChunk> chunks = new ArrayList<>();
-        QueryStreamObserver observer = observer(chunks);
+        List<TaskArtifactUpdateEvent> artifacts = new ArrayList<>();
+        RemoteAgentCaller.EventObserver eventObserver = observer(artifacts);
 
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
-                Map.of(), Map.of(), true), observer, null);
+                Map.of(), Map.of(), true), eventObserver);
         ForwardingEnvelope request = submittedSingle();
         assertThat(request.inlinePayload()).contains("\"method\":\"SendStreamingMessage\"");
         caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
@@ -193,7 +190,8 @@ class AgentBusRemoteAgentCallerTest {
         streamEvents.get().accept(artifactEvent("task-stream", "partial"));
         streamEvents.get().accept(new TaskEvent(task("task-stream", TaskState.TASK_STATE_COMPLETED)));
 
-        assertThat(chunks).singleElement().extracting(QueryChunk::getData).isEqualTo("partial");
+        assertThat(artifacts).singleElement().satisfies(update ->
+                assertThat(update.artifact().parts()).singleElement().isEqualTo(new TextPart("partial")));
         assertThat(future.join().resultCategory()).isEqualTo("COMPLETED");
         assertThat(subscriptionClosed).isTrue();
         assertThat(caller.pendingCount()).isZero();
@@ -213,7 +211,7 @@ class AgentBusRemoteAgentCallerTest {
                 });
 
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
-                Map.of(), Map.of(), true), observer(new ArrayList<>()), null);
+                Map.of(), Map.of(), true), observer(new ArrayList<>()));
         ForwardingEnvelope create = submittedSingle();
         caller.accept(response(create, AgentBusEventType.A2A_CALL_ACCEPTED,
                 "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
@@ -246,7 +244,7 @@ class AgentBusRemoteAgentCallerTest {
                         () -> subscriptionClosed.set(true));
 
         var future = caller.callOutcome(new RemoteCall("agent-b", "hello", "context-a", null,
-                Map.of(), Map.of(), true), observer(new ArrayList<>()), null);
+                Map.of(), Map.of(), true), observer(new ArrayList<>()));
         ForwardingEnvelope request = submittedSingle();
         caller.accept(response(request, AgentBusEventType.A2A_CALL_ACCEPTED,
                 "taskId=task-stream;projectionKind=ACCEPTED;revision=0"));
@@ -275,24 +273,15 @@ class AgentBusRemoteAgentCallerTest {
         return Task.builder().id(taskId).contextId("context-a").status(new TaskStatus(state)).build();
     }
 
-    private static QueryStreamObserver observer(List<QueryChunk> chunks) {
-        return new QueryStreamObserver() {
+    private static RemoteAgentCaller.EventObserver observer(List<TaskArtifactUpdateEvent> artifacts) {
+        return new RemoteAgentCaller.EventObserver() {
             @Override
-            public void onNext(QueryChunk chunk) {
-                chunks.add(chunk);
+            public void onStatus(TaskStatusUpdateEvent event) {
             }
 
             @Override
-            public void onComplete() {
-            }
-
-            @Override
-            public void onError(Throwable error) {
-            }
-
-            @Override
-            public boolean isCancelled() {
-                return false;
+            public void onArtifact(TaskArtifactUpdateEvent event) {
+                artifacts.add(event);
             }
         };
     }
