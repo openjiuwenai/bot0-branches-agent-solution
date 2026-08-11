@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import types
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
@@ -90,11 +91,11 @@ def _make_opt(*, group_size: int = 2) -> TfGrpoOptimizer:
     opt._trace_retry_backoff = 0.01
     opt._artifact_exporter = _Exporter()
 
-    opt._sample_cases = TfGrpoOptimizer._sample_cases.__get__(opt, TfGrpoOptimizer)
-    opt._push_phase = TfGrpoOptimizer._push_phase.__get__(opt, TfGrpoOptimizer)
-    opt._on_step_apply = TfGrpoOptimizer._on_step_apply.__get__(opt, TfGrpoOptimizer)
-    opt._export_experience_libraries = TfGrpoOptimizer._export_experience_libraries.__get__(
-        opt, TfGrpoOptimizer
+    opt._sample_cases = types.MethodType(TfGrpoOptimizer._sample_cases, opt)
+    opt._push_phase = types.MethodType(TfGrpoOptimizer._push_phase, opt)
+    opt._on_step_apply = types.MethodType(TfGrpoOptimizer._on_step_apply, opt)
+    opt._export_experience_libraries = types.MethodType(
+        TfGrpoOptimizer._export_experience_libraries, opt
     )
     setattr(
         opt,
