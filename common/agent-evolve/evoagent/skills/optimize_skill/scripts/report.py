@@ -188,13 +188,16 @@ def _summary_skills(run_dir: Path) -> tuple[str, ...]:
 
 
 def _skill_dirs(run_dir: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in run_dir.iterdir()
-        if path.is_dir()
-        and _epoch_number(path) is None
-        and any(child.is_dir() and _epoch_number(child) is not None for child in path.iterdir())
-    )
+    # 显式 for 循环：三段 and 过滤含嵌套 any(...) 生成器，过复杂不宜压进推导式 (G.EXP.04)
+    dirs: list[Path] = []
+    for path in run_dir.iterdir():
+        if not path.is_dir():
+            continue
+        if _epoch_number(path) is not None:
+            continue
+        if any(child.is_dir() and _epoch_number(child) is not None for child in path.iterdir()):
+            dirs.append(path)
+    return sorted(dirs)
 
 
 def _artifact_epoch_offset(run_dir: Path, skill_dirs: list[Path]) -> int:
