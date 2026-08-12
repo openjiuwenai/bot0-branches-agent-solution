@@ -7,6 +7,7 @@ from .call_multiagent import call_multiagent_tool
 from .call_multiversatile import call_multiversatile_tool
 from .scenario_tool import build_tools
 
+
 # 向后兼容：保留 TOOLS 名字——访问触发 build_tools()。
 def __getattr__(name: str):
     if name == "TOOLS":

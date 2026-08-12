@@ -42,6 +42,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -65,7 +66,7 @@ def _resolve_decrypt() -> Callable[[str], str]:
     ]
     for p in candidates:
         if (p / "common" / "crypto.py").exists():
-            sys.path.insert(0, str(p))
+            sys.path.append(str(p))
             try:
                 from common.crypto import decrypt_config_value  # type: ignore
                 return decrypt_config_value
@@ -211,8 +212,8 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
     raw_api_key = os.environ.get("PLANNING_AGENT_MODEL_API_KEY", "")
     required = {
         "base_url": os.environ.get("PLANNING_AGENT_MODEL_BASE_URL", ""),
-        "api_key":  decrypt(raw_api_key) if raw_api_key else "",
-        "model":    os.environ.get("PLANNING_AGENT_MODEL_NAME", ""),
+        "api_key": decrypt(raw_api_key) if raw_api_key else "",
+        "model": os.environ.get("PLANNING_AGENT_MODEL_NAME", ""),
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
@@ -223,7 +224,7 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
             "     PLANNING_AGENT_MODEL_API_KEY\n"
             "     PLANNING_AGENT_MODEL_NAME"
         )
-        raise SystemExit(2)
+        raise RuntimeError(f"missing required environment variables: {missing}")
 
     # token / user_id（成对校验，与 config.py 行为一致）
     raw_token = os.environ.get("PLANNING_AGENT_MODEL_TOKEN", "")
@@ -233,14 +234,14 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
             "❌ PLANNING_AGENT_MODEL_TOKEN 已设置但 PLANNING_AGENT_MODEL_TOKEN_HEADER 缺失。\n"
             "   生产环境 EDPAgent 在这种情况下会启动失败，脚本同样不允许。"
         )
-        raise SystemExit(2)
+        raise RuntimeError("PLANNING_AGENT_MODEL_TOKEN set but PLANNING_AGENT_MODEL_TOKEN_HEADER missing")
     user_id = os.environ.get("PLANNING_AGENT_MODEL_USER_ID", "")
     user_id_header = os.environ.get("PLANNING_AGENT_MODEL_USER_ID_HEADER", "")
     if user_id and not user_id_header:
         logger.error(
             "❌ PLANNING_AGENT_MODEL_USER_ID 已设置但 PLANNING_AGENT_MODEL_USER_ID_HEADER 缺失。"
         )
-        raise SystemExit(2)
+        raise RuntimeError("PLANNING_AGENT_MODEL_USER_ID set but PLANNING_AGENT_MODEL_USER_ID_HEADER missing")
 
     # extra headers（JSON dict）
     extra_raw = os.environ.get("PLANNING_AGENT_MODEL_EXTRA_HEADERS", "")
@@ -262,11 +263,11 @@ def _load_env(decrypt: Callable[[str], str]) -> dict[str, Any]:
     return {
         **required,
         "timeout": float(os.environ.get("PLANNING_AGENT_MODEL_TIMEOUT", "120")),
-        "token":          decrypt(raw_token) if raw_token else "",
-        "token_header":   token_header,
-        "user_id":        user_id,
+        "token": decrypt(raw_token) if raw_token else "",
+        "token_header": token_header,
+        "user_id": user_id,
         "user_id_header": user_id_header,
-        "extra_headers":  extra_headers,
+        "extra_headers": extra_headers,
     }
 
 
@@ -289,12 +290,18 @@ def _build_headers(env: dict) -> dict[str, str]:
     return headers
 
 
+@dataclass
+class _DiagCtx:
+    env: dict
+    headers: dict
+    dump_dir: Path
+
+
 # ── 单次调用 ───────────────────────────────────────────────────────────────
 
-def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
-               case_name: str, idx: int) -> dict[str, Any]:
+def _call_once(ctx: _DiagCtx, case: dict, case_name: str, idx: int) -> dict[str, Any]:
     body = {
-        "model": env["model"],
+        "model": ctx.env["model"],
         "messages": case["messages"],
         "temperature": 0.3,
         "top_p": 0.95,
@@ -304,24 +311,24 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
         body["tools"] = _TOOLS
         body["tool_choice"] = "auto"
 
-    url = env["base_url"].rstrip("/") + "/chat/completions"
+    url = os.path.join(ctx.env["base_url"].rstrip("/"), "chat/completions")
     started = time.monotonic()
     try:
-        r = httpx.post(url, json=body, headers=headers, timeout=env["timeout"])
+        r = httpx.post(url, json=body, headers=ctx.headers, timeout=ctx.env["timeout"])
         elapsed = time.monotonic() - started
         try:
             data = r.json()
         except Exception:
             data = {"_raw_text": r.text, "_status": r.status_code}
     except Exception as e:
-        return {"ok": False, "exception": repr(e), "elapsed_ms": int((time.monotonic()-started)*1000)}
+        return {"ok": False, "exception": repr(e), "elapsed_ms": int((time.monotonic() - started) * 1000)}
 
     if r.status_code != 200:
         # HTTP 异常：dump 整段
-        path = dump_dir / f"{case_name}-{idx}-http{r.status_code}.json"
+        path = ctx.dump_dir / f"{case_name}-{idx}-http{r.status_code}.json"
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         return {"ok": False, "http_status": r.status_code, "dump": str(path),
-                "elapsed_ms": int(elapsed*1000)}
+                "elapsed_ms": int(elapsed * 1000)}
 
     # 拆解 OpenAI-shape 响应
     choices = data.get("choices") or [{}]
@@ -353,7 +360,7 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
         info["tool_name"] = fn.get("name")
         info["tool_args"] = fn.get("arguments", "")
     if is_empty:
-        path = dump_dir / f"{case_name}-{idx}-EMPTY.json"
+        path = ctx.dump_dir / f"{case_name}-{idx}-EMPTY.json"
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         info["dump"] = str(path)
     return info
@@ -361,18 +368,17 @@ def _call_once(env: dict, case: dict, headers: dict, dump_dir: Path,
 
 # ── 主流程 ─────────────────────────────────────────────────────────────────
 
-def _run_case(env: dict, case_name: str, case: dict, runs: int,
-              dump_dir: Path, headers: dict) -> int:
+def _run_case(ctx: _DiagCtx, case_name: str, case: dict, runs: int) -> int:
     logger.info(f"\n{'='*78}")
     logger.info(f"Case: {case_name} — {case['desc']}")
-    logger.info(f"  base_url = {env['base_url']}")
-    logger.info(f"  model    = {env['model']}")
+    logger.info(f"  base_url = {ctx.env['base_url']}")
+    logger.info(f"  model    = {ctx.env['model']}")
     logger.info(f"  tools    = {case['tools_enabled']}    runs = {runs}")
     logger.info('=' * 78)
 
     empty_count = 0
     for i in range(1, runs + 1):
-        info = _call_once(env, case, headers, dump_dir, case_name, i)
+        info = _call_once(ctx, case, case_name, i)
         if not info.get("ok"):
             empty_count += 1
             mark = "⚠ EMPTY" if info.get("is_empty") else "❌ FAIL"
@@ -421,6 +427,7 @@ def main() -> None:
     headers = _build_headers(env)
     dump_dir = Path(args.dump_dir)
     dump_dir.mkdir(parents=True, exist_ok=True)
+    ctx = _DiagCtx(env, headers, dump_dir)
 
     # 打印的 header 摘要里，对 Authorization / token 做脱敏（只保留前后 4 字符）
     def _mask(s: str) -> str:
@@ -444,7 +451,7 @@ def main() -> None:
 
     total_empty = 0
     for name in case_names:
-        total_empty += _run_case(env, name, CASES[name], args.runs, dump_dir, headers)
+        total_empty += _run_case(ctx, name, CASES[name], args.runs)
 
     logger.info(f"\n{'='*78}")
     logger.info(f"汇总：{len(case_names)} 个用例 × {args.runs} 次 = "

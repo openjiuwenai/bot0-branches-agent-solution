@@ -125,7 +125,10 @@ class MultiversatileInterruptRail(BaseInterruptRail):
             ctx.session.update_state({"cascade_result": None})
             result = await self._handle_cascade_resume(ctx, cascade_result)
             tool_context = ctx.session.get_state("pending_tool_context") or {}
-            self._create_intercepted_tool_span(ctx, tool_context.get("tool_name", ""), tool_context.get("tool_args", {}), result)
+            self._create_intercepted_tool_span(
+                ctx, tool_context.get("tool_name", ""),
+                tool_context.get("tool_args", {}), result,
+            )
             return result
 
         tool_args = ctx.inputs.tool_args or {}
@@ -237,7 +240,8 @@ class MultiversatileInterruptRail(BaseInterruptRail):
                     skill_input["input_data"] = input_data
                     logger.info(
                         f"[MultiversatileInterruptRail] workflow[{idx}] input_key 数据注入："
-                        f"input_key={input_key!r}, data_keys={list(input_data.keys()) if isinstance(input_data, dict) else type(input_data)}"
+                        f"input_key={input_key!r}, "
+                        f"data_keys={list(input_data.keys()) if isinstance(input_data, dict) else type(input_data)}"
                     )
                 else:
                     logger.warning(
@@ -254,7 +258,8 @@ class MultiversatileInterruptRail(BaseInterruptRail):
             # ── response_template_keys 话术处理 ──────────────────────
             response_template_keys_str = wf_args.get("response_template_keys", "")
             has_ui_notice = isinstance(normalized, dict) and isinstance(normalized.get("ui_notice"), dict)
-            if response_template_keys_str and status and self._scripts_config and not has_ui_notice:
+            has_template_config = response_template_keys_str and status and self._scripts_config
+            if has_template_config and not has_ui_notice:
                 self._apply_response_template(ctx, response_template_keys_str, status)
 
             # ── ui_notice 话术提示 ──────────────────────────────────
@@ -315,7 +320,9 @@ class MultiversatileInterruptRail(BaseInterruptRail):
         """构造传给沙箱脚本的 SKILL_INPUT JSON（与 VersatileInterruptRail._build_skill_input 对齐）"""
         base = {
             "query_intent": wf_args.get("query_intent", ""),
-            "query_description": wf_args.get("query", wf_args.get("query_description", wf_args.get("task_description", ""))),
+            "query_description": wf_args.get(
+                "query", wf_args.get("query_description", wf_args.get("task_description", ""))
+            ),
             "business_data": business_data,
         }
 
@@ -328,7 +335,11 @@ class MultiversatileInterruptRail(BaseInterruptRail):
     def _apply_response_template(self, ctx, response_template_keys_str: str, status: str) -> None:
         """处理 response_template_keys 话术（与 VersatileInterruptRail 对齐）"""
         try:
-            response_template_keys = json.loads(response_template_keys_str) if isinstance(response_template_keys_str, str) else response_template_keys_str
+            response_template_keys = (
+                json.loads(response_template_keys_str)
+                if isinstance(response_template_keys_str, str)
+                else response_template_keys_str
+            )
             if isinstance(response_template_keys, list):
                 key_index = 0 if status == "success" else 1
                 if key_index < len(response_template_keys):
@@ -379,7 +390,8 @@ class MultiversatileInterruptRail(BaseInterruptRail):
                     )
         else:
             logger.warning(
-                f"[MultiversatileInterruptRail] ui_notice 丢弃：event={notice_event!r}, key={notice_key!r}, has_text={bool(notice_text)}"
+                f"[MultiversatileInterruptRail] ui_notice 丢弃："
+                f"event={notice_event!r}, key={notice_key!r}, has_text={bool(notice_text)}"
             )
 
     async def _sandbox_normalize(self, command: str, skill_input: dict, fallback, ctx=None):

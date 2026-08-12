@@ -485,7 +485,10 @@ class TodoModifyTool(TodoToolBase):
                             # status 字段必须是有效的 TodoStatus 类型，不允许通过 updates 覆盖，而是由 action 参数内部管理
                             raise build_error(
                                 StatusCode.COMPONENT_TOOL_EXECUTION_ERROR,
-                                reason=f"Cannot manually update 'status' field via updates. Status is managed internally by action '{action}'."
+                                reason=(
+                                    "Cannot manually update 'status' field via updates. "
+                                    f"Status is managed internally by action '{action}'."
+                                )
                             )
                         if hasattr(task, key):
                             setattr(task, key, value)

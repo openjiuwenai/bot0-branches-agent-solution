@@ -57,7 +57,7 @@ import java.util.Set;
  *   <li>Wraps the target's {@code QueryResponse.result} into an
  *       {@code {"type":"answer","payload":{"content":"..."},"agent_id":"...",
  *       "intent_id":"..."}} envelope so the caller's
- *       {@code RemoteAgentAnswerExtractor} can capture the business text and
+ *       the gateway caller can capture the business text and
  *       the orchestrator can read {@code agent_id} for further forwarding</li>
  *   <li>Wraps the envelope in a JSON-RPC response with a
  *       {@code TASK_STATE_COMPLETED} task whose artifact carries the envelope

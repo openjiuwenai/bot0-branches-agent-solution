@@ -45,31 +45,37 @@ class TestCallMultiversatile:
 class TestCallMultiversatileToolCard:
     """Test call_multiversatile_tool definition (TC-06)."""
 
-    def test_tool_card_id(self):
+    @staticmethod
+    def test_tool_card_id():
         """TC-06: ToolCard.id == 'call_multiversatile'"""
         assert call_multiversatile_tool.card.id == "call_multiversatile"
 
-    def test_tool_card_name(self):
+    @staticmethod
+    def test_tool_card_name():
         assert call_multiversatile_tool.card.name == "call_multiversatile"
 
-    def test_workflows_is_array(self):
+    @staticmethod
+    def test_workflows_is_array():
         """TC-06: workflows 参数类型为 array"""
         params = call_multiversatile_tool.card.input_params
         assert params["properties"]["workflows"]["type"] == "array"
 
-    def test_workflows_items_required_fields(self):
+    @staticmethod
+    def test_workflows_items_required_fields():
         """TC-06: workflows.items.required 包含 query, query_intent"""
         items = call_multiversatile_tool.card.input_params["properties"]["workflows"]["items"]
         required = items["required"]
         assert "query" in required
         assert "query_intent" in required
 
-    def test_top_level_required(self):
+    @staticmethod
+    def test_top_level_required():
         """TC-06: 顶层 required == ['workflows']"""
         params = call_multiversatile_tool.card.input_params
         assert params["required"] == ["workflows"]
 
-    def test_description_contains_parallel_keyword(self):
+    @staticmethod
+    def test_description_contains_parallel_keyword():
         """TC-06: description 包含'并行调用多个 VersatileAdapter 工作流'"""
         desc = call_multiversatile_tool.card.description
         assert "并行调用多个 VersatileAdapter 工作流" in desc
@@ -78,7 +84,8 @@ class TestCallMultiversatileToolCard:
 class TestCallMultiversatilePerWorkflowFields:
     """Test per-workflow item fields (TC-40~TC-43)."""
 
-    def _get_items_properties(self):
+    @staticmethod
+    def _get_items_properties():
         """获取 workflows.items.properties"""
         return call_multiversatile_tool.card.input_params["properties"]["workflows"]["items"]["properties"]
 

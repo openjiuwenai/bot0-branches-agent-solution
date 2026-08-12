@@ -28,7 +28,8 @@ if str(_EDPAGENT_DIR) not in os.sys.path:
 class TestScriptLookupChain:
     """验证 get_response_template() 两级查找机制完整性。"""
 
-    def test_common_script_found_via_named_field(self):
+    @staticmethod
+    def test_common_script_found_via_named_field():
         """通用话术通过具名字段查找成功。"""
         from EDPAgent.agent_rule import ScriptsConfig
 
@@ -37,7 +38,8 @@ class TestScriptLookupChain:
         assert cfg.get_response_template("task_cancelled") == "好的，已为您取消当前操作。如需其他帮助，请随时告诉我。"
         assert cfg.get_response_template("out_of_scope") == "正在学习中，暂不支持该业务。"
 
-    def test_business_script_found_via_extra_scripts(self):
+    @staticmethod
+    def test_business_script_found_via_extra_scripts():
         """业务话术通过 extra_scripts dict 查找成功。"""
         from EDPAgent.agent_rule import ScriptsConfig
 
@@ -48,7 +50,8 @@ class TestScriptLookupChain:
         assert cfg.get_response_template("product_recommend_success") == "我找到以上您可能感兴趣的产品"
         assert cfg.get_response_template("fund_planning_buy_failed") == "购买失败，请重新尝试"
 
-    def test_common_field_takes_priority_over_extra_scripts(self):
+    @staticmethod
+    def test_common_field_takes_priority_over_extra_scripts():
         """当 extra_scripts 中存在与通用字段同名的 key 时，具名字段优先。"""
         from EDPAgent.agent_rule import ScriptsConfig
 
@@ -58,7 +61,8 @@ class TestScriptLookupChain:
         # 具名字段优先
         assert cfg.get_response_template("tool_start") == "正在调用：{tool_name}"
 
-    def test_missing_key_returns_default(self):
+    @staticmethod
+    def test_missing_key_returns_default():
         """查找不存在的 key 时返回默认值。"""
         from EDPAgent.agent_rule import ScriptsConfig
 
@@ -66,14 +70,16 @@ class TestScriptLookupChain:
         assert cfg.get_response_template("nonexistent_key") == ""
         assert cfg.get_response_template("nonexistent_key", "fallback") == "fallback"
 
-    def test_extra_scripts_empty_by_default(self):
+    @staticmethod
+    def test_extra_scripts_empty_by_default():
         """默认 extra_scripts 为空 dict。"""
         from EDPAgent.agent_rule import ScriptsConfig
 
         cfg = ScriptsConfig()
         assert cfg.extra_scripts == {}
 
-    def test_all_common_scripts_accessible(self):
+    @staticmethod
+    def test_all_common_scripts_accessible():
         """验证所有 12 个通用话术字段均可通过 get_response_template 查找。"""
         from EDPAgent.agent_rule import ScriptsConfig
 
@@ -96,7 +102,8 @@ class TestScriptLookupChain:
 class TestCollectSkillScripts:
     """验证 collect_skill_scripts() 从 SKILL.md 收集业务话术。"""
 
-    def test_collects_scripts_from_skill_md(self, tmp_path):
+    @staticmethod
+    def test_collects_scripts_from_skill_md(tmp_path):
         """从 SKILL.md frontmatter 中正确收集 scripts 字段。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -117,7 +124,8 @@ class TestCollectSkillScripts:
         result = collect_skill_scripts(tmp_path)
         assert result == {"test_success": "操作成功", "test_failed": "操作失败"}
 
-    def test_merges_scripts_from_multiple_skills(self, tmp_path):
+    @staticmethod
+    def test_merges_scripts_from_multiple_skills(tmp_path):
         """多个 SKILL.md 的 scripts 合并到一个 dict。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -136,7 +144,8 @@ class TestCollectSkillScripts:
         result = collect_skill_scripts(tmp_path)
         assert result == {"skill_a_key": "skill_a value", "skill_b_key": "skill_b value"}
 
-    def test_skips_non_directory_entries(self, tmp_path):
+    @staticmethod
+    def test_skips_non_directory_entries(tmp_path):
         """跳过非目录文件。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -146,7 +155,8 @@ class TestCollectSkillScripts:
         result = collect_skill_scripts(tmp_path)
         assert result == {}
 
-    def test_skips_scenarios_directory(self, tmp_path):
+    @staticmethod
+    def test_skips_scenarios_directory(tmp_path):
         """跳过 scenarios 目录。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -160,7 +170,8 @@ class TestCollectSkillScripts:
         result = collect_skill_scripts(tmp_path)
         assert result == {}
 
-    def test_skips_skill_without_skil_md(self, tmp_path):
+    @staticmethod
+    def test_skips_skill_without_skil_md(tmp_path):
         """跳过没有 SKILL.md 的目录。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -169,7 +180,8 @@ class TestCollectSkillScripts:
         result = collect_skill_scripts(tmp_path)
         assert result == {}
 
-    def test_skips_skill_without_frontmatter(self, tmp_path):
+    @staticmethod
+    def test_skips_skill_without_frontmatter(tmp_path):
         """跳过没有 frontmatter 的 SKILL.md。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -183,7 +195,8 @@ class TestCollectSkillScripts:
         result = collect_skill_scripts(tmp_path)
         assert result == {}
 
-    def test_skips_skill_without_scripts_field(self, tmp_path):
+    @staticmethod
+    def test_skips_skill_without_scripts_field(tmp_path):
         """跳过有 frontmatter 但没有 scripts 字段的 SKILL.md。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -197,14 +210,16 @@ class TestCollectSkillScripts:
         result = collect_skill_scripts(tmp_path)
         assert result == {}
 
-    def test_nonexistent_dir_returns_empty(self, tmp_path):
+    @staticmethod
+    def test_nonexistent_dir_returns_empty(tmp_path):
         """skills 目录不存在时返回空 dict。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
         result = collect_skill_scripts(tmp_path / "nonexistent")
         assert result == {}
 
-    def test_real_skills_dir_collects_all_scripts(self):
+    @staticmethod
+    def test_real_skills_dir_collects_all_scripts():
         """从实际 skills 目录收集所有 SKILL.md 话术。"""
         from EDPAgent.agent_rule import collect_skill_scripts
 
@@ -237,7 +252,8 @@ class TestCollectSkillScripts:
         for key in expected_keys:
             assert key in result, f"业务话术 {key} 未从 SKILL.md 收集到"
 
-    def test_end_to_end_lookup_with_collected_scripts(self):
+    @staticmethod
+    def test_end_to_end_lookup_with_collected_scripts():
         """端到端：collect_skill_scripts → extra_scripts → get_response_template。"""
         from EDPAgent.agent_rule import ScriptsConfig, collect_skill_scripts
 
@@ -270,7 +286,8 @@ class TestCollectSkillScripts:
 class TestLoadScenarioConfig:
     """验证 load_scenario_config() 加载场景配置。"""
 
-    def test_loads_valid_scenario(self, tmp_path):
+    @staticmethod
+    def test_loads_valid_scenario(tmp_path):
         """加载有效的场景配置文件。"""
         from EDPAgent.agent_rule import load_scenario_config
 
@@ -305,7 +322,8 @@ class TestLoadScenarioConfig:
         assert len(cfg.skill_routing) == 1
         assert cfg.skill_routing[0].trigger == "用户请求A"
 
-    def test_loads_minimal_scenario(self, tmp_path):
+    @staticmethod
+    def test_loads_minimal_scenario(tmp_path):
         """加载仅含 name 的最小场景配置。"""
         from EDPAgent.agent_rule import load_scenario_config
 
@@ -323,7 +341,8 @@ class TestLoadScenarioConfig:
         assert cfg.todolist_steps == []
         assert cfg.skill_routing == []
 
-    def test_raises_on_missing_file(self, tmp_path):
+    @staticmethod
+    def test_raises_on_missing_file(tmp_path):
         """文件不存在时抛出 FileNotFoundError。"""
         from EDPAgent.agent_rule import load_scenario_config
 
@@ -334,7 +353,8 @@ class TestLoadScenarioConfig:
 class TestScenarioSwitching:
     """验证场景切换功能。"""
 
-    def test_active_scenario_overrides_todolist_steps(self, tmp_path):
+    @staticmethod
+    def test_active_scenario_overrides_todolist_steps(tmp_path):
         """active_scenario.todolist_steps 优先于 AgentRuleConfig.todolist_steps。"""
         from EDPAgent.agent_rule import (
             AgentRuleConfig,
@@ -367,7 +387,8 @@ class TestScenarioSwitching:
         assert len(steps_source) == 2
         assert steps_source[0].skill == "scenario_skill_1"
 
-    def test_falls_back_to_inline_when_no_active_scenario(self):
+    @staticmethod
+    def test_falls_back_to_inline_when_no_active_scenario():
         """无 active_scenario 时回退到 AgentRuleConfig 内联步骤。"""
         from EDPAgent.agent_rule import AgentRuleConfig, TodoStepConfig
 
@@ -385,7 +406,8 @@ class TestScenarioSwitching:
         assert len(steps_source) == 1
         assert steps_source[0].skill == "inline_skill"
 
-    def test_falls_back_to_inline_when_scenario_has_no_steps(self):
+    @staticmethod
+    def test_falls_back_to_inline_when_scenario_has_no_steps():
         """active_scenario 存在但无 todolist_steps 时回退到内联步骤。"""
         from EDPAgent.agent_rule import AgentRuleConfig, ScenarioConfig, TodoStepConfig
 
@@ -403,7 +425,8 @@ class TestScenarioSwitching:
         assert len(steps_source) == 1
         assert steps_source[0].skill == "inline_skill"
 
-    def test_load_real_scenario_config(self):
+    @staticmethod
+    def test_load_real_scenario_config():
         """加载实际的场景配置文件。"""
         from EDPAgent.agent_rule import load_scenario_config
 
@@ -421,7 +444,8 @@ class TestScenarioSwitching:
         assert len(cfg.scope.denied) > 0
         assert len(cfg.skill_routing) >= 3
 
-    def test_scenario_discovery_default(self):
+    @staticmethod
+    def test_scenario_discovery_default():
         """ScenarioDiscoveryConfig 默认值正确。"""
         from EDPAgent.agent_rule import ScenarioDiscoveryConfig
 
@@ -429,7 +453,8 @@ class TestScenarioSwitching:
         assert cfg.base_path == "skills/scenarios"
         assert cfg.active_scenario == "AgentRule_wealth_purchase"
 
-    def test_active_scenario_env_override(self):
+    @staticmethod
+    def test_active_scenario_env_override():
         """通过环境变量 ACTIVE_SCENARIO 覆盖场景名。"""
         # 模拟 agent.py 中的逻辑
         from EDPAgent.agent_rule import ScenarioDiscoveryConfig
@@ -451,7 +476,8 @@ class TestScenarioSwitching:
 class TestFullIntegration:
     """完整集成测试：从文件加载到话术查找全链路。"""
 
-    def test_full_chain_from_files_to_lookup(self, tmp_path):
+    @staticmethod
+    def test_full_chain_from_files_to_lookup(tmp_path):
         """从 AgentRule.md + SKILL.md + scenario.md 到话术查找的完整链路。"""
         from EDPAgent.agent_rule import (
             ScriptsConfig,

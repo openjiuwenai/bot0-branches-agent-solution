@@ -17,8 +17,8 @@
 #   - gateway process (port 8084, profile mock-a2a-gateway): forwarding proxy
 #     that routes POST /a2a/{agentId} to the target runtime's /v1/query based
 #     on a hardcoded agentCard → URL routing table. Wraps the target's
-#     QueryResponse.result in an answer envelope so the caller's
-#     RemoteAgentAnswerExtractor can capture business text and agent_id.
+#     QueryResponse.result in an answer envelope so the gateway caller can
+#     preserve the terminal business text and agent_id.
 #
 #   - layer1 process (port 8081, profiles layer1,dev,mock-versatile,
 #     a2a-gateway-test): serves /v1/query, runs mock Versatile SSE flow that

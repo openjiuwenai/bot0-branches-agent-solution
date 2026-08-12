@@ -168,7 +168,8 @@ class TestCloseResource:
         closed = []
 
         class _SyncCloseResource:
-            def dispose(self):  # sync, returns None
+            @staticmethod
+            def dispose():  # sync, returns None
                 closed.append("done")
 
         with patch.object(mem_engine, "logger") as mock_logger:
