@@ -109,4 +109,39 @@ class ParamValidatorTest {
         GovernanceContext ctx = validate(validator, STREAMING);
         assertThat(ctx.method()).isEqualTo("SendStreamingMessage");
     }
+
+    @Test
+    void fingerprintExcludesJsonRpcRequestId() {
+        // ISSUE-84/85: 同一业务正文,仅顶层 id 不同(JSON-RPC 客户端重试惯例) → 同指纹 → 幂等复用而非 409
+        String idA = "{\"jsonrpc\":\"2.0\",\"id\":\"A\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+        String idB = "{\"jsonrpc\":\"2.0\",\"id\":\"B\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+        assertThat(validate(validator, idA).idempotencyFingerprint())
+                .isEqualTo(validate(validator, idB).idempotencyFingerprint());
+    }
+
+    @Test
+    void fingerprintIsStableAcrossFieldOrder() {
+        // ISSUE-84: 同一业务正文,JSON 字段顺序不同 → 同指纹(规范化键序排序)
+        String orderA = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]},"
+                + "\"metadata\":{\"agentId\":\"agent-9\"}}}";
+        String orderB = "{\"jsonrpc\":\"2.0\",\"id\":\"2\",\"method\":\"SendMessage\","
+                + "\"params\":{\"metadata\":{\"agentId\":\"agent-9\"},"
+                + "\"message\":{\"parts\":[{\"text\":\"hi\"}],\"messageId\":\"m1\"}}}";
+        assertThat(validate(validator, orderA).idempotencyFingerprint())
+                .isEqualTo(validate(validator, orderB).idempotencyFingerprint());
+    }
+
+    @Test
+    void fingerprintReflectsBusinessBody() {
+        // 不同业务正文 → 不同指纹 → 幂等冲突 409(保留冲突检测)
+        String body1 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"hi\"}]}}}";
+        String body2 = "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"SendMessage\","
+                + "\"params\":{\"message\":{\"messageId\":\"m1\",\"parts\":[{\"text\":\"bye\"}]}}}";
+        assertThat(validate(validator, body1).idempotencyFingerprint())
+                .isNotEqualTo(validate(validator, body2).idempotencyFingerprint());
+    }
 }

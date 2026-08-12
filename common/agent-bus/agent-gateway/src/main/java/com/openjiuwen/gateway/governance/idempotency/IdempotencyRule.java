@@ -19,11 +19,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>730 in-memory single-process store (decision D4). Multi-instance Gateway
  * would need shared storage — deliberately out of 730 scope (documented).
  *
- * <p>Fingerprint is the raw create body (730 simplification of L2 §3.6.1
- * "规范化正文摘要"; since the body carries {@code params.metadata.agentId}, an
- * agentId change also changes the fingerprint). Same key + different fingerprint
- * -> CONFLICT (409). Same key + same fingerprint + completed -> REPLAY the prior
- * result. Same key + same fingerprint + still in-flight -> IN_FLIGHT_DUPLICATE.
+ * <p>Fingerprint is the normalized {@code params} subtree (business body incl.
+ * {@code message} + {@code metadata}), serialized with sorted keys; the JSON-RPC
+ * envelope fields {@code id} / {@code jsonrpc} / {@code method} are excluded so a
+ * client retry that regenerates the request {@code id} (JSON-RPC convention) does
+ * not break idempotent reuse (FEAT-011 L2 §3.6 idempotency key = messageId; the
+ * fingerprint carries {@code params.metadata.agentId}, so an agentId change still
+ * changes it). Same key + different fingerprint -> CONFLICT (409). Same key + same
+ * fingerprint + completed -> REPLAY the prior result. Same key + same fingerprint +
+ * still in-flight -> IN_FLIGHT_DUPLICATE.
  *
  * @since 0.1.0
  */
@@ -39,7 +43,7 @@ public class IdempotencyRule {
      *
      * @param tenantId    authoritative tenant (G2)
      * @param messageId   create idempotency key (may be blank -> SKIP)
-     * @param fingerprint create body fingerprint (raw body)
+     * @param fingerprint normalized params body fingerprint (envelope id excluded)
      * @return decision telling the controller how to proceed
      */
     public Decision check(String tenantId, String messageId, String fingerprint) {
