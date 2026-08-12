@@ -52,7 +52,7 @@ final class BusRemoteCallEventConsumer {
             } else {
                 LOG.debug("Unknown A2A client event type: {}", event.getClass().getSimpleName());
             }
-        } catch (RuntimeException failure) {
+        } catch (IllegalArgumentException | IllegalStateException failure) {
             result.completeExceptionally(failure);
         }
     }
