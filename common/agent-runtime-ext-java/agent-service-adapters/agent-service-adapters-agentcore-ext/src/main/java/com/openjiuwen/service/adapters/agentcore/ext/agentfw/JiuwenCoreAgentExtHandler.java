@@ -4,7 +4,11 @@
 
 package com.openjiuwen.service.adapters.agentcore.ext.agentfw;
 
+import com.openjiuwen.core.runner.Runner;
+import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.agentfw.JiuwenCoreAgentHandler;
+import com.openjiuwen.service.adapters.agentcore.ext.concurrency.AgentInstanceManager;
+import com.openjiuwen.service.adapters.agentcore.ext.concurrency.TaskQuotaTracker;
 import com.openjiuwen.service.adapters.agentcore.ext.external.ClientToolRail;
 import com.openjiuwen.service.adapters.agentcore.ext.external.RemoteA2aToolInstaller;
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRailBinding;
@@ -12,6 +16,7 @@ import com.openjiuwen.service.adapters.agentcore.ext.middleware.otel.OtelRuntime
 import com.openjiuwen.service.adapters.agentcore.ext.middleware.skillhub.SkillHubManager;
 import com.openjiuwen.service.adapters.agentcore.external.ExternalSvcAdapterRegistrar;
 import com.openjiuwen.service.adapters.agentcore.middleware.MiddlewareAdapterRegistrar;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 import com.openjiuwen.service.spec.dto.QueryResponse;
 import com.openjiuwen.service.spec.dto.ServeRequest;
 import com.openjiuwen.service.spec.spi.QueryStreamObserver;
@@ -20,10 +25,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * AgentCore handler extension that installs remote A2A tools and SkillHub skills before execution.
+ *
+ * <p>When {@link AgentInstanceManager} is injected (DFX-002 concurrency mode),
+ * each request acquires a fresh per-Task Agent instance to avoid concurrency
+ * issues in agent-core-java. The per-Task agent is passed to Runner via the
+ * {@code currentTaskAgent} ThreadLocal, which is cleaned in the finally block.
  *
  * @since 2026-06-30
  */
@@ -33,6 +46,17 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
     private RemoteA2aToolInstaller remoteToolInstaller = RemoteA2aToolInstaller.noop();
     private IntentDeepAgentInstaller intentInstaller;
     private SkillHubManager skillHubManager;
+
+    @Autowired(required = false)
+    private TaskAdmissionGate admissionGate;
+
+    @Autowired(required = false)
+    private AgentInstanceManager agentManager;
+
+    @Autowired(required = false)
+    private TaskQuotaTracker quotaTracker;
+
+    final ThreadLocal<Object> currentTaskAgent = new ThreadLocal<>();
 
     public JiuwenCoreAgentExtHandler(Object agent) {
         super(requireAgentInstance(agent));
@@ -73,6 +97,18 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         this.skillHubManager = skillHubManager;
     }
 
+    void setAdmissionGate(TaskAdmissionGate admissionGate) {
+        this.admissionGate = admissionGate;
+    }
+
+    void setAgentManager(AgentInstanceManager agentManager) {
+        this.agentManager = agentManager;
+    }
+
+    void setQuotaTracker(TaskQuotaTracker quotaTracker) {
+        this.quotaTracker = quotaTracker;
+    }
+
     @Override
     public void start() {
         if (skillHubManager != null) {
@@ -102,23 +138,39 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
 
     @Override
     public void streamQuery(ServeRequest request, QueryStreamObserver observer) {
-        installBeforeRun();
-        OtelRailBinding otelBinding = bindOtel(request);
-        try (var binding = ClientToolRail.bind(getAgent(), request)) {
-            super.streamQuery(request, observer);
+        Object agent = resolveTaskAgent(request);
+        try {
+            installBeforeRun(agent);
+            OtelRailBinding otelBinding = bindOtel(agent, request);
+            try (var binding = ClientToolRail.bind(agent, request)) {
+                currentTaskAgent.set(agent);
+                onTaskWorking(request);
+                super.streamQuery(request, observer);
+            } finally {
+                closeOtelQuietly(otelBinding);
+            }
         } finally {
-            closeOtelQuietly(otelBinding);
+            currentTaskAgent.remove();
+            releaseTaskResources(request, agent);
         }
     }
 
     @Override
     public QueryResponse query(ServeRequest request) {
-        installBeforeRun();
-        OtelRailBinding otelBinding = bindOtel(request);
-        try (var binding = ClientToolRail.bind(getAgent(), request)) {
-            return super.query(request);
+        Object agent = resolveTaskAgent(request);
+        try {
+            installBeforeRun(agent);
+            OtelRailBinding otelBinding = bindOtel(agent, request);
+            try (var binding = ClientToolRail.bind(agent, request)) {
+                currentTaskAgent.set(agent);
+                onTaskWorking(request);
+                return super.query(request);
+            } finally {
+                closeOtelQuietly(otelBinding);
+            }
         } finally {
-            closeOtelQuietly(otelBinding);
+            currentTaskAgent.remove();
+            releaseTaskResources(request, agent);
         }
     }
 
@@ -130,22 +182,68 @@ public class JiuwenCoreAgentExtHandler extends JiuwenCoreAgentHandler {
         }
     }
 
-    private OtelRailBinding bindOtel(ServeRequest request) {
+    private OtelRailBinding bindOtel(Object agent, ServeRequest request) {
         // 同模块 middleware/otel：未启用时 OtelRuntimeSupport 内部返回 no-op 绑定
-        return OtelRuntimeSupport.bindRequest(getAgent(), request.getConversationId());
+        return OtelRuntimeSupport.bindRequest(agent, request.getConversationId());
     }
 
-    private void installBeforeRun() {
+    @Override
+    protected Iterator<Object> executeAgentStreaming(Map<String, Object> inputs, Object session,
+            List<StreamMode> streamModes) {
+        Object agent = currentTaskAgent.get();
+        if (agent != null) {
+            return Runner.runAgentStreaming(agent, inputs, session, null, streamModes);
+        }
+        return super.executeAgentStreaming(inputs, session, streamModes);
+    }
+
+    @Override
+    protected Object executeAgent(Map<String, Object> inputs, Object session) {
+        Object agent = currentTaskAgent.get();
+        if (agent != null) {
+            return Runner.runAgent(agent, inputs, session, null);
+        }
+        return super.executeAgent(inputs, session);
+    }
+
+    protected void installBeforeRun(Object agent) {
         if (intentInstaller == null) {
-            remoteToolInstaller.install(getAgent());
+            remoteToolInstaller.install(agent);
         } else {
-            intentInstaller.install(getAgent());
+            intentInstaller.install(agent);
             if (intentInstaller.exposeAgentCardTools()) {
-                remoteToolInstaller.install(getAgent());
+                remoteToolInstaller.install(agent);
             }
         }
         if (skillHubManager != null) {
-            skillHubManager.register(getAgent());
+            skillHubManager.register(agent);
+        }
+    }
+
+    private Object resolveTaskAgent(ServeRequest request) {
+        if (agentManager != null) {
+            return agentManager.acquire(request.getConversationId());
+        }
+        return getAgent();
+    }
+
+    private void onTaskWorking(ServeRequest request) {
+        if (quotaTracker != null) {
+            String taskId = request.getMetadata() != null
+                    ? (String) request.getMetadata().get("runtime.parentTaskId") : null;
+            quotaTracker.onTaskWorking(request.getConversationId(), taskId);
+        }
+    }
+
+    private void releaseTaskResources(ServeRequest request, Object agent) {
+        if (quotaTracker != null) {
+            quotaTracker.onTaskReleased(request.getConversationId());
+        }
+        if (agentManager != null) {
+            agentManager.release(request.getConversationId(), agent);
+        }
+        if (admissionGate != null) {
+            admissionGate.release();
         }
     }
 

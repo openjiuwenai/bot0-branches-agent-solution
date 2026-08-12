@@ -6,6 +6,7 @@ package com.openjiuwen.service.app.custom.rest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 import com.openjiuwen.service.spec.lifecycle.AgentReadiness;
 
 import org.a2aproject.sdk.server.ServerCallContext;
@@ -19,6 +20,8 @@ import org.a2aproject.sdk.spec.Message;
 import org.a2aproject.sdk.spec.MessageSendParams;
 import org.a2aproject.sdk.spec.StreamingEventKind;
 import org.a2aproject.sdk.spec.Task;
+
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.Map;
 import java.util.Objects;
@@ -39,6 +42,7 @@ final class CustomRestA2ABridge {
     private final CustomRestA2ATaskResolver resolver;
     private final AgentReadiness readiness;
     private final ConcurrentHashMap<String, Object> reservations = new ConcurrentHashMap<>();
+    private ObjectProvider<TaskAdmissionGate> admissionGateProvider;
 
     CustomRestA2ABridge(CustomRestProtocolAdapter adapter, RequestHandler requestHandler, TaskStore taskStore,
                        AgentReadiness readiness) {
@@ -46,6 +50,11 @@ final class CustomRestA2ABridge {
         this.requestHandler = Objects.requireNonNull(requestHandler, "requestHandler");
         this.resolver = new CustomRestA2ATaskResolver(Objects.requireNonNull(taskStore, "taskStore"));
         this.readiness = readiness;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setAdmissionGateProvider(ObjectProvider<TaskAdmissionGate> admissionGateProvider) {
+        this.admissionGateProvider = admissionGateProvider;
     }
 
     Prepared prepare(CustomRestProtocolAdapter.Context context, boolean acceptsSse) {
@@ -56,6 +65,11 @@ final class CustomRestA2ABridge {
         }
         if (readiness != null && !readiness.isAgentLoaded()) {
             throw new CustomRestFailure(503, "agent_not_ready", "The agent is not ready");
+        }
+        TaskAdmissionGate admissionGate = admissionGateProvider != null
+                ? admissionGateProvider.getIfAvailable() : null;
+        if (admissionGate != null && !admissionGate.tryAcquire()) {
+            throw new CustomRestFailure(503, "concurrent_limit_reached", "Concurrent task limit reached");
         }
 
         MessageSendParams preparedParams = command.params();
@@ -74,9 +88,12 @@ final class CustomRestA2ABridge {
                 }
             }
             preparedSuccessfully = true;
-            return new Prepared(context, preparedParams, command.stream(), token);
+            return new Prepared(context, preparedParams, command.stream(), token, admissionGate);
         } finally {
             if (!preparedSuccessfully) {
+                if (admissionGate != null) {
+                    admissionGate.release();
+                }
                 release(conversationId, token);
             }
         }
@@ -84,8 +101,10 @@ final class CustomRestA2ABridge {
 
     Object executeBlocking(Prepared prepared) {
         Task task;
+        boolean admissionHeld = prepared.admissionGate() != null;
         try {
             EventKind result = requestHandler.onMessageSend(prepared.params(), callContext(prepared.stream()));
+            admissionHeld = false;
             if (!(result instanceof Task)) {
                 throw new CustomRestFailure(502, "invalid_a2a_result",
                         "The A2A runtime returned an invalid blocking result");
@@ -97,8 +116,11 @@ final class CustomRestA2ABridge {
             throw failure;
         } catch (RuntimeException error) {
             throw new CustomRestFailure(500, "adapter_execution_failed",
-                    "The A2A runtime could not execute the request");
+                    "The A2A runtime could not execute the request", error);
         } finally {
+            if (admissionHeld && prepared.admissionGate() != null) {
+                prepared.admissionGate().release();
+            }
             release(prepared.params().message().contextId(), prepared.token());
         }
         return projectTask(task, prepared.httpContext());
@@ -110,11 +132,19 @@ final class CustomRestA2ABridge {
                             prepared.params(), callContext(prepared.stream())),
                     "RequestHandler returned a null publisher");
         } catch (A2AError error) {
+            releaseAdmission(prepared);
             release(prepared.params().message().contextId(), prepared.token());
             throw mapA2AError(error);
         } catch (RuntimeException error) {
+            releaseAdmission(prepared);
             release(prepared.params().message().contextId(), prepared.token());
-            throw new CustomRestFailure(500, "adapter_execution_failed", "The A2A stream could not be started");
+            throw new CustomRestFailure(500, "adapter_execution_failed", "The A2A stream could not be started", error);
+        }
+    }
+
+    private void releaseAdmission(Prepared prepared) {
+        if (prepared.admissionGate() != null) {
+            prepared.admissionGate().release();
         }
     }
 
@@ -224,6 +254,7 @@ final class CustomRestA2ABridge {
     record Prepared(CustomRestProtocolAdapter.Context httpContext,
                     MessageSendParams params,
                     boolean stream,
-                    Object token) {
+                    Object token,
+                    TaskAdmissionGate admissionGate) {
     }
 }
