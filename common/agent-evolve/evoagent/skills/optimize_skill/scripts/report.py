@@ -224,7 +224,9 @@ def _artifact_epoch_offset(run_dir: Path, skill_dirs: list[Path]) -> int:
             number = _epoch_number(path)
             if number is not None:
                 skill_epochs.append(number)
-    if gate_epochs and skill_epochs and min(gate_epochs) == 1 and min(skill_epochs) == 0:
+    gate_aligned = bool(gate_epochs) and min(gate_epochs) == 1
+    skill_aligned = bool(skill_epochs) and min(skill_epochs) == 0
+    if gate_aligned and skill_aligned:
         return 1
     return 0
 

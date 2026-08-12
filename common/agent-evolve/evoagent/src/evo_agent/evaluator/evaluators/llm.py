@@ -253,13 +253,14 @@ class LLMEvaluator(EvaluateInputMixin, BaseEvaluator):  # type: ignore[misc]
             )
             response = result.text
         except Exception as e:
-            if (
+            is_retryable_unusable = (
                 isinstance(e, LLMInvocationError)
                 and e.category == "unusable_response"
                 and invalid_error is not None
                 and invalid_response is not None
                 and e.result is not None
-            ):
+            )
+            if is_retryable_unusable:
                 _attach_invocation_diagnostics(
                     invalid_error,
                     response=invalid_response,
@@ -571,11 +572,12 @@ def _validate_evaluator_output(data: dict[str, Any]) -> ValidationResult:
         return ValidationResult(False, "field_type", "attributed_skill must be a string")
     for dimension in _DIM_KEYS:
         value = data.get(dimension)
-        if value is not None and (
+        is_invalid_number = (
             isinstance(value, bool)
             or not isinstance(value, (int, float))
             or not math.isfinite(value)
-        ):
+        )
+        if value is not None and is_invalid_number:
             return ValidationResult(
                 False,
                 "field_type",

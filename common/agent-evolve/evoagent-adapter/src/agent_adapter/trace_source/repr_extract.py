@@ -76,7 +76,9 @@ def _tokenize(s: str):
             yield ("STR", "".join(buf))
             i = j + 1
             continue
-        if c.isdigit() or (c == "-" and i + 1 < n and s[i + 1].isdigit()):
+        is_digit = c.isdigit()
+        is_signed_number = c == "-" and i + 1 < n and s[i + 1].isdigit()
+        if is_digit or is_signed_number:
             j = i + 1
             while j < n and (s[j].isdigit() or s[j] == "."):
                 j += 1
