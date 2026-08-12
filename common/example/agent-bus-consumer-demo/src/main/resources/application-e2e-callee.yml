@@ -22,11 +22,6 @@ openjiuwen:
         enabled: true
 
 agent-bus:
-  role:
-    caller:
-      enabled: false
-    runtime:
-      enabled: true
   reliability:
     enabled: false
   producer-group: ${AGENT_BUS_RUNTIME_PRODUCER_GROUP:runtime-target-producer}

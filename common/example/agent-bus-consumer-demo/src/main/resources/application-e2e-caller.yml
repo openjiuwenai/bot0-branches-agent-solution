@@ -23,11 +23,6 @@ openjiuwen:
         registry-base-url: ${RDC_BASE_URL:http://127.0.0.1:8092}
 
 agent-bus:
-  role:
-    caller:
-      enabled: true
-    runtime:
-      enabled: true
   reliability:
     enabled: false
   producer-group: ${AGENT_BUS_CALLER_PRODUCER_GROUP:runtime-source-caller}

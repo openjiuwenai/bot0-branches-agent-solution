@@ -17,7 +17,6 @@ import com.openjiuwen.service.bus.consumer.a2a.TaskStoreProjectionPostProcessor;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusCallerResponseLifecycle;
 import com.openjiuwen.service.bus.consumer.caller.AgentBusRemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.caller.RuntimeRdcClient;
-import com.openjiuwen.service.bus.consumer.caller.UnavailableAgentBusRemoteAgentCaller;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairScheduler;
 import com.openjiuwen.service.bus.consumer.relay.BusProjectionRepairer;
 import com.openjiuwen.service.bus.consumer.relay.BusResponseRelay;
@@ -126,7 +125,7 @@ public class BusConsumerAutoConfiguration {
     }
 
     @Bean
-    RemoteAgentCaller agentBusRemoteAgentCaller(ObjectProvider<RuntimeRdcClient> registry,
+    AgentBusRemoteAgentCaller agentBusRemoteAgentCaller(ObjectProvider<RuntimeRdcClient> registry,
             ObjectProvider<AgentBusRequestSubmitter> requestSubmitter,
             @Qualifier("agentBusCallerExecutor") ExecutorService agentBusCallerExecutor,
             CallerSettings settings,
@@ -134,7 +133,8 @@ public class BusConsumerAutoConfiguration {
         RuntimeRdcClient registryClient = registry.getIfAvailable();
         AgentBusRequestSubmitter submitter = requestSubmitter.getIfAvailable();
         if (registryClient == null || submitter == null) {
-            return new UnavailableAgentBusRemoteAgentCaller();
+            throw new IllegalStateException("Agent Bus caller role requires AgentBusRequestSubmitter "
+                    + "and responseConsumer when bus consumer is enabled");
         }
         return new AgentBusRemoteAgentCaller(registryClient, submitter, agentBusCallerExecutor,
                 settings.tenantId(), settings.sourceServiceId(), settings.responseTimeoutMillis(),
@@ -145,10 +145,7 @@ public class BusConsumerAutoConfiguration {
     @ConditionalOnBean(value = AgentBusRequestSubmitter.class, name = "responseConsumer")
     AgentBusCallerResponseLifecycle agentBusCallerResponseLifecycle(
             @Qualifier("responseConsumer") BrokerForwardingConsumerPort consumer,
-            RemoteAgentCaller agentBusRemoteAgentCaller, AgentBusBrokerProperties bus, Environment environment) {
-        if (!(agentBusRemoteAgentCaller instanceof AgentBusRemoteAgentCaller caller)) {
-            throw new IllegalStateException("Agent Bus caller infrastructure is incomplete");
-        }
+            AgentBusRemoteAgentCaller caller, AgentBusBrokerProperties bus, Environment environment) {
         ExecutorService executor = executor(1, "bus-caller-response");
         String serviceId = serviceId(environment);
         return new AgentBusCallerResponseLifecycle(consumer, caller, executor,
@@ -264,20 +261,31 @@ public class BusConsumerAutoConfiguration {
             if (callers.size() != 1 || !callers.containsKey("agentBusRemoteAgentCaller")) {
                 throw new IllegalStateException("Agent Bus must be the only RemoteAgentCaller when bus is enabled");
             }
-            if (hasRuntimeRole(beans)) {
-                requireBean(beans, RequestHandler.class, "A2A RequestHandler is required for the runtime role");
-                requireBean(beans, TaskStore.class, "A2A TaskStore is required for the runtime role");
-                requireBean(beans, AgentBusResponsePublisher.class,
-                        "runtimeResponseProducer is required for the runtime role");
-                requireBean(beans, RuntimeBusEventConsumer.class,
-                        "RuntimeBusEventConsumer could not be assembled for the runtime role");
-            }
+            requireNamedBean(beans, "runtimeRequestConsumer",
+                    "runtimeRequestConsumer is required when bus consumer is enabled");
+            requireNamedBean(beans, "runtimeResponseProducer",
+                    "runtimeResponseProducer is required when bus consumer is enabled");
+            requireNamedBean(beans, "responseConsumer",
+                    "responseConsumer is required when bus consumer is enabled");
+            requireBean(beans, AgentBusRequestSubmitter.class,
+                    "AgentBusRequestSubmitter is required when bus consumer is enabled");
+            requireBean(beans, RequestHandler.class, "A2A RequestHandler is required for the runtime role");
+            requireBean(beans, TaskStore.class, "A2A TaskStore is required for the runtime role");
+            requireBean(beans, AgentBusBrokerDeliveryPort.class,
+                    "AgentBusBrokerDeliveryPort could not be assembled for the runtime role");
+            requireBean(beans, AgentBusResponsePublisher.class,
+                    "AgentBusResponsePublisher could not be assembled for the runtime role");
+            requireBean(beans, RuntimeBusEventConsumer.class,
+                    "RuntimeBusEventConsumer could not be assembled for the runtime role");
+            requireBean(beans, AgentBusCallerResponseLifecycle.class,
+                    "AgentBusCallerResponseLifecycle could not be assembled for the caller role");
         };
     }
 
-    private static boolean hasRuntimeRole(ConfigurableListableBeanFactory beans) {
-        return beans.containsBean("runtimeRequestConsumer")
-                || beans.getBeanProvider(AgentBusBrokerDeliveryPort.class).getIfAvailable() != null;
+    private static void requireNamedBean(ConfigurableListableBeanFactory beans, String name, String message) {
+        if (!beans.containsBean(name)) {
+            throw new IllegalStateException(message);
+        }
     }
 
     private static <T> void requireBean(ConfigurableListableBeanFactory beans, Class<T> type, String message) {

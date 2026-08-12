@@ -16,12 +16,14 @@ openjiuwen:
         enabled: false
     bus:
       consumer:
-        enabled: true
+        enabled: ${AGENT_BUS_ENABLED:true}
 
 agent-bus:
   role:
     runtime:
-      enabled: true
+      enabled: ${openjiuwen.service.bus.consumer.enabled}
+    caller:
+      enabled: ${openjiuwen.service.bus.consumer.enabled}
   reliability:
     enabled: false
   nameserver: ${AGENT_BUS_NAMESERVER:127.0.0.1:9876}

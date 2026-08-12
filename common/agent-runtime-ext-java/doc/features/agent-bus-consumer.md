@@ -115,16 +115,31 @@ Gateway 随后通过 Runtime 的标准 A2A `SubscribeToTask` HTTP/SSE 入口接�
 ## 8. 自动装配
 
 `openjiuwen.service.bus.consumer.enabled=true` 是本模块的全局开关。启用后要求非空、稳定的
-`openjiuwen.service.service-id` 和非空 `agent-bus.tenant`，但不要求 runtime role 与 caller role
-同时存在。
+`openjiuwen.service.service-id` 和非空 `agent-bus.tenant`。Runtime 应在应用配置中把 Agent Bus SDK
+的两个内部 role 开关都引用到该全局开关：
 
-- Agent Bus SDK runtime role 存在时，必须同时提供 `runtimeRequestConsumer` 和
-  `runtimeResponseProducer`，基础 Runtime 必须提供 A2A `RequestHandler` 和 `TaskStore`。
-- Agent Bus SDK caller role 提供 `AgentBusRequestSubmitter` 和 `responseConsumer` 后，模块装配
-  真实 Bus Caller、内部注册发现客户端和响应生命周期。Caller 通过高层提交端口把请求交给 SDK，
-  不依赖 Agent Bus reliability 层。
-- Bus 全局开关开启后，Runtime 间调用不允许退回 HTTP Caller；caller role 未装配时，
-  真正发起远程调用才返回明确的 `caller role unavailable`，不影响 runtime role 独立启动。
+```yaml
+openjiuwen:
+  service:
+    bus:
+      consumer:
+        enabled: ${AGENT_BUS_ENABLED:false}
+
+agent-bus:
+  role:
+    runtime:
+      enabled: ${openjiuwen.service.bus.consumer.enabled}
+    caller:
+      enabled: ${openjiuwen.service.bus.consumer.enabled}
+```
+
+- 开关开启时，SDK 必须同时提供 `runtimeRequestConsumer`、`runtimeResponseProducer`、
+  `AgentBusRequestSubmitter` 和 `responseConsumer`；基础 Runtime 必须提供 A2A `RequestHandler` 和
+  `TaskStore`。缺少任一组件时启动失败并指出缺失项。
+- 模块装配真实 Bus Caller、内部注册发现客户端和响应生命周期。Caller 通过高层提交端口把请求
+  交给 SDK，不依赖 Agent Bus reliability 层。
+- Bus 全局开关开启后，`AgentBusRemoteAgentCaller` 是唯一 Runtime 间调用实现，不允许退回 HTTP
+  Caller。开关关闭或未配置时不装配 Bus 链路，保留现有纯 HTTP Runtime。
 
 Runtime 侧应配置 `agent-bus.reliability.enabled=false`。`agent-service-bus-consumer` 对
 `event-bus-sdk` 传递的 JDBC、Flyway 和 PostgreSQL 依赖做了排除，因此只使用内存业务状态的
