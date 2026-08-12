@@ -6,7 +6,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.service.app.controller.runtime.ActiveTaskController;
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
 import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;

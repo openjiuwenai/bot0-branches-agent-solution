@@ -11,7 +11,7 @@ import com.openjiuwen.core.session.stream.OutputSchema;
 import com.openjiuwen.core.session.stream.StreamMode;
 import com.openjiuwen.service.adapters.agentcore.ext.agentfw.JiuwenCoreAgentExtHandler;
 import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
-import com.openjiuwen.service.app.controller.runtime.ActiveTaskController;
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
 import com.openjiuwen.service.spec.spi.AgentHandler;

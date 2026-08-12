@@ -6,7 +6,7 @@ package com.openjiuwen.service.adapters.agentcore.ext.concurrency;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.openjiuwen.service.app.controller.runtime.ActiveTaskController;
+import com.openjiuwen.service.app.controller.probe.ActiveTaskController;
 import com.openjiuwen.service.adapters.agentcore.ext.autoconfigure.ConcurrencyAutoConfiguration;
 import com.openjiuwen.service.spec.concurrency.ActiveTaskQuery;
 import com.openjiuwen.service.spec.concurrency.TaskAdmissionGate;
@@ -140,7 +140,7 @@ class ConcurrencyE2EIntegrationTest {
         assertThat(SlowAgent.awaitStarted(5, TimeUnit.SECONDS)).isTrue();
 
         ResponseEntity<Map> snapshot = rest.getForEntity(
-                "http://localhost:" + port + "/v1/runtime/current_act_task", Map.class);
+                "http://localhost:" + port + "/v1/current_active_tasks", Map.class);
 
         assertThat(snapshot.getStatusCode().is2xxSuccessful()).isTrue();
         Map<String, Object> body = snapshot.getBody();
