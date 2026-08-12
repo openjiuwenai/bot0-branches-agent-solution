@@ -50,6 +50,120 @@ def _contract_error(code: str, message: str, status_code: int) -> JSONResponse:
     )
 
 
+def _get_skillhub_service(request: Request):
+    return getattr(request.app.state, "skillhub_service", None)
+
+
+def _handle_skillhub_action(request: Request, skill_request: SkillActionRequest) -> JSONResponse:
+    from agent_adapter.skillhub.errors import (
+        SkillHubAuthError,
+        SkillHubConflictError,
+        SkillHubError,
+        SkillHubNotFoundError,
+        SkillHubValidationError,
+    )
+
+    service = _get_skillhub_service(request)
+    if service is None:
+        return _contract_error(
+            "SKILLHUB_DISABLED",
+            "SkillHub integration is not enabled on this adapter",
+            503,
+        )
+
+    action = skill_request.action
+    agent_name = skill_request.agent_name
+    try:
+        if action == "list_hub_skills":
+            data = service.list_hub_skills(
+                page=skill_request.page,
+                page_size=skill_request.page_size,
+                keyword=skill_request.keyword,
+            )
+            return JSONResponse(content=data)
+
+        if action == "get_hub_version":
+            assert skill_request.asset_id is not None
+            assert skill_request.version is not None
+            data = service.get_hub_version(skill_request.asset_id, skill_request.version)
+            return JSONResponse(content=data)
+
+        if action == "pull_skill":
+            assert skill_request.asset_id is not None
+            assert skill_request.version is not None
+            result = service.pull_skill(
+                agent_name,
+                skill_request.asset_id,
+                skill_request.version,
+                overwrite=skill_request.overwrite,
+            )
+            return JSONResponse(
+                content={
+                    "asset_id": result.asset_id,
+                    "skill_name": result.skill_name,
+                    "version": result.version,
+                    "local_path": result.local_path,
+                    "revision": result.revision,
+                },
+            )
+
+        if action == "publish_skill":
+            assert skill_request.skill_name is not None
+            result = service.publish_skill(
+                agent_name,
+                skill_request.skill_name,
+                plugin_version=skill_request.plugin_version,
+                asset_id=skill_request.asset_id,
+                version_desc=skill_request.version_desc,
+                force=skill_request.force,
+            )
+            return JSONResponse(
+                content={
+                    "asset_id": result.asset_id,
+                    "skill_name": result.skill_name,
+                    "version": result.version,
+                    "plugin_type": result.plugin_type,
+                    "publish_result": result.publish_result,
+                    "moderation_status": result.moderation_status,
+                    "checksum_sha256": result.checksum_sha256,
+                    "version_desc": result.version_desc,
+                    "local_revision": result.local_revision,
+                },
+            )
+
+        if action == "delete_hub_version":
+            assert skill_request.asset_id is not None
+            assert skill_request.version is not None
+            result = service.delete_hub_version(skill_request.asset_id, skill_request.version)
+            return JSONResponse(
+                content={
+                    "asset_id": result.asset_id,
+                    "version": result.version,
+                    "deleted": result.deleted,
+                },
+            )
+
+        return _contract_error("INVALID_ACTION", "Unrecognized or invalid action", 400)
+
+    except SkillHubValidationError as exc:
+        return _contract_error("INVALID_ACTION", str(exc), 400)
+    except SkillHubAuthError as exc:
+        return _contract_error("HUB_AUTH_FAILED", str(exc), 401)
+    except SkillHubNotFoundError as exc:
+        return _contract_error("HUB_NOT_FOUND", str(exc), 404)
+    except SkillHubConflictError as exc:
+        return _contract_error("HUB_CONFLICT", str(exc), 409)
+    except SkillHubError as exc:
+        code = "HUB_ERROR"
+        status = exc.status_code if exc.status_code >= 400 else 502
+        return _contract_error(code, str(exc), status)
+    except SkillAgentNotFoundError as exc:
+        return _contract_error("AGENT_NOT_FOUND", str(exc), 404)
+    except Exception:
+        logger.exception("skillhub_action_error", agent_name=agent_name, action=action)
+        return _contract_error("INTERNAL_ERROR", "Failed to process SkillHub request", 500)
+
+
 @router.get("/health")
 async def health() -> dict[str, str]:
     """Return adapter health status."""
@@ -200,6 +314,15 @@ async def skills_action(request: Request) -> JSONResponse:
             if result.message:
                 payload["message"] = result.message
             return JSONResponse(content=payload)
+
+        if action in {
+            "list_hub_skills",
+            "get_hub_version",
+            "pull_skill",
+            "publish_skill",
+            "delete_hub_version",
+        }:
+            return _handle_skillhub_action(request, skill_request)
 
         return _contract_error("INVALID_ACTION", "Unrecognized or invalid action", 400)
 

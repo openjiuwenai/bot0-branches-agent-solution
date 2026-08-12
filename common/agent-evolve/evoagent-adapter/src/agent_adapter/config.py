@@ -290,6 +290,17 @@ class AdapterConfig(BaseSettings):
     # ── GET /traces/{conv} 服务端短等待 (设计文档 §7: 5s 上报 + 余量) ──
     trace_wait_timeout: float = 10.0
 
+    # ── SkillHub integration (optional publish/pull to marketplace) ──
+    skillhub_enabled: bool = False
+    skillhub_base_url: str = ""
+    skillhub_auth_mode: Literal["bearer", "system_token"] = "system_token"
+    skillhub_token: str = ""
+    skillhub_token_env: str = "SKILLHUB_TOKEN"
+    skillhub_connect_timeout: float = 30.0
+    skillhub_publish_timeout: float = 120.0
+    skillhub_version_strategy: Literal["patch", "manual"] = "manual"
+    skillhub_default_plugin_type: str = "skill"
+
     # ── Internal (not from YAML/env) ──
     _yaml_path: str | None = None
 
