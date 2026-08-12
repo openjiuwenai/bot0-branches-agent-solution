@@ -31,7 +31,8 @@ def test_prompt_does_not_have_64_section():
 
 def test_agent_rule_md_does_not_mention_legacy_todolist_tools():
     """AgentRule.md is injected into the system prompt — must not instruct LLM
-    to call todolist_create / todolist_modify (deleted in Phase 1)."""
+    to call todolist_create / todolist_modify (deleted in Phase 1).
+    """
     agent_rule_path = Path(__file__).resolve().parent.parent / "AgentRule.md"
     text = agent_rule_path.read_text(encoding="utf-8")
     for legacy in _LEGACY_TOOL_NAMES:

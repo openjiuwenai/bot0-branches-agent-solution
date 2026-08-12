@@ -45,13 +45,13 @@ from datetime import timezone
 from typing import Any, List
 
 from loguru import logger
-
-from ..memory_engine import get_memory_engine, init_memory_engine
 from openjiuwen.core.common.security.json_utils import JsonUtils
 from openjiuwen.core.foundation.llm import AssistantMessage, UserMessage
 from openjiuwen.core.memory.config.config import AgentMemoryConfig
 from openjiuwen.core.memory.long_term_memory import LongTermMemory
 from openjiuwen.core.single_agent.rail.base import AgentCallbackContext, AgentRail
+
+from ..memory_engine import get_memory_engine, init_memory_engine
 
 # ════════════════════════════════════════════════════════════════════════
 # Constants
@@ -236,16 +236,16 @@ class MemoryRail(AgentRail):
             ctx.extra["_memory_typed"] = typed_sections
 
             if typed_sections:
-                _TYPE_LABELS = {
-                    "user_profile":    "用户画像",
+                _type_labels = {
+                    "user_profile": "用户画像",
                     "semantic_memory": "语义记忆",
                     "episodic_memory": "情景记忆",
-                    "summary":         "会话摘要",
-                    "unknown":         "其他记忆",
+                    "summary": "会话摘要",
+                    "unknown": "其他记忆",
                 }
                 lines = []
                 for t, items in typed_sections.items():
-                    label = _TYPE_LABELS.get(t, t)
+                    label = _type_labels.get(t, t)
                     lines.append(f"[{label}]")
                     lines.extend(f"- {c}" for c in items)
                 result["sys_long_term_memory"] = "\n".join(lines)

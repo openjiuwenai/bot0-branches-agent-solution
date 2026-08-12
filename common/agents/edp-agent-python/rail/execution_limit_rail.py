@@ -15,12 +15,11 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from common.logger import Extra, Tag, to_logger, TagObservation, ObservationType, Level
-
 from loguru import logger
 from openjiuwen.core.session.stream import OutputSchema
 from openjiuwen.core.single_agent.rail.base import AgentRail, AgentCallbackContext
 
+from common.logger import Extra, Tag, to_logger, TagObservation, ObservationType, Level
 from .. import state_keys
 from ..agent_rule import AgentRuleConfig
 

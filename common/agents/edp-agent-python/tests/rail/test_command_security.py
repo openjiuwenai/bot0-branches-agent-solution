@@ -80,7 +80,8 @@ class TestEmptyAndNonString:
     def test_non_string_types(self, command):
         assert validate_script_command(command) is False
 
-    def test_whitespace_only(self):
+    @staticmethod
+    def test_whitespace_only():
         """Whitespace-only string becomes empty after strip; regex fails."""
         assert validate_script_command("   ") is False
         assert validate_script_command("\t\n") is False

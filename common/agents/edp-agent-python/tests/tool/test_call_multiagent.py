@@ -49,19 +49,23 @@ class TestCallMultiagent:
 class TestCallMultiagentToolCard:
     """Test call_multiagent_tool definition (TC-02)."""
 
-    def test_tool_card_id(self):
+    @staticmethod
+    def test_tool_card_id():
         """TC-02: ToolCard.id == 'call_multiagent'"""
         assert call_multiagent_tool.card.id == "call_multiagent"
 
-    def test_tool_card_name(self):
+    @staticmethod
+    def test_tool_card_name():
         assert call_multiagent_tool.card.name == "call_multiagent"
 
-    def test_entities_is_array(self):
+    @staticmethod
+    def test_entities_is_array():
         """TC-02: entities 参数类型为 array"""
         params = call_multiagent_tool.card.input_params
         assert params["properties"]["entities"]["type"] == "array"
 
-    def test_entities_items_required_fields(self):
+    @staticmethod
+    def test_entities_items_required_fields():
         """TC-02: entities.items.required 包含 entity_id, entity_name, entity_type, query"""
         items = call_multiagent_tool.card.input_params["properties"]["entities"]["items"]
         required = items["required"]
@@ -70,12 +74,14 @@ class TestCallMultiagentToolCard:
         assert "entity_type" in required
         assert "query" in required
 
-    def test_top_level_required(self):
+    @staticmethod
+    def test_top_level_required():
         """TC-02: 顶层 required == ['entities']"""
         params = call_multiagent_tool.card.input_params
         assert params["required"] == ["entities"]
 
-    def test_description_contains_parallel_keyword(self):
+    @staticmethod
+    def test_description_contains_parallel_keyword():
         """TC-02: description 包含'并行调用多个子 Agent'"""
         desc = call_multiagent_tool.card.description
         assert "并行调用多个子 Agent" in desc

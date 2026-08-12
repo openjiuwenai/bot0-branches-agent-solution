@@ -52,15 +52,19 @@ class _FakeSpan:
 class _FakeTracer:
     """模拟 OTel tracer，返回 _FakeSpan 并支持 context manager。"""
 
-    def start_as_current_span(self, name, kind=None):
+    @staticmethod
+    def start_as_current_span(name, kind=None):
         span = _FakeSpan()
 
         class _CM:
-            def __enter__(self_inner):
-                return span
+            def __init__(self):
+                self._span = span
 
-            def __exit__(self_inner, *args):
-                span.end()
+            def __enter__(self):
+                return self._span
+
+            def __exit__(self, *args):
+                self._span.end()
                 return False
 
         return _CM()
@@ -70,19 +74,22 @@ class _FakeTracer:
 class TestOtelSpanHelper:
     """验证 otel_span_helper 的 3 种 context manager 能正确创建 span 并设置属性。"""
 
-    def setup_method(self):
+    @staticmethod
+    def setup_method():
         """每个测试前注入 fake tracer。"""
         from agents.EDPAgent import otel_span_helper
         otel_span_helper._tracer = _FakeTracer()
         otel_span_helper._OTEL_AVAILABLE = True
 
-    def teardown_method(self):
+    @staticmethod
+    def teardown_method():
         """每个测试后清理 tracer。"""
         from agents.EDPAgent import otel_span_helper
         otel_span_helper._tracer = None
         otel_span_helper._OTEL_AVAILABLE = False
 
-    def test_http_request_span(self):
+    @staticmethod
+    def test_http_request_span():
         """http.request span 创建 + 属性设置。"""
         from agents.EDPAgent.otel_span_helper import start_http_request_span
 
@@ -104,16 +111,20 @@ class TestOtelSpanHelper:
         assert attrs["openjiuwen.trace.id"] == "uuid-abc"
         assert attrs["openjiuwen.agent.name"] == "edp_agent"
 
-    def test_versatile_adapter_span_single(self):
+    @staticmethod
+    def test_versatile_adapter_span_single():
         """service.versatile_adapter span 创建（单次 VA 调用）。"""
-        from agents.EDPAgent.otel_span_helper import start_versatile_adapter_span
+        from agents.EDPAgent.otel_span_helper import (
+            start_versatile_adapter_span,
+            VersatileSpanAttrs,
+        )
 
-        with start_versatile_adapter_span(
+        with start_versatile_adapter_span(VersatileSpanAttrs(
             query_intent="理财推荐",
             query_description="推荐理财产品",
             session_id="conv-456",
             dispatch_mode="single",
-        ) as span:
+        )) as span:
             assert span is not None
 
         attrs = span._attrs
@@ -122,11 +133,15 @@ class TestOtelSpanHelper:
         assert attrs["openjiuwen.va.query_description"] == "推荐理财产品"
         assert attrs["session.id"] == "conv-456"
 
-    def test_versatile_adapter_span_parallel(self):
+    @staticmethod
+    def test_versatile_adapter_span_parallel():
         """service.versatile_adapter span 创建（工作流并行调度）。"""
-        from agents.EDPAgent.otel_span_helper import start_versatile_adapter_span
+        from agents.EDPAgent.otel_span_helper import (
+            start_versatile_adapter_span,
+            VersatileSpanAttrs,
+        )
 
-        with start_versatile_adapter_span(
+        with start_versatile_adapter_span(VersatileSpanAttrs(
             query_intent="理财推荐",
             query_description="推荐理财产品",
             session_id="conv-789",
@@ -134,7 +149,7 @@ class TestOtelSpanHelper:
             workflow_id="wf-xxx",
             target_agent="versatile_adapter",
             sub_task_path="['conv-789','wf-xxx']",
-        ) as span:
+        )) as span:
             assert span is not None
 
         attrs = span._attrs
@@ -143,11 +158,15 @@ class TestOtelSpanHelper:
         assert attrs["openjiuwen.va.target_agent"] == "versatile_adapter"
         assert attrs["openjiuwen.va.sub_task_path"] == "['conv-789','wf-xxx']"
 
-    def test_sub_agent_dispatch_span(self):
+    @staticmethod
+    def test_sub_agent_dispatch_span():
         """sub_agent.dispatch span 创建。"""
-        from agents.EDPAgent.otel_span_helper import start_sub_agent_dispatch_span
+        from agents.EDPAgent.otel_span_helper import (
+            start_sub_agent_dispatch_span,
+            SubAgentDispatchSpanAttrs,
+        )
 
-        with start_sub_agent_dispatch_span(
+        with start_sub_agent_dispatch_span(SubAgentDispatchSpanAttrs(
             entity_id="fund_agent",
             entity_name="基金理财 Agent",
             query="推荐稳健型基金",
@@ -155,7 +174,7 @@ class TestOtelSpanHelper:
             sub_task_path="['conv-100','fund_agent']",
             context_id="conv-100-sub-fund_agent",
             session_id="conv-100",
-        ) as span:
+        )) as span:
             assert span is not None
 
         attrs = span._attrs
@@ -167,7 +186,8 @@ class TestOtelSpanHelper:
         assert attrs["openjiuwen.subagent.context_id"] == "conv-100-sub-fund_agent"
         assert attrs["session.id"] == "conv-100"
 
-    def test_otel_disabled_yields_none(self):
+    @staticmethod
+    def test_otel_disabled_yields_none():
         """OTEL_AVAILABLE=False 时 yield None，不创建 span。"""
         from agents.EDPAgent import otel_span_helper
         from agents.EDPAgent.otel_span_helper import start_http_request_span
@@ -183,7 +203,8 @@ class TestOtelSpanHelper:
 class TestEmitMetric:
     """验证 _emit_metric 能补充 OTel span 属性。"""
 
-    def test_emit_metric_sets_attributes(self):
+    @staticmethod
+    def test_emit_metric_sets_attributes():
         """_emit_metric 设置 span 属性。"""
         from agents.EDPAgent.rail.log_rail import LogRail
 
@@ -191,7 +212,10 @@ class TestEmitMetric:
         import sys
         # 临时注入 opentelemetry.trace 模块
         mock_otel_trace = MagicMock()
-        mock_otel_trace.get_current_span = lambda: fake_span
+
+        def get_current_span():
+            return fake_span
+        mock_otel_trace.get_current_span = get_current_span
         sys.modules["opentelemetry"] = MagicMock()
         sys.modules["opentelemetry.trace"] = mock_otel_trace
 
@@ -207,13 +231,17 @@ class TestEmitMetric:
         del sys.modules["opentelemetry"]
         del sys.modules["opentelemetry.trace"]
 
-    def test_emit_metric_no_span(self):
+    @staticmethod
+    def test_emit_metric_no_span():
         """无活跃 span 时 _emit_metric 不报错。"""
         from agents.EDPAgent.rail.log_rail import LogRail
 
         import sys
         mock_otel_trace = MagicMock()
-        mock_otel_trace.get_current_span = lambda: None
+
+        def get_current_span():
+            return None
+        mock_otel_trace.get_current_span = get_current_span
         sys.modules["opentelemetry"] = MagicMock()
         sys.modules["opentelemetry.trace"] = mock_otel_trace
 
@@ -228,7 +256,8 @@ class TestEmitMetric:
 class TestInterceptedToolSpan:
     """验证被拦截工具的 tool span 创建。"""
 
-    def setup_method(self):
+    @staticmethod
+    def setup_method():
         """每个测试前注入 fake tracer 和 opentelemetry mock。
 
         rail 模块在文件头即 `from opentelemetry.trace import SpanKind`，
@@ -246,7 +275,8 @@ class TestInterceptedToolSpan:
         otel_span_helper._tracer = _FakeTracer()
         otel_span_helper._OTEL_AVAILABLE = True
 
-    def teardown_method(self):
+    @staticmethod
+    def teardown_method():
         """每个测试后清理 tracer 和 opentelemetry mock。"""
         import sys
         from agents.EDPAgent import otel_span_helper
@@ -260,12 +290,19 @@ class TestInterceptedToolSpan:
             if "interrupt_rail" in m:
                 del sys.modules[m]
 
-    def _make_ctx(self, session_id="conv-test"):
+    @staticmethod
+    def _make_ctx(session_id="conv-test"):
         """构建 fake ctx 对象。"""
         ctx = MagicMock()
         state: dict[str, Any] = {}
-        ctx.session.get_state.side_effect = lambda key: state.get(key)
-        ctx.session.update_state.side_effect = lambda d: state.update(d)
+
+        def get_state(key):
+            return state.get(key)
+
+        def update_state(d):
+            return state.update(d)
+        ctx.session.get_state.side_effect = get_state
+        ctx.session.update_state.side_effect = update_state
         ctx.session.session_id = session_id
         return ctx
 

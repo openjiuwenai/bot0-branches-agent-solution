@@ -72,12 +72,12 @@ async def close_memory_engine() -> None:
     :func:`init_memory_engine` is called again.
     """
     global _memory_engine
-    if (
-        _memory_engine is None
-        and _redis_client is None
+    resources_none = (
+        _redis_client is None
         and _es_client is None
         and _db_engine is None
-    ):
+    )
+    if _memory_engine is None and resources_none:
         logger.debug("[DPA][MEMORY] Memory engine not initialized, nothing to close")
         return
     logger.info("[DPA][MEMORY] Closing memory engine and releasing connections")

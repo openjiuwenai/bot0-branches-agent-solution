@@ -11,6 +11,7 @@
 测试策略：mock _emit_heartbeat 为 spy，mock 外部依赖（session/agent/checkpointer），
 驱动 _agent_event_stream 到心跳发送点，验证 spy 的调用参数。
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -70,6 +71,7 @@ async def _collect_events(coroutine):
         async for evt in coroutine:
             events.append(evt)
     except Exception:
+        # expected: post-heartbeat stages may raise with incomplete mocks
         pass
     return events
 

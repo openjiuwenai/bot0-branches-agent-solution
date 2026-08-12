@@ -33,7 +33,8 @@ def _mock_scripts_config():
 class TestBuildRails:
     """Test build_rails() with scenario_tools parameter."""
 
-    def test_main_agent_scenario(self):
+    @staticmethod
+    def test_main_agent_scenario():
         """TC-23: 主 Agent 场景配套 MultiagentInterruptRail"""
         rails = build_rails(
             scenario_tools=["call_multiagent"],
@@ -58,7 +59,8 @@ class TestBuildRails:
         assert AskUserRail in rail_types
         assert LogRail in rail_types
 
-    def test_sub_agent_scenario(self):
+    @staticmethod
+    def test_sub_agent_scenario():
         """TC-24: 子 Agent 场景配套 MultiversatileInterruptRail"""
         rails = build_rails(
             scenario_tools=["call_multiversatile"],
@@ -83,7 +85,8 @@ class TestBuildRails:
         assert AskUserRail in rail_types
         assert LogRail in rail_types
 
-    def test_common_rails_always_registered(self):
+    @staticmethod
+    def test_common_rails_always_registered():
         """TC-25: 通用 Rail 在所有场景下始终注册"""
         common_rail_types = {
             IterationLimitRail,
