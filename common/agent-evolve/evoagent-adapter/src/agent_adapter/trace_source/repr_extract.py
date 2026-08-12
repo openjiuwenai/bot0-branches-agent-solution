@@ -2,10 +2,17 @@
 
 EDPAgent 上报的 gen_ai.prompt / gen_ai.completion / openjiuwen.agent.outputs 字段值是
 Python 对象的 repr (非合法 JSON), 例如:
-  - gen_ai.prompt:      {"messages": "[SystemMessage(role='system', content='...'), HumanMessage(role='user', content='...')]"}
-  - gen_ai.completion:  {"outputs": "role='assistant' content='' name=None metadata={} tool_calls=[ToolCall(id='...', type='function', name='...', arguments='...')] usage_metadata=UsageMetadata(code=0, ...)"}
-  - openjiuwen.agent.outputs: {"outputs": "ExecuteCmdResult(code=0, message='success', data=ExecuteCmdData(command='...'))"}
-                        或 {"outputs": "<agents...._ToolOutput object at 0x7cdd1f560450>"}  (不可解析)
+  - gen_ai.prompt:
+    {"messages": "[SystemMessage(role='system', content='...'),
+    HumanMessage(role='user', content='...')]"}
+  - gen_ai.completion:
+    {"outputs": "role='assistant' content='' name=None metadata={}
+    tool_calls=[ToolCall(id='...', type='function', name='...',
+    arguments='...')] usage_metadata=UsageMetadata(code=0, ...)"}
+  - openjiuwen.agent.outputs:
+    {"outputs": "ExecuteCmdResult(code=0, message='success',
+    data=ExecuteCmdData(command='...'))"}
+    或 {"outputs": "<agents...._ToolOutput object at 0x7cdd1f560450>"} (不可解析)
 
 parse_repr 把这类字符串解析成原生 Python 类型 (str/int/float/bool/None/list/dict);
 解析失败或遇 <...object at...> 时返回原字符串 (决策 E, 不抛)。
@@ -99,7 +106,8 @@ def _tokenize(s: str):
             yield ("JUNK", s[i:j + 1])
             i = j + 1
             continue
-        if c in "()[]{}=:->":              # 单字符 token ('->' 在 list/dict 起始不出现, '->'罕用, 此处忽略)
+        # 单字符 token ('->' 在 list/dict 起始不出现, '->'罕用, 此处忽略)
+        if c in "()[]{}=:->":
             yield (c, c)
             i += 1
             continue
@@ -229,7 +237,8 @@ def parse_repr(s: Any) -> Any:
 
 
 def extract_value(v: Any) -> Any:
-    """规整一个字段值: 字符串 → parse_repr (含类名则提取成结构, 不可解析则原样); 已是结构原样返回。"""
+    """规整一个字段值: 字符串 → parse_repr (含类名则提取成结构,
+    不可解析则原样); 已是结构原样返回。"""
     if isinstance(v, str):
         return parse_repr(v)
     return v
