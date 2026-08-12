@@ -57,11 +57,14 @@ class _FakeTracer:
         span = _FakeSpan()
 
         class _CM:
+            def __init__(self):
+                self._span = span
+
             def __enter__(self):
-                return span
+                return self._span
 
             def __exit__(self, *args):
-                span.end()
+                self._span.end()
                 return False
 
         return _CM()
@@ -111,14 +114,17 @@ class TestOtelSpanHelper:
     @staticmethod
     def test_versatile_adapter_span_single():
         """service.versatile_adapter span 创建（单次 VA 调用）。"""
-        from agents.EDPAgent.otel_span_helper import start_versatile_adapter_span
+        from agents.EDPAgent.otel_span_helper import (
+            start_versatile_adapter_span,
+            VersatileSpanAttrs,
+        )
 
-        with start_versatile_adapter_span(
+        with start_versatile_adapter_span(VersatileSpanAttrs(
             query_intent="理财推荐",
             query_description="推荐理财产品",
             session_id="conv-456",
             dispatch_mode="single",
-        ) as span:
+        )) as span:
             assert span is not None
 
         attrs = span._attrs
@@ -130,9 +136,12 @@ class TestOtelSpanHelper:
     @staticmethod
     def test_versatile_adapter_span_parallel():
         """service.versatile_adapter span 创建（工作流并行调度）。"""
-        from agents.EDPAgent.otel_span_helper import start_versatile_adapter_span
+        from agents.EDPAgent.otel_span_helper import (
+            start_versatile_adapter_span,
+            VersatileSpanAttrs,
+        )
 
-        with start_versatile_adapter_span(
+        with start_versatile_adapter_span(VersatileSpanAttrs(
             query_intent="理财推荐",
             query_description="推荐理财产品",
             session_id="conv-789",
@@ -140,7 +149,7 @@ class TestOtelSpanHelper:
             workflow_id="wf-xxx",
             target_agent="versatile_adapter",
             sub_task_path="['conv-789','wf-xxx']",
-        ) as span:
+        )) as span:
             assert span is not None
 
         attrs = span._attrs
@@ -152,9 +161,12 @@ class TestOtelSpanHelper:
     @staticmethod
     def test_sub_agent_dispatch_span():
         """sub_agent.dispatch span 创建。"""
-        from agents.EDPAgent.otel_span_helper import start_sub_agent_dispatch_span
+        from agents.EDPAgent.otel_span_helper import (
+            start_sub_agent_dispatch_span,
+            SubAgentDispatchSpanAttrs,
+        )
 
-        with start_sub_agent_dispatch_span(
+        with start_sub_agent_dispatch_span(SubAgentDispatchSpanAttrs(
             entity_id="fund_agent",
             entity_name="基金理财 Agent",
             query="推荐稳健型基金",
@@ -162,7 +174,7 @@ class TestOtelSpanHelper:
             sub_task_path="['conv-100','fund_agent']",
             context_id="conv-100-sub-fund_agent",
             session_id="conv-100",
-        ) as span:
+        )) as span:
             assert span is not None
 
         attrs = span._attrs

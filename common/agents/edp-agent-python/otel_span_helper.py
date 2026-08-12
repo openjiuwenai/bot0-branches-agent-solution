@@ -10,6 +10,7 @@ parent-child 关系自动建立。
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Optional
 
 _tracer = None        # 初始为 None，由 _register_otel_tracer() 注入
@@ -57,16 +58,20 @@ def start_http_request_span(method: str, route: str, session_id: str,
         yield span
 
 
+@dataclass
+class VersatileSpanAttrs:
+    """service.versatile_adapter span 的属性集合。"""
+    query_intent: str
+    query_description: str
+    session_id: str
+    dispatch_mode: str = "single"
+    workflow_id: str = ""
+    target_agent: str = ""
+    sub_task_path: str = ""
+
+
 @contextmanager
-def start_versatile_adapter_span(
-    query_intent: str,
-    query_description: str,
-    session_id: str,
-    dispatch_mode: str = "single",
-    workflow_id: str = "",
-    target_agent: str = "",
-    sub_task_path: str = "",
-):
+def start_versatile_adapter_span(attrs: VersatileSpanAttrs):
     """创建 service.versatile_adapter span（CLIENT），记录 VA 调用。
 
     单次调用（_call_versatile_adapter）和工作流并行调度（_drive_workflow_va）
@@ -85,29 +90,33 @@ def start_versatile_adapter_span(
     with _tracer.start_as_current_span(
         "service.versatile_adapter", kind=SpanKind.CLIENT
     ) as span:
-        span.set_attribute("openjiuwen.va.dispatch_mode", dispatch_mode)
-        span.set_attribute("openjiuwen.va.query_intent", query_intent)
-        span.set_attribute("openjiuwen.va.query_description", query_description)
-        span.set_attribute("session.id", session_id)
-        if workflow_id:
-            span.set_attribute("openjiuwen.va.workflow_id", workflow_id)
-        if target_agent:
-            span.set_attribute("openjiuwen.va.target_agent", target_agent)
-        if sub_task_path:
-            span.set_attribute("openjiuwen.va.sub_task_path", sub_task_path)
+        span.set_attribute("openjiuwen.va.dispatch_mode", attrs.dispatch_mode)
+        span.set_attribute("openjiuwen.va.query_intent", attrs.query_intent)
+        span.set_attribute("openjiuwen.va.query_description", attrs.query_description)
+        span.set_attribute("session.id", attrs.session_id)
+        if attrs.workflow_id:
+            span.set_attribute("openjiuwen.va.workflow_id", attrs.workflow_id)
+        if attrs.target_agent:
+            span.set_attribute("openjiuwen.va.target_agent", attrs.target_agent)
+        if attrs.sub_task_path:
+            span.set_attribute("openjiuwen.va.sub_task_path", attrs.sub_task_path)
         yield span
 
 
+@dataclass
+class SubAgentDispatchSpanAttrs:
+    """sub_agent.dispatch span 的属性集合。"""
+    entity_id: str
+    entity_name: str
+    query: str
+    sub_agent_url: str
+    sub_task_path: str
+    context_id: str
+    session_id: str
+
+
 @contextmanager
-def start_sub_agent_dispatch_span(
-    entity_id: str,
-    entity_name: str,
-    query: str,
-    sub_agent_url: str,
-    sub_task_path: str,
-    context_id: str,
-    session_id: str,
-):
+def start_sub_agent_dispatch_span(attrs: SubAgentDispatchSpanAttrs):
     """创建 sub_agent.dispatch span（CLIENT），记录子 Agent 调用。
 
     在 remote_agent_handler.py 的 _drive_sub_agent 入口处调用，
@@ -124,11 +133,11 @@ def start_sub_agent_dispatch_span(
     with _tracer.start_as_current_span(
         "sub_agent.dispatch", kind=SpanKind.CLIENT
     ) as span:
-        span.set_attribute("openjiuwen.subagent.entity_id", entity_id)
-        span.set_attribute("openjiuwen.subagent.entity_name", entity_name)
-        span.set_attribute("openjiuwen.subagent.query", query)
-        span.set_attribute("openjiuwen.subagent.sub_agent_url", sub_agent_url)
-        span.set_attribute("openjiuwen.subagent.sub_task_path", sub_task_path)
-        span.set_attribute("openjiuwen.subagent.context_id", context_id)
-        span.set_attribute("session.id", session_id)
+        span.set_attribute("openjiuwen.subagent.entity_id", attrs.entity_id)
+        span.set_attribute("openjiuwen.subagent.entity_name", attrs.entity_name)
+        span.set_attribute("openjiuwen.subagent.query", attrs.query)
+        span.set_attribute("openjiuwen.subagent.sub_agent_url", attrs.sub_agent_url)
+        span.set_attribute("openjiuwen.subagent.sub_task_path", attrs.sub_task_path)
+        span.set_attribute("openjiuwen.subagent.context_id", attrs.context_id)
+        span.set_attribute("session.id", attrs.session_id)
         yield span
