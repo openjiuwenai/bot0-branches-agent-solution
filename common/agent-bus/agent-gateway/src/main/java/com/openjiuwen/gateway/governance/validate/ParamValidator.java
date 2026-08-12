@@ -13,6 +13,7 @@ import com.openjiuwen.gateway.governance.GovernanceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +50,15 @@ public class ParamValidator {
      */
     private static final Set<String> WHITELIST = Set.of("SendMessage", "SendStreamingMessage");
 
+    /**
+     * Inline payload byte limit (whole A2A body, UTF-8). Aligned with
+     * {@link com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope#MAX_INLINE_PAYLOAD_BYTES}
+     * so G3 rejects oversized inline at the entry (413 {@code PAYLOAD_TOO_LARGE}) before
+     * the BUS enqueue layer throws a raw {@code IllegalArgumentException} (500). Large
+     * payloads must use {@code payloadRef} (FEAT-012 §5).
+     */
+    private static final int MAX_INLINE_PAYLOAD_BYTES = 65536;
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     /**
@@ -60,6 +70,7 @@ public class ParamValidator {
      * @throws GovernanceException 400 VALIDATION_* on malformed body / bad method / empty agentId
      */
     public void validate(String rawBody, GovernanceContext ctx) {
+        checkInlinePayloadSize(rawBody);
         JsonNode root;
         try {
             root = mapper.readTree(rawBody);
@@ -112,6 +123,29 @@ public class ParamValidator {
             ctx.setContextId(contextId);
         }
         ctx.setIdempotencyFingerprint(fingerprintOf(root));
+    }
+
+    /**
+     * G3 payload guard: the inline payload (whole A2A body, UTF-8 bytes) must not
+     * exceed {@link #MAX_INLINE_PAYLOAD_BYTES}. Aligned with
+     * {@link com.openjiuwen.bus.forwarding.spi.ForwardingEnvelope}'s enqueue-layer
+     * cap, so G3 rejects oversized inline at the entry with 413
+     * {@code PAYLOAD_TOO_LARGE} (stable error body) instead of letting the BUS
+     * enqueue layer throw a raw {@code IllegalArgumentException} (500). Large
+     * payloads must use {@code payloadRef} (FEAT-012 §5).
+     *
+     * @param rawBody raw JSON-RPC envelope
+     */
+    private static void checkInlinePayloadSize(String rawBody) {
+        if (rawBody == null) {
+            return;
+        }
+        int size = rawBody.getBytes(StandardCharsets.UTF_8).length;
+        if (size > MAX_INLINE_PAYLOAD_BYTES) {
+            throw new GovernanceException(HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE",
+                    "inline payload exceeds " + MAX_INLINE_PAYLOAD_BYTES + " bytes (UTF-8): " + size
+                            + "; use payloadRef for larger payloads");
+        }
     }
 
     /**
