@@ -434,9 +434,8 @@ public class BusForwarder {
                 sctx.sseBridge().writeSse(out, frameIterator, firstFrame);  // 再透传 runtime data 流
                 terminalEvent = pollTerminalEvent(sctx, taskId, window);
             }
-            // 不合成、不改写——TERMINAL/INPUT_REQUIRED 投影的 body 就是 runtime 产出的
-            // {"task":{"id":"...","status":{"state":"..."},"artifacts":[...]}}，
-            // gateway 只包 JSON-RPC envelope(同 runtime 直出格式),符合 §8 "wire 契约与直连 runtime 等价"。
+            // 不合成、不改写——TERMINAL/INPUT_REQUIRED 投影的 body 已是 Runtime
+            // 使用 HTTP 入口同源序列化器生成的完整 JSON-RPC response。
             String terminalFrame = terminalTaskFrame(terminalEvent);
             sctx.sseBridge().writeSse(out, terminalFrame);
         } catch (IOException ex) {
@@ -521,8 +520,8 @@ public class BusForwarder {
     }
 
     /**
-     * 从 runtime 产出的完整 A2A Task(TERMINAL 投影的 a2aResponse / body)直接透传,包 JSON-RPC envelope。
-     * 不改写 Task 内容(§8 "不得改写 result.task")——只做 bus 投影→A2A wire 格式的适配包装。
+     * 原样透传 Runtime 产出的完整 A2A JSON-RPC response。
+     * Gateway 不改写 Task 内容，也不重建 result 或 JSON-RPC envelope。
      * 若 body 为 null(超时兜底),合成一个最小终态帧(A2A v1.0 {"task":{...}} 格式)。
      *
      * @param terminalEvent TERMINAL 投影事件(可能携带 runtime 的 a2aResponse)
@@ -530,16 +529,16 @@ public class BusForwarder {
      */
     private static String terminalTaskFrame(ProjectionFeed.ProjectionEvent terminalEvent) {
         if (terminalEvent.body() != null && !terminalEvent.body().isBlank()) {
-            // runtime 产出的完整 A2A Task(已是 {"task":{"id":"...","status":{"state":"..."},"artifacts":[...]}} 格式),
-            // 直接放进 JSON-RPC envelope 的 result,不改写。
-            return "{\"jsonrpc\":\"2.0\",\"result\":" + terminalEvent.body() + "}";
+            // Runtime 已使用与 HTTP 入口相同的序列化器产出完整 JSON-RPC response。
+            // Gateway 只原样透传，不重建 result 联合体或 envelope。
+            return terminalEvent.body();
         }
         // 超时兜底:body 为 null,合成最小终态(A2A v1.0 {"task":{...}} 格式)
         String state = FiveStateFolder.fold(terminalEvent.eventType()) == InvocationResponseStatus.FAILED
                 ? "failed" : "completed";
         return "{\"jsonrpc\":\"2.0\",\"result\":{\"task\":{\"id\":\""
                 + (terminalEvent.taskId() != null ? terminalEvent.taskId() : "")
-                + "\",\"status\":{\"state\":\"" + state + "\"}}}";
+                + "\",\"status\":{\"state\":\"" + state + "\"}}}}";
     }
 
     /**
@@ -588,10 +587,12 @@ public class BusForwarder {
     }
 
     /**
-     * Builds the client-facing status body. COMPLETED_RESPONSE with a decoded A2A response
-     * returns that response directly (the gateway forwards the A2A JSON-RPC response); other
-     * statuses return {@code {"result":{"status":...}}}, with {@code taskId} when known and
-     * {@code reason} for REJECTED/FAILED.
+     * Builds the client-facing status body. A completed projection already contains the complete
+     * JSON-RPC response produced by the Runtime and is forwarded unchanged. Other statuses return
+     * a synthesized JSON-RPC envelope {@code {"jsonrpc":"2.0","result":{"status":...}}}, with
+     * {@code taskId} when known and {@code reason} for REJECTED/FAILED. The {@code jsonrpc}
+     * envelope mirrors the streaming terminal-frame fallback so ACCEPTED_WITH_TASK / UNKNOWN
+     * (and the other non-completed states) are not emitted as bare {@code {"result":...}}.
      *
      * @param s folded invocation status
      * @param taskId task id when known (ACCEPTED_WITH_TASK / INPUT_REQUIRED / accepted-then-response)
@@ -602,7 +603,8 @@ public class BusForwarder {
         if (s == InvocationResponseStatus.COMPLETED_RESPONSE && body != null && !body.isBlank()) {
             return body;
         }
-        StringBuilder sb = new StringBuilder("{\"result\":{\"status\":\"").append(s.name()).append("\"");
+        StringBuilder sb = new StringBuilder("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"");
+        sb.append(s.name()).append("\"");
         if (taskId != null && !taskId.isBlank()) {
             sb.append(",\"taskId\":\"").append(taskId).append("\"");
         }

@@ -76,16 +76,35 @@ class BrokerProjectionFeedTest {
 
     @Test
     void drainOnceRoutesMatchingEventAndPollReadsIt() {
-        String a2a = b64Url("{\"result\":{\"id\":\"t1\"}}");
+        String a2a = b64Url("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\",\"result\":{\"task\":{"
+                + "\"id\":\"t1\",\"status\":{\"state\":\"completed\"},"
+                + "\"artifacts\":[{\"parts\":[{\"text\":\"answer\"}]}]}}}");
         consumer.enqueue(msg("c1", AgentBusEventType.INVOCATION_RESPONSE, "runtime-01",
-                "taskId=t1;a2aResponseType=Task;a2aResponse=" + a2a));
+                "taskId=t1;a2aResponseType=JsonRpcResponse;a2aResponse=" + a2a));
         feed.drainOnce(); // dispatcher routes c1's event to c1's staging queue + commits
         Optional<ProjectionFeed.ProjectionEvent> evt = feed.poll("c1");
         assertThat(evt).isPresent();
         assertThat(evt.get().eventType()).isEqualTo(AgentBusEventType.INVOCATION_RESPONSE);
         assertThat(evt.get().taskId()).isEqualTo("t1");
-        assertThat(evt.get().body()).isEqualTo("{\"result\":{\"id\":\"t1\"}}");
+        assertThat(evt.get().body()).isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":\"req-1\","
+                + "\"result\":{\"task\":{\"id\":\"t1\",\"status\":{\"state\":\"completed\"},"
+                + "\"artifacts\":[{\"parts\":[{\"text\":\"answer\"}]}]}}}");
         assertThat(consumer.committed()).hasSize(1);
+    }
+
+    @Test
+    void messageProjectionPreservesCompleteJsonRpcResponse() {
+        String a2a = b64Url("{\"jsonrpc\":\"2.0\",\"id\":\"req-message\",\"result\":{\"message\":{"
+                + "\"messageId\":\"m1\",\"role\":\"ROLE_AGENT\",\"parts\":[]}}}");
+        consumer.enqueue(msg("c-message", AgentBusEventType.INVOCATION_RESPONSE, "runtime-01",
+                "a2aResponseType=JsonRpcResponse;a2aResponse=" + a2a));
+
+        feed.drainOnce();
+
+        assertThat(feed.poll("c-message")).get()
+                .extracting(ProjectionFeed.ProjectionEvent::body)
+                .isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":\"req-message\",\"result\":{\"message\":{"
+                        + "\"messageId\":\"m1\",\"role\":\"ROLE_AGENT\",\"parts\":[]}}}");
     }
 
     @Test
