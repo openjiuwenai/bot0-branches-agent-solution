@@ -155,40 +155,38 @@ class OptimizationConfigResolver:
             minimum=1,
         )
 
-        extra_hyperparams = {
-            k: v
-            for k, v in merged_hp.items()
-            if k
-            not in {
-                "num_epochs",
-                "batch_size",
-                "accumulation",
-                "minibatch_size",
-                "edit_budget",
-                "scheduler_mode",
-                "update_mode",
-                "score_threshold",
-                "parallelism",
-                "num_parallel",
-                "use_slow_update",
-                "use_meta_skill",
-                "preserve_frontmatter",
-                "trace_max_retries",
-                "trace_retry_backoff",
-                "empty_extract_max_attempts",
-                "empty_extract_retry_backoff",
-                "tie_reval_eps",
-                "validation_max_case_attempts",
-                "validation_min_success_ratio",
-                "validation_require_same_case_set",
-                "llm_context_window_tokens",
-                "llm_output_reserve_tokens",
-                "llm_safety_margin_tokens",
-                "llm_chars_per_token",
-                "llm_stage_output_reserve_tokens",
-            }
-            and k not in _RESERVED_DEPENDENCY_KEYS
+        _reserved_keys = {
+            "num_epochs",
+            "batch_size",
+            "accumulation",
+            "minibatch_size",
+            "edit_budget",
+            "scheduler_mode",
+            "update_mode",
+            "score_threshold",
+            "parallelism",
+            "num_parallel",
+            "use_slow_update",
+            "use_meta_skill",
+            "preserve_frontmatter",
+            "trace_max_retries",
+            "trace_retry_backoff",
+            "empty_extract_max_attempts",
+            "empty_extract_retry_backoff",
+            "tie_reval_eps",
+            "validation_max_case_attempts",
+            "validation_min_success_ratio",
+            "validation_require_same_case_set",
+            "llm_context_window_tokens",
+            "llm_output_reserve_tokens",
+            "llm_safety_margin_tokens",
+            "llm_chars_per_token",
+            "llm_stage_output_reserve_tokens",
         }
+        extra_hyperparams = {}
+        for k, v in merged_hp.items():
+            if k not in _reserved_keys and k not in _RESERVED_DEPENDENCY_KEYS:
+                extra_hyperparams[k] = v
 
         return ResolvedOptimizationConfig(
             scenario=request.scenario,
