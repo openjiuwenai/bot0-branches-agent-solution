@@ -13,6 +13,10 @@ agentcore-ext-remote-a2a-tool-demo
 `-- agent-b-versatile-runtime
 ```
 
+两个 Runtime 的 `spring.application.name` 分别固定为 `agent-a` 和 `versatile-agent`。Runtime 使用该值作为
+`agentEvent.source.agentId`；Agent A 的远端注册名也必须是 `versatile-agent`，这样 delegation 的 target
+与 Agent B 输出的 source 才指向同一个逻辑节点。
+
 不要把 DeepSeek key 写入仓库文件，只通过环境变量传入。
 
 ## 打包
