@@ -1,16 +1,16 @@
 # agent-client-demo 独立 Docker 部署手册
 
-本目录可以独立构建、启动和停止 `agent-client-demo`（把 `mock-gateway` 和 `verification-app` 打包成一个镜像），不依赖 `deploy-all`、Docker Compose 或任何外部 gateway / Redis / 大模型 API Key。本镜像团队只管理一类资源：
+本目录可以独立构建、启动和停止 `agent-client-demo`（把 `verification-app` 打包成一个镜像）。`verification-app` **不内嵌任何 mock**，必须通过 `AGENT_GATEWAY_URL` 连接一个真实可达的外部 gateway 才能运行。本镜像团队只管理一类资源：
 
 - `agent-client-demo` 容器。
 
-本 demo 为单容器自检：`verification-app` 内嵌启动 `mock-gateway`，全部在容器内完成端到端断言，不涉及任何跨容器通信，因此**不创建也不使用 `agent-net` 等共享网络**。这与 `edp-agent-java` 不同——`edp-agent-java` 需要 `agent-net` 是因为它要和 `adapter-versatile` 容器跨容器通信（用容器名做 DNS 解析），那是真正的运行契约；而本 demo 没有这样的跨容器依赖。
+本 demo 为单容器验证：`verification-app` 经 `AGENT_GATEWAY_URL` 连接外部 gateway（可以是独立运行的 `mock-gateway` 微服务，也可以是你自己实现的 gateway），全部断言在容器内完成，不涉及任何跨容器通信，因此**不创建也不使用 `agent-net` 等共享网络**。这与 `edp-agent-java` 不同——`edp-agent-java` 需要 `agent-net` 是因为它要和 `adapter-versatile` 容器跨容器通信（用容器名做 DNS 解析），那是真正的运行契约；而本 demo 没有这样的跨容器依赖。
 
 ## 0. 从零开始：64 位 Linux（amd64/arm64）一键部署（推荐）
 
 本手册所有 `.sh` 脚本均为 Linux 原生 bash，可在 64 位 amd64 或 arm64 Linux 上仅凭本代码仓完成"构建 jar → 构建镜像 → 起容器 → 验证"，**无需任何 Windows / PowerShell 步骤**。构建服务器和部署服务器为同一台时，`docker build` 会自动按当前服务器架构构建对应镜像，不需要 `buildx` 或手工指定 `--platform`。
 
-前置：Linux 上已装 `git`、`docker`、`JDK 17`、`Maven 3.9+`（构建镜像必须 Docker；构建 jar 必须 JDK17+Maven）。注意 Maven 版本要求是 **3.9+**（比 edp-agent-java 的 3.8+ 更高，因为本工程使用更新的插件）。
+前置：Linux 上已装 `git`、`docker`、`JDK 17`、`Maven 3.9+`（构建镜像必须 Docker；构建 jar 必须 JDK17+Maven）。注意 Maven 版本要求是 **3.9+**（比 edp-agent-java 的 3.8+ 更高，因为本工程使用更新的插件）。**另须自备一个可访问的 A2A gateway**（可用同仓的 `mock-gateway` 独立起，或你自己实现的 gateway）。
 
 ARM64 服务器在部署前先确认操作系统、Docker 和基础镜像均为 64 位 ARM：
 
@@ -49,7 +49,7 @@ mvn -version
 # 1) 拉取代码仓
 git clone <你们的仓库地址> && cd agent-solution
 
-# 2) 准备配置（本 demo 无密钥，主要是确认运行模式与端口）
+# 2) 准备配置（必须填 AGENT_GATEWAY_URL 指向一个真实可达的 gateway）
 cp common/example/agent-client-demo/deploy/.env.example common/example/agent-client-demo/deploy/.env
 chmod 600 common/example/agent-client-demo/deploy/.env
 vi common/example/agent-client-demo/deploy/.env
@@ -62,32 +62,28 @@ bash common/example/agent-client-demo/deploy/deploy.sh
 
 ### 这个 demo 验证了什么
 
-`verification-app` 内嵌启动 `mock-gateway`，再由 SDK 经真实 HTTP + SSE 发起调用，覆盖：
+`verification-app` 经 SDK 对 `AGENT_GATEWAY_URL` 指定的外部 gateway 发起真实 HTTP + SSE 调用，覆盖：
 
 1. **STREAMING + client 工具多轮**：远端经 `_interrupt` 逐个请求工具 → SDK 自动就地执行并续传 → 完成。
 2. **BLOCKING + client 工具**：非流式（`SendMessage`）路径同样能驱动多轮。
 3. **用户输入续传**（`continueInput`）。
 4. **取消**（`cancel`，本版本非 MUST，但 wire 已打通）。
 
-关键不变量由断言守护：每个工具恰好执行一次；ACTION 工具触发且仅触发一次审批；调用到达 `COMPLETED` / `CANCELED` 终态。CLI 模式下跑完即退出，**退出码 0 = 全部断言通过，非 0 = 失败**，可直接作为 CI / 容器健康门禁。
+关键不变量由断言守护：每个工具恰好执行一次；ACTION 工具触发且仅触发一次审批；调用到达 `COMPLETED` / `CANCELED` 终态。容器跑完即退出，**退出码 0 = 全部断言通过，非 0 = 失败**，可直接作为 CI / 容器健康门禁。
 
 ### 整体链路与外部依赖
 
-本 demo 无任何外部依赖（无 Redis、无 adapter、无大模型 API Key），容器内即可完成端到端自检：
-
-```text
-verification-app  ──内嵌启动──▶  mock-gateway(127.0.0.1)  ──A2A HTTP+SSE──▶  SDK 驱动多轮断言
-```
-
-EXTERAL 模式下可让 `verification-app` 连接外部 gateway 做联调验证：
+`verification-app` 不内嵌任何 mock，必须连接一个外部 gateway（可用同仓 `mock-gateway` 独立起，或你自己实现的 gateway）：
 
 ```text
 verification-app  ──A2A HTTP+SSE──▶  外部 gateway（由 AGENT_GATEWAY_URL 指定）
 ```
 
+除 gateway 外无任何其他外部依赖（无 Redis、无 adapter、无大模型 API Key）。
+
 ## 1. 先理解 build
 
-本 demo 为单容器自检，不创建任何 Docker 网络。CLI 模式不映射端口（无需宿主机访问）；UI 模式用 `--network host`（见第 5 节）；EXTERNAL 模式用 Docker 默认 bridge 网络访问外部 gateway。
+本 demo 为单容器验证，不创建任何 Docker 网络。容器通过 Docker 默认 bridge 网络访问 `AGENT_GATEWAY_URL` 指定的外部 gateway。
 
 `docker build` 只读取 Dockerfile 和构建上下文生成镜像。
 
@@ -98,7 +94,8 @@ verification-app  ──A2A HTTP+SSE──▶  外部 gateway（由 AGENT_GATEWA
 - Linux 部署机（建议配置 4CPU、8G 即可，本 demo 是轻量验证程序，无大模型调用）已安装 Docker Engine，当前用户能执行 `docker info`；不要求 Compose。
 - 从源码构建时，必须先完成 Maven 多模块构建（父 pom 一条命令即可，SDK 会随 reactor 一起构建）。
 - Dockerfile 采用多阶段构建（构建阶段 `maven:3.9-eclipse-temurin-17` 已内置 Maven + JDK17，运行阶段 `eclipse-temurin:17-jre`），因此也可不在宿主机装 Maven/JDK，仅靠 Docker 即可完成构建（但本地 `build-jar.sh` 路径需要宿主机 Maven）。
-- 本 demo 无 Redis、无 adapter、无大模型 API Key 等外部依赖。
+- **必须自备一个可访问的 A2A gateway**：可用同仓 `mock-gateway` 独立起（见上级 README「把 mock-gateway 当独立微服务运行」），或你自己实现的 gateway。容器需能通过网络路由到该 gateway 地址。
+- 本 demo 无 Redis、无 adapter、无大模型 API Key 等其他外部依赖。
 
 生产部署请给镜像使用版本号或 Git 提交号标签，不要长期复用 `latest`。这样日志和回滚记录才能准确对应代码版本。
 
@@ -116,15 +113,15 @@ vi common/example/agent-client-demo/deploy/.env
 至少核对：
 
 - `ACD_IMAGE`：推荐改成可审计的发布版本标签；
-- `ACD_RUN_MODE`：`CLI`（默认，跑完退出，退出码表达成败）/ `UI`（浏览器看板，常驻）/ `EXTERNAL`（连接外部 gateway）；
-- `ACD_HOST_PORT`：宿主机端口（UI 模式下不生效，见第 5 节）；
-- 仅 `EXTERNAL` 模式需填 `AGENT_GATEWAY_URL`。
+- `ACD_RUN_MODE`：`EXTERNAL`（默认，连接外部 gateway，跑完退出，退出码表达成败）/ `UI`（浏览器看板，常驻，用于调试外接 gateway）；
+- `AGENT_GATEWAY_URL`：**必填**，外部 gateway 的 baseUrl（不含 `/a2a`），容器内必须可路由到该地址。
+- `UI_PORT`：仅 UI 模式生效。
 
-脚本不会 `source` 或 `eval` `.env`，所以内容不会被当作 shell 代码执行。配置格式必须是严格的 `KEY=value`，不要在等号两侧加空格或引号。本 demo 无密钥，`.env` 主要是控制运行模式与端口。
+脚本不会 `source` 或 `eval` `.env`，所以内容不会被当作 shell 代码执行。配置格式必须是严格的 `KEY=value`，不要在等号两侧加空格或引号。本 demo 无密钥，`.env` 主要控制 gateway 地址与运行模式。
 
-## 4. 严格部署顺序：CLI 自检模式（推荐）
+## 4. 严格部署顺序：EXTERNAL 模式（默认）
 
-此路径适合 CI、容器门禁或快速验证。容器跑完即退出，退出码 0 = 全部断言通过。
+此路径适合 CI、容器门禁或快速验证。容器连接外部 gateway 跑完即退出，退出码 0 = 全部断言通过。
 
 ### 步骤 1：生成 jar
 
@@ -143,7 +140,7 @@ mvn -f common/example/agent-client-demo/pom.xml clean package -DskipTests
 产物为三个瘦 jar（不打 fat-jar，避免联网拉取 assembly/shade 插件依赖，保证离线 / 鲲鹏 aarch64 可构建）：
 
 - `common/agent-client/agent-client-sdk-for-jvm/target/agent-client-sdk-for-jvm.jar`
-- `common/example/agent-client-demo/mock-gateway/target/mock-gateway.jar`
+- `common/example/agent-client-demo/mock-gateway/target/mock-gateway.jar`（可独立起当参考网关用，`verification-app` 不依赖它）
 - `common/example/agent-client-demo/verification-app/target/verification-app.jar`
 
 因为镜像直接以 `common/` 目录为构建上下文，Linux 上**不需要**再打 tar 部署包。
@@ -163,7 +160,8 @@ powershell -ExecutionPolicy Bypass -File common\example\agent-client-demo\deploy
 按第 3 节创建配置，保持：
 
 ```dotenv
-ACD_RUN_MODE=CLI
+ACD_RUN_MODE=EXTERNAL
+AGENT_GATEWAY_URL=http://10.0.0.5:8080   # 你的外部 gateway，容器内必须可路由到
 ```
 
 ### 步骤 3：构建镜像
@@ -179,7 +177,8 @@ bash common/example/agent-client-demo/deploy/start.sh
 bash common/example/agent-client-demo/deploy/verify.sh
 ```
 
-`start.sh` 会在 CLI 模式下等待容器退出并解析退出码，退出码 0 = 验证通过（通过后自动清理容器），非 0 = 验证失败（容器保留便于排查）。
+
+`start.sh` 会在 EXTERNAL 模式下等待容器退出并解析退出码，退出码 0 = 验证通过（通过后自动清理容器），非 0 = 验证失败（容器保留便于排查）。
 
 上述步骤 3、4 也可以合并为：
 
@@ -195,7 +194,7 @@ bash common/example/agent-client-demo/deploy/deploy.sh --skip-build
 
 ## 5. UI 看板模式
 
-适合不熟悉 Java 的人员观察断言细节。`verification-app` 内嵌一个小 HTTP 服务，浏览器打开即可看到 12 个场景的进度与绿/红断言。**不需要 Node。**
+适合不熟悉 Java 的人员观察断言细节。`verification-app` 内嵌一个小 HTTP 服务，浏览器打开即可看到场景的进度与绿/红断言。**不需要 Node。** UI 模式**同样必须配 `AGENT_GATEWAY_URL`**——它只是把 EXTERNAL 的退出码输出换成浏览器实时看板，底层仍连接外部 gateway。
 
 ### 重要：UI 绑定 127.0.0.1 的限制
 
@@ -208,9 +207,10 @@ bash common/example/agent-client-demo/deploy/deploy.sh --skip-build
 ### 步骤
 
 ```bash
-# 1) 编辑 .env，切换为 UI 模式
+# 1) 编辑 .env，切换为 UI 模式（同样必须填 AGENT_GATEWAY_URL）
 vi common/example/agent-client-demo/deploy/.env
 #   ACD_RUN_MODE=UI
+#   AGENT_GATEWAY_URL=http://10.0.0.5:8080
 #   UI_PORT=9090
 
 # 2) 构建镜像（若已构建可跳过）
@@ -234,26 +234,9 @@ UI 模式常驻不退出，停止用：
 bash common/example/agent-client-demo/deploy/stop.sh
 ```
 
-## 6. EXTERNAL 模式：连接外部 gateway 联调
+## 6. 关于 `AGENT_GATEWAY_URL`
 
-若你要对接自己实现的 gateway（而非内嵌的 mock-gateway），用 EXTERNAL 模式。`verification-app` 通过环境变量 `AGENT_GATEWAY_URL` 找你的 gateway。
-
-### 步骤
-
-```bash
-# 1) 编辑 .env
-vi common/example/agent-client-demo/deploy/.env
-#   ACD_RUN_MODE=EXTERNAL
-#   AGENT_GATEWAY_URL=http://10.0.0.5:8080   # 外部 gateway 的 baseUrl（不含 /a2a）
-
-# 2) 构建镜像（若已构建可跳过）
-bash common/example/agent-client-demo/deploy/build-image.sh
-
-# 3) 启动联调验证
-bash common/example/agent-client-demo/deploy/start.sh
-```
-
-### 关于 AGENT_GATEWAY_URL
+`AGENT_GATEWAY_URL` 是 `verification-app` 连接外部 gateway 的**唯一配置点**，所有运行模式（EXTERNAL / UI）都必须填写。可用同仓 `mock-gateway` 独立起当参考网关，或指向你自己实现的 gateway。
 
 - 给的是 baseUrl（不含 `/a2a`）。SDK 会自动在末尾追加 `/a2a`，所以你的 gateway 必须在 `POST /a2a` 路径上接收请求。如果你的 gateway 入口路径不是 `/a2a`，要么在 gateway 侧把入口挂到 `/a2a`，要么在变量里直接写完整地址（如 `http://10.0.0.5:8080/a2a`，SDK 检测到已含 `/a2a` 就不再追加）。
 - 每个请求会带 `Authorization: Bearer mock-token`。你的 gateway 至少要校验"存在且非空"，缺失/空一律 401。
@@ -272,7 +255,7 @@ bash common/example/agent-client-demo/deploy/stop.sh
 
 它只删除带正确 ownership label 的容器。本 demo 不创建任何 Docker 网络，因此 `stop.sh` 也不涉及网络清理。
 
-本 demo 没有 Redis、volume 等持久化资源，因此没有 `stop-local-redis.sh`、`start-local-redis.sh` 之类的脚本，也没有任何数据需要备份或恢复。CLI/EXTERNAL 模式验证通过后 `start.sh` 会自动清理容器；验证失败时容器保留以便排查，排错后用 `stop.sh` 清理。
+本 demo 没有 Redis、volume 等持久化资源，因此没有 `stop-local-redis.sh`、`start-local-redis.sh` 之类的脚本，也没有任何数据需要备份或恢复。EXTERNAL 模式验证通过后 `start.sh` 会自动清理容器；验证失败时容器保留以便排查，排错后用 `stop.sh` 清理。
 
 所有容器都带以下标签：
 
@@ -289,14 +272,14 @@ com.huawei.edpa.component=agent-client-demo
 # 查看容器状态
 docker ps -a --filter name=agent-client-demo
 
-# 查看最近日志（CLI/EXTERNAL 模式容器已退出时仍可查看）
+# 查看最近日志（EXTERNAL 模式容器已退出时仍可查看）
 docker logs --tail 100 agent-client-demo
 
 # 重新检查退出码与日志摘要
 bash common/example/agent-client-demo/deploy/verify.sh
 ```
 
-`verify.sh` 会根据运行模式分层检查：CLI/EXTERNAL 模式解析退出码并打印日志摘要；UI 模式检查容器是否在运行、UI 端口是否可访问。
+`verify.sh` 会根据运行模式分层检查：EXTERNAL 模式解析退出码并打印日志摘要；UI 模式检查容器是否在运行、UI 端口是否可访问。
 
 常见问题：
 
@@ -308,7 +291,8 @@ bash common/example/agent-client-demo/deploy/verify.sh
 - **UI 模式下浏览器无法访问 `http://127.0.0.1:9090/`**：确认 `start.sh` 是否用了 `--network host`（UI 模式自动启用）。若仍不通，检查宿主机 9090 端口是否被占用（改 `UI_PORT`），或宿主机防火墙是否放行。注意：`--network host` 在 Docker Desktop for Windows/Mac 上行为不同，本模式主要面向 Linux 宿主机。
 - **UI 模式下用 `-p 9090:9090` 端口映射仍无法访问**：这是预期的。`VerificationUiServer` 硬编码绑定 `127.0.0.1`，端口映射转发的流量到达容器 eth0 但没有进程在 eth0 上监听。必须用 `--network host`（`start.sh` 已自动处理），或修改源码把绑定地址改为 `0.0.0.0` 后重新构建。
 - **EXTERNAL 模式验证失败**：先看 `docker logs agent-client-demo` 的日志，通常能直接定位是 gateway 返回了什么导致的问题。对照 `Guidance4GatewayTest.md` 的协议要求检查你的 gateway 实现。注意 S8/S9 两个断连场景对接真实 gateway 时可能失败（见 `Guidance4GatewayTest.md` 末尾说明），可暂时忽略。
-- **容器启动后立即退出且 exit=1**：CLI 模式下这表示有断言失败。用 `docker logs agent-client-demo` 查看具体失败场景与断言文案。
+- **容器启动后立即退出且 exit=1**：这表示有断言失败，或未配 `AGENT_GATEWAY_URL`。用 `docker logs agent-client-demo` 查看具体失败场景与断言文案；若日志含 `AGENT_GATEWAY_URL is required`，说明 `.env` 未填 gateway 地址。
+- **未配 `AGENT_GATEWAY_URL`**：`verification-app` 不再内嵌任何 mock，不配会直接抛 `IllegalStateException` 退出。请指向一个真实可达的 gateway（可用同仓 `mock-gateway` 独立起，或你自己实现的 gateway）。
 
 ## 9. 与 edp-agent-java 部署的差异对照
 
@@ -319,13 +303,13 @@ bash common/example/agent-client-demo/deploy/verify.sh
 | 构建上下文 | `edp-agent-java/`（单模块） | `common/`（多模块，SDK 与 demo 分属两个子目录） |
 | Maven 版本 | 3.8+ | 3.9+（插件更新） |
 | JDK 版本 | 17（`agent-core-java:0.1.13` 为 JDK17 构建） | 17（`<release>17</release>` 基线） |
-| 外部依赖 | Redis（local/external）、adapter、大模型 API Key | 无（容器内端到端自检） |
+| 外部依赖 | Redis（local/external）、adapter、大模型 API Key | **必须外接一个 A2A gateway**（其余无） |
 | 密钥 | `EDP_AGENT_MODEL_API_KEY` 必填 | 无密钥 |
-| 运行模式 | 常驻 HTTP 服务 | CLI（跑完退出）/ UI（看板常驻）/ EXTERNAL（外接 gateway） |
-| 健康检查 | Agent Card HTTP + Redis PING | 退出码（CLI/EXTERNAL）/ 端口可达（UI） |
+| 运行模式 | 常驻 HTTP 服务 | EXTERNAL（跑完退出，默认）/ UI（看板常驻，调试外接 gateway） |
+| 健康检查 | Agent Card HTTP + Redis PING | 退出码（EXTERNAL）/ 端口可达（UI） |
 | Redis 脚本 | `start-local-redis.sh` / `stop-local-redis.sh` | 无（本 demo 不用 Redis） |
 | 容器标签 owner | `edp-agent-java` | `agent-client-demo` |
-| 共享网络 | `agent-net`（与 adapter 契约） | 无（单容器自检，不创建网络） |
+| 共享网络 | `agent-net`（与 adapter 契约） | 无（单容器验证，不创建网络） |
 | `pack-for-linux.ps1` 产物 | tar.gz（jar + governance + scenarios + deploy） | tar.gz（demo 源码 + SDK 源码 + jar + deploy） |
 
 操作流程完全一致：`cp .env.example .env` → `vi .env` → `bash deploy/deploy.sh`（或分步 `build-jar.sh` → `build-image.sh` → `start.sh` → `verify.sh`），停止用 `stop.sh`，排错用 `docker logs` + `verify.sh`。

@@ -17,9 +17,10 @@
 #   - 全程不使用 apt-get，避免国内镜像源 GPG/慢速失败。
 #
 # 运行模式（由 ACD_RUN_MODE 环境变量在 docker run 时选择，Dockerfile 只负责准备可运行镜像）：
-#   CLI（默认）      ：java -cp ... CloudClientVerification            —— 跑完退出，退出码 0=通过
+#   EXTERNAL（默认）：AGENT_GATEWAY_URL=... java -cp ... CloudClientVerification —— 连外部 gateway 跑完退出
 #   UI              ：java -cp ... CloudClientVerification --ui       —— 常驻看板（绑定 127.0.0.1，需 --network host）
-#   EXTERNAL        ：AGENT_GATEWAY_URL=... java -cp ... CloudClientVerification —— 连外部 gateway 跑完退出
+#
+# 注意：所有模式都必须通过 AGENT_GATEWAY_URL 指向一个真实可达的外部 gateway，verification-app 不内嵌任何 mock。
 
 # syntax=docker/dockerfile:1
 
@@ -34,7 +35,7 @@ COPY example/agent-client-demo/verification-app ./example/agent-client-demo/veri
 COPY example/agent-client-demo/deploy ./example/agent-client-demo/deploy
 COPY agent-client/agent-client-sdk-for-jvm ./agent-client/agent-client-sdk-for-jvm
 WORKDIR /workspace/example/agent-client-demo
-# install 让 reactor 各模块进入本地仓库，随后把 verification-app 的运行时依赖（含 SDK/mock/jackson）收集到 /app/lib
+# install 让 reactor 各模块进入本地仓库，随后把 verification-app 的运行时依赖（含 SDK/jackson）收集到 /app/lib
 RUN mvn -q -B -e clean install \
     && mvn -q -B -pl verification-app dependency:copy-dependencies \
        -DincludeScope=runtime -DoutputDirectory=/app/lib \
@@ -45,11 +46,10 @@ WORKDIR /app
 COPY --from=build /app/lib /app/lib
 COPY --from=build /app/verification-app.jar /app/verification-app.jar
 
-ENV ACD_RUN_MODE=CLI \
+ENV ACD_RUN_MODE=EXTERNAL \
     JAVA_OPTS="-Dfile.encoding=UTF-8"
 
-# CLI / EXTERNAL 模式：跑完即退出，用退出码表达成败，可直接作为 CI / 容器健康门禁。
+# EXTERNAL 模式：跑完即退出，用退出码表达成败，可直接作为 CI / 容器健康门禁。
 # UI 模式：常驻看板，由调用方传入 ACD_RUN_MODE=UI。
-# 容器内 verification-app 默认内嵌启动 mock-gateway（127.0.0.1）做端到端自检，
-# 无需任何外部依赖。
+# 容器内 verification-app 不内嵌任何 mock，运行时必须通过 AGENT_GATEWAY_URL 指向一个真实可达的外部 gateway。
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -cp \"/app/verification-app.jar:/app/lib/*\" com.openjiuwen.client.verify.CloudClientVerification $([ \"$ACD_RUN_MODE\" = UI ] && echo --ui)"]

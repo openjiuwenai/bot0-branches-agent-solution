@@ -139,7 +139,7 @@ public class A2aController {
         if (context.taskId() == null) {
             return forwardCreate(context, response);
         }
-        return forwardResume(context);
+        return forwardResume(context, response);
     }
 
     /**
@@ -213,10 +213,35 @@ public class A2aController {
     /**
      * Forward a resume call to the original Task owner via the sticky index.
      *
+     * <p>STREAMING 续跑（{@code SendStreamingMessage} + taskId）走 sticky 路由 + SSE 桥接
+     * （{@link Router#routeResumeStream}），与流式创建同构；其余续跑走同步 JSON
+     * （{@link Router#routeResume}）。
+     *
+     * <p>续跑（含 BUS 模式）统一走 DIRECT sticky 路由：续跑针对已有 taskId，sticky index
+     * 在创建时已写入（BUS 创建于首个 taskId 投影处绑定），只需读 sticky 解析 owner runtime
+     * 直接转发；不经过 BUS 控制面（无 control.forward → 投影轮询 → STREAM_READY），与同步
+     * 续跑走 {@link Router#routeResume} 完全对称。runtime 原生支持
+     * {@code SendStreamingMessage + taskId} 续跑（恢复过程以 SSE 返回）。
+     *
      * @param context governance context with taskId bound
-     * @return sync JSON response from the sticky owner runtime
+     * @param response servlet response (used to write the SSE stream for streaming resume)
+     * @return sync JSON response from the sticky owner runtime, or {@code null} once an SSE
+     *         stream has been written
+     * @throws IOException if writing the SSE stream to the client fails (disconnect)
      */
-    private Object forwardResume(GovernanceContext context) {
+    private Object forwardResume(GovernanceContext context, HttpServletResponse response) throws IOException {
+        if ("SendStreamingMessage".equals(context.method())) {
+            // 流式续跑：sticky 路由 + SSE 桥接。续跑针对已有 taskId，走 DIRECT sticky 路由
+            // （与同步续跑 routeResume 对称）；不走 BUS 控制面（续跑不产生新 STREAM_READY，
+            // 故无需 control.forward → 投影轮询）。BUS 创建已在首个 taskId 投影写入 stickyIndex。
+            // runtime 原生支持 SendStreamingMessage + taskId（对话接口输入与输出.md §恢复请求）。
+            Stream<String> frames = router.routeResumeStream(context);
+            response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+            response.setCharacterEncoding("UTF-8");
+            sseBridge.writeSse(response.getOutputStream(), frames);
+            // Spring MVC contract: null tells the framework the SSE stream is already committed.
+            return null;
+        }
         try {
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(router.routeResume(context));
         } catch (GovernanceException ex) {

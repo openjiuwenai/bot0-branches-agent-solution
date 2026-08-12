@@ -7,6 +7,7 @@ package com.openjiuwen.gateway.bus;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openjiuwen.bus.forwarding.spi.AgentBusEventType;
 import com.openjiuwen.gateway.bus.control.BusControlForwarder;
 import com.openjiuwen.gateway.bus.control.EnvelopeBuilder;
@@ -40,6 +41,8 @@ import java.util.Optional;
  * @since 2026-07-24
  */
 class BusStreamingAndResumeTest {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private final FakeRdcRouteClient rdc = new FakeRdcRouteClient();
     private final FakeForwardingOutboxPort outbox = new FakeForwardingOutboxPort();
     private final FakeProjectionFeed feed = new FakeProjectionFeed();
@@ -79,11 +82,35 @@ class BusStreamingAndResumeTest {
         String sseOutput = mockResponse.getContentAsString();
         assertThat(sseOutput).contains("event: jsonrpc");
         assertThat(sseOutput).contains("data: {\"result\":{\"id\":\"task-s\",\"status\":\"working\"}}");
+        assertSseDataFramesAreValidJson(sseOutput);
         // runtime was called via openStreamByRef with the resolved endpoint
         assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
         // control event was enqueued (inlinePayload = A2A body, no token)
         assertThat(outbox.enqueued().get(0).inlinePayload()).isNotNull();
         assertThat(outbox.enqueued().get(0).inlinePayload()).doesNotContain("token");
+    }
+
+    @Test
+    void streamingTerminalTaskPreservesArtifactOutput() throws Exception {
+        rdc.setCandidates(List.of(new AgentCardRoute("h1", "svc-rt")));
+        rdc.setResolved(new ResolvedRoute("http://rt:8000"));
+        feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-output", null);
+        feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-output", "sr-output");
+        feed.inject(AgentBusEventType.INVOCATION_TERMINAL, "task-output", null, null,
+                "{\"jsonrpc\":\"2.0\",\"id\":\"req-output\",\"result\":{\"task\":{"
+                        + "\"id\":\"task-output\",\"status\":{\"state\":\"completed\"},"
+                        + "\"artifacts\":[{\"parts\":[{\"text\":\"result[trace=trace-11]"
+                        + "[agent=demo-a2a-agent-a]\"}]}]}}}");
+        runtime.setFrames(List.of("{\"result\":{\"id\":\"task-output\",\"status\":\"working\"}}"));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        Optional<String> result = forwarder().forwardStreaming(createCtx("agent-1", "m-output"), response,
+                sseBridge);
+
+        assertThat(result).isEmpty();
+        String sse = response.getContentAsString();
+        assertThat(sse).contains("result[trace=trace-11][agent=demo-a2a-agent-a]");
+        assertSseDataFramesAreValidJson(sse);
     }
 
     @Test
@@ -110,7 +137,8 @@ class BusStreamingAndResumeTest {
         feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-ir", null);
         feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-ir", "sr-ir");
         feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "task-ir", null, null,
-                "{\"task\":{\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}");
+                "{\"jsonrpc\":\"2.0\",\"id\":\"req-ir\",\"result\":{\"task\":{"
+                        + "\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}}");
         runtime.setFrames(List.of("{\"result\":{\"id\":\"task-ir\",\"status\":{\"state\":\"working\"}}}"));
         // small response window so the RED (timeout→synthetic COMPLETED) is fast, not 60s
         BusForwarder f = new BusForwarder(rdc,
@@ -138,7 +166,8 @@ class BusStreamingAndResumeTest {
         feed.inject(AgentBusEventType.INVOCATION_ACCEPTED, "task-ir", null);
         feed.inject(AgentBusEventType.INVOCATION_STREAM_READY, "task-ir", "sr-ir");
         feed.inject(AgentBusEventType.INVOCATION_INPUT_REQUIRED, "task-ir", null, null,
-                "{\"task\":{\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}");
+                "{\"jsonrpc\":\"2.0\",\"id\":\"req-ir\",\"result\":{\"task\":{"
+                        + "\"id\":\"task-ir\",\"status\":{\"state\":\"input-required\"}}}}");
         // a distinctive runtime first frame — if the drain runs, this marker appears in the SSE;
         // if the pre-drain check skips the drain (the fix), it does NOT appear.
         runtime.setFrames(List.of("{\"result\":{\"id\":\"task-ir\",\"status\":{\"state\":\"working\"},"
@@ -316,5 +345,13 @@ class BusStreamingAndResumeTest {
         String resumeResp = router.routeResume(resumeCtx);
         assertThat(resumeResp).contains("ti-resume");
         assertThat(runtime.lastEndpoint()).isEqualTo("http://rt:8000");
+    }
+
+    private static void assertSseDataFramesAreValidJson(String sse) throws Exception {
+        for (String line : sse.split("\\R")) {
+            if (line.startsWith("data: ")) {
+                assertThat(MAPPER.readTree(line.substring("data: ".length()))).isNotNull();
+            }
+        }
     }
 }

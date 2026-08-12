@@ -14,18 +14,17 @@
 |------|----------|------|:---:|------|
 | `agent-client-sdk-for-jvm` | `common/agent-client/agent-client-sdk-for-jvm/` | ★ SDK 本体（JVM 版） | **是** | `api` / `*.spi` / `internal` / `transport`。公共 API 不泄漏第三方类型；Jackson 仅在 `transport.a2a` 内部用于编解码 A2A 报文。 |
 | `mock-gateway` | `common/example/agent-client-demo/mock-gateway/` | ◇ 模拟网关+runtime | 否 | 纯 JDK `com.sun.net.httpserver` 实现 A2A 入口，可独立运行的小微服务。**SDK 对它零依赖。** |
-| `verification-app` | `common/example/agent-client-demo/verification-app/` | ◇ 业务样例 + 可执行验收 | 否 | 注册本地工具、发起真实 HTTP 调用打到 `mock-gateway`，用退出码表达成败。 |
+| `verification-app` | `common/example/agent-client-demo/verification-app/` | ◇ 业务样例 + 可执行验收 | 否 | 注册本地工具、发起真实 HTTP 调用打到**外部 gateway**（由 `AGENT_GATEWAY_URL` 指定），用退出码表达成败。 |
 
 > SDK 命名说明：`agent-client-sdk-for-jvm` 明确这是面向 JVM 环境的 SDK 实现；
 > 未来 `for-android` / `for-ios` / `for-harmony` 等多端 SDK 尚在建设中。
 > 跨端能力由线协议中立性保证，不是靠现在写多份 SDK（详见 `agent-client/docs/device-portability-and-v1-delivery.md`）。
 
-> `agent-client-sdk-for-jvm` 内另含 `transport.fake.InProcessFakeGateway`：**测试工具（非交付）**，
-> 供无网络环境做纯逻辑单测；真实交付路径是 `transport.a2a.A2aHttpTransportProvider`。
+> `verification-app` **不内嵌任何 mock**：必须通过环境变量 `AGENT_GATEWAY_URL` 指向一个真实 gateway（可以是独立运行的 `mock-gateway` 微服务，也可以是你自己实现的 gateway）。不配则直接报错退出。
 
 ## 这个 demo 验证了什么（全部经真实 HTTP 断言）
 
-`verification-app` 内嵌启动 `mock-gateway`，再由 SDK 经真实 HTTP + SSE 发起调用，覆盖：
+`verification-app` 经 SDK 发起真实 HTTP + SSE 调用打到 `AGENT_GATEWAY_URL` 指定的外部 gateway，覆盖：
 
 1. **STREAMING + client 工具多轮**：远端经 `_interrupt` 逐个请求工具 → SDK 自动就地执行并续传 → 完成。
 2. **BLOCKING + client 工具**：非流式（`SendMessage`）路径同样能驱动多轮。
@@ -50,7 +49,7 @@ mvn -q -o clean package
 
 产物（瘦 jar）：
 - `../../agent-client/agent-client-sdk-for-jvm/target/agent-client-sdk-for-jvm.jar`
-- `mock-gateway/target/mock-gateway.jar`
+- `mock-gateway/target/mock-gateway.jar`（仍可独立运行当参考 gateway 用，verification-app 不再依赖它）
 - `verification-app/target/verification-app.jar`
 
 > 本工程刻意零 Web 框架、SDK 侧仅一个 Jackson 运行时依赖，保证离线 / 鲲鹏 aarch64 可构建。
@@ -64,7 +63,6 @@ mvn -q -o clean package
 $m="$env:USERPROFILE\.m2\repository\com\fasterxml\jackson"
 $cp=@(
   "..\..\agent-client\agent-client-sdk-for-jvm\target\agent-client-sdk-for-jvm.jar",
-  "mock-gateway\target\mock-gateway.jar",
   "verification-app\target\verification-app.jar",
   "$m\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar",
   "$m\core\jackson-core\2.17.3\jackson-core-2.17.3.jar",
@@ -74,16 +72,24 @@ $cp=@(
 
 ### 方式 A：命令行自检（跑完即退出）
 
+**必须先设 `AGENT_GATEWAY_URL` 指向一个真实 gateway**（不配会直接报错退出）。最省事的做法是用同目录下的 `mock-gateway` 当独立微服务（见下节），也可指向你自己实现的 gateway：
+
 ```powershell
+# 终端 1：用 mock-gateway 当参考网关（默认 8080）
+java -cp "mock-gateway\target\mock-gateway.jar;$m\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar;$m\core\jackson-core\2.17.3\jackson-core-2.17.3.jar;$m\core\jackson-annotations\2.17.3\jackson-annotations-2.17.3.jar" com.openjiuwen.mockgateway.MockGatewayServer 8080
+
+# 终端 2：让自校验连到外部网关
+$env:AGENT_GATEWAY_URL="http://127.0.0.1:8080"
 java -cp $cp com.openjiuwen.client.verify.CloudClientVerification
 Write-Host "exit=$LASTEXITCODE"   # 0 = 全部断言通过
 ```
 
 ### 方式 B：薄可视化前端（推荐不熟悉 Java 时使用）
 
-**不需要 Node。** Java 进程内嵌一个小 HTTP 服务，浏览器打开即可：
+**不需要 Node。** Java 进程内嵌一个小 HTTP 服务，浏览器打开即可（同样必须先设 `AGENT_GATEWAY_URL`）：
 
 ```powershell
+$env:AGENT_GATEWAY_URL="http://127.0.0.1:8080"
 java -cp $cp com.openjiuwen.client.verify.CloudClientVerification --ui
 ```
 
@@ -93,7 +99,7 @@ java -cp $cp com.openjiuwen.client.verify.CloudClientVerification --ui
   请在浏览器打开: http://127.0.0.1:9090/
 ```
 
-在页面点「开始验证」，会实时看到 4 个场景的进度与绿/红断言。端口可用环境变量 `UI_PORT` 改。
+在页面点「开始验证」，会实时看到场景的进度与绿/红断言。端口可用环境变量 `UI_PORT` 改。
 
 > 前端是 `verification-app` 里的静态 HTML + 原生 JS（`src/main/resources/web/`），
 > 经 JDK `HttpServer` 提供；**不要**为这个验证控制台再单独起 Node 工程。
@@ -102,17 +108,17 @@ Linux / macOS（classpath 分隔符为 `:`）：
 
 ```bash
 M="$HOME/.m2/repository/com/fasterxml/jackson"
-CP="../../agent-client/agent-client-sdk-for-jvm/target/agent-client-sdk-for-jvm.jar:mock-gateway/target/mock-gateway.jar:verification-app/target/verification-app.jar:\
+CP="../../agent-client/agent-client-sdk-for-jvm/target/agent-client-sdk-for-jvm.jar:verification-app/target/verification-app.jar:\
 $M/core/jackson-databind/2.17.3/jackson-databind-2.17.3.jar:\
 $M/core/jackson-core/2.17.3/jackson-core-2.17.3.jar:\
 $M/core/jackson-annotations/2.17.3/jackson-annotations-2.17.3.jar"
-java -cp "$CP" com.openjiuwen.client.verify.CloudClientVerification
+AGENT_GATEWAY_URL=http://127.0.0.1:8080 java -cp "$CP" com.openjiuwen.client.verify.CloudClientVerification
 echo "exit=$?"
 ```
 
 ## 把 mock-gateway 当独立微服务运行
 
-也可以先独立起网关，再让 `verification-app` 通过环境变量指向它（发起真正跨进程 HTTP）：
+`mock-gateway` 是一个纯 JDK `HttpServer` 实现的 A2A 参考网关，可独立 `java -jar` 运行，供 `verification-app` 连接：
 
 ```bash
 # 终端 1：启动网关（默认 8080，或传端口/设 PORT）
@@ -126,25 +132,26 @@ AGENT_GATEWAY_URL=http://127.0.0.1:8080 java -cp "$CP" com.openjiuwen.client.ver
 ## 预期输出
 
 ```
-[verify] started embedded mock-gateway at http://127.0.0.1:xxxxx
+[verify] gateway=http://127.0.0.1:8080 (external)
 
 == Scenario 1: STREAMING + client tools (real HTTP + SSE) ==
   [ok]   streaming invocation completed, state=COMPLETED
   [ok]   readPage executed exactly once despite duplicate INPUT_REQUIRED, actual=1
   [ok]   submitOrder executed exactly once, actual=1
   [ok]   approval requested exactly once for the ACTION tool, actual=1
-... (Scenario 2/3/4) ...
+... (其余场景) ...
 ALL CHECKS PASSED
 ```
 
 ## Docker 一键验收
 
-构建上下文为 `common/` 目录（SDK 与 demo 分属两个子目录，需要同时拷入容器）：
+构建上下文为 `common/` 目录（SDK 与 demo 分属两个子目录，需要同时拷入容器）。容器需通过 `AGENT_GATEWAY_URL` 指向一个真实可达的 gateway：
 
 ```bash
 cd common
 docker build -t openjiuwen/agent-client-demo:0.1.0 -f example/agent-client-demo/Dockerfile .
-docker run --rm openjiuwen/agent-client-demo:0.1.0   # 退出码 0=全部断言通过，非 0=失败
+# 必须指向一个真实可达的 gateway（容器内需能路由到该地址）
+docker run --rm -e AGENT_GATEWAY_URL=http://10.0.0.5:8080 openjiuwen/agent-client-demo:0.1.0   # 退出码 0=全部断言通过，非 0=失败
 ```
 
 ## SDK 包结构（对齐设计四层）
@@ -159,7 +166,6 @@ agent-client-sdk-for-jvm : com.openjiuwen.client
 ├── state.spi/      客户端状态存储 SPI：ClientStateStore（幂等去重 / 提交去重）
 ├── transport.spi/  传输抽象：TransportProvider / ToolWireSpec
 ├── transport.a2a/  ★ 默认传输：A2aHttpTransportProvider（真实 A2A JSON-RPC over HTTP+SSE）+ A2aJsonCodec
-├── transport.fake/ 测试工具（非交付）：InProcessFakeGateway（进程内、无网络）
 └── internal/       内核编排：DefaultAgentClient(invocationRef↔taskRef 映射) / ToolDispatcher
                     / DefaultToolRegistry / InMemoryStateStore / ObservationTextRenderer
 ```

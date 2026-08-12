@@ -47,7 +47,7 @@ mvn -q -o clean package
 ```powershell
 cd "d:\java版EDPA重构\正秋的agent-solution仓\agent-solution_dxn\common\example\agent-client-demo"
 set AGENT_GATEWAY_URL=http://127.0.0.1:8080
-java -cp "verification-app\target\verification-app.jar;..\..\agent-client\agent-client-sdk-for-jvm\target\agent-client-sdk-for-jvm.jar;mock-gateway\target\mock-gateway.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.17.3\jackson-core-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.17.3\jackson-annotations-2.17.3.jar" com.openjiuwen.client.verify.CloudClientVerification --ui
+java -cp "verification-app\target\verification-app.jar;..\..\agent-client\agent-client-sdk-for-jvm\target\agent-client-sdk-for-jvm.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.17.3\jackson-databind-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.17.3\jackson-core-2.17.3.jar;%USERPROFILE%\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.17.3\jackson-annotations-2.17.3.jar" com.openjiuwen.client.verify.CloudClientVerification --ui
 ```
 
 看到下面的输出即启动成功，保持这个终端不要关：
@@ -62,7 +62,7 @@ java -cp "verification-app\target\verification-app.jar;..\..\agent-client\agent-
 
 **说明**：
 - `AGENT_GATEWAY_URL` 必须在启动 verification-app **之前**设好；如果忘了设或设空，verification-app 会直接报错退出，不会启动。
-- classpath 里的三个 jar（`verification-app` / `agent-client-sdk-for-jvm` / `mock-gateway`）都要带上。`mock-gateway.jar` 在页面调试模式下不会真正运行，但代码加载时需要它在 classpath 上。`agent-client-sdk-for-jvm.jar` 在上级 `..\..\agent-client\agent-client-sdk-for-jvm\target\` 下（SDK 本体归 agent-client 模块）。
+- classpath 里的两个 jar（`verification-app` / `agent-client-sdk-for-jvm`）都要带上。`agent-client-sdk-for-jvm.jar` 在上级 `..\..\agent-client\agent-client-sdk-for-jvm\target\` 下（SDK 本体归 agent-client 模块）。`mock-gateway` 不再需要出现在 verification-app 的 classpath 上——verification-app 不依赖它，也不内嵌启动它；如需用 mock-gateway 当参考网关，单独在另一个终端 `java -jar` 起它即可。
 - 三个 Jackson jar 是 SDK 的运行时依赖，首次构建后会在 `%USERPROFILE%\.m2\repository\` 下。如果版本号不同（构建时 Maven 会提示实际版本），按你本地的实际版本号替换。
 - 自己的端口可用 `set UI_PORT=9090` 改（默认 9090）。
 - 启动后**保持终端开着**，所有调试日志都会打印在这里（见 ③）。
@@ -99,10 +99,11 @@ verification-app 启动的那个终端会实时打印调用过程，包括：
 | 鉴权 | 每个请求必须有 `Authorization: Bearer <非空>`，否则 401 `{"code":"AUTH_MISSING"}` |
 | 方法 | `SendStreamingMessage`（SSE 流式响应，用于创建 STREAMING 调用）、`SendMessage`（单条 JSON，用于创建 BLOCKING/ASYNC 调用 + 一切续传）、`GetTask`（单条 JSON，状态查询） |
 | 方法白名单 | 建议只放行上面三个；其余（如 `CancelTask` / `SubscribeToTask`）返回 `400 {"code":"VALIDATION_METHOD"}`。**客户端 v0730 不会调用这两个方法** |
-| 状态查询 | `GetTask`，参数是 **`params.taskId`**（注意：不是 A2A 别名 `params.id`）。返回该 Task 当前权威快照。客户端在 ASYNC 观察、BLOCKING 推进、以及**流中断后确认真实进展**时都会调它 |
+| unary 返回时机 | client 在 `SendMessage` 的 `params.configuration.returnImmediately` 写布尔值：ASYNC=`true`，BLOCKING=`false`；字段缺省按 `false` 兼容。不要从 method 推断二者，也不要新增私有 mode 字段 |
+| 状态查询 | `GetTask`，参数是标准 A2A **`params.id`**。返回该 Task 当前权威快照。客户端在显式 `getInvocation`、ASYNC 观察以及**流中断后确认真实进展**时调用它；严格 unary BLOCKING 不会自动调用 |
 | 创建调用 | `params.message.taskId` 为空；按 `message.messageId` 幂等去重；读 `params.metadata.clientTools` 获取客户端工具清单 |
 | 请求工具 | `INPUT_REQUIRED` 状态，工具调用意图放在 `result.status.message.metadata._interrupt`（`_interrupt_kind=client_tool`，含 `toolCallId`/`toolName`/`arguments`） |
-| 续传 | 客户端对既有 `taskId` 再发**同步** `SendMessage`，正文为一个 text part（工具结果或用户输入文本），并稳定携带 `contextId`。**v0730 不在 wire 上回传 `toolCallId`**：同一时刻只有单个 pending，由 runtime 按该 pending 自动关联即可。`toolCallId` 只在客户端本地用于去重 |
+| 续传 | 客户端对既有 `taskId` 再发 unary `SendMessage`，正文为一个 text part（工具结果或用户输入文本），稳定携带 `contextId`，并按当前 mode 写 `returnImmediately`。**v0730 不在 wire 上回传 `toolCallId`**：同一时刻只有单个 pending，由 runtime 按该 pending 自动关联即可。`toolCallId` 只在客户端本地用于去重 |
 | 中断即关流 | 投递 `INPUT_REQUIRED` 后关闭当前 SSE 流，等客户端续传后再开下一段。这是**约定行为**，客户端不会把它当作异常中断 |
 | 完成 | `TASK_STATE_COMPLETED`，输出文本放在 artifact 或 `status.message.parts` |
 
@@ -111,11 +112,11 @@ verification-app 启动的那个终端会实时打印调用过程，包括：
 | 场景 | 考察点 | 对你 gateway 的要求 |
 |------|--------|------------------|
 | S1 | 流式 + 工具多轮：逐个 `_interrupt` 请求工具，收续传推进，全部完成转 COMPLETED | `SendStreamingMessage` + `_interrupt` + 续传推进 |
-| S2 | BLOCKING 走同步接口拿最终结果；再用 STREAMING 跑一次单工具 | `SendMessage` 创建须返回该 Task 的**当前完整状态**（含输出文本），不要只回一个 working 占位 |
+| S2 | BLOCKING 走同步接口拿本轮结果；再用 STREAMING 跑一次单工具 | 识别 `returnImmediately=false` 并进入同步等待；返回 Task 当前完整状态。若等待窗口只能返回 WORKING，client 会以 `ProgressUncertain` 结算且不会自动轮询 |
 | S3 | 用户输入续传：`_interrupt_kind=user_input`，收用户输入后完成 | `_interrupt_kind=user_input` + 同步续传 |
 | S4 / S5 | 不带工具的普通多轮，直接 COMPLETED | 同 conversationId 多次创建，各自独立 Task |
 | S6 | 故意不带鉴权 token，期望 gateway 返回 401 | 401 + `{"code":"AUTH_MISSING"}` |
-| S7 | ASYNC 受理后用 `GetTask` 观察进展 | **`GetTask` + `params.taskId`** |
+| S7 | ASYNC 受理后用 `GetTask` 观察进展 | 识别 `returnImmediately=true`，取得 taskId 后立即返回受理快照；后续支持 **`GetTask` + `params.id`** |
 | S8 | 流在非终态下中断，但服务端其实已完成 → 客户端靠 `GetTask` 恢复为终态，业务不感知中断 | 中断后 `GetTask` 仍能查到该 Task 的真实状态 |
 | S9 | 流在非终态下中断且服务端仍在跑 → 客户端投影「进展不确定」并给出恢复线索，**不判失败、不悬挂** | 同上；此场景验证客户端行为，gateway 只需如实返回 WORKING |
 | S10 | 续接一个已终态的调用，应拿到稳定错误码而非裸异常 | 纯客户端行为，不发请求到 gateway |
@@ -124,4 +125,13 @@ verification-app 启动的那个终端会实时打印调用过程，包括：
 
 > **S1** 里客户端会验证"每个工具恰好执行一次"（参考实现会故意重复投递一次 `INPUT_REQUIRED` 来测客户端去重，你的 gateway **不必**复刻，正常按序投递即可）。
 >
-> **S8 / S9** 是本次新增的断连场景。参考实现用输入文本前缀 `DROP_THEN_COMPLETE` / `DROP_STAYS_WORKING` 触发"发出首帧后直接关流"，你的 gateway **不必**复刻这个触发方式——这两个场景只在跑内置 mock gateway 时生效；对接你的 gateway 时，若不实现该触发，这两个场景会因收不到预期中断而失败，可暂时忽略，或按上表要求确认 `GetTask` 在中断后仍可用。
+> **S8 / S9** 是断连场景。参考实现（`mock-gateway`，可作为独立微服务起）用输入文本前缀 `DROP_THEN_COMPLETE` / `DROP_STAYS_WORKING` 触发"发出首帧后直接关流"，你的 gateway **不必**复刻这个触发方式——若你的 gateway 不实现该触发，这两个场景会因收不到预期中断而失败，可暂时忽略，或按上表要求确认 `GetTask` 在中断后仍可用。
+
+### gateway 实现 `returnImmediately` 的最小清单
+
+1. G3 读取并校验 `params.configuration.returnImmediately` 为 boolean；缺省按 `false`。
+2. DIRECT 路径保留 `configuration` 并原样透传 runtime，不在 runtime HTTP 响应之外追加等待。
+3. BUS 路径值为 `true` 时，收到首个 `ACCEPTED_WITH_TASK` 后立即绑定粘滞路由并返回标准非终态 Task；值为 `false` 时才继续等待 TERMINAL/INPUT_REQUIRED。
+4. ASYNC 返回后后台执行和状态投影不能停止，`GetTask(params.id)` 必须能查询该 taskId。
+5. 同一 messageId 改变 `returnImmediately` 应按正文冲突处理；同键同正文重放保持第一次的返回边界。
+6. 契约测试至少覆盖 DIRECT true/false 透传、BUS true 受理即返、BUS false 等待结算、缺省 false、非法类型 400 和 ASYNC 后 GetTask。
