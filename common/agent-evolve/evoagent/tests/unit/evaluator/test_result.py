@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 import json
 from unittest.mock import MagicMock
+import pytest
 
 from openjiuwen.agent_evolving.dataset import Case, EvaluatedCase
 
