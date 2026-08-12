@@ -27,7 +27,7 @@ public interface AgentClient extends AutoCloseable {
      * <ul>
      * <li>{@link InvocationMode#STREAMING} —— 订阅 {@link InvocationCall#events()} 增量消费。</li>
      * <li>{@link InvocationMode#BLOCKING} —— 忽略事件流，直接等 {@link InvocationCall#completion()}。
-     * 由传输层走网关同步接口获取结果，<b>不</b>是把流式结果在本地聚合。</li>
+     * 由传输层走带 {@code returnImmediately=false} 的网关 unary 接口获取结果，<b>不</b>是把流式结果在本地聚合。</li>
      * <li>{@link InvocationMode#ASYNC} —— 拿到 {@link InvocationCall#accepted()} 即返回，
      * 之后用 {@link #getInvocation} 观察进展。</li>
      * </ul>

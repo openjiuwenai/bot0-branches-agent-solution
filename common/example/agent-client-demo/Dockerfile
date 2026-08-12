@@ -6,9 +6,10 @@
 # 构建上下文需为 common/ 目录（因为 SDK 在 common/agent-client/ 下，demo 在 common/example/agent-client-demo/ 下）：
 #   cd common
 #   docker build -t openjiuwen/agent-client-demo:0.1.0 -f example/agent-client-demo/Dockerfile .
-#   docker run --rm openjiuwen/agent-client-demo:0.1.0   # 退出码 0=全部断言通过，非 0=失败
+#   docker run --rm -e AGENT_GATEWAY_URL=http://10.0.0.5:8080 openjiuwen/agent-client-demo:0.1.0   # 退出码 0=全部断言通过，非 0=失败
 #
-# 说明：verification-app 内嵌启动 mock-gateway，SDK 经真实 HTTP 打到本机回环，容器内即可自检。
+# 说明：verification-app 不内嵌任何 mock，运行时必须通过 AGENT_GATEWAY_URL 指向一个真实可达的外部 gateway。
+# mock-gateway 仍随 reactor 构建（可独立起当参考网关），但 verification-app 不依赖它。
 
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace

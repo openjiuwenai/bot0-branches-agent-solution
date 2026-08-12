@@ -92,14 +92,15 @@ public sealed interface InvocationEvent
     }
 
     /**
-     * 流在非终态下中断，服务端进展<b>不确定</b>（<b>非</b>终态、<b>非</b>失败）。
+     * 当前观察窗口在非终态下结束，服务端进展<b>不确定</b>（<b>非</b>终态、<b>非</b>失败）。
      *
-     * <p>对齐 FEAT-006 §5.1.4「SSE 中断不等于 Task 失败」：SDK 既不伪造终态、也不让调用方悬挂，
-     * 而是投递本事件说明"到此为止本地不再能观测进展"，并在 {@code completion()} 的快照上
-     * 附带恢复线索（{@link InvocationSnapshot#recovery()}）。
+     * <p>典型来源包括：SSE 在非终态下中断，或严格 unary {@code BLOCKING} 的单次
+     * {@code SendMessage} 返回 {@code SUBMITTED}/{@code WORKING}。SDK 既不伪造终态、也不让
+     * 调用方悬挂，而是投递本事件说明"本次调用不再自动观察进展"，并在 {@code completion()}
+     * 的快照上附带恢复线索（{@link InvocationSnapshot#recovery()}）。
      *
-     * <p>SDK 会先尝试用 {@code GetTask} 主动查询确认真实状态；只有查询也无法给出确定状态时才投递本事件。
-     * 调用方可据 {@link AgentClient#getInvocation} 稍后再次确认。
+     * <p>SSE 中断时 SDK 会先尝试用 {@code GetTask} 主动确认；严格 unary {@code BLOCKING}
+     * 不会自动查询。调用方可据 {@link AgentClient#getInvocation} 稍后再次确认。
      *
      * @param invocationRef 调用句柄
      * @param lastKnownState 中断前最后一次观测到的状态

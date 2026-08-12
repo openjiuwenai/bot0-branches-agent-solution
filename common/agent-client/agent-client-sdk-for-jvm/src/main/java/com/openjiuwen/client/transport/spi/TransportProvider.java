@@ -46,7 +46,11 @@ public interface TransportProvider extends AutoCloseable {
     CompletionStage<InvocationSnapshot> getTask(String taskRef, String credentialToken);
 
     /**
-     * 续跑既有 Task（wire 方法为同步 {@code SendMessage}），返回该 Task 的<b>下一状态</b>快照。
+     * 续跑既有 Task，返回该 Task 的<b>下一状态</b>快照。
+     *
+     * <p>wire method 由 {@code cmd.mode()} 决定并沿续跑继承首轮 invocation 的 mode（FEAT-006 §47）：
+     * STREAMING 走 {@code SendStreamingMessage}（SSE，响应为帧流，折叠成单个快照结算返回 future），
+     * BLOCKING/ASYNC 走 unary {@code SendMessage}（单次 JSON，返回时机由 mode 决定）。
      *
      * <p>返回快照必须是响应正文解析出的<b>完整</b>状态（含 outputText / pendingToolCall / errorCode），
      * 不能是占位的"working"快照——{@code continueInput} 依赖它驱动新 invocation 的事件流与结算。
@@ -135,12 +139,16 @@ public interface TransportProvider extends AutoCloseable {
     /**
      * 续跑指令。{@code observationText} 是已渲染好的服务端可消费文本（工具结果）或用户补充输入文本。
      *
+     * <p>{@code mode} <b>强制继承</b>首轮 invocation 的 mode（FEAT-006 §47）：由 {@code DefaultAgentClient}
+     * 在构造本指令时从首轮 {@code InvocationState.mode} 填入，业务不得覆盖。wire method 据此选择
+     * {@code SendStreamingMessage}（STREAMING）或 {@code SendMessage}（BLOCKING/ASYNC）。
+     *
      * @param invocationRef 调用句柄；{@code USER_INPUT} 时是<b>新</b>建的 invocationRef
      * @param taskRef 任务引用（关联既有 Task 的唯一依据）
      * @param messageId 消息标识，每次续跑新生成
      * @param toolCallId 工具调用标识；仅本地去重用，不上 wire（FRZ-2）
      * @param observationText 回传文本
-     * @param mode 调用模式
+     * @param mode 调用模式（继承自首轮 invocation）
      * @param clientTools 客户端工具规格
      * @param credentialToken 凭证令牌
      * @param conversationId 会话标识
