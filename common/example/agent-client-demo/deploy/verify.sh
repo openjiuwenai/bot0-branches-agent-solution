@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 验证 agent-client-demo 容器状态与运行结果。
 #
-# CLI/EXTERNAL 模式：start.sh 已等待容器退出并解析退出码；本脚本对已退出的容器
+# EXTERNAL 模式：start.sh 已等待容器退出并解析退出码；本脚本对已退出的容器
 #   重新检查退出码并打印日志摘要，便于排错或 CI 二次确认。
 # UI 模式：检查容器是否在运行、UI 端口是否可访问。
 set -euo pipefail
@@ -11,15 +11,15 @@ check_docker
 
 CONTAINER="$(config_value ACD_CONTAINER agent-client-demo)"
 HOST_PORT="$(config_value ACD_HOST_PORT 8080)"
-RUN_MODE="$(config_value ACD_RUN_MODE CLI)"
+RUN_MODE="$(config_value ACD_RUN_MODE EXTERNAL)"
 UI_PORT="$(config_value UI_PORT 9090)"
 
 validate_resource_name "容器" "${CONTAINER}"
 
 if ! container_exists "${CONTAINER}"; then
-    if [ "${RUN_MODE}" = "CLI" ] || [ "${RUN_MODE}" = "EXTERNAL" ]; then
-        # CLI/EXTERNAL 模式下容器已退出且被 start.sh 清理是正常情况（验证通过时）。
-        log "容器不存在（${RUN_MODE} 模式跑完即退出，验证通过时 start.sh 会自动清理）。"
+    if [ "${RUN_MODE}" = "EXTERNAL" ]; then
+        # EXTERNAL 模式下容器已退出且被 start.sh 清理是正常情况（验证通过时）。
+        log "容器不存在（EXTERNAL 模式跑完即退出，验证通过时 start.sh 会自动清理）。"
         log "如需复跑：bash ${SCRIPT_DIR}/start.sh"
         exit 0
     fi
@@ -57,7 +57,7 @@ case "${STATE}" in
             show_recent_logs "${CONTAINER}"
             die "UI 容器已退出（state=${STATE}, exit=${EXIT_CODE}），预期应常驻运行。"
         fi
-        # CLI/EXTERNAL 模式：退出是预期行为，解析退出码。
+        # EXTERNAL 模式：退出是预期行为，解析退出码。
         if [ "${EXIT_CODE}" = "0" ]; then
             log "验证通过：全部断言 PASSED（exit=0, state=${STATE}）。"
         else

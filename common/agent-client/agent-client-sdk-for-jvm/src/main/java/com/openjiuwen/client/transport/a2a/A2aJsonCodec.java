@@ -4,6 +4,7 @@
 
 package com.openjiuwen.client.transport.a2a;
 
+import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.TaskState;
 import com.openjiuwen.client.transport.spi.ToolWireSpec;
 import com.openjiuwen.client.transport.spi.TransportProvider;
@@ -23,7 +24,8 @@ import java.util.UUID;
 /**
  * A2A JSON-RPC 2.0 报文的编解码（仅在 transport 内部使用 Jackson）。
  *
- * <p>请求侧：把中立指令映射为 {@code SendStreamingMessage}（创建/流式）与 {@code SendMessage}（续跑/同步）。
+ * <p>请求侧：把中立指令映射为 {@code SendStreamingMessage}（创建/流式续跑）与 {@code SendMessage}（unary 创建/续跑）；
+ * wire method 由首轮 mode 决定并沿续跑继承。unary 返回时机由 {@code params.configuration.returnImmediately} 表达。
  * 业务标识到 wire 字段的映射：{@code conversationId → message.contextId}、
  * {@code invocationId/idempotencyKey → message.messageId}、ToolView → {@code params.metadata.clientTools}、
  * 可选 {@code agentId → params.metadata.agentId}。
@@ -73,11 +75,14 @@ final class A2aJsonCodec {
      */
 
     ObjectNode buildCreate(TransportProvider.CreateCommand cmd) {
-        // 仅 STREAMING 交付：创建用 SendStreamingMessage（SSE）；预留模式回退 SendMessage。
-        String method = (cmd.mode() == com.openjiuwen.client.api.InvocationMode.STREAMING)
+        // STREAMING 用方法名表达；BLOCKING / ASYNC 共用 SendMessage，由 configuration 区分返回时机。
+        String method = (cmd.mode() == InvocationMode.STREAMING)
                 ? "SendStreamingMessage" : "SendMessage";
         ObjectNode root = newRequest(method);
         ObjectNode params = root.putObject("params");
+        if (cmd.mode() != InvocationMode.STREAMING) {
+            fillReturnImmediately(params, cmd.mode());
+        }
         ObjectNode message = params.putObject("message");
         message.put("role", "ROLE_USER");
         // invocationId / idempotencyKey → message.messageId（网关据此去重，Feat-Func-011 §4.9 AC-4）。
@@ -102,9 +107,16 @@ final class A2aJsonCodec {
      */
 
     ObjectNode buildResume(TransportProvider.ResumeCommand cmd) {
-        // 工具结果 / 用户输入续跑一律走同步 SendMessage（Feat-Func-011 §5.9.3）：非 SSE、单条 JSON 响应。
-        ObjectNode root = newRequest("SendMessage");
+        // 续跑 method 沿用首轮 mode（FEAT-006 §47）：STREAMING 走 SendStreamingMessage（SSE），
+        // BLOCKING / ASYNC 走 unary SendMessage（由 configuration.returnImmediately 表达返回时机）。
+        String method = (cmd.mode() == InvocationMode.STREAMING)
+                ? "SendStreamingMessage" : "SendMessage";
+        ObjectNode root = newRequest(method);
         ObjectNode params = root.putObject("params");
+        // unary 才写 configuration.returnImmediately；流式 method 本身即流式返回，无此语义。
+        if (cmd.mode() != InvocationMode.STREAMING) {
+            fillReturnImmediately(params, cmd.mode());
+        }
         ObjectNode message = params.putObject("message");
         message.put("role", "ROLE_USER");
         // 每次续跑用新的 messageId；taskId 关联既有 Task。toolCallId 在多并行工具场景下写入 part.metadata（见下）。
@@ -128,6 +140,17 @@ final class A2aJsonCodec {
         // 续跑不重复声明 clientTools（仅创建时声明），metadata 保持空对象以对齐 A2A 结构。
         params.putObject("metadata");
         return root;
+    }
+
+    /**
+     * 在 unary A2A 请求上表达服务端返回时机。ASYNC 在受理后立即返回，其他模式等待本轮结果。
+     *
+     * @param params 请求参数节点；configuration 子对象会被追加到此节点下
+     * @param mode 调用模式；决定 returnImmediately 的取值
+     */
+    private static void fillReturnImmediately(ObjectNode params, InvocationMode mode) {
+        params.putObject("configuration")
+                .put("returnImmediately", mode == InvocationMode.ASYNC);
     }
 
     private void fillMetadata(ObjectNode params, String agentId, List<ToolWireSpec> clientTools,
@@ -292,6 +315,12 @@ final class A2aJsonCodec {
         String stateStr = status.path("state").asText(null);
         TaskState state = mapState(stateStr).orElse(null);
         String text = collectMessageText(status.path("message")).orElse(null);
+        // 完整 Task 的最终业务结果位于 artifacts，而不是 status.message。后者主要承载
+        // INPUT_REQUIRED 提示或状态说明。BUS unary 响应和流式 TERMINAL 投影都会返回完整 Task；
+        // COMPLETED 时优先读取 artifacts，才能与 runtime HTTP 入口的 Task 语义保持一致。
+        if (isTask && state == TaskState.COMPLETED) {
+            text = collectTaskArtifactText(taskNode).orElse(text);
+        }
         Interrupt interrupt = parseInterrupt(result, status).orElse(null);
         String errorCode = result.path("metadata").path("errorCode").asText(null);
         if (errorCode == null && isTask) {
@@ -371,6 +400,24 @@ final class A2aJsonCodec {
     }
 
     /**
+     * Collects the final output carried by a complete Task's artifacts.
+     *
+     * @param task complete A2A Task node
+     * @return concatenated artifact text, or empty when the Task has no textual artifact
+     */
+    private Optional<String> collectTaskArtifactText(JsonNode task) {
+        JsonNode artifacts = task.path("artifacts");
+        if (!artifacts.isArray()) {
+            return Optional.empty();
+        }
+        StringBuilder text = new StringBuilder();
+        for (JsonNode artifact : artifacts) {
+            collectArtifactText(artifact).ifPresent(text::append);
+        }
+        return text.length() > 0 ? Optional.of(text.toString()) : Optional.empty();
+    }
+
+    /**
      * collectPartsText。
      *
      * @param parts JsonNode
@@ -387,6 +434,18 @@ final class A2aJsonCodec {
             // 兼容旧 mock 形态：{kind:"text", text:"..."}。
             if (p.has("text")) {
                 sb.append(p.path("text").asText(""));
+            } else if (p.has("data")) {
+                // Runtime ChunkMapper maps a structured QueryResponse result to DataPart. The confirmed
+                // text contract is data.content; arbitrary data.text/data.message fields remain structured
+                // business data and must not be guessed as InvocationSnapshot.outputText.
+                JsonNode data = p.path("data");
+                String text = data.path("content").asText("");
+                if (!text.isEmpty()) {
+                    sb.append(text);
+                }
+            } else {
+                // 其他 Part 类型（如 FilePart）当前不参与文本提取，跳过。
+                continue;
             }
         }
         return sb.length() > 0 ? Optional.of(sb.toString()) : Optional.empty();
