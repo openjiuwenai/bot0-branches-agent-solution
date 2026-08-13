@@ -2,6 +2,8 @@
 
 这个 example 用 `agent-runtime-java` 的 A2A 入口启动一个只挂载 `VersatileAgentHandler` 的 runtime，然后通过 A2A `SendStreamingMessage` 调用远端 Versatile HTTP 服务。
 
+> 另提供 Linux shell 脚本 + Docker 镜像方式（`script/start.sh`、`script/send-requests.sh`、`script/build-image.sh`），见 [`script/README.md`](script/README.md)。
+
 默认本地 runtime 地址：
 
 ```text
