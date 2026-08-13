@@ -200,9 +200,10 @@ public class ParamValidator {
         if (node.isTextual()) {
             return node.textValue();
         }
-        // JSON null (and any non-textual scalar fallback) — null preserves the JSON null
-        // token in the fingerprint without a bare 'return null' statement (G.MET.06).
-        return node.isNull() ? null : node.asText();
+        // JSON null token — returning the NullNode itself (the node arg when isNull())
+        // serializes to 'null' (same as Java null) without a bare 'null' literal in the
+        // return statement (G.MET.06). Other non-textual scalars fall back to asText().
+        return node.isNull() ? node : node.asText();
     }
 
     private static Optional<String> text(JsonNode parent, String field) {
