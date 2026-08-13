@@ -202,6 +202,13 @@ final class A2aJsonCodec {
         return root;
     }
 
+    /** SubscribeToTask 请求。断点 cursor 通过标准 Last-Event-ID header 承载。 */
+    ObjectNode buildSubscribe(String taskRef) {
+        ObjectNode root = newRequest("SubscribeToTask");
+        root.putObject("params").put("id", taskRef);
+        return root;
+    }
+
     /**
      * JSON 文本。
      *
@@ -246,7 +253,8 @@ final class A2aJsonCodec {
      * @param errorMessage 错误信息
      */
     record Frame(String taskId, String contextId, TaskState state, Interrupt interrupt,
-            String text, String errorCode, String errorMessage) {
+            String text, String errorCode, String errorMessage, ProtocolArtifact artifact,
+            List<ProtocolArtifact> taskArtifacts) {
         // 仅规范构造器，无额外成员。
     }
 
@@ -274,17 +282,22 @@ final class A2aJsonCodec {
         String legacyKind = result.path("kind").asText("");
 
         if (result.has("artifactUpdate") || "artifact-update".equals(legacyKind)) {
+            JsonNode update = result.has("artifactUpdate") ? result.path("artifactUpdate") : result;
             JsonNode art = result.has("artifactUpdate")
-                    ? result.path("artifactUpdate").path("artifact")
+                    ? update.path("artifact")
                     : result.path("artifact");
-            String text = collectArtifactText(art).orElse(null);
+            ProtocolArtifact protocolArtifact = parseArtifact(art,
+                    update.path("append").asBoolean(false), update.path("lastChunk").asBoolean(false));
+            String text = !protocolArtifact.agentEventDeclared() && !protocolArtifact.controllerOutput()
+                    ? collectArtifactText(art).orElse(null) : null;
             String taskId = result.has("artifactUpdate")
                     ? result.path("artifactUpdate").path("taskId").asText(null)
                     : firstText(result, "id", "taskId").orElse(null);
             String contextId = result.has("artifactUpdate")
                     ? result.path("artifactUpdate").path("contextId").asText(null)
                     : result.path("contextId").asText(null);
-            return Optional.of(new Frame(taskId, contextId, null, null, text, null, null));
+            return Optional.of(new Frame(taskId, contextId, null, null, text, null, null,
+                    protocolArtifact, List.of()));
         }
 
         // status 节点定位：流式在 result.statusUpdate.status；非流式在 result.task.status；
@@ -327,7 +340,63 @@ final class A2aJsonCodec {
             // 非流式 task 形态的错误码可能在 task.metadata。
             errorCode = taskNode.path("metadata").path("errorCode").asText(null);
         }
-        return Optional.of(new Frame(taskId, contextId, state, interrupt, text, errorCode, text));
+        List<ProtocolArtifact> taskArtifacts = isTask ? parseTaskArtifacts(taskNode) : List.of();
+        return Optional.of(new Frame(taskId, contextId, state, interrupt, text, errorCode, text,
+                null, taskArtifacts));
+    }
+
+    private List<ProtocolArtifact> parseTaskArtifacts(JsonNode task) {
+        JsonNode artifacts = task.path("artifacts");
+        if (!artifacts.isArray()) {
+            return List.of();
+        }
+        List<ProtocolArtifact> result = new java.util.ArrayList<>();
+        for (JsonNode artifact : artifacts) {
+            result.add(parseArtifact(artifact, false, true));
+        }
+        return List.copyOf(result);
+    }
+
+    private ProtocolArtifact parseArtifact(JsonNode artifact, boolean append, boolean lastChunk) {
+        String artifactId = artifact.path("artifactId").asText(null);
+        if (artifactId == null || artifactId.isBlank()) {
+            artifactId = "anonymous-" + Integer.toHexString(artifact.toString().hashCode());
+        }
+        List<ProtocolPart> parts = new java.util.ArrayList<>();
+        boolean controllerOutput = false;
+        JsonNode partNodes = artifact.path("parts");
+        if (partNodes.isArray()) {
+            for (JsonNode part : partNodes) {
+                if (part.has("text")) {
+                    parts.add(new ProtocolPart.Text(part.path("text").asText("")));
+                } else if (part.has("data")) {
+                    Object data = mapper.convertValue(part.path("data"), Object.class);
+                    parts.add(new ProtocolPart.Data(data));
+                    controllerOutput |= "controller_output".equals(part.path("data").path("type").asText());
+                }
+            }
+        }
+        JsonNode agentEventNode = artifact.path("metadata").path("agentEvent");
+        boolean agentEventDeclared = !agentEventNode.isMissingNode() && !agentEventNode.isNull();
+        return new ProtocolArtifact(artifactId, parts, append, lastChunk,
+                parseAgentEvent(agentEventNode), agentEventDeclared, controllerOutput);
+    }
+
+    private static AgentEvent parseAgentEvent(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        AgentEvent event = new AgentEvent(node.path("type").asText(null),
+                parseAgentRef(node.path("source")), parseAgentRef(node.path("target")),
+                node.path("state").asText(null));
+        return event.valid() ? event : null;
+    }
+
+    private static AgentEvent.AgentRef parseAgentRef(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        return new AgentEvent.AgentRef(node.path("agentId").asText(null), node.path("taskId").asText(null));
     }
 
     /**
@@ -412,9 +481,25 @@ final class A2aJsonCodec {
         }
         StringBuilder text = new StringBuilder();
         for (JsonNode artifact : artifacts) {
+            if (artifact.path("metadata").has("agentEvent") || isControllerOutput(artifact)) {
+                continue;
+            }
             collectArtifactText(artifact).ifPresent(text::append);
         }
         return text.length() > 0 ? Optional.of(text.toString()) : Optional.empty();
+    }
+
+    private static boolean isControllerOutput(JsonNode artifact) {
+        JsonNode parts = artifact.path("parts");
+        if (!parts.isArray()) {
+            return false;
+        }
+        for (JsonNode part : parts) {
+            if ("controller_output".equals(part.path("data").path("type").asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

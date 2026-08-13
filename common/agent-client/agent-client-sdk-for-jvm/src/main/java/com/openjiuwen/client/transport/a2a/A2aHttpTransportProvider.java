@@ -9,6 +9,8 @@ import com.openjiuwen.client.api.InvocationEvent;
 import com.openjiuwen.client.api.InvocationMode;
 import com.openjiuwen.client.api.InvocationSnapshot;
 import com.openjiuwen.client.api.TaskState;
+import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
+import com.openjiuwen.client.transport.spi.CallTreeTransportProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -68,7 +70,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @since 2026-07-27
  */
-public final class A2aHttpTransportProvider implements TransportProvider {
+public class A2aHttpTransportProvider implements TransportProvider, CallTreeTransportProvider {
     private static final java.util.logging.Logger LOG =
             java.util.logging.Logger.getLogger(A2aHttpTransportProvider.class.getName());
 
@@ -80,6 +82,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
 
     /** UNKNOWN 恢复的最大重发次数（含首次恢复尝试）。耗尽后投递进展不确定，不无限重试。 */
     private static final int MAX_CREATE_RECOVERY_ATTEMPTS = 3;
+    private static final int MAX_OBSERVATION_RECOVERY_FAILURES = 3;
 
     private final URI endpoint;
     private final HttpClient http;
@@ -87,9 +90,11 @@ public final class A2aHttpTransportProvider implements TransportProvider {
     private final ExecutorService io;
     private final ScheduledExecutorService scheduler;
     private final Duration sseIdleTimeout;
+    private final EndpointPolicy endpointPolicy;
 
     private final ConcurrentMap<String, Channel> byInvocationRef = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Channel> byTaskRef = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CallTreeSnapshot> completedTrees = new ConcurrentHashMap<>();
 
     /**
      * 构造传输实现（使用默认 ObjectMapper 与 SSE 读空闲超时）。
@@ -118,9 +123,15 @@ public final class A2aHttpTransportProvider implements TransportProvider {
      * @param sseIdleTimeout SSE 读空闲超时
      */
     public A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout) {
+        this(baseUrl, mapper, sseIdleTimeout, GatewayEndpointPolicy.INSTANCE);
+    }
+
+    A2aHttpTransportProvider(String baseUrl, ObjectMapper mapper, Duration sseIdleTimeout,
+            EndpointPolicy endpointPolicy) {
         String normalized = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.endpoint = URI.create(normalized.endsWith("/a2a") ? normalized : normalized + "/a2a");
         this.sseIdleTimeout = sseIdleTimeout;
+        this.endpointPolicy = endpointPolicy;
         this.io = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS,
                 new SynchronousQueue<>(), daemonFactory("a2a-transport-io"));
         this.scheduler = Executors.newSingleThreadScheduledExecutor(daemonFactory("a2a-transport-watchdog"));
@@ -129,6 +140,10 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                 .executor(io)
                 .build();
         this.codec = new A2aJsonCodec(mapper);
+    }
+
+    static Duration defaultIdleTimeout() {
+        return DEFAULT_SSE_IDLE_TIMEOUT;
     }
 
     private static java.util.concurrent.ThreadFactory daemonFactory(String name) {
@@ -147,18 +162,19 @@ public final class A2aHttpTransportProvider implements TransportProvider {
 
     @Override
     public Flow.Publisher<InvocationEvent> createAndStream(CreateCommand cmd) {
-        ObjectNode req = codec.buildCreate(cmd);
+        CreateCommand effective = endpointPolicy.createCommand(cmd);
+        ObjectNode req = codec.buildCreate(effective);
         // 原始创建正文保存下来：UNKNOWN 恢复必须逐字节复用同一正文，否则会命中网关幂等正文冲突。
         String body = codec.write(req);
-        Channel ch = new Channel(cmd.invocationRef(), cmd.conversationId(),
-                cmd.idempotencyKey() != null ? cmd.idempotencyKey() : cmd.invocationId(),
-                cmd.mode(), body, cmd.credentialToken(), io);
-        byInvocationRef.put(cmd.invocationRef(), ch);
+        Channel ch = new Channel(effective.invocationRef(), effective.conversationId(),
+                effective.idempotencyKey() != null ? effective.idempotencyKey() : effective.invocationId(),
+                effective.mode(), body, effective.credentialToken(), io);
+        byInvocationRef.put(effective.invocationRef(), ch);
         Runnable start = () -> {
-            if (cmd.mode() == InvocationMode.STREAMING) {
-                openSse(ch, body, cmd.credentialToken());
+            if (effective.mode() == InvocationMode.STREAMING) {
+                openSse(ch, body, effective.credentialToken());
             } else {
-                startUnaryCreate(ch, body, cmd.credentialToken());
+                startUnaryCreate(ch, body, effective.credentialToken());
             }
         };
         return new LazyStartPublisher(ch.publisher, start);
@@ -194,7 +210,31 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         Channel ch = byTaskRef.get(taskRef);
         String credential = (credentialToken != null) ? credentialToken : (ch != null ? ch.credential : null);
         String ref = (ch != null) ? ch.invocationRef : taskRef;
-        return sendForSnapshot(codec.buildGet(taskRef), credential, ref);
+        return sendForSnapshot(codec.buildGet(taskRef), credential, ref, ch);
+    }
+
+    @Override
+    public Flow.Publisher<CallTreeSnapshot> callTree(String invocationRef) {
+        Channel channel = byInvocationRef.get(invocationRef);
+        if (channel == null) {
+            return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
+                @Override
+                public void request(long n) {
+                    subscriber.onComplete();
+                }
+
+                @Override
+                public void cancel() {
+                }
+            });
+        }
+        return channel.callTree.publisher();
+    }
+
+    @Override
+    public Optional<CallTreeSnapshot> currentCallTree(String invocationRef) {
+        Channel channel = byInvocationRef.get(invocationRef);
+        return channel == null ? Optional.ofNullable(completedTrees.get(invocationRef)) : channel.callTree.current();
     }
 
     @Override
@@ -207,6 +247,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         }
         byInvocationRef.clear();
         byTaskRef.clear();
+        completedTrees.clear();
         scheduler.shutdownNow();
         io.shutdownNow();
     }
@@ -220,6 +261,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         if (withTimeout) {
             b.timeout(UNARY_TIMEOUT);
         }
+        credential = endpointPolicy.credential(credential);
         if (credential != null && !credential.isEmpty()) {
             b.header("Authorization", credential.startsWith("Bearer ") ? credential : "Bearer " + credential);
         }
@@ -614,7 +656,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                         failStream(ch, notStreaming);
                         return;
                     }
-                    io.execute(() -> readSse(ch, resp.body()));
+                    io.execute(() -> readSse(ch, resp.body(), false));
                 });
     }
 
@@ -639,34 +681,52 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                 null, ErrorCodes.STREAMING_UNAVAILABLE, resp.statusCode(), false));
     }
 
-    private void readSse(Channel ch, InputStream in) {
+    private void readSse(Channel ch, InputStream in, boolean subscription) {
         ch.touch();
         ch.idleTimedOut.set(false);
         ScheduledFuture<?> watchdog = armWatchdog(ch, in);
         ch.watchdog = watchdog;
         Throwable failure = null;
+        int acceptedFrames = 0;
         try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder data = new StringBuilder();
+            String eventId = null;
             String line;
             while ((line = r.readLine()) != null) {
                 ch.touch();
                 if (line.isEmpty()) {
-                    flushFrame(ch, data);
+                    if (flushFrame(ch, data, eventId, subscription)) {
+                        acceptedFrames++;
+                    }
+                    eventId = null;
                 } else if (line.startsWith("data:")) {
                     data.append(line.substring(5).trim());
+                } else if (line.startsWith("id:")) {
+                    eventId = line.substring(3).trim();
                 } else {
-                    // event: / id: / 注释行（":"开头）当前不参与语义；
-                    // id: 与 Last-Event-ID 的游标续传属后续版本（网关尚未下发 id 行）。
+                    // event: / 注释行（":"开头）不参与业务语义。
                     continue;
                 }
             }
-            flushFrame(ch, data);
+            if (flushFrame(ch, data, eventId, subscription)) {
+                acceptedFrames++;
+            }
+            if (subscription && acceptedFrames > 0) {
+                ch.observationFailures = 0;
+                ch.callTree.markRecovered(true);
+            }
         } catch (IOException | IllegalStateException | NullPointerException e) {
             failure = e;
         } finally {
             if (watchdog != null) {
                 watchdog.cancel(false);
             }
+        }
+        if (subscription && acceptedFrames == 0 && !ch.terminal.get()
+                && ch.lastState != TaskState.INPUT_REQUIRED) {
+            onObservationFailure(ch, "SubscribeToTask closed before a valid event",
+                    failure != null ? failure : new IOException("empty subscription stream"));
+            return;
         }
         onSseStreamEnd(ch, failure);
     }
@@ -733,12 +793,100 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             return;
         }
         if (ch.taskRef == null) {
+            if (!endpointPolicy.retryUnconfirmedCreate()) {
+                publishUncertain(ch, reason + "; runtime create outcome unknown; automatic retry is unsafe");
+                return;
+            }
             // 创建未确认：不能简单重发（会产生重复 Task），走同键同正文的幂等重发。
             // 次数从 recoveryAttempt 累加而非固定从 1 起，否则反复中断会无限重连。
             recoverUnconfirmedCreate(ch, reason, ch.recoveryAttempt + 1);
         } else {
-            confirmByQuery(ch, reason);
+            recoverKnownTask(ch, reason);
         }
+    }
+
+    private void recoverKnownTask(Channel ch, String reason) {
+        if (endpointPolicy.subscribeSupported()) {
+            openSubscription(ch, reason);
+        } else {
+            pollTask(ch, reason);
+        }
+    }
+
+    private void openSubscription(Channel ch, String reason) {
+        HttpRequest.Builder request = base("text/event-stream", ch.credential, false);
+        if (ch.replayCursor != null && !ch.replayCursor.isBlank()) {
+            request.header("Last-Event-ID", ch.replayCursor);
+        }
+        HttpRequest httpRequest = request.POST(HttpRequest.BodyPublishers.ofString(
+                codec.write(codec.buildSubscribe(ch.taskRef)), StandardCharsets.UTF_8)).build();
+        http.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofInputStream()).whenComplete((resp, failure) -> {
+            if (failure != null) {
+                onObservationFailure(ch, reason, failure);
+                return;
+            }
+            if (resp.statusCode() / 100 != 2) {
+                onObservationFailure(ch, reason, governanceError(resp.statusCode(), readAll(resp.body())));
+                return;
+            }
+            String contentType = resp.headers().firstValue("Content-Type").orElse("");
+            if (contentType.toLowerCase(java.util.Locale.ROOT).contains("application/json")) {
+                String body = readAll(resp.body());
+                try {
+                    extractResult(codec.readTree(body));
+                    onObservationFailure(ch, reason, new IllegalStateException("SubscribeToTask returned JSON"));
+                } catch (A2aTransportException error) {
+                    if (ErrorCodes.REPLAY_CURSOR_EXPIRED.equals(error.code())) {
+                        ch.recovering.set(false);
+                        pollTask(ch, reason + "; replay cursor expired");
+                    } else if (ErrorCodes.METHOD_NOT_SUPPORTED.equals(error.code())
+                            && endpointPolicy.type() == com.openjiuwen.client.api.EndpointType.GATEWAY) {
+                        ch.recovering.set(false);
+                        pollTask(ch, reason + "; gateway subscribe unsupported");
+                    } else {
+                        onObservationFailure(ch, reason, error);
+                    }
+                }
+                return;
+            }
+            ch.recovering.set(false);
+            io.execute(() -> readSse(ch, resp.body(), true));
+        });
+    }
+
+    private void onObservationFailure(Channel ch, String reason, Throwable failure) {
+        ch.recovering.set(false);
+        if (failure instanceof A2aTransportException classified && !classified.retryable()) {
+            publishUncertain(ch, reason + "; deterministic recovery error: " + rootMessage(failure));
+            return;
+        }
+        int attempts = ++ch.observationFailures;
+        if (attempts >= MAX_OBSERVATION_RECOVERY_FAILURES) {
+            publishUncertain(ch, reason + "; recovery failed " + attempts + " times: " + rootMessage(failure));
+            return;
+        }
+        long delay = 200L * (1L << (attempts - 1));
+        scheduler.schedule(() -> {
+            if (!ch.terminal.get()) {
+                beginDisconnectRecovery(ch, reason);
+            }
+        }, delay, TimeUnit.MILLISECONDS);
+    }
+
+    private void pollTask(Channel ch, String reason) {
+        sendForSnapshot(codec.buildGet(ch.taskRef), ch.credential, ch.invocationRef, ch)
+                .whenComplete((snap, failure) -> {
+            ch.recovering.set(false);
+            if (failure != null) {
+                onObservationFailure(ch, reason, failure);
+                return;
+            }
+            ch.observationFailures = 0;
+            ch.callTree.markRecovered(false);
+            if (!projectQueriedState(ch, snap)) {
+                scheduler.schedule(() -> beginDisconnectRecovery(ch, reason), 200L, TimeUnit.MILLISECONDS);
+            }
+        });
     }
 
     /**
@@ -904,20 +1052,36 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         return (msg != null && !msg.isBlank()) ? msg : cur.getClass().getSimpleName();
     }
 
-    private void flushFrame(Channel ch, StringBuilder data) {
+    private boolean flushFrame(Channel ch, StringBuilder data, String eventId, boolean replayed) {
         if (data.length() == 0) {
-            return;
+            return false;
         }
         String json = data.toString();
         data.setLength(0);
+        if (eventId != null && !eventId.isBlank() && ch.seenEventIds.contains(eventId)) {
+            return false;
+        }
         JsonNode result = extractResult(codec.readTree(json));
         A2aJsonCodec.Frame f = codec.parseFrame(result).orElse(null);
         bindTaskRef(ch, f);
+        if (replayed && f != null) {
+            ch.observationFailures = 0;
+            ch.callTree.markRecovered(true);
+        }
         emit(ch, f);
+        if (eventId != null && !eventId.isBlank()) {
+            ch.recordEventId(eventId);
+        }
+        return f != null;
     }
 
     private CompletionStage<InvocationSnapshot> sendForSnapshot(ObjectNode req, String credential,
-                                                               String invocationRef) {
+                                                                String invocationRef) {
+        return sendForSnapshot(req, credential, invocationRef, null);
+    }
+
+    private CompletionStage<InvocationSnapshot> sendForSnapshot(ObjectNode req, String credential,
+                                                                 String invocationRef, Channel channel) {
         HttpRequest httpReq = base("application/json", credential, true)
                 .POST(HttpRequest.BodyPublishers.ofString(codec.write(req), StandardCharsets.UTF_8))
                 .build();
@@ -927,7 +1091,15 @@ public final class A2aHttpTransportProvider implements TransportProvider {
                         throw governanceError(resp.statusCode(), resp.body());
                     }
                     JsonNode result = extractResult(codec.readTree(resp.body()));
-                    return snapshotFromFrame(invocationRef, codec.parseFrame(result).orElse(null));
+                    A2aJsonCodec.Frame frame = codec.parseFrame(result).orElse(null);
+                    if (channel != null && frame != null) {
+                        bindTaskRef(channel, frame);
+                        for (ProtocolArtifact artifact : frame.taskArtifacts()) {
+                            channel.callTree.accept(artifact);
+                        }
+                        channel.callTree.updateRootState(frame.state());
+                    }
+                    return snapshotFromFrame(invocationRef, frame);
                 });
     }
 
@@ -951,6 +1123,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         }
         ch.taskRef = f.taskId();
         ch.contextId = f.contextId();
+        ch.callTree.bindRoot(f.taskId());
         byTaskRef.put(f.taskId(), ch);
         submit(ch, new InvocationEvent.Accepted(ch.invocationRef, f.taskId(), f.contextId()));
     }
@@ -959,6 +1132,13 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         if (f == null) {
             return;
         }
+        if (f.artifact() != null) {
+            ch.callTree.accept(f.artifact());
+        }
+        for (ProtocolArtifact artifact : f.taskArtifacts()) {
+            ch.callTree.accept(artifact);
+        }
+        ch.callTree.updateRootState(f.state());
         if (f.state() == null) {
             if (f.text() != null) {
                 submit(ch, new InvocationEvent.ContentDelta(ch.invocationRef, f.text()));
@@ -1030,6 +1210,8 @@ public final class A2aHttpTransportProvider implements TransportProvider {
     }
 
     private void unregister(Channel ch) {
+        ch.callTree.close();
+        ch.callTree.current().ifPresent(tree -> completedTrees.put(ch.invocationRef, tree));
         if (ch.taskRef != null) {
             byTaskRef.remove(ch.taskRef);
         }
@@ -1075,11 +1257,15 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             int rpcCode = err.path("code").asInt();
             String message = err.path("message").asText();
             // JSON-RPC 层错误一律不可重试：方法不支持、Task 不存在、已到终态都不会因重试改变。
-            String code = switch (rpcCode) {
-                case -32601 -> ErrorCodes.METHOD_NOT_SUPPORTED;
-                case -32001 -> ErrorCodes.TASK_NOT_FOUND;
-                default -> "JSONRPC_" + rpcCode;
-            };
+            String declaredCode = err.path("data").path("code").asText(null);
+            String code = "CURSOR_EXPIRED".equals(declaredCode)
+                    || ErrorCodes.REPLAY_CURSOR_EXPIRED.equals(declaredCode)
+                    ? ErrorCodes.REPLAY_CURSOR_EXPIRED
+                    : switch (rpcCode) {
+                        case -32601 -> ErrorCodes.METHOD_NOT_SUPPORTED;
+                        case -32001 -> ErrorCodes.TASK_NOT_FOUND;
+                        default -> "JSONRPC_" + rpcCode;
+                    };
             throw new A2aTransportException(
                     "JSON-RPC error: " + rpcCode + " " + message, null, code, 0, false);
         }
@@ -1099,11 +1285,15 @@ public final class A2aHttpTransportProvider implements TransportProvider {
         final String createBody;
         final String credential;
         final SubmissionPublisher<InvocationEvent> publisher;
+        final CallTreeReducer callTree;
         volatile String taskRef;
         volatile String contextId;
         volatile TaskState lastState;
         volatile long lastActivityNanos = System.nanoTime();
         volatile int recoveryAttempt;
+        volatile int observationFailures;
+        volatile String replayCursor;
+        final java.util.LinkedHashSet<String> seenEventIds = new java.util.LinkedHashSet<>();
         volatile ScheduledFuture<?> watchdog;
         final AtomicBoolean terminal = new AtomicBoolean(false);
         final AtomicBoolean recovering = new AtomicBoolean(false);
@@ -1117,6 +1307,7 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             this.mode = mode;
             this.createBody = createBody;
             this.credential = credential;
+            this.callTree = new CallTreeReducer(mode);
             // 事件投递放到 IO 线程池，避免订阅者的处理逻辑跑在 SSE 读线程上把读取拖停。
             this.publisher = new SubmissionPublisher<>(deliveryExecutor, Flow.defaultBufferSize());
         }
@@ -1129,6 +1320,16 @@ public final class A2aHttpTransportProvider implements TransportProvider {
             ScheduledFuture<?> w = watchdog;
             if (w != null) {
                 w.cancel(false);
+            }
+        }
+
+        synchronized void recordEventId(String eventId) {
+            seenEventIds.add(eventId);
+            replayCursor = eventId;
+            while (seenEventIds.size() > 2048) {
+                java.util.Iterator<String> iterator = seenEventIds.iterator();
+                iterator.next();
+                iterator.remove();
             }
         }
     }

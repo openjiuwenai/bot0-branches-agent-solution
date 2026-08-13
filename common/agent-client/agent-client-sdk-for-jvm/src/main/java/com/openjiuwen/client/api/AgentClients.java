@@ -12,6 +12,8 @@ import com.openjiuwen.client.state.spi.ClientStateStore;
 import com.openjiuwen.client.tool.spi.LocalToolRegistry;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
+import com.openjiuwen.client.transport.a2a.GatewayTransportProvider;
+import com.openjiuwen.client.transport.a2a.RuntimeTransportProvider;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -57,6 +59,8 @@ public final class AgentClients {
         private Governance.ApprovalProvider approvalProvider;
         private ExecutorService toolExecutor;
         private CredentialProvider credentialProvider;
+        private EndpointType endpointType = EndpointType.GATEWAY;
+        private String endpointUrl;
 
         /**
          * 设置传输提供者（必填，决定 wire 协议与网关地址）。
@@ -66,6 +70,18 @@ public final class AgentClients {
          */
         public Builder transport(TransportProvider v) {
             this.transport = v;
+            return this;
+        }
+
+        /** 设置内置 A2A Transport 的 Endpoint 类型，默认 GATEWAY。 */
+        public Builder endpointType(EndpointType v) {
+            this.endpointType = Objects.requireNonNull(v, "endpointType");
+            return this;
+        }
+
+        /** 设置内置 A2A Transport 的服务基址；SDK 自动补齐 /a2a。 */
+        public Builder endpointUrl(String v) {
+            this.endpointUrl = v;
             return this;
         }
 
@@ -142,7 +158,18 @@ public final class AgentClients {
          * @return 客户端实例
          */
         public AgentClient build() {
-            Objects.requireNonNull(transport, "transport must be provided");
+            if (transport != null && endpointUrl != null) {
+                throw new IllegalArgumentException("transport and endpointUrl are mutually exclusive");
+            }
+            TransportProvider resolvedTransport = transport;
+            if (resolvedTransport == null) {
+                if (endpointUrl == null || endpointUrl.isBlank()) {
+                    throw new NullPointerException("transport or endpointUrl must be provided");
+                }
+                resolvedTransport = endpointType == EndpointType.RUNTIME
+                        ? new RuntimeTransportProvider(endpointUrl)
+                        : new GatewayTransportProvider(endpointUrl);
+            }
             LocalToolRegistry reg = (registry != null) ? registry : new DefaultToolRegistry();
             ClientStateStore store = (stateStore != null) ? stateStore : new InMemoryStateStore();
             Governance.PolicyGuard guard =
@@ -152,7 +179,7 @@ public final class AgentClients {
             ExecutorService exec = (toolExecutor != null) ? toolExecutor : defaultExecutor();
             ObjectMapper mapper = new ObjectMapper();
             return new DefaultAgentClient(
-                    transport, reg, store, guard, approval, exec, mapper, credentialProvider);
+                    resolvedTransport, reg, store, guard, approval, exec, mapper, credentialProvider);
         }
 
         /**

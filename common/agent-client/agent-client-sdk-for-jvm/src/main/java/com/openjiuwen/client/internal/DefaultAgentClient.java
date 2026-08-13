@@ -26,7 +26,9 @@ import com.openjiuwen.client.tool.spi.ToolExposurePolicy;
 import com.openjiuwen.client.tool.spi.ToolView;
 import com.openjiuwen.client.transport.spi.CredentialProvider;
 import com.openjiuwen.client.transport.spi.ToolWireSpec;
+import com.openjiuwen.client.transport.spi.CallTreeTransportProvider;
 import com.openjiuwen.client.transport.spi.TransportProvider;
+import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -124,7 +126,7 @@ public final class DefaultAgentClient implements AgentClient {
         InvocationState state = new InvocationState(
                 invocationRef, request.conversationId(), request.mode(),
                 clientTools, credential, request.idempotencyKey(), false,
-                effective.expiresAt().orElse(null));
+                effective.expiresAt().orElse(null), invocationRef);
         invocations.put(invocationRef, state);
 
         TransportProvider.CreateCommand cmd = new TransportProvider.CreateCommand(
@@ -133,7 +135,7 @@ public final class DefaultAgentClient implements AgentClient {
                 clientTools, credential, null, request.attributes());
 
         Flow.Publisher<InvocationEvent> upstream = transport.createAndStream(cmd);
-        CallImpl call = new CallImpl(invocationRef, request.conversationId());
+        CallImpl call = new CallImpl(invocationRef, request.conversationId(), callTreePublisher(invocationRef));
         calls.put(invocationRef, call);
         upstream.subscribe(call);
         return call;
@@ -147,7 +149,8 @@ public final class DefaultAgentClient implements AgentClient {
             return CompletableFuture.completedFuture(InvocationSnapshot.unknown(invocationRef));
         }
         return transport.getTask(state.taskRef, state.credentialToken)
-                .thenApply(snap -> withInvocationRef(invocationRef, snap));
+                .thenApply(snap -> withInvocationRef(invocationRef, snap,
+                        currentCallTree(invocationRef).orElse(snap != null ? snap.callTree() : null)));
     }
 
     /**
@@ -157,16 +160,31 @@ public final class DefaultAgentClient implements AgentClient {
      * @param snap 传输层快照
      * @return 句柄已归正的快照
      */
-    private static InvocationSnapshot withInvocationRef(String invocationRef, InvocationSnapshot snap) {
+    private static InvocationSnapshot withInvocationRef(String invocationRef, InvocationSnapshot snap,
+            CallTreeSnapshot callTree) {
         if (snap == null) {
             return InvocationSnapshot.unknown(invocationRef);
         }
-        if (invocationRef.equals(snap.invocationRef())) {
+        if (invocationRef.equals(snap.invocationRef()) && callTree == snap.callTree()) {
             return snap;
         }
         return new InvocationSnapshot(invocationRef, snap.state(), snap.terminal(),
                 snap.diagnosticTaskRef(), snap.pendingToolCall(), snap.outputText(),
-                snap.errorCode(), snap.message(), snap.recovery());
+                snap.errorCode(), snap.message(), snap.recovery(), callTree);
+    }
+
+    private Flow.Publisher<CallTreeSnapshot> callTreePublisher(String invocationRef) {
+        if (transport instanceof CallTreeTransportProvider trees) {
+            return trees.callTree(invocationRef);
+        }
+        return InvocationCall.superCallTreePublisher();
+    }
+
+    private Optional<CallTreeSnapshot> currentCallTree(String invocationRef) {
+        if (transport instanceof CallTreeTransportProvider trees) {
+            return trees.currentCallTree(invocationRef);
+        }
+        return Optional.empty();
     }
 
     @Override
@@ -199,7 +217,7 @@ public final class DefaultAgentClient implements AgentClient {
         InvocationState newState = new InvocationState(
                 newInvocationRef, request.conversationId(), inheritedMode,
                 related.clientTools, related.credentialToken, request.idempotencyKey(), true,
-                related.exposureExpiresAt);
+                related.exposureExpiresAt, related.treeInvocationRef);
         newState.taskRef = related.taskRef;
         invocations.put(newInvocationRef, newState);
 
@@ -212,7 +230,8 @@ public final class DefaultAgentClient implements AgentClient {
                 related.conversationId, TransportProvider.ResumeDelivery.SNAPSHOT_ONLY);
 
         // 新 CallImpl：不订阅 transport 旧 Channel，而是由续跑 unary 响应直接驱动其事件流与 completion。
-        CallImpl newCall = new CallImpl(newInvocationRef, request.conversationId());
+        CallImpl newCall = new CallImpl(newInvocationRef, request.conversationId(),
+                callTreePublisher(related.treeInvocationRef), related.treeInvocationRef);
         calls.put(newInvocationRef, newCall);
 
         // 交接：原 invocation 的可观测生命到"等待输入"为止，后续由新 invocationRef 承载（006 §3.4.1）。
@@ -416,6 +435,7 @@ public final class DefaultAgentClient implements AgentClient {
          * 而不是按此后可能已被业务改动的会话级策略。
          */
         final Instant exposureExpiresAt;
+        final String treeInvocationRef;
         volatile String taskRef;
 
         /**
@@ -432,12 +452,12 @@ public final class DefaultAgentClient implements AgentClient {
                         List<ToolWireSpec> clientTools, String credentialToken, String idempotencyKey,
                         boolean snapshotDriven) {
             this(invocationRef, conversationId, mode, clientTools, credentialToken, idempotencyKey,
-                    snapshotDriven, null);
+                    snapshotDriven, null, invocationRef);
         }
 
         InvocationState(String invocationRef, String conversationId, InvocationMode mode,
                         List<ToolWireSpec> clientTools, String credentialToken, String idempotencyKey,
-                        boolean snapshotDriven, Instant exposureExpiresAt) {
+                        boolean snapshotDriven, Instant exposureExpiresAt, String treeInvocationRef) {
             this.invocationRef = invocationRef;
             this.conversationId = conversationId;
             this.mode = mode;
@@ -446,6 +466,7 @@ public final class DefaultAgentClient implements AgentClient {
             this.idempotencyKey = idempotencyKey;
             this.snapshotDriven = snapshotDriven;
             this.exposureExpiresAt = exposureExpiresAt;
+            this.treeInvocationRef = treeInvocationRef;
         }
 
         boolean exposureExpired() {
@@ -463,6 +484,8 @@ public final class DefaultAgentClient implements AgentClient {
 
         private final String invocationRef;
         private final String conversationId;
+        private final Flow.Publisher<CallTreeSnapshot> callTreePublisher;
+        private final String treeInvocationRef;
         private final java.util.concurrent.SubmissionPublisher<InvocationEvent> downstream =
                 new java.util.concurrent.SubmissionPublisher<>();
         private final CompletableFuture<InvocationSnapshot> completion = new CompletableFuture<>();
@@ -480,9 +503,16 @@ public final class DefaultAgentClient implements AgentClient {
         private volatile String uncertainReason;
         private int consumedSinceRequest;
 
-        CallImpl(String invocationRef, String conversationId) {
+        CallImpl(String invocationRef, String conversationId, Flow.Publisher<CallTreeSnapshot> callTreePublisher) {
+            this(invocationRef, conversationId, callTreePublisher, invocationRef);
+        }
+
+        CallImpl(String invocationRef, String conversationId, Flow.Publisher<CallTreeSnapshot> callTreePublisher,
+                String treeInvocationRef) {
             this.invocationRef = invocationRef;
             this.conversationId = conversationId;
+            this.callTreePublisher = callTreePublisher;
+            this.treeInvocationRef = treeInvocationRef;
         }
 
         @Override
@@ -503,6 +533,11 @@ public final class DefaultAgentClient implements AgentClient {
         @Override
         public Flow.Publisher<InvocationEvent> events() {
             return downstream;
+        }
+
+        @Override
+        public Flow.Publisher<CallTreeSnapshot> callTree() {
+            return callTreePublisher;
         }
 
         @Override
@@ -766,7 +801,7 @@ public final class DefaultAgentClient implements AgentClient {
             InvocationSnapshot snapshot = new InvocationSnapshot(
                     invocationRef, settled, settled.isTerminal(), taskRef, null,
                     output.length() > 0 ? output.toString() : null, errorCode, message,
-                    recoveryHint(is, taskRef).orElse(null));
+                    recoveryHint(is, taskRef).orElse(null), currentCallTree(treeInvocationRef).orElse(null));
             completion.complete(snapshot);
             downstream.close();
             if (subscription != null) {
@@ -788,9 +823,14 @@ public final class DefaultAgentClient implements AgentClient {
             }
             // 已有 taskRef → Task 确已创建，重发会造重复，只能查询；
             // 无 taskRef → 创建未被确认，须以同幂等键、同正文重发，由网关幂等回放取回原 Task。
-            InvocationSnapshot.Recovery.Action action = (taskRef != null)
-                    ? InvocationSnapshot.Recovery.Action.QUERY_INVOCATION
-                    : InvocationSnapshot.Recovery.Action.RETRY_CREATE_SAME_KEY;
+            InvocationSnapshot.Recovery.Action action;
+            if (taskRef != null) {
+                action = InvocationSnapshot.Recovery.Action.QUERY_INVOCATION;
+            } else if (reason.contains("runtime create outcome unknown")) {
+                action = InvocationSnapshot.Recovery.Action.MANUAL_RECONCILIATION;
+            } else {
+                action = InvocationSnapshot.Recovery.Action.RETRY_CREATE_SAME_KEY;
+            }
             return Optional.of(new InvocationSnapshot.Recovery(reason, conversationId,
                     (is != null) ? is.idempotencyKey : null, action));
         }

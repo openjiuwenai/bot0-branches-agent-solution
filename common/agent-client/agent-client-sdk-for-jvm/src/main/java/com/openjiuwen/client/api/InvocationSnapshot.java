@@ -4,6 +4,8 @@
 
 package com.openjiuwen.client.api;
 
+import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
+
 import java.util.Optional;
 
 /**
@@ -33,7 +35,8 @@ public record InvocationSnapshot(
         String outputText,
         String errorCode,
         String message,
-        Recovery recovery) {
+        Recovery recovery,
+        CallTreeSnapshot callTree) {
     /**
      * 无恢复线索的快照（正常路径）。
      *
@@ -50,7 +53,15 @@ public record InvocationSnapshot(
                               String diagnosticTaskRef, InvocationEvent.ToolCall pendingToolCall,
                               String outputText, String errorCode, String message) {
         this(invocationRef, state, terminal, diagnosticTaskRef, pendingToolCall,
-                outputText, errorCode, message, null);
+                outputText, errorCode, message, null, null);
+    }
+
+    /** 保留原九参数构造器，兼容已有源码与编译产物。 */
+    public InvocationSnapshot(String invocationRef, TaskState state, boolean terminal,
+                              String diagnosticTaskRef, InvocationEvent.ToolCall pendingToolCall,
+                              String outputText, String errorCode, String message, Recovery recovery) {
+        this(invocationRef, state, terminal, diagnosticTaskRef, pendingToolCall,
+                outputText, errorCode, message, recovery, null);
     }
 
     /**
@@ -70,6 +81,11 @@ public record InvocationSnapshot(
      */
     public Optional<Recovery> maybeRecovery() {
         return Optional.ofNullable(recovery);
+    }
+
+    /** @return 调用树；旧 Transport 可能为空 */
+    public Optional<CallTreeSnapshot> maybeCallTree() {
+        return Optional.ofNullable(callTree);
     }
 
     /**
@@ -100,7 +116,9 @@ public record InvocationSnapshot(
              * 创建请求未被确认：以<b>同一幂等键与逐字节相同的正文</b>重发创建。
              * 网关会命中幂等回放取回原 Task，不会产生重复 Task（L2 Feat-Func-006 §5.4）。
              */
-            RETRY_CREATE_SAME_KEY
+            RETRY_CREATE_SAME_KEY,
+            /** Runtime 创建结果未知且不安全重发，需要业务侧人工核对。 */
+            MANUAL_RECONCILIATION
         }
     }
 }

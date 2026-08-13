@@ -4,6 +4,8 @@
 
 package com.openjiuwen.client.api;
 
+import com.openjiuwen.client.api.calltree.CallTreeSnapshot;
+
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 
@@ -46,6 +48,36 @@ public interface InvocationCall extends AutoCloseable {
      * @return 事件流发布者
      */
     Flow.Publisher<InvocationEvent> events();
+
+    /**
+     * 订阅调用树最新值。旧 Transport 或不支持过程树的调用返回一个立即完成的 Publisher；
+     * SDK 内置 Transport 会在订阅后立即发布当前快照。
+     *
+     * @return 调用树快照流
+     */
+    default Flow.Publisher<CallTreeSnapshot> callTree() {
+        return superCallTreePublisher();
+    }
+
+    /** SDK 内部与兼容实现共用的空 Publisher。 */
+    static Flow.Publisher<CallTreeSnapshot> superCallTreePublisher() {
+        return subscriber -> subscriber.onSubscribe(new Flow.Subscription() {
+            private boolean done;
+
+            @Override
+            public void request(long n) {
+                if (!done) {
+                    done = true;
+                    subscriber.onComplete();
+                }
+            }
+
+            @Override
+            public void cancel() {
+                done = true;
+            }
+        });
+    }
 
     /**
      * 在调用到达终态时完成，携带最终快照。

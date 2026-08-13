@@ -70,6 +70,9 @@ public final class ErrorCodes {
     /** 流在非终态下中断，进展不确定（FEAT-006 §5.1.4：中断不等于失败）。 */
     public static final String STREAM_INTERRUPTED = "STREAM_INTERRUPTED";
 
+    /** 断点游标已不在 Runtime 的重放窗口中；SDK 应降级查询当前 Task 快照。 */
+    public static final String REPLAY_CURSOR_EXPIRED = "REPLAY_CURSOR_EXPIRED";
+
     /** 未支持的调用模式。不可重试。 */
     public static final String UNSUPPORTED_MODE = "UNSUPPORTED_MODE";
 
