@@ -14,6 +14,7 @@ import jakarta.annotation.PreDestroy;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -43,7 +44,7 @@ public final class DeepResearchOutboundPushRemoteAgentCaller implements RemoteAg
 
     private final String callbackUrl;
 
-    private final String callbackToken;
+    private final Optional<String> callbackToken;
 
     private final Supplier<String> callbackIdSupplier;
 
@@ -86,15 +87,13 @@ public final class DeepResearchOutboundPushRemoteAgentCaller implements RemoteAg
         metadata.remove(CALLBACK_ID_METADATA);
         metadata.put(CALLBACK_URL_METADATA, callbackUrl);
         metadata.put(CALLBACK_ID_METADATA, callbackIdSupplier.get());
-        if (callbackToken != null) {
-            metadata.put(CALLBACK_TOKEN_METADATA, callbackToken);
-        }
+        callbackToken.ifPresent(token -> metadata.put(CALLBACK_TOKEN_METADATA, token));
         return new RemoteCall(call.agentName(), call.message(), call.contextId(), call.taskId(), metadata,
                 call.messageMetadata(), call.isCallerStreaming());
     }
 
-    private static String normalizeOptional(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
+    private static Optional<String> normalizeOptional(String value) {
+        return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
     }
 
     /**
