@@ -240,7 +240,8 @@ def parse_repr(s: Any) -> Any:
 
 def extract_value(v: Any) -> Any:
     """规整一个字段值: 字符串 → parse_repr (含类名则提取成结构,
-    不可解析则原样); 已是结构原样返回。"""
+    不可解析则原样); 已是结构原样返回。
+    """
     if isinstance(v, str):
         return parse_repr(v)
     return v
